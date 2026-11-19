@@ -9,7 +9,7 @@ import { usableRunners } from '@/lib/provider-status'
 import {
   effortOptionsForModel,
   modelsForRunner,
-  modelCatalogStatus,
+  catalogQueryStatus,
   resolveEffort,
   resolveModel,
   resolveRunner,
@@ -279,7 +279,7 @@ export function EnginePills({
         })
       }}
       options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(runner, registered.data, catalog.data, catalog.isError, catalog.isFetching)}
+      status={catalogQueryStatus(runner, registered.data, catalog)}
     />
   )
   const effortPill = (

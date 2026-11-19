@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 
 import type { useAccountSelection, useEngineSelection } from './new-task-controller'
 import type { NewTaskDraft } from './new-task-draft'
-import { effortOptionsForModel, modelCatalogStatus, resolveEffort, RUNNERS } from './new-task-form'
+import { effortOptionsForModel, catalogQueryStatus, resolveEffort, RUNNERS } from './new-task-form'
 
 /** The `/new` route's layout sections (hearsay-tools/cezarion#1598), each with explicit inputs. */
 
@@ -118,7 +118,7 @@ function ModelPill({ engine, draftEffort, update }: { engine: Engine; draftEffor
         })
       }}
       options={engine.models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(displayRunner, engine.registered.data, catalog.data, catalog.isError, catalog.isFetching)}
+      status={catalogQueryStatus(displayRunner, engine.registered.data, catalog)}
     />
   )
 }

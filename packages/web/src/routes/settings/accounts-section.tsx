@@ -48,7 +48,7 @@ import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { agentPickerRows } from '@/components/default-agent-picker'
-import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -405,7 +405,7 @@ function CatalogStatusOption({ runner, runners, catalog }: {
   runners: RunnersResponse
   catalog: ReturnType<typeof useRunnerModelCatalogs>[Runner] | undefined
 }) {
-  const status = modelCatalogStatus(runner, runners, catalog?.data, catalog?.isError, catalog?.isFetching)
+  const status = catalogQueryStatus(runner, runners, catalog)
   return status ? <option disabled>{status}</option> : null
 }
 

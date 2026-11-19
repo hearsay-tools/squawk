@@ -139,17 +139,17 @@ export function jsonZodValidator<
  * content-type to gate on and no malformed-input path — Hono's own behaviour is already right.
  * The schema receives the whole param object (`{ provider: 'codex' }`), not a single value.
  */
-export function paramZodValidator<S extends z.ZodType>(schema: S, { message, code, runners }: ErrorOptions = {}) {
-  return validator('param', (value, c) => {
-    const parsed = parseWithRunners(schema, value, runners);
-    return parsed.success ? (parsed.data as z.infer<S>) : reject(c, parsed.error, message, code);
-  });
+export function paramZodValidator<S extends z.ZodType>(schema: S, options: ErrorOptions = {}) {
+  return validator('param', (value, c) => parsedOrRejected(schema, value, c, options));
 }
 
 /** Query string, on the same terms as {@link paramZodValidator}. */
-export function queryZodValidator<S extends z.ZodType>(schema: S, { message, code, runners }: ErrorOptions = {}) {
-  return validator('query', (value, c) => {
-    const parsed = parseWithRunners(schema, value, runners);
-    return parsed.success ? (parsed.data as z.infer<S>) : reject(c, parsed.error, message, code);
-  });
+export function queryZodValidator<S extends z.ZodType>(schema: S, options: ErrorOptions = {}) {
+  return validator('query', (value, c) => parsedOrRejected(schema, value, c, options));
+}
+
+/** The parsed value, or the 400 that rejects it. */
+function parsedOrRejected<S extends z.ZodType>(schema: S, value: unknown, c: Context, { message, code, runners }: ErrorOptions) {
+  const parsed = parseWithRunners(schema, value, runners);
+  return parsed.success ? (parsed.data as z.infer<S>) : reject(c, parsed.error, message, code);
 }

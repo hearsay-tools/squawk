@@ -15,7 +15,7 @@ import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pil
 import {
   effortOptionsForModel,
   modelsForRunner,
-  modelCatalogStatus,
+  catalogQueryStatus,
   resolveEffort,
   resolveModel,
 } from '@/routes/new-task-form'
@@ -260,7 +260,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
             if (effort !== '' && resolveEffort(effort, nextOptions) === '') setPickedEffort('')
           }}
           options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-          status={modelCatalogStatus(runner, registered.data, catalog.data, catalog.isError, catalog.isFetching)}
+          status={catalogQueryStatus(runner, registered.data, catalog)}
         />
         <PickerPill
           icon={<GaugeIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}

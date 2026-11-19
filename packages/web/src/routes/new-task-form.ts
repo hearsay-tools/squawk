@@ -207,6 +207,15 @@ export function modelCatalogStatus(
   return undefined
 }
 
+/** {@link modelCatalogStatus} for a runner's catalog query. */
+export function catalogQueryStatus(
+  runner: Runner,
+  runners: RunnersResponse | undefined,
+  query: { data?: RunnerModelCatalogResponse | undefined; isError?: boolean; isFetching?: boolean } | undefined,
+): string | undefined {
+  return modelCatalogStatus(runner, runners, query?.data, query?.isError, query?.isFetching)
+}
+
 /** Which runners the pill offers, from the health checks (legacy `renderChrome`). The `claude`
  *  fallback when nothing is detected is deliberate legacy behavior: the form must always have
  *  a runner, and claude is the default engine. */

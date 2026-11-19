@@ -28,7 +28,7 @@ import {
   hasAgentAccounts,
   providerChoice,
 } from '@/components/default-agent-picker'
-import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
 import { ProviderSettings } from './provider-settings'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -126,7 +126,7 @@ function AgentsForm({
   const renderModel = (runner: (typeof RUNNERS)[number]) => {
     const { providerConnected, providerReason } = providerChoice(providerStatus, runner.id)
     const catalog = catalogs[runner.id]
-    const catalogStatus = modelCatalogStatus(runner.id, runners, catalog?.data, catalog?.isError, catalog?.isFetching)
+    const catalogStatus = catalogQueryStatus(runner.id, runners, catalog)
     const modelOptions = modelsForRunner(runner.id, runners, catalog?.data, [
       config.defaultModels[runner.id],
     ])
@@ -157,7 +157,7 @@ function AgentsForm({
             data-runner={runner.id}
             value={configuredModel}
             title={providerReason ?? runner.desc}
-            disabled={save.isPending || !providerConnected}
+            disabled={save.isPending || !providerConnected || runners === undefined}
             onChange={(event) =>
               save.mutate({
                 defaultModels: { [runner.id]: event.target.value || null } as Partial<

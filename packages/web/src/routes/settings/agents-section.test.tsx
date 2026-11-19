@@ -214,13 +214,13 @@ function serve({
 /** Seeds the step-3.2 route gates — boot id (legacy redirect) + registry (known-check) — so a
  *  flat entry URL lands scoped immediately. The boot project mounts UNSCOPED, so the exact
  *  `/api/v1/*` paths this file's fetch stub matches stay byte-identical. */
-function gateSeededClient() {
+function gateSeededClient(withRunners = true) {
   const client = createQueryClient()
   client.setDefaultOptions({
     queries: { ...client.getDefaultOptions().queries, retry: false },
   })
   client.setQueryData(queryKeys.health, { bootProject: 'boot' })
-  seedRunners(client)
+  if (withRunners) seedRunners(client)
   // Seeded WITH the boot project, not an empty list: the client's staleTime is 5 minutes, so an
   // empty seed is never refetched and `project` stays undefined for the whole test — which renders
   // the Account picker disabled and let its assertions pass only because `fireEvent` ignores
@@ -233,8 +233,8 @@ function gateSeededClient() {
   return client
 }
 
-function renderAt(entry: string) {
-  const client = gateSeededClient()
+function renderAt(entry: string, withRunners = true) {
+  const client = gateSeededClient(withRunners)
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
@@ -319,6 +319,17 @@ describe('the agents form', () => {
     expect(screen.getByLabelText<HTMLSelectElement>('Default model for claude').disabled).toBe(true)
     expect((screen.getByLabelText<HTMLTextAreaElement>('System prompt')).disabled).toBe(false)
     expect((screen.getByLabelText<HTMLButtonElement>('Live title updates')).disabled).toBe(false)
+  })
+
+  // hearsay-tools/squawk#3897: the runner pickers wait for the runners query, as they wait for health.
+  it('disables the model selectors until the runners query answers', async () => {
+    serve()
+    const client = renderAt('/settings/agents', false)
+    const select = await screen.findByLabelText<HTMLSelectElement>('Default model for claude')
+    await waitFor(() => expect(client.getQueryState(workspaceQueryKeys.providerStatus)?.status).toBe('success'))
+    expect(select.disabled).toBe(true)
+    seedRunners(client)
+    await waitFor(() => expect(select.disabled).toBe(false))
   })
 
   it('keeps unrelated settings usable when provider status errors', async () => {
