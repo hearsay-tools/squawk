@@ -121,6 +121,22 @@ test('a renamed function, a moved function and a function in a renamed parent ar
   assert.equal(gate(f, moved).code, 0);
 });
 
+test('a long function moved to a new file behind a same-named delegator is matched to its origin', t => {
+  const f = repo(t, { 'a.ts': complex('big', 24) });
+  const head = f.commit({
+    'a.ts': `import { big as moved } from './b';\nexport function big(x) { return moved(x); }\n`,
+    'b.ts': complex('big', 24),
+  });
+  const result = gate(f, head);
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /matched to a removed function: b\.ts:1 big: complexity 25 \(was 25 in a\.ts:big at the merge base/);
+
+  const longDelegator = f.commit({ 'a.ts': complex('big', 24, '  x += 1;\n') });
+  const copied = gate(f, longDelegator);
+  assert.equal(copied.code, 1, 'a delegator over the limit keeps its origin, so the copy is new');
+  assert.match(copied.output, /b\.ts:1 big: complexity 25 \(new function; limit 20\)/);
+});
+
 test('a function moved with edits keeps its name and is compared with the original', t => {
   const f = repo(t, { 'a.ts': complex('keep', 1) + complex('big', 24) });
   const level = f.commit({ 'a.ts': complex('keep', 1), 'b.ts': complex('big', 24, '  x += 1;\n') });

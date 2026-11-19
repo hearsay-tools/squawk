@@ -50,6 +50,13 @@ fails a stale entry, so a lowering that was not committed cannot reach `main`. T
 variables remain for one decision: writing a baseline that does not exist. They also lower in CI.
 A run never adds or raises an entry.
 
+CI's `Reject baseline growth` step accepts one relocation without the `baseline-growth` label: an
+entry or key that names a file the change moved. The old path must be gone from the head, the
+change must add the new path, and every other field must stay equal or shrink. The entry may
+name the file by its full path or by its path below a directory both paths share, as the cockpit
+baselines do (`routes/x.tsx`), alone or inside a longer string. One old entry serves one new entry. [packages.md § Moving a source file](../areas/packages.md#moving-a-source-file)
+lists every file that pins a path.
+
 A non-zero tool exit, unreadable tool output, a plugin that does not load, a config that turns on
 a category on, a missing built-in plugin, another rule count than all cez rules plus enabled
 built-in entries, and a file that does not parse are failures,

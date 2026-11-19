@@ -19,7 +19,8 @@ const HELP = `Usage: node <skill>/scripts/complexity-gate.mjs --base <ref> --hea
 
 Fail when a function that the head changes since the merge-base of <ref> and <rev> has
 classic complexity above ${thresholds.complexity} and is new or above its merge-base complexity.
-A moved or renamed function is compared with the function it came from. The head is read
+A moved or renamed function is compared with the function it came from, also when a
+same-named function at or under the limit stays in its place. The head is read
 from Git objects only; the working tree and untracked files are ignored.
 
   --allow-growth  Print the findings as warnings and exit 0 (the baseline-growth label)
@@ -90,9 +91,11 @@ export function findGrowth(scan, limit = thresholds.complexity) {
   const { pairs, free } = pairMoves(over.filter(fn => fn.change === 'added'), scan.removed);
   const results = over.map(fn => ({ fn, from: counterpartOf(fn, pairs.get(fn)) }));
   const growth = results.filter(({ fn, from }) => !from || fn.complexity > from.complexity);
+  // scanChanges already took out each function moved or renamed without edits, with its origin.
+  const verbatim = (scan.moved ?? []).filter(fn => fn.complexity > limit).map(fn => ({ fn, from: { kind: 'moved', ...fn.from } }));
   return {
     limit, checked: changed.length, files: scan.files.length, growth,
-    moved: results.filter(item => item.from?.kind === 'moved' && !growth.includes(item)),
+    moved: [...verbatim, ...results.filter(item => item.from?.kind === 'moved' && !growth.includes(item))],
     kept: results.filter(item => item.from?.kind !== 'moved' && !growth.includes(item)),
     lost: [...free].filter(item => item.complexity > limit),
   };

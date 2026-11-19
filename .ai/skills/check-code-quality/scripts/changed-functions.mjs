@@ -47,6 +47,7 @@ const describe = (fn, functions, source, details) =>
 /**
  * Compare one file's functions before and after. `changed` lists the functions whose
  * own source differs. With `details`, each carries its decision `points`, `bodyHash` and body `lines`
+ * (a modified one also its merge-base `baselineHash`)
  * (its ambiguous candidates carry their `lines` too), and `unmatched` lists the functions before that
  * no function after took over. The
  * candidates of an ambiguous match are not unmatched: the comparison keeps them.
@@ -75,6 +76,7 @@ export function matchFunctions(before, after, file, { details = false } = {}) {
         candidates: candidates.map(candidate => describe(candidate, oldFunctions, before, details)),
       } : {}),
       ...(details ? { bodyHash: bodyHash(fn, functions, after), lines: bodyLines(fn, functions, after), points: fn.points } : {}),
+      ...(details && old ? { baselineHash: bodyHash(old, oldFunctions, before) } : {}),
     }];
   });
   const unmatched = details
@@ -127,11 +129,40 @@ function matchInFile(before, after, file, options) {
   catch (error) { throw new Error(`${file}: ${error.message}`, { cause: error }); }
 }
 
+const DETAIL_KEYS = ['bodyHash', 'baselineHash', 'lines', 'points'];
+const withoutDetails = fn => Object.fromEntries(Object.entries(fn).filter(([key]) => !DETAIL_KEYS.includes(key)));
+const place = ({ file, name, line, column, complexity }) => ({ file, name, line, column, complexity });
+
+/**
+ * Pair each added function with a merge-base function of identical own body and equal complexity: a
+ * verbatim move or rename.
+ * The origin is a function the change removed, or one whose same-place successor the change rewrote
+ * and left at or under the complexity limit, such as a delegator that now calls the moved body. That
+ * limit keeps two copies of a long function from both passing. One origin serves one pair, so a copy
+ * is still new. Returns the pairs and the removed functions no pair took.
+ */
+export function pairVerbatimMoves(changed, removed, limit = thresholds.complexity) {
+  const rewritten = changed.filter(fn => fn.change === 'modified' && fn.complexity <= limit && fn.baselineHash)
+    .map(fn => ({ file: fn.file, ...fn.baseline, bodyHash: fn.baselineHash }));
+  const free = new Set([...removed, ...rewritten]);
+  const moved = new Map();
+  for (const fn of changed.filter(item => item.change === 'added')) {
+    // A changed signature can add decision points (a default value) that the body hash leaves out.
+    const origin = [...free].find(item => item.bodyHash === fn.bodyHash && item.complexity === fn.complexity);
+    if (!origin) continue;
+    free.delete(origin);
+    moved.set(fn, origin);
+  }
+  return { moved, removed: removed.filter(item => free.has(item)) };
+}
+
 /**
  * Changed functions between the merge-base of `baseRef` and the head, which is the
  * working tree on top of HEAD unless `head` names a revision to read from Git alone.
- * `details` adds what pairing a moved function needs: each function's decision
- * points and body hash, and `removed`, the base functions no head function took over.
+ * A function moved or renamed without edits is not a change: it leaves `files` and is listed in
+ * `moved` with the function it came from. `details` adds what pairing a function moved with edits
+ * needs: each function's decision points and body hash, and `removed`, the base functions no head
+ * function took over.
  */
 export function scanChanges(baseRef, cwd = process.cwd(), { head: headRevision, details = false } = {}) {
   const git = (...args) => execFileSync('git', args, {
@@ -144,21 +175,25 @@ export function scanChanges(baseRef, cwd = process.cwd(), { head: headRevision, 
   const pinnedGit = (...args) => git(`--attr-source=${base}`, ...args);
   const side = headRevision ? revisionSide(pinnedGit, base, head) : workingTreeSide(cwd, pinnedGit, base);
   const paths = [...new Set(side.paths().filter(isSourcePath))].sort();
-  const files = [], deletedFiles = [], removed = [];
+  const scanned = [], deletedFiles = [], removed = [];
   for (const file of paths) {
     const after = side.read(file);
     if (after === null) continue;
     const before = blobAt(pinnedGit, base, file) ?? '';
-    if (after === undefined) {
-      deletedFiles.push(file);
-      if (!details) continue; // A deleted file has no scores; only pairing a move reads its old functions.
-    }
-    const { changed, unmatched } = matchInFile(before, after ?? '', file, { details });
+    if (after === undefined) deletedFiles.push(file); // A deleted file has no scores; its old functions can be a move's origin.
+    const { changed, unmatched } = matchInFile(before, after ?? '', file, { details: true });
     removed.push(...unmatched.map(fn => ({ file, ...fn })));
-    if (changed.length) files.push({ file, sourceHash: createHash('sha256').update(after).digest('hex'), functions: changed });
+    scanned.push({ file, after, changed: changed.map(fn => ({ file, ...fn })) });
   }
+  const pairing = pairVerbatimMoves(scanned.flatMap(item => item.changed), removed);
+  const strip = fn => { const { file: _file, ...rest } = details ? fn : withoutDetails(fn); return rest; };
+  const files = scanned.map(({ file, after, changed }) => ({ file, after, functions: changed.filter(fn => !pairing.moved.has(fn)).map(strip) }))
+    .filter(({ functions }) => functions.length)
+    .map(({ file, after, functions }) => ({ file, sourceHash: createHash('sha256').update(after).digest('hex'), functions }));
+  const moved = [...pairing.moved].map(([fn, from]) => ({ ...place(fn), from: place(from) }));
   return {
-    schemaVersion: 1, root: cwd, target, head, base, thresholds, files, deletedFiles, ...(details ? { removed } : {}),
+    schemaVersion: 1, root: cwd, target, head, base, thresholds, files, deletedFiles, moved,
+    ...(details ? { removed: pairing.removed } : {}),
   };
 }
 

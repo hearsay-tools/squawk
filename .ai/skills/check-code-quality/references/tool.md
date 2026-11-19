@@ -35,9 +35,13 @@ Complexity uses ESLint's classic convention: one, plus one for each decision
 point in the function's own body. A nested function counts its own points.
 
 The change scanner compares function source, excluding nested bodies from the
-parent. Comments and whitespace inside a function count as edits. Renamed or
-moved functions may appear as added. Duplicate identities can have an unknown
-baseline. Inspect the diff and baseline for these cases before deciding origin.
+parent. Comments and whitespace inside a function count as edits. A function
+moved or renamed without edits is not a change: the scanner lists it under
+`moved` with the function it came from, and not under `files`. Its origin is a
+removed function with an identical body and equal complexity, or one whose same-named successor in
+the old place now stays at or under complexity 20, such as a delegator. A
+function moved with edits appears as added. Duplicate identities can have an
+unknown baseline. Inspect the diff and baseline for these cases before deciding origin.
 
 ## CRAP scoring
 

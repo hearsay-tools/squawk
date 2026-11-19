@@ -4,6 +4,8 @@
 //   node scripts/readers.mjs <name…>              every reader of each name, grouped by tree
 //   node scripts/readers.mjs --runner <id> [name…]  also the saved-run readers of a runner id
 //   node scripts/readers.mjs -- --old-flag          a name that starts with `-` follows `--`
+//   node scripts/readers.mjs --moved <old> <new>    the readers of a moved file's old path, and the
+//                                                   JSON pins that name it, to rewrite in the same commit
 //
 // It searches every tracked and untracked, not ignored, file of the checkout with `git grep`,
 // so no tree is left out by hand. A name that holds a `/` is a path: the sweep also searches
@@ -78,9 +80,9 @@ export function specifierOf(name) {
   return segment ? `/${segment}` : undefined;
 }
 
-function grep(root, patterns) {
+function grep(root, patterns, pathspec = '.') {
   // --no-color and -z keep the output parseable whatever the user's Git config or file names.
-  const args = ['grep', '--no-color', '-z', '-n', '-I', '-F', '--untracked', ...patterns.flatMap(pattern => ['-e', pattern]), '--', '.'];
+  const args = ['grep', '--no-color', '-z', '-n', '-I', '-F', '--untracked', ...patterns.flatMap(pattern => ['-e', pattern]), '--', pathspec];
   try {
     return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   } catch (error) {
@@ -145,9 +147,25 @@ export function formatRunnerReaders(readers) {
     ...readers.map(entry => `${entry.found ? 'ok     ' : 'MISSING'} ${entry.file} — ${entry.reader} (anchor "${entry.anchor}")`)].join('\n');
 }
 
+/** The JSON files that name a path: mutant targets and equivalents, the baselines and the lint lists.
+ *  Each pins a file, or a function by its file, so a move rewrites them. */
+export function searchPins(root, path) {
+  // A pin may name the file below a directory, as the cockpit baselines do (`routes/x.tsx`).
+  const segments = path.split('/');
+  const tails = segments.slice(0, -1).map((_, k) => segments.slice(k).join('/'));
+  return parseHits(grep(root, tails.length ? tails : [path], '*.json'));
+}
+
+export function formatPins({ from, to }, hits) {
+  const files = new Set(hits.map(hit => hit.file));
+  return [`## JSON pins that name ${from}: ${hits.length} lines in ${files.size} files; rewrite each to ${to}`,
+    ...hits.map(hit => `  ${hit.file}:${hit.line}: ${hit.text.length > MAX_TEXT ? `${hit.text.slice(0, MAX_TEXT)}…` : hit.text}`),
+    'The guards that key on a directory, not a file, are listed in docs/areas/packages.md § Moving a source file.'].join('\n');
+}
+
 export function parseArgs(argv) {
   const names = [];
-  let runner;
+  let runner, moved;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--') {
@@ -157,18 +175,24 @@ export function parseArgs(argv) {
       runner = argv[index + 1];
       index += 1;
       if (!runner || runner.startsWith('-')) throw new Error('--runner needs a runner id');
+    } else if (arg === '--moved') {
+      const [from, to] = argv.slice(index + 1, index + 3);
+      index += 2;
+      if (!from || !to || from.startsWith('-') || to.startsWith('-')) throw new Error('--moved needs <old-path> <new-path>');
+      moved = { from, to };
+      names.push(from);
     } else if (arg.startsWith('-')) {
       throw new Error(`Unknown option: ${arg}`);
     } else {
       names.push(arg);
     }
   }
-  if (!names.length && runner === undefined) throw new Error('Usage: node scripts/readers.mjs [--runner <id>] <name…>');
-  return { names, runner };
+  if (!names.length && runner === undefined) throw new Error('Usage: node scripts/readers.mjs [--runner <id>] [--moved <old-path> <new-path>] <name…>');
+  return { names, runner, ...(moved ? { moved } : {}) };
 }
 
 /** The report for one invocation, and its exit code. */
-export function sweep(root, { names, runner }) {
+export function sweep(root, { names, runner, moved }) {
   const sections = [];
   let code = 0;
   if (runner !== undefined) {
@@ -177,6 +201,7 @@ export function sweep(root, { names, runner }) {
     sections.push(formatRunnerReaders(readers));
     sections.push(formatSearch(searchName(root, runner, [`'${runner}'`, `"${runner}"`, `\`${runner}\``])));
   }
+  if (moved) sections.push(formatPins(moved, searchPins(root, moved.from)));
   for (const name of names) sections.push(formatSearch(searchName(root, name)));
   return { report: sections.join('\n\n'), code };
 }

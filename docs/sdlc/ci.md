@@ -195,7 +195,11 @@ Within a package, each unordered pair of different file paths has a ceiling:
 the sum of jscpd's reported duplicated tokens at the merge-base. An equal or
 smaller head total passes even when fragments split or change fingerprints.
 A larger total or a new reported pair fails; reductions in other pairs cannot
-offset it. Removed pairs pass. Renamed files form new pairs. Reported line
+offset it. Removed pairs pass. A clone that moved keeps its allowance: before the totals are
+summed, each merge-base clone carries one head clone with the same fingerprint (its code with the
+layout dropped, its token count and its package) out of both scans. A clone that stays in its pair is
+carried first. A moved or renamed file, or a cloned pair moved into another file, therefore passes, and
+a further copy of the same code finds no merge-base clone left and fails. Reported line
 counts are diagnostic only: splitting a clone can count a boundary line twice.
 This uses jscpd's detected pairs, not an exhaustive comparison of all file pairs.
 Moving duplication within one pair can pass within its token ceiling.
@@ -589,7 +593,11 @@ fails because a function it does not touch is long. A changed function that is l
 over 20 passes; the job and the pre-PR check (`check-code-quality`), which runs the same script,
 list it as a notice. A moved or renamed function is compared with
 the function it came from: first one with an identical body, then the one same-named function that
-shares the most of its body lines, at least half of them. A copy of a long function is still new, and
+shares the most of its body lines, at least half of them. A function with an identical body and equal
+complexity may
+also come from a function whose same-named successor in the old place the change rewrote to at or
+under 20, such as a delegator that now calls the moved body; a successor still over 20 keeps its
+origin, so the copy is new. A copy of a long function is still new, and
 so is a function that only shares a name with a removed one or has two equally close origins. When
 one file holds several same-named functions that the gate cannot tell apart by their place, a changed one
 is compared with the one closest by body, or with the least complex when none is closest, so an unclear
@@ -629,7 +637,8 @@ node packages/cezar/src/lint/file-length.ts headroom <path>...
 When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so.
 Commit the baseline with the change. CI writes nothing and fails a pin that was not lowered
 ([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)). A run only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
-or a new entry, and the same `baseline-growth` label approves one.
+or a new entry, and the same `baseline-growth` label approves one. A pin that only follows its
+file to a new path needs no label ([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)).
 
 A PR that edits `ci.yml` does not run its own definition (see § Proving a `ci.yml` change). A bare
 `workflow_dispatch` runs `complexity-gate` on the dispatched branch against `main`, so the
