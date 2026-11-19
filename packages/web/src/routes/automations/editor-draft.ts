@@ -1,4 +1,4 @@
-import { writableAutomationTask } from '@open-mercato/cezar-api-client/contract/automations'
+import { writableAutomationTask } from '@open-mercato/cezar-api-client/contract/automation-storage'
 import {
   normalizeSchedule,
   type AutomationSchedule,

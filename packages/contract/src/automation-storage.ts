@@ -51,6 +51,14 @@ export const storedAutomationTaskSchema = z
     message: 'task selects either a named workflow or inline steps, not both',
   });
 
+const WRITABLE_TASK_KEYS: ReadonlySet<string> = new Set(Object.keys(storedAutomationTaskSchema.shape).filter((key) => key !== 'variants'));
+
+/** Keep only the keys the write request (`automation-requests.ts`) accepts. A stored task may
+ *  carry retired keys such as `variants` or `generateFollowups`; never apply to caller input. */
+export function writableAutomationTask<T extends object>(task: T): Omit<T, 'variants'> {
+  return Object.fromEntries(Object.entries(task).filter(([key]) => WRITABLE_TASK_KEYS.has(key))) as Omit<T, 'variants'>;
+}
+
 /**
  * A poll's two defaulted keys are filled BEFORE parsing, and only for the poll kind: `.default()`
  * on the keys themselves would also stamp `intervalSeconds: 300` and an empty filter onto every

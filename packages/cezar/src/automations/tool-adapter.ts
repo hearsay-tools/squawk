@@ -5,7 +5,7 @@ import { nextOccurrence } from '@open-mercato/cezar-contract/automation-schedule
 import { ProjectAutomationScheduler } from './scheduler.ts';
 import type { GithubRepository } from './github-repository.ts';
 import type { GithubPoller } from './github-poller.ts';
-import { writableAutomationTask } from '@open-mercato/cezar-contract/automations';
+import { writableAutomationTask } from '@open-mercato/cezar-contract/automation-storage';
 import { automationCreateSchema, automationUpdateSchema } from '@open-mercato/cezar-contract/automation-requests';
 import { isValidTimeZone } from '@open-mercato/cezar-contract/zoned-time';
 import { onceInstant, unknownTimeZoneMessage } from '@open-mercato/cezar-contract/automation-schedule';
