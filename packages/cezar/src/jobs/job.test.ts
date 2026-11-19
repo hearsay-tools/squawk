@@ -250,7 +250,7 @@ it.runIf(posix)('stop ends the whole group of a running job, a grandchild that i
   expect(groupRunning(leader)).toBe(false);
 }, 30_000);
 
-it.runIf(posix)('stop ends what a job left in its group after its supervisor was killed by PID', async () => {
+it.runIf(process.platform === 'linux')('stop ends what a job left in its group after its supervisor was killed by PID', async () => {
   const dir = scratch();
   const job = await stubbornJob(dir, 'bench');
   const leader = leaderOf(job.pid);
@@ -295,3 +295,14 @@ it.runIf(process.platform === 'linux')('stop never signals a leaderless group th
   expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([]);
   expect(groupRunning({ pid: leader.pid! })).toBe(true);
 });
+
+it.runIf(process.platform === 'darwin')('on macOS, stop reports a group its supervisor left and never signals it: no boot id proves it is the job\'s', async () => {
+  const dir = scratch();
+  const job = await stubbornJob(dir, 'left');
+  process.kill(job.pid, 'SIGTERM');
+  await written(job.exitFile);
+  await vi.waitFor(() => { try { process.kill(job.pid, 0); } catch { return; } throw new Error('the supervisor still runs'); }, { timeout: 20_000, interval: 25 }); // bound: hang guard; the supervisor exits after its exit file
+  const kill = vi.spyOn(process, 'kill');
+  expect(await stopJob(dir, 'left', { graceMs: 300 })).toEqual({ name: 'left', pid: job.pid, stopped: false });
+  expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([]);
+}, 30_000);

@@ -102,8 +102,10 @@ that finds no job running removes it (hearsay-tools/squawk#3138). The end-time r
 kept the directory for, so later run events of that end, such as a read mark, keep it too
 (`jobHoldsScratch` in `workflows/run/run-settlement.ts`); once the run is archived, the mark holds
 nothing. `hsq job stop <name>` ends
-the job's whole process group, which the supervisor leads, also after the supervisor has exited
-while a member still runs (hearsay-tools/squawk#3941). Agents stop a job with it, never with
+the job's whole process group, which the supervisor leads (hearsay-tools/squawk#3941). After the
+supervisor has exited, it ends the members left in the group only where the record's start token
+proves this boot (Linux, the worker scope's rule in ADR 0032); elsewhere it reports them and
+signals nothing. Agents stop a job with it, never with
 `kill <pid>`: that signal reaches only the command, and a child that ignores SIGTERM keeps running.
 The launch prompt's
 "Long commands" part (`jobs/command.ts`) gives agents the full command; the `cezar_wait`

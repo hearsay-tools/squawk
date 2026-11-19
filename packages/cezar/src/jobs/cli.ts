@@ -16,9 +16,11 @@ status  Print JSON: "state" is "running" or "exited", with "pid", "log",
         "exitFile", and "exitCode" when the exit file holds one.
 stop    End the job's whole process group: SIGTERM, then SIGKILL after 10 s for
         what still runs. Stop a job with this, never with kill <pid>: that
-        reaches only the command, and its children can keep running. It also
-        ends what such a kill left behind. Prints JSON with "stopped"; it is
-        false, with exit 1, while a process of the job may still run.
+        reaches only the command, and its children can keep running. On Linux
+        it also ends what such a kill left behind; elsewhere nothing proves
+        that group is still the job's, so it is reported, not signalled.
+        Prints JSON with "stopped"; it is false, with exit 1, while a process
+        of the job may still run.
 
 --dir <dir>  Where the job's files live. Default: $TMPDIR, the task's temp
              directory. Squawk keeps it across its own restart while the
