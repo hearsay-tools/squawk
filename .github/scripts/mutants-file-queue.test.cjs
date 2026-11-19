@@ -1,0 +1,169 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawn, spawnSync } = require('node:child_process');
+const { enterQueue, alive } = require('./mutants-file-queue.cjs');
+
+function queueDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-queue-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+/** Each wait parks until the test calls tick(), so the test decides when a waiter polls again. */
+function manualClock() {
+  const parked = [];
+  return {
+    wait: () => new Promise(resolve => parked.push(resolve)),
+    async tick() {
+      for (const resolve of parked.splice(0)) resolve();
+      await new Promise(resolve => setImmediate(resolve));
+    },
+  };
+}
+
+const settled = promise => Promise.race([promise.then(() => true), new Promise(resolve => setImmediate(() => resolve(false)))]);
+const entry = (dir, name, pid, file = `packages/cezar/src/p${pid}.ts`) => fs.writeFileSync(path.join(dir, name), JSON.stringify({ pid, file }));
+
+test('two runs on one host take turns, and the second prints its position', async t => {
+  const dir = queueDir(t);
+  const clock = manualClock();
+  const logs = { 1: [], 2: [] };
+  const run = pid => enterQueue({ file: `packages/cezar/src/f${pid}.ts`, signal: new AbortController().signal, log: line => logs[pid].push(line), dir, pid, wait: clock.wait, isAlive: () => true });
+  const releaseFirst = await run(1);
+  const second = run(2);
+  assert.equal(await settled(second), false);
+  assert.deepEqual(logs[2], ['Queue: position 2, 1 ahead; running: packages/cezar/src/f1.ts (pid 1)']);
+  assert.deepEqual(logs[1], []);
+  await clock.tick();
+  assert.equal(await settled(second), false, 'the second run waits while the first holds the queue');
+  assert.equal(logs[2].length, 1, 'an unchanged position is printed once');
+  releaseFirst.release();
+  await clock.tick();
+  const releaseSecond = await second;
+  assert.equal(logs[2].at(-1), 'Queue: this run starts now');
+  releaseSecond.release();
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('a dead run ahead is removed, and two runs that arrive together never both enter', async t => {
+  // The interleaving from the pre-PR review: a dead holder, then two waiters at once. Each file
+  // belongs to one PID, so removing the dead one cannot remove a live run's entry.
+  const dir = queueDir(t);
+  const clock = manualClock();
+  entry(dir, 't-000000000001-0000000007.json', 7);
+  entry(dir, 'c-0000000010.json', 10);
+  const opts = { signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive: pid => pid !== 7 };
+  const first = enterQueue({ ...opts, file: 'packages/cezar/src/a.ts', pid: 20 });
+  assert.equal(await settled(first), false, 'a live run that is still choosing a ticket holds the others back');
+  assert.ok(!fs.readdirSync(dir).includes('t-000000000001-0000000007.json'), 'the dead run is removed');
+  entry(dir, 't-000000000001-0000000010.json', 10);
+  fs.rmSync(path.join(dir, 'c-0000000010.json'));
+  await clock.tick();
+  assert.equal(await settled(first), false, 'the run with the lower ticket goes first');
+  fs.rmSync(path.join(dir, 't-000000000001-0000000010.json'));
+  await clock.tick();
+  const release = await first;
+  const second = enterQueue({ ...opts, file: 'packages/cezar/src/b.ts', pid: 10 });
+  assert.equal(await settled(second), false, 'a run that arrives while another runs waits');
+  release.release();
+  await clock.tick();
+  (await second).release();
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('equal tickets go in PID order', async t => {
+  const dir = queueDir(t);
+  const clock = manualClock();
+  entry(dir, 't-000000000001-0000000003.json', 3);
+  const waiter = enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive: () => true, file: 'packages/cezar/src/x.ts', pid: 5 });
+  assert.ok(fs.readdirSync(dir).includes('t-000000000002-0000000005.json'));
+  entry(dir, 't-000000000002-0000000004.json', 4);
+  fs.rmSync(path.join(dir, 't-000000000001-0000000003.json'));
+  await clock.tick();
+  assert.equal(await settled(waiter), false, 'PID 4 holds the same ticket and goes first');
+  fs.rmSync(path.join(dir, 't-000000000002-0000000004.json'));
+  await clock.tick();
+  (await waiter).release();
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('an interrupted waiter leaves the queue; the default wait stops on the signal', async t => {
+  const dir = queueDir(t);
+  const logs = [];
+  const release = await enterQueue({ signal: new AbortController().signal, log: line => logs.push(line), dir, pid: 1, isAlive: () => true, file: 'packages/cezar/src/a.ts' });
+  const controller = new AbortController();
+  const waiter = enterQueue({ signal: controller.signal, log: line => logs.push(line), dir, pid: 2, isAlive: () => true, file: 'packages/cezar/src/b.ts' });
+  assert.equal(await settled(waiter), false);
+  controller.abort();
+  await assert.rejects(waiter, { name: 'AbortError' });
+  assert.deepEqual(fs.readdirSync(dir), ['t-000000000001-0000000001.json']);
+  assert.equal(logs.length, 1);
+  release.release();
+});
+
+test('alive reports this process and not an exited one', () => {
+  assert.equal(alive(process.pid), true);
+  const exited = spawnSync(process.execPath, ['-e', '0']).pid;
+  assert.equal(alive(exited), false);
+});
+
+test('a killed run keeps its turn while the Stryker process group it started lives', async t => {
+  const dir = queueDir(t);
+  const clock = manualClock();
+  const group = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+  const stopGroup = () => { try { process.kill(-group.pid, 'SIGKILL'); } catch {} };
+  t.after(stopGroup);
+  const killedParent = spawnSync(process.execPath, ['-e', '0']).pid;
+  const slot = await enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, file: 'packages/cezar/src/a.ts', pid: killedParent });
+  slot.track(group.pid);
+  const logs = [];
+  const next = enterQueue({ signal: new AbortController().signal, log: line => logs.push(line), dir, wait: clock.wait, file: 'packages/cezar/src/b.ts', pid: process.pid });
+  assert.equal(await settled(next), false, 'the dead parent\'s live Stryker group holds the queue');
+  assert.match(logs[0], /running: packages\/cezar\/src\/a\.ts/);
+  const exited = new Promise(resolve => group.once('exit', resolve));
+  stopGroup();
+  await exited;
+  await clock.tick();
+  (await next).release();
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('a parent that records its group and dies during a waiter\'s read keeps its turn', async t => {
+  // Review interleaving: the waiter reads the old ticket, the parent records a live group and dies,
+  // then the waiter decides. The waiter checks the parent before the read, so it sees a live parent.
+  const dir = queueDir(t);
+  const clock = manualClock();
+  const dead = new Set();
+  const isAlive = id => id === -1234 || !dead.has(id);
+  const first = await enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive, file: 'packages/cezar/src/a.ts', pid: 10 });
+  const ticket = path.join(dir, 't-000000000001-0000000010.json');
+  const io = { ...fs, readFileSync: (file, ...rest) => {
+    const old = fs.readFileSync(file, ...rest);
+    if (file === ticket && !dead.has(10)) { first.track(1234); dead.add(10); }
+    return old;
+  } };
+  const second = enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive, io, file: 'packages/cezar/src/b.ts', pid: 20 });
+  assert.equal(await settled(second), false, 'the first run\'s live Stryker group still holds the queue');
+  assert.ok(fs.existsSync(ticket));
+  await clock.tick();
+  assert.equal(await settled(second), false, 'the next poll reads the recorded group');
+  first.release();
+  await clock.tick();
+  (await second).release();
+});
+
+test('track never throws when the ticket cannot be written', async t => {
+  const dir = queueDir(t);
+  const logs = [];
+  const io = { ...fs, renameSync: (from, to) => { if (to.includes('t-') && logs.length === 0 && broken) throw Object.assign(new Error('no space left'), { code: 'ENOSPC' }); return fs.renameSync(from, to); } };
+  let broken = false;
+  const slot = await enterQueue({ signal: new AbortController().signal, log: line => logs.push(line), dir, io, isAlive: () => true, file: 'packages/cezar/src/a.ts', pid: 1 });
+  broken = true;
+  assert.doesNotThrow(() => slot.track(99));
+  assert.deepEqual(logs, ['Queue: could not record Stryker process group 99: no space left']);
+  slot.release();
+});

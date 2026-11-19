@@ -185,6 +185,10 @@ test('the issue body holds the marker, file, head, run, PASS and FAIL lines, the
     'FAIL: consumer tests: failed — boom', 'No earlier result.', '`decide`: 1 undetected', 'L4 Condition / ConditionalExpression',
     '`gone`: not found', 'Stale', 'Ambiguous', 'more than one mutant (3)', 'Fixes #']) assert.ok(body.includes(text), text);
   assert.ok(!body.includes('`ok`:'), 'a guard with no survivors gets no line');
+  assert.match(body, /### Timeout mutants\n\nNone\./);
+  const timeout = survivor(7, 'decide', { status: 'Timeout' });
+  const timed = renderIssue({ outcome: classify(entry(file), { result: { ...res, mutants: [survivor(3), timeout] } }), earlier: { kind: 'none' }, head: HEAD, runUrl: RUN_URL });
+  assert.match(timed, /### Timeout mutants\n\n- L7 Condition \/ ConditionalExpression in `decide`: `x > 7` -> `true`\n\n/);
   assert.match(renderIssue({ outcome, earlier: { kind: 'incomparable', version: 1 }, head: HEAD, runUrl: RUN_URL }), /No comparable earlier result: it has result version 1, this run has version 2\./);
   assert.match(renderIssue({ outcome, earlier: { kind: 'incomparable', reason: 'bad' }, head: HEAD, runUrl: RUN_URL }), /No comparable earlier result: bad\./);
   const earlierResult = result(file, { survivors: [survivor(9)] });

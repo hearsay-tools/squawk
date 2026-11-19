@@ -168,6 +168,12 @@ function guardSection(result, cap) {
   return lines.length ? lines : ['None.'];
 }
 
+/** A Timeout counts as detected, but under load it can hide a survivor, so the issue names each one. */
+function timeoutSection(result, cap) {
+  const timeouts = (Array.isArray(result.mutants) ? result.mutants : []).filter(m => m?.status === 'Timeout');
+  return timeouts.length ? capped(timeouts, cap, survivorLine) : ['None.'];
+}
+
 function equivalentSection(result, cap) {
   const groups = [['Stale (matches no mutant)', result.staleEquivalent], ['Ambiguous (the function name repeats)', result.ambiguousEquivalent],
     ...(result.multipleEquivalent ?? []).map(e => [`Matches more than one mutant (${e.matchCount})`, [e]])];
@@ -184,6 +190,7 @@ function issueText({ outcome, earlier, head, runUrl }, cap) {
     ...(result.consumers?.state === 'failed' ? [`- FAIL: consumer tests: failed — ${flat(result.consumers.reason)}`] : []), '',
     '### Change against the earlier result', '', ...changeSection(earlier, cap), '',
     '### Guard survivors', '', ...guardSection(result, cap), '',
+    '### Timeout mutants', '', ...timeoutSection(result, cap), '',
     '### Equivalent list entries', '', ...equivalentSection(result, cap), '',
     '### Fixing it', '',
     `Run \`node .github/scripts/mutants-file.cjs ${file}\` as \`docs/sdlc/regression-proof.md\` says, cite its PASS lines in the pull request and write \`Fixes #<this issue>\`. The weekly run closes this issue when every target passes.`,
