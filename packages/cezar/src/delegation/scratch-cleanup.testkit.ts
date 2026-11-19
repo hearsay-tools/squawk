@@ -16,7 +16,7 @@ export let root: string;
 export let store: RunStore;
 
 function openStore(): RunStore {
-  // As `serve` boots: a store that cannot open is kept as `RunStore.unavailable` (#779).
+  // As `serve` boots: a store that cannot open is kept as `RunStore.unavailable` (hearsay-tools/cezarion#779).
   try {
     return RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
   } catch (error) {

@@ -13,7 +13,7 @@ import { createFixtureManager, drainFixtureManagers } from './fixture-no-runner.
 import type { RunManager } from './run.ts';
 
 /**
- * An ownership check is a moment; the work it admits is not (#779, plan step 3, PR #851 review).
+ * An ownership check is a moment; the work it admits is not (hearsay-tools/cezarion#779, plan step 3, hearsay-tools/cezarion#851 review).
  * A Continue admission and the async maintenance claims (publish, worktree reclaim, branch
  * cleanup) must HOLD the run's family claim for as long as they act on it, so another Squawk
  * process cannot claim and Continue the run in between, and must refuse when the hold fails.
