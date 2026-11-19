@@ -90,6 +90,10 @@ describe.runIf(posix)('an owner-death guard (hearsay-tools/squawk#3941)', () => 
       `import { ignoreTermUntilOwnerExits } from ${helper}; import { createInterface } from 'node:readline'; ignoreTermUntilOwnerExits(${pid}); process.stdout.write('ready\\n'); createInterface({ input: process.stdin }).on('line', () => process.stdout.write('pong\\n'));`]]);
   }, BOUND_MS);
 
+  it('builds a shell guard with no quote character, so a quoted sh -c script around it cannot change it', () => {
+    expect(ownerGuardShell('$member', 4242)).not.toMatch(/['"]/);
+  });
+
   it('never names pid 0 or 1, which would signal a whole group or init', () => {
     for (const pid of [0, 1, -5, Number.NaN, 2.5]) {
       expect(() => ignoreTermSource(pid)).toThrow(/is no pid/);

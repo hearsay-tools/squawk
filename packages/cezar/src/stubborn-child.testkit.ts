@@ -44,13 +44,14 @@ export function ignoreTermUntilOwnerExits(owner: number): void {
  * A POSIX sh command that runs in the background and SIGKILLs `target` once `owner` is gone. It
  * ends by itself within a second after `target` ends. It signals the one pid `target` names, never
  * a process group. `target` is a shell word, `$$` (this shell) by default; capture `$!` in a
- * variable first, because this command starts a job of its own. The guard ignores SIGTERM itself,
- * so a SIGTERM sweep of the group leaves it watching (hearsay-tools/squawk#3945 review). Inside a `( … )` subshell `$$` is
+ * variable first, because this command starts a job of its own. The guard catches SIGTERM with a
+ * no-op, so a SIGTERM sweep of the group leaves it watching (hearsay-tools/squawk#3945 review). It
+ * holds no quote character, so it keeps its meaning inside a quoted `sh -c '…'` script. Inside a `( … )` subshell `$$` is
  * still the outer shell, so a subshell that must die names its own captured pid instead.
  */
 export function ownerGuardShell(target = '$$', owner: number = process.pid): string {
   const pid = ownerPid(owner);
-  return `(trap '' TERM; while kill -0 ${target} 2>/dev/null; do kill -0 ${pid} 2>/dev/null || { kill -KILL ${target} 2>/dev/null; exit; }; sleep 1; done) </dev/null >/dev/null 2>&1 &`;
+  return `(trap : TERM; while kill -0 ${target} 2>/dev/null; do kill -0 ${pid} 2>/dev/null || { kill -KILL ${target} 2>/dev/null; exit; }; sleep 1; done) </dev/null >/dev/null 2>&1 &`;
 }
 
 /**
