@@ -57,6 +57,8 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Reach another Squawk task only through ${messaging}; never use your runner's native tools for that.`,
   ].join(' ');
 
+  /** What the task may do only to workers it started itself: both the workers-on and the workers-off prompt say it. */
+  const ownWorkersOnly = 'Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker.';
   const worker = run.delegation?.role === 'worker';
   const owned = run.delegation?.role === 'root' && run.delegation.receipts.length > 0;
   // Accepted peer requests still allow a reply, a wait or a cancel after messaging goes off.
@@ -127,13 +129,13 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,
-    `A worker may start one shared-workspace worker of its own at a time. Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker. Workers cannot message peers.`,
+    `A worker may start one shared-workspace worker of its own at a time. ${ownWorkersOnly} Workers cannot message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
     `Use native subagents for research, code reading and focused analysis.`,
     subagentMessaging,
     WORKERS_OFF,
-    ...(owned ? [`You still manage the workers you own with ${invocation} list, inspect, collect, steer, stop, destroy, diff and wait. Collect the latest settled revision of every worker before completing.`] : []),
+    ...(owned ? [`You still manage the workers you own with ${invocation} list, inspect, collect, steer, stop, destroy, diff and wait. ${ownWorkersOnly} Collect the latest settled revision of every worker before completing.`] : []),
     ...messagingOff,
     conversationGuidance,
   ];

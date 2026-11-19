@@ -229,6 +229,7 @@ describe('session provisioning', () => {
       const session = provision()!;
       expect(session.env.CEZ_DELEGATION_TOKEN).toBeTypeOf('string');
       expect(session.instructions).toContain('You still manage the workers you own');
+      expect(session.instructions).toContain('Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker.');
       expect(session.instructions).toContain(`Squawk workers are off for this task.`);
     });
   });

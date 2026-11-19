@@ -1,4 +1,4 @@
-import type { WorkerWait } from './delegation.ts';
+import { listsWorkers, type WorkerWait } from './delegation.ts';
 import type { RunIndexEntry, RunRecord, RunSummary } from './runs.ts';
 import type { WaitingOn } from './waits.ts';
 import { hasResolvedWait, resolveWaitingOn } from './waiting-on.ts';
@@ -157,8 +157,10 @@ function owesWorkerWake(run: AttentionInput): boolean {
  * A worker waits outside itself on its parent (ring); a root waits on its own workers (robot). */
 function workerAttention(run: Pick<AttentionInput, 'delegation'>, waitingOn: Extract<WaitingOn, { kind: 'workers' }>): Attention {
   const attention = attentionOfRung('waiting-on-workers');
-  // A worker waits on a reply to its own request, or on the workers it started.
-  if (run.delegation?.role === 'worker' && (waitingOn.replies || !waitingOn.count)) return { ...attention, shape: 'ring', label: 'waiting on parent reply' };
+  // A worker waits on its parent's reply, unless it can have workers of its own (`listsWorkers`)
+  // and waits on them. A list summary carries no grant, so it keeps the parent-reply wording.
+  const ownWorkers = listsWorkers(run.delegation) && !waitingOn.replies && !!waitingOn.count;
+  if (run.delegation?.role === 'worker' && !ownWorkers) return { ...attention, shape: 'ring', label: 'waiting on parent reply' };
   if (waitingOn.replies) return { ...attention, label: waitingOn.peers ? 'waiting on replies' : 'waiting on worker replies' };
   const count = waitingOn.count;
   return { ...attention, label: count ? `waiting on ${count} worker${count === 1 ? '' : 's'}` : attention.label };
