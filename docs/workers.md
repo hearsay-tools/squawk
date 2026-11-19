@@ -111,6 +111,51 @@ hsq worker destroy <worker-id>
 - **What the root still controls.** The root task may inspect, wait on, collect, stop and destroy every worker of its family, so cleanup never depends on a worker that has ended. It does not steer or message a worker it did not start. The root task's **Allow Squawk workers** setting gates every spawn in its family.
 - **History.** Delete the history of the workers a worker started before you delete that worker's history; the cockpit names them when it refuses.
 
+### Run a review round from a worker
+
+A worker reviews its own committed change before it pushes: it starts one worker that reads the commits, and it reads that worker's report. The project's pre-PR review rule names the runner, the model, the effort and the review prompt; [Continuous integration](sdlc/ci.md) says where that review stands among the gates.
+
+1. Commit the change. Then start the worker with the command of the review rule and a new request id:
+
+   ```sh
+   hsq worker spawn --baseline parent-head --request-id <UUID> --runner <runner> --model <model> --effort <effort> --context-file <review-prompt> '<task>'
+   ```
+
+   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It names the pull request when one exists; else it says that none exists yet. It says to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree, and `--baseline parent-head` changes nothing there ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
+2. Register the wait and end the turn. Do not edit the worktree while the round runs.
+
+   ```sh
+   hsq worker wait <worker-id> --mode one --timeout-seconds <1-7200>
+   ```
+
+   One round has a total time limit of one hour, counted from the spawn. The limit is a rule of this procedure, not a Squawk timeout: a wait never stops its worker. Give each wait a `--timeout-seconds` of at most the time left in the hour, and register the wait again after a wake on a message or a deadline. When the hour has passed and the worker has not settled, stop it, destroy it and count a failed round:
+
+   ```sh
+   hsq worker stop <worker-id>
+   hsq worker destroy <worker-id>
+   ```
+
+3. Collect the result.
+
+   ```sh
+   hsq worker collect <worker-id>
+   ```
+
+   A round is valid only when all three hold:
+
+   - **The worker has settled.** The result says `"settled": true` and `"partial": false`. A result of a running worker is partial, and its `changes` compares with the directory at that moment: wait again.
+   - **The full report has arrived.** The worker sends it as a message to its parent before `cezar_done`. The collected `summary` holds at most the last assistant text, cut at 4,000 characters; it is not the report.
+   - **`changes` says `unchanged`** ([Change report](#shared-workspace)). `changed` means that a file, the index, HEAD or the branch moved during the round: read `paths` and find the cause. `unavailable` means that Squawk has no comparison, for example after a crashed session.
+
+   The round covers the head SHA that the task names: `git rev-parse HEAD` must still print it when the round ends. A worker that failed, was cancelled, or settled with no report, and a round whose `changes` is `changed` or `unavailable`, is a failed round: destroy the worker and run the round again.
+4. Destroy the worker. A worker may have one outstanding worker, so the next round starts only after this.
+
+   ```sh
+   hsq worker destroy <worker-id>
+   ```
+
+After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or after two failed rounds, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
+
 ### What destroy stops
 
 Every process Squawk starts for a worker (its setup, agent sessions, `check` steps and preview server) starts inside the worker's **scope**, and destroy stops the scope ([ADR 0032](adr/0032-prove-process-and-workspace-ownership-before-cleanup.md)). `hsq worker inspect` reports it as `scope.backend` and `scope.guarantee`:

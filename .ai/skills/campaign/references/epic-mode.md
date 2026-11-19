@@ -39,8 +39,9 @@ exit. Design approval does not grant merge authority.
    affected implementation starts.
 4. **Start.** Start a phase coordinator as a root Squawk task with the prompt
    below and a freshly discovered runner/model/effort. Use `hsq task start`
-   with `--task-file <prompt>` and the selected execution controls. An owned
-   worker cannot delegate; phase coordinators need root-task capabilities.
+   with `--task-file <prompt>` and the selected execution controls. A worker
+   may start only one shared-workspace worker at a time; a phase coordinator
+   needs a root task's rights.
 5. **Wait.** Keep one long peer wait per active coordinator: register
    `hsq message wait --peer <coordinator id> --timeout-seconds 7200`, rather
    than renewing 30-minute waits. Put the request deadline in the first line
