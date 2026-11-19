@@ -131,3 +131,39 @@ test('a killed run keeps its turn while the Stryker process group it started liv
   (await next).release();
   assert.deepEqual(fs.readdirSync(dir), []);
 });
+
+test('a parent that records its group and dies during a waiter\'s read keeps its turn', async t => {
+  // Review interleaving: the waiter reads the old ticket, the parent records a live group and dies,
+  // then the waiter decides. The waiter checks the parent before the read, so it sees a live parent.
+  const dir = queueDir(t);
+  const clock = manualClock();
+  const dead = new Set();
+  const isAlive = id => id === -1234 || !dead.has(id);
+  const first = await enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive, file: 'packages/cezar/src/a.ts', pid: 10 });
+  const ticket = path.join(dir, 't-000000000001-0000000010.json');
+  const io = { ...fs, readFileSync: (file, ...rest) => {
+    const old = fs.readFileSync(file, ...rest);
+    if (file === ticket && !dead.has(10)) { first.track(1234); dead.add(10); }
+    return old;
+  } };
+  const second = enterQueue({ signal: new AbortController().signal, log: () => {}, dir, wait: clock.wait, isAlive, io, file: 'packages/cezar/src/b.ts', pid: 20 });
+  assert.equal(await settled(second), false, 'the first run\'s live Stryker group still holds the queue');
+  assert.ok(fs.existsSync(ticket));
+  await clock.tick();
+  assert.equal(await settled(second), false, 'the next poll reads the recorded group');
+  first.release();
+  await clock.tick();
+  (await second).release();
+});
+
+test('track never throws when the ticket cannot be written', async t => {
+  const dir = queueDir(t);
+  const logs = [];
+  const io = { ...fs, renameSync: (from, to) => { if (to.includes('t-') && logs.length === 0 && broken) throw Object.assign(new Error('no space left'), { code: 'ENOSPC' }); return fs.renameSync(from, to); } };
+  let broken = false;
+  const slot = await enterQueue({ signal: new AbortController().signal, log: line => logs.push(line), dir, io, isAlive: () => true, file: 'packages/cezar/src/a.ts', pid: 1 });
+  broken = true;
+  assert.doesNotThrow(() => slot.track(99));
+  assert.deepEqual(logs, ['Queue: could not record Stryker process group 99: no space left']);
+  slot.release();
+});

@@ -36,6 +36,14 @@ function publish(io, dir, name, entry) {
   io.renameSync(temp, path.join(dir, name));
 }
 
+function readJson(file, io) {
+  try {
+    return JSON.parse(io.readFileSync(file, 'utf8')) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 /** Live choosing marks and tickets in queue order, after removing the files of dead processes. */
 function entries(dir, io, isAlive) {
   const live = [];
@@ -43,12 +51,11 @@ function entries(dir, io, isAlive) {
     const match = ENTRY.exec(name);
     if (!match) continue;
     const pid = Number(match[3]);
-    let content = {};
-    try {
-      content = JSON.parse(io.readFileSync(path.join(dir, name), 'utf8')) ?? {};
-    } catch {}
+    // Parent death first, then the ticket: a dead parent writes no more groups, so this read is final.
+    const parentAlive = isAlive(pid);
+    const content = readJson(path.join(dir, name), io);
     const groups = Array.isArray(content.groups) ? content.groups.filter(Number.isSafeInteger) : [];
-    if (!isAlive(pid) && !groups.some(group => isAlive(-group))) {
+    if (!parentAlive && !groups.some(group => isAlive(-group))) {
       io.rmSync(path.join(dir, name), { force: true });
       continue;
     }
@@ -86,7 +93,15 @@ async function enterQueue({ file, signal, log, dir = QUEUE_DIR, pid = process.pi
         ticketName = null;
         const groups = [];
         return {
-          track: group => { groups.push(group); publish(io, dir, own, { pid, file, groups }); },
+          // Never throws: Stryker's group already runs, and runStryker must keep the means to stop it.
+          track: group => {
+            groups.push(group);
+            try {
+              publish(io, dir, own, { pid, file, groups });
+            } catch (error) {
+              log(`Queue: could not record Stryker process group ${group}: ${error.message}`);
+            }
+          },
           release: () => io.rmSync(path.join(dir, own), { force: true }),
         };
       }
