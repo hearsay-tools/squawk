@@ -8,6 +8,10 @@ import {
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The binding schema and capture read each provider's account layout from the registry.
+registerBuiltInRunners();
 
 const claude = { provider: 'claude' as const, profileId: 'default', homePath: '/home/x/.claude', claudeLayout: { kind: 'relocated' as const } };
 const codex = { provider: 'codex' as const, profileId: 'work', homePath: '/home/x/codex-work' };

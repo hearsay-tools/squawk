@@ -7,6 +7,8 @@ import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 import { OPENCODE_DETECTION } from './detection.ts';
 import { OPENCODE_CLI } from './cli.ts';
 import { OPENCODE_LOGIN } from './login.ts';
+import { OPENCODE_ACCOUNTS } from './accounts.ts';
+import { OPENCODE_ENV } from './env.ts';
 
 /** The OpenCode runner. */
 export const opencodeRunner = defineRunner({
@@ -25,5 +27,7 @@ export const opencodeRunner = defineRunner({
   configFiles: OPENCODE_CONFIG_FILES,
   extraTools: OPENCODE_EXTRA_TOOLS,
   login: OPENCODE_LOGIN,
+  accounts: OPENCODE_ACCOUNTS,
+  env: OPENCODE_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOpenCodeStatus }),
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv, withoutHomeEnv, looksSecret } from './agent-env.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// buildChildEnv reads the backend's allow-list prefixes from the registry.
+registerBuiltInRunners();
 import { RUNNER_IDS } from './agent-runner.ts';
 
 /**

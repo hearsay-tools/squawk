@@ -7,6 +7,8 @@ import { PI_SPEC_SUPPORT } from './spec-support.ts';
 import { PI_DETECTION } from './detection.ts';
 import { PI_CLI } from './cli.ts';
 import { PI_LOGIN } from './login.ts';
+import { PI_ACCOUNTS } from './accounts.ts';
+import { PI_ENV } from './env.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
@@ -25,5 +27,7 @@ export const piRunner = defineRunner({
   configFiles: PI_CONFIG_FILES,
   extraTools: PI_EXTRA_TOOLS,
   login: PI_LOGIN,
+  accounts: PI_ACCOUNTS,
+  env: PI_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parsePiStatus }),
 });

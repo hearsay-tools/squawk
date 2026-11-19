@@ -5,10 +5,10 @@ import { isAbsolute } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
 import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
-import { ACCOUNT_LAYOUT, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
+import { accountLayout, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-import { AGENT_HOME_SLOT, agentHomePaths, claudeStateFilePath } from '../paths.ts';
+import { agentHomePaths, agentHomeSlot, claudeStateFilePath } from '../paths.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -29,8 +29,8 @@ export const workerAccountBindingSchema = z.object({
 }).strict().refine(binding => binding.homePath !== undefined
   ? supportsProfiles(binding.provider)
   // A default that binds no home spawns bare.
-  : binding.profileId === 'default' && !ACCOUNT_LAYOUT[binding.provider].defaultBindsHome)
-  .refine(binding => ACCOUNT_LAYOUT[binding.provider].stateFile === 'beside-home'
+  : binding.profileId === 'default' && !accountLayout(binding.provider).defaultBindsHome)
+  .refine(binding => accountLayout(binding.provider).stateFile === 'beside-home'
     ? binding.claudeLayout !== undefined && (binding.claudeLayout.kind !== 'native' || binding.profileId === 'default')
     : binding.claudeLayout === undefined);
 export type WorkerAccountBinding = z.infer<typeof workerAccountBindingSchema>;
@@ -85,13 +85,13 @@ export type WorkerExecutionIdentity = z.infer<typeof workerExecutionIdentitySche
 export class WorkerIdentityError extends Error {}
 
 export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.ProcessEnv = process.env): WorkerAccountBinding | undefined {
-  const layout = ACCOUNT_LAYOUT[profile.provider];
+  const layout = accountLayout(profile.provider);
   if (!supportsProfiles(profile.provider) || (profile.isDefault && !layout.defaultBindsHome)) {
     return { provider: profile.provider, profileId: 'default' };
   }
   // A home whose state file sits beside it binds the home the child env resolves, and records that
   // layout. Bind an existing symlink to its actual home. A native first-run home may not exist yet.
-  const childHome = agentHomePaths(env)[AGENT_HOME_SLOT[profile.provider]];
+  const childHome = agentHomePaths(env)[agentHomeSlot(profile.provider)];
   let homePath = layout.stateFile === 'beside-home' ? childHome : profile.path;
   try {
     homePath = realpathSync(homePath);

@@ -9,6 +9,10 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// These routes read runner data through the registry; register the built-ins.
+registerBuiltInRunners();
 import * as git from './git.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 

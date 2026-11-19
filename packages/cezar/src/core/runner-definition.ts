@@ -49,6 +49,13 @@ export interface RunnerDefinition {
   readonly login: RunnerLogin;
   /** Imports the runner's status parser (`runners/<id>/login-probe.ts`). */
   loadLogin(): Promise<RunnerLoginStatus>;
+
+  // ---- accounts and env (hearsay-tools/squawk#3894) ----
+
+  /** Account folder layout, profile markers, home slot (the `accounts` part). */
+  readonly accounts: RunnerAccounts;
+  /** The environment allow-list prefixes (the `env` part). */
+  readonly env: RunnerEnv;
 }
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
@@ -126,6 +133,48 @@ export interface RunnerLogin {
  *  `runners/<id>/login-probe.ts`, so a definition module imports no parser code. */
 export interface RunnerLoginStatus {
   parse(result: ProviderCommandResult): ProviderConnectionState | null;
+}
+
+/** How one runner lays out an account, declared once per runner. Moved verbatim from
+ *  `core/agent-profiles.ts` (`AccountLayout`). */
+export interface AccountLayout {
+  /**
+   * The variable Squawk sets to the account folder so the CLI opens that login. null: the provider
+   * carries no named accounts.
+   */
+  readonly envVar: string | null;
+  /**
+   * Whether a worker binding of the default account pins its discovered home. false: the default
+   * spawns bare and follows the host env. A machine where the agent never ran has no home to pin.
+   */
+  readonly defaultBindsHome: boolean;
+  /**
+   * Where the login state file sits for the discovered home. `beside-home`: next to it (Claude's
+   * `.claude.json`, see `claudeStateFilePath`), so a worker binds the home the child env resolves
+   * and records that layout. `in-home`: inside the account folder.
+   */
+  readonly stateFile: 'in-home' | 'beside-home';
+}
+
+/** Account relocation, profile markers and the home slot (the `accounts` part, spec
+ *  2026-11-18-runner-definitions): the rows of `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS` and
+ *  `AGENT_HOME_SLOT`, moved from `core/agent-profiles.ts` and `paths.ts`. */
+export interface RunnerAccounts {
+  /** How this runner lays out an account. */
+  readonly layout: AccountLayout;
+  /** What the agent drops into its home on first login. Any one is enough. */
+  readonly dirMarkers: readonly string[];
+  /** The `AgentHomePaths` slot that holds this runner's account home. Typed `string` here because
+   *  core may not import the catalog's type; `runners/<id>/accounts.ts` checks the key against
+   *  `keyof AgentHomePaths`, and `agentHomeSlot` (paths.ts) returns that type. */
+  readonly homeSlot: string;
+}
+
+/** The environment allow-list prefixes (the `env` part, spec 2026-11-18-runner-definitions): the
+ *  runner's row of `BACKEND_ALLOW_PREFIXES`, moved from `core/agent-env.ts`. */
+export interface RunnerEnv {
+  /** Per-backend auth/config the runner genuinely needs, by prefix. */
+  readonly allowPrefixes: readonly string[];
 }
 
 /** Declare one runner. */

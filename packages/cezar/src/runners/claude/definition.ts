@@ -7,6 +7,8 @@ import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 import { CLAUDE_DETECTION } from './detection.ts';
 import { CLAUDE_CLI } from './cli.ts';
 import { CLAUDE_LOGIN } from './login.ts';
+import { CLAUDE_ACCOUNTS } from './accounts.ts';
+import { CLAUDE_ENV } from './env.ts';
 
 /** The Claude runner. */
 export const claudeRunner = defineRunner({
@@ -25,5 +27,7 @@ export const claudeRunner = defineRunner({
   configFiles: CLAUDE_CONFIG_FILES,
   extraTools: CLAUDE_EXTRA_TOOLS,
   login: CLAUDE_LOGIN,
+  accounts: CLAUDE_ACCOUNTS,
+  env: CLAUDE_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseClaudeStatus }),
 });

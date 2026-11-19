@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// These routes read runner data through the registry; register the built-ins.
+registerBuiltInRunners();
 import type { SocketHub, TopicPublisher } from './ws.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';

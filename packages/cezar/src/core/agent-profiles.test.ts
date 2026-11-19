@@ -1,30 +1,37 @@
 import { describe, expect, it } from 'vitest';
 import { PROVIDER_IDS } from './provider-auth.ts';
 import {
-  PROFILE_CAPABLE_PROVIDERS,
-  PROFILE_ENV_VAR,
   looksLikeProfileDir,
+  profileCapableProviders,
   profileEnv,
+  profileEnvVar,
   supportsProfiles,
 } from './agent-profiles.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-describe('PROFILE_ENV_VAR', () => {
+// The account mappings are read from the registry; this file pins all five built-ins.
+registerBuiltInRunners();
+
+describe('profileEnvVar', () => {
   it('names one variable per provider that can carry an account', () => {
-    expect(PROFILE_ENV_VAR.claude).toBe('CLAUDE_CONFIG_DIR');
-    expect(PROFILE_ENV_VAR.codex).toBe('CODEX_HOME');
-    expect(PROFILE_ENV_VAR.pi).toBe('PI_CODING_AGENT_DIR');
+    expect(profileEnvVar('claude')).toBe('CLAUDE_CONFIG_DIR');
+    expect(profileEnvVar('codex')).toBe('CODEX_HOME');
+    expect(profileEnvVar('pi')).toBe('PI_CODING_AGENT_DIR');
   });
 
   it('leaves OpenCode and omp unsupported — no folder variable moves their login', () => {
-    expect(PROFILE_ENV_VAR.opencode).toBeNull();
-    expect(PROFILE_ENV_VAR.omp).toBeNull();
+    expect(profileEnvVar('opencode')).toBeNull();
+    expect(profileEnvVar('omp')).toBeNull();
     expect(supportsProfiles('opencode')).toBe(false);
     expect(supportsProfiles('omp')).toBe(false);
-    expect(PROFILE_CAPABLE_PROVIDERS).toEqual(['claude', 'codex', 'pi']);
+    expect(profileCapableProviders()).toEqual(['claude', 'codex', 'pi']);
   });
 
-  it('covers every provider, so adding one forces a decision here', () => {
-    expect(Object.keys(PROFILE_ENV_VAR).sort()).toEqual([...PROVIDER_IDS].sort());
+  it('answers for every provider, so adding one forces a decision here', () => {
+    expect([...PROVIDER_IDS].sort()).toEqual([
+      ...profileCapableProviders(),
+      ...PROVIDER_IDS.filter((provider) => profileEnvVar(provider) === null),
+    ].sort());
   });
 });
 
@@ -54,8 +61,8 @@ describe('profileEnv', () => {
     // CLAUDE_CONFIG_DIR, which would point claude's sibling tooling at the wrong home.
     for (const provider of PROVIDER_IDS) {
       const emitted = Object.keys(profileEnv(provider, '/somewhere'));
-      const foreign = Object.values(PROFILE_ENV_VAR).filter(
-        (name): name is string => name !== null && name !== PROFILE_ENV_VAR[provider],
+      const foreign = PROVIDER_IDS.filter((other) => other !== provider).flatMap(
+        (other) => (profileEnvVar(other) === null ? [] : [profileEnvVar(other) as string]),
       );
       expect(emitted.some((name) => foreign.includes(name))).toBe(false);
     }

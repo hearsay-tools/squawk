@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv } from './agent-env.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// buildChildEnv reads the backend's allow-list prefixes from the registry.
+registerBuiltInRunners();
 import { RUNNER_IDS } from './agent-runner.ts';
 
 const authority = ['TOOL_TOKEN', 'TOOL_SOCKET', 'DELEGATION_TOKEN', 'DELEGATION_URL', 'COCKPIT_URL', 'PROJECT_ID', 'PREVIEW_CDP_URL'];

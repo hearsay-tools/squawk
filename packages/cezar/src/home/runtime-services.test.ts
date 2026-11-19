@@ -8,6 +8,10 @@ import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { ProviderRuntimeAuthObserver } from '../server/provider-auth-runtime.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The runtime services probe provider logins through the registry.
+registerBuiltInRunners();
 import { createApp } from '../server/server.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';

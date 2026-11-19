@@ -10,6 +10,10 @@ import {
   resolveCodexExecutable,
   waitForCodexAppServerExit,
 } from './codex-app-server-transport.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The transport's child-env sanitizer reads the backend allow-list from the registry.
+registerBuiltInRunners();
 
 const originalBin = process.env.CEZ_CODEX_BIN;
 

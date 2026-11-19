@@ -9,6 +9,10 @@ import { agentEnv } from '../workflows/run/launch-context.ts';
 import { worktreeSetupEnv } from '../worktree-setup.ts';
 import { withPreviewCdp } from '../preview/agent-address.ts';
 import { buildChildEnv } from './agent-env.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// buildChildEnv reads the backend's allow-list prefixes from the registry.
+registerBuiltInRunners();
 import { squawkToolEnvNames } from '../ci-wait/tools.ts';
 import { systemdUnit } from '../server-install/platforms/ubuntu-vps.ts';
 import { squawkLaunchdPlist } from '../server-install/platforms/macosx-ngrok.ts';

@@ -7,6 +7,8 @@ import { OMP_SPEC_SUPPORT } from './spec-support.ts';
 import { OMP_DETECTION } from './detection.ts';
 import { OMP_CLI } from './cli.ts';
 import { OMP_LOGIN } from './login.ts';
+import { OMP_ACCOUNTS } from './accounts.ts';
+import { OMP_ENV } from './env.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -28,5 +30,7 @@ export const ompRunner = defineRunner({
   configFiles: OMP_CONFIG_FILES,
   extraTools: OMP_EXTRA_TOOLS,
   login: OMP_LOGIN,
+  accounts: OMP_ACCOUNTS,
+  env: OMP_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),
 });

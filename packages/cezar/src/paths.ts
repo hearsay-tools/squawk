@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './core/runner-config-files.ts';
 import type { ProviderId } from './core/provider-auth.ts';
+import { runnerDefinition } from './core/runner-registry.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';
 import type { Home } from './home/home.ts';
@@ -126,10 +127,12 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
  * `agentHomePathsForProfiles` instead — what this function answers is what the
  * host is configured for when nothing overrides it.
  */
-/** The slot of `AgentHomePaths` that holds each provider's account home. */
-export const AGENT_HOME_SLOT: Readonly<Record<ProviderId, keyof AgentHomePaths>> = {
-  claude: 'claude', codex: 'codex', opencode: 'opencodeConfig', pi: 'pi', omp: 'omp',
-};
+/** The slot of `AgentHomePaths` that holds each provider's account home. Was the
+ *  `AGENT_HOME_SLOT` table; the slot now lives in each definition's `accounts.homeSlot`
+ *  (`runners/<id>/accounts.ts`), checked there against `keyof AgentHomePaths`. */
+export function agentHomeSlot(provider: ProviderId): keyof AgentHomePaths {
+  return runnerDefinition(provider).accounts.homeSlot as keyof AgentHomePaths;
+}
 
 export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomePaths {
   const home = env.HOME || env.USERPROFILE || homedir();
