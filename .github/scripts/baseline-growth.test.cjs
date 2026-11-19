@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { execFileSync, spawnSync } = require('node:child_process');
-const { compareBaseline, checkBaselineGrowth } = require('./baseline-growth.cjs');
+const { compareBaseline, movedBetween, checkBaselineGrowth } = require('./baseline-growth.cjs');
 
 const root = path.resolve(__dirname, '../..');
 const formats = [
@@ -253,3 +253,34 @@ test('auto-merge protects moved unit wait scanners and fixtures while permitting
   assert.equal(added.status, 0, added.stdout + added.stderr);
 });
 
+
+test('a pin follows its moved file one for one; other path changes and growth still fail', () => {
+  const moved = movedBetween(['old.ts', 'kept.ts', 'other.ts'], ['new.ts', 'kept.ts', 'other.ts', 'second.ts']);
+  const entries = { entries: [{ file: 'old.ts', target: 'kept.ts', count: 2, reason: 'r' }] };
+  const at = (fields) => ({ entries: [{ ...entries.entries[0], ...fields }] });
+  assert.deepEqual(compareBaseline(entries, at({ file: 'new.ts' }), '$', moved), []);
+  assert.deepEqual(compareBaseline(entries, at({ file: 'new.ts', count: 1 }), '$', moved), []);
+  assert.ok(compareBaseline(entries, at({ file: 'new.ts' })).length, 'without the moves, a new path is a new entry');
+  assert.ok(compareBaseline(entries, at({ file: 'new.ts', count: 3 }), '$', moved).length);
+  assert.ok(compareBaseline(entries, at({ file: 'other.ts' }), '$', moved).length, 'a file the change did not add');
+  assert.ok(compareBaseline(entries, at({ file: 'new.ts', reason: 'changed' }), '$', moved).length);
+  assert.ok(compareBaseline(entries, { entries: [...at({ file: 'new.ts' }).entries, ...at({ file: 'second.ts' }).entries] }, '$', moved).length, 'one entry relocates once');
+
+  const pins = { limit: 1000, files: { 'old.ts': 1200, 'kept.ts': 1100 } };
+  assert.deepEqual(compareBaseline(pins, { limit: 1000, files: { 'new.ts': 1200, 'kept.ts': 1100 } }, '$', moved), []);
+  assert.ok(compareBaseline(pins, { limit: 1000, files: { 'new.ts': 1201, 'kept.ts': 1100 } }, '$', moved).length);
+  assert.ok(compareBaseline(pins, { limit: 1000, files: { 'new.ts': 1200, 'second.ts': 1200, 'kept.ts': 1100 } }, '$', moved).length);
+  assert.ok(compareBaseline(pins, { limit: 1000, files: { 'old.ts': 1200, 'new.ts': 1200, 'kept.ts': 1100 } }, '$', moved).length, 'a kept key cannot also move');
+});
+
+test('git comparison accepts a pin that only follows its moved file, with no label', (t) => {
+  const r = repository(t);
+  r.write('src/old.ts', 'export {};\n');
+  r.write('pins.baseline.json', '{"files":{"src/old.ts":1200},"entries":[{"file":"src/old.ts","count":2}]}');
+  const base = r.commit();
+  r.git('mv', 'src/old.ts', 'src/new.ts');
+  r.write('pins.baseline.json', '{"files":{"src/new.ts":1200},"entries":[{"file":"src/new.ts","count":2}]}');
+  assert.deepEqual(checkBaselineGrowth({ cwd: r.cwd, base, head: r.commit() }), []);
+  r.write('pins.baseline.json', '{"files":{"src/new.ts":1201},"entries":[{"file":"src/new.ts","count":2}]}');
+  assert.match(checkBaselineGrowth({ cwd: r.cwd, base, head: r.commit() }).join('\n'), /files\.src\/new\.ts: added an entry/);
+});

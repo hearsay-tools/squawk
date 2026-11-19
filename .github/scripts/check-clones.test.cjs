@@ -236,3 +236,42 @@ test('same-file totals ignore fingerprints and cannot borrow another file or pai
   assert.match(growth[0], /Clone token increase:.*baseline 200, head 201 tokens/);
   assert.match(compare(summary([reportedClone(a, b, 200)]), summary([reportedClone(a, a, 50, false)]))[0], /New same-file clone/);
 });
+
+test('a file moved with its same-file clone passes; a further copy of it still fails', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-move-'));
+  const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+  const folder = path.join(repo, 'packages/demo/src');
+  const code = Array.from({ length: 12 }, (_, i) => ` total += values[${i}] * ${i + 37};`).join('\n');
+  const block = (name) => `export function ${name}(values: number[]) {\n let total = 0;\n${code}\n return total;\n}\n`;
+  const scan = (base) => spawnSync(process.execPath, [script, '--base', base], { cwd: repo, encoding: 'utf8' });
+  try {
+    git('init', '--quiet'); fs.mkdirSync(path.join(folder, 'moved'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'self.ts'), block('first') + block('second'));
+    git('add', '.'); git('commit', '-qm', 'same-file clone');
+    const base = git('rev-parse', 'HEAD');
+    git('mv', 'packages/demo/src/self.ts', 'packages/demo/src/moved/self.ts');
+    git('commit', '-qm', 'move');
+    const moved = scan(base);
+    assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+    fs.copyFileSync(path.join(folder, 'moved/self.ts'), path.join(folder, 'copy.ts'));
+    git('add', '.'); git('commit', '-qm', 'copy');
+    const copied = scan(base);
+    assert.equal(copied.status, 1, copied.stdout + copied.stderr);
+    assert.match(copied.stdout, /copy\.ts/);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test('a merge-base clone carries one head clone of the same fingerprint, in its own pair first, never across packages', () => {
+  const { carryMoved } = require('./check-clones.cjs');
+  const clone = (first, second, fragment = 'a\nb', tokens = 60) => ({ ...reportedClone(first, second, tokens), fragment });
+  const a = 'packages/demo/src/a.ts'; const b = 'packages/demo/src/b.ts'; const c = 'packages/demo/src/c.ts'; const other = 'packages/web/src/x.ts';
+  const kept = (base, head) => {
+    const result = carryMoved(reportRoot, base, head);
+    return { base: result.baseline.length, head: result.head.map(item => path.relative(reportRoot, item.secondFile.name)) };
+  };
+  assert.deepEqual(kept([clone(a, a)], [clone(c, c, '  a\n  b')]), { base: 0, head: [] }, 'layout is not part of the fingerprint');
+  assert.deepEqual(kept([clone(a, b)], [clone(a, c), clone(a, b)]), { base: 0, head: [c] }, 'the clone that stayed is carried; the copy is reported');
+  assert.deepEqual(kept([clone(a, b)], [clone(a, c, 'a\nb', 61)]), { base: 1, head: [c] }, 'another token count is another clone');
+  assert.deepEqual(kept([clone(a, other)], [clone(b, other)]), { base: 1, head: [other] });
+  assert.throws(() => carryMoved(reportRoot, [], [reportedClone(a, b, 60)]), /Invalid clone fragment/);
+});

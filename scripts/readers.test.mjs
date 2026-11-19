@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-import { RUNNER_ID_READERS, TREES, groupByTree, parseArgs, runnerReaders, searchName, specifierOf, sweep } from './readers.mjs';
+import { RUNNER_ID_READERS, TREES, groupByTree, parseArgs, runnerReaders, searchName, searchPins, specifierOf, sweep } from './readers.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const script = join(repoRoot, 'scripts/readers.mjs');
@@ -114,4 +114,31 @@ test('a sweep reads Git output the same under a colouring config and a file name
   const run = spawnSync(process.execPath, [script, 'removedExport'], { cwd: root, env, encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stdout, /^ {2}scripts\/a:1:b\.mjs:1: removedExport\(\);$/m);
+});
+
+test('a moved-file sweep lists every JSON pin that names the old path, and its readers', (t) => {
+  const old = 'packages/contract/src/waits.ts';
+  const root = fixtureRepo(t, {
+    '.github/mutants/targets.json': JSON.stringify({ [old]: { tier: 'logic', guards: ['computeWaitingOn'] } }, null, 2),
+    '.github/mutants/equivalent.json': JSON.stringify([{ file: old, function: 'workersOwed' }], null, 2),
+    'packages/cezar/src/file-length.baseline.json': JSON.stringify({ files: { [old]: 1200 } }, null, 2),
+    'packages/cezar/src/lint/layer-import.baseline.json': JSON.stringify({ entries: [{ file: 'packages/cezar/src/a.ts', target: old, count: 1 }] }, null, 2),
+    'packages/cezar/src/lint/resume-time-readers.json': JSON.stringify({ files: { [old]: 'reads the time' } }, null, 2),
+    'packages/cezar/src/lint/other.json': JSON.stringify({ files: { 'packages/contract/src/runs.ts': 'x' } }),
+    'packages/cezar/src/reader.ts': "import { computeWaitingOn } from '../../contract/src/waits';\n",
+  });
+  assert.deepEqual([...new Set(searchPins(root, old).map(hit => hit.file))].sort(), [
+    '.github/mutants/equivalent.json',
+    '.github/mutants/targets.json',
+    'packages/cezar/src/file-length.baseline.json',
+    'packages/cezar/src/lint/layer-import.baseline.json',
+    'packages/cezar/src/lint/resume-time-readers.json',
+  ]);
+  const options = parseArgs(['--moved', old, 'packages/contract/src/waiting-on.ts']);
+  assert.deepEqual(options.moved, { from: old, to: 'packages/contract/src/waiting-on.ts' });
+  const { report, code } = sweep(root, options);
+  assert.equal(code, 0);
+  assert.match(report, /## JSON pins that name packages\/contract\/src\/waits\.ts: 5 lines in 5 files; rewrite each to packages\/contract\/src\/waiting-on\.ts/);
+  assert.match(report, /packages\/cezar\/src\/reader\.ts:1 \[specifier\]/);
+  assert.throws(() => parseArgs(['--moved', old]), /--moved needs <old-path> <new-path>/);
 });

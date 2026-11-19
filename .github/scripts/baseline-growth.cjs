@@ -5,14 +5,16 @@ function object(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+const stays = () => false;
+
 // Arrays are multisets: each head entry must fit a distinct base entry. Matching
 // can reassign a prior choice so reordered duplicate sites with different counts
 // do not report growth. Object keys and numeric limits may only shrink.
-function arrayFits(before, after) {
+function arrayFits(before, after, moved) {
   const owners = new Map();
   function assign(index, seen) {
     for (let i = 0; i < before.length; i++) {
-      if (seen.has(i) || compareBaseline(before[i], after[index]).length) continue;
+      if (seen.has(i) || compareBaseline(before[i], after[index], '$', moved).length) continue;
       seen.add(i);
       if (!owners.has(i) || assign(owners.get(i), seen)) {
         owners.set(i, index);
@@ -24,20 +26,41 @@ function arrayFits(before, after) {
   return after.every((_, i) => assign(i, new Set()));
 }
 
-function compareBaseline(before, after, location = '$') {
+// A key the head adds takes over one key the head dropped, when `moved` says the file moved
+// and the value fits the old one: a pin keyed by the path of a moved file.
+function relocatedKey(before, after, key, taken, moved) {
+  const origin = Object.keys(before).find(old => !taken.has(old) && !Object.hasOwn(after, old)
+    && moved(old, key) && !compareBaseline(before[old], after[key], '$', moved).length);
+  if (origin !== undefined) taken.add(origin);
+  return origin;
+}
+
+/**
+ * The ways `after` grew past `before`. `moved(oldPath, newPath)` says a file moved: a string or key
+ * that names it may then name its new path, one for one, and is not growth.
+ */
+function compareBaseline(before, after, location = '$', moved = stays) {
   if (typeof before === 'number' && typeof after === 'number') {
     return after <= before ? [] : [`${location}: number grew from ${before} to ${after}`];
   }
   if (Array.isArray(before) && Array.isArray(after)) {
-    return arrayFits(before, after) ? [] : [`${location}: added or enlarged an entry`];
+    return arrayFits(before, after, moved) ? [] : [`${location}: added or enlarged an entry`];
   }
   if (object(before) && object(after)) {
+    const taken = new Set();
     return Object.keys(after).filter(key => key !== '$comment').flatMap(key =>
       Object.hasOwn(before, key)
-        ? compareBaseline(before[key], after[key], `${location}.${key}`)
-        : [`${location}.${key}: added an entry`]);
+        ? compareBaseline(before[key], after[key], `${location}.${key}`, moved)
+        : relocatedKey(before, after, key, taken, moved) === undefined ? [`${location}.${key}: added an entry`] : []);
   }
+  if (typeof before === 'string' && typeof after === 'string' && moved(before, after)) return [];
   return before === after ? [] : [`${location}: changed an entry or its type`];
+}
+
+// A relocation: the head no longer has the old path, and the change added the new one.
+function movedBetween(baseFiles, headFiles) {
+  const base = new Set(baseFiles), head = new Set(headFiles);
+  return (oldPath, newPath) => oldPath !== newPath && base.has(oldPath) && !head.has(oldPath) && head.has(newPath) && !base.has(newPath);
 }
 
 function git(cwd, ...args) {
@@ -68,14 +91,16 @@ function deletedReaders(cwd, head, deleted) {
 }
 
 function checkBaselineGrowth({ cwd = process.cwd(), base, head, allowGrowth = false }) {
-  const beforeFiles = tree(cwd, base).filter(file => file.endsWith('.baseline.json'));
+  const baseFiles = tree(cwd, base);
+  const beforeFiles = baseFiles.filter(file => file.endsWith('.baseline.json'));
   const headFiles = tree(cwd, head);
   const afterFiles = new Set(headFiles.filter(file => file.endsWith('.baseline.json')));
+  const moved = movedBetween(baseFiles, headFiles);
   const reasons = [];
   for (const file of afterFiles) {
     const after = readBaseline(cwd, head, file); // New and overridden files must still be valid JSON.
     if (!beforeFiles.includes(file)) continue; // A new file starts a new ratchet.
-    const changes = compareBaseline(readBaseline(cwd, base, file), after);
+    const changes = compareBaseline(readBaseline(cwd, base, file), after, '$', moved);
     if (!allowGrowth) reasons.push(...changes.map(change => `${file}: ${change}`));
   }
   const deleted = beforeFiles.filter(file => !afterFiles.has(file));
@@ -115,8 +140,8 @@ async function checkPullRequest({ github, context, core, cwd = process.cwd() }) 
   const { pr, head, mergeBase } = resolved;
   const allowGrowth = pr.labels.some(label => label.name === 'baseline-growth');
   const reasons = checkBaselineGrowth({ cwd, base: mergeBase, head, allowGrowth });
-  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nFor an owner-approved increase, add the baseline-growth label, then re-run the failed classify-pr job. Deletion readers and invalid JSON must still be fixed.`);
+  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nFor an owner-approved increase, add the baseline-growth label, then re-run the failed classify-pr job. Deletion readers and invalid JSON must still be fixed. A pin that only follows a file this change moved needs no label: keep its other fields (docs/areas/packages.md § Moving a source file).`);
   else core.info(allowGrowth ? 'Baseline growth approved by label; owner merge required.' : 'Baseline ratchets did not grow.');
 }
 
-module.exports = { compareBaseline, checkBaselineGrowth, resolvePullRequest, checkPullRequest };
+module.exports = { compareBaseline, movedBetween, checkBaselineGrowth, resolvePullRequest, checkPullRequest };

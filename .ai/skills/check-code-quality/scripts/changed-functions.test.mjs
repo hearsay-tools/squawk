@@ -190,19 +190,66 @@ test('a head revision is read from Git objects, never from the working tree', t 
   assert.equal('removed' in result, false);
 });
 
-test('details offer the functions of a deleted file as the source of a move', t => {
-  const f = repo(t);
-  const body = '{ if (x) return 1; if (y) return 2; return 3; }';
-  f.write('old.ts', `export function relocated(x, y) ${body}`);
-  f.git('add', '.');
-  f.git('commit', '-qm', 'old home');
-  const base = f.git('rev-parse', 'HEAD');
-  rmSync(join(f.cwd, 'old.ts'));
-  f.write('new.ts', `export function relocated(x, y) ${body}`);
+function commitAll(f, changes, message) {
+  for (const [path, source] of Object.entries(changes)) {
+    if (source === null) rmSync(join(f.cwd, path)); else f.write(path, source);
+  }
   f.git('add', '-A');
-  f.git('commit', '-qm', 'move');
-  const result = scanChanges(base, f.cwd, { head: f.git('rev-parse', 'HEAD'), details: true });
+  f.git('commit', '-qm', message);
+  return f.git('rev-parse', 'HEAD');
+}
+
+const branchy = '{ if (x) return 1; if (y) return 2; return 3; }';
+const rows = (fns) => fns.map(fn => [fn.file, fn.name, fn.from?.file, fn.from?.name].filter(Boolean));
+
+test('details offer the functions of a deleted file as the source of a move with edits', t => {
+  const f = repo(t);
+  const base = commitAll(f, { 'old.ts': `export function relocated(x, y) ${branchy}` }, 'old home');
+  const head = commitAll(f, { 'old.ts': null, 'new.ts': `export function relocated(x, y) { if (x) return 1; if (y) return 4; return 3; }` }, 'move');
+  const result = scanChanges(base, f.cwd, { head, details: true });
   assert.deepEqual(result.deletedFiles, ['old.ts']);
+  assert.deepEqual(result.moved, []);
   assert.deepEqual(result.removed.map(fn => [fn.file, fn.name, fn.complexity]), [['old.ts', 'relocated', 3]]);
-  assert.equal(result.removed[0].bodyHash, result.files[0].functions[0].bodyHash);
+  assert.equal(result.files[0].functions[0].change, 'added');
+});
+
+test('a file moved without edits leaves the inventory and lists each function with its origin', t => {
+  const f = repo(t);
+  const base = commitAll(f, { 'old.ts': `export function one(x, y) ${branchy}\nexport function two(x, y) { return x + y; }` }, 'old home');
+  f.git('mv', 'old.ts', 'new.ts');
+  f.git('commit', '-qm', 'move');
+  for (const details of [false, true]) {
+    const result = scanChanges(base, f.cwd, { head: f.git('rev-parse', 'HEAD'), details });
+    assert.deepEqual(result.files, [], `details: ${details}`);
+    assert.deepEqual(result.deletedFiles, ['old.ts']);
+    assert.deepEqual(rows(result.moved), [['new.ts', 'one', 'old.ts', 'one'], ['new.ts', 'two', 'old.ts', 'two']]);
+    if (details) assert.deepEqual(result.removed, []);
+  }
+});
+
+test('a function moved out of a file that keeps a same-named delegator is a move, not new work', t => {
+  const f = repo(t);
+  const base = commitAll(f, { 'a.ts': `export function big(x, y) ${branchy}` }, 'base');
+  const head = commitAll(f, {
+    'a.ts': `import { big as moved } from './b';\nexport function big(x, y) { return moved(x, y); }`,
+    'b.ts': `export function big(x, y) ${branchy}`,
+  }, 'move');
+  const result = scanChanges(base, f.cwd, { head });
+  assert.deepEqual(rows(result.moved), [['b.ts', 'big', 'a.ts', 'big']]);
+  assert.deepEqual(result.files.flatMap(file => file.functions.map(fn => [file.file, fn.name, fn.change])), [['a.ts', 'big', 'modified']]);
+});
+
+test('a copy is still new: one origin serves one move, and a rewritten original over the limit donates nothing', t => {
+  const f = repo(t);
+  const long = `{\n${'  if (x) { x++; }\n'.repeat(21)}  return x;\n}`;
+  const base = commitAll(f, { 'a.ts': `export function big(x) ${long}` }, 'base');
+  const copied = commitAll(f, { 'b.ts': `export function big(x) ${long}`, 'c.ts': `export function big(x) ${long}` }, 'copy twice');
+  const twice = scanChanges(base, f.cwd, { head: copied });
+  assert.deepEqual(rows(twice.moved), [], 'the original stays, so nothing moved');
+  assert.deepEqual(twice.files.map(file => file.file), ['b.ts', 'c.ts']);
+
+  const stillLong = commitAll(f, { 'a.ts': `export function big(x) ${long.replace('return x;', 'return x + 1;')}`, 'c.ts': null }, 'rewrite original');
+  const result = scanChanges(base, f.cwd, { head: stillLong });
+  assert.deepEqual(rows(result.moved), []);
+  assert.deepEqual(result.files.flatMap(file => file.functions.map(fn => [file.file, fn.change])), [['a.ts', 'modified'], ['b.ts', 'added']]);
 });

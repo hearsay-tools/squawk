@@ -184,6 +184,8 @@ To prepare a step:
 2. File the step. A step that fits one pull request is a task. A step that needs several is an
    epic whose first deliverable is a spec and a plan, with one child issue for each slice.
 3. Link the issue in the steps table above.
+4. Before a step moves a file, read
+   [packages.md § Moving a source file](../../docs/areas/packages.md#moving-a-source-file).
 
 ## Case tables
 

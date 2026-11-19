@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Scan Git data with trusted tooling; never load a candidate's config or scripts.
 const { execFileSync, spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -65,6 +66,43 @@ function relativeFile(scratch, file) {
   return path.relative(scratch, file.name).split(path.sep).join('/');
 }
 
+// The clone's code with its layout dropped, its token count and its package: the same clone in
+// another file or file pair hashes alike, so a move can be told from a new copy.
+function fingerprint(scratch, clone) {
+  if (typeof clone.fragment !== 'string' || !Number.isSafeInteger(clone.tokens)) throw new Error('Invalid clone fragment');
+  const text = clone.fragment.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+  return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${text}`).digest('hex');
+}
+
+const pairKey = (scratch, clone) => JSON.stringify([relativeFile(scratch, clone.firstFile), relativeFile(scratch, clone.secondFile)].sort());
+const samePackage = (scratch, clone) => packageOf(scratch, clone.firstFile.name) === packageOf(scratch, clone.secondFile.name);
+
+/**
+ * Drop each head clone that a merge-base clone with the same fingerprint carries over, one for one,
+ * from both scans: code that moved with its clone, to another file or file pair, is not a new clone.
+ * A clone that stays in its pair is carried first, so a new copy is reported where it was added.
+ * A further copy finds no free merge-base clone and stays. Cross-package clones are never carried.
+ */
+function carryMoved(scratch, baseline, head) {
+  const free = new Map();
+  for (const clone of baseline.filter(item => samePackage(scratch, item))) {
+    const key = fingerprint(scratch, clone);
+    free.set(key, [...(free.get(key) ?? []), clone]);
+  }
+  const carried = new Set();
+  const take = (clone, match) => {
+    const candidates = free.get(fingerprint(scratch, clone)) ?? [];
+    const index = candidates.findIndex(match);
+    if (index < 0) return;
+    carried.add(candidates[index]).add(clone);
+    candidates.splice(index, 1);
+  };
+  const movable = head.filter(item => samePackage(scratch, item));
+  for (const clone of movable) take(clone, item => pairKey(scratch, item) === pairKey(scratch, clone));
+  for (const clone of movable.filter(item => !carried.has(item))) take(clone, () => true);
+  return { baseline: baseline.filter(item => !carried.has(item)), head: head.filter(item => !carried.has(item)) };
+}
+
 function summarize(scratch, duplicates) {
   const pairs = new Map();
   const forbidden = [];
@@ -120,9 +158,11 @@ function check({ repo = process.cwd(), base = 'origin/main', head = 'HEAD' } = {
     // Both scans use the same trusted paths and options; candidate config never runs.
     fs.writeFileSync(path.join(scratch, 'trusted-config.json'), '{}');
     materialize(repo, mergeBase, scratch);
-    const baseline = summarize(scratch, scan(scratch, true));
+    const baseClones = scan(scratch, true);
     materialize(repo, headSha, scratch);
-    const headReport = summarize(scratch, scan(scratch, false));
+    const kept = carryMoved(scratch, baseClones, scan(scratch, false));
+    const baseline = summarize(scratch, kept.baseline);
+    const headReport = summarize(scratch, kept.head);
     const failures = compare(baseline, headReport);
     for (const failure of failures) process.stdout.write(`${failure}\n`);
     process.stdout.write(`Clone pairs: ${headReport.pairs.size}; violations: ${failures.length}\n`);
@@ -141,4 +181,4 @@ if (require.main === module) {
   }
   process.exitCode = check(options);
 }
-module.exports = { check, eligible, summarize, compare };
+module.exports = { check, eligible, summarize, compare, carryMoved };
