@@ -1,6 +1,7 @@
 import type { Home } from '../home/home.ts';
 import type { z } from 'zod';
-import { writableAutomationTask, type AutomationKind, type AutomationListQuery, type OnceStatus } from '@open-mercato/cezar-contract/automations';
+import { type AutomationKind, type AutomationListQuery, type OnceStatus } from '@open-mercato/cezar-contract/automations';
+import { writableAutomationTask } from '@open-mercato/cezar-contract/automation-storage';
 import { nextOccurrence, ONCE_PAST_DUE_MESSAGE, onceInstant } from '@open-mercato/cezar-contract/automation-schedule';
 import { automationCreateSchema, automationUpdateSchema, type AutomationEditable } from '@open-mercato/cezar-contract/automation-requests';
 import { SCHEDULED_TASK_NOTE } from '@open-mercato/cezar-contract/scheduled-tasks';

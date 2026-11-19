@@ -14,7 +14,8 @@ import {
 import { parseDurationMinutes, resolveDelay, SCHEDULED_TASK_NOTE } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { isValidTimeZone } from '@open-mercato/cezar-contract/zoned-time';
 import type { AutomationEvent, CreateAutomationInput } from '@open-mercato/cezar-contract';
-import { AUTOMATION_FAILURE_NOTICE_AFTER, automationFailureNotice, writableAutomationTask, type AutomationRuntimeState } from '@open-mercato/cezar-contract/automations';
+import { AUTOMATION_FAILURE_NOTICE_AFTER, automationFailureNotice, type AutomationRuntimeState } from '@open-mercato/cezar-contract/automations';
+import { writableAutomationTask } from '@open-mercato/cezar-contract/automation-storage';
 import { EXIT } from '../task-cli/cli.ts';
 import { resolveCockpit, type DiscoverOptions } from '../task-cli/discovery.ts';
 import { fetchJson, refuse, TaskCliError, type Cockpit, type HttpResult } from '../task-cli/http.ts';

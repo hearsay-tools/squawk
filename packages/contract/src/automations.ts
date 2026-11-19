@@ -80,14 +80,6 @@ export const automationTaskSchema = createRunInputBaseSchema
   });
 export type AutomationTask = z.infer<typeof automationTaskSchema>;
 
-const WRITABLE_TASK_KEYS: ReadonlySet<string> = new Set(Object.keys(automationTaskSchema.shape).filter((key) => key !== 'variants'));
-
-/** Keep only the keys a write request accepts. A stored task may carry retired keys such as
- *  `variants` or `generateFollowups`; never apply to caller input. */
-export function writableAutomationTask<T extends object>(task: T): Omit<T, 'variants'> {
-  return Object.fromEntries(Object.entries(task).filter(([key]) => WRITABLE_TASK_KEYS.has(key))) as Omit<T, 'variants'>;
-}
-
 /**
  * A one-time schedule's archive record (hearsay-tools/cezarion#1465): written after its task
  * exists (`launched`, with the run and receipt) or when it was cancelled. An archived definition
