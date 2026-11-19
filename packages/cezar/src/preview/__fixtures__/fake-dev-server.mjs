@@ -32,7 +32,7 @@ if (flag('stdin-eof')) {
   if (flag('leader-exits')) holder.stdout.once('data', () => process.exit(3));
   setInterval(() => {}, 1 << 30);
 } else {
-  if (flag('ignore-term')) process.on('SIGTERM', () => {});
+  if (flag('ignore-term')) process.on('SIGTERM', () => {}); // stubborn-child: --lifetime ends it, 5 min by default
   setTimeout(() => createServer(socket => socket.end()).listen(port, host, () => console.log(`listening on ${host}:${port}`)), delay);
   setInterval(() => {}, 1 << 30);
 }

@@ -13,6 +13,7 @@ vi.mock('node:fs/promises', async importOriginal => {
 
 import { autosaveCommit } from './autosave-commit.ts';
 import { killFromPidFile, readPids, requirePid, writePidSource } from './pid-file.testkit.ts';
+import { ignoreTermSource } from './stubborn-child.testkit.ts';
 
 const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
 const budget = { timeoutMs: 500, killGraceMs: 100, confirmMs: 100 };
@@ -170,7 +171,7 @@ exec ${shQuote(realGit)} "$@"
   it('terminates descendants after the Git leader exits with closed pipes', async () => {
     const descendant = join(bin, 'descendant.cjs');
     writeFileSync(descendant, `
-process.on('SIGTERM', () => {});
+${ignoreTermSource()}
 ${writePidSource(join(bin, 'pid'))}
 setInterval(() => {}, 1000);
 `);
@@ -213,7 +214,7 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (args.includes('status')) {
   require('node:child_process').spawn(process.execPath, [${JSON.stringify(descendant)}], { detached: true, stdio: 'ignore' }).unref();
-  process.on('SIGTERM', () => {});
+  ${ignoreTermSource()}
   const timer = setInterval(() => {
     if (fs.existsSync(${JSON.stringify(join(bin, 'pid'))}) && !${stalled}) { clearInterval(timer); process.exit(0); }
   }, 5);

@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { basename, join, resolve } from 'node:path';
 import { afterEach, test } from 'node:test';
 import { parsePid, readPid, requirePid, writePidSource } from '../../src/pid-file.testkit.ts';
+import { ignoreTermSource } from '../../src/stubborn-child.testkit.ts';
 import { readTestEnvDescriptor, readTestEnvInputs, testEnvInputsMismatch } from '../../../../.ai/scripts/test-env-inputs.mjs';
 
 // The scripts under test are the REPO's, not this package's: `.ai/` is agent-pipeline tooling
@@ -145,7 +146,7 @@ require('node:fs').writeFileSync('.ai/app-argv', process.argv.slice(2).join('\\n
 require('node:fs').writeFileSync('.ai/app-cez-env', Object.keys(process.env).filter((key) => key.startsWith('CEZ_')).sort().map((key) => key + '=' + process.env[key]).join('\\n'));
 // A member of the app's process group that ignores SIGTERM, as a dev server's child can.
 if (process.env.FIXTURE_APP_MEMBER) {
-  const member = "process.on('SIGTERM', () => {}); const fs = require('node:fs'); fs.writeFileSync('.ai/app-member.pid.tmp', String(process.pid)); fs.renameSync('.ai/app-member.pid.tmp', '.ai/app-member.pid'); setInterval(() => {}, 1000);";
+  const member = ${JSON.stringify(`${ignoreTermSource()} const fs = require('node:fs'); fs.writeFileSync('.ai/app-member.pid.tmp', String(process.pid)); fs.renameSync('.ai/app-member.pid.tmp', '.ai/app-member.pid'); setInterval(() => {}, 1000);`)};
   require('node:child_process').spawn(process.execPath, ['-e', member], { stdio: 'ignore' });
 }
 // Binds the port it is given (0: the kernel picks) and prints its URL, as the real server's banner does.

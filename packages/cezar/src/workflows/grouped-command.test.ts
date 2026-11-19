@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CHECK_KILL_GRACE_MS, CHECK_TERMINATION_CONFIRM_MS, runGroupedCommand } from './grouped-command.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
+import { ignoreTermShell } from '../stubborn-child.testkit.ts';
 
 /**
  * The process-group runner check steps and worktree setup (#917) share. Check-step Stop
@@ -53,7 +54,7 @@ describe('runGroupedCommand', () => {
     const timeoutMs = 2_000;
     const result = await runGroupedCommand({
       ...base(dir),
-      command: `trap '' TERM; echo $$ > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; while true; do sleep 0.1; done`,
+      command: `${ignoreTermShell()} echo $$ > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; while true; do sleep 0.1; done`,
       timeoutMs,
     });
     expect(result.timedOut).toBe(true);

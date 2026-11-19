@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createWorktree, worktreePathFor } from './git-worktree.ts';
 import { withWorktreeMutation } from './git-worktree-lock.ts';
+import { ownerGuardShell } from './stubborn-child.testkit.ts';
 
 const exec = promisify(execFile);
 const roots: string[] = [];
@@ -44,7 +45,7 @@ if [ "$1" = worktree ] && [ "$2" = add ]; then
   # The real command first: a slow or failing add has already made its branch and registration.
   ${JSON.stringify(real)} "$@" || exit $?
   [ "$action" = slow ] && exec sleep 30
-  if [ "$action" = stuck ]; then (trap '' TERM; sleep 60) & exec sleep 30; fi
+  if [ "$action" = stuck ]; then (trap '' TERM; exec sleep 60) & member=$!; ${ownerGuardShell('$member')} exec sleep 30; fi
   [ "$action" = fail ] && { echo "fatal: example failure" >&2; exit 1; }
   if [ "$action" = symref ]; then
     ${JSON.stringify(real)} worktree remove --force "$7" && ${JSON.stringify(real)} symbolic-ref refs/heads/cez/66666666 refs/heads/main

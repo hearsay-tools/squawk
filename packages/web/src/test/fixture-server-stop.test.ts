@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { spawnFixtureServer, stopFixtureServer } from '../../e2e/fixture-server'
+import { ignoreTermSource } from './stubborn-child'
 
 const children: ChildProcess[] = []
 // spawnFixtureServer starts no process group on Windows, so these tests are POSIX-only.
@@ -109,7 +110,7 @@ describe('stopFixtureServer', () => {
   })
 
   groupIt('escalates to SIGKILL for a child that ignores SIGTERM', async () => {
-    const { child, grandchild } = await serverWithChild("process.on('SIGTERM', () => {})")
+    const { child, grandchild } = await serverWithChild(ignoreTermSource())
 
     await stopFixtureServer(child, 100)
 
