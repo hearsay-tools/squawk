@@ -69,15 +69,16 @@ type WorkspaceConfigQuery = ReturnType<typeof useWorkspaceConfig>
 type UiStateQuery = ReturnType<typeof useUiState>
 type MountedRef = RefObject<boolean>
 
+/** A picker with its own runner must not inherit a different draft identity. */
+function linkedRunnerPatch(runner: Runner, account: string | undefined, stored: Runner | null): Partial<NewTaskDraft> {
+  return { runner, agentProfile: account || null, ...(runner !== stored ? { model: null, effort: null } : {}) }
+}
+
 function initialDraft(draftProjectId: string | null, deepLink: NewTaskParams): NewTaskDraft {
   const stored = readDraft(draftProjectId)
   return {
     ...stored,
-    // A picker with its own runner must not inherit a different draft identity.
-    ...(deepLink.runner !== undefined
-      ? { runner: deepLink.runner, agentProfile: deepLink.account || null,
-        ...(deepLink.runner !== stored.runner ? { model: null, effort: null } : {}) }
-      : {}),
+    ...(deepLink.runner !== undefined ? linkedRunnerPatch(deepLink.runner, deepLink.account, stored.runner) : {}),
     ...(deepLink.ref !== '' ? { text: deepLink.ref } : {}),
     ...(deepLink.skill !== ''
       ? { source: { source: 'skill', ref: deepLink.skill, ...(deepLink.skillPath !== undefined ? { path: deepLink.skillPath } : {}) } as TaskSource }
@@ -86,8 +87,10 @@ function initialDraft(draftProjectId: string | null, deepLink: NewTaskParams): N
 }
 
 /** The draft survives navigation (module store); explicit deep-link params beat it — a
- *  pasted `/new?skill=&ref=` link states intent, a leftover draft only remembers it. */
-export function useNewTaskDraft(draftProjectId: string | null, deepLink: NewTaskParams) {
+ *  pasted `/new?skill=&ref=` link states intent, a leftover draft only remembers it.
+ *  `linkedRunner` is the link's runner once the runners list names it: when the list answers
+ *  after mount, the runner applies then. The runner pickers stay disabled until that answer. */
+export function useNewTaskDraft(draftProjectId: string | null, deepLink: NewTaskParams, linkedRunner?: Runner) {
   const [draft, setDraft] = useState<NewTaskDraft>(() => initialDraft(draftProjectId, deepLink))
   const currentDraft = useRef(draft)
   useEffect(() => {
@@ -108,6 +111,14 @@ export function useNewTaskDraft(draftProjectId: string | null, deepLink: NewTask
     writeDraft(next, draftProjectId)
     setDraft(next)
   }
+  const runnerPending = useRef(deepLink.runner === undefined)
+  useEffect(() => {
+    if (!runnerPending.current || linkedRunner === undefined) return
+    runnerPending.current = false
+    update(linkedRunnerPatch(linkedRunner, deepLink.account, currentDraft.current.runner))
+    // `update` is rebuilt each render; the patch applies once, when the runners list answers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedRunner])
   // A suspended thread transition can return to this same mounted form. Clear it too.
   const clearStarted = (expectedRevision: number) => {
     if (draftRevision(draftProjectId) !== expectedRevision) return

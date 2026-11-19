@@ -256,6 +256,16 @@ describe('picker data flows', () => {
     expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull()
   })
 
+  it('applies a linked runner when the runners list answers after the composer opens', async () => {
+    const runners = deferredJson<typeof RUNNERS_RESPONSE>()
+    serve({ health: HEALTH_MULTI, providerStatus: PROVIDERS_MULTI, runners: runners.fetch })
+    renderNewTask('/new?runner=codex')
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/v1/runners')).toBe(true))
+
+    act(() => runners.release(RUNNERS_RESPONSE))
+    await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('codex'))
+  })
+
   it('shows the runner pill with >1 backend, and switching runner swaps the model presets', async () => {
     serve({ health: HEALTH_MULTI, providerStatus: PROVIDERS_MULTI })
     renderNewTask()

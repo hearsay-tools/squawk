@@ -36,6 +36,9 @@ import {
 import { WorkerConversationGroup } from './conversation-card'
 import { reduceThread } from './thread-state'
 import { SessionTranscript } from './session-transcript'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
 
 afterEach(() => {
   cleanup()
@@ -51,14 +54,16 @@ describe('ProviderAuthRequiredCard', () => {
     ['omp', 'OMP'],
   ] as const)('renders accessible fixed recovery guidance for %s', (provider, label) => {
     render(
-      <MemoryRouter initialEntries={['/p/acme/tasks/r1']}>
-        <ProviderAuthRequiredCard incident={{
-          kind: 'provider-auth-required',
-          id: 'v1:2',
-          provider,
-          authFailureId: 'incident-1',
-        }} />
-      </MemoryRouter>,
+      <QueryClientProvider client={seedRunners(createQueryClient())}>
+        <MemoryRouter initialEntries={['/p/acme/tasks/r1']}>
+          <ProviderAuthRequiredCard incident={{
+            kind: 'provider-auth-required',
+            id: 'v1:2',
+            provider,
+            authFailureId: 'incident-1',
+          }} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     expect(screen.getByRole('alert').textContent).toContain(`This run needed ${label} authorization`)

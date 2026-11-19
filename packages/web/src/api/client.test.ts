@@ -398,7 +398,7 @@ describe('project scope (multi-project spec, step 3.1)', () => {
 })
 
 describe('response parsing', () => {
-  it('normalizes provider status into canonical order without unexpected fields', async () => {
+  it('keeps the row order the server sent and drops unexpected fields from provider status', async () => {
     reply({
       ignored: 'top-level raw value',
       providers: [
@@ -410,9 +410,9 @@ describe('response parsing', () => {
 
     await expect(getProviderStatus()).resolves.toEqual({
       providers: [
+        { provider: 'opencode', status: 'unknown', hint: 'Try again.', enabled: true },
         { provider: 'claude', status: 'connected', enabled: false },
         { provider: 'codex', status: 'disconnected', enabled: true, authFailureId: 'incident-1' },
-        { provider: 'opencode', status: 'unknown', hint: 'Try again.', enabled: true },
       ],
     })
   })

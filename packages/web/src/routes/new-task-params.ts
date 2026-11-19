@@ -1,4 +1,5 @@
-import { runnerSchema, type Runner } from '@open-mercato/cezar-api-client/contract/health'
+import type { Runner } from '@open-mercato/cezar-api-client'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 /** The `/new` prefill query: `?skill=&ref=`. `ref` falls back to the older `task` spelling.
  *  Parsing lives apart from the component so it stays table-testable. */
@@ -12,14 +13,19 @@ export interface NewTaskParams {
   ref: string
 }
 
-export function parseNewTaskParams(search: string | URLSearchParams): NewTaskParams {
+/** `runner` is kept only when the runners list names it; until the list answers, it is absent. */
+export function parseNewTaskParams(
+  search: string | URLSearchParams,
+  runners: RunnersResponse | undefined,
+): NewTaskParams {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search
-  const runner = runnerSchema.safeParse(params.get('runner'))
+  const runner = params.get('runner')
+  const registered = runner !== null && (runners?.runners.some((entry) => entry.id === runner) ?? false)
   const skillPath = params.get('skillPath')
   return {
     skill: (params.get('skill') ?? '').trim(),
     ...(skillPath ? { skillPath } : {}),
-    ...(runner.success ? { runner: runner.data } : {}),
+    ...(registered ? { runner } : {}),
     ...(params.has('account') ? { account: params.get('account')! } : {}),
     ref: (params.get('ref') ?? params.get('task') ?? '').trim(),
   }

@@ -9,6 +9,7 @@ import { Link, useNavigate } from '@/lib/project-router'
 
 import { useProjectScope } from '@/api/project-scope-context'
 import { useConfig, useRepo, useUiState, useWorkspaceConfig } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { ProjectListEntry, WorkflowDef } from '@open-mercato/cezar-api-client'
 import { Composer, type ComposerHandle } from '@/components/composer/composer'
 import { chevron, chipClass } from '@/components/picker-pill'
@@ -110,7 +111,10 @@ export function NewTaskRoute() {
 
   // The deep-link params, captured ONCE: the prefill hook strips them from the URL, so live
   // search params would vanish under us.
-  const [deepLink] = useState(() => parseNewTaskParams(search))
+  const registered = useRunners().data
+  const [linkSearch] = useState(() => search.toString())
+  const [deepLink] = useState(() => parseNewTaskParams(linkSearch, registered))
+  const linkedRunner = parseNewTaskParams(linkSearch, registered).runner
 
   const repo = useRepo()
   const uiState = useUiState()
@@ -119,7 +123,7 @@ export function NewTaskRoute() {
   const config = useConfig()
   const workspaceConfig = useWorkspaceConfig()
 
-  const { draft, update, clearStarted, submissionPending, mounted } = useNewTaskDraft(draftProjectId, deepLink)
+  const { draft, update, clearStarted, submissionPending, mounted } = useNewTaskDraft(draftProjectId, deepLink, linkedRunner)
   const engine = useEngineSelection(draft, config)
   const accounts = useAccountSelection(engine.displayRunner, draft.agentProfile)
   const sources = useSourceSelection(draft.source, uiState, engine.displayRunner, accounts.agentProfile)
