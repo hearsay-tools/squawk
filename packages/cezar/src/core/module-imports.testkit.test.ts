@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { runtimeImports, siblingImports } from './module-imports.testkit.ts';
+import { moduleImports, runtimeImports, siblingImports } from './module-imports.testkit.ts';
 
 const CELLS = /^kit-[a-z]+\.testkit\.ts$/;
 
@@ -73,5 +73,16 @@ describe('siblingImports', () => {
     expect(() => siblingImports(partFile(`import './kit-own.testkit';`), CELLS)).toThrow('another extension or none');
     expect(() => siblingImports(partFile(`import './kit-own.testkit.tsx';`), CELLS)).toThrow('another extension or none');
     expect(() => siblingImports(partFile(`import './kit-own.testkit.jsx';`), CELLS)).toThrow('another extension or none');
+  });
+});
+
+describe('moduleImports', () => {
+  it('fails closed on a load in another directory it cannot pin to one module', () => {
+    const hashed = partFile(`import '../elsewhere/kit-far.testkit.ts?raw';`);
+    expect(() => moduleImports(hashed, new URL('../elsewhere/', hashed), CELLS)).toThrow('query or a hash');
+    const otherExt = partFile(`import '../elsewhere/kit-far.testkit.js';`);
+    expect(() => moduleImports(otherExt, new URL('../elsewhere/', otherExt), CELLS)).toThrow('another extension');
+    const none = partFile(`import '../elsewhere/kit-far.testkit';`);
+    expect(() => moduleImports(none, new URL('../elsewhere/', none), CELLS)).toThrow('another extension or none');
   });
 });

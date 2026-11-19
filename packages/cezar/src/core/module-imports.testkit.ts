@@ -48,20 +48,21 @@ export function runtimeImports(source: string, file = 'source'): string[] {
 
 const ANY_EXTENSION = /\.[^./]+$/;
 
-/** The modules in the file's own directory that the file loads and whose name `name` matches, as
- *  file names. Each relative specifier is resolved against the file first, so `././x.ts` and
- *  `../dir/x.ts` name the same module as `./x.ts`. A relative load with a query or a hash, or one
- *  that names a matching module by any other extension or by none (the resolver tries extensions), throws:
- *  the guard cannot tell what it loads. */
-export function siblingImports(file: URL, name: RegExp): string[] {
+/** The modules in `dir` that `file` loads and whose name `name` matches, as file names. Each
+ *  relative specifier is resolved against `file` first, so `././x.ts` and `../dir/x.ts` name the
+ *  same module as `./x.ts`. A relative load with a query or a hash, or one that names a matching
+ *  module by any other extension or by none (the resolver tries extensions), throws: the guard
+ *  cannot tell what it loads. */
+export function moduleImports(file: URL, dir: URL, name: RegExp): string[] {
   const path = fileURLToPath(file);
+  const dirPath = fileURLToPath(dir).replace(/[/\\]+$/, '');
   const found: string[] = [];
   for (const specifier of runtimeImports(readFileSync(path, 'utf8'), basename(path))) {
     if (!specifier.startsWith('.')) continue;
     const target = new URL(specifier, file);
     if (target.search || target.hash) throw new Error(`${basename(path)}: ${specifier} carries a query or a hash`);
     const targetPath = fileURLToPath(target);
-    if (dirname(targetPath) !== dirname(path)) continue;
+    if (dirname(targetPath) !== dirPath) continue;
     const module = basename(targetPath);
     if (name.test(module)) found.push(module);
     else if (name.test(`${module}.ts`) || name.test(module.replace(ANY_EXTENSION, '.ts'))) {
@@ -69,4 +70,10 @@ export function siblingImports(file: URL, name: RegExp): string[] {
     }
   }
   return found;
+}
+
+/** The modules in the file's own directory that the file loads and whose name `name` matches, as
+ *  file names. Same resolution and throws as `moduleImports`. */
+export function siblingImports(file: URL, name: RegExp): string[] {
+  return moduleImports(file, new URL('.', file), name);
 }
