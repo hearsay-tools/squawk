@@ -157,11 +157,15 @@ export function subagentCells(runners: readonly RunnerId[]): void {
   }
 }
 
-/** The guard, run once: every runner has its file, and each exemption is a runner with no scenario. */
+/** The guard, run once: a runner with a live row has its file, a runner exempt from every row has
+ *  none, and each exemption is a runner with no scenario. */
 export function subagentGuard(file: (runner: RunnerId) => string): void {
   describe('native subagent cells (hearsay-tools/cezarion#2431)', () => {
-    it('runs every runner\'s subagent cells from its own file', () => {
-      for (const runner of RUNNER_IDS) expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(true);
+    it('runs the subagent cells of each runner with a live row from its own file', () => {
+      for (const runner of RUNNER_IDS) {
+        const live = !SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
+        expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(live);
+      }
     });
     it('exempts a runner from every row exactly when its wire reports no subagents to wait on', () => {
       for (const runner of RUNNER_IDS) {

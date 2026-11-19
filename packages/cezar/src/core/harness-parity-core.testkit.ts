@@ -256,9 +256,8 @@ export const FINAL_MESSAGE_CRITERIA = [
   { id: 'F11', scenario: 'silent-tail-late-turn-start', name: 'resumes on a late native turn-start before content' },
 ] as const;
 
-/** hearsay-tools/cezarion#1138: worker-wait-conversations.test.ts, every native parent wire. */
+/** hearsay-tools/cezarion#1138: worker-wait-resumed-requests.test.ts, every native parent wire. */
 export const WORKER_PROGRESS_WAIT_CRITERIA = [
-  { id: 'WP1', scenario: 'hold', name: 'delivers progress without retiring the registered worker wait' },
   { id: 'WP2', scenario: 'hold', name: 'preserves a resumed request past 45 minutes and delivers a late reply amendment' },
 ] as const;
 
