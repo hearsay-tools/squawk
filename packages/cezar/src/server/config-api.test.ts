@@ -10,10 +10,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-
-// The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';

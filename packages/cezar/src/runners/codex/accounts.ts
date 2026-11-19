@@ -1,5 +1,5 @@
 import type { RunnerAccounts } from '../../core/runner-definition.ts';
-import type { AgentHomePaths } from '../../agent-config/catalog.ts';
+import type { AgentHomePaths } from '../../core/runner-config-files.ts';
 
 /** Codex's account data (the `accounts` part). Data only: the definition and the account
  *  readers consume it, so importing it loads no code. */

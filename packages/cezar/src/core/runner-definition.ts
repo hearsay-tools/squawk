@@ -43,15 +43,11 @@ export interface RunnerDefinition {
   /** Extra tools unioned onto the default when a step does not set allowedTools. */
   readonly extraTools: readonly string[];
 
-  // ---- login (hearsay-tools/squawk#3894) ----
-
+  // Login, accounts, home paths and environment (hearsay-tools/squawk#3894).
   /** Login and auth-status data (the `login` part). */
   readonly login: RunnerLogin;
   /** Imports the runner's status parser (`runners/<id>/login-probe.ts`). */
   loadLogin(): Promise<RunnerLoginStatus>;
-
-  // ---- accounts and env (hearsay-tools/squawk#3894) ----
-
   /** Account folder layout, profile markers, home slot (the `accounts` part). */
   readonly accounts: RunnerAccounts;
   /** The environment allow-list prefixes (the `env` part). */

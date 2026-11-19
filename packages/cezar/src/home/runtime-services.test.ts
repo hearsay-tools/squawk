@@ -8,10 +8,6 @@ import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { ProviderRuntimeAuthObserver } from '../server/provider-auth-runtime.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-
-// The runtime services probe every registered provider's login, and the cases use Claude and Codex.
-registerBuiltInRunners();
 import { createApp } from '../server/server.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
@@ -21,10 +17,10 @@ import { AutomationStore } from '../automations/store.ts';
 import type { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { Hono } from 'hono';
 import { openRunCli } from '../server/open-in-targets.ts';
-import { registerRunner } from '../core/runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerRunner(claudeRunner);
+// The agent-profiles route reads every provider's account data from the registry.
+registerBuiltInRunners();
 
 it('delivers task webhooks from the selected registry', async () => {
   const { root, selected } = runtimeHomes();
