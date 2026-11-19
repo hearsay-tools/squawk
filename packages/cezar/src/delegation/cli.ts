@@ -97,7 +97,7 @@ const WORKER_USAGE = { operations: [
 ] };
 const WORKER_HELP: Record<string, { args: string; description: string }> = {
   resume: { args: '<worker-id> "<instruction>" --id <UUID>', description: 'Resume a settled owned worker with a request; --timeout-seconds accepts 1-86400.' },
-  spawn: { args: '"<task>" --request-id <UUID> (--baseline <ref> | --workspace shared)', description: 'Create an owned worker: in its own worktree from a committed baseline, or in your worktree with --workspace shared.' },
+  spawn: { args: '"<task>" --request-id <UUID> [--baseline <ref> | --workspace shared]', description: 'Create an owned worker: in its own worktree from a committed baseline, or in your worktree with --workspace shared. A worker may start one shared worker at a time, and no flag is needed: wait for it (worker wait), read its result (worker collect) and destroy it (worker destroy) before you start the next.' },
   list: { args: '', description: 'List your owned workers, execution revisions and remaining cleanup resources.' },
   inspect: { args: '<worker-id>', description: 'Show worker state and input locations.' },
   steer: { args: '<worker-id> "<text>"', description: 'Send instructions to a running worker.' },
@@ -110,8 +110,8 @@ const WORKER_HELP: Record<string, { args: string; description: string }> = {
 
 };
 const WORKER_FLAG_HELP: Record<string, string> = {
-  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required unless --workspace shared.',
-  '--workspace': '<isolated|shared>    isolated (default): own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --baseline or --attach.',
+  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required for an isolated workspace. A shared workspace takes only parent-head, or none.',
+  '--workspace': '<isolated|shared>    Default: the first kind you may start (a task: isolated; a worker: shared, its only kind). isolated: own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --attach; of --baseline only parent-head.',
   '--request-id': '<UUID>              Spawn retry ID, or request being followed up/replied to.',
   '--runner': `<name>                  ${RUNNER_IDS.join(' | ')}.`,
   '--backend': '<name>                 Alias of --runner.',
@@ -462,7 +462,6 @@ async function spawnPayload(values: CliValues, positionals: string[], argv: stri
   if (refusal) throw new WorkerCliError(`spawn refused: ${refusal}`);
   const attached = await attachPaths(typed);
   const context = { text, artifacts: attached.length ? attached.map(path => ({ kind: 'parent-file' as const, path })) : undefined };
-  if (values.workspace !== 'shared' && values.baseline === undefined) throw new WorkerCliError('spawn is missing --baseline');
   const parsed = workerSpawnRequestSchema.safeParse({ task: positionals[0], baseline: values.baseline, workspace: values.workspace, requestId: values['request-id'], backend: runner,
     model: values.model, effort: values.effort, workflow: values.workflow, skill: values.skill,
     context: text === undefined && !attached.length ? undefined : context });

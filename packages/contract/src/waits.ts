@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { askContextSchema, askRequestSchema } from './ask-schema.ts';
 import { ciPrIdentitySchema, ciWaitErrorCodeSchema, ciWaitRequestSchema, ciWaitResultSchema, prWaitUntilSchema } from './ci-wait.ts';
-import { peerWaitResultSchema, refinePeerWaitResult, workerIdsSchema } from './delegation.ts';
+import { listsWorkers, peerWaitResultSchema, refinePeerWaitResult, workerIdsSchema } from './delegation.ts';
 import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
 import type { PeerWaitView, WorkerCompletionWait, WorkerWait } from './delegation.ts';
 import { requestOutcomeSchema } from './conversations.ts';
@@ -405,7 +405,7 @@ export const askErrorCodeSchema = z.enum([
   'invalid_request', 'capacity', 'persistence', 'unavailable', 'unauthorized', 'autonomous_run',
   'manager_disposed', 'capability_revoked', 'run_missing', 'run_not_running', 'run_stopping', 'session_replaced',
   'session_closed', 'run_cancelled', 'finish_requested', 'generation_mismatch', 'worker_wait_pending',
-  'worker_execution_stopped', 'root_finish_pending',
+  'worker_execution_stopped', 'root_finish_pending', 'supervisor_is_worker',
 ]);
 export type AskErrorCode = z.infer<typeof askErrorCodeSchema>;
 
@@ -577,9 +577,10 @@ export function workerCompletionWaitProjection(entry: WorkerWaitEntry, run: Part
   };
 }
 
-/** A run's deadline-less completion wait in its projection, for the relationships view. */
+/** A run's deadline-less completion wait in its projection, for the relationships view: for every
+ *  run that lists workers, a supervising worker included. */
 export function completionWaitView(run: Partial<Pick<RunRecord, 'status' | 'waits' | 'delegation'>>): WorkerCompletionWait | undefined {
-  if (run.delegation?.role !== 'root') return undefined;
+  if (!listsWorkers(run.delegation)) return undefined;
   const entry = completionWaitEntry(run.waits);
   return entry ? workerCompletionWaitProjection(entry, run) : undefined;
 }

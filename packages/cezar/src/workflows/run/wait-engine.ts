@@ -4,6 +4,7 @@ import type { Wait, WaitErrorCode, AskErrorCode, WorkerWaitEntry, PrWaitEntry, P
 import type { ActiveRun } from '../active-run.ts';
 import type { RunModuleContext } from './types.ts';
 import type { RunRecord } from '../../runs/store.ts';
+import { recordedDirectory } from '../../runs/shared-hosts.ts';
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import { assertWaitCapacity, WaitCapacityError } from '../../runs/wait-capacity.ts';
 import { waitErrorMessage } from '../../ci-wait/errors.ts';
@@ -184,7 +185,7 @@ export class WaitEngine {
   /** Where a process wait's exit file may sit: the run's worktree (the checkout for a run without
    *  one) and, unless turned off, the Squawk temp directory its agent gets as `TMPDIR`. */
   exitFileRoots(runId: string, run = this.context.store.getRun(runId)): ExitFileRoots {
-    return { worktree: run?.worktreePath ?? this.context.repoRoot, ...(agentTmpDirEnabled() ? { tmpDir: resolveAgentTmpDir(this.context.dataDir, runId) } : {}) };
+    return { worktree: recordedDirectory(run, this.context.repoRoot), ...(agentTmpDirEnabled() ? { tmpDir: resolveAgentTmpDir(this.context.dataDir, runId) } : {}) };
   }
 
   /** Start what resolves an open wait: the watch adapter its row names. An overdue deadline

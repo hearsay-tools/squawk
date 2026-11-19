@@ -15,7 +15,7 @@ import {
   WAIT_SOURCE,
   WAIT_VIA,
 } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { WorkerActivitySection, WorkerWaitDetails, hasWorkerWaitDetails } from './run-relationships'
+import { WorkerActivitySection, WorkerWaitDetails, hasWorkerWaitDetails, useWorkersVerdict } from './run-relationships'
 
 const parentId = '10000000-0000-4000-8000-000000000001'
 const workerId = '10000000-0000-4000-8000-000000000002'
@@ -162,6 +162,15 @@ it('shows a parent parked on Cezar\'s completion wait, which has no deadline', (
   expect(screen.queryByText(/Deadline:/)).toBeNull();
 });
 
+// hearsay-tools/squawk#3819: a worker that started a worker parks on the same wait and shows the same note.
+it('shows a supervising worker parked on the completion wait', () => {
+  setup({ ...child, status: RUN_STATUS.waiting, delegation: { ...child.delegation!, spawnGrant: { kinds: ['shared'], live: 1 } } as ApiRun['delegation'], waits: [{
+    kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, registeredAt: at,
+    phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all', workerIds: [parentId], revisions: [], outcomes: [],
+  }] });
+  expect(screen.getByText(/^Waiting on 1 worker\. No deadline: Squawk wakes this task when they have all settled\.$/)).toBeTruthy();
+});
+
 // hearsay-tools/cezarion#2588: waits [A, B] and [A] are two pending workers, as the Activity row says.
 it('counts each pending worker once across overlapping open waits', () => {
   const otherWorker = '10000000-0000-4000-8000-000000000009'
@@ -300,6 +309,41 @@ it('names an archived worker the run list no longer carries from the relationshi
   setup(root, async () => json({ workers: [archivedWorker], titles: [{ id: workerId, title: 'Old worker', titleSummary: 'Fixed the parser' }] }))
   const group = await screen.findByRole('group', { name: 'Task relationships' })
   expect(await within(group).findByText('Fixed the parser')).toBeTruthy()
+})
+
+// hearsay-tools/squawk#3819: a root lists its whole family and marks a worker that another worker started.
+it('marks a worker that another worker started with its supervisor, and lists a worker\'s own workers on its page', async () => {
+  const [first, second] = [workerAt(1), { ...workerAt(2), supervisorRunId: workerAt(1).workerId }]
+  const titles = [{ id: first.workerId, title: 'Build the parser' }, { id: second.workerId, title: 'Review the parser' }]
+  const view = setup(rootOf([first, second]), async () => json({ workers: [first, second], titles, capacity: capacityOf(2) }))
+  const items = within(await section()).getAllByRole('listitem')
+  expect((await within(items[0]!).findByText('Started by Build the parser')).getAttribute('data-slot')).toBe('worker-supervisor')
+  expect(within(items[1]!).queryByText(/Started by/)).toBeNull()
+  view.unmount()
+
+  const supervisor: ApiRun = { ...ordinary, id: first.workerId, delegation: { role: 'worker', permissions: [], parentRunId: parentId, workspace: first.workspace, spawnGrant: { kinds: ['shared'], live: 1 } } }
+  setup(supervisor, async () => json({ parentRunId: parentId, workers: [second], titles }))
+  expect((await within(await section()).findByRole('link', { name: `Worker task ${second.workerId}` })).textContent).toContain('Review the parser')
+  expect(within(await section()).queryByText(/Started by/)).toBeNull()
+  cleanup()
+  setup(supervisor)
+  expect(await within(await section()).findByText('No workers')).toBeTruthy()
+})
+
+// The dock's verdict reads the same list the section shows, for every run that shows one.
+it('judges a worker that started a worker by that worker, and an ordinary worker as complete', async () => {
+  const failed = { ...workerAt(2), status: workerInspectionSchema.shape.status.enum.failed, supervisorRunId: workerAt(1).workerId }
+  const supervisor: ApiRun = { ...ordinary, id: workerAt(1).workerId, delegation: { role: 'worker', permissions: [], parentRunId: parentId, workspace, spawnGrant: { kinds: ['shared'], live: 1 } } }
+  const Verdict = ({ run }: { run: ApiRun }) => <output>{useWorkersVerdict(run)}</output>
+  const show = (run: ApiRun) => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ parentRunId: parentId, workers: [failed] })))
+    const client = createQueryClient(); client.setDefaultOptions({ queries: { retry: false } })
+    return render(<QueryClientProvider client={client}><ProjectScopeProvider projectId="sample"><Verdict run={run} /></ProjectScopeProvider></QueryClientProvider>)
+  }
+  const view = show(supervisor)
+  await waitFor(() => expect(view.container.textContent).toBe('issue'))
+  view.unmount()
+  expect(show(child).container.textContent).toBe('complete')
 })
 
 it('says when a stuck cleanup needs attention, when it checks next, and how to try now (hearsay-tools/cezarion#879)', async () => {

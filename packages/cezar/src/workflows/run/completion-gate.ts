@@ -4,7 +4,8 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { RunModuleContext } from './types.ts';
 import { hasRegisteredRunProcess } from '../../core/process-usage.ts';
 import { parentReadiness } from '../../delegation/readiness.ts';
-import { finishing, isFamilyRecord, isRootTask, receiptsOf, supervisorIdOf } from '../../runs/task-rights.ts';
+import { familyRecordOf, finishing, isFamilyRecord, isRootTask, receiptsOf, supervisorIdOf } from '../../runs/task-rights.ts';
+import { completionWorkerIds, holdsCompletionGate } from '../../runs/supervised.ts';
 import { openWaits } from '../waits.ts';
 import { openCompletionRequests, rootCompletionRefusal, type CompletionRefusal } from '../completion-policy.ts';
 import { hasPendingHumanAsk } from './pending-ask-facts.ts';
@@ -19,20 +20,25 @@ export interface CompletionGateHost {
   unansweredQuestions(runId: string): { workerId: string; messageId: string }[];
 }
 
+/** The completion gate holds a task that holds a family record, and a worker that started a
+ *  worker: the same gate for every supervisor. */
+export function gatesCompletion(context: RunModuleContext, run: RunRecord | undefined): run is RunRecord {
+  return holdsCompletionGate(run, familyRecordOf(run, id => context.store.getRun(id)));
+}
+
 export function completionRefusal(context: RunModuleContext, host: CompletionGateHost, runId: string): CompletionRefusal | undefined {
-  if (!isFamilyRecord(context.store.getRun(runId))) return undefined;
+  if (!gatesCompletion(context, context.store.getRun(runId))) return undefined;
   return rootCompletionRefusal({ questions: host.unansweredQuestions(runId), blockers: host.parentCompletionBlockers(runId),
     requests: openCompletionRequests(context.store, runId), incomingRefused: !!host.active.get(runId)?.boundary.incomingRequestRefused });
 }
 
 export function parentCompletionBlockers(context: RunModuleContext, host: CompletionGateHost, runId: string) {
   const parent = context.store.getRun(runId);
-  if (!isFamilyRecord(parent)) return [];
-  const ids = new Set([...receiptsOf(parent).map(receipt => receipt.workerId),
-    ...context.store.listWorkersOf(runId).map(run => run.id)]);
-  const workers = parentReadiness(parent, [...ids].map(workerId => ({ workerId, run: context.store.getRun(workerId),
+  const family = familyRecordOf(parent, id => context.store.getRun(id));
+  if (!parent || !family) return [];
+  const workers = parentReadiness(parent, family.id, completionWorkerIds(context.store, parent, family).map(workerId => ({ workerId, run: context.store.getRun(workerId),
     terminated: context.store.readWorkerExecution(workerId)?.phase === 'complete', result: context.store.getRun(workerId)
-      ? context.store.readWorkerResult(runId, workerId) : context.store.readDeletedWorkerResult(runId, workerId),
+      ? context.store.readWorkerResult(family.id, workerId) : context.store.readDeletedWorkerResult(family.id, workerId),
   })));
   return [...workers, ...openCompletionRequests(context.store, runId).sent.map(request => ({ workerId: request.recipientRunId, reason: 'request' as const, request }))];
 }

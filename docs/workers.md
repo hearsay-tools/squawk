@@ -18,7 +18,7 @@ hsq worker spawn --baseline parent-head --request-id <UUID> 'Implement the assig
 hsq worker spawn --baseline parent-head --request-id <UUID> --runner codex --effort high --context-file ./selected-context.txt 'Review the parser'
 hsq worker spawn --baseline parent-head --request-id <UUID> --workflow review 'Review the parser change'
 hsq worker spawn --workspace shared --request-id <UUID> 'Review the committed change; do not edit files'
-hsq worker list                         # All own workers, revisions and cleanup resources (fetches pages automatically)
+hsq worker list                         # A root: its whole family. A worker: the workers it started. With revisions and cleanup resources (fetches pages automatically)
 hsq worker inspect <worker-id>
 hsq worker steer <worker-id> 'Consider this additional constraint'
 hsq worker diff <worker-id>
@@ -54,7 +54,7 @@ Destroy and worker spawn share one worktree mutation lock per repository. An exp
 
 `hsq worker spawn --workspace shared` starts a worker in the directory its parent works in: the parent's worktree, or the repository root for a parent that runs in place. The default, `--workspace isolated`, gives the worker its own worktree and branch as before.
 
-A shared worker starts at the parent's HEAD, and its record keeps that commit as `baselineSha`. `--baseline` is refused with `--workspace shared`. `--attach` is refused too: the file is already in the directory the worker runs in. Text context and baseline files work; Squawk copies each baseline file from its commit into the worker's own data directory, never into the parent's worktree, and `hsq worker inspect` reports those paths.
+A shared worker starts at the parent's HEAD, and its record keeps that commit as `baselineSha`. With `--workspace shared`, `--baseline parent-head` is accepted and changes nothing, because that is the commit a shared worker starts at; any other `--baseline` value is refused. `--attach` is refused too: the file is already in the directory the worker runs in. Text context and baseline files work; Squawk copies each baseline file from its commit into the worker's own data directory, never into the parent's worktree, and `hsq worker inspect` reports those paths.
 
 A shared worker has none of the things an isolated worker owns:
 
@@ -93,6 +93,72 @@ Squawk does not prevent a write, and the report does not say who made a change. 
 
 A shared worker counts toward the same limits as any worker: 32 outstanding workers and 1,024 creations per parent.
 
+### A worker that starts a worker
+
+A worker that a root task started may start one worker of its own, for example to review its change before it reports. That worker always runs in a shared workspace, in the directory of the worker that started it.
+
+```sh
+hsq worker spawn --request-id <UUID> 'Review my last commit; do not edit files'
+hsq worker wait <worker-id>
+hsq worker collect <worker-id>
+hsq worker destroy <worker-id>
+```
+
+- **No flag is needed.** A spawn that names no `--workspace` uses the first kind the caller may start: `isolated` for a root task, `shared` for a worker. `--workspace isolated` from a worker is refused, and the answer names the allowed kinds. `--attach` and a `--baseline` other than `parent-head` are refused as for every shared worker, so `hsq worker spawn --baseline parent-head ...` works from a root and from a worker alike.
+- **One at a time.** A worker may have one outstanding worker. It destroys the finished one before it starts the next; destroy of a shared worker is immediate. A second spawn while the first is outstanding answers `capacity_limit` and says so. The worker that was started this way cannot start a worker.
+- **The family stays flat.** The root task holds every receipt, every message and every limit: 32 outstanding workers and 1,024 creations count the workers of its workers too. Each worker record names its **supervisor**, the task that started it.
+- **Messages follow the supervisor.** A worker and the worker it started message each other with `hsq message`; "your parent" in a worker's prompt is its supervisor. The root and a worker's worker cannot message each other. A worker that another worker started gets no question card: `cezar_ask` tells it to send a request message to its supervisor instead.
+- **Waits and results follow the supervisor.** The supervisor waits on its worker, and the settlement wakes the supervisor, not the root. `hsq worker collect` stores the result on the root's record; the supervisor and the root can both read it. `hsq worker list` shows a worker the workers it started, and shows a root its whole family with each worker's `supervisorRunId`.
+- **The same done gate.** A supervisor's first `cezar_done` with a live or uncollected worker is refused once with what to do. For a live worker, the second makes Squawk wait for it and wake the supervisor. An uncollected result needs `hsq worker collect`; a second done does not wake on it by itself. As for a root, the gate also holds the supervisor's open requests, and it keeps holding them after every worker the task started is destroyed or deleted: cancel a request you no longer need, or wait for its reply.
+- **Endings.** A worker that fails, is cancelled, is stopped or is destroyed gets the live workers it started cancelled, because they work in its directory. A failed root still keeps the live workers of its family, and they continue. Destroy of a worker first stops and destroys the workers it started. A worker that another worker started continues only while that worker is live: after its supervisor settles in any way, failed included, continue the supervisor first.
+- **What the root still controls.** The root task may inspect, wait on, collect, stop and destroy every worker of its family, so cleanup never depends on a worker that has ended. It does not steer or message a worker it did not start. The root task's **Allow Squawk workers** setting gates every spawn in its family.
+- **History.** Delete the history of the workers a worker started before you delete that worker's history; the cockpit names them when it refuses.
+
+### Run a review round from a worker
+
+A worker reviews its own committed change before it pushes: it starts one worker that reads the commits, and it reads that worker's report. The project's pre-PR review rule names the runner, the model, the effort and the review prompt; [Continuous integration](sdlc/ci.md) says where that review stands among the gates.
+
+1. Commit the change. Then start the worker with the command of the review rule and a new request id:
+
+   ```sh
+   hsq worker spawn --baseline parent-head --request-id <UUID> --runner <runner> --model <model> --effort <effort> --context-file <review-prompt> '<task>'
+   ```
+
+   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It names the pull request when one exists; else it says that none exists yet. It says to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree, and `--baseline parent-head` changes nothing there ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
+2. Register the wait and end the turn. Do not edit the worktree while the round runs.
+
+   ```sh
+   hsq worker wait <worker-id> --mode one --timeout-seconds <1-7200>
+   ```
+
+   One round has a total time limit of one hour, counted from the spawn. The limit is a rule of this procedure, not a Squawk timeout: a wait never stops its worker. Give each wait a `--timeout-seconds` of at most the time left in the hour, and register the wait again after a wake on a message or a deadline. When the hour has passed and the worker has not settled, stop it, destroy it and count a failed round:
+
+   ```sh
+   hsq worker stop <worker-id>
+   hsq worker destroy <worker-id>
+   ```
+
+3. Collect the result.
+
+   ```sh
+   hsq worker collect <worker-id>
+   ```
+
+   A round is valid only when all three hold:
+
+   - **The worker has settled.** The result says `"settled": true` and `"partial": false`. A result of a running worker is partial, and its `changes` compares with the directory at that moment: wait again.
+   - **The full report has arrived.** The worker sends it as a message to its parent before `cezar_done`. The collected `summary` holds at most the last assistant text, cut at 4,000 characters; it is not the report.
+   - **`changes` says `unchanged`** ([Change report](#shared-workspace)). `changed` means that a file, the index, HEAD or the branch moved during the round: read `paths` and find the cause. `unavailable` means that Squawk has no comparison, for example after a crashed session.
+
+   The round covers the head SHA that the task names: `git rev-parse HEAD` must still print it when the round ends. A worker that failed, was cancelled, or settled with no report, and a round whose `changes` is `changed` or `unavailable`, is a failed round: destroy the worker and run the round again.
+4. Destroy the worker. A worker may have one outstanding worker, so the next round starts only after this.
+
+   ```sh
+   hsq worker destroy <worker-id>
+   ```
+
+After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or after two failed rounds, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
+
 ### What destroy stops
 
 Every process Squawk starts for a worker (its setup, agent sessions, `check` steps and preview server) starts inside the worker's **scope**, and destroy stops the scope ([ADR 0032](adr/0032-prove-process-and-workspace-ownership-before-cleanup.md)). `hsq worker inspect` reports it as `scope.backend` and `scope.guarantee`:
@@ -128,4 +194,4 @@ Parent completion requires collection of every worker's latest settled execution
 
 Stop requests cancellation; `stopping` does not prove termination. Destroy checkpoints obtainable results, waits up to 30 seconds for proven termination, and removes only verified owned resources. An `incomplete` response lists remaining resources; resolve the cause and retry explicitly. Cleanup order is: collect/integrate desired results, destroy owned resources, explicitly delete child histories through the cockpit/API, then delete parent history. Parent-owned summaries and bounded diff snapshots remain until parent deletion, including after child-history deletion; general artifact bytes are not archived. Branch/path strings and SHAs become historical descriptors after removal, not promises of available Git objects or files. The human cleanup endpoint `POST /api/v1/p/<projectId>/runs/<worker-id>/worker-destroy` stays available when delegation is disabled. The CLI bounds each HTTP request to 45 seconds and rejects endpoint/auth/origin overrides and redirects.
 
-Provisioned root tasks and workers may use native subagents, and each mechanism has its own purpose. Use native subagents for work that needs no separate worktree: research, code reading and focused analysis, for example a subagent that reads the parser and summarizes its error handling. Native subagents need no worker creation, worktree, collection or destruction. Use Squawk workers for work that needs its own worktree, its own commits or a tracked lifecycle. Workers may use native subagents too, but cannot spawn Squawk workers. An agent may message its own subagents with its runner's tools; it reaches another Squawk task only through `hsq message`. Where a runner's native tool for reaching another session is separate from subagent messaging, a per-run adapter control turns it off: Codex's cross-thread message board, and an OpenCode plugin that refuses a `task` call whose `task_id` names a session outside the caller's own session tree. Claude sessions refuse messages from other sessions on every launch. Known limitations: a Claude session Squawk starts can still list and message Claude sessions that Squawk did not start, and sessions on other machines; an OpenCode session that an older Squawk created under delegation keeps its `task` deny on Continue and restart recovery, because OpenCode cannot remove a session permission rule (new OpenCode sessions allow subagents). These controls are cooperative same-user supervision, not isolation ([Governed delegation controls](../AGENT_PROTOCOL.md#governed-delegation-controls-d1)). When the listener is unavailable, ordinary tools/settings stay unchanged. The listener binds to `127.0.0.1`, including hosted cockpit mode. Its session credentials authorize only what that session may do: a root manages its own workers and messages peer roots in the same project, subject to the task's settings and relationship checks; a worker addresses only its parent. This is cooperative local-agent supervision; same-user unrestricted shell and custom tools are not hard isolation. Workers cannot spawn Squawk workers or message peers through Squawk. Review remains a human gate with no automatic acceptance. Never read, echo, forward, or persist the generated token.
+Provisioned root tasks and workers may use native subagents, and each mechanism has its own purpose. Use native subagents for work that needs no separate worktree: research, code reading and focused analysis, for example a subagent that reads the parser and summarizes its error handling. Native subagents need no worker creation, worktree, collection or destruction. Use Squawk workers for work that needs its own worktree, its own commits or a tracked lifecycle. Workers may use native subagents too; a root's worker may also start one shared-workspace Squawk worker ([A worker that starts a worker](#a-worker-that-starts-a-worker)). An agent may message its own subagents with its runner's tools; it reaches another Squawk task only through `hsq message`. Where a runner's native tool for reaching another session is separate from subagent messaging, a per-run adapter control turns it off: Codex's cross-thread message board, and an OpenCode plugin that refuses a `task` call whose `task_id` names a session outside the caller's own session tree. Claude sessions refuse messages from other sessions on every launch. Known limitations: a Claude session Squawk starts can still list and message Claude sessions that Squawk did not start, and sessions on other machines; an OpenCode session that an older Squawk created under delegation keeps its `task` deny on Continue and restart recovery, because OpenCode cannot remove a session permission rule (new OpenCode sessions allow subagents). These controls are cooperative same-user supervision, not isolation ([Governed delegation controls](../AGENT_PROTOCOL.md#governed-delegation-controls-d1)). When the listener is unavailable, ordinary tools/settings stay unchanged. The listener binds to `127.0.0.1`, including hosted cockpit mode. Its session credentials authorize only what that session may do: a root manages its own workers and messages peer roots in the same project, subject to the task's settings and relationship checks; a worker addresses only its supervisor and a worker it started. This is cooperative local-agent supervision; same-user unrestricted shell and custom tools are not hard isolation. Workers cannot message peers through Squawk, and a worker that another worker started cannot spawn Squawk workers. Review remains a human gate with no automatic acceptance. Never read, echo, forward, or persist the generated token.

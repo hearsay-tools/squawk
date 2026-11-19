@@ -10,6 +10,8 @@ import type { AddressInfo } from 'node:net';
 import { DelegationController } from '../delegation/provision.ts';
 import '../core/every-runner.testkit.ts';
 import { fixture } from '../delegation/service.testkit.ts';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { createDelegationRoutes } from '../delegation/routes.ts';
 import { createDelegationApp, startDelegationTransport } from '../delegation/transport.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
@@ -76,9 +78,14 @@ describe('cez discover', () => {
     }
     expect(await run(['runners', '--url', origin], env())).not.toBe(0);
   });
-  it('refuses worker credentials even though the public cockpit is reachable', async () => {
+  // hearsay-tools/squawk#3819: discovery goes with the spawn grant, so a running worker that may start a worker has it.
+  it('answers a running worker that holds a spawn grant, and refuses one that holds none even though the public cockpit is reachable', async () => {
     const { workerId } = await f.service.spawn(f.caller, { task: 'child', baseline: 'HEAD', requestId: randomUUID() });
     const token = f.credentials.issue('project', workerId, randomUUID());
+    setRunStatus(f.store, workerId, RUN_STATUS.running);
+    expect(await run(['runners'], { ...env(), CEZ_DELEGATION_TOKEN: token })).toBe(0);
+    const { spawnGrant: _grant, ...ungranted } = f.store.getRun(workerId)!.delegation as Record<string, unknown>;
+    f.store.commitDelegation([{ id: workerId, delegation: ungranted as never }]);
     expect(await run(['runners'], { ...env(), CEZ_DELEGATION_TOKEN: token })).not.toBe(0);
     expect(last().code).toBe('denied_scope');
   });

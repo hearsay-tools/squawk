@@ -78,6 +78,9 @@ export const WAIT_CRITERIA = [
   { id: 'U20u', scenario: 'baseline', name: 'a done blocked by a settled, uncollected worker gets the uncollected refusal nudge without the will-wait sentence' },
   { id: 'U20h', scenario: 'baseline', name: 'a human message, in the opening session or a continuation, after an unanswered refusal nudge starts a fresh cycle' },
   { id: 'U21', scenario: 'baseline', name: 'an ignored refusal with live workers parks on a Squawk worker wait that settlement wakes' },
+  // hearsay-tools/squawk#3819: the same gate for a worker that started a worker.
+  { id: 'U21s', scenario: 'baseline', name: 'a worker that started a worker gets the same gate: an ignored refusal parks it off the pool on a Squawk worker wait, and its worker\'s settlement wakes it and not the root' },
+  { id: 'U21g', scenario: 'baseline', name: 'a root\'s ignored refusal parks off the pool on a worker that an ended worker started and that has not terminated, and its termination wakes the root once' },
   { id: 'U21r', scenario: 'baseline', name: 'after a restart, a deadline-less completion wait resolves on the worker\'s settlement and wakes the parent once' },
   { id: 'U21m', scenario: 'baseline', name: 'a worker message wakes a parent parked on the completion wait and the wait stays open' },
   { id: 'U21t', scenario: 'baseline', name: 'an agent timer registered beside a completion-wait park keeps its deadline and wakes beside it' },

@@ -10,6 +10,9 @@ describe('status shape labels', () => {
   it('names a worker that waits on its parent and a root that waits on peers', () => {
     const asking = worker({ status: RUN_STATUS.waiting, rung: 'waiting-on-workers', wait: { kind: ACTIVITY_WAIT_KIND.workers, since: iso(-1_000), detail: { owed: 1, total: 1, settled: 0, replies: true, recipientRunIds: ['parent'] } } })
     expect(shapeOf(asking, 'worker').label).toBe('waiting on parent reply')
+    // hearsay-tools/squawk#3819: a worker parked on Squawk's completion wait on the worker it started.
+    const supervising = worker({ status: RUN_STATUS.waiting, rung: 'waiting-on-workers', wait: { kind: ACTIVITY_WAIT_KIND.workers, since: iso(-1_000), detail: { owed: 1, total: 1, settled: 0, recipientRunIds: [] } } })
+    expect(shapeOf(supervising, 'worker').label).toBe('waiting on 1 worker')
     const peers = run({ status: RUN_STATUS.waiting, rung: 'waiting-on-workers', wait: { kind: ACTIVITY_WAIT_KIND.peers, since: iso(-1_000), deadline: iso(60_000), detail: { peerRunIds: ['a', 'b'] } } })
     expect(shapeOf(peers, 'root').label).toBe('waiting on 2 tasks')
     const replies = run({ status: RUN_STATUS.waiting, rung: 'waiting-on-workers', wait: { kind: ACTIVITY_WAIT_KIND.workers, since: iso(-1_000), detail: { owed: 1, total: 1, settled: 0, replies: true, recipientRunIds: ['b'] } } })

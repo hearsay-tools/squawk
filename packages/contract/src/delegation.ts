@@ -132,6 +132,9 @@ export const workerCreationReceiptSchema = z.object({
   workerId: z.uuid(),
   /** Hash of the original normalized spawn request, NOT the resolved commit or inherited settings. */
   requestHash: requestHashSchema,
+  /** The task that started the worker. Absent: the task that holds this receipt. A request ID is
+   *  unique among the receipts of one supervisor. */
+  supervisorRunId: z.uuid().optional(),
   deletion: z.object({ phase: z.enum(['pending', 'complete']), revision: z.number().int().nonnegative(), resourceId: z.uuid(), generation: z.uuid() }).strict().optional(),
 }).strict();
 
@@ -262,7 +265,7 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
     spawnGrant: spawnGrantSchema.optional(),
     // #816: bounded by the creation ceiling (WORKER_CREATION_LIMIT), not by capacity.
     receipts: z.array(workerCreationReceiptSchema).max(1_024).refine(receipts =>
-      new Set(receipts.map(receipt => receipt.requestId)).size === receipts.length &&
+      new Set(receipts.map(receipt => `${receipt.supervisorRunId ?? ''} ${receipt.requestId}`)).size === receipts.length &&
       new Set(receipts.map(receipt => receipt.workerId)).size === receipts.length),
     // `wait`, `lastWait` and `completion` are the old worker-wait engine's, never written since
     // hearsay-tools/cezarion#1301: every worker wait is a list entry. Kept optional so old rows
@@ -281,7 +284,10 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
     lastWait: workerWaitSchema.optional(),
     permissions: permissionsSchema,
     spawnGrant: spawnGrantSchema.optional(),
+    /** The task that holds the family's receipts and its conversation ledger. */
     parentRunId: z.uuid(),
+    /** The task that started this worker and supervises it. Absent: `parentRunId`. */
+    supervisorRunId: z.uuid().optional(),
     workspace: workerWorkspaceSchema,
     destroy: workerDestroySchema.optional(),
     context: workerInputRecipeSchema.optional(),
@@ -293,6 +299,13 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
 ]);
 export type DelegationState = z.infer<typeof delegationStateSchema>;
 
+/** Whether a task with this record can have workers to list: the task that holds the family's
+ *  receipts, and a worker that holds a spawn grant. The cockpit's Workers section, its verdict and
+ *  the completion wait's view all ask this. */
+export function listsWorkers(delegation: Pick<DelegationState, 'role'> & { spawnGrant?: SpawnGrant | undefined } | null | undefined): boolean {
+  return delegation?.role === 'root' || (delegation?.role === 'worker' && !!delegation.spawnGrant?.kinds.length);
+}
+
 /** Slim list/palette projection. Never copies resource paths, permissions or receipts. */
 export const runDelegationSummarySchema = z.discriminatedUnion('role', [
   delegationStateSchema.options[0].pick({ role: true }).strip().extend({
@@ -303,8 +316,9 @@ export const runDelegationSummarySchema = z.discriminatedUnion('role', [
     }).optional(),
   }),
   // `parentRunId` is the one worker field a list needs: the sidebar lights the parent's row for
-  // a worker URL, and `cez task list` hides workers by it (#817). Never paths or permissions.
-  delegationStateSchema.options[1].pick({ role: true, parentRunId: true }).strip().extend({
+  // a worker URL, and `cez task list` hides workers by it (#817). `supervisorRunId` names the
+  // worker whose Workers section lists this one. Never paths or permissions.
+  delegationStateSchema.options[1].pick({ role: true, parentRunId: true, supervisorRunId: true }).strip().extend({
     wait: workerWaitSchema.pick({ phase: true, requestIds: true }).strip().optional(),
   }),
   delegationStateSchema.options[2].strip(),
@@ -314,20 +328,24 @@ export type RunDelegationSummary = z.infer<typeof runDelegationSummarySchema>;
 /** What `--workspace` takes, and the stored kind each choice plans. */
 export const WORKSPACE_CHOICES = { isolated: 'owned-isolated', shared: 'shared' } as const satisfies Record<string, WorkerWorkspace['kind']>;
 export const workerWorkspaceChoiceSchema = z.enum(['isolated', 'shared']);
-export const SHARED_BASELINE_REFUSAL = '--baseline cannot be used with --workspace shared: a shared worker runs at its parent\'s HEAD';
+/** `parent-head` names what a shared worker already runs at, so it is accepted; any other ref is refused. */
+export const SHARED_BASELINE = 'parent-head';
+export const SHARED_BASELINE_REFUSAL = '--baseline cannot be used with --workspace shared: a shared worker runs at its parent\'s HEAD; leave --baseline out or pass parent-head';
+export const ISOLATED_BASELINE_REFUSAL = '--baseline is required for an isolated workspace';
 export const SHARED_ATTACH_REFUSAL = '--attach cannot be used with --workspace shared: the worker runs in your worktree, so the file is already there';
 /** Why a spawn into a shared workspace is refused, or undefined. The schema accepts the request, so
  *  the service and the CLI answer with these words instead of a generic validation error. */
 export function sharedSpawnRefusal(request: { workspace?: string | undefined; baseline?: string | undefined; context?: { artifacts?: ReadonlyArray<{ kind: string }> | undefined } | undefined }): string | undefined {
   if (request.workspace !== 'shared') return undefined;
-  if (request.baseline !== undefined) return SHARED_BASELINE_REFUSAL;
+  if (request.baseline !== undefined && request.baseline !== SHARED_BASELINE) return SHARED_BASELINE_REFUSAL;
   return request.context?.artifacts?.some(artifact => artifact.kind === 'parent-file') ? SHARED_ATTACH_REFUSAL : undefined;
 }
 export const workerSpawnRequestSchema = z.object({
   task: z.string().min(1).max(100_000),
-  /** Required for an isolated workspace; refused for a shared one, which runs at its host's HEAD. */
+  /** Required for an isolated workspace. A shared one runs at its host's HEAD: only `parent-head` is accepted.
+   *  The service decides, since an absent `workspace` depends on the caller's grant. */
   baseline: z.string().min(1).max(1_024).optional(),
-  /** `isolated` when absent. */
+  /** Absent: the first kind the caller's spawn grant allows. */
   workspace: workerWorkspaceChoiceSchema.optional(),
   requestId: z.uuid(),
   context: workerContextSchema.optional(),
@@ -339,7 +357,7 @@ export const workerSpawnRequestSchema = z.object({
   /** Discovered skill to run as a one-step task, mutually exclusive with workflow (#778). */
   skill: z.string().trim().min(1).max(200).optional(),
 }).strict().refine(request => request.skill === undefined || request.workflow === undefined, { message: '--skill and --workflow cannot be used together' })
-  .refine(request => request.workspace === 'shared' || request.baseline !== undefined, { path: ['baseline'], message: '--baseline is required' }).refine(request => request.task.length + (request.context?.text?.length ?? 0) <= 100_000, { message: 'Combined task and context exceed 100000 characters' });
+  .refine(request => request.task.length + (request.context?.text?.length ?? 0) <= 100_000, { message: 'Combined task and context exceed 100000 characters' });
 export type WorkerSpawnRequest = z.infer<typeof workerSpawnRequestSchema>;
 
 export const workerSteerRequestSchema = z.object({
@@ -358,7 +376,10 @@ export type WorkerWaitRequest = z.infer<typeof workerWaitRequestSchema>;
 export const workerInspectionSchema = z.object({
   workerId: z.uuid(),
   settled: z.boolean(),
+  /** The task that holds the family's receipts. */
   parentRunId: z.uuid(),
+  /** The worker that supervises this one. Absent: `parentRunId` supervises it. */
+  supervisorRunId: z.uuid().optional(),
   status: z.enum(['queued', 'running', 'waiting', ...workerOutcomeSchema.shape.status.options]),
   currentStepId: z.string().optional(),
   workspace: workerWorkspaceSchema,
@@ -378,7 +399,7 @@ export type WorkerInspection = z.infer<typeof workerInspectionSchema>;
 
 /** Small summaries omit inspection inputs, wait payloads and assistant output. */
 export const workerListEntrySchema = workerInspectionSchema.pick({
-  workerId: true, parentRunId: true, status: true, workspace: true, destroy: true,
+  workerId: true, parentRunId: true, supervisorRunId: true, status: true, workspace: true, destroy: true,
 }).extend({
   revision: z.number().int().nonnegative(),
   settled: z.boolean(),
@@ -458,8 +479,11 @@ export type RelatedRunTitle = z.infer<typeof relatedRunTitleSchema>;
 
 export const runRelationshipsSchema = z.object({
   parentRunId: z.uuid().optional(),
+  /** For a worker that another worker supervises: that worker. Absent: `parentRunId` supervises it. */
+  supervisorRunId: z.uuid().optional(),
+  /** A root's whole family; a worker's supervised workers. */
   workers: z.array(workerInspectionSchema).max(1_024),
-  /** The parent's title for a worker, each worker's for a parent; absent when there is none. */
+  /** The parent's and the supervisor's title for a worker, each listed worker's; absent when there is none. */
   titles: z.array(relatedRunTitleSchema).max(1_025).optional(),
   /** Present for a delegation root only. */
   capacity: workerCapacitySchema.optional(),

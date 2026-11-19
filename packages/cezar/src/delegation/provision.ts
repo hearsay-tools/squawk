@@ -9,6 +9,7 @@ import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
 import { WORKERS_OFF } from './policy.ts';
+import { maySpawn, supervisedByFamilyRecord, supervisorIdOf } from '../runs/task-rights.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 import { openCompletionRequests } from '../workflows/completion-policy.ts';
 import { createDelegationRoutes } from './routes.ts';
@@ -32,7 +33,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   const invocation = bundledWorkerInvocation();
   const messaging = bundledWorkerInvocation('message');
   const conversationGuidance = [
-    `Use ${messaging} for task conversations. Root tasks can message peer root tasks in the same project and their owned workers; workers may address only their parent. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
+    `Use ${messaging} for task conversations. Root tasks can message peer root tasks in the same project and their owned workers; a worker may address only its parent and a worker it started. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
     `Use ${messaging} request <recipient-run-id> '<text>' --id <message-UUID> to request an explicit reply; use ${messaging} progress <recipient-run-id> '<text>' --id <message-UUID> for an update without an obligation.`,
     `Use ${messaging} follow-up <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to clarify your request, or ${messaging} reply <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to answer an incoming request.`,
     `A request's ID is its message ID. Reuse a message ID only for an exact retry, including timeout; changed payloads are rejected.`,
@@ -56,6 +57,8 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Reach another Squawk task only through ${messaging}; never use your runner's native tools for that.`,
   ].join(' ');
 
+  /** What the task may do only to workers it started itself: both the workers-on and the workers-off prompt say it. */
+  const ownWorkersOnly = 'Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker.';
   const worker = run.delegation?.role === 'worker';
   const owned = run.delegation?.role === 'root' && run.delegation.receipts.length > 0;
   // Accepted peer requests still allow a reply, a wait or a cancel after messaging goes off.
@@ -126,13 +129,13 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,
-    `Workers cannot spawn Squawk workers or message peers.`,
+    `A worker may start one shared-workspace worker of its own at a time. ${ownWorkersOnly} Workers cannot message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
     `Use native subagents for research, code reading and focused analysis.`,
     subagentMessaging,
     WORKERS_OFF,
-    ...(owned ? [`You still manage the workers you own with ${invocation} list, inspect, collect, steer, stop, destroy, diff and wait. Collect the latest settled revision of every worker before completing.`] : []),
+    ...(owned ? [`You still manage the workers you own with ${invocation} list, inspect, collect, steer, stop, destroy, diff and wait. ${ownWorkersOnly} Collect the latest settled revision of every worker before completing.`] : []),
     ...messagingOff,
     conversationGuidance,
   ];
@@ -144,11 +147,13 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     env: { ...productEnvEntries('DELEGATION_URL', options.url), ...productEnvEntries('DELEGATION_TOKEN', token) },
     instructions: run.delegation?.role === 'worker'
       ? [
-        `You are an owned Squawk worker. Your parent run ID is ${run.delegation.parentRunId}.`,
+        `You are an owned Squawk worker. Your parent run ID is ${supervisorIdOf(run)}.`,
         ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
         conversationGuidance,
-        `You cannot spawn Squawk workers. You cannot control peers, merge automatically, or accept your own review.`,
-        commandText(`Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`),
+        `${maySpawn(run) ? `You may start one shared-workspace Squawk worker at a time; destroy it before you start the next. Run ${invocation} spawn --help first.` : `You cannot spawn Squawk workers.`} You cannot control peers, merge automatically, or accept your own review.`,
+        commandText(supervisedByFamilyRecord(run)
+          ? `Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`
+          : `Follow your assigned task and selected input context. Send every question to your parent as a request with cez message request and wait for its reply: no question card reaches your parent or a human. Do not wait for a human.`),
         `You may use native subagents for research, code reading and focused analysis.`,
         subagentMessaging,
         `Commit reviewed work before your parent deliberately integrates it; report the summary, commits, tests and remaining concerns.`,

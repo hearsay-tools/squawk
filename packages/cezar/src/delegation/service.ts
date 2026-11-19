@@ -41,6 +41,7 @@ import {
   type RequestOutcome,
 } from '@open-mercato/cezar-contract/conversations';
 import {
+  ISOLATED_BASELINE_REFUSAL,
   WORKSPACE_CHOICES,
   sharedSpawnRefusal,
   workerSpawnRequestSchema,
@@ -70,7 +71,8 @@ import { completionWaitEntry, peerWaitView, workerCompletionWaitProjection, work
 import type { RunStore, RunRecord } from '../runs/store.ts';
 import { assertConversationIdFree, ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import { workerDestroyView, workerOutcome, workerObservation } from '../runs/delegation-state.ts';
-import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, familyRecordOf, grantsOf, historyDeleting, isFamilyRecord, receiptsOf, relationOf, supervisorIdOf } from '../runs/task-rights.ts';
+import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, defaultSpawnKind, familyRecordOf, grantsOf, historyDeleting, inspectableReceipts, isFamilyRecord, mayOperate, receiptsOf, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
+import { recordedDirectory } from '../runs/shared-hosts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps, plannedWorkflow, allowedToolsForStep, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
@@ -80,9 +82,9 @@ import type { RunnerId } from '../core/agent-runner.ts';
 import type { Caller } from './credentials.ts';
 import { isAuthenticatedCaller } from './credentials.ts';
 import { parseDelegationEffort } from './effort.ts';
-import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed } from './policy.ts';
+import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed, workspaceChoiceOf } from './policy.ts';
 import { resolveWorkerBaseline } from './workspace.ts';
-import { DEFAULT_WORKSPACE_CHOICE, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
+import { workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
@@ -172,25 +174,28 @@ function stepIdentityFields({ settings, grants }: ResolvedSpawnStep) {
   return { account: settings.accountBinding, grants, ...(settings.model === undefined ? {} : { model: settings.model }), ...(settings.effort === undefined ? {} : { effort: settings.effort }) };
 }
 
-function spawnRequestHash(request: WorkerSpawnRequest): string {
+/** `choice` is the workspace the request resolved to: named, or the first kind of the caller's grant. */
+function spawnRequestHash(request: WorkerSpawnRequest, choice: keyof typeof WORKSPACE_CHOICES): string {
   const effortPin = parseDelegationEffort(request.effort);
-  return createHash('sha256').update(JSON.stringify({ task: request.task, baseline: request.baseline,
+  // A shared worker runs at its host's HEAD with or without `--baseline parent-head`: one request either way.
+  return createHash('sha256').update(JSON.stringify({ task: request.task, baseline: choice === 'shared' ? undefined : request.baseline,
     ...(request.context === undefined ? {} : { context: request.context }),
     ...(request.backend === undefined ? {} : { backend: request.backend }),
     ...(request.model === undefined ? {} : { model: request.model }),
     ...(effortPin === undefined ? {} : { effort: effortPin }),
     ...(request.workflow === undefined ? {} : { workflow: request.workflow }),
     ...(request.skill === undefined ? {} : { skill: request.skill }),
-    ...((request.workspace ?? DEFAULT_WORKSPACE_CHOICE) === DEFAULT_WORKSPACE_CHOICE ? {} : { workspace: request.workspace }),
+    ...(choice === 'isolated' ? {} : { workspace: choice }),
   })).digest('hex');
 }
 
 function replayedSpawn(project: DelegationProject, family: RunRecord, parent: RunRecord, requestId: string, requestHash: string) {
-  const receipt = receiptsOf(family).find(r => r.requestId === requestId);
+  // A request ID is the caller's own: another supervisor's same ID is another worker.
+  const receipt = supervisedReceipts(family, parent.id).find(r => r.requestId === requestId);
   if (!receipt) return;
   if (receipt.requestHash !== requestHash) throw new DelegationPolicyError('invalid_input', 'Request ID payload conflict');
   const worker = project.store.getRun(receipt.workerId);
-  if (worker?.delegation?.role !== 'worker' || relationOf(parent, worker) !== 'supervised') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+  if (worker?.delegation?.role !== 'worker' || supervisorIdOf(worker) !== parent.id || !mayOperate(parent, worker, 'spawn')) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
   return { workerId: worker.id, baselineSha: worker.delegation.workspace.baselineSha };
 }
 
@@ -235,7 +240,7 @@ async function acceptSpawnedWorker(args: {
       autonomous: parent.autonomous,
       steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step) })),
     }, family.id, request.requestId, { role: 'worker', permissions: [...DEFAULT_GRANTS.worker.operate], ...(spawnGrant ? { spawnGrant } : {}),
-      parentRunId: family.id, workspace, ...(context ? { context } : {}) }, requestHash, {
+      parentRunId: family.id, ...(parent.id === family.id ? {} : { supervisorRunId: parent.id }), workspace, ...(context ? { context } : {}) }, requestHash, {
       ...identity, ...(context ? { contextHash: workerContextHash(context) } : {}),
       // A named catalog chain or skill is bound like the context recipe; the default quick-task leaves the identity as before.
       ...(request.workflow === undefined && request.skill === undefined ? {} : { workflowHash: workerWorkflowHash(workflowDef) }),
@@ -263,7 +268,9 @@ export class DelegationService {
     // Discovery accompanies spawn authority, including roots persisted before this command existed.
     const callerRun = project.store.getRun(caller.runId);
     authorizeSpawnReplay(caller, callerRun, project.id);
-    requireWorkersAllowed(callerRun);
+    const family = familyRecordOf(callerRun, id => project.store.getRun(id));
+    if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    requireWorkersAllowed(family);
     if (!this.discovery) throw new DelegationPolicyError('unavailable_transport', 'Host discovery is unavailable');
     return request.kind === 'models' ? this.discovery.models.get(request.runner) : discoveredRunners(await this.discovery.providers());
   }
@@ -631,8 +638,6 @@ export class DelegationService {
   }
   async spawn(caller: Caller, value: WorkerSpawnRequest) {
     const request = workerSpawnRequestSchema.parse(value);
-    const refusal = sharedSpawnRefusal(request);
-    if (refusal) throw new DelegationPolicyError('invalid_input', refusal);
     const initial = this.context(caller);
     return this.serialized(`parent:${initial.id}:${caller.runId}`, async () => {
       const project = this.context(caller);
@@ -641,10 +646,14 @@ export class DelegationService {
       const family = familyRecordOf(parent, id => project.store.getRun(id));
       if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
       if (project.store.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
-      const requestHash = spawnRequestHash(request);
+      // A spawn that names no workspace plans the first kind the caller's grant allows.
+      const choice = request.workspace ?? workspaceChoiceOf(defaultSpawnKind(parent)!);
+      const refusal = sharedSpawnRefusal({ ...request, workspace: choice }) ?? (choice === 'isolated' && request.baseline === undefined ? ISOLATED_BASELINE_REFUSAL : undefined);
+      if (refusal) throw new DelegationPolicyError('invalid_input', refusal);
+      const requestHash = spawnRequestHash(request, choice);
       const replayed = replayedSpawn(project, family, parent, request.requestId, requestHash);
       if (replayed) return replayed;
-      const kindId = WORKSPACE_CHOICES[request.workspace ?? DEFAULT_WORKSPACE_CHOICE];
+      const kindId = WORKSPACE_CHOICES[choice];
       authorizeSpawn(caller, parent, project.id, id => project.store.getRun(id), kindId);
       const catalog = await resolveSpawnWorkflow(project, request);
       const resolvedSteps = await resolveSpawnSteps(project.manager, parent.id, request, catalog, (step, settings) => this.validateModels(request, [{ step, settings }]));
@@ -660,12 +669,15 @@ export class DelegationService {
       const settings = first.settings;
       const identity = acceptedWorkerIdentitySchema.parse({ kind: 'accepted', ...stepIdentityFields(first),
         steps: resolvedSteps.map(entry => ({ stepId: entry.step.id, ...stepIdentityFields(entry) })) });
-      const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline ?? 'parent-head');
+      // A root's directory is its session's, as the engine captured it at launch; a worker's is the
+      // one its record names (`recordedDirectory`), which nothing inside its session can move.
+      const hostDirectory = parent.id === family.id ? settings.cwd : recordedDirectory(parent, project.root);
+      const baselineSha = await resolveWorkerBaseline(project.root, hostDirectory, request.baseline ?? 'parent-head');
       const kind = workspaceKinds[kindId];
-      const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory: settings.cwd });
+      const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory });
       const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
-        parentCwd: settings.cwd, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
+        parentCwd: hostDirectory, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
       });
       return acceptSpawnedWorker({
         project, parent, family, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared,
@@ -677,16 +689,17 @@ export class DelegationService {
     const project = this.context(caller);
     const parent = project.store.getRun(caller.runId);
     authorizeWorkerList(caller, parent, project.id);
-    const receipts = receiptsOf(familyRecordOf(parent, id => project.store.getRun(id)));
+    const receipts = inspectableReceipts(parent, familyRecordOf(parent, id => project.store.getRun(id)));
     const workers: WorkerListPage['workers'] = [];
     const offset = Number(query.offset ?? 0);
     const end = Math.min(offset + 32, receipts.length);
     for (const receipt of receipts.slice(offset, end)) {
       const worker = project.store.getRun(receipt.workerId);
       // Deleted histories have no resources to supervise. Never expose an unrelated receipt target.
-      if (worker?.delegation?.role !== 'worker' || relationOf(parent, worker) !== 'supervised') continue;
+      if (worker?.delegation?.role !== 'worker' || !mayOperate(parent, worker, 'inspect')) continue;
       const inspection = await this.inspect(caller, { workerId: worker.id });
       workers.push({ workerId: inspection.workerId, parentRunId: inspection.parentRunId,
+        ...(inspection.supervisorRunId === undefined ? {} : { supervisorRunId: inspection.supervisorRunId }),
         status: inspection.status, workspace: inspection.workspace,
         ...(inspection.destroy ? { destroy: inspection.destroy } : {}), revision: workerRevision(worker),
         settled: inspection.settled,
@@ -702,7 +715,9 @@ export class DelegationService {
     const wait = this.inspectedWait(parent, worker.id);
     const completion = completionWaitEntry(parent.waits, worker.id);
     const completionWait = completion ? workerCompletionWaitProjection(completion, parent) : undefined;
-    return { workerId: worker.id, parentRunId: parent.id, status: worker.status, workspace: worker.delegation.workspace,
+    return { workerId: worker.id, parentRunId: worker.delegation.parentRunId,
+      ...(worker.delegation.supervisorRunId === undefined ? {} : { supervisorRunId: worker.delegation.supervisorRunId }),
+      status: worker.status, workspace: worker.delegation.workspace,
       settled: workerObservation(worker, project.store.readWorkerExecution(worker.id)).settled,
       ...(worker.runner === undefined ? {} : { backend: worker.runner }), ...(worker.model === undefined ? {} : { model: worker.model }),
       ...(worker.delegation.context === undefined ? {} : { inputs: worker.delegation.context.inputs }),
@@ -718,27 +733,31 @@ export class DelegationService {
     const entry = (parent.waits ?? []).filter((wait): wait is DeadlinedWorkerWaitEntry => wait.kind === 'worker' && WAIT_KINDS.worker.hasDeadline(wait) && !!wait.workerIds?.includes(workerId)).at(-1);
     return entry ? workerWaitEntryToLegacy(entry) : undefined;
   }
+  /** A result is kept where the family keeps results: on the record of the task that holds the receipts. */
   async collect(caller: Caller, params: WorkerParams): Promise<WorkerCollectedResult> {
     const project = this.context(caller);
     const { workerId } = workerParamsSchema.parse(params);
     const parent = project.store.getRun(caller.runId);
     const worker = project.store.getRun(workerId);
+    const familyOf = () => familyRecordOf(project.store.getRun(caller.runId), id => project.store.getRun(id));
+    const family = familyOf();
     if (!worker) {
-      const retained = project.store.readDeletedWorkerResult(caller.runId, workerId);
-      authorizeRetainedResult(caller, parent, project.id, workerId, retained);
-      const evidence = await revalidateRetainedWorkerResult(project.root, retained!, project.store.sourceDataDir(caller.runId));
-      authorizeRetainedResult(caller, project.store.getRun(caller.runId), project.id, workerId, project.store.readDeletedWorkerResult(caller.runId, workerId));
-      return project.store.commitWorkerResult(caller.runId, evidence, project.store.readWorkerResultDiff(caller.runId, workerId));
+      const retained = family && project.store.readDeletedWorkerResult(family.id, workerId);
+      authorizeRetainedResult(caller, parent, project.id, workerId, retained, family);
+      const evidence = await revalidateRetainedWorkerResult(project.root, retained!, project.store.sourceDataDir(family!.id));
+      const current = familyOf();
+      authorizeRetainedResult(caller, project.store.getRun(caller.runId), project.id, workerId, current && project.store.readDeletedWorkerResult(current.id, workerId), current);
+      return project.store.commitWorkerResult(current!.id, evidence, project.store.readWorkerResultDiff(current!.id, workerId));
     }
     authorizeWorker(caller, worker, 'inspect', parent, project.id);
+    if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     project.manager.settleOrphanedWorkerExecution(workerId); // #469: before `settled` is computed
-    const family = familyRecordOf(parent, id => project.store.getRun(id));
-    if (parent && receiptsOf(family).some(receipt => receipt.workerId === workerId && receipt.deletion?.phase === 'pending')) {
-      const retained = project.store.readWorkerResult(parent.id, workerId);
+    if (receiptsOf(family).some(receipt => receipt.workerId === workerId && receipt.deletion?.phase === 'pending')) {
+      const retained = project.store.readWorkerResult(family.id, workerId);
       if (!retained || !project.store.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history deletion evidence is unavailable');
-      const evidence = await revalidateRetainedWorkerResult(project.root, retained, project.store.sourceDataDir(parent.id));
+      const evidence = await revalidateRetainedWorkerResult(project.root, retained, project.store.sourceDataDir(family.id));
       if (!project.store.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history changed during collection');
-      return project.store.commitWorkerResult(parent.id, evidence, project.store.readWorkerResultDiff(parent.id, workerId));
+      return project.store.commitWorkerResult(family.id, evidence, project.store.readWorkerResultDiff(family.id, workerId));
     }
     // Store records preserve object references. Copy before yielding to Continue or cleanup.
     const snapshot = structuredClone(worker);
@@ -750,13 +769,14 @@ export class DelegationService {
     }
     // Private completion can arrive during evidence I/O without changing the public revision.
     const observation = workerObservation(current.worker, project.store.readWorkerExecution(workerId));
-    return project.store.commitWorkerResult(parent!.id, { ...evidence.result, ...observation }, evidence.diffSnapshot);
+    return project.store.commitWorkerResult(family.id, { ...evidence.result, ...observation }, evidence.diffSnapshot);
   }
   async steer(caller: Caller, params: WorkerParams, value: WorkerSteerRequest) {
     const request = workerSteerRequestSchema.parse(value);
-    const { project, worker, parent } = this.target(caller, params, 'steer');
+    const { project, worker } = this.target(caller, params, 'steer');
     if (project.store.containsSessionSecret(request.text)) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
-    const state = project.manager.steerWorker(worker.id, { id: randomUUID(), source: 'agent', parentRunId: parent.id, text: request.text, createdAt: new Date().toISOString() });
+    // `parentRunId` names the family record, as every agent input of a family does.
+    const state = project.manager.steerWorker(worker.id, { id: randomUUID(), source: 'agent', parentRunId: familyRecordOf(worker, id => project.store.getRun(id))?.id ?? caller.runId, text: request.text, createdAt: new Date().toISOString() });
     return { workerId: worker.id, state };
   }
   async stop(caller: Caller, params: WorkerParams) {

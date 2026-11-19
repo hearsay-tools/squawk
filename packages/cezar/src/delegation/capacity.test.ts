@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import type { WorkerDestroy } from '@open-mercato/cezar-contract';
 import { runRecordSchema, type RunRecord } from '../runs/store.ts';
 import { DEFAULT_GRANTS } from '../runs/task-rights.ts';
-import { capacityError, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
+import { capacityError, NO_SPAWN_GRANT, OUTSTANDING_REFUSAL, ownLimitRefusal, spawnCapacityRefusal, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
 
 const now = '2026-10-04T12:00:00.000Z';
 const parentId = randomUUID();
-type Receipt = { requestId: string; workerId: string; requestHash: string; deletion?: { phase: 'pending' | 'complete'; revision: number; resourceId: string; generation: string } };
+type Receipt = { requestId: string; workerId: string; requestHash: string; supervisorRunId?: string; deletion?: { phase: 'pending' | 'complete'; revision: number; resourceId: string; generation: string } };
 
 function receipt(workerId: string, deletion?: 'pending' | 'complete'): Receipt {
   return { requestId: randomUUID(), workerId, requestHash: 'b'.repeat(64),
@@ -68,10 +68,26 @@ describe('supervisedOutstanding', () => {
     expect(DEFAULT_GRANTS.root.spawn?.live).toBe(WORKER_CAPACITY);
   });
 
-  it('leaves out a worker that another task supervises, and keeps one whose record is gone', () => {
+  it('counts for each supervisor the receipts that name it, a worker whose record is gone included', () => {
     const live = worker(randomUUID(), 'running');
-    const family = parent([receipt(live.id), receipt(randomUUID())]);
-    expect(supervisedOutstanding(family, live, id => id === live.id ? live : undefined)).toBe(1);
+    const family = parent([receipt(live.id), receipt(randomUUID()), { ...receipt(randomUUID()), supervisorRunId: live.id }]);
+    const getRun = (id: string) => id === live.id ? live : undefined;
+    expect(supervisedOutstanding(family, live, getRun)).toBe(1);
+    expect(supervisedOutstanding(family, family, getRun)).toBe(2);
+    expect(workerCapacity(family, getRun).outstanding).toBe(3);
+  });
+
+  it('names the caller\'s own limit, and the family limit first', () => {
+    const supervisor = { ...worker(randomUUID(), 'running') };
+    supervisor.delegation = { ...supervisor.delegation!, permissions: ['spawn'], spawnGrant: { kinds: ['shared'], live: 1 } } as typeof supervisor.delegation;
+    const getRun = (id: string) => id === supervisor.id ? supervisor : undefined;
+    expect(spawnCapacityRefusal(parent([receipt(supervisor.id)]), supervisor, getRun)).toBeUndefined();
+    const full = parent([receipt(supervisor.id), { ...receipt(randomUUID()), supervisorRunId: supervisor.id }]);
+    expect(spawnCapacityRefusal(full, supervisor, getRun)).toBe(ownLimitRefusal(1, 1));
+    expect(ownLimitRefusal(1, 1)).toMatch(/^You have 1 outstanding worker of the 1 you may have at a time .*destroy a finished worker \(worker destroy <worker-id>\) before you start another$/);
+    const family = parent(Array.from({ length: 32 }, () => receipt(randomUUID())));
+    expect(spawnCapacityRefusal(family, supervisor, getRun)).toBe(OUTSTANDING_REFUSAL);
+    expect(spawnCapacityRefusal(parent([]), worker(randomUUID(), 'running'), getRun)).toBe(NO_SPAWN_GRANT);
   });
 });
 

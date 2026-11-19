@@ -54,20 +54,58 @@ Before the PR, in this order:
    same-named delegator stays behind; tell the coordinator about any function
    over 20.
 6. <kind section below>
+7. Run git fetch origin main, then npm run prepr; it covers steps 2 and 3.
+   A complexity gate failure blocks the PR. Commit what it changes.
+8. Review round, on the committed head. Run the worker spawn command of the
+   pre-PR review rule in your prompt as it is, with a new request id. From a
+   worker it starts a shared-workspace worker in this worktree. The task
+   names the branch, the head SHA from git rev-parse HEAD and the base. It
+   names the PR when one exists; else it says that none exists yet. It says
+   to read commits with git show and never check out, to change no file, and
+   to send the full report to its parent and then call cezar_done.
+   Do not edit the worktree while the round runs. Register worker wait <id>
+   and end your turn. One round has a total time limit of one hour, counted
+   from the spawn; the limit is this brief's rule, not a Squawk timeout.
+   Within it, register the wait again after a wake on a message or a
+   deadline, with a --timeout-seconds of at most the time left. When the
+   hour has passed and the reviewer has not settled: run worker stop <id>,
+   then worker destroy <id>, and count a failed round.
+   A round is valid only when all three hold: worker collect <id> says
+   settled true and partial false; the reviewer's full report has arrived as
+   a message (the collected summary is not the report); and changes says
+   unchanged. A reviewer that failed, was cancelled, or settled with no
+   report, and a round with changes changed or unavailable, is a failed
+   round: run worker destroy <id> and run the round again.
+   Run worker destroy <id> before every next spawn: you may have one
+   outstanding worker.
+   A finding scored 5 or more: fix it, commit, and run one round on the fix
+   only. Findings scored 4 or lower do not block; list them in the PR body
+   (.ai/skills/auto-merge/SKILL.md § Arm it only after the review).
+   When the spawn is refused (workers off for the task, the limit, a runner
+   that is not available) or after two failed rounds: run the same prompt in a
+   native subagent of your runner, and say in the PR body that the round ran
+   that way. worker spawn --help lists the flags; docs/workers.md § Run a
+   review round from a worker has the commands and the detail.
+9. Release request: git rev-parse HEAD must still print the head SHA that
+   the round's task named; else run the round on the new commits. Send the
+   coordinator that SHA, the round's result and the readiness evidence. Push
+   and open the PR only after its reply for that head (PR-opening gate above).
 Read auto-merge before opening the PR. The campaign's owner-merge control
 requires owner review; leave automatic merging off in that case. Workers
 leave the merge action to the coordinator/owner under the recorded authority.
-Run git fetch origin main, then npm run prepr before the push; it covers steps 2 and 3. Repeat the steps
-after any later code change. Leave full suites to Squeal and CI. A complexity
-gate failure blocks the PR.
+Repeat the steps after any later code change; step 8 then covers the new
+commits only. Leave full suites to Squeal and CI. Commit attribution follows
+your runner's own prompt; this brief adds none.
 
-PR: git push, then gh pr create --base main (ready, not draft). Title in Conventional
-Commits, for example refactor(<area>): <what moved>. Write the body in
+PR, after the coordinator's release: git push, then gh pr create --base main
+(ready, not draft). Title in Conventional Commits, for example
+refactor(<area>): <what moved>. Write the body in
 .ai/qa/<N>/pr-body.md with: Closes hearsay-tools/cezarion#<N>; Summary (at most
 3 sentences); Changed names (against the issue's list, and the reason for every
 extra); Seams kept (each with the test that needs it); Orders preserved (for any
 non-verbatim change); Verification (command and result lines); Left undone (or
-"Nothing"); Merge authority (copy the authority above).
+"Nothing"); Review round (the reviewed head, how the round ran, and each
+finding that does not block); Merge authority (copy the authority above).
 
 After the PR: send the coordinator a progress message (PR, head SHA, changed
 names, length pins, out-of-scope findings) and register one PR wait. Fix a red

@@ -13,6 +13,8 @@ import { reconcileWorkerEntry } from '../../delegation/wait.ts';
 import { workerOutcome } from '../../runs/delegation-state.ts';
 import { workerOutcomeKey } from '../../runs/transcript-facts.ts';
 import { LivenessTimers } from './liveness-timers.ts';
+import { familyWorkers, isLiveWorker, supervisedWorkers } from '../../runs/supervised.ts';
+import { familyRecordOf, isFamilyRecord, receiptsOf } from '../../runs/task-rights.ts';
 
 interface FamilyReconcilerHost {
   reapTerminalScratch(id: string): void;
@@ -111,8 +113,8 @@ export class FamilyReconciler {
     }
   }
 
-  /** One delegation family: its root, then the root's direct workers (the store's
-   *  `parent_run_id` query). Workers cannot delegate, so this never recurses. */
+  /** One delegation family: its root, then every worker whose receipt the root holds (the store's
+   *  `parent_run_id` query). A worker a worker started is filed under the root too, so this never recurses. */
   familyMembers(rootId: string): RunRecord[] {
     const root = this.context.store.getRun(rootId);
     return [...(root ? [root] : []), ...this.context.store.listWorkersOf(rootId)];
@@ -203,10 +205,11 @@ export class FamilyReconciler {
    * A parent that can no longer answer ends what its workers wait on it for
    * (hearsay-tools/cezarion#2410). A parent being stopped closes their questions now, however long its
    * stop takes. A settled one also cancels its worker waits, which lets a stored wait upgraded onto a
-   * finished root go (hearsay-tools/cezarion#1301), and its live workers. A failed parent keeps its
-   * live workers (hearsay-tools/squawk#3337): they run to their own end, and the parent collects
-   * them after a Continue. A recovering parent is left to recovery. True when the parent is settled,
-   * so the pass skips the rest.
+   * finished root go (hearsay-tools/cezarion#1301), and its live workers. A failed root keeps the
+   * family's live workers (hearsay-tools/squawk#3337): they run to their own end, and the root
+   * collects them after a Continue. A settled worker, failed or not, cancels the live workers it
+   * started: they work in its directory. A recovering parent is left to recovery. True when the
+   * parent is settled, so the pass skips the rest.
    */
   private endStoppedParent(parent: RunRecord): boolean {
     const recovering = this.host.recoveringRun(parent);
@@ -216,24 +219,32 @@ export class FamilyReconciler {
     const stale = WAIT_KINDS.worker.select(parent.waits ?? []).filter(wait => wait.phase === 'open' || wait.phase === 'resolved').map(wait => wait.id);
     if (stale.length) this.host.waitEngine.cancel(parent.id, stale);
     this.host.closeRoutedQuestions(parent.id);
-    if (parent.status === 'failed') return true;
-    for (const child of parent.delegation?.role === 'root' ? this.context.store.listWorkersOf(parent.id) : []) {
-      if (['queued', 'running', 'waiting'].includes(child.status)) this.host.cancel(child.id);
-    }
+    for (const child of this.endedWith(parent)) this.host.cancel(child.id);
     return true;
   }
 
-  /** The settled outcomes a run's worker waits can observe now: each owned worker whose execution
-   *  is provably complete, and each deleted worker's retained result. */
+  /** The live workers a settled parent ends: the whole family of a root that did not fail, and
+   *  the workers a settled worker started. */
+  private endedWith(parent: RunRecord): RunRecord[] {
+    const workers = isFamilyRecord(parent)
+      ? (parent.status === 'failed' ? [] : familyWorkers(this.context.store, parent))
+      : supervisedWorkers(this.context.store, parent);
+    return workers.filter(isLiveWorker);
+  }
+
+  /** The settled outcomes a run's worker waits can observe now: each worker of its family whose
+   *  execution is provably complete, and each deleted worker's retained result. A wait names the
+   *  workers it reads, and registration checked that the run may wait on each. */
   private workerObservations(parent: RunRecord, now: string) {
-    const outcomes = this.context.store.listWorkersOf(parent.id).flatMap(child => {
+    const family = familyRecordOf(parent, id => this.context.store.getRun(id));
+    const outcomes = familyWorkers(this.context.store, parent).flatMap(child => {
       const outcome = workerOutcome(child, now);
       return outcome && this.context.store.readWorkerExecution(child.id)?.phase === 'complete' ? [outcome] : [];
     });
     // Explicit history deletion replaces the live execution proof with a completed
     // parent receipt. Keep its acknowledged outcome while other all-wait workers run.
-    const deletedResults = new Map((parent.delegation?.role === 'root' ? parent.delegation.receipts : []).flatMap(receipt => {
-      const result = this.context.store.readDeletedWorkerResult(parent.id, receipt.workerId);
+    const deletedResults = new Map(receiptsOf(family).flatMap(receipt => {
+      const result = this.context.store.readDeletedWorkerResult(family!.id, receipt.workerId);
       return result ? [[receipt.workerId, result] as const] : [];
     }));
     for (const result of deletedResults.values()) {

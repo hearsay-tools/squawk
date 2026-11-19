@@ -4,6 +4,8 @@ import type { SquawkDoneAnswer, ConversationMessage } from '@open-mercato/cezar-
 import { WAIT_MESSAGE_MAX } from '@open-mercato/cezar-contract/wait-limits';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { rootsAwaitingPeer } from '../delegation/conversations.ts';
+import { holdsCompletionGate } from '../runs/supervised.ts';
+import { familyRecordOf } from '../runs/task-rights.ts';
 import { retiredFinishPatch } from '../runs/run-exits.ts';
 import type { ActiveRun } from './active-run.ts';
 
@@ -62,10 +64,18 @@ export function startCompletionCycle(state: ActiveRun): void {
 }
 
 
-/** Only named ledgers are read; incoming peer requests live in their sender's ledger. */
+/**
+ * The open requests a run's completion answers for: the ones it sent and the ones sent to it, in
+ * its family's ledger, and for the task that holds that ledger the peer requests that await it.
+ * Read for every run the completion gate holds (`holdsCompletionGate`); a worker that supervises
+ * nobody has no gate and reads none. Only named ledgers are read; incoming peer requests live in
+ * their sender's ledger.
+ */
 export function openCompletionRequests(store: RunStore, runId: string) {
-  if (store.getRun(runId)?.delegation?.role !== 'root') return { sent: [], incoming: [] };
-  const requests = [runId, ...rootsAwaitingPeer(store, runId)].flatMap(id => {
+  const run = store.getRun(runId);
+  const family = familyRecordOf(run, id => store.getRun(id));
+  if (!family || !holdsCompletionGate(run, family)) return { sent: [], incoming: [] };
+  const requests = (family.id === runId ? [runId, ...rootsAwaitingPeer(store, runId)] : [family.id]).flatMap(id => {
     const root = store.getRun(id);
     const conversation = root?.delegation?.role === 'root' ? root.delegation.conversation : undefined;
     return conversation?.messages.filter(message => message.kind === 'request' && message.state === 'accepted' &&

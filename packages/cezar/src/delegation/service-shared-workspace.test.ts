@@ -105,17 +105,21 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
   });
 
   it('refuses --baseline and --attach with clear words, and creates no worker', async () => {
-    await expect(f.service.spawn(f.caller, { ...shared(), baseline: 'parent-head' })).rejects.toMatchObject({ code: 'invalid_input', message: SHARED_BASELINE_REFUSAL });
+    await expect(f.service.spawn(f.caller, { ...shared(), baseline: 'main' })).rejects.toMatchObject({ code: 'invalid_input', message: SHARED_BASELINE_REFUSAL });
+    expect(SHARED_BASELINE_REFUSAL).toContain('leave --baseline out or pass parent-head');
     await expect(f.service.spawn(f.caller, { ...shared(), context: { artifacts: [{ kind: 'parent-file', path: '.env' }] } }))
       .rejects.toMatchObject({ code: 'invalid_input', message: SHARED_ATTACH_REFUSAL });
     await expect(f.service.spawn(f.caller, { task: 'isolated without a baseline', requestId: randomUUID() })).rejects.toThrow();
     expect(f.store.listWorkerIds()).toEqual([]);
   });
 
-  it('returns the same worker for the same request, and refuses another kind under the same request id', async () => {
+  it('returns the same worker for the same request, with or without --baseline parent-head, and refuses another kind under the same request id', async () => {
     const request = shared();
     const first = await f.service.spawn(f.caller, request);
     expect(await f.service.spawn(f.caller, request)).toEqual(first);
+    // `parent-head` names the HEAD a shared worker runs at anyway: the same request, the same worker.
+    expect(await f.service.spawn(f.caller, { ...request, baseline: 'parent-head' })).toEqual(first);
+    expect(first.baselineSha).toBe(hostHead);
     await expect(f.service.spawn(f.caller, { task: request.task, baseline: 'parent-head', requestId: request.requestId }))
       .rejects.toMatchObject({ code: 'invalid_input', message: 'Request ID payload conflict' });
     await expect(f.service.spawn(f.caller, { ...request, workspace: 'isolated', baseline: 'parent-head' }))

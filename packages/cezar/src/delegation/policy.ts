@@ -1,11 +1,12 @@
-import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
+import { delegationStateSchema, WORKSPACE_CHOICES } from '@open-mercato/cezar-contract/delegation';
 import type { DelegationErrorResponse, WorkerOperation, WorkerCollectedResult, ModelChoices } from '@open-mercato/cezar-contract';
 import type { WorkerWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import type { RunRecord } from '../runs/store.ts';
-import { familyRecordOf, finishing, hasSpawnRoom, historyDeleting, holdsOperation, mayOperate, maySpawn, receiptsOf, type Lookup } from '../runs/task-rights.ts';
+import { familyRecordOf, finishing, grantsOf, historyDeleting, holdsOperation, mayOperate, maySpawn, receiptsOf, receiptSupervisorId, type Lookup } from '../runs/task-rights.ts';
 import { isAuthenticatedCaller, type Caller } from './credentials.ts';
-import { capacityError, OUTSTANDING_REFUSAL, supervisedOutstanding, workerCapacity } from './capacity.ts';
+import { NO_SPAWN_GRANT, spawnCapacityRefusal } from './capacity.ts';
+export { NO_SPAWN_GRANT } from './capacity.ts';
 
 export type { WorkerOperation } from '@open-mercato/cezar-contract';
 
@@ -24,9 +25,20 @@ export const MESSAGING_OFF = 'Task messaging is off for this task. A human can t
 export class MessagingOffError extends DelegationPolicyError {
   constructor() { super('incompatible_state', MESSAGING_OFF); }
 }
-export function requireWorkersAllowed(parent: RunRecord): void {
-  if (!workersAllowed(parent)) throw new DelegationPolicyError('incompatible_state', WORKERS_OFF);
+/** `family` is the task that holds the family record: its human's switch gates every member. */
+export function requireWorkersAllowed(family: RunRecord): void {
+  if (!workersAllowed(family)) throw new DelegationPolicyError('incompatible_state', WORKERS_OFF);
 }
+type WorkspaceChoice = keyof typeof WORKSPACE_CHOICES;
+/** The `--workspace` word of a stored kind. */
+export function workspaceChoiceOf(kind: WorkerWorkspace['kind']): WorkspaceChoice {
+  return (Object.keys(WORKSPACE_CHOICES) as WorkspaceChoice[]).find(choice => WORKSPACE_CHOICES[choice] === kind)!;
+}
+/** The refusal of a workspace kind the caller's spawn grant does not hold, naming the kinds it does. */
+export function kindRefusal(actor: RunRecord, kind: WorkerWorkspace['kind']): string {
+  return `This task cannot spawn a worker with --workspace ${workspaceChoiceOf(kind)}. Allowed: ${(grantsOf(actor).spawn?.kinds ?? []).map(id => `--workspace ${workspaceChoiceOf(id)}`).join(', ')}`;
+}
+
 export function requireMessagingAllowed(run: RunRecord): void {
   if (!messagingAllowed(run)) throw new MessagingOffError();
 }
@@ -80,7 +92,7 @@ export function authorizeWorkerList(caller: Caller, parent: RunRecord | undefine
 /** Check before receipt lookup: replay skips the creation cap, never authority or lifecycle. */
 export function authorizeSpawnReplay(caller: Caller, parent: RunRecord | undefined, projectId: string): asserts parent is RunRecord {
   requireOperation(caller, parent, projectId, 'spawn');
-  if (!maySpawn(parent)) denyScope();
+  if (!maySpawn(parent)) throw new DelegationPolicyError('denied_scope', NO_SPAWN_GRANT);
   requireActiveParent(parent);
   if (finishing(parent)) {
     throw new DelegationPolicyError('incompatible_state', 'Parent finish is pending');
@@ -93,12 +105,12 @@ export function authorizeSpawnReplay(caller: Caller, parent: RunRecord | undefin
 export function authorizeSpawn(caller: Caller, parent: RunRecord | undefined, projectId: string, getRun: Lookup, kind: WorkerWorkspace['kind']): void {
   authorizeSpawnReplay(caller, parent, projectId);
   const family = familyRecordOf(parent, getRun);
-  if (!family || !maySpawn(parent, kind)) denyScope();
+  if (!family) denyScope();
+  if (!maySpawn(parent, kind)) throw new DelegationPolicyError('denied_scope', kindRefusal(parent, kind));
   // Read again at the serial queue head and just before acceptance: a switch turned off while a
   // spawn waited refuses it. A replayed request ID skips this, as accepted work finishes.
-  requireWorkersAllowed(parent);
-  const refusal = capacityError(workerCapacity(family, getRun)) ??
-    (hasSpawnRoom(parent, supervisedOutstanding(family, parent, getRun)) ? undefined : OUTSTANDING_REFUSAL);
+  requireWorkersAllowed(family);
+  const refusal = spawnCapacityRefusal(family, parent, getRun);
   if (refusal) throw new DelegationPolicyError('capacity_limit', refusal);
 }
 
@@ -110,10 +122,15 @@ export function authorizeCancelWait(caller: Caller, parent: RunRecord | undefine
   }
 }
 
-/** Retained results require both durable ownership and an actual parent-owned payload. */
-export function authorizeRetainedResult(caller: Caller, parent: RunRecord | undefined, projectId: string, workerId: string, result: WorkerCollectedResult | undefined): void {
+/** A deleted worker's retained result: the caller holds `inspect` for the worker by its receipt
+ *  (it started the worker, or it holds the family record and inspects every worker of it), and
+ *  the family record holds the payload. */
+export function authorizeRetainedResult(caller: Caller, parent: RunRecord | undefined, projectId: string, workerId: string, result: WorkerCollectedResult | undefined, family: RunRecord | undefined): void {
   requireOperation(caller, parent, projectId, 'inspect');
-  if (!receiptsOf(parent).some(receipt => receipt.workerId === workerId) ||
-    !result || result.parentRunId !== parent.id || result.workerId !== workerId) denyScope();
+  const receipt = receiptsOf(family).find(entry => entry.workerId === workerId);
+  const started = !!family && !!receipt && receiptSupervisorId(family, receipt) === parent.id;
+  const holdsRecord = family?.id === parent.id && grantsOf(parent).operateFamily.includes('inspect');
+  if (!family || !receipt || !(started || holdsRecord) ||
+    !result || result.parentRunId !== family.id || result.workerId !== workerId) denyScope();
   requireActiveParent(parent);
 }

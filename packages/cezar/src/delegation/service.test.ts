@@ -36,7 +36,7 @@ describe('delegation service durable authority', () => {
     const [a, b] = await Promise.all([f.service.spawn(f.caller, request), f.service.spawn(f.caller, request)]);
     expect(a).toEqual(b); expect(a.baselineSha).toBe(f.sha);
     const worker = f.store.getRun(a.workerId)!;
-    expect(worker).toMatchObject({ status: RUN_STATUS.queued, runner: 'claude', model: 'opus', effort: 'high', delegation: { role: 'worker', permissions: [], parentRunId: f.parent.id } });
+    expect(worker).toMatchObject({ status: RUN_STATUS.queued, runner: 'claude', model: 'opus', effort: 'high', delegation: { role: 'worker', permissions: ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'], spawnGrant: { kinds: ['shared'], live: 1 }, parentRunId: f.parent.id } });
     if (worker.delegation?.role !== 'worker') throw Error('worker');
     expect(existsSync(worker.delegation.workspace.path)).toBe(false);
     const proof = f.store.readWorkerExecution(worker.id);
@@ -324,9 +324,15 @@ describe('delegation service durable authority', () => {
   });
   it('authorizes before replay and rejects copied caller, wrong project, and worker credentials', async () => {
     const request = input(); const worker = await f.service.spawn(f.caller, request);
-    for (const caller of [{ ...f.caller } as Caller, f.credentials.authenticate(f.credentials.issue('elsewhere', f.parent.id, 'new'))!, f.credentials.authenticate(f.credentials.issue('project', worker.workerId, 'new'))!]) {
+    for (const caller of [{ ...f.caller } as Caller, f.credentials.authenticate(f.credentials.issue('elsewhere', f.parent.id, 'new'))!]) {
       await expect(f.service.spawn(caller, request)).rejects.toMatchObject({ code: 'denied_scope' });
     }
+    // hearsay-tools/squawk#3819: a worker's request ID is its own, so the root's request replays nothing for it;
+    // this worker is queued, and one that runs is refused the isolated kind.
+    const asWorker = f.credentials.authenticate(f.credentials.issue('project', worker.workerId, 'new'))!;
+    await expect(f.service.spawn(asWorker, request)).rejects.toMatchObject({ code: 'incompatible_state' });
+    setRunStatus(f.store, worker.workerId, RUN_STATUS.running);
+    await expect(f.service.spawn(asWorker, { ...request, workspace: 'isolated' })).rejects.toMatchObject({ code: 'denied_scope' });
   });
   it('blocks spawn/steer/wait during parent Finish, keeping inspect/stop/cleanup usable', async () => {
     const request = input(); const { workerId } = await f.service.spawn(f.caller, request);

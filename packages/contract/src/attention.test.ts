@@ -132,6 +132,9 @@ describe('rung ids', () => {
     ['waiting-on-workers', 'waiting on workers', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 0 } }],
     ['waiting-on-workers', 'waiting on worker replies', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1, replies: true } }],
     ['waiting-on-workers', 'waiting on parent reply', { status: RUN_STATUS.waiting, delegation: { role: 'worker' }, waitingOn: { kind: 'workers', count: 1 } } as AttentionInput],
+    // hearsay-tools/squawk#3819: a worker that holds a spawn grant and waits on a worker it started says so; on replies it still waits on its parent.
+    ['waiting-on-workers', 'waiting on 1 worker', { status: RUN_STATUS.waiting, delegation: { role: 'worker', spawnGrant: { kinds: ['shared'], live: 1 } }, waitingOn: { kind: 'workers', count: 1 } } as unknown as AttentionInput],
+    ['waiting-on-workers', 'waiting on parent reply', { status: RUN_STATUS.waiting, delegation: { role: 'worker', spawnGrant: { kinds: ['shared'], live: 1 } }, waitingOn: { kind: 'workers', count: 1, replies: true } } as unknown as AttentionInput],
     // hearsay-tools/cezarion#1995: a peer request's reply, and named peer tasks.
     ['waiting-on-workers', 'waiting on replies', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1, replies: true, peers: true } }],
     ['waiting-on-workers', 'waiting on 2 tasks', { status: RUN_STATUS.waiting, waitingOn: { kind: 'peers', count: 2 } }],

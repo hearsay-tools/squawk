@@ -275,7 +275,20 @@ export async function delegatingParent(options: { permissions: WorkerOperation[]
   return { p, service, callerFor, close };
 }
 
+/** A worker of `parentId`. When `parentId` is itself a worker, the new one is the shared worker
+ *  that worker started: its receipt on the family's root, its supervisor and host `parentId`. */
 export async function worker(parentId: string, task = 'mock:hold', runner: RunnerId = 'claude') {
+  const supervisor = store.getRun(parentId);
+  if (supervisor?.delegation?.role === 'worker') {
+    const id = randomUUID();
+    const directory = supervisor.worktreePath!;
+    const family = supervisor.delegation.parentRunId;
+    return store.createOwnedRun({ title: 'worker', task, workflow: 'quick-task', runner, steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] }, family, randomUUID(), {
+      role: 'worker', permissions: [], parentRunId: family, supervisorRunId: parentId,
+      workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'shared', path: directory, hostRunId: parentId,
+        baselineSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim() },
+    }, 'a'.repeat(64));
+  }
   checkpoint('worker-plan-start');
   const id = randomUUID();
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();

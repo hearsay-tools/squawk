@@ -117,6 +117,12 @@ export function shapeOf(run: Pick<ActivityRun | ActivityWorker, 'rung' | 'wait'>
 
 const counted = (lead: string, n: number, noun: string) => `${lead} ${n} ${noun}${n === 1 ? '' : 's'}`
 
+/** The snapshot is computed now from the open waits: only a wait on workers lacks `replies`, and a
+ *  worker can open one only for workers it started. */
+function waitsOnOwnWorkers(wait: (ActivityRun | ActivityWorker)['wait']): boolean {
+  return wait?.kind === 'workers' && !wait.detail.replies && wait.detail.owed > 0
+}
+
 /**
  * The dot's accessible name for the waits whose rung label is generic. These are the words
  * `deriveAttention` gives the same runs in the task list: a worker waits on its parent's reply,
@@ -125,7 +131,7 @@ const counted = (lead: string, n: number, noun: string) => `${lead} ${n} ${noun}
 function labelOf(run: Pick<ActivityRun | ActivityWorker, 'rung' | 'wait'>, role: 'root' | 'worker'): string | undefined {
   const wait = run.wait
   if (run.rung === 'waiting-on-workers') {
-    if (role === 'worker') return 'waiting on parent reply'
+    if (role === 'worker' && !waitsOnOwnWorkers(wait)) return 'waiting on parent reply'
     if (wait?.kind === 'peers' && wait.detail.peerRunIds.length > 0) return counted('waiting on', wait.detail.peerRunIds.length, 'task')
     if (wait?.kind === 'workers' && wait.detail.replies) return 'waiting on replies'
     if (wait?.kind === 'workers' && wait.detail.owed > 0) return counted('waiting on', wait.detail.owed, 'worker')

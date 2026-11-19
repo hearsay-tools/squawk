@@ -1,7 +1,7 @@
 /** The worker workspace kinds: one definition per `workspace.kind`. Delegation code and the run
  *  engine's port ask the definition; they never call a kind's own functions directly. */
 import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDestroyWork, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
-import { ownedWorkspace, type WORKSPACE_CHOICES } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { runGit } from '../git-command.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { WorkerSettlement, WorkerWorkspaceOpened, WorkerWorkspacePort, WorkerWorkspaceRequest } from '../workflows/run/worker-workspace-port.ts';
@@ -78,7 +78,7 @@ const isolated: WorkspaceKind = {
   async openForLaunch({ repoRoot, dataDir, run, parentCwd, firstLaunch }) {
     const workspace = await ensureOwnedWorkspace(repoRoot, run);
     const delegation = workerDelegation(run);
-    await verifyWorkerContext({ dataDir, parentId: delegation.parentRunId, workspace: delegation.workspace, context: delegation.context, parentCwd });
+    await verifyWorkerContext({ dataDir, parentId: delegation.supervisorRunId ?? delegation.parentRunId, workspace: delegation.workspace, context: delegation.context, parentCwd });
     // First launch only (hearsay-tools/cezarion#1149): a worker re-queued past its first step and
     // runContinuation never re-place attachments the worker may have edited or deleted.
     if (firstLaunch) await placeWorkerAttachments({ dataDir, workspace: delegation.workspace, context: delegation.context });
@@ -87,7 +87,7 @@ const isolated: WorkspaceKind = {
   async openForContinue({ repoRoot, dataDir, run, parentCwd }) {
     const { path } = await verifyOwnedWorkspace(repoRoot, run);
     const delegation = workerDelegation(run);
-    await verifyWorkerContext({ dataDir, parentId: delegation.parentRunId, workspace: delegation.workspace, context: delegation.context, parentCwd });
+    await verifyWorkerContext({ dataDir, parentId: delegation.supervisorRunId ?? delegation.parentRunId, workspace: delegation.workspace, context: delegation.context, parentCwd });
     return path;
   },
   async settle() {},
@@ -128,7 +128,7 @@ const shared: WorkspaceKind = {
     if (workerDelegation(run).destroy) throw new Error('Worker destruction has begun');
     const workspace = await verifySharedWorkspace(repoRoot, run);
     const delegation = workerDelegation(run);
-    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
+    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.supervisorRunId ?? delegation.parentRunId, workspace, context: delegation.context });
     // A failed read leaves no start state: the change report then says it is unavailable.
     if (firstLaunch) await recordWorkspaceStart(dataDir, run.id, workspace.path).catch(() => undefined);
     await clearWorkspaceEnds(dataDir, run.id);
@@ -137,7 +137,7 @@ const shared: WorkspaceKind = {
   async openForContinue({ repoRoot, dataDir, run }) {
     const workspace = await verifySharedWorkspace(repoRoot, run);
     const delegation = workerDelegation(run);
-    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
+    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.supervisorRunId ?? delegation.parentRunId, workspace, context: delegation.context });
     await clearWorkspaceEnds(dataDir, run.id);
     return workspace.path;
   },
@@ -161,9 +161,6 @@ export const workspaceKinds: Readonly<Record<WorkerWorkspace['kind'], WorkspaceK
 export function workspaceDirectoryRemoved(workspace: Pick<WorkerWorkspace, 'kind'>, remaining: readonly WorkerDestroy['remaining'][number][]): boolean {
   return workspaceKind(workspace).destroyResources.includes('worktree') && !remaining.includes('worktree');
 }
-
-/** The `--workspace` choice a spawn plans when it names none. */
-export const DEFAULT_WORKSPACE_CHOICE: keyof typeof WORKSPACE_CHOICES = 'isolated';
 
 /** The definition a workspace record names. */
 export function workspaceKind(workspace: Pick<WorkerWorkspace, 'kind'>): WorkspaceKind {

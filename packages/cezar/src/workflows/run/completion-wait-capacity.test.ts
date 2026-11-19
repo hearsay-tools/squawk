@@ -1,5 +1,6 @@
 import { WaitEngine } from './wait-engine.ts';
 import { afterEach, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { makeWorkerWait, RUN_STATUS, WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { seedWaits } from '../../runs/run-store.testkit.ts';
 import { unused } from '../fixture-no-runner.testkit.ts';
@@ -51,6 +52,18 @@ it('below capacity the completion wait commits before reconcile and notice', () 
   expect(f.noticeParkedWorkers).toHaveBeenCalledWith(f.run.id);
   expect(f.commit.mock.invocationCallOrder[0]).toBeLessThan(f.reconcileWorkerWaits.mock.invocationCallOrder[0]!);
   expect(f.reconcileWorkerWaits.mock.invocationCallOrder[0]).toBeLessThan(f.noticeParkedWorkers.mock.invocationCallOrder[0]!);
+});
+
+// hearsay-tools/squawk#3819: the wait takes the gate's blockers as they are. A root's blocker that
+// another worker started stays a target; a blocker whose record is gone leaves no empty wait.
+it('waits on a blocker that another worker supervises, and opens no wait when no blocker has a record', () => {
+  const f = fixture(0);
+  const supervised = f.store.getRun(f.worker.id)!.delegation!;
+  f.store.updateRun(f.worker.id, { delegation: { ...supervised, supervisorRunId: randomUUID() } as typeof supervised });
+  expect(f.registry.registerCompletionWait(f.run.id, [f.worker.id, randomUUID()])).toMatchObject({ via: WAIT_VIA.completion, workerIds: [f.worker.id] });
+  f.commit.mockClear();
+  expect(f.registry.registerCompletionWait(f.run.id, [randomUUID()])).toBeUndefined();
+  expect(f.commit).not.toHaveBeenCalled();
 });
 
 it('other commit errors escape without reconciliation or notice', () => {
