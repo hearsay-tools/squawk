@@ -3,6 +3,7 @@ import { modelConflictsWithRunner } from './model-presets.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// A conflict compares the model with every registered runner's presets.
 registerBuiltInRunners();
 
 describe('modelConflictsWithRunner', () => {

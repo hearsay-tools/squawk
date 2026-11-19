@@ -11,6 +11,7 @@ import {
   toBackendModel,
 } from './model-identity.ts';
 
+// The empty-model case runs on every registered runner and the legacy id.
 registerBuiltInRunners();
 
 /**

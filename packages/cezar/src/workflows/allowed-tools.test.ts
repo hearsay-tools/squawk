@@ -9,6 +9,7 @@ import {
 import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The extras table covers every runner.
 registerBuiltInRunners();
 
 describe('allowedToolsForStep', () => {

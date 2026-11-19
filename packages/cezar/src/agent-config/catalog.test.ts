@@ -3,6 +3,7 @@ import { findConfigFile, listConfigFiles } from './catalog.ts';
 import type { AgentHomePaths } from '../core/runner-config-files.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The catalog lists every registered runner's config files.
 registerBuiltInRunners();
 
 const HOME: AgentHomePaths = {

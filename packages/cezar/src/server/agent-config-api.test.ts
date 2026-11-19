@@ -12,6 +12,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The agent-config routes list every runner's config files.
 registerBuiltInRunners();
 
 /**

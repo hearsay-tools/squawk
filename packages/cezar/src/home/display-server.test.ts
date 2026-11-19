@@ -14,6 +14,7 @@ import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The agent-config listing reads every runner's config files.
 registerBuiltInRunners();
 
 it('names the product in an API refusal and installer label without changing their contracts', async () => {

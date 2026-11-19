@@ -14,6 +14,7 @@ import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.
 import { apiRequest } from './loopback-request.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// GET /config reads every runner's native default model.
 registerBuiltInRunners();
 
 /**

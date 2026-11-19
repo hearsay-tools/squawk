@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WriteBoundary } from '../worktree-manifest.ts';
 import { readManifest, uncoveredPaths } from '../worktree-manifest.testkit.ts';
 import { isPreserved, seedAgentConfigLocalLayer } from './seed.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 let repo: string;
 const env = process.env;

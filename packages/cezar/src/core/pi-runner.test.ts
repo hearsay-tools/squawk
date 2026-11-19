@@ -29,15 +29,13 @@ import { buildPiArgs, PiRunner } from './pi-runner.js';
 import { PI_MINIMAL_ARGS } from './pi-args.ts';
 import { squawkToolNames } from '../ci-wait/tools.js';
 import { appendTurnText } from '../workflows/run.js';
-import { allowedToolsForStep } from '../workflows/types.js';
+import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { registerRunner } from './runner-registry.ts';
 import { piRunner } from '../runners/pi/definition.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { extraToolRows } from './runner-fact-rows.testkit.ts';
 
 registerRunner(piRunner);
-// A worker inherits the Claude step default from a Claude parent.
-registerRunner(claudeRunner);
 
 /**
  * The `pi` runner (#387): a new AgentBackend slotted into the runner seam as
@@ -1029,6 +1027,9 @@ describe('pi RPC argv', () => {
 // built-ins through an extension; a narrowed list keeps the allowlist; a list that maps to
 // nothing fails closed instead of falling back to pi's own default.
 describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
+  // The Claude step default a worker inherits from a Claude parent, from Claude's data file: this
+  // test registers only pi.
+  const claudeStepDefault = [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows().claude];
   const ci = { name: 'cezar_ci_test', command: 'node', args: ['/x.mjs'] };
   const base = { cwd: '/repo', userPrompt: 'task', toolGrant: UNSET_TOOL_GRANT };
   const stepDefault = allowedToolsForStep(undefined, 'pi');
@@ -1042,7 +1043,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
   });
 
   it('keeps the default path for the six base tools alone, the list a worker inherits from a Claude parent', () => {
-    expect(buildPiArgs({ ...base, toolGrant: { kind: 'inherited', tools: allowedToolsForStep(undefined, 'claude') } })).toEqual([
+    expect(buildPiArgs({ ...base, toolGrant: { kind: 'inherited', tools: claudeStepDefault } })).toEqual([
       '--mode', 'rpc', ...squawkExtensionArgs, ...defaultToolArgs('read,edit,write,grep,find,bash'),
     ]);
   });
@@ -1052,7 +1053,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
     expect(buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: [...stepDefault, 'ls', 'WebFetch'] } })).toEqual([
       '--mode', 'rpc', ...squawkExtensionArgs, '--tools', named,
     ]);
-    expect(buildPiArgs({ ...base, toolGrant: { kind: 'inherited', tools: [...allowedToolsForStep(undefined, 'claude'), 'review_tool'] } })).toEqual([
+    expect(buildPiArgs({ ...base, toolGrant: { kind: 'inherited', tools: [...claudeStepDefault, 'review_tool'] } })).toEqual([
       '--mode', 'rpc', ...squawkExtensionArgs, '--tools', 'read,edit,write,grep,find,bash,review_tool',
     ]);
   });
