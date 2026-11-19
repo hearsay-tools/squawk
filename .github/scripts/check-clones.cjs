@@ -11,6 +11,9 @@ const eligible = (name) => /^packages\/[^/]+\/src\//.test(name) || name.startsWi
 const crossPackageExceptions = [{
   files: ['packages/cezar/src/lint/wait-baseline.ts', 'packages/web/src/test/wait-baseline.ts'],
   reason: 'The cockpit unit wait rule moved into lint in hearsay-tools/cezarion#2421; the browser wait discipline, M08, stays in packages/web and may not import packages/cezar by relative path; remove this entry when M08 moves into lint.',
+}, {
+  files: ['packages/cezar/src/runners/claude/models.ts', 'packages/web/src/routes/new-task-form.ts'],
+  reason: 'B3 (hearsay-tools/squawk#3895) copies the cockpit presets into the runner definition, as the plan says; C2 removes the cockpit list; remove this entry in C2.',
 }];
 
 /** All scan inputs are trusted paths materialized under packages/<workspace>/. */
