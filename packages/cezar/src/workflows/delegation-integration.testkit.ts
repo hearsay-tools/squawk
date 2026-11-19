@@ -244,10 +244,9 @@ if (group === 'reviewed-integration') {
     // Actual Git CAS failure after worktree removal, not a stubbed cleanup result.
     const branchLock = git(repo, 'rev-parse', '--git-path', `refs/heads/${ownedWorkspace(resultA.workspace).branch}.lock`);
     const lockPath = join(repo, branchLock); writeFileSync(lockPath, 'held by integration test');
-    // A cherry-pick copies the commit, so neither worker's commit is on another ref: a plain destroy
-    // names it, and the parent that integrated its choice discards it (hearsay-tools/squawk#3553).
-    expect(await destroy(p.id, a, 1)).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'], work: { uncommittedFiles: 0, commits: 1 } });
-    expect(existsSync(firstA.cwd)).toBe(true);
+    // No ref reaches the commit the parent did not integrate: a plain destroy names it, and the
+    // parent discards it (hearsay-tools/squawk#3553). A's cherry-pick may reproduce its SHA.
+    expect(await destroy(p.id, b, 1)).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'], work: { uncommittedFiles: 0, commits: 1 } });
     expect(await destroy(p.id, a, 1, '--discard-work')).toMatchObject({ state: 'incomplete', remaining: ['branch'], deleted: [{ kind: 'worktree', path: firstA.cwd }] });
     expect(existsSync(firstA.cwd)).toBe(false);
     expect(git(repo, 'rev-parse', `refs/heads/${ownedWorkspace(resultA.workspace).branch}`)).toBe(resultA.head.sha);
