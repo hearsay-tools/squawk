@@ -399,11 +399,10 @@ export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
 /**
  * Each registered runner's adapter, by runner id. A read goes to the registry: a test registers the
  * runners it drives (`useRunners` and `onlyRunner`), and reading a runner that is not registered
- * throws. `Object.values` lists the registered runners.
+ * throws, never returns undefined. `Object.values` lists the registered runners.
  */
 export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = new Proxy({} as Record<RunnerId, HarnessAdapter>, {
-  get: (_target, key) => typeof key === 'string' && (isRegisteredRunner(key) || (RUNNER_IDS as readonly string[]).includes(key))
-    ? harnessAdapter(runnerDefinition(key as RunnerId)) : undefined,
+  get: (_target, key) => typeof key === 'string' ? harnessAdapter(runnerDefinition(key as RunnerId)) : undefined,
   has: (_target, key) => typeof key === 'string' && isRegisteredRunner(key),
   ownKeys: () => registeredRunners().map(definition => definition.id),
   getOwnPropertyDescriptor: (_target, key) => typeof key === 'string' && isRegisteredRunner(key)

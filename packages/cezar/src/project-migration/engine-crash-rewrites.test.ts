@@ -14,9 +14,8 @@ import { Crash, crashAt, crashThenRecover, disposers, fence, beforeRepair, moved
 import { readProjectMigrationJournal } from './journal.ts';
 import { projectSnapshot, removeMigrationProject, TASK, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /** Crash recovery of the project migration engine from its repair on (hearsay-tools/cezarion#3088): a
  *  crash at every fault point of the worktree repair, the receipts, the run store and the run files,

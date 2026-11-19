@@ -17,9 +17,8 @@ import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * Alias parity for the mirrored project-route table (spec

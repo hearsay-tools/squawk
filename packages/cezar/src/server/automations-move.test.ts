@@ -20,9 +20,8 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { startServer } from './start-server.ts';
 import { WorkspaceEventBus } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const temporary: string[] = [];
 function directory(): string {

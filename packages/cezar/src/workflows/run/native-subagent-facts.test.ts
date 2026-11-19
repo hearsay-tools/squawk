@@ -6,7 +6,7 @@ import { reportsNativeSubagents } from './subagent-waits.ts';
 vi.mock('../../core/runner-facts.ts', async (load) => {
   const actual = await load<typeof import('../../core/runner-facts.ts')>();
   // The spread below reads every runner's facts from the registry.
-  (await import('../../runners/built-in.ts')).registerBuiltInRunners();
+  await import('../../core/register-all-runners.testkit.ts');
   return { ...actual, RUNNER_FACTS: {
     ...actual.RUNNER_FACTS,
     codex: { ...actual.RUNNER_FACTS.codex, nativeSubagents: 'unreported' },

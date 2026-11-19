@@ -17,9 +17,8 @@ import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * A project whose run store cannot be opened (#779, plan step 4) answers every route with why,

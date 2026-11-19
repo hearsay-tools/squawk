@@ -24,9 +24,8 @@ import { sendAgentReport } from '../runs/webhook.ts';
 import { commitAccepted } from '../delegation/conversations.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { RunWriteRefusedError } from '../runs/store.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /** `requireRunControl` is the one explicit write that adopts a family read from `.ai/squawk/`. */
 let root: string, primary: string, fallback: string, store: RunStore, manager: RunManager, app: Hono;

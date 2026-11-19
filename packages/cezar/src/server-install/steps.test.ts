@@ -5,10 +5,9 @@ import { aptInstallTool, brewInstallTool, brewRemoveHint, depCheckStep, generate
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { BackendCheck } from '../core/backend-detect.ts';
 import type { CommandResult, InstallContext, Runner, Ui } from './types.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The installer table covers every runner.
-registerBuiltInRunners();
 
 function makeCtx(over: {
   ui?: Ui;

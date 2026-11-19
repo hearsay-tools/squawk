@@ -7,9 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts, ProjectContextsClosedError } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const sweeps = vi.hoisted(() => ({ started: 0 }));
 vi.mock('./repo-branch-sweep.ts', async (original) => {

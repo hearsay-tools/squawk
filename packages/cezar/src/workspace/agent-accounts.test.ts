@@ -15,10 +15,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentAccountsPath, workspaceConfigPath } from '../paths.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The store's schema asks the registry which agents can carry an account; the cases use all five.
-registerBuiltInRunners();
 import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from './config.ts';
 import {
   defaultAgentAccountStore,

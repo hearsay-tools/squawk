@@ -28,9 +28,8 @@ import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runnersWhere } from './runner-facts.ts';
 import type { UiEvent, UiItem } from './ui-events.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BACKENDS = RUNNER_IDS;

@@ -42,9 +42,8 @@ import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } fr
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * The exclusive project migration fence (hearsay-tools/cezarion#3087): one claim file beside both

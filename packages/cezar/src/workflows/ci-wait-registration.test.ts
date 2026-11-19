@@ -14,9 +14,10 @@ import { createActiveRun } from './active-run.ts';
 import { WaitRegistry } from './run/wait-registry.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 const pr = 'https://github.com/acme/repo/pull/12';
 const identity = { prUrl: pr, repository: 'acme/repo', prNumber: 12, headSha: 'a'.repeat(40) };

@@ -17,9 +17,8 @@ import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 describe('task file links', () => {
   let root: string, working: string, dataDir: string, runId: string, store: RunStore;

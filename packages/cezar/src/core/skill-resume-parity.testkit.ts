@@ -15,7 +15,7 @@ import { observationClock } from './observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 import { factsWhere } from './runner-fact-rows.testkit.ts';
 import {
   HARNESS_ADAPTERS,
@@ -31,7 +31,6 @@ import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../work
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
-registerBuiltInRunners();
 
 const execFileAsync = promisify(execFile);
 const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

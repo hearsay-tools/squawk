@@ -12,10 +12,9 @@ import { previewRefusal } from '../ci-wait/errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The agent-config listing reads every runner's config files.
-registerBuiltInRunners();
 
 it('names the product in an API refusal and installer label without changing their contracts', async () => {
   const { displayName: name, command } = productIdentity();

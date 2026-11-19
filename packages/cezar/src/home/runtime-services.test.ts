@@ -17,10 +17,9 @@ import { AutomationStore } from '../automations/store.ts';
 import type { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { Hono } from 'hono';
 import { openRunCli } from '../server/open-in-targets.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The agent-profiles route reads every provider's account data from the registry.
-registerBuiltInRunners();
 
 it('delivers task webhooks from the selected registry', async () => {
   const { root, selected } = runtimeHomes();

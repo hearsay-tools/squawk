@@ -14,9 +14,10 @@ import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { workerCapacity } from './capacity.ts';
 import { cadence, destroyOf, f, input, linux, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 /** A worker whose launch failed before its first step: settled, failed, with no step started. */
 async function failStart(options: { reservedDirectory?: boolean } = {}) {

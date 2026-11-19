@@ -7,10 +7,9 @@ import {
   toolGrantLists,
 } from './types.ts';
 import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The extras table covers every runner.
-registerBuiltInRunners();
 
 describe('allowedToolsForStep', () => {
   it('unions Pi extras onto the default list when the step does not set allowedTools', () => {

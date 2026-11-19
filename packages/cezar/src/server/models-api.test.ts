@@ -5,10 +5,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MODEL_DISCOVERY_RUNNERS } from '@open-mercato/cezar-contract/workspace';
 import { ProviderAuthService } from '../core/provider-auth.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';

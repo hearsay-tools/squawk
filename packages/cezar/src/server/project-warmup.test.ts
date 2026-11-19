@@ -12,9 +12,8 @@ import { ProjectContexts, sweepRegisteredPreviewLeftovers } from './project-cont
 import { startServer } from './start-server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 // The post-listen chain reads the registry, then sweeps preview leftovers, then decides on the
 // warm-up: the sweep call is the test's signal that the chain reached that decision.

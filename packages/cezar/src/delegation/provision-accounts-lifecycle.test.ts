@@ -20,9 +20,12 @@ import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels

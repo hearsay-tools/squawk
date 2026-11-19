@@ -11,10 +11,9 @@ import { runInstall, runUninstall } from '../engine.ts';
 import { loadServerState } from '../state.ts';
 import { createAutoUi } from '../ui.ts';
 import type { InstallContext, Runner, Ui } from '../types.ts';
-import { registerBuiltInRunners } from '../../runners/built-in.ts';
+import '../../core/register-all-runners.testkit.ts';
 
 // The dry-run install walks the dependency step, which probes every runner.
-registerBuiltInRunners();
 
 const okRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
 

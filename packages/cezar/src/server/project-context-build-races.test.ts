@@ -11,9 +11,8 @@ import { RunManager } from '../workflows/run.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectContextDeps } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /** Lets a test hold a build inside its migration step; open when `gate` is unset. */
 const preparing = vi.hoisted(() => ({ gate: undefined as Promise<void> | undefined, entered: () => {} }));

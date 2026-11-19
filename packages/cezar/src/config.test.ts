@@ -7,10 +7,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
-import { registerBuiltInRunners } from './runners/built-in.ts';
+import './core/register-all-runners.testkit.ts';
 
 // `defaultModels` is a record keyed by registered id, and the cases use several runners' keys.
-registerBuiltInRunners();
 
 /**
  * `config.json` schema roundtrips (R2 2.3: `systemPrompt?`). The invariants

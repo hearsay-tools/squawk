@@ -10,9 +10,10 @@ import { fixtureUpdateRun, manager, parent, register, restart, root, store, unti
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { completionNudges, idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

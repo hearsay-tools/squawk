@@ -4,14 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProviderAuthService } from '../core/provider-auth.ts'
-import { registerBuiltInRunners } from '../runners/built-in.ts'
+import '../core/register-all-runners.testkit.ts';
 import { RunStore } from '../runs/store.ts'
 import type { RunManager } from '../workflows/run.ts'
 import { createApp } from './server.ts'
 import { apiRequest } from './loopback-request.testkit.ts'
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners()
 
 /**
  * Moving the query string onto `queryZodValidator` changed one thing on the wire that nothing

@@ -14,9 +14,8 @@ import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, type ProjectContextSource } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const record = (id: string, extra: Record<string, unknown> = {}) => ({
   id, title: id, task: id, workflow: 'quick-task', steps: [], status: RUN_STATUS.done, tokensUsed: 0, archived: false,

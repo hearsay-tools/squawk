@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { findConfigFile, listConfigFiles } from './catalog.ts';
 import type { AgentHomePaths } from '../core/runner-config-files.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The catalog lists every registered runner's config files.
-registerBuiltInRunners();
 
 const HOME: AgentHomePaths = {
   claude: '/home/u/.claude',

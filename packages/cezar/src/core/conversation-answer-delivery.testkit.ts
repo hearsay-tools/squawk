@@ -12,11 +12,10 @@ import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 import { ANSWER_DELIVERY_CRITERIA, HARNESS_ADAPTERS, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
-registerBuiltInRunners();
 
 // hearsay-tools/cezarion#935: a Continue executing an answer keeps that answer's checkpoint until
 // turn-end for crash recovery. The checkpoint must not hold worker conversation input arriving

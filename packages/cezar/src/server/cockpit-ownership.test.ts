@@ -12,9 +12,8 @@ import { processStartToken } from '../delegation/process-liveness.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const roots: string[] = [];
 const owners: CockpitOwnership[] = [];

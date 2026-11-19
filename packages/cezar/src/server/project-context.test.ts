@@ -17,9 +17,8 @@ import { ProjectContextError, ProjectContexts, type ProjectContextSource, type R
 import { createRunManager } from './run-manager.testkit.ts';
 import { seedRuns, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 const observed = vi.hoisted(() => ({
   options: new WeakMap<object, Parameters<RunManagerFactory>[2]>(),

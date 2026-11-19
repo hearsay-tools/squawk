@@ -12,7 +12,7 @@ import { onTestFinished, afterEach, beforeEach, expect, vi } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { AgentRunResult, AgentRunSpec, AgentSession, AgentEvent } from '../core/agent-runner.ts';
 import * as runners from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';
@@ -23,7 +23,6 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 
-registerBuiltInRunners();
 export function delegationToken(spec: AgentRunSpec): string {
   const token = spec.env?.CEZ_DELEGATION_TOKEN;
   expect(token).toBeDefined();

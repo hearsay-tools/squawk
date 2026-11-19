@@ -3,12 +3,11 @@ import { subagentGuard } from './waits-subagents-parity-cells.testkit.ts';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The single-runner cells drive the Claude wire.
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 // The subagent guard reads every runner's declared facts through the shared code.
-registerBuiltInRunners();
 
 // The wait list's criteria guard and single-runner cells; each runner's RUNNER_IDS cells run from
 // the semantic part files in `WAIT_PARITY_FILES` and the fold files in `WAIT_FOLDS` (hearsay-tools/cezarion#1301).

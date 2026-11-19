@@ -16,10 +16,9 @@ import {
   workspaceConfigBackupPath,
   type WorkspaceConfig,
 } from './config.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // `agentDefaults.models` is a record keyed by registered id, and the cases use several runners' keys.
-registerBuiltInRunners();
 
 /**
  * `~/.cezar/config.json` house rules under test (spec

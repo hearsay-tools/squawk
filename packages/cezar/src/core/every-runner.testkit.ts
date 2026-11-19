@@ -1,5 +1,5 @@
 import { createRunner } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import './register-all-runners.testkit.ts';
 import { useRunners } from './runners-under-test.testkit.ts';
 
 // Importing this module registers every built-in runner and makes every production adapter the test
@@ -9,5 +9,4 @@ import { useRunners } from './runners-under-test.testkit.ts';
 // that starts no runner imports `no-runner.testkit.ts`, and one that runs only Claude imports
 // `claude-runner.testkit.ts`. This kit's choice is explicit, so it beats both of them when one test
 // file loads them together (hearsay-tools/cezarion#3242).
-registerBuiltInRunners();
 useRunners(backend => createRunner(backend));

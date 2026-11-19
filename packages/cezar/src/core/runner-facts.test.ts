@@ -5,9 +5,8 @@ import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner, runnerDefinition } from './runner-registry.ts';
 import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   it('reads the facts of each runner from its registered definition', () => {

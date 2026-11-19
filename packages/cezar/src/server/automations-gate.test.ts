@@ -15,10 +15,9 @@ import { ArchiveOnMergeCoordinator } from './archive-on-merge.ts';
 import { CompletionActionCoordinator } from './completion-actions.ts';
 import { startServer } from './start-server.ts';
 import { createApp, type ServerDeps } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 import * as git from './git.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 

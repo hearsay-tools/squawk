@@ -42,9 +42,8 @@ import {
   type RegisterProjectResponse,
   type ServerDeps,
 } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * GUI clone (spec 2026-07-20-multi-project-workspace, step 4.3):

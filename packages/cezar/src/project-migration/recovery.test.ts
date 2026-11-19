@@ -27,9 +27,8 @@ import { writeSettledJournal } from './project-migration.testkit.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import { prepareBeforeTicks, prepareProjects } from './auto.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * Early recovery of an unfinished project migration (hearsay-tools/cezarion#3089): every entry

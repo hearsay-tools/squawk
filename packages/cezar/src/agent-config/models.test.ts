@@ -3,10 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readAgentModelDefaults, readAgentModelProvider } from './models.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // readAgentModelDefaults reads every runner's native default model.
-registerBuiltInRunners();
 
 describe('readAgentModelDefaults', () => {
   const roots: string[] = [];

@@ -13,9 +13,8 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { Cockpit } from './http.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * A real cockpit app on a real loopback socket for `cez task` tests (#504). No agent slot is

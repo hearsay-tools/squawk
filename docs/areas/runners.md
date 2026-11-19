@@ -33,6 +33,7 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   `runners/<id>/spec-support.ts`, its host probe in `runners/<id>/detection.ts`, its terminal
   command and install source in `runners/<id>/cli.ts`, its model data in
   `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
+  native mock script and scenario prompts in `runners/<id>/mock.ts` (the `mock` part), its
   definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its cockpit facts in
   `RUNNER_COCKPIT_FACTS`. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
@@ -86,7 +87,15 @@ that one runner. `core/runner-fact-exemptions.test.ts` swaps facts rows and chec
 that the exemptions follow (hearsay-tools/squawk#3642).
 
 A per-runner parity file loads only its own adapter. It picks its runner with
-`useRunners(onlyRunner(definition, make))`, which registers only that runner's definition. The
+`useRunners(onlyRunner(definition, make))`, which registers only that runner's definition, and
+passes the definition to the kit: `describeHarnessParity({ runner: piRunner, part })`,
+`describeWaitParity({ runner: piRunner, ... })`, `subagentCells([piRunner])`. `HARNESS_ADAPTERS`
+(`core/harness-parity-core.testkit.ts`) reads each registered runner's `mock` part, and reading a
+runner that is not registered throws. A test file registers only the runners it drives. A file
+that enumerates runners (`runnersWhere`, `registeredRunners`, `RUNNER_IDS`), reads every runner's
+data, or exercises the server's registry readers (config, health, providers, catalogs) imports
+`core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
+`core/every-runner.testkit.ts` imports it and adds the production factory. The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude

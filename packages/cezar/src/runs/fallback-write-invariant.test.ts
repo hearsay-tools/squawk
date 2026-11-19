@@ -20,9 +20,10 @@ import { RUNS_DB_FILE, RunConflictError, RunDatabase, RunDatabaseBusyError } fro
 import { DatabaseSync } from 'node:sqlite';
 import { readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import { RunStore } from './store.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 /**
  * The invariant, without naming the paths that could break it: boot, recovery, every reconciler

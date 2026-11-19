@@ -32,9 +32,8 @@ import { createApp, WorkspaceEventBus } from './server.ts';
 import { projectPaths } from '../project-paths.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 // Server prewarming outlives the HTTP response. Keep unrelated host discovery
 // from starting CLIs that write HOME caches during fixture teardown. GitHub

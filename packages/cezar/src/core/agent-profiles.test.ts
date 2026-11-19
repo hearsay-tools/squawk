@@ -7,10 +7,9 @@ import {
   profileEnvVar,
   supportsProfiles,
 } from './agent-profiles.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // The account mappings are read from the registry; this file pins all five built-ins.
-registerBuiltInRunners();
 
 describe('profileEnvVar', () => {
   it('names one variable per provider that can carry an account', () => {

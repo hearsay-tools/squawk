@@ -22,9 +22,10 @@ import { workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps } from './types.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 const LAUNCH_WAIT_MS = 15_000;
 const execFileAsync = promisify(execFile);

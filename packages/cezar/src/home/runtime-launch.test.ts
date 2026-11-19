@@ -13,9 +13,8 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { AGENT_MODELS_LOCKED_ERROR } from '../core/agent-model-policy.ts';
 import { workerIdentity } from '../delegation/execution-identity.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 it('keeps accepted run pins on the selected model policy through RunManager', () => {
   const { root, selected } = runtimeHomes();

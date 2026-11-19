@@ -6,10 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { detectEnvironment, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // DetectEnvironment probes every registered runner.
-registerBuiltInRunners();
 
 const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);
 

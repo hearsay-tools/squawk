@@ -23,9 +23,8 @@ import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { planProjectMigration } from './plan.ts';
 import { buildMigrationProject, git, projectSnapshot, removeMigrationProject, TASK, WORKER, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * The write root of a moved project (hearsay-tools/cezarion#3150): the completed migration's marker makes `projectPaths` write `.ai/squawk/`

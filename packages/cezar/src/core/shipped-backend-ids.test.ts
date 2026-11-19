@@ -13,9 +13,8 @@ import { runRecordSchema } from '../runs/store.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
 import type { AgentBackend, RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
-registerBuiltInRunners();
 
 /**
  * Every backend id that shipped, with the runner it resolves to. Add a new id; never remove an

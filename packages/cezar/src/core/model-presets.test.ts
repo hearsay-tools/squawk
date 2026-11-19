@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { modelConflictsWithRunner } from './model-presets.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/register-all-runners.testkit.ts';
 
 // A conflict compares the model with every registered runner's presets.
-registerBuiltInRunners();
 
 describe('modelConflictsWithRunner', () => {
   it('never rejects auto or a runner\'s own preset', () => {
