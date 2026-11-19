@@ -93,7 +93,8 @@ never a wire gap.
 
 ### Native skills
 
-`core/host-skill-catalog.ts` registers each runner's list adapter. Its
+Each runner's definition loads its list adapter through `loadSkillCatalog`, and
+`core/host-skill-catalog.ts` builds the catalog's adapters from the registry. Its
 `discover({ runner, cwd, accountHome }, signal)` call returns `{ skills, problems }`
 without a model turn: Claude `get_skills_dialog`, Codex `skills/list`, OpenCode
 `GET /skill`, pi RPC `get_commands`, omp `omp skill list --json`.
@@ -320,7 +321,9 @@ force, or force only in part. The item numbers are stable: code cites them.
    existing runner's wire, read the fork's own protocol documents for the turn boundary,
    the session id and the tool flags before you copy code.
 2. **Definition** — `runners/<id>/definition.ts` with its facts and `loadAdapter`, and one line
-   in `runners/built-in.ts`. The compiler and the guard tests name each other place:
+   in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
+   `loadSkillCatalog`, `configFiles` (`runners/<id>/config-files.ts`) and `extraTools`
+   go in the same definition. The compiler and the guard tests name each other place:
    `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
    `ui-events.ts` and in its api-client copy (§3).
 3. **Detection** — add the runner's probe to `RUNNER_PROBES` (`core/backend-detect.ts`).
@@ -347,8 +350,8 @@ force, or force only in part. The item numbers are stable: code cites them.
    `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. Add the composer
    presets and the Settings → Agents entry. Keep every change additive, so that old run
    records still parse.
-10. **Model selection** — `BACKEND_MODEL_MAP` and `core/model-identity.test.ts` hold the
-    rules.
+10. **Model selection** — the definition's `models.idMap` (`runners/<id>/models.ts`) and
+    `core/model-identity.test.ts` hold the rules.
 11. **Host model discovery** — ships in the runner's PR. `model-discovery-guard.test.ts`
     forces the contract enum, the adapter module and the catalog registration, or a
     `MODEL_DISCOVERY_EXEMPTIONS` entry with the wire reason. It does not force these

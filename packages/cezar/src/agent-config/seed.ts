@@ -4,7 +4,7 @@ import { git } from '../git-command.ts';
 import { agentHomePaths } from '../paths.ts';
 import { excludeFromGit } from '../worktree-paths.ts';
 import { copyIdentity, withWorktreeFiles, type WorktreeFilesOptions } from '../worktree-manifest.ts';
-import { CONFIG_FILES } from './catalog.ts';
+import { listConfigFiles } from './catalog.ts';
 
 /**
  * Seed only supported gitignored personal config into task worktrees and exclude it from Git.
@@ -46,7 +46,7 @@ export async function seedAgentConfigLocalLayer(
   if (worktreeCwd === repoRoot) return [];
   const home = agentHomePaths(env);
   const sources: Array<{ id: string; rel: string; src: string }> = [];
-  for (const def of CONFIG_FILES) {
+  for (const def of listConfigFiles()) {
     if (!def.seeded) continue;
     const src = def.resolve(repoRoot, home);
     const rel = relative(repoRoot, src);

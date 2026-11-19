@@ -3,10 +3,14 @@ import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
   allowedToolsForStep,
   DEFAULT_ALLOWED_TOOLS,
-  HARNESS_EXTRA_TOOLS,
   stepToolGrant,
   toolGrantLists,
 } from './types.ts';
+import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The extras table covers every runner.
+registerBuiltInRunners();
 
 describe('allowedToolsForStep', () => {
   it('unions Pi extras onto the default list when the step does not set allowedTools', () => {
@@ -48,9 +52,9 @@ describe('allowedToolsForStep', () => {
   });
 
   it('has an extras row for every selectable runner', () => {
-    expect(Object.keys(HARNESS_EXTRA_TOOLS).sort()).toEqual([...RUNNER_IDS].sort());
-    expect(HARNESS_EXTRA_TOOLS.pi).toEqual(['Subagent', 'SubagentSupervisor', 'SubagentWait']);
-    expect(HARNESS_EXTRA_TOOLS.claude).toEqual([]);
+    expect(registeredRunners().filter(definition => Array.isArray(definition.extraTools)).map(definition => definition.id).sort()).toEqual([...RUNNER_IDS].sort());
+    expect(runnerDefinition('pi').extraTools).toEqual(['Subagent', 'SubagentSupervisor', 'SubagentWait']);
+    expect(runnerDefinition('claude').extraTools).toEqual([]);
   });
 });
 

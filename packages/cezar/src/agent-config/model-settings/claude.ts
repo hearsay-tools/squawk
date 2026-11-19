@@ -1,5 +1,5 @@
 import { firstConfiguredModel, readNativeSettingsFiles } from './shared.ts';
-import type { AgentModelSettingsStrategy } from './types.ts';
+import type { AgentModelSettingsStrategy } from '../../core/runner-model-settings.ts';
 
 export const claudeModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'claude',

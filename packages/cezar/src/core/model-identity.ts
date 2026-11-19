@@ -2,7 +2,8 @@
  * Canonical provider/model identity and conversion to backend wire forms. Keep backend-specific
  * wire types behind the AgentRunner seam.
  */
-import type { AgentBackend } from './agent-runner.ts';
+import type { AgentBackend, RunnerId } from './agent-runner.ts';
+import { isRegisteredRunner, LEGACY_RUNNER_IDS, runnerDefinition } from './runner-registry.ts';
 
 /**
  * A backend-agnostic model identity. Serialized as `provider/model` (see
@@ -34,10 +35,11 @@ export class ModelIdentityError extends Error {
  * so future models and new backends are never silently rejected — an exported
  * roster of "providers Squawk names today" would gate nothing, and an unused
  * public export reads as a contract someone must keep current. The per-backend
- * knowledge that IS load-bearing lives in `BACKEND_MODEL_MAP` below.
+ * knowledge that IS load-bearing lives in each runner definition's `models.idMap`.
  */
 
-interface BackendModelMap {
+/** How one runner maps a model id: its definition's `models.idMap` (`runners/<id>/models.ts`). */
+export interface BackendModelMap {
   /**
    * The provider a bare (provider-less) model id belongs to for this backend.
    * `undefined` marks a backend that spans providers and therefore requires an
@@ -57,33 +59,16 @@ interface BackendModelMap {
 }
 
 /**
- * Per-backend mapping table — the one place #387 extends for the `pi` runner.
- * `claude-cli` is the legacy id kept so old run records normalise identically
- * to `claude`. That is now true end to end: `storedRunnerSchema`
- * (`runs/store.ts`) parses the legacy spelling out of `runs.json` and folds it
- * to `claude` (#547), so the entry below is what a record carrying it maps
- * through on the way in — not, as the comment used to imply, a mapping for a
- * value the store could never load.
+ * The model id map of `backend`: the registered definition's `models.idMap`. `claude-cli` is the
+ * legacy id kept so old run records normalise identically to `claude`: `storedRunnerSchema`
+ * (`runs/store.ts`) parses the legacy spelling out of `runs.json` and folds it to `claude` (#547),
+ * and a lookup resolves it through the registry's legacy map first. An id that no runner
+ * registered has no map.
  */
-export const BACKEND_MODEL_MAP: Readonly<Record<AgentBackend, BackendModelMap>> = {
-  // Claude Code supports custom/gateway model ids such as DeepSeek via an
-  // Anthropic-compatible endpoint, so preserve an explicit provider/model.
-  claude: { defaultProvider: 'anthropic', allowExplicitProvider: true, wireProviderQualified: true },
-  'claude-cli': { defaultProvider: 'anthropic', allowExplicitProvider: true, wireProviderQualified: true },
-  // Codex selects the provider from model_provider in config.toml. A foreign
-  // explicit prefix is accepted only when the caller proves it matches that
-  // effective setting; the provider is then stripped from the wire model id.
-  codex: { defaultProvider: 'openai' },
-  // opencode selects across providers, so a bare model is ambiguous: reject it
-  // loudly rather than let the server pick a default the user never asked for.
-  opencode: {},
-  // pi selects across providers with the same `provider/model` convention as
-  // opencode (#387) — no default provider, so a bare model is rejected loudly
-  // and `toBackendModel` hands pi the full `provider/model` on its `--model`.
-  pi: {},
-  // OMP is pi's fork: `provider/model`, no default provider, so a bare model is rejected loudly.
-  omp: {},
-};
+export function backendModelMap(backend: AgentBackend): BackendModelMap | undefined {
+  const id = LEGACY_RUNNER_IDS.get(backend) ?? backend;
+  return isRegisteredRunner(id) ? runnerDefinition(id as RunnerId).models.idMap : undefined;
+}
 
 const SLASH = '/';
 
@@ -128,7 +113,7 @@ export function resolveModelIdentity(
   options: { configuredProvider?: string | undefined } = {},
 ): ModelIdentity | undefined {
   if (!raw || !raw.trim()) return undefined;
-  const map = BACKEND_MODEL_MAP[backend] ?? {};
+  const map = backendModelMap(backend) ?? {};
   const configuredProvider = options.configuredProvider?.trim().toLowerCase() || undefined;
   const effectiveProvider = configuredProvider ?? map.defaultProvider;
   const explicit = parseModelIdentity(raw);
@@ -167,7 +152,7 @@ export function resolveModelIdentity(
  * they re-split into their own request shape.
  */
 export function toBackendModel(backend: AgentBackend, id: ModelIdentity): string {
-  const map = BACKEND_MODEL_MAP[backend] ?? {};
+  const map = backendModelMap(backend) ?? {};
   if (map.defaultProvider === undefined) return formatModelIdentity(id);
   if (
     map.allowExplicitProvider &&

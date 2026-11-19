@@ -14,6 +14,7 @@ const ENTRIES = [
   'packages/cezar/scripts/benchmark-workspace-events.ts',
   '.ai/scripts/mock-wire-evidence.ts',
   '.ai/scripts/probe-questions.ts',
+  '.ai/scripts/probe-startup.ts',
   '.ai/scripts/probe-steering.ts',
 ];
 

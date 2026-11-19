@@ -20,12 +20,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/ci-wait/injection.ts",
-      "target": "packages/cezar/src/core/opencode-runtime-config.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
       "file": "packages/cezar/src/ci-wait/tool-catalog.ts",
       "target": "packages/cezar/src/automations/enabled.ts",
       "count": 1,
@@ -36,36 +30,6 @@
       "target": "packages/cezar/src/worker-scope/scope.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/claude-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/codex-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/omp-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/opencode-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/pi-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
     },
     {
       "file": "packages/cezar/src/core/provider-auth.ts",
@@ -144,12 +108,6 @@
       "target": "packages/cezar/src/home/migration-accounts.ts",
       "count": 1,
       "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
-      "file": "packages/cezar/src/paths.ts",
-      "target": "packages/cezar/src/agent-config/catalog.ts",
-      "count": 1,
-      "reason": "feature:agent-config: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/process-wait/supervisor.ts",

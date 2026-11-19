@@ -5,7 +5,7 @@ import type { AgentConfigFile, Runner } from '@open-mercato/cezar-api-client'
  * 2026-07-17-agent-config-by-agent, amending #404): the UI is grouped by AGENT —
  * selector first, then that agent's settings, MCP and memory together — not by
  * purpose across agents. One descriptor entry per agent, keyed by the same
- * `Runner` id the rest of the codebase uses (the BACKEND_MODEL_MAP precedent from
+ * `Runner` id the rest of the codebase uses (the per-runner model map precedent from
  * #405: one table entry per agent, extension by design). A new agent is one entry
  * here plus its catalog files — no layout or route work.
  *

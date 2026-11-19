@@ -523,7 +523,7 @@ function piGrantArgs(spec: AgentRunSpec, grant: ToolGrant): string[] {
 }
 
 // The built-ins Squawk's default list maps onto (DEFAULT_ALLOWED_TOOLS through piTools), and the
-// names a default list may hold besides them (HARNESS_EXTRA_TOOLS.pi).
+// names a default list may hold besides them (the pi definition's `extraTools`).
 const PI_DEFAULT_BUILTINS = ['read', 'edit', 'write', 'grep', 'find', 'bash'];
 const PI_DEFAULT_EXTRAS = ['subagent', 'subagent_supervisor', 'subagent_wait'];
 

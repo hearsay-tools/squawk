@@ -5,7 +5,7 @@ import {
   type NativeSettingsFile,
   readNativeSettingsFiles,
 } from './shared.ts';
-import type { AgentModelSettingsStrategy } from './types.ts';
+import type { AgentModelSettingsStrategy } from '../../core/runner-model-settings.ts';
 
 /**
  * pi's native-settings policy, expressed the same way every other runner's is.

@@ -2,7 +2,8 @@ import { productIdentity } from '../home/identity.ts';
 import { defined } from '../core/defined.ts';
 import { readFile } from 'node:fs/promises';
 import { agentHomePaths, claudeStateFilePath } from '../paths.ts';
-import { CONFIG_FILES, type ConfigFileDef } from './catalog.ts';
+import { listConfigFiles } from './catalog.ts';
+import type { ConfigFileDef } from '../core/runner-config-files.ts';
 import { hashBytes, statConfigPath } from './files.ts';
 
 /**
@@ -88,7 +89,7 @@ export async function listAgentConfig(
 ): Promise<AgentConfigListing> {
   const home = agentHomePaths(env);
   const files = await Promise.all(
-    CONFIG_FILES.map(async (def): Promise<ConfigFileListing> => {
+    listConfigFiles().map(async (def): Promise<ConfigFileListing> => {
       const path = def.resolve(repoRoot, home);
       const { exists, size } = await statConfigPath(path);
       return defined({

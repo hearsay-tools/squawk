@@ -14,6 +14,10 @@ import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+registerRunner(claudeRunner);
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning its real stub binary through the untouched `spawn`. */

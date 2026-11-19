@@ -3,7 +3,7 @@ import {
   firstConfiguredProvider,
   readNativeSettingsFiles,
 } from './shared.ts';
-import type { AgentModelSettingsStrategy } from './types.ts';
+import type { AgentModelSettingsStrategy } from '../../core/runner-model-settings.ts';
 
 export const codexModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'codex',

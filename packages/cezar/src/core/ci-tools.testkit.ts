@@ -8,7 +8,7 @@ import { driveSeam, seedOpencodeMockSession } from './harness-parity.testkit.ts'
 import { buildChildEnv } from './agent-env.ts';
 import { buildClaudeArgs } from './claude-cli-runner.ts';
 import { buildPiArgs } from './pi-runner.ts';
-import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
+import { ciOpenCodeEnv } from './opencode-runtime-config.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
 import { askAnswerHint, askToolDefinition, cancelWaitToolDefinition, squawkServerInstructions, waitToolDefinition } from '../ci-wait/tools.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';

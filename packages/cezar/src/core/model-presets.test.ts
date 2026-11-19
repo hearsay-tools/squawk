@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { KNOWN_PRESETS_BY_RUNNER, modelConflictsWithRunner } from './model-presets.ts';
+import { modelConflictsWithRunner } from './model-presets.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// A conflict compares the model with every registered runner's presets.
+registerBuiltInRunners();
 
 describe('modelConflictsWithRunner', () => {
   it('never rejects auto or a runner\'s own preset', () => {
@@ -43,11 +48,11 @@ describe('modelConflictsWithRunner', () => {
   });
 
   it('keeps no hard-coded OpenCode catalog to drift', () => {
-    expect(KNOWN_PRESETS_BY_RUNNER.opencode).toEqual([]);
+    expect(runnerDefinition('opencode').models.known).toEqual([]);
   });
 
   it('treats omp like pi: no hard-coded presets, every provider-qualified id accepted', () => {
-    expect(KNOWN_PRESETS_BY_RUNNER.omp).toEqual([]);
+    expect(runnerDefinition('omp').models.known).toEqual([]);
     for (const runner of ['pi', 'omp'] as const) {
       expect(modelConflictsWithRunner('anthropic/claude-sonnet-5', runner)).toBe(false);
       expect(modelConflictsWithRunner('openai/gpt-5.4', runner)).toBe(false);

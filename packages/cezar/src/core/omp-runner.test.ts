@@ -32,6 +32,10 @@ import { readPids } from '../pid-file.testkit.js';
 import { z } from 'zod';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
 import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
+import { registerRunner } from './runner-registry.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
+
+registerRunner(ompRunner);
 
 const TOOL_STATUS = z.enum([
   ...Object.values(CODEX_TOOL_STATUS_MAP),
