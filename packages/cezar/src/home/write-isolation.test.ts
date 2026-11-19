@@ -6,6 +6,10 @@ import { dirname, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mergeWriteWorkspaceConfig, workspaceConfigSchema } from '../workspace/config.ts';
 import { loadAgentAccounts, mergeWriteAgentAccounts, storeSchema } from '../workspace/agent-accounts.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The legacy import parses account selections through the registry.
+registerBuiltInRunners();
 import { listBackups } from '../workspace/backups.ts';
 import { restoreBackup } from '../workspace/backup-cli.ts';
 import { runMigrations } from '../workspace/migrations.ts';

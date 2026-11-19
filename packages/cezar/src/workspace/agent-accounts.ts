@@ -7,7 +7,7 @@ import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-pro
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
-import { loadWorkspaceConfigSync } from './config.ts';
+import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
 /**
  * Optional agent-account store with root-keyed selections. Preserve unknown keys and salvage
@@ -104,16 +104,7 @@ export function parseAgentAccountEntries(entries: unknown[]): { accounts: AgentA
  *  registry when the store loads. A key no registered runner took is kept and ignored, as
  *  `.passthrough()` kept it; a registered runner's value is bounded and degrades per key. An
  *  absent key means the discovered default. */
-const selectionSchema = z
-  .record(z.string(), z.unknown())
-  .transform((entries) => {
-    const field = z.string().max(64).optional().catch(undefined);
-    const out = { ...entries } as Record<string, string | undefined>;
-    for (const { id } of registeredRunners()) {
-      if (id in entries) out[id] = field.parse(entries[id]);
-    }
-    return out;
-  });
+const selectionSchema = registeredRunnerRecord(z.string().max(64).optional().catch(undefined));
 
 export type AgentAccountSelection = z.infer<typeof selectionSchema>;
 
