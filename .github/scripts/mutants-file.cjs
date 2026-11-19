@@ -281,11 +281,13 @@ async function runMeasurement(opts, deps, signal = new AbortController().signal)
   const [baseline] = preflight(opts, deps);
   const head = deps.git(['rev-parse', 'HEAD']).trim();
   const source = deps.git(['rev-parse', '--show-toplevel']).trim();
-  const leaveQueue = await deps.queue(opts.file, signal, deps.log);
+  const slot = await deps.queue(opts.file, signal, deps.log);
+  // The queue keeps this run's turn while a Stryker group it started lives, even after a SIGKILL here.
+  const stryker = (project, mutate, ms, options) => deps.stryker(project, mutate, ms, { ...options, onSpawn: slot.track });
   try {
-    return await measureInScratch(opts, deps, signal, { baseline, head, source });
+    return await measureInScratch(opts, { ...deps, stryker }, signal, { baseline, head, source });
   } finally {
-    leaveQueue();
+    slot.release();
   }
 }
 

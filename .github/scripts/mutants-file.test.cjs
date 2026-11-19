@@ -127,7 +127,7 @@ function fakeDeps(file = 'packages/contract/src/sample.ts') {
     ranges: () => [], read: file => file.endsWith('equivalent.json') ? '[]' : "import { x } from '@open-mercato/cezar-contract/sample';",
     readJson: () => ({ vitest: { configFile: 'vitest.stryker.config.ts', pool: 'forks' }, reporters: ['json'], inPlace: true, timeoutMS: 30000 }), write: (file, text) => calls.push(['write', file, text]),
     removeScratch: dir => calls.push(['remove-scratch', dir]), log: text => calls.push(['log', text]),
-    queue: async (queued, signal, log) => { calls.push(['queue', queued, typeof log]); return () => calls.push(['leave-queue']); },
+    queue: async (queued, signal, log) => { calls.push(['queue', queued, typeof log]); return { track: group => calls.push(['track', group]), release: () => calls.push(['leave-queue']) }; },
   };
   return { deps, calls };
 }
@@ -334,8 +334,9 @@ test('runStryker passes the config as a positional argument and keeps cwd and pr
   const child = new EventEmitter();
   child.pid = 123;
   let emitted;
+  const spawned = [];
   await runStryker('contract', ['packages/contract/src/sample.ts'], 1000, {
-    cwd: '/cache/tree', extraArgs: ['--concurrency', '4', 'stryker.mutants-consumers.config.json'],
+    onSpawn: group => spawned.push(group), cwd: '/cache/tree', extraArgs: ['--concurrency', '4', 'stryker.mutants-consumers.config.json'],
     spawn: (bin, argv, options) => { emitted = { bin, argv, options }; queueMicrotask(() => child.emit('exit', 0)); return child; },
     kill: () => {},
   });
@@ -343,6 +344,7 @@ test('runStryker passes the config as a positional argument and keeps cwd and pr
   assert.equal(emitted.options.cwd, '/cache/tree');
   assert.equal(emitted.options.env.STRYKER_PROJECT, 'contract');
   assert.equal(emitted.options.detached, true);
+  assert.deepEqual(spawned, [123], 'the caller learns the process group Stryker leads');
 });
 
 
@@ -609,4 +611,12 @@ test('the summary lists Timeout mutants by function with their lines', async () 
   await m.runMeasurement(m.parseArgs([file]), deps);
   const text = calls.filter(c => c[0] === 'log').map(c => c[1]).join('\n');
   assert.match(text, /Timeouts in \(module\):\n {2}L1 Condition \/ BooleanLiteral: true -> false/);
+});
+
+test('the queue tracks each Stryker process group the measurement starts', async () => {
+  const { deps, calls } = fakeDeps();
+  const inner = deps.stryker;
+  deps.stryker = async (project, mutate, ms, options) => { options.onSpawn(4242); return inner(project, mutate, ms, options); };
+  await m.runMeasurement(m.parseArgs(['packages/contract/src/sample.ts']), deps);
+  assert.deepEqual(calls.filter(c => c[0] === 'track'), [['track', 4242], ['track', 4242]]);
 });

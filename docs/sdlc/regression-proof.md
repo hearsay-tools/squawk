@@ -130,7 +130,8 @@ It prints phase changes and progress every 30 seconds: completed/total mutants a
 Preparation and the initial test run show an unknown count until Stryker has a mutation plan.
 Whole-file runs on one host run one at a time: a run waits in a queue under
 `~/.cache/cez/mutants/queue` before its scratch checkout, prints its position when it changes, and
-starts when the runs before it end. A run that was killed leaves an entry that the next run removes.
+starts when the runs before it end. A run that was killed keeps its turn until the Stryker processes
+it started have ended; then the next run removes its entry.
 Stryker stops the initial test run after the `dryRunTimeoutMinutes` value in `stryker.config.json`
 (25). For a file that many tests import, add `--dry-run-timeout-minutes <n>` (1 to 600) to raise it.
 The summary lists the survivors and the Timeout mutants of each function with their lines.
