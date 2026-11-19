@@ -194,7 +194,8 @@ describe('worker spawn, steer and wait requests', () => {
     accepts(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(512) });
     refuses(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(513) });
     refuses(workerSpawnRequestSchema, { ...spawn, task: '' });
-    refuses(workerSpawnRequestSchema, { ...spawn, backend: 'nope' });
+    // Any runner id parses; the route refuses one that no runner registered (spec 2026-11-18-runner-definitions).
+    refuses(workerSpawnRequestSchema, { ...spawn, backend: '' });
   });
 
   it('names each refused spawn combination, and takes a combined text of exactly 100000', () => {

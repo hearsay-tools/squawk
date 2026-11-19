@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { runnerSchema } from './runner.ts';
-const PROVIDER_IDS = runnerSchema.options;
 
 export const providerConnectSchema = z.object({
-  provider: z.enum(PROVIDER_IDS),
+  provider: runnerSchema,
   /** Which agent account to sign in (spec 2026-07-29-agent-profiles). Absent = the discovered
    *  default, which is what every pre-profiles client sends. Without this, "Connect" on a second
    *  Claude account would open a login for the FIRST one and report success. */
@@ -14,7 +13,7 @@ export const providerConnectSchema = z.object({
  *  src/workspace/config.ts exactly, so a value these accept can never be degraded away by the
  *  next load's `.catch`. The id is allocated server-side and is never a request field. */
 export const createAgentProfileSchema = z.object({
-  provider: z.enum(PROVIDER_IDS),
+  provider: runnerSchema,
   label: z.string().trim().max(200).optional(),
   configDir: z.string().trim().min(1).max(4096),
 }).strict();
@@ -31,11 +30,11 @@ export const updateAgentProfileSchema = z.object({
  *  clears it back to the discovered account. */
 export const selectAgentProfileSchema = z.object({
   projectId: z.string().min(1).max(64),
-  provider: z.enum(PROVIDER_IDS),
+  provider: runnerSchema,
   profileId: z.string().max(64).nullable(),
 }).strict();
 
-export const providerParamSchema = z.enum(PROVIDER_IDS);
+export const providerParamSchema = runnerSchema;
 
 export const providerEnabledSchema = z.object({ enabled: z.boolean() }).strict();
 
