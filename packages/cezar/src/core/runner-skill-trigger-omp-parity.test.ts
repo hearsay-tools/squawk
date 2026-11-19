@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -33,13 +33,15 @@ it('passes an omp mid-message skill token unchanged for native expansion', async
 it.each(['human', 'agent'] as const)('correlates an omp expanded mid-turn %s trigger before its reply', async origin => {
   const dir = mkdtempSync(join(tmpdir(), 'omp-skill-consumption-'));
   const gate = join(dir, 'release');
+  const stdin = join(dir, 'stdin.ndjson');
+  const steerAdmitted = () => existsSync(stdin) && readFileSync(stdin, 'utf8').includes('"streamingBehavior":"steer"');
   const consumed: string[] = [];
   let live: AgentSession | undefined;
   let heldAtReply: boolean | undefined;
   let consumedAtReply: string[] = [];
   try {
     const obs = await driveSeam('omp', 'steer-tool', {
-      spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STEER_GATE: gate } },
+      spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STEER_GATE: gate, CEZ_MOCK_STDIN_FILE: stdin } },
       sessionOptions: { onAgentInputConsumed: ids => consumed.push(...ids) },
       onEvent: entry => {
         if ('v1' in entry && entry.v1.type === 'text' && entry.v1.text.includes('TRIGGER-FIXTURE')) {
@@ -59,6 +61,8 @@ it.each(['human', 'agent'] as const)('correlates an omp expanded mid-turn %s tri
           expect(ack).not.toBe(false);
           await ack;
         }
+        // The mock admits the steer into the held turn before the gate lets that turn end.
+        await waitFor(steerAdmitted);
         writeFileSync(gate, '');
         await waitFor(() => v1.some(event => event.type === 'turn-end'));
       },
