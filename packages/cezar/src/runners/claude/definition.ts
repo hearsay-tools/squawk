@@ -1,4 +1,5 @@
 import { defineRunner } from '../../core/runner-definition.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { CLAUDE_FACTS } from './facts.ts';
 import { CLAUDE_MODELS } from './models.ts';
 import { CLAUDE_CONFIG_FILES } from './config-files.ts';
@@ -26,7 +27,7 @@ export const claudeRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/claude-skill-catalog.ts')).discoverClaudeSkills,
   configFiles: CLAUDE_CONFIG_FILES,
   extraTools: CLAUDE_EXTRA_TOOLS,
-  login: CLAUDE_LOGIN,
+  login: { ...CLAUDE_LOGIN, executable: () => productEnv('CLAUDE_BIN') ?? 'claude' },
   accounts: CLAUDE_ACCOUNTS,
   env: CLAUDE_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseClaudeStatus }),

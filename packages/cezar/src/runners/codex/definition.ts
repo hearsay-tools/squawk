@@ -1,4 +1,5 @@
 import { defineRunner } from '../../core/runner-definition.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_MODELS } from './models.ts';
 import { CODEX_CONFIG_FILES } from './config-files.ts';
@@ -26,7 +27,7 @@ export const codexRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/codex-skill-catalog.ts')).discoverCodexSkills,
   configFiles: CODEX_CONFIG_FILES,
   extraTools: CODEX_EXTRA_TOOLS,
-  login: CODEX_LOGIN,
+  login: { ...CODEX_LOGIN, executable: () => productEnv('CODEX_BIN') ?? 'codex' },
   accounts: CODEX_ACCOUNTS,
   env: CODEX_ENV,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseCodexStatus }),

@@ -189,12 +189,6 @@ function loginFor(provider: ProviderId): RunnerLogin {
   return runnerDefinition(provider).login;
 }
 
-/** The probe's executable, from the login data (`productEnv(env) ?? fallback`); was each
- *  descriptor's `executable`. */
-function executableFor(login: RunnerLogin): string {
-  return productEnv(login.executable.env) ?? login.executable.fallback;
-}
-
 interface RuntimeAuthFailure {
   generation: number;
   authFailureId: string;
@@ -454,7 +448,7 @@ export class ProviderAuthService {
    */
   loginCommand(provider: ProviderId, configDir?: string | null): string | null {
     const login = loginFor(provider);
-    const command = [quoteExecutable(executableFor(login), this.platform), ...login.loginArgs].join(' ');
+    const command = [quoteExecutable(login.executable(), this.platform), ...login.loginArgs].join(' ');
     const env = configDir ? profileEnv(provider, configDir) : {};
     return withEnvPrefix(command, env, this.platform);
   }
@@ -590,10 +584,10 @@ export class ProviderAuthService {
     const env = configDir ? profileEnv(provider, configDir) : undefined;
     try {
       result = await (login.maxBuffer !== undefined
-        ? this.runCommand(executableFor(login), login.statusArgs, COMMAND_TIMEOUT_MS, env, { maxBuffer: login.maxBuffer })
+        ? this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS, env, { maxBuffer: login.maxBuffer })
         : env === undefined
-          ? this.runCommand(executableFor(login), login.statusArgs, COMMAND_TIMEOUT_MS)
-          : this.runCommand(executableFor(login), login.statusArgs, COMMAND_TIMEOUT_MS, env));
+          ? this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS)
+          : this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS, env));
     } catch {
       return { provider, status: 'unknown', hint: UNKNOWN_HINT };
     }

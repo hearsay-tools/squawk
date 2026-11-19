@@ -116,9 +116,7 @@ export interface RunnerCli {
 
 /** Login and auth status (the `login` part, spec 2026-11-18-runner-definitions): the data half of
  *  a `DESCRIPTORS` entry from `core/provider-auth.ts`, read by `ProviderAuthService`. */
-export interface RunnerLogin {
-  /** The auth probe's executable: `productEnv(env) ?? fallback` (e.g. `HSQ_CLAUDE_BIN`). */
-  readonly executable: { readonly env: string; readonly fallback: string };
+export interface RunnerLoginData {
   /** Args that ask the CLI whether it is logged in. */
   readonly statusArgs: readonly string[];
   /** Args that log the CLI in. */
@@ -127,6 +125,14 @@ export interface RunnerLogin {
   readonly installHint: string;
   /** A larger output ceiling for a status command whose output grows with the user's setup. */
   readonly maxBuffer?: number;
+}
+
+/** {@link RunnerLoginData} plus the code half: the executable resolution. */
+export interface RunnerLogin extends RunnerLoginData {
+  /** The auth probe's executable, honoring the runner's `HSQ_*_BIN` override. Code, not data:
+   *  it stays in the definition (`runners/<id>/definition.ts`) so its `productEnv` read keeps a
+   *  literal suffix (cez/product-env-read). */
+  executable(): string;
 }
 
 /** The code half of `login`: how a CLI's answer becomes a connection state. Loads from
