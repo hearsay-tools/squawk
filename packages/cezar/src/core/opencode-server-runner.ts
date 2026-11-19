@@ -16,7 +16,7 @@ import {
   type ContentBlock, type AgentRunSpecSupport,
   type InputDelivery, type AgentSession, type SessionOptions, isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
-import { RUNNER_FACTS } from './runner-facts.ts';
+import { OPENCODE_FACTS } from '../runners/opencode/facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
 import { signalSession, spawnSessionLeader } from './session-process.ts';
 import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
@@ -162,9 +162,9 @@ export const OPENCODE_LOST_WAKE_GRACE_MS = 2_000;
 export class OpencodeServerRunner implements AgentRunner {
   readonly backend = 'opencode' as const;
   readonly specSupport = OPENCODE_SPEC_SUPPORT;
-  readonly systemPromptOnResume = RUNNER_FACTS.opencode.systemPromptOnResume;
-  readonly facts = RUNNER_FACTS.opencode;
-  readonly inputDelivery: InputDelivery = RUNNER_FACTS.opencode.inputDelivery;
+  readonly systemPromptOnResume = OPENCODE_FACTS.systemPromptOnResume;
+  readonly facts = OPENCODE_FACTS;
+  readonly inputDelivery: InputDelivery = OPENCODE_FACTS.inputDelivery;
 
   private readonly bin: string;
   private readonly timeoutMs: number | undefined;

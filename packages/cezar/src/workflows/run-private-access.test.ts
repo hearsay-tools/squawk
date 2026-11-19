@@ -9,7 +9,10 @@ import { expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 function privateMembers() {
   const source = readFileSync(new URL('./run.ts', import.meta.url), 'utf8');

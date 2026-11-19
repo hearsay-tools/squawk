@@ -7,7 +7,7 @@ import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/ce
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { clearAutosaveCleanup, retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import '../core/every-runner.testkit.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
@@ -58,7 +58,7 @@ beforeEach(() => {
   onTestFinished(scopeFixtureProcesses());
   mutationLock.taken = 0; sessions.length = 0; onSession = () => {};
   f = fixture(workerCleanups());
-  vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+  vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({
     backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
     startSession: spec => {

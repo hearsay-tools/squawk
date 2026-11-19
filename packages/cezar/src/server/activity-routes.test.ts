@@ -21,7 +21,10 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import type { WorkspaceProjects } from './workspace-projects.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const TOOL_STATUS = activityToolSchema.shape.status.enum;
 

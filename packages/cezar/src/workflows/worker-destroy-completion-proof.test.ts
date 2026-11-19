@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 
 import * as worktrees from '../autosave-commit.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
@@ -24,7 +24,10 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 
 import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, worker, workspace, useWorkerDestroyFixture, replaceWorkerDestroyManager } from "./worker-destroy.testkit.ts";
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.
@@ -48,7 +51,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     await until(() => ['done', 'review'].includes(store.getRun(done.id)!.status));
     expect(await manager.awaitRunTermination(done.id, 15_000)).toBe(true);
     const failure = await worker();
-    const runnerSpy = vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined, run: async () => { throw Error('unused'); }, startSession: () => { throw Error('startup failed'); } });
+    const runnerSpy = vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined, run: async () => { throw Error('unused'); }, startSession: () => { throw Error('startup failed'); } });
     manager.enqueueOwnedRun(failure.id); await until(() => store.getRun(failure.id)?.status === 'failed');
     expect(await manager.awaitRunTermination(failure.id, 15_000)).toBe(true);
     runnerSpy.mockRestore();
@@ -159,7 +162,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     vi.useFakeTimers(); releases.push(() => vi.useRealTimers());
     const saves = vi.spyOn(worktrees, 'autosaveCommit');
-    vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+    vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
       run: async () => { throw Error('unused'); }, startSession: () => { throw Error('startup failed'); } });
     expect(manager.continueRun(w.id, { text: 'mock:hold' }).ok).toBe(true);
     await until(() => !manager.isActive(w.id));

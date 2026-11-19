@@ -11,9 +11,12 @@ import { DelegationService } from '../delegation/service.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
-import { createRunner } from './runner-factory.ts';
+import { createRunner } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { ANSWER_DELIVERY_CRITERIA, HARNESS_ADAPTERS, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+
+registerBuiltInRunners();
 
 // hearsay-tools/cezarion#935: a Continue executing an answer keeps that answer's checkpoint until
 // turn-end for crash recovery. The checkpoint must not hold worker conversation input arriving
@@ -79,10 +82,10 @@ function steering(backend: RunnerId, it: typeof registerTest = registerTest): vo
   const steerExemption = exemptionFor(steer.id, backend);
 
   if (steerExemption) {
-    it(`${backend} is exempt from ${steer.id} — ${steerExemption.reason}`, () => {
+    it(`${backend} is exempt from ${steer.id} — ${steerExemption.reason}`, async () => {
       expect(steerExemption.kind).toBe('scenario-unconstructible');
       expect(HARNESS_ADAPTERS[backend].scenarios[steer.scenario]).toBeUndefined();
-      expect(inputDeliveryOf(createRunner(backend)).mode).toBe('boundary');
+      expect(inputDeliveryOf(await createRunner(backend)).mode).toBe('boundary');
     });
   } else {
     it(`${backend} ${steer.id} ${steer.name}`, async () => {
@@ -114,7 +117,7 @@ function declaredDelivery(backend: RunnerId, it: typeof registerTest = registerT
     const releaseFile = join(tmpdir(), `cez-935-release-${randomUUID()}`);
     try {
       await withAnsweredWorker(backend, { CEZ_MOCK_RELEASE_FILE: releaseFile }, async ({ store, runId, askSeq, send, answer }) => {
-        const mode = inputDeliveryOf(createRunner(backend)).mode;
+        const mode = inputDeliveryOf(await createRunner(backend)).mode;
         const start = lastSeq(store, runId);
         await answer(`Vitest ${promptFor(backend, declared.scenario)}`);
         await waitFor(() => firstAfter(store, runId, 'turn.started', start) !== undefined);

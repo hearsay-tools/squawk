@@ -21,7 +21,7 @@ import { gitEnv } from '../git-command.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
 import {
@@ -42,6 +42,9 @@ import {
   type RegisterProjectResponse,
   type ServerDeps,
 } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * GUI clone (spec 2026-07-20-multi-project-workspace, step 4.3):

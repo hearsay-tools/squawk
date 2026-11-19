@@ -10,8 +10,11 @@ import type { RunManager } from '../workflows/run.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { ProjectContexts, sweepRegisteredPreviewLeftovers } from './project-context.ts';
 import { startServer } from './start-server.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // The post-listen chain reads the registry, then sweeps preview leftovers, then decides on the
 // warm-up: the sweep call is the test's signal that the chain reached that decision.

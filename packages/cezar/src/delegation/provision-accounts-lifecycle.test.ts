@@ -17,9 +17,12 @@ import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factori
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { ProjectContexts } from '../server/project-context.ts';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels

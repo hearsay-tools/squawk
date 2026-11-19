@@ -8,9 +8,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunner } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
+import { registerRunner } from './core/runner-registry.ts';
+import { ompRunner } from './runners/omp/definition.ts';
+
+registerRunner(ompRunner);
 
 const run = vi.fn(async () => ({ text: '' }));
-function runners(): AgentRunner {
+async function runners(): Promise<AgentRunner> {
   return { run } as unknown as AgentRunner;
 }
 

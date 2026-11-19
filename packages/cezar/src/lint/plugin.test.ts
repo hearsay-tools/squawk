@@ -162,8 +162,8 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'omp';\n",
   'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'omp';\n",
   'packages/web/src/routes/frame.ts': "switch (message.t) { case 'omp': break; }\n",
-  // layer-import: the runner factory, and a shell file that imports a feature.
-  'packages/cezar/src/core/runner-factory.ts': "import { PiRunner } from './pi-runner.ts';\n",
+  // layer-import: a runner definition that loads its adapter, and a shell file that imports a feature.
+  'packages/cezar/src/runners/pi/definition.ts': "const load = () => import('../../core/pi-runner.ts');\n",
   'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
   // runner-roster-literal: the definition, a listed roster, a subset and a derived list.
   'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,

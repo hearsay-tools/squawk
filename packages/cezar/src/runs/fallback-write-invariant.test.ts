@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { pruneOrphans } from '../git-worktree.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { ArchiveOnMergeCoordinator } from '../server/archive-on-merge.ts';
@@ -20,6 +20,9 @@ import { RUNS_DB_FILE, RunConflictError, RunDatabase, RunDatabaseBusyError } fro
 import { DatabaseSync } from 'node:sqlite';
 import { readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import { RunStore } from './store.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The invariant, without naming the paths that could break it: boot, recovery, every reconciler

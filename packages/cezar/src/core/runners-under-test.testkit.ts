@@ -1,4 +1,6 @@
 import type { AgentRunner, RunnerFactory, RunnerId } from './agent-runner.ts';
+import type { RunnerDefinition } from './runner-definition.ts';
+import { registerRunner } from './runner-registry.ts';
 
 /** The runner factory a test file drives. Each test file is its own module graph, so this is per
  *  file (hearsay-tools/cezarion#2939).
@@ -41,22 +43,26 @@ export function runnersUnderTest(): RunnerFactory {
 type RunnerMaker = () => AgentRunner;
 
 /** A factory that builds the named runners and refuses every other backend, so a per-runner test
- *  loads and starts only the adapters it names. */
-export function onlyRunners(makers: Partial<Record<RunnerId, RunnerMaker>>): RunnerFactory {
-  return (backend) => {
+ *  loads and starts only the adapters it names. It registers each runner's definition, so the
+ *  engine reads that runner's data from the registry; registering the same definition again does
+ *  nothing. */
+export function onlyRunners(runners: ReadonlyArray<readonly [RunnerDefinition, RunnerMaker]>): RunnerFactory {
+  for (const [definition] of runners) registerRunner(definition);
+  const makers = new Map<RunnerId, RunnerMaker>(runners.map(([definition, make]) => [definition.id, make]));
+  return async (backend) => {
     const requested = backend === undefined || backend === 'claude-cli' ? 'claude' : backend;
-    const make = makers[requested];
-    if (!make) throw new Error(`This test drives only the ${Object.keys(makers).join(' and ')} runner; it was asked for ${String(backend)}.`);
+    const make = makers.get(requested);
+    if (!make) throw new Error(`This test drives only the ${[...makers.keys()].join(' and ')} runner; it was asked for ${String(backend)}.`);
     return make();
   };
 }
 
 /** `onlyRunners` for one runner. */
-export function onlyRunner(id: RunnerId, make: RunnerMaker): RunnerFactory {
-  return onlyRunners({ [id]: make });
+export function onlyRunner(definition: RunnerDefinition, make: RunnerMaker): RunnerFactory {
+  return onlyRunners([[definition, make]]);
 }
 
 /** For a run module test that starts no runner: building one fails the test at once. */
-export const noRunners: RunnerFactory = (backend) => {
+export const noRunners: RunnerFactory = async (backend) => {
   throw new Error(`This test starts no runner; it was asked for ${String(backend)}.`);
 };

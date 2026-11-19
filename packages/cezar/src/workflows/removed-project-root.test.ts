@@ -11,6 +11,10 @@ import { projectMovedMarker, projectPaths } from '../project-paths.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled } from './fixture-manager.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+registerRunner(claudeRunner);
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -49,7 +53,7 @@ it.each(['Continue', 'recovery'])('%s uses the current repo after its old root i
     },
     interrupt: async () => {},
   };
-  const manager = createFixtureManager(store, current, { createRunner: () => runner });
+  const manager = createFixtureManager(store, current, { createRunner: async () => runner });
   if (entry === 'Continue') expect(manager.continueRun(run.id, { text: 'continue' })).toEqual({ ok: true });
   else await manager.recover();
   await fixtureWorkSettled(current);

@@ -3,12 +3,15 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { type RunRecord } from '../runs/store.ts';
-import * as runnerFactory from '../core/runner-factory.ts';
+import * as runnerFactory from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { COMPLETION_WILL_WAIT } from './run.ts';
 import { fixtureUpdateRun, manager, parent, register, restart, root, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { completionNudges, idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.
@@ -79,7 +82,7 @@ it('readiness public cancellation does not wake until private completion is dura
 it('readiness real stopped process wakes its parent only after actual exit and finalization', async () => {
     const p = await parent(); const w = await worker(p.id);
     let child: ReturnType<typeof spawn> | undefined; let ready = false;
-    const runner = vi.spyOn(runnerFactory, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+    const runner = vi.spyOn(runnerFactory, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
       run: async () => { throw Error('unused'); }, startSession: () => {
         child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"], { stdio: ['ignore', 'pipe', 'pipe'] });
         child.stdout!.once('data', () => { ready = true; });

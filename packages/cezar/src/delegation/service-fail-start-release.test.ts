@@ -8,12 +8,15 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from '../workflows/run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { workerCapacity } from './capacity.ts';
 import { cadence, destroyOf, f, input, linux, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** A worker whose launch failed before its first step: settled, failed, with no step started. */
 async function failStart(options: { reservedDirectory?: boolean } = {}) {

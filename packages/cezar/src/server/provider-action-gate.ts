@@ -5,6 +5,7 @@ import type {
   ProviderStatusResponse,
 } from '../core/provider-auth.ts';
 import type { RunRecord } from '../runs/store.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
 export { providersRequiredByWorkflow } from '@open-mercato/cezar-contract/workflows';
 
 export function providerForExistingRun(
@@ -12,7 +13,7 @@ export function providerForExistingRun(
   override?: ProviderId,
 ): ProviderId {
   if (override) return override;
-  return run.runner ?? 'claude';
+  return run.runner ?? DEFAULT_RUNNER_ID;
 }
 
 export function unavailableProviderMessage(

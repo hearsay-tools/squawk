@@ -45,9 +45,12 @@ vi.mock('node:child_process', async (original) => {
 });
 
 import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from './agent-runner.js';
-import { createRunner } from './runner-factory.js';
+import { createRunner } from './runner-registry.js';
+import { registerBuiltInRunners } from '../runners/built-in.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
+
+registerBuiltInRunners();
 
 /** The runners whose EOF cleanup cells (the `eof-` families) run. */
 export const EOF_CLEANUP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi');
@@ -84,7 +87,7 @@ async function withChild(backend: RunnerId, check: (session: AgentSession, child
   let openingTurnStarted = false;
   spawned.length = 0;
   eventStreams.length = 0;
-  const session = createRunner(backend).startSession({ toolGrant: UNSET_TOOL_GRANT,
+  const session = (await createRunner(backend)).startSession({ toolGrant: UNSET_TOOL_GRANT,
     cwd, userPrompt: promptFor(backend, scenario), timeoutMs: 0,
     timings: { killGraceMs: 100, eofTermGraceMs, eofKillGraceMs: 100 },
   }, event => events.push(event), {
@@ -314,6 +317,7 @@ function signalReadiness(backend: RunnerId, it: typeof registerTest = registerTe
       // consumed startup, so host load cannot turn this into a startup-exit test.
       writeFileSync(preload, `
 import { existsSync } from 'node:fs';
+
 const original = globalThis.setTimeout;
 globalThis.setTimeout = function(callback, ms, ...args) {
   if (ms !== 12000) return original(callback, ms, ...args);

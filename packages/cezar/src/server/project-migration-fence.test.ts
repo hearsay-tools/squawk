@@ -23,7 +23,7 @@ import type { GithubAutomationDefinition } from '../automations/types.ts';
 import { hostname } from 'node:os';
 import { defaultCliDeps, main, type CliDeps } from '../cli-dispatch.ts';
 import { initCommand, openStore } from '../project-commands.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { seedRuns, setRunStatus } from '../runs/run-store.testkit.ts';
 import { closeClaimSession, openClaimSession } from '../runs/run-claims.ts';
@@ -42,6 +42,9 @@ import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } fr
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The exclusive project migration fence (hearsay-tools/cezarion#3087): one claim file beside both

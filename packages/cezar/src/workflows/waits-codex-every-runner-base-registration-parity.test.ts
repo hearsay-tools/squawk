@@ -1,8 +1,9 @@
 import { describeWaitParity } from './waits-parity-base-registration-fold.testkit.ts';
 import { CodexAppServerRunner } from '../core/codex-app-server-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 
-useRunners(onlyRunner('codex', () => new CodexAppServerRunner()));
+useRunners(onlyRunner(codexRunner, () => new CodexAppServerRunner()));
 
 // codex is not the scenario runner: it runs only the wait rows that run on every runner. This file
 // runs one group of their parts (WAIT_FOLDS in waits-parity-catalog.testkit.ts, hearsay-tools/cezarion#2991).

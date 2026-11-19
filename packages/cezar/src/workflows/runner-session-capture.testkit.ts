@@ -1,13 +1,13 @@
 import { onTestFinished, vi } from 'vitest';
 import type { AgentSession } from '../core/agent-runner.ts';
-import * as runnerFactory from '../core/runner-factory.ts';
+import * as runnerFactory from '../core/runner-registry.ts';
 
 /** Own the real sessions at the runner boundary, keyed by the task environment. */
 export function captureSessions(options: { env?: (id: string) => Record<string, string> } = {}) {
   const sessions = new Map<string, AgentSession>();
   const create = runnerFactory.createRunner;
-  const capture = vi.spyOn(runnerFactory, 'createRunner').mockImplementation((...args) => {
-    const runner = create(...args);
+  const capture = vi.spyOn(runnerFactory, 'createRunner').mockImplementation(async (...args) => {
+    const runner = await create(...args);
     const start = runner.startSession.bind(runner);
     vi.spyOn(runner, 'startSession').mockImplementation((spec, ...rest) => {
       const id = spec.env?.CEZ_TASK_ID;

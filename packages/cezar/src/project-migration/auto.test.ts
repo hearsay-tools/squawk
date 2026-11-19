@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { Home } from '../home/home.ts';
 import { holdCockpitLease } from '../home/leases.ts';
@@ -36,6 +36,9 @@ import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The cockpit's automatic project move (hearsay-tools/cezarion#3089): at cockpit start and at a project's first open, a legacy project moves before anything

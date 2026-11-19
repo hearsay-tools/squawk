@@ -2,10 +2,13 @@ import * as git from '../autosave-commit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // bound: Git and the manager must have time to launch on a loaded host.
 const until = (predicate: () => boolean) => vi.waitFor(() => expect(predicate()).toBe(true), { timeout: 15_000, interval: 10 });
@@ -22,7 +25,7 @@ describe('launch disposal routes', { timeout: 30_000 }, () => {
     vi.stubEnv('CEZ_DRY_RUN', '1'); vi.stubEnv('CEZ_AUTONAME', '0');
     f = fixture();
     await f.releaseAdmission();
-    vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+    vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({
       backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
       startSession: () => {

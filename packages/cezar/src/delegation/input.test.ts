@@ -3,7 +3,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { createActiveRun } from '../workflows/active-run.ts';
 import { InputDelivery } from '../workflows/run/input-delivery.ts';
 import { execFileSync } from 'node:child_process';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import type { RunnerFactory } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { TrackedWork } from '../workflows/run/tracked-work.ts';
@@ -24,6 +24,9 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import { enqueueAgentInput, nextAgentInput, agentInputBatch } from './input.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** Read at call time, so a test's `vi.spyOn(runners, 'createRunner')` reaches managers built before it. */
 const spiedRunners: RunnerFactory = backend => runners.createRunner(backend);
@@ -116,7 +119,7 @@ async function withLiveInputRun(check: (fixture: LiveInputRun) => Promise<void> 
   const session: AgentSession = { get open() { return open; }, result, sendAgentMessage: send,
     sendMessage: human, discardQueuedMessages() {}, holdsHumanInput: () => false,
     end() { open = false; }, interrupt() { open = false; } };
-  const runner = vi.spyOn(runners, 'createRunner').mockImplementation(() => ({
+  const runner = vi.spyOn(runners, 'createRunner').mockImplementation(async () => ({
     backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     interrupt: async () => undefined,
     run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),

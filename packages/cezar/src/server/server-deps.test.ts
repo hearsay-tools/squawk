@@ -23,7 +23,10 @@ import {
   watchProviderRuntimeAuth,
 } from './server-deps.ts';
 import { createApp, type WorkspaceEventBus } from './server.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const response = (statuses: Partial<Record<ProviderId, 'connected' | 'disconnected'>>): ProviderStatusResponse => ({
   providers: PROVIDER_IDS.map((provider) => ({ provider, status: statuses[provider] ?? 'connected' })),

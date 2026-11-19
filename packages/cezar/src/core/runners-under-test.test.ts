@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RunnerFactory } from './agent-runner.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
 // Which factory a test file drives when its closure loads several runner kits
 // (hearsay-tools/cezarion#3242). Each case loads a fresh `runners-under-test.testkit.ts`, so
@@ -21,9 +22,9 @@ async function importKits(kits: readonly Kit[]): Promise<void> {
 }
 
 /** The kit whose factory `runnersUnderTest` returns, read from how it treats a Codex task. */
-function chosenKit(factory: RunnerFactory): Kit {
+async function chosenKit(factory: RunnerFactory): Promise<Kit> {
   try {
-    const backend = factory('codex').backend;
+    const backend = (await factory('codex')).backend;
     if (backend === 'codex') return 'every-runner';
     throw new Error(`A Codex task got the ${backend} runner.`);
   } catch (error) {
@@ -45,7 +46,7 @@ describe('runner kit precedence', () => {
     async (_name, order) => {
       const kit = await freshRunnersKit();
       await importKits(order);
-      expect(chosenKit(kit.runnersUnderTest())).toBe('every-runner');
+      expect(await chosenKit(kit.runnersUnderTest())).toBe('every-runner');
     },
   );
 
@@ -54,35 +55,35 @@ describe('runner kit precedence', () => {
     async (_name, order) => {
       const kit = await freshRunnersKit();
       await importKits(order);
-      expect(chosenKit(kit.runnersUnderTest())).toBe('claude-runner');
+      expect(await chosenKit(kit.runnersUnderTest())).toBe('claude-runner');
     },
   );
 
   it.each<Kit>(['every-runner', 'claude-runner', 'no-runner'])('a single %s kit chooses its own factory', async (only) => {
     const kit = await freshRunnersKit();
     await importKits([only]);
-    expect(chosenKit(kit.runnersUnderTest())).toBe(only);
+    expect(await chosenKit(kit.runnersUnderTest())).toBe(only);
   });
 
   it('a later explicit useRunners in the test body wins over every kit', async () => {
     const kit = await freshRunnersKit();
     await importKits(['claude-runner', 'every-runner', 'no-runner']);
     kit.useRunners(kit.noRunners);
-    expect(chosenKit(kit.runnersUnderTest())).toBe('no-runner');
+    expect(await chosenKit(kit.runnersUnderTest())).toBe('no-runner');
   });
 
   it('an offer after an explicit choice does not replace it', async () => {
     const kit = await freshRunnersKit();
     kit.useRunners(kit.noRunners);
-    kit.offerRunners(kit.onlyRunner('claude', () => { throw new Error('unused'); }), kit.RUNNER_OFFER.claude);
-    expect(chosenKit(kit.runnersUnderTest())).toBe('no-runner');
+    kit.offerRunners(kit.onlyRunner(claudeRunner, () => { throw new Error('unused'); }), kit.RUNNER_OFFER.claude);
+    expect(await chosenKit(kit.runnersUnderTest())).toBe('no-runner');
   });
 
   it('the claude-runner kit builds the Claude runner for claude, claude-cli and no backend', async () => {
     const kit = await freshRunnersKit();
     await importKits(['claude-runner']);
     const factory = kit.runnersUnderTest();
-    for (const backend of ['claude', 'claude-cli', undefined] as const) expect(factory(backend).backend).toBe('claude');
+    for (const backend of ['claude', 'claude-cli', undefined] as const) expect((await factory(backend)).backend).toBe('claude');
   });
 
   it('no kit leaves the test file without a factory', async () => {

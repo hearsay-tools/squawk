@@ -28,8 +28,10 @@ import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { ClaudeCliRunner } from '../src/core/claude-cli-runner.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
+import { registerBuiltInRunners } from '../src/runners/built-in.ts';
 
 installWindowsIdentityStore();
+registerBuiltInRunners();
 const ownHome = prepareBenchmarkEnv();
 process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0'; process.env.CEZ_MOCK_NUDGE_REPLY = 'plain'; process.env.CEZ_MOCK_NOTES = '0';
 
@@ -49,7 +51,7 @@ async function until(predicate: () => boolean, timeoutMs: number): Promise<boole
 }
 
 const holders: ChildProcess[] = [];
-const { root, sha, dataDir, store, manager, service, detach } = await benchmarkProject('cez-bench-lifecycle-', { createRunner: () => new ClaudeCliRunner(), maxParallel: 4 });
+const { root, sha, dataDir, store, manager, service, detach } = await benchmarkProject('cez-bench-lifecycle-', { createRunner: async () => new ClaudeCliRunner(), maxParallel: 4 });
 try {
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
   setRunStatus(store, parent.id, 'waiting', { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });

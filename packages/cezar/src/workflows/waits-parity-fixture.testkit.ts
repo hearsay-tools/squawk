@@ -22,6 +22,8 @@ import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages, toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells, fileFamilies, rowFamily, type FamilyPart } from './waits-parity-catalog.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
 // hearsay-tools/cezarion#1233: every runner opens, cancels and survives CI and timer waits on its
 // own native wire. The production tool controller, bundled tool, runner, store and scheduler stay
@@ -81,13 +83,14 @@ const runnerBoundary = vi.hoisted(() => ({
 /** The test file's runner for its parents, and the Claude runner for the workers this kit runs on
  *  the Claude wire whatever the parent's runner is (hearsay-tools/cezarion#2939). */
 function withClaudeWorkers(inner: RunnerFactory): RunnerFactory {
-  return backend => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend);
+  registerRunner(claudeRunner);
+  return async backend => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend);
 }
 
 /** The test file's runners, with each session recorded at its boundary. */
 function boundaryRunners(inner: RunnerFactory): RunnerFactory {
-  return (...args) => {
-    const runner = inner(...args);
+  return async (...args) => {
+    const runner = await inner(...args);
     const start = runner.startSession.bind(runner);
     runner.startSession = (spec, ...rest) => {
       const runId = spec.env!.CEZ_TASK_ID!;

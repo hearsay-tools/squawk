@@ -2,7 +2,7 @@ import { observationClock } from '../core/observation-clock.testkit.ts';
 // Register the external CI mock before loading RunManager.
 import { success, ciWaitOf, lastCiWaitOf, github, register, githubByPr, registerPr, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import type { AgentEvent, AgentRunResult, AgentRunner, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 
@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 
 describe('CI wait delivery', { timeout: 30_000 }, () => {
@@ -40,7 +43,7 @@ describe('CI wait delivery', { timeout: 30_000 }, () => {
       queueMicrotask(() => emit({ type: 'turn-end' }));
       return Promise.resolve();
     });
-    vi.spyOn(runners, 'createRunner').mockReturnValue(runner);
+    vi.spyOn(runners, 'createRunner').mockResolvedValue(runner);
     const run = await parent();
     const wait = await register(run.id);
     const answer = await manager.squawkToolHandlers(run.id, toolGenerationOf(run.id)).ask({

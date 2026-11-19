@@ -105,7 +105,7 @@ async function observeFollowOn(backend: RunnerId): Promise<FollowOnObservation> 
       await waitFor(() => answeredInItsTurn(v1, FOLLOW_ON_NEXT), 10_000).catch(() => undefined);
     },
   });
-  return { obs, consumed, observable: inputDeliveryOf(runnersUnderTest()(backend)).consumption === 'observable' };
+  return { obs, consumed, observable: inputDeliveryOf(await runnersUnderTest()(backend)).consumption === 'observable' };
 }
 export const FOLLOW_ON_CRITERION: SeamCriterion<FollowOnObservation> = {
   ...FOLLOW_ON_ROWS[0],
@@ -207,8 +207,8 @@ export const SESSION_GROUPS = {
     const { describeRunners, runners, it, parityRow } = r;
     describeRunners('input', 'harness parity — input delivery (#505)', () => {
       for (const backend of runners) {
-        it(`${backend} I0 declares its input delivery`, () => {
-          expect(['steer', 'boundary']).toContain(inputDeliveryOf(runnersUnderTest()(backend)).mode);
+        it(`${backend} I0 declares its input delivery`, async () => {
+          expect(['steer', 'boundary']).toContain(inputDeliveryOf(await runnersUnderTest()(backend)).mode);
         });
         for (const criterion of INPUT_CRITERIA) {
           parityRow(backend, criterion, () => observeInput(backend, criterion.scenario, `parity-${criterion.id}`));
@@ -300,7 +300,7 @@ export const SESSION_GROUPS = {
         // #505: a `steer` runner admits non-human input mid-turn; a `boundary` runner refuses
         // it until the turn ends. Either way the input is eventually read, and a closed session refuses.
         it(`${backend} S12 non-human input follows the runner's declared delivery mode`, async () => {
-          const steer = inputDeliveryOf(runnersUnderTest()(backend)).mode === 'steer';
+          const steer = inputDeliveryOf(await runnersUnderTest()(backend)).mode === 'steer';
           await driveSeam(backend, 'hold', {
             whileOpen: async (session, { v1 }) => {
               let busy = session.sendAgentMessage([{ type: 'text', text: 'mock:agent-echo retried steering' }]);
@@ -462,9 +462,9 @@ export const SESSION_GROUPS = {
     const { describeRunners, runners, it, describe, beforeAll, afterAll, scope } = r;
     describeRunners('spec', 'harness parity — AgentRunSpec support declarations', () => {
       if (scope === 'once') {
-        it('every runner id builds its own runner, declaring every AgentRunSpec field with a reason', () => {
+        it('every runner id builds its own runner, declaring every AgentRunSpec field with a reason', async () => {
           for (const backend of RUNNER_IDS) {
-            const runner = runnersUnderTest()(backend);
+            const runner = await runnersUnderTest()(backend);
             // A new RUNNER_IDS member with no factory case falls through to claude; that is not a declaration.
             expect(runner.backend).toBe(backend);
             expect(Object.keys(runner.specSupport).sort()).toEqual([...AGENT_RUN_SPEC_FIELDS].sort());
@@ -533,8 +533,8 @@ export const SESSION_GROUPS = {
           });
 
           for (const field of AGENT_RUN_SPEC_FIELDS) {
-            it(`${backend} does with ${field} what it declares`, () => {
-              const declared = runnersUnderTest()(backend).specSupport[field].honored;
+            it(`${backend} does with ${field} what it declares`, async () => {
+              const declared = (await runnersUnderTest()(backend)).specSupport[field].honored;
               const probe = SPEC_FIELD_PROBES[field];
               let observed: boolean;
               if (probe.kind === 'boundary') {

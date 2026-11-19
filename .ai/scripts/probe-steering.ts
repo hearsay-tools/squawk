@@ -10,8 +10,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createRunner } from '../../packages/cezar/src/core/runner-factory.ts';
+import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { inputDeliveryOf, type AgentEvent, type RunnerId } from '../../packages/cezar/src/core/agent-runner.ts';
+import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const [backend, model] = process.argv.slice(2) as [RunnerId, string | undefined];
 if (!backend) { console.error('usage: probe-steering.ts <backend> [model]'); process.exit(2); }
@@ -22,7 +25,7 @@ const rec = (kind: string, detail: unknown = '') => console.log(JSON.stringify({
 const TOKEN = 'PROBE-7731';
 const PROMPT = `Use your shell tool to run exactly this one command in the FOREGROUND and wait for it (never run it in the background): node -e "setTimeout(() => console.log('SLEPT'), 40000)"
 After it finishes, reply with every user message you received after this one, verbatim (or NONE), then end with FINISHED. Do not run any other command.`;
-const runner = createRunner(backend);
+const runner = await createRunner(backend);
 rec('delivery', inputDeliveryOf(runner));
 let sent = false; let turnEnds = 0;
 const session = runner.startSession({ userPrompt: PROMPT, cwd, model, effort: 'low', toolGrant: { kind: 'explicit', tools: ['Bash'] }, timeoutMs: 300_000 }, (event: AgentEvent) => {

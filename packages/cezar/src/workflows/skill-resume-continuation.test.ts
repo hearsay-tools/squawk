@@ -11,7 +11,7 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentRunSpec, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { openingInput } from '../core/skill-trigger.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
@@ -22,6 +22,9 @@ import { workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps } from './types.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const LAUNCH_WAIT_MS = 15_000;
 const execFileAsync = promisify(execFile);
@@ -60,7 +63,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
       load: async () => ({ maxParallel: 1, memoryLimitMb: null }) });
     manager = createFixtureManager(store, repoRoot, { semaphore });
     oneShotCalls = vi.fn(async () => ({ text: '', toolCalls: [], tokensUsed: 0 }));
-    vi.spyOn(runners, 'createRunner').mockImplementation((backend) => ({
+    vi.spyOn(runners, 'createRunner').mockImplementation(async (backend) => ({
       backend: backend ?? 'claude',
       specSupport: CLAUDE_SPEC_SUPPORT,
       systemPromptOnResume: 'resent',

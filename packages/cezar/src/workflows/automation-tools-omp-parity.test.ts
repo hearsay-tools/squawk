@@ -1,6 +1,7 @@
 import { describeAutomationToolsParity } from './automation-tools-parity.testkit.ts';
 import { OmpRunner } from '../core/omp-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 
-useRunners(onlyRunner('omp', () => new OmpRunner()));
+useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 describeAutomationToolsParity('omp');

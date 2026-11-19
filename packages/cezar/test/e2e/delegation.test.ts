@@ -117,7 +117,9 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     const { Home } = await load('home/home.js') as typeof import('../../src/home/home.ts');
     const { RunManager } = await load('workflows/run.js') as typeof import('../../src/workflows/run.ts');
     const { acquireCiResources } = await load('ci-wait/resources.js') as typeof import('../../src/ci-wait/resources.ts');
-    const { createRunner } = await load('core/runner-factory.js') as typeof import('../../src/core/runner-factory.ts');
+    const { createRunner } = await load('core/runner-registry.js') as typeof import('../../src/core/runner-registry.ts');
+    const { registerBuiltInRunners } = await load('runners/built-in.js') as typeof import('../../src/runners/built-in.ts');
+    registerBuiltInRunners();
     const { DelegationController, bundledWorkerInvocation } = await load('delegation/provision.js') as typeof import('../../src/delegation/provision.ts');
     const { workerCleanups } = await load('delegation/worker-cleanup.js') as typeof import('../../src/delegation/worker-cleanup.ts');
     const { WorkspaceSemaphore } = await load('workspace/semaphore.js') as typeof import('../../src/workspace/semaphore.ts');

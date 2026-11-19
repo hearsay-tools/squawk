@@ -12,6 +12,8 @@ import { beginUsageInvocation, recordReportedCost } from './usage-accounting.ts'
 // the declaration and not the runner id (hearsay-tools/cezarion#2991).
 vi.mock('../../core/runner-facts.ts', async (load) => {
   const actual = await load<typeof import('../../core/runner-facts.ts')>();
+  // The spread below reads every runner's facts from the registry.
+  (await import('../../runners/built-in.ts')).registerBuiltInRunners();
   return { ...actual, RUNNER_FACTS: {
     ...actual.RUNNER_FACTS,
     claude: { ...actual.RUNNER_FACTS.claude, costReport: 'per-turn' },

@@ -9,13 +9,16 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerSpawnRequest } from '@open-mercato/cezar-contract';
 import type { AgentRunResult, AgentRunSpec, AgentSession } from './agent-runner.ts';
-import * as runners from './runner-factory.ts';
+import * as runners from './runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from './claude-cli-runner.ts';
 import './every-runner.testkit.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { parentFileSnapshotPath, placeWorkerAttachments } from '../delegation/context.ts';
 import { ensureOwnedWorkspace, readOwnedDiff } from '../delegation/workspace.ts';
 import { autosaveCommit } from '../autosave-commit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // A one-shot hook around `open`: it may change the filesystem just before a matching path is opened,
 // and its returned step receives the opened handle, so a test can land a race or a failing write.
@@ -73,7 +76,7 @@ describe('attached parent files in the worker worktree', { timeout: 30_000 }, ()
       tools.set(id, launched);
       return launched;
     });
-    vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({ backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
+    vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({ backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), startSession: (spec, onEvent) => {
         const read = (path: string) => existsSync(join(spec.cwd, path)) ? readFileSync(join(spec.cwd, path), 'utf8') : undefined;
         const files = Object.fromEntries(Object.keys(ATTACHED).map(path => [path, read(path)]));

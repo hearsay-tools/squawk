@@ -11,7 +11,7 @@ import {
   type ContentBlock, type SessionOptions, type AgentRunSpecSupport,
   type InputDelivery, prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
-import { RUNNER_FACTS } from './runner-facts.ts';
+import { CODEX_FACTS } from '../runners/codex/facts.ts';
 import { codexToolGrantFields } from './runner-tool-grants.ts';
 import { signalSession } from './session-process.ts';
 import { afterExitDrain, AUTO_END_DELAY_MS, exitDrainBudget, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -103,9 +103,9 @@ export const CODEX_SPEC_SUPPORT: AgentRunSpecSupport = {
 export class CodexAppServerRunner implements AgentRunner {
   readonly backend = 'codex' as const;
   readonly specSupport = CODEX_SPEC_SUPPORT;
-  readonly systemPromptOnResume = RUNNER_FACTS.codex.systemPromptOnResume;
-  readonly facts = RUNNER_FACTS.codex;
-  readonly inputDelivery: InputDelivery = RUNNER_FACTS.codex.inputDelivery;
+  readonly systemPromptOnResume = CODEX_FACTS.systemPromptOnResume;
+  readonly facts = CODEX_FACTS;
+  readonly inputDelivery: InputDelivery = CODEX_FACTS.inputDelivery;
 
   private readonly bin: string;
   private readonly timeoutMs: number | undefined;

@@ -17,9 +17,15 @@ import { RunStore } from '../runs/store.ts';
 import { executionAccount } from './execution-account.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import type { RunManager } from './run.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 const runnerHook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
-useRunners(() => runnerHook.runner!);
+useRunners(async () => runnerHook.runner!);
 
 function initRepo(root: string) {
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });

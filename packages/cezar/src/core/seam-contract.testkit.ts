@@ -247,7 +247,7 @@ async function driveContract(backend: RunnerId, drive: DriveContract): Promise<C
         }
       },
     });
-    const runner = runnersUnderTest()(backend);
+    const runner = await runnersUnderTest()(backend);
     return {
       backend, delivery: inputDeliveryOf(runner), obs, timeline: recorder.timeline, at: recorder.at,
       read: { heldAtTurnEnd: recorder.holdsAtTurnEnd[0], ...recorder.read },
@@ -265,7 +265,7 @@ async function driveContract(backend: RunnerId, drive: DriveContract): Promise<C
  * the turn runs. An `always-held` runner keeps it until the turn ends, so nothing reaches the wire.
  */
 async function deliveredMidTurn(backend: RunnerId, mock: MockControl): Promise<void> {
-  if (inputDeliveryOf(runnersUnderTest()(backend)).humanInputAtTurnEnd !== 'always-held') await mock.onWire(FOLLOW_UP);
+  if (inputDeliveryOf(await runnersUnderTest()(backend)).humanInputAtTurnEnd !== 'always-held') await mock.onWire(FOLLOW_UP);
 }
 
 const v1Of = (recorder: Recorder): AgentEvent[] => recorder.timeline.flatMap(entry => 'v1' in entry ? [entry.v1] : []);
@@ -332,7 +332,7 @@ async function observeAcknowledgement(backend: RunnerId): Promise<ContractObserv
     sessionOptions: { onAgentInputConsumed: ids => { for (const id of ids) { consumed.push(id); recorder?.mark(`consumed:${id}`); } } },
     whileOpen: async (session, rec, mock) => {
       recorder = rec;
-      const delivery = inputDeliveryOf(runnersUnderTest()(backend));
+      const delivery = inputDeliveryOf(await runnersUnderTest()(backend));
       const steer = delivery.mode === 'steer';
       const send = (id: string) => session.sendAgentMessage([{ type: 'text', text: `mock:agent-echo ${id}` }], [id]);
       const acknowledged = (id: string, ack: Promise<void>) => ack.then(() => { rec.mark(`ack:${id}`); });

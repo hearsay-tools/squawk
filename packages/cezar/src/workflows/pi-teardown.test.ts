@@ -9,7 +9,10 @@ import { RunStore } from '../runs/store.js';
 import { RunManager } from './run.js';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.js';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const workflow: WorkflowDef = {
   name: 'quick-task', source: 'built-in',

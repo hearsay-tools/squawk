@@ -6,6 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
 import { RUNNER_IDS } from './core/agent-runner.ts';
+import { DEFAULT_RUNNER_ID } from './core/runner-registry.ts';
 
 /**
  * Optional advanced config at `.ai/cezar/config.json`. Zero-config rule:
@@ -44,7 +45,7 @@ const configSchema = z.object({
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.
    */
-  defaultRunner: z.enum(RUNNER_IDS).default('claude'),
+  defaultRunner: z.enum(RUNNER_IDS).default(DEFAULT_RUNNER_ID),
   /** Model for the chain planner (spec 008) — cheap but reliable at JSON. */
   plannerModel: z.string().min(1).default('sonnet'),
   /** Model for the task namer (spec 2026-07-17-task-auto-naming) — the cheapest
@@ -116,7 +117,7 @@ export type CezConfig = z.infer<typeof configSchema>;
  * Fold the machine-wide agent defaults under a repo's own config (spec 2026-07-29-agent-profiles).
  *
  * Applied to the RAW object, before parsing, for the reason `ownWorktreeRetention` documents just
- * below: `defaultRunner`'s `.default('claude')` materializes the key, so after a parse there is no
+ * below: `defaultRunner`'s `.default(DEFAULT_RUNNER_ID)` materializes the key, so after a parse there is no
  * telling "the user chose claude" from "the user said nothing". Merging first keeps the wire shape
  * exactly as it has always been — `defaultRunner` and the model presets stay always-present — while
  * making an absent key mean "ask the machine".

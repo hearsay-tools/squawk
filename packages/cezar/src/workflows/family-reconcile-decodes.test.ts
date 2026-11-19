@@ -9,7 +9,10 @@ import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { seedSettledFamily } from './delegation-reconcile.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** Successful `decodeRunRow` calls, by run id: the store calls `collectRawExtras` once per decode. */
 const decodes = vi.hoisted(() => new Map<string, number>());

@@ -111,8 +111,7 @@ export class StepSession {
     const composed = this.stepOpening(step.id, skill?.args ?? opening.userPrompt, emit, { checkFailure, images, chainNote, attachments, openingNote });
     if (skill) skill.args = composed.userPrompt;
     else opening.userPrompt = composed.userPrompt;
-    const beforeSpawn = this.context.store.getRun(runId);
-    if (state.liveSession.cancelled || (beforeSpawn && this.host.executionBlockedByRootFinish(beforeSpawn))) return null;
+    if (this.stoppedBeforeLaunch(runId, state)) return null;
     this.context.store.updateStep(runId, step.id, { profileId: stepProfile.profileId });
 
     const toolGrant = atStepOpen.toolGrant(stepIdentity, step, stepBackend);
@@ -121,7 +120,10 @@ export class StepSession {
       effort: model.effectiveEffort,
       agentProfile: stepProfile.profileId, accountBinding: stepProfile.accountBinding, systemPrompt: extraSystemPrompt,
       ...toolGrantLists(toolGrant) });
-    const runner = this.context.createRunner(stepBackend);
+    const runner = await this.context.createRunner(stepBackend);
+    // Loading the adapter yields. A Stop or a root Finish that came meanwhile ends the step here,
+    // as the check before it does, before the step selects itself and opens its turn boundary.
+    if (this.stoppedBeforeLaunch(runId, state)) return null;
     state.liveSession.recordSessionError(undefined);
     state.liveSession.selectStep(step.id);
     transitionTurnBoundary(state, { kind: 'session-open', phase: 'reset-step', session: state.liveSession.session });
@@ -145,6 +147,12 @@ export class StepSession {
     }), onEvent, turn, sink);
     if (typeof session === 'string') return session;
     return this.awaitStepSession(runId, state, session, atStepOpen.sessionWaitPayload(step.id, nextStep, { sink, turn, startTokens, delegation, ciTools }));
+  }
+
+  /** Whether a Stop or a root Finish ended the step before its session spawns. */
+  private stoppedBeforeLaunch(runId: string, state: ActiveRun): boolean {
+    const run = this.context.store.getRun(runId);
+    return state.liveSession.cancelled || (!!run && this.host.executionBlockedByRootFinish(run));
   }
 
   private async openingSkill(runId: string, state: ActiveRun, step: WorkflowStepDef, opening: { userPrompt: string }) {

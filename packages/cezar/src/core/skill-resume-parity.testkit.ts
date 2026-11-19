@@ -14,8 +14,9 @@ import { expect } from 'vitest';
 import { observationClock } from './observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
-import { createRunner } from './runner-factory.ts';
-import { runnersWhere } from './runner-facts.ts';
+import { createRunner } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { factsWhere } from './runner-fact-rows.testkit.ts';
 import {
   HARNESS_ADAPTERS,
   PINNED_SESSION_ID,
@@ -30,6 +31,8 @@ import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../work
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
+registerBuiltInRunners();
+
 const execFileAsync = promisify(execFile);
 const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 
@@ -38,7 +41,7 @@ const SKILL_DESCRIPTION = 'Playbook for continued skill-driven tasks.';
 const SKILL_BODY = 'PLAYBOOK-BODY-790-SENTINEL';
 const EXTRA_PROMPT = 'EXTRA-PROMPT-790';
 
-const IN_THREAD = new Set(runnersWhere(facts => facts.systemPromptOnResume === 'in-thread'));
+const IN_THREAD = new Set(factsWhere(facts => facts.systemPromptOnResume === 'in-thread'));
 const LOST_OPENCODE_SESSION =
   'OpenCode session ses_mock_1 no longer exists; the continuation runs in a fresh session without the earlier conversation.';
 
@@ -545,7 +548,7 @@ describe('harness parity — native skill on Continue (#790)', () => {
 });
 
 describe('harness parity — systemPromptOnResume declaration (#790)', () => {
-  it('every runner declares systemPromptOnResume', () => {
+  it('every runner declares systemPromptOnResume', async () => {
     const expected: Record<RunnerId, 'resent' | 'in-thread'> = {
       claude: 'resent',
       pi: 'resent',
@@ -554,7 +557,7 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
       codex: 'in-thread',
     };
     for (const backend of RUNNER_IDS) {
-      expect(createRunner(backend).systemPromptOnResume).toBe(expected[backend]);
+      expect((await createRunner(backend)).systemPromptOnResume).toBe(expected[backend]);
     }
   });
 
@@ -591,7 +594,7 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
         expect(resumed.v1.filter((event) => event.type === 'error')).toEqual([]);
         const freshWire = readRecording(join(dir, `${freshName}.args.ndjson`), join(dir, `${freshName}.stdin.ndjson`));
         const resumeWire = readRecording(join(dir, `${resumeName}.args.ndjson`), join(dir, `${resumeName}.stdin.ndjson`));
-        const mode = createRunner(backend).systemPromptOnResume;
+        const mode = (await createRunner(backend)).systemPromptOnResume;
         if (mode === 'resent') {
           expect(freshWire).toContain('SENTINEL-790-SYSTEM');
           expect(resumeWire).toContain('SENTINEL-790-SYSTEM');

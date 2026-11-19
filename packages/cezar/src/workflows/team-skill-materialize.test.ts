@@ -12,11 +12,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { RunStore } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import type { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from './types.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -48,7 +51,7 @@ describe('native skills do not materialize Squawk copies', () => {
       id: NATIVE, name: NATIVE, scope: 'user', path: join(repoRoot, 'account-skills', NATIVE, 'SKILL.md'),
     }]) });
     launches = []; finish = []; turnEnd = [];
-    vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+    vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({
       backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
       startSession: (spec, onEvent) => {

@@ -19,11 +19,11 @@ import type { WorkflowDef } from './types.ts';
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 const runnerHook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
-vi.mock('../core/runner-factory.ts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../core/runner-factory.ts')>();
+vi.mock('../core/runner-registry.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../core/runner-registry.ts')>();
   return {
     ...actual,
-    createRunner: (...args: Parameters<typeof actual.createRunner>) => runnerHook.runner ?? actual.createRunner(...args),
+    createRunner: async (...args: Parameters<typeof actual.createRunner>) => runnerHook.runner ?? actual.createRunner(...args),
   };
 });
 

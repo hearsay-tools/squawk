@@ -14,17 +14,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
 import { ensureOwnedWorkspace } from '../delegation/workspace.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { until, root, store, manager, parent, releases, worker, workspace, useWorkerDestroyFixture } from './worker-destroy.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
   useWorkerDestroyFixture();
@@ -50,7 +53,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     async function crashed(status: RunRecord['status'] = 'running') {
       const w = await worker(); let first: Awaited<ReturnType<typeof spawnReady>> | undefined; let launches = 0; let ready!: () => void;
       const started = new Promise<void>(resolve => { ready = resolve; });
-      vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+      vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
         run: async () => { throw Error('unused'); }, startSession: () => {
           if (++launches > 1) return { result: Promise.resolve({ text: 'resumed', toolCalls: [], tokensUsed: 0 }), open: false,
             sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false, interrupt() {}, end() {} };

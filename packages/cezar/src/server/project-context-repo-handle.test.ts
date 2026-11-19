@@ -12,8 +12,11 @@ const forgeFactory = (root: string) => ({ ...resolveForgeRoot(root), discoverRep
 
 import { ProjectContexts } from './project-context.ts';
 import type { RepoHandleDiscovery } from './forge/github.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const handle = { owner: 'acme', name: 'service' };
 const foreignPr = 'https://github.com/other/repo/pull/42';

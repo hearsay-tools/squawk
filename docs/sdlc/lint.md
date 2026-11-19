@@ -103,7 +103,7 @@ explicit baseline and reader-list inputs. CSS remains a runner check.
 | `cez/design-guardian` | The ten original cockpit design checks; each finding names its original rule, reason and token (hearsay-tools/cezarion#2422) | Original inline allowed predicates and reason comments; tests keep their original scope and the guardian suite excludes itself |
 | `cez/home-boundary` | `cezarHomeDir` references, `resolveHome` outside `home/` and CLI dispatch, unlisted `homedir()` calls in non-test `packages/cezar/src/`, and test-side CEZ_HOME writes/stubs/deletes | `home-readers.baseline.json`: reasoned OS-user readers with exact call counts, shrink-only; shared `vitest.setup.ts` selects test homes |
 | `cez/test-home-write` | Guarded home names in calls, destructuring, runtime import/export specifiers and member references in test code | Same-line `// test-home-read: <reason>` for a deliberate use; use an explicit sandbox path for writes (hearsay-tools/cezarion#2813) |
-| `cez/layer-import` | A `core` file that imports a `feature:<name>` file, type-only imports included, or a `core` file other than `core/runner-factory.ts` that imports a `runner` file. `npm run lint` also fails a source file with no layer in `layers.json` (ADR 0065, hearsay-tools/squawk#3706) | `layer-import.baseline.json`: each importing file and imported file with its count and a reason that starts with the imported layer; shrink-only, stale entries fail. See [Layer import](#layer-import) |
+| `cez/layer-import` | A `core` file that imports a `feature:<name>` file, type-only imports included, or a `core` file that imports a `runner` file. `npm run lint` also fails a source file with no layer in `layers.json` (ADR 0065, hearsay-tools/squawk#3706) | `layer-import.baseline.json`: each importing file and imported file with its count and a reason that starts with the imported layer; shrink-only, stale entries fail. See [Layer import](#layer-import) |
 | `cez/launch-read-outside-resolver` | Production launch source fields, captures and selectors outside their resolver (hearsay-tools/cezarion#2744, hearsay-tools/squawk#3774) | Resolver, test and testkit files; lifecycle observations. See [Launch-read ownership](#launch-read-ownership) |
 | `cez/native-mock-source` | A test that reads, splices or swaps native mock source (hearsay-tools/cezarion#1479) | None |
 | `cez/parity-runner-subset` | An array literal in a parity file that lists two or more runner ids but not all of them. A parity test selects runners from their declared facts: `runnersWhere()` over `RUNNER_FACTS`, or `exemptWhere()` (hearsay-tools/squawk#3642) | None; a protocol quirk of one runner names that one runner |
@@ -308,9 +308,11 @@ exception), while CEZ_HOME and XDG overrides use a private marked sandbox.
 
 ### Runner classes (`runner-class-outside-factory`)
 
-The oxlint AST rule checks production `.ts` files in `packages/cezar/src` outside `core/`; it
-ignores tests and testkits (hearsay-tools/cezarion#2939). Only `createRunner` in
-`core/runner-factory.ts` constructs a runner class; other code takes a `RunnerFactory`.
+The oxlint AST rule checks production `.ts` files in `packages/cezar/src` outside a runner's
+own folder (`runners/<id>/`) and the adapters' `core/` files (`core/claude-*` and the others); it
+ignores tests and testkits (hearsay-tools/cezarion#2939). Only a runner definition's
+`loadAdapter` constructs a runner class; other code takes a `RunnerFactory`, such as
+`createRunner` in `core/runner-registry.ts`.
 The rule reports `new` of a class that implements `AgentRunner`, on the bare name or as a
 namespace member. It also reports a run-time load of a concrete runner module
 `core/<name>-runner.ts`: a static import or re-export that is not `import type` or `export type`,

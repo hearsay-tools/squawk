@@ -12,11 +12,12 @@ import { toolCall } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { factsAtDone } from './run/done-accepted.ts';
 import { COMPLETION_NUDGE_NOTE, DONE_KEPT_NOTE, DONE_RECONSIDERED_NOTE } from './turn-end.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
 // hearsay-tools/squawk#2587: what an accepted cezar_done does when input, a wait or a refusal
 // follows it (the spec's "Transitions out: hearsay-tools/squawk#2587 (S13)" table). U6r and U6p
 // pin the kept done and the refused one on every runner; these rows run on Claude's wire.
-useRunners(onlyRunner('claude', () => new ClaudeCliRunner()));
+useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 const runner = 'claude';
 
 const prWait = (id: string) => store.getRun(id)?.waits?.find(wait => wait.kind === WAIT_KIND.pr);

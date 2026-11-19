@@ -1,7 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
@@ -13,6 +13,9 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 
 const run = promisify(execFile);
@@ -121,7 +124,7 @@ describe('recover() and the autonomous flag (#489)', () => {
         sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {},
         holdsHumanInput: () => false, interrupt: () => {}, end: () => {},
       }));
-      vi.spyOn(runners, 'createRunner').mockReturnValue({
+      vi.spyOn(runners, 'createRunner').mockResolvedValue({
         backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
         startSession, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
       });

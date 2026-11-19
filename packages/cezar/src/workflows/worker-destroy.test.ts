@@ -17,7 +17,7 @@ import * as config from '../config.ts';
 import * as worktrees from '../git-worktree.ts';
 import * as profiles from '../workspace/agent-profiles.ts';
 
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
@@ -25,8 +25,11 @@ import { DelegationService } from '../delegation/service.ts';
 
 import { monitoringWakeOf } from './waits.testkit.ts';
 import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, worker, workspace, destroy, useWorkerDestroyFixture, replaceWorkerDestroyManager } from './worker-destroy.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.
@@ -193,7 +196,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       }
       return append(id, event);
     });
-    vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+    vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
       run: async () => { throw Error('unused'); }, startSession: () => {
         expect(manager.deferMessage(w.id, [{ type: 'text', text: 'buffered during startup' }])).toBe(true);
         return { pid: child.pid, result: closed, open: true, sendMessage: () => true, sendAgentMessage: () => Promise.resolve(), discardQueuedMessages: () => {}, holdsHumanInput: () => false,
@@ -217,7 +220,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it.each(['live', 'parked'])('%s ignored SIGTERM and concurrent stop waiters cannot mistake cancelled/killed for exit', async phase => {
     const w = await worker(); let child: ReturnType<typeof spawn> | undefined; let ready = false;
-    vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined, run: async () => { throw Error('unused'); }, startSession: (_spec, emit) => {
+    vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined, run: async () => { throw Error('unused'); }, startSession: (_spec, emit) => {
       child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"], { stdio: ['ignore', 'pipe', 'pipe'] });
       child.stdout!.once('data', () => { ready = true; if (phase === 'parked') emit?.({ type: 'turn-end' }); });
       const result = new Promise<never>((_resolve, reject) => child!.once('close', () => reject(Error('stopped'))));
@@ -244,7 +247,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it.each(['running', 'waiting', 'queued', 'failed', 'cancelled'] as const)('refuses %s recovery and Continue over a surviving prior process, then refuses real destroy', async status => {
     const w = await worker(); let child: ReturnType<typeof spawn> | undefined; let ready = false; let launches = 0;
-    vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+    vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
       run: async () => { throw Error('unused'); }, startSession: () => {
         if (++launches > 1) return { result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }), open: false,
           sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false, interrupt() {}, end() {} };

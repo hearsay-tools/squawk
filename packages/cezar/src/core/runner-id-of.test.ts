@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS, runnerIdOf } from './agent-runner.ts';
+import { RUNNER_IDS } from './agent-runner.ts';
+import { runnerIdOf } from './runner-registry.ts';
 
 describe('runnerIdOf', () => {
   it.each(RUNNER_IDS)('keeps the runner id %s', (id) => {

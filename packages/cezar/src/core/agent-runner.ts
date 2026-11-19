@@ -41,18 +41,6 @@ export function isRunnerId(value: string): value is RunnerId {
   return (RUNNER_IDS as readonly string[]).includes(value);
 }
 
-/** Legacy ids that old records carry, each with the runner it now names. */
-const LEGACY_RUNNER_IDS: ReadonlyMap<string, RunnerId> = new Map([['claude-cli', 'claude']]);
-
-/**
- * The runner a backend value names. A legacy id maps to its runner; undefined and an unknown value
- * map to `claude`, as `createRunner` does.
- */
-export function runnerIdOf(backend: string | undefined): RunnerId {
-  if (backend === undefined) return 'claude';
-  return isRunnerId(backend) ? backend : LEGACY_RUNNER_IDS.get(backend) ?? 'claude';
-}
-
 export interface AgentRunSpec {
   /** Internal deadline overrides; never persisted or sent to the native wire. */
   timings?: Partial<RunnerTimings> | undefined;
@@ -488,9 +476,9 @@ export function inputDeliveryOf(runner: Pick<AgentRunner, 'inputDelivery'>): Inp
 export type SystemPromptOnResume = 'resent' | 'in-thread';
 
 /** Builds the runner for a backend id. The engine depends on this type only; the entry points
- *  pass `createRunner` from `runner-factory.ts`, which knows every adapter, and a test passes a
- *  factory for the one runner it drives (hearsay-tools/cezarion#2939). */
-export type RunnerFactory = (backend: AgentBackend | RunnerId | undefined) => AgentRunner;
+ *  pass `createRunner` from `runner-registry.ts`, which loads the registered runner's adapter, and
+ *  a test passes a factory for the one runner it drives (hearsay-tools/cezarion#2939). */
+export type RunnerFactory = (backend: AgentBackend | RunnerId | undefined) => Promise<AgentRunner>;
 
 export interface AgentRunner {
   readonly backend: AgentBackend;

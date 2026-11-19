@@ -7,7 +7,7 @@ import type { AgentRunner, AgentSession } from '../core/agent-runner.ts';
 
 afterEach(() => { runnerHook.runner = undefined; });
 
-it('calls the original session start when two factory calls reuse one runner', () => {
+it('calls the original session start when two factory calls reuse one runner', async () => {
   const session: AgentSession = {
     result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }), open: false,
     sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages() {},
@@ -22,9 +22,9 @@ it('calls the original session start when two factory calls reuse one runner', (
   const spec = { userPrompt: 'hello', cwd: '/tmp', toolGrant: UNSET_TOOL_GRANT };
   const firstUi = vi.fn();
   const secondUi = vi.fn();
-  expect(runnersUnderTest()('claude').startSession(spec, undefined, { onUiEvent: firstUi })).toBe(session);
+  expect((await runnersUnderTest()('claude')).startSession(spec, undefined, { onUiEvent: firstUi })).toBe(session);
   runnerHook.uiEvent({ type: 'session.started', sessionId: 'first', backend: 'claude' });
-  expect(runnersUnderTest()('claude').startSession(spec, undefined, { onUiEvent: secondUi })).toBe(session);
+  expect((await runnersUnderTest()('claude')).startSession(spec, undefined, { onUiEvent: secondUi })).toBe(session);
   runnerHook.uiEvent({ type: 'session.started', sessionId: 'second', backend: 'claude' });
   expect(start).toHaveBeenCalledTimes(2);
   expect(firstUi).toHaveBeenCalledExactlyOnceWith({ type: 'session.started', sessionId: 'first', backend: 'claude' });

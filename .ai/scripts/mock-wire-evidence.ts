@@ -7,8 +7,11 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, expect, test, vi } from 'vitest';
 import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from '../../packages/cezar/src/core/agent-runner.ts';
-import { createRunner } from '../../packages/cezar/src/core/runner-factory.ts';
+import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } from '../../packages/cezar/src/core/harness-parity.testkit.ts';
+import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const output = resolve(process.env.MOCK_WIRE_OUTPUT_DIR!);
 const AUTONOMOUS = 'Continue working autonomously until the task is fully complete.';
@@ -240,7 +243,7 @@ async function recordRecipe(runner: RunnerId, scenario: string) {
   let asked = false;
   let session: AgentSession | undefined;
   try {
-    session = createRunner(runner).startSession({
+    session = (await createRunner(runner)).startSession({
       cwd, userPrompt: prompt(scenario, runner, join(cwd, 'park')), toolGrant: { kind: 'unset' },
       sessionId: PINNED_SESSION_ID, timeoutMs: 0,
       // The real tool transport returns a stable unavailable receipt without a controller.

@@ -9,7 +9,7 @@ import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-fac
 import { runsIndexResponseSchema } from '@open-mercato/cezar-contract/workspace-events';
 import { runArtifactCommand } from '../artifacts/cli.ts';
 import { defaultCliDeps, main, type CliDeps } from '../cli-dispatch.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
@@ -27,6 +27,9 @@ import { writeSettledJournal } from './project-migration.testkit.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import { prepareBeforeTicks, prepareProjects } from './auto.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Early recovery of an unfinished project migration (hearsay-tools/cezarion#3089): every entry

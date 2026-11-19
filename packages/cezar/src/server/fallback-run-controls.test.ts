@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { closeClaimSession, openClaimSession } from '../runs/run-claims.ts';
 import { RUNS_DB_FILE, RunDatabase } from '../runs/run-database.ts';
@@ -24,6 +24,9 @@ import { sendAgentReport } from '../runs/webhook.ts';
 import { commitAccepted } from '../delegation/conversations.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { RunWriteRefusedError } from '../runs/store.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** `requireRunControl` is the one explicit write that adopts a family read from `.ai/squawk/`. */
 let root: string, primary: string, fallback: string, store: RunStore, manager: RunManager, app: Hono;

@@ -123,7 +123,8 @@ describe('generateRunName (dry run)', () => {
       const root = mkdtempSync(join(tmpdir(), 'cez-namer-'));
       try {
         const { generateRunName } = await import('./auto-name.ts');
-        const { createRunner } = await import('../core/runner-factory.ts');
+        const { createRunner } = await import('../core/runner-registry.ts');
+        (await import('../runners/built-in.ts')).registerBuiltInRunners();
         const result = await generateRunName(root, { task: '437', skillName: 'om-auto-review-pr' }, testHome(), createRunner);
         expect(result).toEqual({ titleSummary: '437: implementing cr fixes', prNumber: 437 });
       } finally {
@@ -148,7 +149,7 @@ describe('generateRunName runner spec', () => {
       run: async (spec: AgentRunSpec) => { specs.push(spec); return { text: '{"title": "naming tasks"}' }; },
     } as unknown as AgentRunner;
     try {
-      await expect(generateRunName(root, { task: 'name tasks' }, testHome(), () => runner)).resolves.toEqual({ titleSummary: 'naming tasks' });
+      await expect(generateRunName(root, { task: 'name tasks' }, testHome(), async () => runner)).resolves.toEqual({ titleSummary: 'naming tasks' });
       expect(specs).toHaveLength(1);
       expect(specs[0]).toMatchObject({ minimal: true, toolGrant: { kind: 'explicit', tools: [] } });
     } finally {

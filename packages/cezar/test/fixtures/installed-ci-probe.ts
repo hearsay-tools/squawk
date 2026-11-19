@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import type { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StdioClientTransport as McpTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CiToolController as Controller } from '../../src/ci-wait/controller.ts';
-import type { createRunner as RunnerFactory } from '../../src/core/runner-factory.ts';
+import type { createRunner as RunnerFactory } from '../../src/core/runner-registry.ts';
 import type { AgentEvent } from '../../src/core/agent-runner.ts';
 import type { SquawkTool } from '../../src/ci-wait/tools.ts';
 import type { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -102,7 +102,7 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    delete process.env.CEZ_OMP_BIN;
    for (const backend of ['codex', 'opencode', 'omp'] as const) {
      const events: AgentEvent[] = [];
-     await createRunner(backend).run({ cwd:process.cwd(), userPrompt:'mock:ci-wait ' + wait.prUrl, toolGrant:{kind:'unset'}, squawkTools:session.descriptor, env:session.env, timeoutMs:10_000 }, event => events.push(event));
+     await (await createRunner(backend)).run({ cwd:process.cwd(), userPrompt:'mock:ci-wait ' + wait.prUrl, toolGrant:{kind:'unset'}, squawkTools:session.descriptor, env:session.env, timeoutMs:10_000 }, event => events.push(event));
      assert.ok(!events.some(event => event.type === 'error'), JSON.stringify(events));
    }
    assert.equal(count, 6);

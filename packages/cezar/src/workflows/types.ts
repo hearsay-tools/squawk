@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { runnerIdOf, type AgentBackend, type RunnerId, type ToolGrant } from '../core/agent-runner.ts';
+import type { AgentBackend, RunnerId, ToolGrant } from '../core/agent-runner.ts';
+import { runnerIdOf } from '../core/runner-registry.ts';
 
 import { workflowStepDefSchema as workflowStepSchema, workflowDefSchema } from '@open-mercato/cezar-contract/workflows';
 import { workflowFileSchema } from '@open-mercato/cezar-contract/workflow-file';

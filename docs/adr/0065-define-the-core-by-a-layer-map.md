@@ -24,7 +24,9 @@ layer calls.
 
 - A `core` file imports no `feature:<name>` file. Type-only imports count: a type still ties the
   two layers.
-- Only `core/runner-factory.ts` imports a `runner` file.
+- A `core` file imports no `runner` file. The core builds runners through the registry
+  (`core/runner-registry.ts`), which each process entry fills from `runners/built-in.ts`
+  (spec 2026-11-18-runner-definitions).
 
 A source file with no layer fails `npm run lint`, so each new file gets a deliberate place. The
 imports that exist today are in `layer-import.baseline.json`, each with a reason. The list only
