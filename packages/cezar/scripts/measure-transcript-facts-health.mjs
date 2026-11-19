@@ -28,6 +28,9 @@ try {
   const { projectPaths } = await import(new URL('project-paths.js', runtime.url));
   dataDir = projectPaths(join(root, 'cold-project')).write;
   const { startServer } = await import(new URL('server/start-server.js', runtime.url));
+  const { registerBuiltInRunners } = await import(new URL('runners/built-in.js', runtime.url));
+  // This measurement is a process entry like index.ts: the server reads every registered runner.
+  registerBuiltInRunners();
   const { RunManager } = await import(new URL('workflows/run.js', runtime.url));
   const { acquireCiResources } = await import(new URL('ci-wait/resources.js', runtime.url));
   const { resolveHome } = await import(new URL('home/resolve.js', runtime.url));
