@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -16,13 +16,15 @@ describeNativeSkillTriggers('pi');
 it.each(['human', 'agent'] as const)('correlates a pi expanded mid-turn %s trigger before its reply', async origin => {
   const dir = mkdtempSync(join(tmpdir(), 'pi-skill-consumption-'));
   const gate = join(dir, 'release');
+  const stdin = join(dir, 'stdin.ndjson');
+  const steerAdmitted = () => existsSync(stdin) && readFileSync(stdin, 'utf8').includes('"streamingBehavior":"steer"');
   const consumed: string[] = [];
   let live: AgentSession | undefined;
   let heldAtReply: boolean | undefined;
   let consumedAtReply: string[] = [];
   try {
     const obs = await driveSeam('pi', 'steer-tool', {
-      spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STEER_GATE: gate } },
+      spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STEER_GATE: gate, CEZ_MOCK_STDIN_FILE: stdin } },
       sessionOptions: { onAgentInputConsumed: ids => consumed.push(...ids) },
       onEvent: entry => {
         if ('v1' in entry && entry.v1.type === 'text' && entry.v1.text.includes('TRIGGER-FIXTURE')) {
@@ -42,6 +44,8 @@ it.each(['human', 'agent'] as const)('correlates a pi expanded mid-turn %s trigg
           expect(ack).not.toBe(false);
           await ack;
         }
+        // The mock admits the steer into the held turn before the gate lets that turn end.
+        await waitFor(steerAdmitted);
         writeFileSync(gate, '');
         await waitFor(() => v1.some(event => event.type === 'turn-end'));
       },
