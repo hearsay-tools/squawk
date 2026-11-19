@@ -32,6 +32,13 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 3. **Each step shrinks a list.** A step's acceptance names the entries it removes from
    `packages/cezar/src/lint/layer-import.baseline.json` or from another shrink-only baseline.
 4. **`main` stays usable after each slice**, at shipped defaults.
+5. **Each step reports what Squeal selects.** A step that adds a port or moves a feature behind
+   registration counts, before and after, the test files that Squeal selects for the files it
+   moves (`squeal status <path> --json`, `.selection.testFiles`; an answer with
+   `selection.reason` `unsynced` is incomplete). A split that keeps every module behind one
+   facade does not lower the count, and neither does a port that test fixtures still build in
+   full. A port lowers it only when its consumers import its type and the fixtures build only
+   the ports a test uses.
 
 ## Steps
 
@@ -134,6 +141,15 @@ The service had 118,000 lines of non-test source at that commit.
 
 On 2026-11-18 at `1e22453b1`, `layer-import.baseline.json` holds 139 entries for 140 imports:
 127 from core into features and 13 from core into runners.
+
+An audit at `2d06ed70c` on 2026-11-19 (Squawk task `0a6c5807`) measured Squeal's selection
+against 90 days of commits on `main`. The files that `workflows/run.ts` imports, directly or
+through other files, caused 59% of the test files Squeal ran after edits, because 564 test files
+build a full `RunManager` and load 97% of what Squeal selects for them. After the
+[ADR 0053](../../docs/adr/0053-keep-runmanager-a-facade-over-run-modules.md) split, the median
+`workflows/run/` module still selects 591 test files. Removing every core import of a feature
+that `layer-import.baseline.json` lists would cut the total by about 4%. Rule 5 exists for this
+reason.
 
 ## Open decisions
 
