@@ -14,7 +14,7 @@ from direct imports into testkits since then.
 
 - 67 of the 501 go through `server/run-manager.testkit.ts`, `delegation/service.testkit.ts`
   or `task-cli/cockpit.testkit.ts`. hearsay-tools/squawk#3937 covers them; they are listed
-  here as `#3937` and not classified.
+  here as `out-of-scope` and not classified.
 - Of the other 434: **345 need the real engine (A)**, **85 could be module tests (B)** and
   **4 repeat another test (C)**.
 - 54 of the 85 B files never build a `RunManager`. They load the engine only because a
@@ -32,7 +32,7 @@ from direct imports into testkits since then.
 | A | Needs the real engine: the assertions depend on the run loop working with sessions, waits, workers, persistence or restart. A fake would remove the thing under test. |
 | B | Could be a module test: what it asserts lives in one module; `RunManager` is only a harness, or is not used at all. |
 | C | Repeats a test that already runs on the real engine. The row names that test. |
-| #3937 | Out of scope: hearsay-tools/squawk#3937 gives these a run-engine fake. |
+| out-of-scope | Out of scope: hearsay-tools/squawk#3937 gives these a run-engine fake. |
 
 B splits by the fix it needs:
 
@@ -122,7 +122,7 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 
 | Test file | Squeal group | First testkit | Class |
 | --- | --- | --- | --- |
-| automations/automation-cli.test.ts | edit | task-cli/cockpit | #3937 |
+| automations/automation-cli.test.ts | edit | task-cli/cockpit | out-of-scope |
 | automations/task-template.test.ts | edit | workflows/fixture-no-runner | B-fake |
 | core/codex-permission-recovery.test.ts | edit | core/workflow-parity | A |
 | core/codex-provider-failure.test.ts | edit | core/workflow-parity | A |
@@ -178,7 +178,7 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 | core/harness-pi-run-parity.test.ts | loop | core/harness-parity-run.cells | A |
 | core/harness-pi-settlement-parity.test.ts | loop | core/harness-parity-settlement.cells | A |
 | core/model-refusal-parity.test.ts | loop | core/workflow-parity | B-fake |
-| core/owned-attach-placement.test.ts | edit | delegation/service | #3937 |
+| core/owned-attach-placement.test.ts | edit | delegation/service | out-of-scope |
 | core/owned-input-delivery-opencode-ack.test.ts | edit | core/workflow-parity | A |
 | core/owned-input-delivery-opencode-failure.test.ts | edit | core/workflow-parity | A |
 | core/owned-input-delivery-port-collision.test.ts | edit | core/workflow-parity | B-fake |
@@ -258,45 +258,45 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 | core/workflow-timeout-explicit-zero-parity.test.ts | loop | core/workflow-timeout-parity | B-fake |
 | core/workflow-timeout-registration-parity.test.ts | loop | core/workflow-timeout-parity | B-tables |
 | core/worktree-setup-parity.test.ts | loop | core/workflow-parity | A |
-| delegation/cli.test.ts | edit | delegation/service | #3937 |
-| delegation/context.test.ts | edit | delegation/service | #3937 |
-| delegation/conversation-effects.test.ts | edit | delegation/service | #3937 |
-| delegation/conversation-scope-order.test.ts | edit | delegation/service | #3937 |
-| delegation/conversation-service.test.ts | edit | delegation/service | #3937 |
-| delegation/destruction-results.test.ts | edit | workflows/fixture-claude | #3937 |
-| delegation/discovery.test.ts | edit | delegation/service | #3937 |
-| delegation/execution-settings.test.ts | edit | delegation/service | #3937 |
-| delegation/explicit-comparison.test.ts | edit | delegation/service | #3937 |
+| delegation/cli.test.ts | edit | delegation/service | out-of-scope |
+| delegation/context.test.ts | edit | delegation/service | out-of-scope |
+| delegation/conversation-effects.test.ts | edit | delegation/service | out-of-scope |
+| delegation/conversation-scope-order.test.ts | edit | delegation/service | out-of-scope |
+| delegation/conversation-service.test.ts | edit | delegation/service | out-of-scope |
+| delegation/destruction-results.test.ts | edit | workflows/fixture-claude | out-of-scope |
+| delegation/discovery.test.ts | edit | delegation/service | out-of-scope |
+| delegation/execution-settings.test.ts | edit | delegation/service | out-of-scope |
+| delegation/explicit-comparison.test.ts | edit | delegation/service | out-of-scope |
 | delegation/family-end.test.ts | edit | delegation/workspace-fixture | B-teardown |
-| delegation/message-cli.test.ts | edit | delegation/service | #3937 |
-| delegation/peer-conversations.test.ts | edit | delegation/service | #3937 |
+| delegation/message-cli.test.ts | edit | delegation/service | out-of-scope |
+| delegation/peer-conversations.test.ts | edit | delegation/service | out-of-scope |
 | delegation/provision-accepted-grants.test.ts | edit | workflows/fixture-cleanup | A |
-| delegation/provision-accounts-lifecycle.test.ts | edit | server/run-manager | #3937 |
+| delegation/provision-accounts-lifecycle.test.ts | edit | server/run-manager | out-of-scope |
 | delegation/provision-claude-layouts.test.ts | edit | delegation/provision-workflows | A |
 | delegation/provision-input-recipes.test.ts | edit | delegation/provision-workflows | A |
 | delegation/provision-intent-catalog.test.ts | edit | delegation/provision-workflows | A |
 | delegation/provision-matrix-registration.test.ts | edit | delegation/provision-workflows | B-tables |
 | delegation/provision-step-identity.test.ts | edit | workflows/fixture-cleanup | A |
-| delegation/provision.test.ts | edit | delegation/service | #3937 |
-| delegation/results.test.ts | edit | delegation/service | #3937 |
-| delegation/resume-admission.test.ts | edit | delegation/service | #3937 |
-| delegation/routes.test.ts | edit | workflows/fixture-claude | #3937 |
+| delegation/provision.test.ts | edit | delegation/service | out-of-scope |
+| delegation/results.test.ts | edit | delegation/service | out-of-scope |
+| delegation/resume-admission.test.ts | edit | delegation/service | out-of-scope |
+| delegation/routes.test.ts | edit | workflows/fixture-claude | out-of-scope |
 | delegation/scratch-cleanup.test.ts | edit | workflows/worker-wait-claude | B-fake |
-| delegation/service-destroy-cadence.test.ts | edit | delegation/service | #3937 |
+| delegation/service-destroy-cadence.test.ts | edit | delegation/service | out-of-scope |
 | delegation/service-destroy-holder.test.ts | edit | workflows/fixture-claude | B-fake |
-| delegation/service-destroy-recovery.test.ts | edit | workflows/fixture-claude | #3937 |
-| delegation/service-destroy-topology-repair.test.ts | edit | delegation/service-destroy-backoff | #3937 |
-| delegation/service-destroy-work.test.ts | edit | delegation/service-destroy-backoff | #3937 |
-| delegation/service-fixture.test.ts | edit | delegation/service | #3937 |
-| delegation/service-repository-seed.test.ts | edit | delegation/service | #3937 |
-| delegation/service-shared-workspace.test.ts | edit | delegation/service | #3937 |
-| delegation/service-supervised-worker.test.ts | edit | delegation/service | #3937 |
-| delegation/service.test.ts | edit | workflows/fixture-cleanup | #3937 |
-| delegation/service.testkit.test.ts | edit | delegation/service | #3937 |
-| delegation/settled-observation.test.ts | edit | delegation/service | #3937 |
-| delegation/task-access.test.ts | edit | delegation/service | #3937 |
-| delegation/task-discovery-page.test.ts | edit | delegation/service | #3937 |
-| delegation/task-discovery.test.ts | edit | delegation/service | #3937 |
+| delegation/service-destroy-recovery.test.ts | edit | workflows/fixture-claude | out-of-scope |
+| delegation/service-destroy-topology-repair.test.ts | edit | delegation/service-destroy-backoff | out-of-scope |
+| delegation/service-destroy-work.test.ts | edit | delegation/service-destroy-backoff | out-of-scope |
+| delegation/service-fixture.test.ts | edit | delegation/service | out-of-scope |
+| delegation/service-repository-seed.test.ts | edit | delegation/service | out-of-scope |
+| delegation/service-shared-workspace.test.ts | edit | delegation/service | out-of-scope |
+| delegation/service-supervised-worker.test.ts | edit | delegation/service | out-of-scope |
+| delegation/service.test.ts | edit | workflows/fixture-cleanup | out-of-scope |
+| delegation/service.testkit.test.ts | edit | delegation/service | out-of-scope |
+| delegation/settled-observation.test.ts | edit | delegation/service | out-of-scope |
+| delegation/task-access.test.ts | edit | delegation/service | out-of-scope |
+| delegation/task-discovery-page.test.ts | edit | delegation/service | out-of-scope |
+| delegation/task-discovery.test.ts | edit | delegation/service | out-of-scope |
 | delegation/workspace-destruction-bookkeeping.test.ts | edit | delegation/workspace-fixture | B-teardown |
 | delegation/workspace-destruction-gc.test.ts | edit | delegation/workspace-fixture | B-teardown |
 | delegation/workspace-destruction-identity.test.ts | edit | delegation/workspace-fixture | B-teardown |
@@ -308,42 +308,42 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 | delegation/workspace-removal-witness.test.ts | edit | delegation/workspace-fixture | B-teardown |
 | delegation/workspace-removal-work.test.ts | edit | delegation/workspace-fixture | B-teardown |
 | delegation/workspace.test.ts | edit | delegation/workspace-fixture | B-teardown |
-| discovery/cli.test.ts | edit | delegation/service | #3937 |
-| project-migration/engine-crash-rewrites.test.ts | edit | server/run-manager | #3937 |
-| project-migration/moved-project.test.ts | edit | server/run-manager | #3937 |
+| discovery/cli.test.ts | edit | delegation/service | out-of-scope |
+| project-migration/engine-crash-rewrites.test.ts | edit | server/run-manager | out-of-scope |
+| project-migration/moved-project.test.ts | edit | server/run-manager | out-of-scope |
 | runs/store-history-compression.test.ts | edit | workflows/fixture-manager | B-fake |
-| server/artifacts-api.test.ts | edit | server/run-manager | #3937 |
-| server/automations-api.test.ts | edit | server/run-manager | #3937 |
-| server/checkout.test.ts | edit | server/run-manager | #3937 |
-| server/cockpit-address.test.ts | edit | server/run-manager | #3937 |
-| server/cockpit-ownership.test.ts | edit | server/run-manager | #3937 |
-| server/delegation-cleanup.test.ts | edit | delegation/service | #3937 |
+| server/artifacts-api.test.ts | edit | server/run-manager | out-of-scope |
+| server/automations-api.test.ts | edit | server/run-manager | out-of-scope |
+| server/checkout.test.ts | edit | server/run-manager | out-of-scope |
+| server/cockpit-address.test.ts | edit | server/run-manager | out-of-scope |
+| server/cockpit-ownership.test.ts | edit | server/run-manager | out-of-scope |
+| server/delegation-cleanup.test.ts | edit | delegation/service | out-of-scope |
 | server/finishability.test.ts | edit | workflows/worker-wait | A |
-| server/project-context-maintenance.test.ts | edit | server/run-manager | #3937 |
-| server/project-context-repo-handle.test.ts | edit | server/run-manager | #3937 |
-| server/project-context-sweep.test.ts | edit | server/run-manager | #3937 |
-| server/project-context.test.ts | edit | server/run-manager | #3937 |
-| server/project-warmup.test.ts | edit | server/run-manager | #3937 |
+| server/project-context-maintenance.test.ts | edit | server/run-manager | out-of-scope |
+| server/project-context-repo-handle.test.ts | edit | server/run-manager | out-of-scope |
+| server/project-context-sweep.test.ts | edit | server/run-manager | out-of-scope |
+| server/project-context.test.ts | edit | server/run-manager | out-of-scope |
+| server/project-warmup.test.ts | edit | server/run-manager | out-of-scope |
 | server/provider-action-gating.test.ts | edit | workflows/fixture-cleanup | B-fake |
-| server/providers-api.test.ts | edit | server/run-manager | #3937 |
-| server/restart-shutdown.test.ts | edit | server/run-manager | #3937 |
-| server/route-parity.test.ts | loop | server/run-manager | #3937 |
-| server/run-relationships.test.ts | edit | delegation/service | #3937 |
-| server/run-store-unavailable.test.ts | edit | server/run-manager | #3937 |
-| server/task-webhook-api.test.ts | edit | server/run-manager | #3937 |
-| server/usage-scope.test.ts | edit | server/run-manager | #3937 |
-| server/workspace-events.test.ts | edit | server/run-manager | #3937 |
+| server/providers-api.test.ts | edit | server/run-manager | out-of-scope |
+| server/restart-shutdown.test.ts | edit | server/run-manager | out-of-scope |
+| server/route-parity.test.ts | loop | server/run-manager | out-of-scope |
+| server/run-relationships.test.ts | edit | delegation/service | out-of-scope |
+| server/run-store-unavailable.test.ts | edit | server/run-manager | out-of-scope |
+| server/task-webhook-api.test.ts | edit | server/run-manager | out-of-scope |
+| server/usage-scope.test.ts | edit | server/run-manager | out-of-scope |
+| server/workspace-events.test.ts | edit | server/run-manager | out-of-scope |
 | server/worktrees-api.test.ts | edit | workflows/fixture-claude | B-fake |
-| task-cli/cli-actions.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-arguments-positionals.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-arguments-values.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-arguments.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-queries.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-results.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli-usage.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/cli.test.ts | edit | task-cli/cli | #3937 |
-| task-cli/status-question.test.ts | edit | task-cli/cockpit | #3937 |
-| task-cli/watch.test.ts | edit | task-cli/cockpit | #3937 |
+| task-cli/cli-actions.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-arguments-positionals.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-arguments-values.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-arguments.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-queries.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-results.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli-usage.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/cli.test.ts | edit | task-cli/cli | out-of-scope |
+| task-cli/status-question.test.ts | edit | task-cli/cockpit | out-of-scope |
+| task-cli/watch.test.ts | edit | task-cli/cockpit | out-of-scope |
 | workflows/agent-profile-wiring.test.ts | edit | workflows/fixture-cleanup | B-idle |
 | workflows/agent-webhooks-prompt.test.ts | edit | workflows/fixture-manager | B-fake |
 | workflows/automation-tools-claude-parity.test.ts | loop | workflows/automation-tools-parity | A |
@@ -398,8 +398,8 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 | workflows/held-human-input-liveness.test.ts | edit | workflows/fixture-cleanup | A |
 | workflows/immediate-delivery.test.ts | edit | workflows/worker-wait | A |
 | workflows/input-entry-state.test.ts | edit | workflows/run-fixture | B-fake |
-| workflows/input-receipt-boundaries.test.ts | edit | workflows/fixture-manager | #3937 |
-| workflows/launch-disposal-routes.test.ts | edit | workflows/fixture-cleanup | #3937 |
+| workflows/input-receipt-boundaries.test.ts | edit | workflows/fixture-manager | out-of-scope |
+| workflows/launch-disposal-routes.test.ts | edit | workflows/fixture-cleanup | out-of-scope |
 | workflows/launch-read-boundaries.test.ts | edit | workflows/fixture-cleanup | A |
 | workflows/launch-system-prompt.test.ts | edit | workflows/fixture-manager | A |
 | workflows/liveness-scope.test.ts | edit | workflows/run-fixture | A |
@@ -571,7 +571,7 @@ the first testkit on the shortest path to `workflows/run.ts`, without `.testkit.
 | workflows/worker-parent-attention-restart-human-ask.test.ts | loop | workflows/worker-parent-attention | A |
 | workflows/worker-parent-attention.test.ts | loop | workflows/worker-parent-attention | B-tables |
 | workflows/worker-park-notice.test.ts | loop | workflows/worker-wait | A |
-| workflows/worker-question-guidance.test.ts | loop | delegation/service | #3937 |
+| workflows/worker-question-guidance.test.ts | loop | delegation/service | out-of-scope |
 | workflows/worker-questions-fallback-checkpoints.test.ts | loop | workflows/worker-wait-claude | A |
 | workflows/worker-questions-inbox-capacity.test.ts | loop | workflows/worker-wait-claude | A |
 | workflows/worker-questions-parent-only.test.ts | loop | workflows/worker-wait-claude | A |
