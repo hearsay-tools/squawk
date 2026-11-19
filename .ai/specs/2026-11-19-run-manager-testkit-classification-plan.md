@@ -17,9 +17,10 @@ from direct imports into testkits since then.
   here as `out-of-scope` and not classified.
 - Of the other 434: **345 need the real engine (A)**, **85 could be module tests (B)** and
   **4 repeat another test (C)**.
-- 54 of the 85 B files never build a `RunManager`. They load the engine only because a
-  helper, a row table or a teardown hook they import sits in an engine testkit. Moving
-  those exports into engine-free files fixes them without changing any assertion.
+- 54 of the 85 B files need only an import move. 52 never build a `RunManager`: they load
+  the engine only because a helper, a row table, a cell registrar or a teardown hook they
+  import sits in an engine testkit. 2 build a fixture manager that no assertion uses.
+  These fixes change no assertion.
 - All B and C fixes together cut the weighted selection by **6.4% over 90 days** and
   **7.2% over 30 days**. The 54 import moves alone give 4.1% and 4.7%.
 - The engine testkits are mostly honest. The 345 A files are parity cells and engine
@@ -38,7 +39,7 @@ B splits by the fix it needs:
 
 | Group | Fix |
 | --- | --- |
-| B-tables | A registration or static guard imports a row, group or partition table from a testkit that also imports the engine. Move the table into an engine-free rows module, as `workflows/ci-wait-failure-rows.testkit.ts` already does. |
+| B-tables | A registration or static guard imports a row, group or partition table, or the cell registrar itself (such as `describeSkillProvisionParity`), from a testkit that also imports the engine. Move the tables and the registrars into engine-free modules, as `workflows/ci-wait-failure-rows.testkit.ts` does for rows, or load the engine fixture only inside the cell bodies. Moving a table alone is not enough when the guard calls the registrar. |
 | B-helper | The test imports one helper from an engine testkit: mostly `unused()` from `workflows/fixture-manager.testkit.ts` (reached through `fixture-no-runner.testkit.ts` and `run/boundary-order.testkit.ts`), also `buildDelegationCli` and `runnerHook`. Move the helper into its own testkit. |
 | B-idle | The test builds a fixture manager that no assertion uses. Remove it. |
 | B-teardown | `delegation/workspace-fixture.testkit.ts` imports `drainFixtureManagers` only for teardown. Split that teardown out; only `workspace-manager-recovery` needs it. |
@@ -96,21 +97,16 @@ Inside A files, readers also found 77 single tests that could be module tests (i
 and 10 single tests that repeat a parity cell. They are listed in the details file and are
 not counted above.
 
-## Proposed child issues
+## Child issues
 
-One issue per group the owner approves. Each issue changes tests and testkits only.
+The owner approved three issues on 2026-11-19: the four import-move groups as one issue,
+plus B-fake and C. Each issue changes tests and testkits only.
 
-| # | Group | Issue scope | Drop, 90 days |
+| Issue | Groups | Scope | Drop, 90 days |
 | --- | --- | --- | ---: |
-| 1 | B-tables | Move the row, group and partition tables of 19 registration and static guards into engine-free rows modules | 2.0% |
-| 2 | B-helper and B-idle | Move `unused()`, `buildDelegationCli` and `runnerHook` out of engine testkits; remove the two unused fixture managers | 0.9% |
-| 3 | B-teardown | Split the manager teardown out of `delegation/workspace-fixture.testkit.ts` | 0.8% |
-| 4 | B-seam | Move seam-only cells out of engine cell testkits (4 files, plus the seam cells inside mixed timeout and refusal files) | 0.4% |
-| 5 | B-fake | Rewrite 31 engine-built tests as module tests with fakes, and split the mixed files | 1.9% |
-| 6 | C | Delete the 4 repeated files and the 10 repeated single tests, after a reviewer confirms each repeat | 0.4% |
-
-Issues 1 to 4 are import moves: no assertion changes. Issue 5 changes what each test drives.
-Issue 6 removes coverage that another test keeps.
+| hearsay-tools/squawk#3956 | B-tables, B-helper, B-idle, B-teardown, B-seam | Move the tables, registrars, helpers and teardown out of engine testkits; move seam-only cells to seam testkits; remove the two unused fixture managers. No assertion changes. | 4.1% |
+| hearsay-tools/squawk#3957 | B-fake | Rewrite 31 engine-built tests as module tests with fakes, and split the mixed files | 1.9% |
+| hearsay-tools/squawk#3958 | C | Delete the 4 repeated files and the 10 repeated single tests, after each repeat is confirmed | 0.4% |
 
 The reasons, the modules to call and the repeated tests for every B and C row are in
 [`assets/2026-11-19-run-manager-testkit-classification/details.md`](assets/2026-11-19-run-manager-testkit-classification/details.md).
