@@ -1,33 +1,11 @@
 import type { RunnerId } from './agent-runner.ts';
-import { resolveOmpExecutable } from './omp-model-catalog.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { quoteExecutable } from './shell-env.ts';
-
-/**
- * How a terminal starts each runner's own CLI, the take-over command of "Open in terminal" and
- * the cockpit's copyable resume line (hearsay-tools/squawk#3642).
- */
-export interface RunnerCli {
-  /**
-   * The executable a terminal runs. `path-name`: the CLI's name on PATH. `configured`: the
-   * executable the server resolves from its `HSQ_*_BIN` override, so only the server can spell it.
-   */
-  readonly terminalExecutable: { readonly kind: 'path-name'; readonly name: string } | { readonly kind: 'configured'; readonly resolve: () => string };
-  /** The arguments that reopen a recorded session, after the executable. */
-  readonly resumeArgs: (sessionId: string) => string;
-}
-
-export const RUNNER_CLI: Readonly<Record<RunnerId, RunnerCli>> = {
-  claude: { terminalExecutable: { kind: 'path-name', name: 'claude' }, resumeArgs: id => `--resume ${id}` },
-  codex: { terminalExecutable: { kind: 'path-name', name: 'codex' }, resumeArgs: id => `resume ${id}` },
-  opencode: { terminalExecutable: { kind: 'path-name', name: 'opencode' }, resumeArgs: id => `--session ${id}` },
-  pi: { terminalExecutable: { kind: 'path-name', name: 'pi' }, resumeArgs: id => `--session ${id}` },
-  omp: { terminalExecutable: { kind: 'configured', resolve: () => resolveOmpExecutable() }, resumeArgs: id => `--resume ${id}` },
-};
 
 /** The terminal executable of a runner as a shell word; null when the configured one cannot be
  *  spelled safely on this platform. */
 export function terminalExecutable(runner: RunnerId, platform: NodeJS.Platform = process.platform): string | null {
-  const executable = RUNNER_CLI[runner].terminalExecutable;
+  const executable = runnerDefinition(runner).cli.terminalExecutable;
   return executable.kind === 'path-name' ? executable.name : quoteExecutable(executable.resolve(), platform);
 }
 
@@ -52,5 +30,5 @@ export function isSafeSessionId(sessionId: string): boolean {
 export function resumeCommand(runner: RunnerId, sessionId: string): string | null {
   if (!isSafeSessionId(sessionId)) return null;
   const executable = terminalExecutable(runner);
-  return executable === null ? null : `${executable} ${RUNNER_CLI[runner].resumeArgs(sessionId)}`;
+  return executable === null ? null : `${executable} ${runnerDefinition(runner).cli.resumeArgs(sessionId)}`;
 }

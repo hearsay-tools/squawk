@@ -25,6 +25,8 @@ import type { AgentEvent, AgentSession } from './agent-runner.js';
 import type { UiEvent } from './ui-events.js';
 import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
+import { registerRunner } from './runner-registry.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { buildPiArgs, PiRunner } from './pi-runner.js';
 import { PI_MINIMAL_ARGS } from '../runners/pi/spec-support.ts';
 import { squawkToolNames } from '../ci-wait/tools.js';
@@ -46,6 +48,7 @@ registerRunner(piRunner);
  */
 
 describe('backend-detect handles an absent pi CLI', () => {
+  registerRunner(piRunner);
   const saved = { bin: process.env.CEZ_PI_BIN, dry: process.env.CEZ_DRY_RUN };
 
   beforeEach(() => {

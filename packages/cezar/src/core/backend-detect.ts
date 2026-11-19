@@ -1,5 +1,7 @@
 import { productIdentity } from '../home/identity.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import type { RunnerId } from './agent-runner.ts';
+import type { RunnerDetection } from './runner-definition.ts';
+import { registeredRunners } from './runner-registry.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -22,158 +24,37 @@ export interface BackendCheck {
  * shows the hints for the rest.
  */
 export async function detectEnvironment(): Promise<BackendCheck[]> {
-  return Promise.all([...RUNNER_IDS.map((runner) => RUNNER_PROBES[runner]()), probeGh(), probeGit()]);
+  return Promise.all([...registeredRunners().map((runner) => probeRunner(runner.id, runner.detection)), probeGh(), probeGit()]);
 }
-
-/** One probe per runner: a runner id without a probe does not compile. */
-const RUNNER_PROBES: Record<RunnerId, () => Promise<BackendCheck>> = {
-  claude: probeClaude,
-  codex: probeCodex,
-  opencode: probeOpencode,
-  pi: probePi,
-  omp: probeOmp,
-};
 
 /** Banner spelling follows the release identity; switch-off output stays stable. */
 function dryRunVersion(): string {
   return `mock (${productIdentity().envPrefix}DRY_RUN=1)`;
 }
 
-async function probeClaude(): Promise<BackendCheck> {
-  if (productEnv('DRY_RUN') === '1') {
-    return { name: 'claude', available: true, version: dryRunVersion() };
+/**
+ * Probe one runner's CLI, as its definition describes it (`RunnerDetection`): an override key or
+ * the PATH name, a `--version` call, and the definition's hints.
+ */
+export async function probeRunner(name: RunnerId, detection: RunnerDetection): Promise<BackendCheck> {
+  const override = detection.binOverride();
+  if (productEnv('DRY_RUN') === '1' && (detection.dryRun === 'always' || override === undefined)) {
+    return { name, available: true, version: dryRunVersion() };
   }
-  // `CEZ_CLAUDE_BIN` like every other claude call site (the runner, provider-auth,
-  // open-in-app). Probing a bare `claude` reported "not installed" for a host whose
-  // only install is at a custom path — which drops claude from the composer and the
-  // installer's dependency step even though runs would have worked fine.
-  const bin = productEnv('CLAUDE_BIN') ?? 'claude';
+  const bin = override ?? detection.binary;
   try {
     const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
     const version = stdout.trim();
-    // A generic `claude` binary (a shell wrapper, an unrelated tool) can shadow
-    // the real CLI on $PATH — reject anything that doesn't match the banner.
-    if (!/^\d+\.\d+|^claude(\s+code)?\s+version\s+\d+\.\d+/i.test(version)) {
+    if (detection.banner && !detection.banner.pattern.test(version)) {
       return {
-        name: 'claude',
+        name,
         available: false,
-        hint: `\`${bin}\` resolves but doesn't look like Claude Code (got: ${version.slice(0, 80)})`,
+        hint: `\`${bin}\` resolves but doesn't look like ${detection.banner.label} (got: ${version.slice(0, 80)})`,
       };
     }
-    return {
-      name: 'claude',
-      available: true,
-      version,
-      hint: 'if not authenticated, run `claude` once and log in',
-    };
+    return { name, available: true, version, hint: detection.availableHint };
   } catch {
-    return {
-      name: 'claude',
-      available: false,
-      hint: 'install Claude Code (npm i -g @anthropic-ai/claude-code) and log in',
-    };
-  }
-}
-
-async function probeCodex(): Promise<BackendCheck> {
-  // Dry-run stands the runner up on its bundled mock, so report it present without
-  // spawning the real CLI: `opencode --version` alone cost ~1-3 s per dry-run boot
-  // under load (hearsay-tools/cezarion#1042). An explicit CEZ_CODEX_BIN outranks the
-  // mock in the runner too, so it is still probed.
-  const override = productEnv('CODEX_BIN');
-  if (productEnv('DRY_RUN') === '1' && override === undefined) {
-    return { name: 'codex', available: true, version: dryRunVersion() };
-  }
-  const bin = override ?? 'codex';
-  try {
-    const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
-    return {
-      name: 'codex',
-      available: true,
-      version: stdout.trim(),
-      hint: 'if not authenticated, run `codex` once and log in',
-    };
-  } catch {
-    return {
-      name: 'codex',
-      available: false,
-      hint: 'optional: install the Codex CLI (npm i -g @openai/codex) and log in to use the Codex runner',
-    };
-  }
-}
-
-async function probeOpencode(): Promise<BackendCheck> {
-  // Dry-run stands the runner up on its bundled mock (hearsay-tools/cezarion#1042),
-  // unless CEZ_OPENCODE_BIN overrides it there as well.
-  const override = productEnv('OPENCODE_BIN');
-  if (productEnv('DRY_RUN') === '1' && override === undefined) {
-    return { name: 'opencode', available: true, version: dryRunVersion() };
-  }
-  const bin = override ?? 'opencode';
-  try {
-    const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
-    return {
-      name: 'opencode',
-      available: true,
-      version: stdout.trim(),
-      hint: 'if no provider is configured, run `opencode` once to set one up',
-    };
-  } catch {
-    return {
-      name: 'opencode',
-      available: false,
-      hint: 'optional: install OpenCode (https://opencode.ai) and configure a provider to use the OpenCode runner',
-    };
-  }
-}
-
-async function probePi(): Promise<BackendCheck> {
-  // Dry-run stands the runner up on the shared mock, so report it present.
-  if (productEnv('DRY_RUN') === '1') {
-    return { name: 'pi', available: true, version: dryRunVersion() };
-  }
-  const bin = productEnv('PI_BIN') ?? 'pi';
-  try {
-    const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
-    return {
-      name: 'pi',
-      available: true,
-      version: stdout.trim(),
-      hint: 'if not authenticated, run `pi` once and log in',
-    };
-  } catch {
-    // A missing `pi` CLI is never a boot failure — the runner just isn't
-    // offered, exactly like an absent codex/opencode.
-    return {
-      name: 'pi',
-      available: false,
-      hint: 'optional: install the pi CLI and log in to use the pi runner',
-    };
-  }
-}
-
-// Copy of probePi with OMP's binary, env override and hints; it never spawns `pi`.
-export async function probeOmp(): Promise<BackendCheck> {
-  // Dry-run stands the runner up on the shared mock, so report it present.
-  if (productEnv('DRY_RUN') === '1') {
-    return { name: 'omp', available: true, version: dryRunVersion() };
-  }
-  const bin = productEnv('OMP_BIN') ?? 'omp';
-  try {
-    const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
-    return {
-      name: 'omp',
-      available: true,
-      version: stdout.trim(),
-      hint: 'if not authenticated, run `omp login`',
-    };
-  } catch {
-    // A missing `omp` CLI is never a boot failure — the runner just isn't offered.
-    return {
-      name: 'omp',
-      available: false,
-      hint: 'optional: install OMP (omp.sh) and run `omp login` to use the OMP runner',
-    };
+    return { name, available: false, hint: detection.missingHint };
   }
 }
 

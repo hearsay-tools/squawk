@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
-import { detectEnvironment, probeOmp } from './backend-detect.ts';
+import { detectEnvironment, probeRunner } from './backend-detect.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
+
+const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);
 
 describe('probeOmp', () => {
   const saved = { dry: process.env.CEZ_DRY_RUN, omp: process.env.CEZ_OMP_BIN, pi: process.env.CEZ_PI_BIN };
@@ -147,5 +153,42 @@ describe('detectEnvironment: codex and opencode probes', () => {
     const rows = await detectEnvironment();
     expect(rows.find((row) => row.name === 'codex')).toMatchObject({ name: 'codex', available: false });
     expect(rows.find((row) => row.name === 'opencode')).toMatchObject({ name: 'opencode', available: false });
+  });
+});
+
+describe('probeRunner: the Claude version banner', () => {
+  const saved = { dry: process.env.CEZ_DRY_RUN, claude: process.env.CEZ_CLAUDE_BIN };
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'cez-probe-claude-'));
+    delete process.env.CEZ_DRY_RUN;
+  });
+
+  afterEach(() => {
+    for (const [key, value] of [['CEZ_DRY_RUN', saved.dry], ['CEZ_CLAUDE_BIN', saved.claude]] as const) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const probeClaude = (banner: string) => {
+    const bin = join(root, 'claude');
+    writeFileSync(bin, `#!/bin/sh\necho '${banner}'\n`);
+    chmodSync(bin, 0o755);
+    process.env.CEZ_CLAUDE_BIN = bin;
+    return probeRunner('claude', runnerDefinition('claude').detection);
+  };
+
+  it('accepts a binary that prints the Claude Code banner', async () => {
+    await expect(probeClaude('2.1.0 (Claude Code)')).resolves.toEqual({
+      name: 'claude', available: true, version: '2.1.0 (Claude Code)', hint: 'if not authenticated, run `claude` once and log in',
+    });
+  });
+
+  it('refuses a binary whose version line is not a Claude banner', async () => {
+    const check = await probeClaude('wrapper-tool unknown');
+    expect(check).toMatchObject({ name: 'claude', available: false });
+    expect(check.hint).toContain("doesn't look like Claude Code (got: wrapper-tool unknown)");
   });
 });

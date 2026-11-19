@@ -7,6 +7,9 @@ import { taskHelp } from '../task-cli/cli.ts';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import { checkoutRoot, discoverCockpit } from '../task-cli/discovery.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 afterEach(() => {
   vi.restoreAllMocks();

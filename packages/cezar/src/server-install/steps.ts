@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
-import { isRunnerId, type RunnerId } from '../core/agent-runner.ts';
+import { isRunnerId } from '../core/agent-runner.ts';
 import { detectEnvironment, type BackendCheck } from '../core/backend-detect.ts';
+import type { RunnerCli } from '../core/runner-definition.ts';
+import { runnerDefinition } from '../core/runner-registry.ts';
 import {
   CANCEL,
   type InstallContext,
@@ -350,18 +352,14 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
   };
 }
 
-/** Where the installer gets each agent CLI: an npm package, a site the operator installs from, or nowhere it knows. */
-const AGENT_CLI_SOURCE: Record<RunnerId, { npm: string } | { site: string; label: string } | null> = {
-  claude: { npm: '@anthropic-ai/claude-code' },
-  codex: { npm: '@openai/codex' },
-  opencode: { site: 'https://opencode.ai', label: 'OpenCode' },
-  pi: null,
-  omp: null,
-};
+/** Where the installer gets an agent CLI: its definition's install source, or null for a name no runner has. */
+function agentCliSource(name: string): RunnerCli['installSource'] {
+  return isRunnerId(name) ? runnerDefinition(name).cli.installSource : null;
+}
 
 /** The npm package of an agent CLI, or undefined for a tool the installer gets no other way. */
 function npmPackage(name: string): string | undefined {
-  const source = isRunnerId(name) ? AGENT_CLI_SOURCE[name] : null;
+  const source = agentCliSource(name);
   return source !== null && 'npm' in source ? source.npm : undefined;
 }
 
@@ -392,7 +390,7 @@ export const brewInstallTool: ToolInstaller = async (ctx, name) => {
 };
 
 async function installViaNpmOrNote(ctx: InstallContext, name: string, sudo: boolean): Promise<void> {
-  const source = isRunnerId(name) ? AGENT_CLI_SOURCE[name] : null;
+  const source = agentCliSource(name);
   if (source !== null && 'site' in source) {
     ctx.ui.note(`Install ${source.label} from ${source.site}, then re-run.`, name);
     return;

@@ -4,12 +4,16 @@ import { OMP_MODELS } from './models.ts';
 import { OMP_CONFIG_FILES } from './config-files.ts';
 import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
 import { OMP_SPEC_SUPPORT } from './spec-support.ts';
+import { OMP_DETECTION } from './detection.ts';
+import { OMP_CLI } from './cli.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
   id: 'omp',
   facts: OMP_FACTS,
   specSupport: OMP_SPEC_SUPPORT,
+  detection: OMP_DETECTION,
+  cli: OMP_CLI,
   loadAdapter: async () => new (await import('../../core/omp-runner.ts')).OmpRunner(),
   models: {
     ...OMP_MODELS,

@@ -25,6 +25,10 @@ export interface RunnerDefinition {
   // Facts, spec support, detection, CLI and install source (slice B1).
   /** Which `AgentRunSpec` fields the runner's wire honors. The adapter class reads the same data file. */
   readonly specSupport: AgentRunSpecSupport;
+  /** How the host probe finds the runner's CLI and reads its version. Core runs the probe. */
+  readonly detection: RunnerDetection;
+  /** How a terminal starts the runner's CLI, and where the installer gets it. */
+  readonly cli: RunnerCli;
 
   // Models, skills, config files and extra tools (hearsay-tools/squawk#3895).
   /** The model presets, the model id map and the reader of the native default model. */
@@ -54,6 +58,45 @@ export interface RunnerModelData {
 export interface RunnerModels extends RunnerModelData {
   /** Imports the runner's native-settings policy: vendor precedence, environment and provider. */
   loadSettings(): Promise<AgentModelSettingsStrategy>;
+}
+
+/** How the host probe finds a runner's CLI (`detectEnvironment`, `core/backend-detect.ts`). */
+export interface RunnerDetection {
+  /** The CLI's name on PATH. */
+  readonly binary: string;
+  /** The executable the host configured through the runner's `*_BIN` setting, if any. It replaces `binary`. */
+  readonly binOverride: () => string | undefined;
+  /**
+   * What `DRY_RUN=1` reports. `always`: the bundled mock stands in, so the CLI counts as present
+   * without a spawn. `unless-bin-override`: the same, except that an explicit `binOverride`
+   * outranks the mock in the runner, so the probe still spawns it.
+   */
+  readonly dryRun: 'always' | 'unless-bin-override';
+  /**
+   * A version line the CLI must print. A binary whose `--version` output does not match is not
+   * this CLI (a shell wrapper or an unrelated tool on PATH), and the probe reports it absent.
+   */
+  readonly banner?: { readonly pattern: RegExp; readonly label: string };
+  /** The hint that goes with a CLI that answered. */
+  readonly availableHint: string;
+  /** The hint that goes with a CLI that did not answer. */
+  readonly missingHint: string;
+}
+
+/**
+ * How a terminal starts each runner's own CLI, the take-over command of "Open in terminal" and
+ * the cockpit's copyable resume line (hearsay-tools/squawk#3642), and where the installer gets it.
+ */
+export interface RunnerCli {
+  /**
+   * The executable a terminal runs. `path-name`: the CLI's name on PATH. `configured`: the
+   * executable the server resolves from its `HSQ_*_BIN` override, so only the server can spell it.
+   */
+  readonly terminalExecutable: { readonly kind: 'path-name'; readonly name: string } | { readonly kind: 'configured'; readonly resolve: () => string };
+  /** The arguments that reopen a recorded session, after the executable. */
+  readonly resumeArgs: (sessionId: string) => string;
+  /** Where the installer gets the CLI: an npm package, a site the operator installs from, or nowhere it knows. */
+  readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | null;
 }
 
 /** Declare one runner. */
