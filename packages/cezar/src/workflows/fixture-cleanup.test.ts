@@ -24,7 +24,8 @@ import * as git from '../git-worktree.ts';
 import * as retention from '../runs/retention.ts';
 import * as workflows from './load.ts';
 import * as fixtureCleanup from './fixture-claude.testkit.ts';
-import { createFixtureManager, removeFixtureRepo, fixtureWorkSettled, unused, fixtureWork, managerDisposed } from './fixture-claude.testkit.ts';
+import { createFixtureManager, removeFixtureRepo, fixtureWorkSettled, fixtureWork, managerDisposed } from './fixture-claude.testkit.ts';
+import { unused } from './unused.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { RunMemory } from './run/run-memory.ts';
 

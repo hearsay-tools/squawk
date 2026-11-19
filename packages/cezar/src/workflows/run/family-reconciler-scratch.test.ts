@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { unused } from '../fixture-no-runner.testkit.ts';
+import { unused } from '../unused.testkit.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';
 import { FamilyReconciler } from './family-reconciler.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
