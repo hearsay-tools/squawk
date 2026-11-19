@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { FileCogIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -90,7 +89,7 @@ function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; 
           To edit here, the host operator runs <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code>.
         </div>
       )}
-      <RemoteSettingsNotice risk={`Agent config can define hooks and MCP servers that run commands on the machine running ${productName('Cezarion')}`} />
+      <RemoteSettingsNotice risk={`Agent config can define hooks and MCP servers that run commands on the machine running Squawk`} />
 
       <div data-slot="agent-config-agents" role="tablist" className="flex flex-wrap gap-1">
         {AGENT_DESCRIPTORS.map((d) => (
@@ -216,7 +215,7 @@ function UserMcpBlock({ userMcp }: { userMcp: NonNullable<AgentConfigListing['us
     <div data-slot="agent-config-user-mcp" className="mt-3">
       <h4 className="mb-1 text-[12px] font-semibold">User &amp; local scopes</h4>
       <p className="mb-2 text-[12px] text-soft-foreground">
-        Managed by <code className="font-mono">claude mcp add</code> in {userMcp.path} — {productName('cezar')} does not edit
+        Managed by <code className="font-mono">claude mcp add</code> in {userMcp.path} — Squawk does not edit
         Claude’s state file.
       </p>
       {userMcp.readable ? (

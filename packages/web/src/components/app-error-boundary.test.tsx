@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -61,7 +60,7 @@ describe('AppErrorBoundary', () => {
     )
 
     const logged = vi.mocked(console.error).mock.calls
-    const ours = logged.find((call) => call[0] === `${productName("cezar")} cockpit: uncaught render error`)
+    const ours = logged.find((call) => call[0] === `Squawk cockpit: uncaught render error`)
     expect(ours, JSON.stringify(logged.map((call) => call[0]))).toBeDefined()
     expect((ours![1] as Error).message).toBe('boom')
   })

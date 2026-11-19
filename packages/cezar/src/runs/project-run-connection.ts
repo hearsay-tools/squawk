@@ -258,17 +258,20 @@ export class ProjectRunConnection {
 
 const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims',
   ...Object.fromEntries(RUN_INDEXES.map(({ index }) => [index.table, `project_${index.table}`])) };
-/** Match only table references. Quoted text and comments are opaque to the projection. */
-const PROJECT_READ = new RegExp(String.raw`('(?:''|[^'])*'|"(?:""|[^"])*"|${'`'}[^${'`'}]*${'`'}|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(${Object.keys(PROJECT_VIEWS).join('|')})\b`, 'gi');
+/** Match only table references. Quoted text and comments are opaque to the projection. A view has
+ *  no index, so an index hint on a projected table is dropped. */
+const PROJECT_READ = new RegExp(String.raw`('(?:''|[^'])*'|"(?:""|[^"])*"|${'`'}[^${'`'}]*${'`'}|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(${Object.keys(PROJECT_VIEWS).join('|')})\b(?:(\s+(?:AS\s+)?[a-z_]\w*)?\s+(?:INDEXED\s+BY\s+\w+|NOT\s+INDEXED)\b)?`, 'gi');
 
 function projectReadTables(sql: string): string {
   return sql.replace(PROJECT_READ,
-    (match, quoted: string | undefined, keyword: string, space: string, table: string, offset: number) => {
+    (match, quoted: string | undefined, keyword: string, space: string, table: string, hintAlias: string | undefined, offset: number) => {
       // A DELETE target stays the primary table; every other reference, nested reads in writes included, is a read.
       if (quoted || /\bDELETE\s*$/i.test(sql.slice(0, offset))) return match;
+      const view = `${keyword}${space}${PROJECT_VIEWS[table.toLowerCase()]}`;
+      if (/(?:INDEXED\s+BY\s+\w+|NOT\s+INDEXED)$/i.test(match)) return `${view}${hintAlias ?? ` AS ${table}`}`;
       const next = /^\s+(?:AS\s+)?([a-z_]\w*|"|`|\[)/i.exec(sql.slice(offset + match.length))?.[1];
-      const aliased = next && !/^(WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|GROUP|ORDER|LIMIT|UNION|INTERSECT|EXCEPT|ON|USING|NOT|INDEXED)$/i.test(next);
-      return `${keyword}${space}${PROJECT_VIEWS[table.toLowerCase()]}${aliased ? '' : ` AS ${table}`}`;
+      const aliased = next && !/^(WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|GROUP|ORDER|LIMIT|UNION|INTERSECT|EXCEPT|ON|USING|NOT)$/i.test(next);
+      return `${view}${aliased ? '' : ` AS ${table}`}`;
     });
 }
 

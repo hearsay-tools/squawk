@@ -460,6 +460,23 @@ describe('durable conversations', () => {
     expect(await f.service.cancelWait(w.caller, { waitId })).toMatchObject({ wait: { id: waitId } });
     await expect(f.service.stop(w.caller, { workerId: w.id })).rejects.toMatchObject({ code: 'denied_scope' });
   });
+  it('checks a request-wait cancel through the parent pair even for a worker that holds wait', async () => {
+    const w = await worker();
+    const held = f.store.getRun(w.id)!;
+    f.store.commitDelegation([{ id: w.id, delegation: { ...held.delegation, permissions: ['wait'] } as never }]);
+    const sent = await f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'request', text: 'question', timeoutSeconds: 600 });
+    const waitId = randomUUID();
+    f.store.commitWait(w.id, { id: waitId, kind: WAIT_KIND.worker, source: WAIT_SOURCE.agent, via: WAIT_VIA['cez-worker-wait'], registeredAt: new Date().toISOString(), phase: WAIT_PHASE.open, turnId: 'turn', requestIds: [sent.message.id], requestOutcomes: [], timeoutSeconds: 600, deadline: new Date(Date.now() + 600000).toISOString() });
+    const parent = f.store.getRun(f.parent.id)!;
+    if (parent.delegation?.role !== 'root') throw new Error('fixture');
+    const live = parent.delegation;
+    const deletion = { phase: 'complete' as const, revision: 0, resourceId: randomUUID(), generation: randomUUID() };
+    f.store.commitDelegation([{ id: parent.id, delegation: { ...live, receipts: live.receipts.map(receipt => ({ ...receipt, deletion })) } }]);
+    await expect(f.service.cancelWait(w.caller, { waitId })).rejects.toMatchObject({ code: 'denied_scope', message: 'Worker scope denied' });
+    await expect(f.service.cancelWait(w.caller, { waitId: randomUUID() })).rejects.toMatchObject({ code: 'denied_scope' });
+    f.store.commitDelegation([{ id: parent.id, delegation: { ...f.store.getRun(parent.id)!.delegation, receipts: live.receipts } as never }]);
+    expect(await f.service.cancelWait(w.caller, { waitId })).toMatchObject({ wait: { id: waitId } });
+  });
   it('keeps rejected receipts rejected after Continue and replays event projections without extra inputs', async () => {
     const w = await worker(); setRunStatus(f.store, w.id, RUN_STATUS.review);
     const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'question', timeoutSeconds: 600 };

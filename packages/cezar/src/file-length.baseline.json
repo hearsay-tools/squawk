@@ -4,14 +4,14 @@
   "files": {
     "packages/cezar/src/core/codex-app-server-runner.ts": 1238,
     "packages/cezar/src/core/opencode-server-runner.ts": 1680,
-    "packages/cezar/src/runs/store.ts": 3383,
-    "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1005,
-    "packages/cezar/src/server/forge/github.ts": 3214,
-    "packages/cezar/src/server/server.ts": 4757,
+    "packages/cezar/src/runs/store.ts": 3382,
+    "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1004,
+    "packages/cezar/src/server/forge/github.ts": 3181,
+    "packages/cezar/src/server/server.ts": 4756,
     "packages/web/e2e/agent-browser.ts": 1139,
-    "packages/web/src/api/client.ts": 2091,
+    "packages/web/src/api/client.ts": 2090,
     "packages/web/src/api/queries.ts": 1975,
-    "packages/web/src/routes/github/github.tsx": 1243,
+    "packages/web/src/routes/github/github.tsx": 1242,
     "packages/web/src/routes/global-tasks.tsx": 1069,
     "packages/web/src/routes/tasks-overview.tsx": 1619
   }

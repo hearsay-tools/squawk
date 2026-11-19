@@ -14,7 +14,6 @@ import { manager, until, store, semaphore, toolGenerationOf, restart, root, term
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';
-import { productName } from '../home/display.ts';
 
 // The registration part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -49,7 +48,7 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
       retryAtOnce();
       const resources = toolResources.current!;
       const broken = () => vi.spyOn(resources, 'controller').mockRejectedValueOnce(new ToolsUnavailableError("ENOSPC: no space left on device, mkdtemp '/tmp/cez-ci-XXXXXX'", '/tmp'));
-      const cause = new RegExp(String.raw`${productName('Cezar')} tools could not start: ENOSPC: no space left on device, mkdtemp '\/tmp\/cez-ci-XXXXXX'\. .*Free space in \/tmp or fix its permissions, then Continue the task\.`);
+      const cause = new RegExp(String.raw`Squawk tools could not start: ENOSPC: no space left on device, mkdtemp '\/tmp\/cez-ci-XXXXXX'\. .*Free space in \/tmp or fix its permissions, then Continue the task\.`);
       // A fresh start: nothing spawns, the step and the run fail with the cause.
       broken();
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${HARNESS_ADAPTERS[runner].scenarios.baseline!} u26-opening` });

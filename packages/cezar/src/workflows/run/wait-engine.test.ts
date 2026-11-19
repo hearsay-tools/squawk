@@ -12,7 +12,6 @@ import { unused } from '../fixture-no-runner.testkit.ts';
 import type { RunModuleContext } from './types.ts';
 import { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
-import { productName } from '../../home/display.ts';
 
 const DEADLINE_MS = 60_000;
 type Kind = Wait['kind'];
@@ -117,7 +116,7 @@ it.each(Object.keys(WAIT_KINDS) as Kind[])('%s: a cancelled wait stays cancelled
 
 /** The open steps each registration path chooses: withdraw, receipt, park and the commit policy. */
 it.each([
-  { name: `withdraw: true withdraws ${productName('Cezar')}'s human waits before the commit`, withdraw: true },
+  { name: `withdraw: true withdraws Squawk's human waits before the commit`, withdraw: true },
   { name: 'withdraw: false leaves them', withdraw: false },
 ])('$name', ({ withdraw }) => {
   const f = current = fixture();

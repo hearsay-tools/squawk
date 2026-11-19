@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { projectPaths, readProjectPath } from '../project-paths.ts';
 import { existsSync } from 'node:fs';
 import { projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
@@ -128,7 +127,7 @@ export class AutomationCoordinator {
     }
     if (!this.fenceLogged.has(projectId)) {
       this.fenceLogged.add(projectId);
-      (this.options.warn ?? console.warn)(`${logPrefix()} automations of project ${projectId} are deferred until its migration ends: ${refusal.message}`);
+      (this.options.warn ?? console.warn)(`[hsq] automations of project ${projectId} are deferred until its migration ends: ${refusal.message}`);
     }
     return false;
   }

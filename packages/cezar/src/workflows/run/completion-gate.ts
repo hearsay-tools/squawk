@@ -4,6 +4,7 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { RunModuleContext } from './types.ts';
 import { hasRegisteredRunProcess } from '../../core/process-usage.ts';
 import { parentReadiness } from '../../delegation/readiness.ts';
+import { finishing, isFamilyRecord, isRootTask, receiptsOf, supervisorIdOf } from '../../runs/task-rights.ts';
 import { openWaits } from '../waits.ts';
 import { openCompletionRequests, rootCompletionRefusal, type CompletionRefusal } from '../completion-policy.ts';
 import { hasPendingHumanAsk } from './pending-ask-facts.ts';
@@ -19,15 +20,15 @@ export interface CompletionGateHost {
 }
 
 export function completionRefusal(context: RunModuleContext, host: CompletionGateHost, runId: string): CompletionRefusal | undefined {
-  if (context.store.getRun(runId)?.delegation?.role !== 'root') return undefined;
+  if (!isFamilyRecord(context.store.getRun(runId))) return undefined;
   return rootCompletionRefusal({ questions: host.unansweredQuestions(runId), blockers: host.parentCompletionBlockers(runId),
     requests: openCompletionRequests(context.store, runId), incomingRefused: !!host.active.get(runId)?.boundary.incomingRequestRefused });
 }
 
 export function parentCompletionBlockers(context: RunModuleContext, host: CompletionGateHost, runId: string) {
   const parent = context.store.getRun(runId);
-  if (parent?.delegation?.role !== 'root') return [];
-  const ids = new Set([...parent.delegation.receipts.map(receipt => receipt.workerId),
+  if (!isFamilyRecord(parent)) return [];
+  const ids = new Set([...receiptsOf(parent).map(receipt => receipt.workerId),
     ...context.store.listWorkersOf(runId).map(run => run.id)]);
   const workers = parentReadiness(parent, [...ids].map(workerId => ({ workerId, run: context.store.getRun(workerId),
     terminated: context.store.readWorkerExecution(workerId)?.phase === 'complete', result: context.store.getRun(workerId)
@@ -40,8 +41,7 @@ export function parentCompletionBlockers(context: RunModuleContext, host: Comple
  * Keep the private termination proof: a public terminal status can precede exit. */
 export function hasLiveWorkers(context: RunModuleContext, host: CompletionGateHost, runId: string): boolean {
   return host.parentCompletionBlockers(runId).some(blocker => {
-    const worker = context.store.getRun(blocker.workerId)?.delegation;
-    return blocker.reason === 'outstanding' && worker?.role === 'worker' && worker.parentRunId === runId;
+    return blocker.reason === 'outstanding' && supervisorIdOf(context.store.getRun(blocker.workerId)) === runId;
   });
 }
 
@@ -55,7 +55,7 @@ export function delegationFinishBlockedReason(context: RunModuleContext, host: C
   const parent = context.store.getRun(runId);
   // A root without workers finishes like any task (hearsay-tools/cezarion#2784): every task is a root
   // once its first session is provisioned, and these rules protect a family, not a lone task.
-  if (parent?.delegation?.role !== 'root' || parent.delegation.receipts.length === 0) return undefined;
+  if (receiptsOf(parent).length === 0) return undefined;
   if (hasPendingHumanAsk(runId, id => host.pendingHumanAskSeq(id)) || host.active.get(runId)?.boundary.pendingHumanAsk) return 'Answer the pending human question before finishing.';
   const questions = host.unansweredQuestions(runId);
   if (questions.length) return `Answer your workers' questions before finishing: ${questions.map(q => q.workerId).join(', ')}`;
@@ -71,12 +71,11 @@ export function finishDecision(context: RunModuleContext, host: CompletionGateHo
   if (blocked) return { reason: blocked, warn: true };
   if (host.active.get(runId)?.liveSession.sessionLive) return { action: 'session' };
   const run = context.store.getRun(runId);
-  if (run?.status === 'waiting' && !hasRegisteredRunProcess(runId) && !host.isActive(runId) &&
-    (run.delegation?.role === 'root' || run.delegation === undefined)) {
+  if (run?.status === 'waiting' && !hasRegisteredRunProcess(runId) && !host.isActive(runId) && isRootTask(run)) {
     if (host.waitingBeforeFinalWorkflowStep(run)) {
       return { reason: 'Continue the remaining workflow steps before finishing.' };
     }
-    return { action: run.delegation?.role === 'root' ? 'root' : 'waiting' };
+    return { action: isFamilyRecord(run) ? 'root' : 'waiting' };
   }
   if (run?.status === 'review' && !host.isActive(runId)) return { action: 'review' };
   return { reason: 'no open session' };
@@ -90,7 +89,7 @@ export function finishBlockedReason(context: RunModuleContext, host: CompletionG
 /** Human Finish keeps the worker guarantees and bypasses request obligations only. */
 export function completionMayPass(context: RunModuleContext, host: CompletionGateHost, runId: string): boolean {
   const run = context.store.getRun(runId);
-  const humanFinish = host.active.get(runId)?.liveSession.finishRequested || (run?.delegation?.role === 'root' && run.delegation.finishRequestedAt);
+  const humanFinish = host.active.get(runId)?.liveSession.finishRequested || finishing(run);
   return humanFinish ? host.parentCompletionBlockers(runId).every(blocker => blocker.reason === 'request') : !completionRefusal(context, host, runId);
 }
 

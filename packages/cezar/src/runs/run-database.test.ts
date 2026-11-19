@@ -576,6 +576,13 @@ describe('RunDatabase', () => {
       expect(window).toMatch(/SCAN runs USING INDEX runs_unarchived .*SEARCH runs USING INDEX runs_archived_roots/);
       const [rootWindow] = planOf(() => db.listWindowSummaries(201, { roots: true }));
       expect(rootWindow).toMatch(/SEARCH runs USING INDEX runs_archived_roots .*SEARCH runs USING INDEX runs_archived_roots/);
+      // hearsay-tools/squawk#3395: each half of the claim join finds runs by key, and the
+      // archive-on-merge walk reads its partial index in seq order.
+      const [foreignClaims] = planOf(() => db.listForeignClaimedIds('session-1'));
+      expect(foreignClaims).toMatch(/SEARCH r USING COVERING INDEX sqlite_autoindex_runs_1 \(id=\?\) .*SEARCH r USING INDEX runs_parent_run_id \(parent_run_id=\?\)/);
+      expect(foreignClaims).not.toMatch(/SCAN r\b/);
+      expect(planOf(() => db.listArchiveOnMergeCandidates(0, 10)))
+        .toEqual(['SEARCH runs USING INDEX runs_archive_on_merge (seq>?)']);
     });
   });
 

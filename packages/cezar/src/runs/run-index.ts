@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { legacyIndexRows } from './legacy-run-rows.ts';
 import { addRunSource, fallbackRunSource } from './project-run-sources.ts';
 import { existsSync, readFileSync } from 'node:fs';
@@ -158,7 +157,7 @@ function projectRows(db: RunDatabase, rows: readonly RunSummaryRow[], dataDir: s
   });
   if (unreadable > 0 && !reportedUnreadable.has(dataDir)) {
     reportedUnreadable.add(dataDir);
-    console.warn(`${logPrefix()} ${unreadable} run(s) in ${join(dataDir, RUNS_DB_FILE)} could not be read; they are left out of the run index and left in the database untouched.`);
+    console.warn(`[hsq] ${unreadable} run(s) in ${join(dataDir, RUNS_DB_FILE)} could not be read; they are left out of the run index and left in the database untouched.`);
   }
   return runs;
 }

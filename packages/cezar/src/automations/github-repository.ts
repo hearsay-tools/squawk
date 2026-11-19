@@ -1,5 +1,6 @@
 import { forgeKindOfRemote, parseRemote } from '../server/forge/index.ts';
 import { canonicalRepoRef, forgetRepoHandle, isRepositoryNameMiss } from '../server/forge/github-repo-handle.ts';
+import { githubRequestGate } from '../server/forge/github-request-gate.ts';
 
 export interface GithubRepositoryName { owner: string; repo: string }
 
@@ -14,11 +15,17 @@ export interface GithubRepository extends GithubRepositoryName {
   forget?: () => void;
 }
 
+/** A poller request, so it goes through the shared gate. A refusal during a pause reads under the
+ *  `origin` name, and the poll's own gated request then reports the pause. */
+function gatedCanonicalName(root: string, remote: GithubRepositoryName): Promise<GithubRepositoryName | null> {
+  return canonicalRepoRef(root, remote, request => githubRequestGate.run(request, { whenPaused: 'throw' }));
+}
+
 /** The project's GitHub repository, or undefined when `origin` is not on github.com. */
 export function githubRepository(
   root: string,
   remote: string | undefined,
-  resolve: typeof canonicalRepoRef = canonicalRepoRef,
+  resolve: (root: string, remote: GithubRepositoryName) => Promise<GithubRepositoryName | null> = gatedCanonicalName,
   forget: typeof forgetRepoHandle = forgetRepoHandle,
 ): GithubRepository | undefined {
   const parsed = parseRemote(remote ?? '');

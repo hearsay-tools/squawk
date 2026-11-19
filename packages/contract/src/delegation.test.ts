@@ -306,6 +306,14 @@ describe('delegation state', () => {
     refuses(delegationStateSchema, { role: 'invalid', extra: true });
   });
 
+  it('takes a spawn grant with nested children on either role and refuses a malformed one', () => {
+    const grant = { kinds: ['owned-isolated', 'shared'], live: 32, children: { kinds: ['shared'], live: 1 } };
+    accepts(delegationStateSchema, { ...root, spawnGrant: grant });
+    accepts(delegationStateSchema, { ...worker, spawnGrant: grant.children });
+    for (const bad of [{ ...grant, live: 33 }, { ...grant, kinds: ['shared', 'shared'] }, { ...grant, extra: 1 },
+      { ...grant, children: { kinds: ['other'], live: 1 } }]) refuses(delegationStateSchema, { ...root, spawnGrant: bad });
+  });
+
   it('accepts every permission once and refuses a repeated one', () => {
     const all = ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'];
     accepts(delegationStateSchema, { ...worker, permissions: all });

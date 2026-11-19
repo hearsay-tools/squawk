@@ -145,19 +145,21 @@ export async function resolveRepoHandle(
 type RepoRef = { owner: string; repo: string };
 const canonicalNames = new Map<string, RepoRef>();
 
-/** The name to read `remote`'s repository under: GitHub's current name for that repository, or
+/** `gate` wraps the one gh request; automations pass the GitHub request gate (hearsay-tools/squawk#3127).
+ *  The name to read `remote`'s repository under: GitHub's current name for that repository, or
  *  `remote` itself when `gh` cannot say. It names `remote` explicitly: an unqualified `gh repo
  *  view` follows gh's default repository, which in a fork checkout is `upstream`. Failures are not
  *  memoized. Null only without a remote. */
-export async function canonicalRepoRef(repoRoot: string, remote: RepoRef | null): Promise<RepoRef | null> {
+export async function canonicalRepoRef(repoRoot: string, remote: RepoRef | null,
+  gate: (request: () => Promise<string>) => Promise<string> = request => request()): Promise<RepoRef | null> {
   if (!remote || productEnv('DRY_RUN') === '1') return remote;
   const context = githubContext(repoRoot);
   const key = `${context.key}\n${`${remote.owner}/${remote.repo}`.toLowerCase()}`;
   const memo = canonicalNames.get(key);
   if (memo) return memo;
   try {
-    const handle = parseOwnerName(await gh(repoRoot,
-      ['repo', 'view', `github.com/${remote.owner}/${remote.repo}`, '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], 15_000, undefined, context));
+    const handle = parseOwnerName(await gate(() => gh(repoRoot,
+      ['repo', 'view', `github.com/${remote.owner}/${remote.repo}`, '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], 15_000, undefined, context)));
     if (!handle) return remote;
     const ref = { owner: handle.owner, repo: handle.name };
     canonicalNames.set(key, ref);

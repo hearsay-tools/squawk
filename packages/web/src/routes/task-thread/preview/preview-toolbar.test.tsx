@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
@@ -114,7 +113,7 @@ describe('PreviewToolbar', () => {
   it('an adopted server also shrinks the badge, and says so inside the URL field', () => {
     render(<PreviewToolbar {...props({ adopted: true })} />)
     expect(screen.getByLabelText('Experimental').textContent).toBe('')
-    expect(screen.getByText(`Not started by ${productName("cezar")}`)).toBeTruthy()
+    expect(screen.getByText(`Not started by Squawk`)).toBeTruthy()
   })
 
   it('the switcher picks a server and offers to type a URL instead', () => {
@@ -167,7 +166,7 @@ describe('PreviewToolbar', () => {
     openMenu(screen.getByRole('button', { name: 'More' }))
     const stop = screen.getByRole('menuitem', { name: /Stop server · web :5173/ })
     expect(stop.getAttribute('aria-disabled')).toBe('true')
-    expect(within(stop).getByText(`${productName("cezar")} didn't start this server, so it won't stop it. Stop it where it was started.`)).toBeTruthy()
+    expect(within(stop).getByText(`Squawk didn't start this server, so it won't stop it. Stop it where it was started.`)).toBeTruthy()
     fireEvent.click(stop)
     expect(onStop).not.toHaveBeenCalled()
   })
@@ -331,13 +330,13 @@ describe('PreviewToolbar', () => {
     render(<PreviewToolbar {...p} />)
     const field = screen.getByRole('textbox', { name: 'Page address' }) as HTMLInputElement
     act(() => field.focus())
-    expect(screen.queryByText(`Not started by ${productName("cezar")}`)).toBeNull()
+    expect(screen.queryByText(`Not started by Squawk`)).toBeNull()
     fireEvent.change(field, { target: { value: 'discard me' } })
     fireEvent.keyDown(field, { key: 'Escape' })
     expect(document.activeElement).not.toBe(field)
     expect(field.value).toBe('localhost:5173/members')
     expect(p.onNavigate).not.toHaveBeenCalled()
-    expect(screen.getByText(`Not started by ${productName("cezar")}`)).toBeTruthy()
+    expect(screen.getByText(`Not started by Squawk`)).toBeTruthy()
     act(() => field.focus())
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(p.onNavigate).toHaveBeenCalledExactlyOnceWith(p.url)

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -191,7 +190,7 @@ describe('PreviewStates (design 5.1 to 5.18)', () => {
   it('5.14 has no retry or reconnect control, only Close preview and the setups link', () => {
     const a = show({ stage: 'proxy-blocked' })
     expect(screen.getByRole('heading', { name: "Preview doesn't work behind this proxy yet" })).toBeTruthy()
-    expect(document.body.textContent).toContain(`The proxy in front of ${productName("cezar")} didn't let the preview's WebSocket through.`)
+    expect(document.body.textContent).toContain(`The proxy in front of Squawk didn't let the preview's WebSocket through.`)
     expect(screen.queryByRole('button', { name: /retry|reconnect|again/i })).toBeNull()
     expect(screen.getByRole('link', { name: 'Which setups work' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Close preview' }))

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface ErrorBoundaryState {
@@ -20,7 +19,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     // The stack the boundary swallowed still belongs in the console, where a failure bundle's
     // capture and a developer's devtools both look for it.
-    console.error(`${productName('cezar')} cockpit: uncaught render error`, error, info.componentStack)
+    console.error(`Squawk cockpit: uncaught render error`, error, info.componentStack)
   }
 
   override render(): ReactNode {
@@ -44,7 +43,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
       >
         <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>The cockpit hit an error</h1>
         <p style={{ margin: 0, maxWidth: '52ch' }}>
-          Reload to carry on. Nothing on disk changed — {productName('cezar')}&rsquo;s state lives in{' '}
+          Reload to carry on. Nothing on disk changed — Squawk&rsquo;s state lives in{' '}
           <code>.ai/cezar/</code>, and this page never wrote to it.
         </p>
         <pre

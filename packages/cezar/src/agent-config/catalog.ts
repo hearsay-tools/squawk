@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { join } from 'node:path';
 import type { RunnerId } from '../core/agent-runner.ts';
 
@@ -145,7 +144,7 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     tracked: 'tracked',
     holdsMcp: true,
     precedence:
-      `Project-scoped MCP servers (key: mcpServers), shared via version control. Each requires approval before use; user- and local-scoped servers live in ~/.claude.json, which ${productName('cezar')} does not edit.`,
+      `Project-scoped MCP servers (key: mcpServers), shared via version control. Each requires approval before use; user- and local-scoped servers live in ~/.claude.json, which Squawk does not edit.`,
     docsUrl: CLAUDE_MCP_DOCS,
   },
   {
@@ -315,7 +314,7 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     modelProviderKey: 'defaultProvider',
     modelPriority: 2,
     precedence:
-      `Overrides global settings (merged recursively). Loaded only once the project folder is trusted; non-interactive modes such as --mode rpc fall back to defaultProjectTrust in the global settings and ignore it under "ask" or "never" — ${productName('cezar')} reads a native default model from it only when that value is "always". Runs read the committed copy.`,
+      `Overrides global settings (merged recursively). Loaded only once the project folder is trusted; non-interactive modes such as --mode rpc fall back to defaultProjectTrust in the global settings and ignore it under "ask" or "never" — Squawk reads a native default model from it only when that value is "always". Runs read the committed copy.`,
     docsUrl: PI_SETTINGS_DOCS,
   },
   {

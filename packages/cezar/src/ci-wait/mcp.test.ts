@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -31,7 +30,7 @@ describe('cezar-ci MCP server instructions', () => {
       const instructions = client.getInstructions();
       expect(instructions).toBeTypeOf('string');
       const [intro, ...lines] = instructions!.split('\n').filter(Boolean);
-      expect(intro).toContain(productName('Cezarion'));
+      expect(intro).toContain('Squawk');
       const { tools } = await client.listTools();
       expect(lines).toHaveLength(tools.length);
       for (const tool of tools) expect(lines.some(line => line.startsWith(`- ${tool.name}:`))).toBe(true);
@@ -106,6 +105,6 @@ describe('cezar-ci MCP server instructions', () => {
   it('tells the agent to pin the port and that Squawk starts the command', () => {
     const preview = squawkTools({ CEZ_PREVIEW: '1' }).find(tool => tool.definition.name === 'cezar_preview_serve')!;
     expect(preview.definition.description).toContain('pin the port (`vite --strictPort`, `next dev -p`)');
-    expect(preview.definition.description).toContain(`${productName('Cezar')} starts the command itself when the user opens the preview`);
+    expect(preview.definition.description).toContain(`Squawk starts the command itself when the user opens the preview`);
   });
 });

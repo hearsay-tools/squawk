@@ -6,21 +6,23 @@
 // Stamp private manifests without publishing them; publish dependencies first.
 // The build and pack gate run beforehand; publishing uses --ignore-scripts.
 // Without supported credentials, preserve the visible dry-run behavior.
+// The tooling loads from TypeScript source (Node strips the types), not from a build: the
+// publishing jobs hold the OIDC token and run no install or build (hearsay-tools/squawk#3321).
 
-import { productEnv } from '../packages/cezar/dist/core/product-env.js';
+import { productEnv } from '../packages/cezar/src/core/product-env.ts';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isPublishable, publicationManifests, RELEASE_MANIFEST_DIRS, releaseRunCommand } from '../packages/cezar/dist/release/manifests.js';
-import { withCompatibilityPackages } from '../packages/cezar/dist/release/compatibility.js';
-import { withPublicationPackage } from '../packages/cezar/dist/release/publication.js';
-import { stampManifests } from '../packages/cezar/dist/release/snapshot.js';
+import { isPublishable, publicationManifests, RELEASE_MANIFEST_DIRS, releaseRunCommand } from '../packages/cezar/src/release/manifests.ts';
+import { withCompatibilityPackages } from '../packages/cezar/src/release/compatibility.ts';
+import { withPublicationPackage } from '../packages/cezar/src/release/publication.ts';
+import { stampManifests } from '../packages/cezar/src/release/snapshot.ts';
 import {
   isReleaseBump,
   resolveReleaseTarget,
   stampStableManifests,
-} from '../packages/cezar/dist/release/stable.js';
+} from '../packages/cezar/src/release/stable.ts';
 
 const repoRoot = productEnv('RELEASE_ROOT')
   ? path.resolve(productEnv('RELEASE_ROOT'))

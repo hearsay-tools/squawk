@@ -1,4 +1,3 @@
-import { logPrefix } from './display.ts';
 import { commandText } from './command.ts';
 import type { Home } from './home.ts';
 import { existsSync } from 'node:fs';
@@ -66,7 +65,7 @@ function migrateAtBoot(home: Home, legacy: Home, env: NodeJS.ProcessEnv): Migrat
   } catch (error) {
     if (!UNWRITABLE.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
     const committed = readInstallMarker(home.config)?.state === 'committed';
-    console.warn(`${logPrefix()} cannot finish the home migration from ${legacy.root} to ${home.root} (${(error as Error).message}); `
+    console.warn(`[hsq] cannot finish the home migration from ${legacy.root} to ${home.root} (${(error as Error).message}); `
       + (committed ? 'serving the migrated home.' : `serving ${legacy.root} until both homes are writable.`));
     return committed ? { kind: 'ready' } : { kind: 'legacy', home: legacy };
   }

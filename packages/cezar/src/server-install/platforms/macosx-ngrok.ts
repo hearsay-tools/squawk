@@ -1,4 +1,3 @@
-import { productName } from '../../home/display.ts';
 import { shellQuote } from '../../core/shell-env.ts';
 import { productIdentity } from '../../home/identity.ts';
 import { commandText } from '../../home/command.ts';
@@ -318,7 +317,7 @@ export async function resolveSquawkArgv(ctx: InstallContext): Promise<string[]> 
   // No runnable Squawk → installing a KeepAlive agent would make launchd
   // respawn-throttle a permanently failing job across reboots. Fail the step.
   throw new StepAborted(
-    `could not locate a runnable ${productName('cezar')} (${entry} missing, no global ${identity.command}) — ` +
+    `could not locate a runnable Squawk (${entry} missing, no global ${identity.command}) — ` +
       `install it (npm i -g ${identity.npmPackage}) or build the checkout, then re-run with --reconfigure autostart`,
   );
 }
@@ -372,7 +371,7 @@ function repairAgentEnv(ctx: InstallContext, agent: LaunchAgent): boolean {
 
 const autostartStep = (): InstallStep => ({
   id: 'autostart',
-  title: `Run ${productName('cezar')} as a service (launchd — starts now + on boot)`,
+  title: `Run Squawk as a service (launchd — starts now + on boot)`,
   async check(ctx) {
     if (ctx.dryRun) return false;
     const agent = agentArtifact(ctx, 'autostart');
@@ -388,14 +387,14 @@ const autostartStep = (): InstallStep => ({
     if (ctx.dryRun) {
       ctx.ui.info(`DRY RUN — would write ${path} and launchctl bootstrap it.`);
     } else {
-      await installAgent(ctx, previous, name, path, squawkLaunchdPlist(ctx.repoRoot, ctx.state.primaryPort, argv), `the ${productName('cezar')} cockpit agent`);
+      await installAgent(ctx, previous, name, path, squawkLaunchdPlist(ctx.repoRoot, ctx.state.primaryPort, argv), `the Squawk cockpit agent`);
     }
     return { artifacts: [owned('launchd', { name, path })] };
   },
   async undo(ctx, created) {
     // Recorded identity, with the same null-ledger fallback as ngrok.
     if (ctx.dryRun) {
-      ctx.ui.info(`DRY RUN — would launchctl bootout and remove the ${productName('cezar')} agent.`);
+      ctx.ui.info(`DRY RUN — would launchctl bootout and remove the Squawk agent.`);
     } else {
       await removeAgent(ctx, agentArtifact(ctx, 'autostart', created));
     }
@@ -461,7 +460,7 @@ export function createMacosxNgrok(): PlatformStrategy {
       });
       // Restart both the Squawk cockpit and the ngrok tunnel, then re-verify.
       if (ctx.dryRun) {
-        ctx.ui.info(`DRY RUN — would restart the ${productName('cezar')} and ngrok launchd agents and re-verify.`);
+        ctx.ui.info(`DRY RUN — would restart the Squawk and ngrok launchd agents and re-verify.`);
         return;
       }
       const cockpit = agentArtifact(ctx, 'autostart');
@@ -473,9 +472,9 @@ export function createMacosxNgrok(): PlatformStrategy {
       }
       // A previous deploy can have repaired the file before bootstrap failed.
       if (repaired || (existsSync(cockpit.path) && (await ctx.runner.capture('launchctl', ['print', `gui/${uid}/${cockpit.name}`])).code !== 0)) {
-        await bootstrapVerified(ctx, uid, cockpit.name, cockpit.path, `the ${productName('cezar')} cockpit agent`);
+        await bootstrapVerified(ctx, uid, cockpit.name, cockpit.path, `the Squawk cockpit agent`);
       }
-      ctx.ui.info(`Redeploying — restarting the ${productName('cezar')} cockpit.`);
+      ctx.ui.info(`Redeploying — restarting the Squawk cockpit.`);
       const squawkCode = await ctx.runner.interactive('launchctl', ['kickstart', '-k', `gui/${uid}/${cockpit.name}`]);
       if (squawkCode !== 0) ctx.ui.warn(`launchctl kickstart returned non-zero — check \`launchctl print gui/${uid}/${cockpit.name}\`.`);
       ctx.ui.info('Redeploying — restarting the ngrok tunnel.');

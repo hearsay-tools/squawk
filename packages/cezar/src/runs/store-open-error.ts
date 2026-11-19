@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { dirname } from 'node:path';
 
 import { LegacyWriterError } from './legacy-index.ts';
@@ -46,20 +45,20 @@ export function toRunStoreOpenError(error: unknown, path: string, opts: { waited
   const kind = error instanceof RunDatabaseError ? error.kind : errnoKind(error) ?? 'other';
   switch (kind) {
     case 'corrupt':
-      return new RunStoreOpenError(kind, path, `${path} is damaged (${detail}). ${productName('cezar')} left it and its -wal and -shm files exactly as they are: restore them from a backup, or rebuild them from runs.json.pre-sqlite.bak as https://github.com/hearsay-tools/squawk/blob/main/docs/run-history-recovery.md describes, then restart ${productName('cezar')}.`, cause);
+      return new RunStoreOpenError(kind, path, `${path} is damaged (${detail}). Squawk left it and its -wal and -shm files exactly as they are: restore them from a backup, or rebuild them from runs.json.pre-sqlite.bak as https://github.com/hearsay-tools/squawk/blob/main/docs/run-history-recovery.md describes, then restart Squawk.`, cause);
     case 'busy': {
       const held = opts.waitedMs ? ` for over ${(opts.waitedMs / 1000).toFixed(1)} s` : '';
-      return new RunStoreOpenError(kind, path, `${path} is busy: another ${productName('cezar')} process has held its write lock${held}. Wait for it to finish, then restart ${productName('cezar')}.`, cause);
+      return new RunStoreOpenError(kind, path, `${path} is busy: another Squawk process has held its write lock${held}. Wait for it to finish, then restart Squawk.`, cause);
     }
     case 'permission':
-      return new RunStoreOpenError(kind, path, `${productName('cezar')} cannot read or write ${path} (${detail}). Give your user read and write access to ${dirname(path)}, then restart ${productName('cezar')}.`, cause);
+      return new RunStoreOpenError(kind, path, `Squawk cannot read or write ${path} (${detail}). Give your user read and write access to ${dirname(path)}, then restart Squawk.`, cause);
     case 'disk-full':
-      return new RunStoreOpenError(kind, path, `No space is left to write ${path} (${detail}). Free some disk space, then restart ${productName('cezar')}.`, cause);
+      return new RunStoreOpenError(kind, path, `No space is left to write ${path} (${detail}). Free some disk space, then restart Squawk.`, cause);
     case 'unsupported-schema': {
-      const schema = error instanceof RunDatabaseUnsupportedSchemaError ? ` (schema ${error.found}; this ${productName('cezar')} reads schema ${error.supported})` : '';
-      return new RunStoreOpenError(kind, path, `${path} was written by a newer ${productName('cezar')}${schema}. Upgrade ${productName('cezar')} to open this project's runs.`, cause);
+      const schema = error instanceof RunDatabaseUnsupportedSchemaError ? ` (schema ${error.found}; this Squawk reads schema ${error.supported})` : '';
+      return new RunStoreOpenError(kind, path, `${path} was written by a newer Squawk${schema}. Upgrade Squawk to open this project's runs.`, cause);
     }
     default:
-      return new RunStoreOpenError('other', path, `${path} could not be opened (${detail}). Restart ${productName('cezar')} to try again.`, cause);
+      return new RunStoreOpenError('other', path, `${path} could not be opened (${detail}). Restart Squawk to try again.`, cause);
   }
 }

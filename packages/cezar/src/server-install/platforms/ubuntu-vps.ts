@@ -1,4 +1,3 @@
-import { productName } from '../../home/display.ts';
 import { productIdentity } from '../../home/identity.ts';
 import { commandText } from '../../home/command.ts';
 import { repairUnitEnv, writeFileStep } from './ubuntu-vps-files.ts';
@@ -96,18 +95,18 @@ async function waitForSquawk(ctx: InstallContext, port: number, attempts = 15): 
  */
 async function confirmSquawkRunning(ctx: InstallContext, statusCmd: string, logsCmd: string): Promise<void> {
   if (ctx.dryRun) {
-    ctx.ui.info(`DRY RUN — would wait for ${productName('cezar')} on ${upstreamHost(ctx)}:${ctx.state.primaryPort}.`);
+    ctx.ui.info(`DRY RUN — would wait for Squawk on ${upstreamHost(ctx)}:${ctx.state.primaryPort}.`);
     return;
   }
   const sp = ctx.ui.spinner();
-  sp.start(`Waiting for ${productName('cezar')} to start on 127.0.0.1:${ctx.state.primaryPort}…`);
+  sp.start(`Waiting for Squawk to start on 127.0.0.1:${ctx.state.primaryPort}…`);
   const up = await waitForSquawk(ctx, ctx.state.primaryPort);
-  sp.stop(up ? `${productName('cezar')} is running.` : `${productName('cezar')} did not come up.`);
+  sp.stop(up ? `Squawk is running.` : `Squawk did not come up.`);
   if (!up) {
     ctx.ui.warn(
-      `${productName('cezar')} is not answering on 127.0.0.1:${ctx.state.primaryPort} yet — nginx will return 502 until it is.\n` +
+      `Squawk is not answering on 127.0.0.1:${ctx.state.primaryPort} yet — nginx will return 502 until it is.\n` +
         `Check the service:\n  • ${statusCmd}\n  • ${logsCmd}\n` +
-        `Common causes: the WorkingDirectory has no built ${productName('cezar')}, or the port is wrong.`,
+        `Common causes: the WorkingDirectory has no built Squawk, or the port is wrong.`,
     );
   }
 }
@@ -172,7 +171,7 @@ ${http2}
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # ${productName('cezar')} streams SSE (run events). Never buffer it, or the cockpit goes mute.
+        # Squawk streams SSE (run events). Never buffer it, or the cockpit goes mute.
         proxy_buffering off;
         proxy_read_timeout 3600s;
         proxy_set_header Connection '';
@@ -196,7 +195,7 @@ const nginxProxyStep = (): InstallStep => ({
     //    claiming a pre-existing nginx.
     const nginxWasPresent = await verifyCommand(ctx, 'nginx', ['-v']);
     await sudoStep(ctx, {
-      description: `Install nginx (the public TLS + auth front for ${productName('cezar')}).`,
+      description: `Install nginx (the public TLS + auth front for Squawk).`,
       command: 'apt-get update && apt-get install -y nginx',
       verify: (c) => verifyCommand(c, 'nginx', ['-v']),
     });
@@ -245,7 +244,7 @@ const nginxProxyStep = (): InstallStep => ({
       if (how === 'generate') {
         password = generatePassword();
         ctx.ui.note(
-          `Username: ${user}\nPassword: ${password}\n\nSave these now — this is your cockpit login. ${productName('cezar')} stores only a hash; the plaintext is not written anywhere and cannot be recovered.`,
+          `Username: ${user}\nPassword: ${password}\n\nSave these now — this is your cockpit login. Squawk stores only a hash; the plaintext is not written anywhere and cannot be recovered.`,
           'Generated cockpit credentials',
         );
       } else {
@@ -303,7 +302,7 @@ const nginxProxyStep = (): InstallStep => ({
     const nginxVersion = await installedNginxVersion(ctx);
     const vhost = nginxVhost(ctx.state.primaryPort, ctx.state.domain ?? '_', htpasswd, nginxVersion);
     await writeFileStep(ctx, {
-      description: `Write the ${productName('cezar')} nginx site, enable it, and reload nginx.`,
+      description: `Write the Squawk nginx site, enable it, and reload nginx.`,
       path: vhostAvail,
       content: vhost,
       extra: `ln -sf ${vhostAvail} ${vhostEnbl} && rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx`,
@@ -375,7 +374,7 @@ const nginxProxyStep = (): InstallStep => ({
     if (sharedPkgs.length > 0) {
       ctx.ui.note(
         sharedPkgs.map((a) => a.removeHint ?? a.name ?? '').filter(Boolean).join('\n'),
-        `Installed for ${productName('cezar')} but possibly used elsewhere — remove manually if unwanted`,
+        `Installed for Squawk but possibly used elsewhere — remove manually if unwanted`,
       );
     }
     // rmdir only succeeds when empty, so removing one instance's
@@ -383,7 +382,7 @@ const nginxProxyStep = (): InstallStep => ({
     const { files, dirs } = sitePathsToRemove(ctx);
     const vhostEnbl = files[0]!;
     await sudoStep(ctx, {
-      description: `Remove the ${productName('cezar')} nginx site + htpasswd, reload nginx.`,
+      description: `Remove the Squawk nginx site + htpasswd, reload nginx.`,
       command:
         `rm -f ${files.join(' ')}` +
         restoreClause +
@@ -539,7 +538,7 @@ const sslStep = (): InstallStep => ({
     if (pkgs.length > 0) {
       ctx.ui.note(
         pkgs.map((a) => a.removeHint ?? a.name ?? '').filter(Boolean).join('\n'),
-        `Installed for ${productName('cezar')} but possibly used elsewhere — remove manually if unwanted`,
+        `Installed for Squawk but possibly used elsewhere — remove manually if unwanted`,
       );
     }
     // The vhost (with certbot’s edits) is removed by the nginx-proxy step’s undo.
@@ -644,7 +643,7 @@ async function resolveExecStart(ctx: InstallContext): Promise<string> {
     globalBin = out.split('\n').map((s) => s.trim()).filter(Boolean).pop();
     if (!globalBin) {
       ctx.ui.warn(
-        `Could not locate a built ${productName('cezar')} to run (${entry} missing, no global ${identity.command}).\n` +
+        `Could not locate a built Squawk to run (${entry} missing, no global ${identity.command}).\n` +
           `Install it (npm i -g ${identity.npmPackage}) or build the checkout, then re-run with --reconfigure autostart.`,
       );
     }
@@ -657,7 +656,7 @@ const autostartStep = (): InstallStep => ({
   // Required: after install the cockpit must actually be serving, so Squawk runs
   // as a systemd service — started now AND enabled on boot. (id kept as
   // `autostart` for state compatibility.)
-  title: `Run ${productName('cezar')} as a service (systemd — starts now + on boot)`,
+  title: `Run Squawk as a service (systemd — starts now + on boot)`,
   async check() {
     return false; // always (re)assert the service is installed and running
   },
@@ -711,7 +710,7 @@ const autostartStep = (): InstallStep => ({
 
     // System unit fallback.
     await writeFileStep(ctx, {
-      description: `Install the ${productName('cezar')} systemd unit, start it now, and enable it at boot.`,
+      description: `Install the Squawk systemd unit, start it now, and enable it at boot.`,
       path: `/etc/systemd/system/${UNIT_NAME}`,
       content: systemdUnit(ctx.repoRoot, ctx.state.primaryPort, 'system', execStart, ctx.state.bindHost),
       extra: `systemctl daemon-reload && systemctl enable --now ${UNIT_NAME}`,
@@ -735,7 +734,7 @@ const autostartStep = (): InstallStep => ({
       }
     } else if (svc) {
       await sudoStep(ctx, {
-        description: `Disable and remove the ${productName('cezar')} systemd unit.`,
+        description: `Disable and remove the Squawk systemd unit.`,
         command: `systemctl disable --now ${UNIT_NAME}; rm -f /etc/systemd/system/${UNIT_NAME} && systemctl daemon-reload`,
         verify: (c) => verifyCommand(c, 'sh', ['-c', `! systemctl is-enabled ${UNIT_NAME}`]),
       });
@@ -766,13 +765,13 @@ async function verifyBehindExternalProxy(ctx: InstallContext, unit: string): Pro
   const domain = ctx.state.domain ?? '<your-domain>';
 
   if (ctx.dryRun) {
-    ctx.ui.info(`DRY RUN — would verify ${productName('cezar')} answers on ${target} and print the proxy routing snippet.`);
+    ctx.ui.info(`DRY RUN — would verify Squawk answers on ${target} and print the proxy routing snippet.`);
     return { artifacts: [] };
   }
 
   if (!(await waitForSquawk(ctx, port))) {
     ctx.ui.error(
-      `${productName('cezar')} is not answering on ${target}.\n\n` +
+      `Squawk is not answering on ${target}.\n\n` +
         `Diagnostics on the server:\n` +
         `  • systemctl --user status ${unit}   (or: sudo systemctl status ${unit})\n` +
         `  • sudo ss -ltnp | grep :${port}\n` +
@@ -786,7 +785,7 @@ async function verifyBehindExternalProxy(ctx: InstallContext, unit: string): Pro
 
   ctx.ui.success(`Cockpit is up and listening on ${target}.`);
   ctx.ui.warn(
-    `${productName('cezar')} has NO built-in authentication in this mode — your reverse proxy MUST enforce it. ` +
+    `Squawk has NO built-in authentication in this mode — your reverse proxy MUST enforce it. ` +
       'Anyone who can reach ' + target + ' can run agents on this box.',
   );
   ctx.ui.message(
@@ -820,7 +819,7 @@ async function verifyBehindExternalProxy(ctx: InstallContext, unit: string): Pro
 
 const identityStep = (): InstallStep => ({
   id: 'identity',
-  title: `Verify the cockpit end-to-end (auth + HTTPS reach ${productName('cezar')})`,
+  title: `Verify the cockpit end-to-end (auth + HTTPS reach Squawk)`,
   async check() {
     return false; // always re-verify; it creates nothing
   },
@@ -830,7 +829,7 @@ const identityStep = (): InstallStep => ({
     // actually listening where the operator's proxy will look for it.
     if (ctx.state.externalProxy) return verifyBehindExternalProxy(ctx, recordedUnit(ctx).name);
     if (ctx.dryRun) {
-      ctx.ui.info(`DRY RUN — would verify auth (401 for anon) AND that an authenticated request reaches ${productName('cezar')}.`);
+      ctx.ui.info(`DRY RUN — would verify auth (401 for anon) AND that an authenticated request reaches Squawk.`);
       return { artifacts: [] };
     }
     const port = ctx.state.primaryPort;
@@ -872,7 +871,7 @@ const identityStep = (): InstallStep => ({
     const coreOk = upstreamUp && authEnforced && authedOk !== false;
     if (coreOk) {
       ctx.ui.success(
-        `Cockpit is live at ${url} — ${authedOk ? `an authenticated request reached ${productName('cezar')}` : `auth is enforced and ${productName('cezar')} is up`}. ` +
+        `Cockpit is live at ${url} — ${authedOk ? `an authenticated request reached Squawk` : `auth is enforced and Squawk is up`}. ` +
           'Log in with the username and password you set.',
       );
       if (!https) {
@@ -885,9 +884,9 @@ const identityStep = (): InstallStep => ({
     }
 
     const problems: string[] = [];
-    if (!upstreamUp) problems.push(`${productName('cezar')} is not listening on 127.0.0.1:${port} — the service is down, so nginx returns 502`);
+    if (!upstreamUp) problems.push(`Squawk is not listening on 127.0.0.1:${port} — the service is down, so nginx returns 502`);
     if (!authEnforced) problems.push(`nginx did not challenge an anonymous request (got "${anonCode}") — basic auth may not be active`);
-    if (authedOk === false) problems.push(`an authenticated request did not reach ${productName('cezar')} (bad credentials, or the upstream is down)`);
+    if (authedOk === false) problems.push(`an authenticated request did not reach Squawk (bad credentials, or the upstream is down)`);
     ctx.ui.error(
       `The cockpit is NOT fully working yet:\n` +
         problems.map((p) => `  • ${p}`).join('\n') +
@@ -937,10 +936,10 @@ export function createUbuntuVps(): PlatformStrategy {
         if (holder && !/nginx/i.test(holder)) {
           ctx.ui.warn(
             `Port 80 is already served by "${holder}" on this host.\n` +
-              `${productName('cezar')}'s ubuntu-vps install wants :80/:443 for its own nginx, so these will collide.\n\n` +
+              `Squawk's ubuntu-vps install wants :80/:443 for its own nginx, so these will collide.\n\n` +
               `If that is a reverse proxy you rely on (Dokploy/Traefik, Coolify, Caddy), re-run with:\n` +
               commandText(`  cez server-install --platform ubuntu-vps --external-proxy${ctx.state.domain ? ` --domain ${ctx.state.domain}` : ''} [--bind-host 172.17.0.1]\n`) +
-              `That installs the ${productName('cezar')} service only and lets your proxy front it.`,
+              `That installs the Squawk service only and lets your proxy front it.`,
           );
         }
       }
@@ -972,14 +971,14 @@ export function createUbuntuVps(): PlatformStrategy {
       // launch form); a checkout / global unit is left alone.
       refreshNpxCacheForRedeploy(ctx, await readExecStart(ctx, scope, UNIT_NAME));
       if (ctx.dryRun) {
-        ctx.ui.info(`DRY RUN — would reload+restart the ${productName('cezar')} ${scope} service and re-verify the cockpit.`);
+        ctx.ui.info(`DRY RUN — would reload+restart the Squawk ${scope} service and re-verify the cockpit.`);
         return;
       }
       await repairUnitEnv(ctx, scope, recordedUnit(ctx).path ?? (scope === 'user' ? userUnitPath : `/etc/systemd/system/${UNIT_NAME}`));
       const before = await serviceSnapshot(ctx, scope, UNIT_NAME);
       const sudo = { used: false };
       const fail = (reason: string): Promise<never> => failedRestart(ctx, scope, UNIT_NAME, reason, sudo.used);
-      ctx.ui.info(`Redeploying — restarting the ${productName('cezar')} ${scope} service to pick up the new version.`);
+      ctx.ui.info(`Redeploying — restarting the Squawk ${scope} service to pick up the new version.`);
       const after = scope === 'user'
         ? await restartUserService(ctx, UNIT_NAME, fail)
         : await restartSystemService(ctx, UNIT_NAME, before, sudo, fail);

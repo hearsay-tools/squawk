@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { setApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
@@ -23,7 +22,7 @@ const apiMeta = document.querySelector('meta[name="cez-api-base"]')?.getAttribut
 setApiBaseUrl(resolveBuildApiBase(apiMeta, import.meta.env.VITE_HSQ_API_BASE, import.meta.env.VITE_CEZ_API_BASE))
 
 const container = document.getElementById('root')
-if (!container) throw new Error(`${productName('cezar')}: #root container is missing from index.html`)
+if (!container) throw new Error(`Squawk: #root container is missing from index.html`)
 
 createRoot(container).render(
   <StrictMode>

@@ -1,4 +1,3 @@
-import { productName } from './home/display.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { defaultCliDeps, main, type CliDeps } from './cli-dispatch.ts';
 import { testHome } from './home/test-home.testkit.ts';
@@ -57,7 +56,7 @@ describe('main dispatch', () => {
     f.deps.resolveCliHome.mockImplementation(() => { throw new Error('No home directory'); });
     await f.run();
     const help = f.deps.console.log.mock.calls[0]![0];
-    expect(help).toContain(`${productName('cezar')} — local cockpit for AI agent tasks in your repo\n\nUsage:`);
+    expect(help).toContain(`Squawk — local cockpit for AI agent tasks in your repo\n\nUsage:`);
     expect(help).toContain(`  ${name} run "<task>"          run a task headless in the terminal`);
     expect(help).toContain('      --no-workers');
     expect(help).toContain('      --no-messaging');

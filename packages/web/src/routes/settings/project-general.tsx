@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -147,7 +146,7 @@ function RemoveProject({ project, bootProject }: { project: ProjectListEntry; bo
           // reach it, then says what "Remove" actually does — the row context that makes a bare
           // "Remove" safe-sounding isn't read out with it.
           aria-label={`Remove ${project.name} from the workspace — unregisters it, no files are deleted`}
-          title={isBoot ? `${productName('cezar')} is serving this project — it re-registers itself at every start` : undefined}
+          title={isBoot ? `Squawk is serving this project — it re-registers itself at every start` : undefined}
           disabled={isBoot || remove.isPending}
           onClick={() => setConfirming(project)}
           className="text-danger"
@@ -156,7 +155,7 @@ function RemoveProject({ project, bootProject }: { project: ProjectListEntry; bo
         </Button>
         {isBoot ? (
           <span data-slot="project-general-remove-boot" className="text-[11px] text-soft-foreground">
-            {productName('cezar')} is serving this project — it re-registers itself at every start.
+            Squawk is serving this project — it re-registers itself at every start.
           </span>
         ) : null}
       </div>

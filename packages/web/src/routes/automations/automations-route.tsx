@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { ZapIcon } from '@/components/design-icons'
@@ -48,7 +47,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
           icon={<ZapIcon />}
           tone="neutral"
           title="Automations are off"
-          subtitle={`This server does not run schedules, poll GitHub or launch tasks from them. Unset CEZ_AUTOMATIONS or set it to 1 and restart ${productName('cezar')} to turn automations on.`}
+          subtitle={`This server does not run schedules, poll GitHub or launch tasks from them. Unset CEZ_AUTOMATIONS or set it to 1 and restart Squawk to turn automations on.`}
           heading="h2"
         />
       </div>
