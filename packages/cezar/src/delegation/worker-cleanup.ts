@@ -239,18 +239,34 @@ export class WorkerCleanup {
    * A worker's destroy first stops and destroys the workers it started, which work in its
    * directory, and then asks whether a live worker still works there. Returns why the worker's own
    * destroy cannot go on yet, or undefined.
+   *
+   * Lock order: an explicit destroy holds the supervisor's key and takes each child's key in turn.
+   * A scheduled attempt already holds the project's `destroy-retries` key, and a child's own
+   * scheduled attempt takes its key before that one, so a scheduled attempt never waits for a
+   * child's key: it records the child's destroy, leaves it to the child's own retry and reports
+   * itself incomplete until that retry has finished.
    */
   private async destroySupervised(project: DelegationProject, workerId: string, mode: 'manual' | 'scheduled', startedAt: number): Promise<string | undefined> {
     const worker = project.store.getRun(workerId);
     for (const child of supervisedWorkers(project.store, worker)) {
+      const record = child.delegation?.role === 'worker' ? child.delegation : undefined;
+      if (!record || (record.destroy?.phase === 'complete' && !record.destroy.remaining.length)) continue;
+      const held = (error?: string) => `Worker ${child.id}, which this worker started, is not destroyed yet${error ? `: ${error}` : ''}`.slice(0, 2_000);
+      if (mode === 'scheduled') {
+        if (!record.destroy) {
+          project.store.commitDelegation([{ id: child.id, delegation: { ...record, destroy: { requestedAt: new Date().toISOString(), phase: 'requested',
+            remaining: ['process', ...workspaceKind(record.workspace).destroyResources] } } }]);
+        }
+        this.scheduleDestroyRetry(project, child.id);
+        return held('its cleanup retries on its own');
+      }
       const check = () => {
         const current = project.store.getRun(child.id);
         if (current?.delegation?.role !== 'worker' || supervisorIdOf(current) !== workerId) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
         return current;
       };
-      const destroyed = child.delegation?.role === 'worker' && child.delegation.destroy?.phase === 'complete' && !child.delegation.destroy.remaining.length;
-      const result = destroyed ? undefined : await this.serialized(`worker:${project.id}:${child.id}`, () => this.destroyAttempt(project, child.id, check, mode, startedAt));
-      if (result && result.state !== 'complete') return `Worker ${child.id}, which this worker started, is not destroyed yet${result.error ? `: ${result.error}` : ''}`.slice(0, 2_000);
+      const result = await this.serialized(`worker:${project.id}:${child.id}`, () => this.destroyAttempt(project, child.id, check, mode, startedAt));
+      if (result.state !== 'complete') return held(result.error);
     }
     const current = project.store.getRun(workerId);
     return current && hostsLiveSharedWorker(current, rootId => project.store.listWorkersOf(rootId)) ? SHARED_HOST_REFUSAL : undefined;
