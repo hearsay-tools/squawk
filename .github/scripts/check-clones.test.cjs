@@ -263,7 +263,7 @@ test('a file moved with its same-file clone passes; a further copy of it still f
 
 test('a merge-base clone carries one head clone of the same fingerprint, in its own pair first, never across packages', () => {
   const { carryMoved } = require('./check-clones.cjs');
-  const clone = (first, second, fragment = 'a\nb', tokens = 60) => ({ ...reportedClone(first, second, tokens), fragment });
+  const clone = (first, second, fragment = 'a\nb', tokens = 60) => ({ ...reportedClone(first, second, tokens), fragment, moduleSources: [] });
   const a = 'packages/demo/src/a.ts'; const b = 'packages/demo/src/b.ts'; const c = 'packages/demo/src/c.ts'; const other = 'packages/web/src/x.ts';
   const kept = (base, head) => {
     const result = carryMoved(reportRoot, base, head);
@@ -333,15 +333,19 @@ test('only module sources resolve, from the file the fragment was cut from', () 
     const crlf = { eol: '\r\n' };
     assert.ok(carried(clone('a', imports('./x.ts'), crlf), clone('b/c', imports('../../a/x.ts'), crlf)), 'a CRLF file moves with its modules');
     assert.ok(!carried(clone('a', imports('./x.ts'), crlf), clone('b', imports('./x.ts'), crlf)), 'a CRLF file importing another x.ts');
-    // A fragment that cannot be placed in a parsed file keeps its relative text only within its own file.
+    // A fragment that cannot be placed in a parsed file is carried only within its own file.
+    const escaped = `import { value } from '\\x2e/x.ts';\nconst late = await import("\\u002e/x.ts");`;
     for (const unresolved of [{ start: 1 }, { file: `${imports('./x.ts')}\nconst = ;` }]) {
-      const base = clone('a', imports('./x.ts'), unresolved);
-      assert.equal(base.moduleSources, null);
-      assert.ok(!carried(base, clone('b', imports('./x.ts'), unresolved)), 'unresolved relative text never moves');
-      assert.ok(!carried(base, clone('b/c', imports('../../a/x.ts'))));
-      assert.ok(carried(base, { ...clone('b', imports('./x.ts'), unresolved), firstFile: base.firstFile }), 'unresolved relative text stays carried in its own file');
-      assert.ok(carried(clone('a', 'const a = 1;', unresolved), clone('b', 'const a = 1;', unresolved)), 'a fragment without relative text moves');
+      for (const fragment of [imports('./x.ts'), escaped, 'const a = 1;']) {
+        const base = clone('a', fragment, unresolved);
+        assert.equal(base.moduleSources, null);
+        assert.ok(!carried(base, clone('b', fragment, unresolved)), `unresolved fragment never moves: ${fragment}`);
+        assert.ok(carried(base, { ...clone('b', fragment, unresolved), firstFile: base.firstFile }), 'an unresolved fragment stays carried in its own file');
+      }
+      assert.ok(!carried(clone('a', imports('./x.ts'), unresolved), clone('b/c', imports('../../a/x.ts'))));
     }
+    assert.deepEqual(clone('a', escaped).moduleSources.map(({ value }) => value), ['./x.ts', './x.ts'], 'an escaped source resolves when the file parses');
+    assert.ok(!carried(clone('a', escaped), clone('b', escaped)), 'an escaped source names another x.ts from another folder');
     // Text that only looks like an import is a string or a comment: it stays as written.
     const lookalike = (source) => `const text = \`import "${source}"\`;\n// import { x } from '${source}';\nconst plain = 'from "${source}"';\nconst call = notRequire('${source}');`;
     const moved = clone('moved', lookalike('./x.ts'));

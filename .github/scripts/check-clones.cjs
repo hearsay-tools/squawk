@@ -142,12 +142,12 @@ function withModuleSources(scratch, clones) {
 // another file or file pair hashes alike, so a move can be told from a new copy. Each relative
 // module source reads as the repository path it resolves to from the first file, marked so no other
 // string reads alike, so a moved file that still imports the same modules keeps its fingerprint.
-// A fragment with unresolved relative-looking text also hashes its first file: it never moves.
+// A fragment whose sources were not resolved also hashes its first file: it never moves.
 function fingerprint(scratch, clone) {
   if (typeof clone.fragment !== 'string' || !Number.isSafeInteger(clone.tokens)) throw new Error('Invalid clone fragment');
   const file = relativeFile(scratch, clone.firstFile);
   const sources = Array.isArray(clone.moduleSources) ? clone.moduleSources : undefined;
-  const pinned = !sources && /['"`]\.\.?\//.test(clone.fragment) ? file : '';
+  const pinned = sources ? '' : file;
   let resolved = clone.fragment;
   for (const { start, end, value } of [...(sources ?? [])].sort((a, b) => b.start - a.start)) {
     resolved = `${resolved.slice(0, start)}\0${JSON.stringify(path.posix.join(path.posix.dirname(file), value))}${resolved.slice(end)}`;
