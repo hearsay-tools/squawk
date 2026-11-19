@@ -6,6 +6,10 @@ import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { discoverClaudeModels, KILL_GRACE_MS, TERM_GRACE_MS } from './claude-model-catalog.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The catalog and startup paths build the runner's child env through the registry.
+registerBuiltInRunners();
 
 /**
  * A stand-in for the CLI's stream-json channel: it records the control requests written to stdin

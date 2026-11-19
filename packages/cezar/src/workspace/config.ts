@@ -19,6 +19,7 @@ import {
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 
 /**
  * `~/.cezar/config.json` — the per-user workspace config + project registry
@@ -215,15 +216,19 @@ const composerDefaultsSchema = z
 const agentDefaultsSchema = z
   .object({
     runner: z.enum(PROVIDER_IDS).optional().catch(undefined),
+    /** A record keyed by registered id, checked against the registry when config loads. A key no
+     *  registered runner took is kept and ignored, as `.passthrough()` kept it; a registered
+     *  runner's value degrades per key. */
     models: z
-      .object({
-        claude: z.string().trim().min(1).max(200).optional().catch(undefined),
-        codex: z.string().trim().min(1).max(200).optional().catch(undefined),
-        opencode: z.string().trim().min(1).max(200).optional().catch(undefined),
-        pi: z.string().trim().min(1).max(200).optional().catch(undefined),
-        omp: z.string().trim().min(1).max(200).optional().catch(undefined),
+      .record(z.string(), z.unknown())
+      .transform((entries) => {
+        const field = z.string().trim().min(1).max(200).optional().catch(undefined);
+        const out = { ...entries } as Record<string, string | undefined>;
+        for (const { id } of registeredRunners()) {
+          if (id in entries) out[id] = field.parse(entries[id]);
+        }
+        return out;
       })
-      .passthrough()
       .optional()
       .catch(undefined),
   })

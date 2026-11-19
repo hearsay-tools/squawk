@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { loadWorkspaceConfigSync } from './config.ts';
 
 /**
@@ -99,17 +100,20 @@ export function parseAgentAccountEntries(entries: unknown[]): { accounts: AgentA
   return { accounts, duplicates, selectedIndices };
 }
 
-/** One project's choice, per provider. Explicit keys so `PROVIDER_IDS` stays the one source of
- *  truth and the value is bounded. An absent key means the discovered default. */
+/** One project's choice, per provider: a record keyed by registered id, checked against the
+ *  registry when the store loads. A key no registered runner took is kept and ignored, as
+ *  `.passthrough()` kept it; a registered runner's value is bounded and degrades per key. An
+ *  absent key means the discovered default. */
 const selectionSchema = z
-  .object({
-    claude: z.string().max(64).optional().catch(undefined),
-    codex: z.string().max(64).optional().catch(undefined),
-    opencode: z.string().max(64).optional().catch(undefined),
-    pi: z.string().max(64).optional().catch(undefined),
-    omp: z.string().max(64).optional().catch(undefined),
-  })
-  .passthrough();
+  .record(z.string(), z.unknown())
+  .transform((entries) => {
+    const field = z.string().max(64).optional().catch(undefined);
+    const out = { ...entries } as Record<string, string | undefined>;
+    for (const { id } of registeredRunners()) {
+      if (id in entries) out[id] = field.parse(entries[id]);
+    }
+    return out;
+  });
 
 export type AgentAccountSelection = z.infer<typeof selectionSchema>;
 
@@ -208,10 +212,11 @@ function upgradeSavedDefaults(home: Home, store: AgentAccountStore): AgentAccoun
   }
 }
 
-/** The saved machine-wide default as [provider, account id] pairs. */
+/** The saved machine-wide default as [provider, account id] pairs, over the registered runners
+ *  in registration order (was `PROVIDER_IDS` order — the same five). */
 function savedDefaults(store: AgentAccountStore) {
   const saved = selectionSchema.safeParse((store as { defaults?: unknown }).defaults);
-  return saved.success ? PROVIDER_IDS.flatMap((provider) => saved.data[provider] === undefined ? [] : [[provider, saved.data[provider]] as const]) : [];
+  return saved.success ? registeredRunners().flatMap(({ id }) => saved.data[id] === undefined ? [] : [[id, saved.data[id]] as const]) : [];
 }
 
 function foldSavedDefaults(store: AgentAccountStore, roots: readonly string[]): AgentAccountStore {

@@ -9,6 +9,10 @@ import {
   resolveOmpExecutable,
   spawnOmp,
 } from './omp-model-catalog.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The spawn and account paths read the runner's env and account data through the registry.
+registerBuiltInRunners();
 
 // Trimmed from a recorded `omp models --json` (omp/18.4.11): the output is an OBJECT with a
 // `models` array, and `thinking` is null or the model's own list of levels.

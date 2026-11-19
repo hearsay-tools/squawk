@@ -33,9 +33,13 @@ import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.j
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { registerRunner } from './runner-registry.ts';
 import { piRunner } from '../runners/pi/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { extraToolRows } from './runner-fact-rows.testkit.ts';
 
-registerRunner(piRunner);
+// The runner's child env reads each backend's allow-list from the registry; the env tests below
+// drive pi, OpenCode (the `provider/model` control) and Claude.
+for (const definition of [piRunner, opencodeRunner, claudeRunner]) registerRunner(definition);
 
 /**
  * The `pi` runner (#387): a new AgentBackend slotted into the runner seam as

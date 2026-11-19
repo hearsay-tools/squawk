@@ -5,6 +5,10 @@ import { HomeStore } from './store.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { acquireLock, deleteServerState } from '../server-install/state.ts';
 import { loadAgentAccounts } from '../workspace/agent-accounts.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The spawn and account paths read the runner's env and account data through the registry.
+registerBuiltInRunners();
 import { disableRemoteSettings, enableRemoteSettings, isPortGranted } from '../remote-settings.ts';
 
 afterEach(() => { vi.restoreAllMocks(); cleanStoreRoots(); });

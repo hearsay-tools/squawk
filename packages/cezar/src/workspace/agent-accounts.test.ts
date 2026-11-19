@@ -235,6 +235,15 @@ describe('agent accounts store', () => {
       expect(raw.accounts[0].futureRowKey).toBe(1);
     });
 
+    it('keeps a selection key for a runner no registered definition took', async () => {
+      // A store written before the runner-definitions slice, including a key no registered
+      // definition took, loads with the same values: the known keys parse, the unknown key is
+      // kept and ignored, as `.passthrough()` kept it.
+      write({ accounts: [account('work')], selections: { '/a': { claude: 'work', ghost: 'other' } } });
+      const store = await loadAgentAccounts(testHome());
+      expect(store.selections['/a']).toEqual({ claude: 'work', ghost: 'other' });
+    });
+
     it('salvages selections per entry and drops a malformed one', async () => {
       write({
         accounts: [account('work')],
