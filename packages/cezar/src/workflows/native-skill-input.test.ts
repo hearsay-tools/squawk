@@ -2,7 +2,7 @@ import { makeHumanWait } from '@open-mercato/cezar-contract/test-factories.testk
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock, RunnerId } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';

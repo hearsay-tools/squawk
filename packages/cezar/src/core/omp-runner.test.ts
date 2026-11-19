@@ -25,7 +25,8 @@ vi.mock('node:child_process', async (importOriginal) => {
 import type { AgentEvent, AgentRunSpec, AgentSession } from './agent-runner.js';
 import type { UiEvent } from './ui-events.js';
 import { sessionGroupOf } from './session-process.js';
-import { buildOmpArgs, OMP_MINIMAL_ARGS, OMP_BUILTIN_TOOL_NAMES, OMP_SPEC_SUPPORT, OmpRunner, ompTools } from './omp-runner.js';
+import { buildOmpArgs, OMP_BUILTIN_TOOL_NAMES, OmpRunner, ompTools } from './omp-runner.js';
+import { OMP_MINIMAL_ARGS, OMP_SPEC_SUPPORT } from '../runners/omp/spec-support.js';
 import { ompProviderErrorMessage } from './omp-ui-mapper.js';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
 import { readPids } from '../pid-file.testkit.js';

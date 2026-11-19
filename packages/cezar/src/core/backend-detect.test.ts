@@ -2,9 +2,21 @@ import { productIdentity } from '../home/identity.ts';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
-import { detectEnvironment, probeOmp } from './backend-detect.ts';
+import { detectEnvironment, probeRunner } from './backend-detect.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// DetectEnvironment probes every registered runner.
+registerBuiltInRunners();
+
+const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);
+
+// `productEnv` reads each HSQ_* name before its CEZ_* twin, so a test that sets or clears a CEZ_*
+// setting also clears the twin, or a variable exported in the developer's shell wins.
+const hsqTwins = (...ids: string[]) => ['HSQ_DRY_RUN', ...ids.map((id) => `HSQ_${id}_BIN`)];
+const clearHsqTwins = (...ids: string[]) => { for (const key of hsqTwins(...ids)) vi.stubEnv(key, undefined); };
 
 describe('probeOmp', () => {
   const saved = { dry: process.env.CEZ_DRY_RUN, omp: process.env.CEZ_OMP_BIN, pi: process.env.CEZ_PI_BIN };
@@ -13,9 +25,11 @@ describe('probeOmp', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'cez-probe-omp-'));
     delete process.env.CEZ_DRY_RUN;
+    clearHsqTwins('OMP', 'PI');
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const [key, value] of [['CEZ_DRY_RUN', saved.dry], ['CEZ_OMP_BIN', saved.omp], ['CEZ_PI_BIN', saved.pi]] as const) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
@@ -75,6 +89,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'cez-probe-agents-'));
     delete process.env.CEZ_DRY_RUN;
+    clearHsqTwins('CODEX', 'OPENCODE', 'CLAUDE', 'PI', 'OMP');
     process.env.CEZ_CODEX_BIN = fakeCli('codex', 'codex-cli 9.9.9');
     process.env.CEZ_OPENCODE_BIN = fakeCli('opencode', '8.8.8');
     // Keep the other agent probes off the host's real CLIs.
@@ -84,6 +99,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const key of keys) {
       if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
     }
@@ -147,5 +163,40 @@ describe('detectEnvironment: codex and opencode probes', () => {
     const rows = await detectEnvironment();
     expect(rows.find((row) => row.name === 'codex')).toMatchObject({ name: 'codex', available: false });
     expect(rows.find((row) => row.name === 'opencode')).toMatchObject({ name: 'opencode', available: false });
+  });
+});
+
+describe('probeRunner: the Claude version banner', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'cez-probe-claude-'));
+    clearHsqTwins('CLAUDE');
+    for (const key of ['CEZ_DRY_RUN', 'CEZ_CLAUDE_BIN']) vi.stubEnv(key, undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const probeClaude = (banner: string) => {
+    const bin = join(root, 'claude');
+    writeFileSync(bin, `#!/bin/sh\necho '${banner}'\n`);
+    chmodSync(bin, 0o755);
+    vi.stubEnv('CEZ_CLAUDE_BIN', bin);
+    return probeRunner('claude', runnerDefinition('claude').detection);
+  };
+
+  it('accepts a binary that prints the Claude Code banner', async () => {
+    await expect(probeClaude('2.1.0 (Claude Code)')).resolves.toEqual({
+      name: 'claude', available: true, version: '2.1.0 (Claude Code)', hint: 'if not authenticated, run `claude` once and log in',
+    });
+  });
+
+  it('refuses a binary whose version line is not a Claude banner', async () => {
+    const check = await probeClaude('wrapper-tool unknown');
+    expect(check).toMatchObject({ name: 'claude', available: false });
+    expect(check.hint).toContain("doesn't look like Claude Code (got: wrapper-tool unknown)");
   });
 });

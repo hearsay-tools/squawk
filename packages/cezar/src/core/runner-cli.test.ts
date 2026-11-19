@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
-import { isSafeSessionId, resumeCommand, RUNNER_CLI, terminalExecutable } from './runner-cli.ts';
+import { isSafeSessionId, resumeCommand, terminalExecutable } from './runner-cli.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
+
+// The golden take-over commands cover every runner.
+registerBuiltInRunners();
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {
   beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });
@@ -70,12 +75,12 @@ describe('terminalExecutable — PATH name or the configured executable', () => 
   it('starts a path-name runner by its PATH name, even in dry-run', () => {
     vi.stubEnv('CEZ_DRY_RUN', '1');
     for (const runner of RUNNER_IDS) {
-      const executable = RUNNER_CLI[runner].terminalExecutable;
+      const executable = runnerDefinition(runner).cli.terminalExecutable;
       if (executable.kind === 'path-name') expect(terminalExecutable(runner)).toBe(executable.name);
     }
   });
 
-  it.each(RUNNER_IDS.filter(runner => RUNNER_CLI[runner].terminalExecutable.kind === 'configured'))(
+  it.each(RUNNER_IDS.filter(runner => runnerDefinition(runner).cli.terminalExecutable.kind === 'configured'))(
     'quotes the configured %s executable, and refuses one the platform cannot spell', (runner) => {
       const variable = `HSQ_${runner.toUpperCase()}_BIN`;
       vi.stubEnv(variable, '/opt/Some Agent/bin');

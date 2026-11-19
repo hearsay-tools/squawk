@@ -11,6 +11,10 @@ import { loadServerState } from './state.ts';
 import { createAutoUi } from './ui.ts';
 import { nginxVhost } from './platforms/ubuntu-vps.ts';
 import { MIGRATABLE_PLATFORM_IDS, type Runner } from './types.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The dry-run install walks the dependency step, which probes every runner.
+registerBuiltInRunners();
 
 const noRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
 

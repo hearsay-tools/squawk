@@ -5,7 +5,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS, WAIT_KIND } from '@open-mercato/cez
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import type { AgentRunner, AgentSession, AgentRunResult } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { fireCapturedTimer, observeWaitTimers } from './waits.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';

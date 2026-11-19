@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunResult, AgentSession } from '../../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../../runners/claude/spec-support.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
 
 describe('session fault precedence through the public run', () => {

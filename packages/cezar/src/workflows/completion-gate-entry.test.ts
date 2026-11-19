@@ -3,7 +3,7 @@ import { transitionTurnBoundary } from './run/turn-boundary.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { createFixtureManager } from './fixture-cleanup.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';

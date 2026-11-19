@@ -26,7 +26,7 @@ import type { UiEvent } from './ui-events.js';
 import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
 import { buildPiArgs, PiRunner } from './pi-runner.js';
-import { PI_MINIMAL_ARGS } from './pi-args.ts';
+import { PI_MINIMAL_ARGS } from '../runners/pi/spec-support.ts';
 import { squawkToolNames } from '../ci-wait/tools.js';
 import { appendTurnText } from '../workflows/run.js';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
@@ -51,8 +51,12 @@ describe('backend-detect handles an absent pi CLI', () => {
   beforeEach(() => {
     delete process.env.CEZ_DRY_RUN; // real probe, not the mock short-circuit
     process.env.CEZ_PI_BIN = join(tmpdir(), 'cez-pi-does-not-exist-xyz');
+    // `productEnv` reads the HSQ_* names first; clear them so the CEZ_* settings above decide.
+    vi.stubEnv('HSQ_DRY_RUN', undefined);
+    vi.stubEnv('HSQ_PI_BIN', undefined);
   });
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (saved.bin === undefined) delete process.env.CEZ_PI_BIN;
     else process.env.CEZ_PI_BIN = saved.bin;
     if (saved.dry === undefined) delete process.env.CEZ_DRY_RUN;

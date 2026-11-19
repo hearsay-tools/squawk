@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { AgentRunner, AgentSession, AgentRunResult, SessionOptions } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as processes from '../core/process-usage.ts';
 import { RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';

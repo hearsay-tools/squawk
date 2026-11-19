@@ -28,7 +28,7 @@ import type { AgentSession, AgentEvent, AgentRunResult } from '../core/agent-run
 import { ciWaitEntry, RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createFixtureManager } from './fixture-cleanup.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { AUTONOMOUS_NUDGE, COMPLETION_NO_REPLY_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE, IDLE_TIMEOUT_MS } from './run.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 

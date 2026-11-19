@@ -15,9 +15,12 @@ The types in `agent-runner.ts` and their doc comments are the contract: `AgentRu
 `RUNNER_FACTS` in `core/runner-facts.ts` reads what each runner's wire can do from the
 registered definitions; each runner declares it in `runners/<id>/facts.ts`. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
 cockpit and the server both read: the display name, the model catalog delivery, the effort
-levels, the model id scope and the input mode. `RUNNER_CLI` in `core/runner-cli.ts` holds how
-a terminal starts and resumes each runner's CLI. Each runner's `*_SPEC_SUPPORT` constant, next to its class, says which
-`AgentRunSpec` fields its wire honors.
+levels, the model id scope and the input mode. A runner's definition holds how a terminal
+starts and resumes its CLI and where the installer gets it (`cli`, from `runners/<id>/cli.ts`;
+`core/runner-cli.ts` reads it), and how the host probe finds it (`detection`, from
+`runners/<id>/detection.ts`; `core/backend-detect.ts` runs the probe). Each runner's
+`*_SPEC_SUPPORT` constant, in `runners/<id>/spec-support.ts`, says which `AgentRunSpec` fields
+its wire honors; the definition and the adapter class read that file.
 
 - `.ai/scripts/probe-steering.ts` probes the `inputDelivery` of a real CLI. It spends a paid
   session, so run it by hand.
@@ -249,7 +252,7 @@ Continue (ADR 0064). It names the step a Continue runs as, never the workflow po
 ### Governed delegation controls (D1)
 
 The `restrictCrossSessionMessaging` doc comment in `core/agent-runner.ts` says what a governed
-session is and what its launch turns off. The same row of each runner's `*_SPEC_SUPPORT` names
+session is and what its launch turns off. The same row of each runner's `*_SPEC_SUPPORT` (`runners/<id>/spec-support.ts`) names
 that runner's control. The D1 entries in `PARITY_EXEMPTIONS` name, for each runner without a
 control, the reason and the version inspected. The Owned workers part of `README.md` states
 the limits that a user meets, and § 11 of
@@ -312,7 +315,7 @@ then name most of the missing pieces. The items below are the steps that they do
 force, or force only in part. The item numbers are stable: code cites them.
 
 1. **Runner** — `core/<runner>-runner.ts` implements `AgentRunner` / `AgentSession`.
-   Declare `specSupport` and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a
+   Declare `specSupport` (`runners/<id>/spec-support.ts`) and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a
    similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
    for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
    permission request after its turn ended declares `nativePermission: 'after-turn'` and
@@ -320,14 +323,15 @@ force, or force only in part. The item numbers are stable: code cites them.
    `prependSystemPrompt` when the backend has no system-prompt channel. For a fork of an
    existing runner's wire, read the fork's own protocol documents for the turn boundary,
    the session id and the tool flags before you copy code.
-2. **Definition** — `runners/<id>/definition.ts` with its facts and `loadAdapter`, and one line
-   in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
+2. **Definition** — `runners/<id>/definition.ts` with its facts, `specSupport`, `detection`, `cli` and `loadAdapter`,
+   and one line in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
    `loadSkillCatalog`, `configFiles` (`runners/<id>/config-files.ts`) and `extraTools`
    go in the same definition. The compiler and the guard tests name each other place:
    `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
    `ui-events.ts` and in its api-client copy (§3).
-3. **Detection** — add the runner's probe to `RUNNER_PROBES` (`core/backend-detect.ts`).
-   An absent CLI never fails the boot.
+3. **Detection** — declare the runner's `detection` (`runners/<id>/detection.ts`): its PATH name,
+   its `*_BIN` override, what dry-run reports and its hints. `core/backend-detect.ts` runs the probe
+   from it. An absent CLI never fails the boot.
 4. **Mapper** — `core/<runner>-ui-mapper.ts` emits the v2 stream (§4).
 5. **v1 alongside v2** — emit v2 through `SessionOptions.onUiEvent` and keep the v1
    stream.

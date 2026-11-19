@@ -3,7 +3,7 @@ import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixtur
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createFixtureManager } from './fixture-cleanup.testkit.ts';

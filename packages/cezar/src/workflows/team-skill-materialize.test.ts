@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import * as runners from '../core/runner-registry.ts';
 import { RunStore } from '../runs/store.ts';

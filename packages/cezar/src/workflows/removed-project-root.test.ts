@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import type { AgentRunSpec, AgentRunner } from '../core/agent-runner.ts';
 
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { projectMovedMarker, projectPaths } from '../project-paths.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';

@@ -1,7 +1,7 @@
 import * as git from '../autosave-commit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentSession } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { fixtureWorkSettled } from './fixture-cleanup.testkit.ts';

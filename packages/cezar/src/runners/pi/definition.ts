@@ -3,11 +3,17 @@ import { PI_FACTS } from './facts.ts';
 import { PI_MODELS } from './models.ts';
 import { PI_CONFIG_FILES } from './config-files.ts';
 import { PI_EXTRA_TOOLS } from './extra-tools.ts';
+import { PI_SPEC_SUPPORT } from './spec-support.ts';
+import { PI_DETECTION } from './detection.ts';
+import { PI_CLI } from './cli.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
   id: 'pi',
   facts: PI_FACTS,
+  specSupport: PI_SPEC_SUPPORT,
+  detection: PI_DETECTION,
+  cli: PI_CLI,
   loadAdapter: async () => new (await import('../../core/pi-runner.ts')).PiRunner(),
   models: {
     ...PI_MODELS,

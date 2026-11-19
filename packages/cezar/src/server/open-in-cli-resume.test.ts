@@ -17,6 +17,10 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The cases span the Claude, Codex, OpenCode and OMP take-over commands.
+registerBuiltInRunners();
 
 // The terminal launcher actually spawns a process (osascript/cmd/x-terminal-emulator) — mocked
 // so this suite exercises only the command construction, never a real terminal window.

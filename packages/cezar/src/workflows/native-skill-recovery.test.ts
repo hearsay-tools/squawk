@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { crashStore } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';

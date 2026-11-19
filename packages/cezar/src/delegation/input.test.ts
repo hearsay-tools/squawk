@@ -5,7 +5,7 @@ import { InputDelivery } from '../workflows/run/input-delivery.ts';
 import { execFileSync } from 'node:child_process';
 import * as runners from '../core/runner-registry.ts';
 import type { RunnerFactory } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { TrackedWork } from '../workflows/run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { plannedWorkflow } from '../workflows/types.ts';
