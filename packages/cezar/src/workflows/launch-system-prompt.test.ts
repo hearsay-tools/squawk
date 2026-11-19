@@ -120,7 +120,7 @@ describe('launch system prompt at both sites (#1632)', () => {
       const finish = () => { clearTimeout(guard); launched.listeners.delete(check); };
       const check = () => { if (launched.specs.length > index) { finish(); resolve(launched.specs[index]!); } };
       // bound: a hang guard only; the runner seam's call ends the wait. Git fixture setup and
-      // provisioning take seconds under load, as in agent-webhooks-prompt.test.ts.
+      // provisioning take seconds under load.
       const guard = setTimeout(() => { finish(); reject(new Error(`no launch #${index}`)); }, 15_000);
       launched.listeners.add(check);
       check();
