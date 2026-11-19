@@ -8,6 +8,11 @@ import { SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
+import { registerRunner } from './runner-registry.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+
+// The runner's session env reads opencode's registry data; this test drives only opencode.
+registerRunner(opencodeRunner);
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 

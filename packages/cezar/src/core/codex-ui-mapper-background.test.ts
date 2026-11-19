@@ -13,6 +13,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
+import { registerRunner } from './runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+// The runner's session env reads codex's registry data; this test drives only codex.
+registerRunner(codexRunner);
 import { createCodexUiState, mapCodexNotification, type CodexUiMapperState } from './codex-ui-mapper.ts';
 import type { UiEvent, UiToolItem } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';

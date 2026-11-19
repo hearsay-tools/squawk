@@ -5,6 +5,10 @@ import { Home } from './home.ts';
 import { migrateLegacyHome } from './migrate.ts';
 import { getHomeRecovery, importHomeRecovery } from './recovery.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The migration parses account stores through the registry.
+registerBuiltInRunners();
 
 afterEach(cleanStoreRoots);
 

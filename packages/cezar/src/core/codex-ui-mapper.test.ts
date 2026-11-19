@@ -18,6 +18,11 @@ import { z } from 'zod';
 import type { AgentEvent } from './agent-runner.ts';
 import type { UiEvent, UiItem } from './ui-events.ts';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP, codexSessionStarted, createCodexUiState, mapCodexNotification } from './codex-ui-mapper.ts';
+import { registerRunner } from './runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+// The runner's session env reads codex's registry data; this test drives only codex.
+registerRunner(codexRunner);
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { PLAN_STATUSES } from './ui-events.ts';
