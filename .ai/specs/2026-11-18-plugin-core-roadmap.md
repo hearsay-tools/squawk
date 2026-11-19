@@ -142,10 +142,12 @@ The service had 118,000 lines of non-test source at that commit.
 On 2026-11-18 at `1e22453b1`, `layer-import.baseline.json` holds 139 entries for 140 imports:
 127 from core into features and 13 from core into runners.
 
-An audit at `2d06ed70c` on 2026-11-19 (Squawk task `0a6c5807`) measured Squeal's selection
-against 90 days of commits on `main`. The files that `workflows/run.ts` imports, directly or
-through other files, caused 59% of the test files Squeal ran after edits, because 564 test files
-build a full `RunManager` and load 97% of what Squeal selects for them. After the
+An audit at `2d06ed70c` on 2026-11-19 (Squawk task `0a6c5807`) weighted Squeal's current
+selection for each file by the commits that touched the file on `main` in 90 days. The files
+that `workflows/run.ts` imports, directly or through other files, hold 59% of that weighted
+total, because 564 test files build a full `RunManager`. Across the 1,702 test files with a
+record of the modules they loaded, the tests loaded 97% of the code files Squeal selects for
+them. After the
 [ADR 0053](../../docs/adr/0053-keep-runmanager-a-facade-over-run-modules.md) split, the median
 `workflows/run/` module still selects 591 test files. Removing every core import of a feature
 that `layer-import.baseline.json` lists would cut the total by about 4%. Rule 5 exists for this
