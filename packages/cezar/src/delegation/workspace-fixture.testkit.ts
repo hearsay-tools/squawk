@@ -3,7 +3,6 @@ import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { copyWorkspaceSeed } from './workspace-seed.testkit.ts';
 import { syncBuiltinESMExports } from 'node:module';
-import { drainFixtureManagers } from '../workflows/fixture-claude.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -52,7 +51,6 @@ export function receiptPath(root: string, workspace: WorkerWorkspace) {
   return join(root, '.git', 'cezar-owned-workspaces', `${workspace.resourceId}.json`);
 }
 afterEach(async () => {
-  for (const root of roots) await drainFixtureManagers(root);
   for (const manager of managers.splice(0)) manager.dispose();
   for (const store of stores.splice(0)) store.flush();
   vi.unstubAllEnvs();

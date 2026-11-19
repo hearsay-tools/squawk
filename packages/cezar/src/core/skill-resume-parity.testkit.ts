@@ -1,5 +1,5 @@
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
-import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
+import { IN_THREAD, skillResumeParity } from './skill-resume-rows.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 /**
  * hearsay-tools/squawk#3751: Continue and recovery keep native skill/session behavior without
@@ -16,11 +16,9 @@ import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { factsWhere } from './runner-fact-rows.testkit.ts';
 import {
   HARNESS_ADAPTERS,
   PINNED_SESSION_ID,
-  SKILL_RESUME_CRITERIA,
   driveSeam,
   promptFor,
   waitFor,
@@ -41,7 +39,6 @@ const SKILL_DESCRIPTION = 'Playbook for continued skill-driven tasks.';
 const SKILL_BODY = 'PLAYBOOK-BODY-790-SENTINEL';
 const EXTRA_PROMPT = 'EXTRA-PROMPT-790';
 
-const IN_THREAD = new Set(factsWhere(facts => facts.systemPromptOnResume === 'in-thread'));
 const LOST_OPENCODE_SESSION =
   'OpenCode session ses_mock_1 no longer exists; the continuation runs in a fresh session without the earlier conversation.';
 
@@ -367,188 +364,117 @@ function assertContinuationSkill(
   expect(hasNativeTrigger(backend, continuationRecording)).toBe(false);
 }
 
-const PARTS: Readonly<Record<string, readonly string[]>> = {
-  "live-continue-claude-pi": [
-    "claude R53",
-    "claude R55",
-    "pi R53",
-    "pi R55"
-  ],
-  "live-continue-codex-omp": [
-    "codex R53",
-    "codex R55",
-    "omp R53",
-    "omp R55"
-  ],
-  "live-continue-opencode": [
-    "opencode R53",
-    "opencode R55"
-  ],
-  "recovery-prompt": [
-    "claude R54",
-    "codex R54",
-    "omp R54",
-    "opencode R54",
-    "pi R54"
-  ],
-  "recovery-before-session-event": [
-    "claude R59",
-    "codex R59",
-    "omp R59",
-    "opencode R59",
-    "pi R59"
-  ],
-  "session-identity-claude-pi": [
-    "claude R57",
-    "pi R57"
-  ],
-  "session-identity-codex-omp": [
-    "codex R57",
-    "omp R57"
-  ],
-  "session-identity-opencode": [
-    "opencode R57"
-  ],
-  "wire-and-fallback": [
-    "claude R56",
-    "codex R56",
-    "codex fresh-session continuation includes the skill",
-    "every runner declares systemPromptOnResume",
-    "omp R56",
-    "opencode R56",
-    "opencode fresh-session continuation includes the skill",
-    "opens a fresh session with the skill, one note, and a new session id",
-    "pi R56"
-  ]
-};
+export const describeSkillResumeParity = skillResumeParity({
+  resumedContinue: backend => async () => {
+    await withSkillResumeRun(backend, async (fixture) => {
+      const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
+      await idleClose(fixture.manager, fixture.runId);
+      const marked = fixture.markWire();
+      const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, marked);
+      assertContinuationSkill(backend, fixture.repoRoot, launchPrompt, continued);
+    });
+  },
+  recoveredContinuation: backend => async () => {
+    await withSkillResumeRun(backend, async (fixture) => {
+      const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
+      await idleClose(fixture.manager, fixture.runId);
+      const marked = fixture.markWire();
+      expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
+      const persisted = fixture.store.getRun(fixture.runId);
+      expect(persisted?.continuationMessage).toBeDefined();
+      expect(['running', 'queued']).toContain(persisted?.status);
+      await fixture.restart();
+      await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
+      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
+      await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
+      assertContinuationSkill(backend, fixture.repoRoot, launchPrompt, fixture.wireSince(marked));
+    });
+  },
+  recordedSession: backend => async () => {
+    await withSkillResumeRun(backend, async (fixture) => {
+      await waitFor(() => Boolean(fixture.store.getRun(fixture.runId)?.steps?.some((step) => Boolean(step.sessionId))));
+      const sessionId = recordedSessionId(fixture.store, fixture.runId);
+      await idleClose(fixture.manager, fixture.runId);
+      const continuedMark = fixture.markWire();
+      const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, continuedMark);
+      assertReusedRecordedSession(backend, continued, sessionId);
+      expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
 
-export function describeSkillResumeParity(part: ParityPart, collect?: ParityCollector): void {
-  const { describe, it } = partitionParity(part, PARTS, collect, 'skill-resume');
-describe('harness parity — native skill on Continue (#790)', () => {
-  expect(SKILL_RESUME_CRITERIA.map((row) => row.id)).toEqual(['R53', 'R54', 'R55', 'R56', 'R57', 'R59']);
-
-  for (const backend of RUNNER_IDS) {
-    it(`${backend} R53 does not retrigger a skill on a resumed Continue`, async () => {
-      await withSkillResumeRun(backend, async (fixture) => {
-        const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
+      await idleClose(fixture.manager, fixture.runId);
+      const recoverMark = fixture.markWire();
+      expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
+      await fixture.restart();
+      await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
+      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
+      await waitFor(() => fixture.wireSince(recoverMark).includes('--append-system-prompt') || fixture.wireSince(recoverMark).includes('turn/start') || fixture.wireSince(recoverMark).includes('session/prompt') || fixture.wireSince(recoverMark).includes('prompt_async') || fixture.wireSince(recoverMark).includes('session/load') || fixture.wireSince(recoverMark).includes('thread/resume') || fixture.wireSince(recoverMark).includes('--output-format'));
+      assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId);
+      expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
+    });
+  },
+  interruptedContinue: backend => async () => {
+    await withSkillResumeRun(backend, async (fixture) => {
+      const sessionId = recordedSessionId(fixture.store, fixture.runId);
+      await idleClose(fixture.manager, fixture.runId);
+      fixture.store.addStep(fixture.runId, {
+        id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation',
+      });
+      fixture.store.updateStep(fixture.runId, 'continue-1', {
+        status: STEP_STATUS.running, sessionId, backend,
+      });
+      // A user's Continue checkpoints its message before the session opens; it answers the
+      // question the run parked on (hearsay-tools/cezarion#1234).
+      setRunStatus(fixture.store, fixture.runId, RUN_STATUS.running, { currentStepId: 'continue-1', finishedAt: undefined, continuationMessage: { id: 'continue-1', text: promptFor(backend, 'baseline'), origin: 'human', createdAt: new Date().toISOString() } });
+      expect(fixture.store.readEvents(fixture.runId).some(event =>
+        event.type === 'session' && event.stepId === 'continue-1')).toBe(false);
+      const marked = fixture.markWire();
+      await fixture.restart();
+      await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
+      assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId);
+      expect(fixture.store.getRun(fixture.runId)?.status).not.toBe('failed');
+    });
+  },
+  skillGone: backend => async () => {
+    await withSkillResumeRun(backend, async fixture => {
+      await idleClose(fixture.manager, fixture.runId);
+      fixture.manager.setSkillCatalog(fixedSkillCatalog());
+      const marked = fixture.markWire();
+      expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
+      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'failed');
+      expect(fixture.store.getRun(fixture.runId)?.error).toContain(`${backend} account "default"`);
+      expect(hasNativeTrigger(backend, fixture.wireSince(marked))).toBe(false);
+    });
+  },
+  freshSession: backend => async () => {
+    const origin: RunnerId = 'claude';
+    const savedClaude = process.env.CEZ_CLAUDE_BIN;
+    const savedTarget = process.env[HARNESS_ADAPTERS[backend].binEnv];
+    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
+    process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+    try {
+      await withSkillResumeRun(origin, async (fixture) => {
+        const launchPrompt = assertLaunchKeepsSkill(origin, fixture.repoRoot, fixture.snapshotWire());
         await idleClose(fixture.manager, fixture.runId);
         const marked = fixture.markWire();
-        const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, marked);
-        assertContinuationSkill(backend, fixture.repoRoot, launchPrompt, continued);
+        const continuedWire = await continueAndPark(fixture, {
+          text: promptFor(backend, 'baseline'),
+          runner: backend,
+        }, marked);
+        const continued = systemPromptsFrom(backend, continuedWire);
+        expect(continued.length).toBeGreaterThan(0);
+        // The continuation's opening prompt; its turn end's nudge follows (hearsay-tools/cezarion#1234).
+        const last = continued[0]!;
+        expect(skillInPrompt(last, fixture.repoRoot)).toBe(true);
+        expect(hasNativeTrigger(backend, continuedWire)).toBe(true);
+        expect(launchPrompt).not.toContain(SKILL_BODY);
       });
-    }, 60_000);
-
-    it(`${backend} R54 does not retrigger a skill when recover() resumes a persisted continuation`, async () => {
-      await withSkillResumeRun(backend, async (fixture) => {
-        const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
-        await idleClose(fixture.manager, fixture.runId);
-        const marked = fixture.markWire();
-        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-        const persisted = fixture.store.getRun(fixture.runId);
-        expect(persisted?.continuationMessage).toBeDefined();
-        expect(['running', 'queued']).toContain(persisted?.status);
-        await fixture.restart();
-        await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
-        await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
-        await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
-        assertContinuationSkill(backend, fixture.repoRoot, launchPrompt, fixture.wireSince(marked));
-      });
-    }, 60_000);
-
-    it(`${backend} R57 reuses the recorded session id on Continue and recover`, async () => {
-      await withSkillResumeRun(backend, async (fixture) => {
-        await waitFor(() => Boolean(fixture.store.getRun(fixture.runId)?.steps?.some((step) => Boolean(step.sessionId))));
-        const sessionId = recordedSessionId(fixture.store, fixture.runId);
-        await idleClose(fixture.manager, fixture.runId);
-        const continuedMark = fixture.markWire();
-        const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, continuedMark);
-        assertReusedRecordedSession(backend, continued, sessionId);
-        expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
-
-        await idleClose(fixture.manager, fixture.runId);
-        const recoverMark = fixture.markWire();
-        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-        await fixture.restart();
-        await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
-        await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
-        await waitFor(() => fixture.wireSince(recoverMark).includes('--append-system-prompt') || fixture.wireSince(recoverMark).includes('turn/start') || fixture.wireSince(recoverMark).includes('session/prompt') || fixture.wireSince(recoverMark).includes('prompt_async') || fixture.wireSince(recoverMark).includes('session/load') || fixture.wireSince(recoverMark).includes('thread/resume') || fixture.wireSince(recoverMark).includes('--output-format'));
-        assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId);
-        expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
-      });
-    }, 90_000);
-
-    it(`${backend} R59 recovers a Continue interrupted before its session event`, async () => {
-      await withSkillResumeRun(backend, async (fixture) => {
-        const sessionId = recordedSessionId(fixture.store, fixture.runId);
-        await idleClose(fixture.manager, fixture.runId);
-        fixture.store.addStep(fixture.runId, {
-          id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation',
-        });
-        fixture.store.updateStep(fixture.runId, 'continue-1', {
-          status: STEP_STATUS.running, sessionId, backend,
-        });
-        // A user's Continue checkpoints its message before the session opens; it answers the
-        // question the run parked on (hearsay-tools/cezarion#1234).
-        setRunStatus(fixture.store, fixture.runId, RUN_STATUS.running, { currentStepId: 'continue-1', finishedAt: undefined, continuationMessage: { id: 'continue-1', text: promptFor(backend, 'baseline'), origin: 'human', createdAt: new Date().toISOString() } });
-        expect(fixture.store.readEvents(fixture.runId).some(event =>
-          event.type === 'session' && event.stepId === 'continue-1')).toBe(false);
-        const marked = fixture.markWire();
-        await fixture.restart();
-        await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
-        assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId);
-        expect(fixture.store.getRun(fixture.runId)?.status).not.toBe('failed');
-      });
-    }, 90_000);
-
-    it(`${backend} R55 fails before a model call when the selected skill is gone`, async () => {
-      await withSkillResumeRun(backend, async fixture => {
-        await idleClose(fixture.manager, fixture.runId);
-        fixture.manager.setSkillCatalog(fixedSkillCatalog());
-        const marked = fixture.markWire();
-        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-        await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'failed');
-        expect(fixture.store.getRun(fixture.runId)?.error).toContain(`${backend} account "default"`);
-        expect(hasNativeTrigger(backend, fixture.wireSince(marked))).toBe(false);
-      });
-    }, 60_000);
-  }
-
-  for (const backend of IN_THREAD) {
-    it(`${backend} fresh-session continuation includes the skill`, async () => {
-      const origin: RunnerId = 'claude';
-      const savedClaude = process.env.CEZ_CLAUDE_BIN;
-      const savedTarget = process.env[HARNESS_ADAPTERS[backend].binEnv];
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
-      try {
-        await withSkillResumeRun(origin, async (fixture) => {
-          const launchPrompt = assertLaunchKeepsSkill(origin, fixture.repoRoot, fixture.snapshotWire());
-          await idleClose(fixture.manager, fixture.runId);
-          const marked = fixture.markWire();
-          const continuedWire = await continueAndPark(fixture, {
-            text: promptFor(backend, 'baseline'),
-            runner: backend,
-          }, marked);
-          const continued = systemPromptsFrom(backend, continuedWire);
-          expect(continued.length).toBeGreaterThan(0);
-          // The continuation's opening prompt; its turn end's nudge follows (hearsay-tools/cezarion#1234).
-          const last = continued[0]!;
-          expect(skillInPrompt(last, fixture.repoRoot)).toBe(true);
-          expect(hasNativeTrigger(backend, continuedWire)).toBe(true);
-          expect(launchPrompt).not.toContain(SKILL_BODY);
-        });
-      } finally {
-        if (savedClaude === undefined) delete process.env.CEZ_CLAUDE_BIN;
-        else process.env.CEZ_CLAUDE_BIN = savedClaude;
-        if (savedTarget === undefined) delete process.env[HARNESS_ADAPTERS[backend].binEnv];
-        else process.env[HARNESS_ADAPTERS[backend].binEnv] = savedTarget;
-      }
-    }, 60_000);
-  }
-});
-
-describe('harness parity — systemPromptOnResume declaration (#790)', () => {
-  it('every runner declares systemPromptOnResume', async () => {
+    } finally {
+      if (savedClaude === undefined) delete process.env.CEZ_CLAUDE_BIN;
+      else process.env.CEZ_CLAUDE_BIN = savedClaude;
+      if (savedTarget === undefined) delete process.env[HARNESS_ADAPTERS[backend].binEnv];
+      else process.env[HARNESS_ADAPTERS[backend].binEnv] = savedTarget;
+    }
+  },
+  declaresResumeMode: async () => {
     const expected: Record<RunnerId, 'resent' | 'in-thread'> = {
       claude: 'resent',
       pi: 'resent',
@@ -559,66 +485,60 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
     for (const backend of RUNNER_IDS) {
       expect((await createRunner(backend)).systemPromptOnResume).toBe(expected[backend]);
     }
-  });
-
-  for (const backend of RUNNER_IDS) {
-    it(`${backend} R56 declaration matches the resume wire`, async () => {
-      const dir = mkdtempSync(join(tmpdir(), `cez-skill-resume-decl-${backend}-`));
-      try {
-        const freshName = 'fresh';
-        const resumeName = 'resume';
-        const fresh = await driveSeam(backend, 'baseline', {
-          spec: {
-            cwd: dir,
-            systemPrompt: 'SENTINEL-790-SYSTEM',
-            env: {
-              CEZ_MOCK_ARGS_FILE: `${freshName}.args.ndjson`,
-              CEZ_MOCK_STDIN_FILE: `${freshName}.stdin.ndjson`,
-              CEZ_HANDOFF_FILE: '',
-            },
+  },
+  declarationWire: backend => async () => {
+    const dir = mkdtempSync(join(tmpdir(), `cez-skill-resume-decl-${backend}-`));
+    try {
+      const freshName = 'fresh';
+      const resumeName = 'resume';
+      const fresh = await driveSeam(backend, 'baseline', {
+        spec: {
+          cwd: dir,
+          systemPrompt: 'SENTINEL-790-SYSTEM',
+          env: {
+            CEZ_MOCK_ARGS_FILE: `${freshName}.args.ndjson`,
+            CEZ_MOCK_STDIN_FILE: `${freshName}.stdin.ndjson`,
+            CEZ_HANDOFF_FILE: '',
           },
-        });
-        expect(fresh.v1.filter((event) => event.type === 'error')).toEqual([]);
-        const resumed = await driveSeam(backend, 'baseline', {
-          spec: {
-            cwd: dir,
-            resume: true,
-            systemPrompt: 'SENTINEL-790-SYSTEM',
-            env: {
-              CEZ_MOCK_ARGS_FILE: `${resumeName}.args.ndjson`,
-              CEZ_MOCK_STDIN_FILE: `${resumeName}.stdin.ndjson`,
-              CEZ_HANDOFF_FILE: '',
-            },
+        },
+      });
+      expect(fresh.v1.filter((event) => event.type === 'error')).toEqual([]);
+      const resumed = await driveSeam(backend, 'baseline', {
+        spec: {
+          cwd: dir,
+          resume: true,
+          systemPrompt: 'SENTINEL-790-SYSTEM',
+          env: {
+            CEZ_MOCK_ARGS_FILE: `${resumeName}.args.ndjson`,
+            CEZ_MOCK_STDIN_FILE: `${resumeName}.stdin.ndjson`,
+            CEZ_HANDOFF_FILE: '',
           },
-        });
-        expect(resumed.v1.filter((event) => event.type === 'error')).toEqual([]);
-        const freshWire = readRecording(join(dir, `${freshName}.args.ndjson`), join(dir, `${freshName}.stdin.ndjson`));
-        const resumeWire = readRecording(join(dir, `${resumeName}.args.ndjson`), join(dir, `${resumeName}.stdin.ndjson`));
-        const mode = (await createRunner(backend)).systemPromptOnResume;
-        if (mode === 'resent') {
-          expect(freshWire).toContain('SENTINEL-790-SYSTEM');
-          expect(resumeWire).toContain('SENTINEL-790-SYSTEM');
-          expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/load/);
+        },
+      });
+      expect(resumed.v1.filter((event) => event.type === 'error')).toEqual([]);
+      const freshWire = readRecording(join(dir, `${freshName}.args.ndjson`), join(dir, `${freshName}.stdin.ndjson`));
+      const resumeWire = readRecording(join(dir, `${resumeName}.args.ndjson`), join(dir, `${resumeName}.stdin.ndjson`));
+      const mode = (await createRunner(backend)).systemPromptOnResume;
+      if (mode === 'resent') {
+        expect(freshWire).toContain('SENTINEL-790-SYSTEM');
+        expect(resumeWire).toContain('SENTINEL-790-SYSTEM');
+        expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/load/);
+      } else {
+        expect(freshWire).toContain('SENTINEL-790-SYSTEM');
+        if (backend === 'opencode') {
+          expect(opencodeSessionGets(resumeWire)).toEqual([PINNED_SESSION_ID]);
+          expect(opencodeSessionGets(freshWire)).toEqual([]);
+          expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
         } else {
-          expect(freshWire).toContain('SENTINEL-790-SYSTEM');
-          if (backend === 'opencode') {
-            expect(opencodeSessionGets(resumeWire)).toEqual([PINNED_SESSION_ID]);
-            expect(opencodeSessionGets(freshWire)).toEqual([]);
-            expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
-          } else {
-            expect(resumeWire).toMatch(/thread\/resume|session\/load/);
-            expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
-          }
+          expect(resumeWire).toMatch(/thread\/resume|session\/load/);
+          expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
         }
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
       }
-    }, 45_000);
-  }
-});
-
-describe('opencode lost-session fallback (#790)', () => {
-  it('opens a fresh session with the skill, one note, and a new session id', async () => {
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  lostSession: async () => {
     await withSkillResumeRun('opencode', async (fixture) => {
       const launchPrompt = assertLaunchKeepsSkill('opencode', fixture.repoRoot, fixture.snapshotWire());
       const lostId = recordedSessionId(fixture.store, fixture.runId);
@@ -647,7 +567,5 @@ describe('opencode lost-session fallback (#790)', () => {
       expect(freshId).not.toBe(lostId);
       expect(freshId).toMatch(/^ses_mock_/);
     });
-  }, 60_000);
+  },
 });
-
-}

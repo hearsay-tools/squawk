@@ -4,16 +4,17 @@ import { randomUUID } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, expect, it as registerTest, describe, vi } from 'vitest';
+import { afterEach, expect, describe, vi } from 'vitest';
 import type { ConversationMessage } from '@open-mercato/cezar-contract';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
-import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import { inputDeliveryOf, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { ANSWER_DELIVERY_CRITERIA, HARNESS_ADAPTERS, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { ANSWER_DELIVERY_GROUPS, answerDeliveryFamilies } from './conversation-answer-delivery-rows.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 registerBuiltInRunners();
@@ -75,45 +76,32 @@ const checkpoints = (store: RunStore, runId: string, askSeq: number) => store.re
 const firstAfter = (store: RunStore, runId: string, type: string, seq: number) => store.readEvents(runId)
   .find(event => event.type === type && event.seq > seq)?.seq;
 const lastSeq = (store: RunStore, runId: string) => store.readEvents(runId).at(-1)?.seq ?? 0;
-function steering(backend: RunnerId, it: typeof registerTest = registerTest): void {
 
-  const [steer] = ANSWER_DELIVERY_CRITERIA;
-
-  const steerExemption = exemptionFor(steer.id, backend);
-
-  if (steerExemption) {
-    it(`${backend} is exempt from ${steer.id} — ${steerExemption.reason}`, async () => {
-      expect(steerExemption.kind).toBe('scenario-unconstructible');
-      expect(HARNESS_ADAPTERS[backend].scenarios[steer.scenario]).toBeUndefined();
-      expect(inputDeliveryOf(await createRunner(backend)).mode).toBe('boundary');
+export const answerDeliveryCells = answerDeliveryFamilies({
+  steerExemption: (backend, steer, steerExemption) => async () => {
+    expect(steerExemption.kind).toBe('scenario-unconstructible');
+    expect(HARNESS_ADAPTERS[backend].scenarios[steer.scenario]).toBeUndefined();
+    expect(inputDeliveryOf(await createRunner(backend)).mode).toBe('boundary');
+  },
+  steering: (backend, steer) => async () => {
+    // Long enough that a held message cannot reach the tool before it returns.
+    await withAnsweredWorker(backend, { CEZ_MOCK_STEER_MS: '1500' }, async ({ store, runId, askSeq, send, answer }) => {
+      const start = lastSeq(store, runId);
+      await answer(`Vitest ${promptFor(backend, steer.scenario)}`);
+      await waitFor(() => firstAfter(store, runId, 'tool-call', start) !== undefined);
+      const id = await send('mock:agent-echo review progress during the answer');
+      await waitFor(() => !!input(store, runId, id)?.consumedAt);
+      // The answer's durable checkpoint stays at turn-end, after the message was read.
+      await waitFor(() => checkpoints(store, runId, askSeq).length === 1);
+      const turnEnd = firstAfter(store, runId, 'turn-end', start)!;
+      expect(projectionSeq(store, runId, id, 'delivered')).toBeLessThan(turnEnd);
+      expect(projectionSeq(store, runId, id, 'consumed')).toBeLessThan(turnEnd);
+      expect(checkpoints(store, runId, askSeq)[0]!.seq).toBeGreaterThan(turnEnd);
+      await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting);
+      expect(checkpoints(store, runId, askSeq)).toEqual([expect.objectContaining({ source: 'parent' })]);
     });
-  } else {
-    it(`${backend} ${steer.id} ${steer.name}`, async () => {
-      // Long enough that a held message cannot reach the tool before it returns.
-      await withAnsweredWorker(backend, { CEZ_MOCK_STEER_MS: '1500' }, async ({ store, runId, askSeq, send, answer }) => {
-        const start = lastSeq(store, runId);
-        await answer(`Vitest ${promptFor(backend, steer.scenario)}`);
-        await waitFor(() => firstAfter(store, runId, 'tool-call', start) !== undefined);
-        const id = await send('mock:agent-echo review progress during the answer');
-        await waitFor(() => !!input(store, runId, id)?.consumedAt);
-        // The answer's durable checkpoint stays at turn-end, after the message was read.
-        await waitFor(() => checkpoints(store, runId, askSeq).length === 1);
-        const turnEnd = firstAfter(store, runId, 'turn-end', start)!;
-        expect(projectionSeq(store, runId, id, 'delivered')).toBeLessThan(turnEnd);
-        expect(projectionSeq(store, runId, id, 'consumed')).toBeLessThan(turnEnd);
-        expect(checkpoints(store, runId, askSeq)[0]!.seq).toBeGreaterThan(turnEnd);
-        await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting);
-        expect(checkpoints(store, runId, askSeq)).toEqual([expect.objectContaining({ source: 'parent' })]);
-      });
-    }, 60_000);
-  }
-}
-
-function declaredDelivery(backend: RunnerId, it: typeof registerTest = registerTest): void {
-
-  const [, declared] = ANSWER_DELIVERY_CRITERIA;
-
-  it(`${backend} ${declared.id} ${declared.name}`, async () => {
+  },
+  declaredDelivery: (backend, declared) => async () => {
     const releaseFile = join(tmpdir(), `cez-935-release-${randomUUID()}`);
     try {
       await withAnsweredWorker(backend, { CEZ_MOCK_RELEASE_FILE: releaseFile }, async ({ store, runId, askSeq, send, answer }) => {
@@ -142,14 +130,8 @@ function declaredDelivery(backend: RunnerId, it: typeof registerTest = registerT
         expect(checkpoints(store, runId, askSeq)[0]!.seq).toBeGreaterThan(turnEnd);
       });
     } finally { rmSync(releaseFile, { force: true }); }
-  }, 60_000);
-}
-
-function pendingQuestion(backend: RunnerId, it: typeof registerTest = registerTest): void {
-
-  const [, , held] = ANSWER_DELIVERY_CRITERIA;
-
-  it(`${backend} ${held.id} ${held.name}`, async () => {
+  },
+  pendingQuestion: (backend, held) => async () => {
     await withAnsweredWorker(backend, {}, async answerFixture => {
       const { runId, askSeq, send } = answerFixture;
       let { store, manager } = answerFixture;
@@ -221,11 +203,8 @@ function pendingQuestion(backend: RunnerId, it: typeof registerTest = registerTe
       }
       await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting);
     });
-  }, 60_000);
-}
-
-export const answerDeliveryCells = { 'steering': steering, 'declared-delivery': declaredDelivery, 'pending-question': pendingQuestion };
-export const ANSWER_DELIVERY_GROUPS = Object.fromEntries(Object.keys(answerDeliveryCells).map(family => [family, RUNNER_IDS.map(runner => ({ runner, family: family as keyof typeof answerDeliveryCells }))]));
+  },
+});
 export function registerAnswerDeliveryGroup(group: keyof typeof answerDeliveryCells): void {
   describe('conversation answer delivery', () => {
     for (const row of ANSWER_DELIVERY_GROUPS[group]!) answerDeliveryCells[row.family](row.runner);

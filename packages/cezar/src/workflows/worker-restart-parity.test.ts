@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { RESTART_GROUPS } from './worker-restart-parity.testkit.ts';
+import { RESTART_GROUPS } from './worker-restart-rows.testkit.ts';
 
 it('runs each complete native-runner restart family in exactly one file', () => {
  const registrations = readdirSync(new URL('.', import.meta.url))

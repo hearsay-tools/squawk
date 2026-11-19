@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { runnerHook } from './run-fixture.testkit.ts';
+import { runnerHook } from './runner-hook.testkit.ts';
 import { runnersUnderTest } from '../core/runners-under-test.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { UNSET_TOOL_GRANT } from '../core/tool-grant.testkit.ts';

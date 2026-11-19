@@ -5,11 +5,10 @@ import { createFixtureManager, fixtureWorkSettled, drainFixtureManagers } from '
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { execFile as execFileCallback, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build, transform } from 'esbuild';
+import { buildDelegationCli } from './delegation-cli-build.testkit.ts';
 import { promisify } from 'node:util';
 import { onTestFinished, afterAll, beforeAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerCollectedResult, WorkerDestroyResult, WorkerInspection, WorkerSpawnResult, WorkerWaitResult } from '@open-mercato/cezar-contract';
@@ -23,31 +22,6 @@ import { monitoringWakeOf } from './waits.testkit.ts';
 import type { WorkerCleanupFactory } from '../delegation/service.ts';
 
 const execFile = promisify(execFileCallback);
-const entry = fileURLToPath(new URL('../index.ts', import.meta.url));
-
-/** Compile once for a fixture, preserving each module's source asset base. */
-export async function buildDelegationCli(sourceEntry: string = entry) {
-  const directory = mkdtempSync(join(tmpdir(), 'cez-delegation-cli-'));
-  const compiledEntry = join(directory, 'cli.mjs');
-  const close = () => rmSync(directory, { recursive: true, force: true });
-  try {
-    symlinkSync(fileURLToPath(new URL('../../node_modules', import.meta.url)), join(directory, 'node_modules'), 'junction');
-    await build({
-      entryPoints: [sourceEntry], outfile: compiledEntry, bundle: true,
-      platform: 'node', format: 'esm', packages: 'external',
-      plugins: [{ name: 'source-module-urls', setup(builder) {
-        builder.onLoad({ filter: /\.ts$/ }, async ({ path }) => {
-          const result = await transform(readFileSync(path, 'utf8'), {
-            loader: 'ts', format: 'esm',
-            define: { 'import.meta.url': JSON.stringify(pathToFileURL(path).href) },
-          });
-          return { contents: result.code, loader: 'js' };
-        });
-      } }],
-    });
-    return { entry: compiledEntry, close };
-  } catch (error) { close(); throw error; }
-}
 
 /** `cleanup` is the worker cleanup for groups that destroy workers; the reviewed-integration group passes `workerCleanups()`. */
 export function registerDelegationIntegrationGroup(group: 'reviewed-integration' | 'spawn-idempotency' | 'failure-authority' | 'parent-cancellation', cleanup?: WorkerCleanupFactory): void {

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
-import { ACK_WIRES, ATTENTION_GROUPS, attentionRowKey } from './worker-parent-attention.testkit.ts';
+import { ACK_WIRES, ATTENTION_GROUPS, attentionRowKey } from './worker-parent-attention-rows.testkit.ts';
 
 it('classifies every RUNNER_IDS delayed-ACK cell without omissions', () => {
   expect(Object.keys(ACK_WIRES).sort()).toEqual([...RUNNER_IDS].sort());

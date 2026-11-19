@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { exemptionFor, FOLLOWUP_CRITERIA } from './harness-parity.testkit.ts';
-import { describeWorkflowFollowup, WORKFLOW_FOLLOWUP_GROUPS } from './workflow-followup-cells.testkit.ts';
+import { workflowFollowupCellNames, WORKFLOW_FOLLOWUP_GROUPS } from './workflow-followup-rows.testkit.ts';
 
 describe('workflow followup family registration', () => {
   it('registers every runner and row variant exactly once', () => {
@@ -20,7 +20,7 @@ describe('workflow followup family registration', () => {
       const source = readFileSync(new URL(`./workflow-followup-${group}-parity.test.ts`, import.meta.url), 'utf8');
       expect(source).toContain(`describeWorkflowFollowup('${group}');`);
       expect(source.match(/describeWorkflowFollowup\(/g)).toHaveLength(1);
-      describeWorkflowFollowup(group, registration);
+      workflowFollowupCellNames(group, registration);
     }
     const expectedNames = RUNNER_IDS.flatMap(runner => FOLLOWUP_CRITERIA.flatMap(row => {
       const exemption = exemptionFor(row.id, runner);
@@ -41,7 +41,7 @@ describe('workflow followup family registration', () => {
     };
     const groups = Object.keys(WORKFLOW_FOLLOWUP_GROUPS) as Array<keyof typeof WORKFLOW_FOLLOWUP_GROUPS>;
     for (const group of groups) {
-      describeWorkflowFollowup(group, {
+      workflowFollowupCellNames(group, {
         describe: ((_name: string, body: () => void) => body()) as typeof describe,
         it: ((name: string) => {
           if (name.endsWith(syntheticReason)) owners.push(`${group}: ${name}`);

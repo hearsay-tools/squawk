@@ -4,9 +4,15 @@ import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { registrationStrings } from './registration-coverage.testkit.ts';
 
-type Cell = { name: string; body: () => void | Promise<void>; timeout: number | undefined };
+type Cell = { name: string; body: CellBody; timeout: number | undefined };
+export type CellBody = () => void | Promise<void>;
 export type ParityPart = string;
 export type ParityCollector = (name: string) => void;
+
+/** The body of a cell a registration guard only collects by name; it never runs. */
+export function collectedOnly(): CellBody {
+  return () => { throw new Error('a collected parity cell never runs'); };
+}
 
 /** Stable cell identity, including the autonomous constructor variants. */
 export function parityCellKey(name: string): string {
@@ -28,7 +34,7 @@ function familyRuns(family: ParityFamilyName | undefined, name: string): boolean
 export function partitionParity(part: ParityPart, parts: Readonly<Record<string, readonly string[]>>, collect?: ParityCollector, family?: ParityFamilyName) {
   let cells: Cell[] = [];
   return {
-    it(name: string, body: () => void | Promise<void>, timeout?: number): void {
+    it(name: string, body: CellBody, timeout?: number): void {
       if (!familyRuns(family, name)) return;
       if (part === 'all' || parts[part]?.includes(parityCellKey(name))) cells.push({ name, body, timeout });
     },

@@ -9,11 +9,7 @@ import { afterAll, afterEach, beforeEach, vi } from 'vitest';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from './run/constants.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import type { UiEvent } from '../core/ui-events.ts';
-import type { AgentRunner } from '../core/agent-runner.ts';
-import * as runnerFactory from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { useRunners } from '../core/runners-under-test.testkit.ts';
+import { runnerHook } from './runner-hook.testkit.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
@@ -21,27 +17,7 @@ import type { TimerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 
-
-const hoistedRunnerHook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined, ui: undefined as ((event: UiEvent) => void) | undefined }));
-
-const originalStarts = new WeakMap<AgentRunner, AgentRunner['startSession']>();
-registerBuiltInRunners();
-useRunners(async (...args) => {
-  const runner = hoistedRunnerHook.runner ?? await runnerFactory.createRunner(...args);
-  const start = originalStarts.get(runner) ?? runner.startSession.bind(runner);
-  originalStarts.set(runner, start);
-  runner.startSession = (spec, ...rest) => {
-    hoistedRunnerHook.ui = rest[1]?.onUiEvent;
-    return start(spec, ...rest);
-  };
-  return runner;
-});
-
-export const runnerHook = {
-  uiEvent(event: UiEvent) { if (!hoistedRunnerHook.ui) throw new Error("No runner UI channel observed"); hoistedRunnerHook.ui(event); },
-  get runner(): AgentRunner | undefined { return hoistedRunnerHook.runner; },
-  set runner(value: AgentRunner | undefined) { hoistedRunnerHook.runner = value; hoistedRunnerHook.ui = undefined; },
-};
+export { runnerHook };
 
 // Naming has its own suite; no background LLM call may outlive these fixtures. The mocks answer
 // Squawk's no-wait nudge in plain text (hearsay-tools/cezarion#1234), so a turn end with no wait

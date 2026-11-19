@@ -1,6 +1,6 @@
 import { it } from 'vitest';
 import { parityRunners } from '../core/parity-classes.testkit.ts';
-import { CONFLICT_ROWS, GROUPS } from './ci-wait-conflict-parity.testkit.ts';
+import { CONFLICT_ROWS, GROUPS } from './ci-wait-conflict-rows.testkit.ts';
 import { expectWaitRowCoverage } from './wait-row-coverage.testkit.ts';
 
 it('registers every ci-wait-conflict runner/family row exactly once', () => {

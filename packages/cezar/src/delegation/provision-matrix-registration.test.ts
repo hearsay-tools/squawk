@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { PROVISION_ROWS, PROVISION_TEST_FILES, provisionMatrixCounts } from './provision-workflows.testkit.ts';
+import { PROVISION_ROWS, PROVISION_TEST_FILES, provisionMatrixCounts } from './provision-rows.testkit.ts';
 
 // Static checks of the provision matrix registrations: no fixture, no run manager.
 describe('provision matrix registration', () => {

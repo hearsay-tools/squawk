@@ -8,7 +8,7 @@ import fs, { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from '
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parityRunners } from '../core/parity-classes.testkit.ts';
+import { GROUPS } from './worker-reboot-rows.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { groupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
@@ -19,10 +19,6 @@ import { DelegationService } from '../delegation/service.ts';
 import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 
-// A shared family (core/parity-classes.testkit.ts): seam row S43 holds each runner to reporting the
-// native processes the ledger records, and runner-shutdown to stopping them.
-const runners = parityRunners('worker-reboot', 'R43');
-export const GROUPS = { collect: runners, destroy: runners, reuse: runners };
 export function registerGroup(settleVia: keyof typeof GROUPS) {
 describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hearsay-tools/cezarion#738)', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();

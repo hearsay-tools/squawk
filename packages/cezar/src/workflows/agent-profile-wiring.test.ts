@@ -1,8 +1,8 @@
+import '../core/every-runner.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,12 +38,10 @@ describe('RunManager agent-profile resolution', () => {
     repoRoot = mkdtempSync(join(realpathSync(tmpdir()), 'cez-profile-wiring-repo-'));
     useTestHome(home ? Home.sandbox(home) : undefined);
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    createFixtureManager(store, repoRoot);
     await registerProject(repoRoot, undefined, testHome());
   });
 
   afterEach(async () => {
-    await drainFixtureManagers(repoRoot);
     store.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
