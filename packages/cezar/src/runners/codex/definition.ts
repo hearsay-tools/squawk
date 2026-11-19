@@ -1,6 +1,7 @@
 import { defineRunner } from '../../core/runner-definition.ts';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_MODELS } from './models.ts';
+import { CODEX_CONFIG_FILES } from './config-files.ts';
 
 /** The Codex runner. */
 export const codexRunner = defineRunner({
@@ -13,4 +14,6 @@ export const codexRunner = defineRunner({
   },
   loadModelCatalog: async () => (await import('../../core/codex-model-catalog.ts')).discoverCodexModels,
   loadSkillCatalog: async () => (await import('../../core/codex-skill-catalog.ts')).discoverCodexSkills,
+  configFiles: CODEX_CONFIG_FILES,
+  extraTools: [],
 });

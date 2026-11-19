@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { agentHomePaths } from '../paths.ts';
-import { findConfigFile, type ConfigFileDef } from './catalog.ts';
+import { findConfigFile } from './catalog.ts';
+import type { ConfigFileDef } from '../core/runner-config-files.ts';
 import { validateConfig } from './validate.ts';
 
 /**

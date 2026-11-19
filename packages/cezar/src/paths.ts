@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { AgentHomePaths } from './agent-config/catalog.ts';
+import type { AgentHomePaths } from './core/runner-config-files.ts';
 import type { ProviderId } from './core/provider-auth.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';

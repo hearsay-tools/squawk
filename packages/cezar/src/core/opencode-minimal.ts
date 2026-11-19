@@ -1,7 +1,6 @@
-import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
 import { buildChildEnv } from './agent-env.ts';
 import type { AgentRunSpec } from './agent-runner.ts';
-import { isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
+import { ciOpenCodeEnv, isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
 import { opencodeToolGrantFields } from './runner-tool-grants.ts';
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { AgentBackend, RunnerId, ToolGrant } from '../core/agent-runner.ts';
-import { runnerIdOf } from '../core/runner-registry.ts';
+import type { AgentBackend, ToolGrant } from '../core/agent-runner.ts';
+import { runnerDefinition, runnerIdOf } from '../core/runner-registry.ts';
 
 import { workflowStepDefSchema as workflowStepSchema, workflowDefSchema } from '@open-mercato/cezar-contract/workflows';
 import { workflowFileSchema } from '@open-mercato/cezar-contract/workflow-file';
@@ -112,20 +112,6 @@ export function stepsIssue(steps: WorkflowStepDef[]): string | null {
 /** Tools an agent step gets when the workflow doesn't say otherwise. */
 export const DEFAULT_ALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'];
 
-/** Extra tools unioned onto the default when a step does not set allowedTools. */
-export const HARNESS_EXTRA_TOOLS: { readonly [K in RunnerId]: readonly string[] } = {
-  claude: [],
-  codex: [],
-  opencode: [],
-  // The trio still marks the default list (hearsay-tools/cezarion#75). pi itself gets no --tools
-  // allowlist for it (hearsay-tools/cezarion#1305): the default-tools extension activates these
-  // names with the built-ins, so MCP and other extension tools stay callable.
-  pi: ['Subagent', 'SubagentSupervisor', 'SubagentWait'],
-  // R1 (rulings): find and ast_grep are gated behind settings that default off, and a --tools
-  // list naming an unavailable built-in exits 2, so they cannot be in the zero-config default.
-  omp: ['todo', 'lsp', 'ast_edit', 'task', 'wait'],
-};
-
 export function allowedToolsForStep(
   step: { allowedTools?: string[] | undefined } | undefined,
   backend: AgentBackend | undefined,
@@ -135,8 +121,10 @@ export function allowedToolsForStep(
   return extras.length === 0 ? [...DEFAULT_ALLOWED_TOOLS] : [...DEFAULT_ALLOWED_TOOLS, ...extras];
 }
 
+/** Extra tools unioned onto the default when a step does not set allowedTools: the runner
+ *  definition's `extraTools`. */
 function extrasFor(backend: AgentBackend | undefined): readonly string[] {
-  return HARNESS_EXTRA_TOOLS[runnerIdOf(backend)];
+  return runnerDefinition(runnerIdOf(backend)).extraTools;
 }
 
 /** Tool lists as a workflow step and a worker identity store them. */

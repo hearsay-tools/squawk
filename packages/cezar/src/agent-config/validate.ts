@@ -1,6 +1,6 @@
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
-import type { ConfigFormat } from './catalog.ts';
+import type { ConfigFormat } from '../core/runner-config-files.ts';
 
 /**
  * Validate format syntax only. Do not validate a vendor schema or reserialize the user’s text.

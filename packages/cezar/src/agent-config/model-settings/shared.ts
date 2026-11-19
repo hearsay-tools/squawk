@@ -1,7 +1,8 @@
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 import type { RunnerId } from '../../core/agent-runner.ts';
-import { CONFIG_FILES, type ConfigFileDef, type ConfigFormat } from '../catalog.ts';
+import { listConfigFiles } from '../catalog.ts';
+import type { ConfigFileDef, ConfigFormat } from '../../core/runner-config-files.ts';
 import { readConfigFile } from '../files.ts';
 import { stripJsonComments } from '../validate.ts';
 
@@ -66,7 +67,7 @@ export async function readNativeSettingsFiles(
   repoRoot: string,
   env: NodeJS.ProcessEnv,
 ): Promise<NativeSettingsFile[]> {
-  const definitions = CONFIG_FILES.filter(
+  const definitions = listConfigFiles().filter(
     (definition) =>
       definition.kind === 'settings' &&
       definition.runners.includes(runner) &&

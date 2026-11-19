@@ -5,6 +5,7 @@ import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
 import type { ModelOption } from './runner-model-catalog.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
+import type { ConfigFileDef } from './runner-config-files.ts';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -28,6 +29,10 @@ export interface RunnerDefinition {
   loadModelCatalog(): Promise<(options: { cwd: string }) => Promise<ModelOption[]>>;
   /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
   loadSkillCatalog(): Promise<(options: SkillDiscoveryOptions) => Promise<SkillCatalog>>;
+  /** The native config files that Settings → Agent config shows, in presentation order. */
+  readonly configFiles: readonly ConfigFileDef[];
+  /** Extra tools unioned onto the default when a step does not set allowedTools. */
+  readonly extraTools: readonly string[];
 }
 
 /** One model the picker suggests. `id: ''` is auto: the runner picks. */

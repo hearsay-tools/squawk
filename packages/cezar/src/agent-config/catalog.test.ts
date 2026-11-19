@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIG_FILES, findConfigFile, listConfigFiles, type AgentHomePaths } from './catalog.ts';
+import { findConfigFile, listConfigFiles } from './catalog.ts';
+import type { AgentHomePaths } from '../core/runner-config-files.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const HOME: AgentHomePaths = {
   claude: '/home/u/.claude',
@@ -11,26 +15,26 @@ const HOME: AgentHomePaths = {
 
 describe('agent-config catalog', () => {
   it('every id is unique and URL-safe', () => {
-    const ids = CONFIG_FILES.map((f) => f.id);
+    const ids = listConfigFiles().map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^[a-z0-9.]+$/);
   });
 
   it('every entry carries a non-empty precedence string and a docs URL', () => {
-    for (const f of CONFIG_FILES) {
+    for (const f of listConfigFiles()) {
       expect(f.precedence.trim().length).toBeGreaterThan(0);
       expect(f.docsUrl).toMatch(/^https:\/\//);
     }
   });
 
   it('<repo>/AGENTS.md is ONE entry read by every runner that loads it (Codex, OpenCode, Pi, OMP)', () => {
-    const agents = CONFIG_FILES.filter((f) => f.label === 'AGENTS.md' && f.scope === 'project');
+    const agents = listConfigFiles().filter((f) => f.label === 'AGENTS.md' && f.scope === 'project');
     expect(agents).toHaveLength(1);
     expect(agents[0]!.runners).toEqual(['codex', 'opencode', 'pi', 'omp']);
   });
 
   it('lists Pi’s documented files: settings at both scopes and the global AGENTS.md — and no MCP file', () => {
-    const pi = CONFIG_FILES.filter((f) => f.runners.includes('pi'));
+    const pi = listConfigFiles().filter((f) => f.runners.includes('pi'));
     expect(pi.map((f) => f.id)).toEqual(['pi.user.settings', 'pi.project.settings', 'pi.user.memory', 'project.agents']);
     expect(pi.some((f) => f.holdsMcp || f.kind === 'mcp')).toBe(false);
     expect(findConfigFile('pi.user.settings')!.resolve('/repo', HOME)).toBe('/home/u/.pi/agent/settings.json');
@@ -39,7 +43,7 @@ describe('agent-config catalog', () => {
   });
 
   it('lists the five OMP files and shares AGENTS.md with omp', () => {
-    const omp = CONFIG_FILES.filter((f) => f.runners.includes('omp'));
+    const omp = listConfigFiles().filter((f) => f.runners.includes('omp'));
     expect(omp.map((f) => f.id)).toEqual([
       'omp.user.settings',
       'omp.project.settings',
@@ -96,21 +100,21 @@ describe('agent-config catalog', () => {
   });
 
   it('marks only Claude’s gitignored personal layer as seeded', () => {
-    const seeded = CONFIG_FILES.filter((f) => f.seeded).map((f) => f.id).sort();
+    const seeded = listConfigFiles().filter((f) => f.seeded).map((f) => f.id).sort();
     expect(seeded).toEqual(['claude.local.memory', 'claude.local.settings']);
-    for (const f of CONFIG_FILES) {
+    for (const f of listConfigFiles()) {
       if (f.seeded) expect(f.tracked).toBe('gitignored');
     }
   });
 
   it('every seeded/gitignored file is a repo-relative path (never in $HOME)', () => {
-    for (const f of CONFIG_FILES) {
+    for (const f of listConfigFiles()) {
       if (f.tracked === 'gitignored') expect(f.resolve('/repo', HOME).startsWith('/repo/')).toBe(true);
     }
   });
 
   it('holdsMcp is set exactly where MCP servers actually live', () => {
-    const mcp = CONFIG_FILES.filter((f) => f.holdsMcp).map((f) => f.id).sort();
+    const mcp = listConfigFiles().filter((f) => f.holdsMcp).map((f) => f.id).sort();
     expect(mcp).toEqual([
       'claude.project.mcp',
       'codex.project.config',
@@ -122,8 +126,31 @@ describe('agent-config catalog', () => {
     ]);
   });
 
-  it('listConfigFiles returns the table; findConfigFile is undefined for junk', () => {
-    expect(listConfigFiles().length).toBe(CONFIG_FILES.length);
+  it('listConfigFiles returns every runner\'s files once, in presentation order; findConfigFile is undefined for junk', () => {
+    expect(listConfigFiles().map((f) => f.id)).toEqual([
+      'claude.user.settings',
+      'claude.project.settings',
+      'claude.local.settings',
+      'claude.project.mcp',
+      'claude.user.memory',
+      'claude.project.memory',
+      'claude.local.memory',
+      'codex.user.config',
+      'codex.project.config',
+      'codex.user.memory',
+      'opencode.user.config',
+      'opencode.project.config',
+      'opencode.user.memory',
+      'pi.user.settings',
+      'pi.project.settings',
+      'pi.user.memory',
+      'omp.user.settings',
+      'omp.project.settings',
+      'omp.user.mcp',
+      'omp.project.mcp',
+      'omp.user.memory',
+      'project.agents',
+    ]);
     expect(findConfigFile('../../etc/passwd')).toBeUndefined();
     expect(findConfigFile('nope')).toBeUndefined();
   });
