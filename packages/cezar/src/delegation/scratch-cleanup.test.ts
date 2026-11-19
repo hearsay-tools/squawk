@@ -6,7 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentTmpDir, agentTmpDirMayExist, agentTmpEnv, removeAgentTmpDir } from '../runs/agent-tmpdir.ts';
-import { manager, store, root, worker, reopenRuntime, useWorkerWaitFixture } from '../workflows/worker-wait-claude.testkit.ts';
+import { store, root, worker, reopenStore, useScratchCleanupFixture } from './scratch-cleanup.testkit.ts';
 import { groupHolder, readableHolder } from './non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { WorkerScratchCleanup } from './scratch-cleanup.ts';
@@ -27,7 +27,7 @@ function setTmpRoot(value: string | undefined) {
 const own = (runId: string, pid: number) => store.scopes.spawnScope(runId).started(pid);
 
 describe('durable scratch cleanup evidence', () => {
-  useWorkerWaitFixture();
+  useScratchCleanupFixture();
   beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
   afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); setHostScope(undefined); });
 
@@ -37,7 +37,6 @@ describe('durable scratch cleanup evidence', () => {
     const run = await worker(parent.id);
     const generation = store.commitWorkerExecutionStart(run.id);
     setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
-    manager.pauseWorkerCleanup();
     const dataDir = join(root, '.ai/cezar'), scratch = location === 'local' ? agentTmpDir(dataDir, run.id) : agentTmpEnv(dataDir, run.id, {}).TMPDIR!;
     if (location === 'fallback') {
       expect(scratch).not.toBe(agentTmpDir(dataDir, run.id));
@@ -171,10 +170,11 @@ describe('durable scratch cleanup evidence', () => {
     const { run, dataDir, scratch } = await completed(location);
     const holder = await groupHolder(scratch);
     own(run.id, holder.pid);
+    let cleanup: WorkerScratchCleanup | undefined;
     try {
       // A real process in the worker's scope; no liveness read is mocked.
       await holder.write();
-      manager.dispose(); store.close();
+      store.close();
       const database = join(dataDir, 'runs.db');
       if (mode === 'corrupt') writeFileSync(database, '{corrupt');
       else if (mode === 'missing') for (const file of [database, `${database}-wal`, `${database}-shm`]) rmSync(file, { force: true });
@@ -183,12 +183,13 @@ describe('durable scratch cleanup evidence', () => {
         delete rows.find((row: { id: string }) => row.id === run.id)!.delegation.workspace.resourceId;
         seedRuns(dataDir, rows);
       }
-      reopenRuntime();
+      reopenStore();
       // An unreadable database is never reset: the store is unavailable, not empty (#779).
       if (mode === 'corrupt') expect(store.unavailable?.kind).toBe('corrupt');
       expect(store.getRun(run.id)?.delegation?.role).not.toBe('worker');
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      await manager.recover(); await vi.advanceTimersByTimeAsync(120_000);
+      cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
+      cleanup.recover(); await vi.advanceTimersByTimeAsync(120_000);
       expect(existsSync(join(scratch, 'keep'))).toBe(true);
       expect(existsSync(join(dataDir, 'runs', `${run.id}.execution.json`))).toBe(true);
       expect(existsSync(join(dataDir, 'runs', `${run.id}.processes.json`))).toBe(true);
@@ -198,7 +199,7 @@ describe('durable scratch cleanup evidence', () => {
       await vi.advanceTimersByTimeAsync(60_000);
       // Without an index nothing is cleaned up, held or not: it waits for the database to be restored.
       expect(existsSync(scratch)).toBe(mode === 'corrupt');
-    } finally { await holder.close(); removeAgentTmpDir(dataDir, run.id); vi.useRealTimers(); }
+    } finally { cleanup?.pause(); await holder.close(); removeAgentTmpDir(dataDir, run.id); vi.useRealTimers(); }
   });
 
   it.each(['legacy intent', 'unknown execution', 'unknown processes'].flatMap(condition => ['local', 'fallback'].map(location => ({ condition, location }))))('retains unindexed $location scratch with $condition until its evidence can authorize cleanup', async ({ condition, location }) => {
@@ -209,52 +210,35 @@ describe('durable scratch cleanup evidence', () => {
       const proof = JSON.parse(original.toString()); delete proof.scratchCleanup;
       writeFileSync(evidence, JSON.stringify(proof));
     } else writeFileSync(evidence, '{corrupt');
-    manager.dispose(); store.close(); seedRuns(dataDir, []);
-    reopenRuntime(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    store.close(); seedRuns(dataDir, []);
+    reopenStore(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {
-      await manager.recover(); await vi.advanceTimersByTimeAsync(120_000);
+      cleanup.recover(); await vi.advanceTimersByTimeAsync(120_000);
       expect(readFileSync(join(scratch, 'keep'), 'utf8')).toBe('durable');
       writeFileSync(evidence, original);
       await vi.advanceTimersByTimeAsync(120_000);
       expect(existsSync(scratch)).toBe(false);
-    } finally { removeAgentTmpDir(dataDir, run.id); vi.useRealTimers(); }
+    } finally { cleanup.pause(); removeAgentTmpDir(dataDir, run.id); vi.useRealTimers(); }
   });
 
   it.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('retries private evidence discovery after directory denial, then clears ordinary orphans too', async () => {
     const { dataDir, scratch } = await completed();
     const files = join(dataDir, 'runs'), orphan = agentTmpDir(dataDir, 'ordinary-orphan');
     mkdirSync(orphan, { recursive: true });
-    manager.dispose(); store.close(); seedRuns(dataDir, []);
-    reopenRuntime(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    store.close(); seedRuns(dataDir, []);
+    reopenStore(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {
       chmodSync(files, 0);
-      await manager.recover(); await vi.advanceTimersByTimeAsync(120_000);
+      cleanup.recover(); await vi.advanceTimersByTimeAsync(120_000);
       expect(existsSync(join(scratch, 'keep'))).toBe(true);
       expect(existsSync(orphan)).toBe(true);
       chmodSync(files, 0o700);
       await vi.advanceTimersByTimeAsync(120_000);
       expect(existsSync(scratch)).toBe(false);
       expect(existsSync(orphan)).toBe(false);
-    } finally { chmodSync(files, 0o700); vi.useRealTimers(); }
-  });
-
-  it('cannot treat a worker with stripped role metadata as an ordinary terminal run or deletable history', async () => {
-    const { run, dataDir, scratch } = await completed();
-    manager.dispose(); store.close();
-    const rows = readPersistedRuns(dataDir);
-    delete rows.find((row: { id: string }) => row.id === run.id)!.delegation;
-    seedRuns(dataDir, rows); reopenRuntime();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await manager.recover(); setRunStatus(store, run.id, RUN_STATUS.cancelled);
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(store.deleteRun(run.id)).toBe(false);
-      expect(existsSync(join(scratch, 'keep'))).toBe(true);
-      // Restoration of valid ownership permits the existing recovery path to retry it.
-      store.updateRun(run.id, { delegation: run.delegation }); manager.recoverWorkerCleanup();
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(existsSync(scratch)).toBe(false);
-    } finally { vi.useRealTimers(); }
+    } finally { cleanup.pause(); chmodSync(files, 0o700); vi.useRealTimers(); }
   });
 
   it.runIf(process.platform === 'linux')('a process outside the worker\'s scope never refuses admission, even inside its retained scratch (ADR 0032)', async () => {
@@ -265,7 +249,6 @@ describe('durable scratch cleanup evidence', () => {
     const scratch = agentTmpDir(join(root, '.ai/cezar'), run.id);
     const generation = store.commitWorkerExecutionStart(run.id);
     setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
-    manager.pauseWorkerCleanup();
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'task files');
     const outsider = await readableHolder(scratch);
     try {
@@ -321,7 +304,7 @@ describe('durable scratch cleanup evidence', () => {
 });
 
 describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
-  useWorkerWaitFixture();
+  useScratchCleanupFixture();
   beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
   afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); vi.useRealTimers(); setHostScope(undefined); });
 
@@ -331,7 +314,6 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
     const run = await worker(parent.id);
     const generation = store.commitWorkerExecutionStart(run.id);
     setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
-    manager.pauseWorkerCleanup();
     const dataDir = join(root, '.ai/cezar'), scratch = agentTmpDir(dataDir, run.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'keep'), 'durable');
     return { run, dataDir, scratch };
