@@ -38,8 +38,9 @@ export interface SessionWire {
   /** The system prompt of the first launch: its own argv flag, or the opening message that carries
    *  it in-thread. Undefined when the wire that should carry it does not. */
   systemPrompt(recording: NativeRecording): string | undefined;
-  /** The text each native trigger of skill `name` carries (its arguments and the context sent with it), in order. */
-  skillTriggers(recording: NativeRecording, name: string): string[];
+  /** The text each native skill trigger carries (its arguments and the context sent with it), in
+   *  order: every skill the wire invoked, or only skill `name` when it is given. */
+  skillTriggers(recording: NativeRecording, name?: string): string[];
   /** Fails unless the wire's native trigger runs `trigger.name` with its arguments and context
    *  exactly as this wire must carry them (`core/runner-skill-trigger.testkit.ts`). */
   expectSkillTrigger(recording: NativeRecording, trigger: SkillTriggerInput): void;
@@ -82,9 +83,11 @@ export function joinedParts(parts: unknown): string {
   return Array.isArray(parts) ? parts.map(part => (part as { text?: string }).text ?? '').join('\n') : '';
 }
 
-/** Each stdin message that runs skill `name` as the slash command `/skill:<name>`, in order. */
-export function slashSkillTriggers({ args, stdin }: NativeRecording, name: string): string[] {
-  return stdinPrompts({ args, stdin: [...args, ...stdin] }).filter(text => isCommand(text, `/skill:${name}`));
+/** Each stdin message that runs a skill as the slash command `/skill:<name>`, in order: every
+ *  skill, or only skill `name` when it is given. */
+export function slashSkillTriggers({ args, stdin }: NativeRecording, name?: string): string[] {
+  return stdinPrompts({ args, stdin: [...args, ...stdin] })
+    .filter(text => name === undefined ? text.startsWith('/skill:') : isCommand(text, `/skill:${name}`));
 }
 
 /** `text` runs the slash command `command`: the command alone, or the command and its arguments. */

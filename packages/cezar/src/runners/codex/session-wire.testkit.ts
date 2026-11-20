@@ -24,7 +24,7 @@ export const CODEX_SESSION_WIRE: SessionWire = {
   systemPrompt: recording => CODEX_SESSION_WIRE.prompts(recording)[0] ?? '',
   skillTriggers: ({ args, stdin }, name) => [...args, ...stdin].flatMap(row => {
     const input = turnInput(row);
-    return input?.some(item => item.type === 'skill' && item.name === name) ? [joinedParts(input)] : [];
+    return input?.some(item => item.type === 'skill' && (name === undefined || item.name === name)) ? [joinedParts(input)] : [];
   }),
   expectSkillTrigger: ({ args, stdin }, { name, args: skillArgs, context }) => {
     const input = [...args, ...stdin].map(turnInput).find(items => items?.some(item => item.type === 'skill'))!;

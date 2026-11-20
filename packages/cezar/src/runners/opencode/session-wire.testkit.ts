@@ -20,7 +20,7 @@ export const OPENCODE_SESSION_WIRE: SessionWire = {
   steers: () => [],
   systemPrompt: recording => OPENCODE_SESSION_WIRE.prompts(recording)[0] ?? '',
   skillTriggers: ({ args, stdin }, name) => [...args, ...stdin].flatMap(row =>
-    urlOf(row).endsWith('/command') && bodyOf(row)?.command === name ? [bodyOf(row)!.arguments ?? ''] : []),
+    urlOf(row).endsWith('/command') && (name === undefined || bodyOf(row)?.command === name) ? [bodyOf(row)!.arguments ?? ''] : []),
   expectSkillTrigger: ({ args, stdin }, { name, args: skillArgs, context }) => {
     const rows = [...args, ...stdin];
     const command = bodyOf(rows.find(row => urlOf(row).endsWith('/command'))!);

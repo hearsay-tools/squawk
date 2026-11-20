@@ -23,8 +23,10 @@ function assertTriggerWire(runner: string, recording: NativeRecording, context =
   sessionWire(runner).expectSkillTrigger(recording, { name: SKILL, args, context });
 }
 
+/** Every native skill invocation the wire recorded, whatever skill it names: an extra skill sent
+ *  beside the probe counts too. */
 function triggerCount(runner: string, recording: NativeRecording): number {
-  return sessionWire(runner).skillTriggers(recording, SKILL).length;
+  return sessionWire(runner).skillTriggers(recording).length;
 }
 
 function assertSuccess(obs: SeamObservation): void {

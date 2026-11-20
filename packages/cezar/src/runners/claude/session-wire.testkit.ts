@@ -5,7 +5,7 @@ type Block = { type?: string; text?: string };
 const blocksOf = (row: Parameters<typeof wireRecord>[0]) => wireRecord(row)?.blocks as Block[] | undefined;
 
 /** How the Claude mock's recorded command lines show a session, a turn and its effort; its stdin
- *  messages carry the prompts, and a skill trigger is a `/name args` text block. */
+ *  messages carry the prompts, and a skill trigger is a message whose last text block is `/name args`. */
 export const CLAUDE_SESSION_WIRE: SessionWire = {
   resumed: wire => flagValues(wire, '--resume'),
   freshSessions: wire => flagValues(wire, '--session-id').length,
@@ -16,7 +16,9 @@ export const CLAUDE_SESSION_WIRE: SessionWire = {
   systemPrompt: appendedSystemPrompt,
   skillTriggers: ({ args, stdin }, name) => [...args, ...stdin].flatMap(row => {
     const blocks = blocksOf(row);
-    return isCommand(blocks?.at(-1)?.text, `/${name}`) ? [blocks!.map(block => block.text ?? '').join('\n')] : [];
+    const command = blocks?.at(-1)?.text;
+    const invoked = name === undefined ? command?.startsWith('/') === true : isCommand(command, `/${name}`);
+    return invoked ? [blocks!.map(block => block.text ?? '').join('\n')] : [];
   }),
   expectSkillTrigger: ({ args, stdin }, { name, args: skillArgs, context }) => {
     const message = [...args, ...stdin].map(blocksOf).find(Boolean)!;
