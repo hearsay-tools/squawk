@@ -2,7 +2,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { isDisposedDelegatedRun } from './run/run-guards.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
-import { unused } from './fixture-cleanup.testkit.ts';
+import { unused } from './unused.testkit.ts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';

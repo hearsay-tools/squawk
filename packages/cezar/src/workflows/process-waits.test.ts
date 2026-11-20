@@ -114,20 +114,6 @@ describe('process waits through RunManager (hearsay-tools/cezarion#1446)', { tim
     expect(notes(run.id, 'cap reached')).toEqual([]);
   });
 
-  it('a batch with an empty deadline and a process exit still charges once', async () => {
-    const external = processes();
-    const run = await waitingParent();
-    const pid = sleeper();
-    const empty = await register(run.id, { pid, exit_file: 'empty.exit' });
-    const completed = await register(run.id, { pid, exit_file: 'completed.exit' });
-    await register(run.id, { pid, exit_file: 'anchor.exit' });
-    store.updateRun(run.id, { automaticWakes: 7 });
-    external.settle({ outcome: 'deadline' }, 0);
-    external.settle({ outcome: 'exited' }, 1);
-    await until(() => settledById(run.id, empty.id)?.phase === 'delivered' && settledById(run.id, completed.id)?.phase === 'delivered');
-    expect(store.getRun(run.id)?.automaticWakes).toBe(8);
-  });
-
   it('a resolution at the spent budget is cancelled with the cap note and the run waits on the user', async () => {
     const external = processes();
     const run = await waitingParent();

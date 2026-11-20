@@ -15,7 +15,8 @@ import {
   useSelectAgentProfile,
 } from '@/api/queries'
 import { useProjectScope } from '@/api/project-scope-context'
-import { useRunners } from '@/api/runners'
+import type { RunnerEntry } from '@open-mercato/cezar-api-client/contract/runners'
+import { runnerEntries, runnerIds, useRunners } from '@/api/runners'
 import type { ConfigResponse, Runner, SetConfigInput } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,7 @@ import {
   hasAgentAccounts,
   providerChoice,
 } from '@/components/default-agent-picker'
-import { catalogQueryStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { ProviderSettings } from './provider-settings'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -55,9 +56,9 @@ export function AgentsSection() {
   const config = useConfig()
   // One row per runner here, so every runner's own host catalog is needed at once (#794) —
   // unlike the composer, which only ever renders the runner the user picked.
-  const catalogs = useRunnerModelCatalogs()
-  const providerStatus = useProviderStatus()
   const runners = useRunners()
+  const catalogs = useRunnerModelCatalogs(runnerIds(runners.data))
+  const providerStatus = useProviderStatus()
 
   if (config.isPending) {
     return (
@@ -123,7 +124,7 @@ function AgentsForm({
       },
     )
 
-  const renderModel = (runner: (typeof RUNNERS)[number]) => {
+  const renderModel = (runner: RunnerEntry) => {
     const { providerConnected, providerReason } = providerChoice(providerStatus, runner.id)
     const catalog = catalogs[runner.id]
     const catalogStatus = catalogQueryStatus(runner.id, runners, catalog)
@@ -138,11 +139,11 @@ function AgentsForm({
     return (
       <label key={runner.id} className="settings-option-row">
         <div>
-          <h3>{runner.label}</h3>
+          <h3>{runner.pickerLabel}</h3>
         </div>
         {config.modelsLocked ? (
           <output
-            aria-label={`Default model for ${runner.label}`}
+            aria-label={`Default model for ${runner.pickerLabel}`}
             data-slot="agents-model"
             data-runner={runner.id}
             title="Model selection is locked to native coding-agent settings."
@@ -152,12 +153,12 @@ function AgentsForm({
           </output>
         ) : (
           <select
-            aria-label={`Default model for ${runner.label}`}
+            aria-label={`Default model for ${runner.pickerLabel}`}
             data-slot="agents-model"
             data-runner={runner.id}
             value={configuredModel}
-            title={providerReason ?? runner.desc}
-            disabled={save.isPending || !providerConnected || runners === undefined}
+            title={providerReason ?? runner.pickerDescription}
+            disabled={save.isPending || !providerConnected}
             onChange={(event) =>
               save.mutate({
                 defaultModels: { [runner.id]: event.target.value || null } as Partial<
@@ -199,7 +200,7 @@ function AgentsForm({
             : 'The model preselected in the composer for each runner. Auto lets the runner decide per task.'
         }
       >
-        <div className="flex flex-col gap-4">{RUNNERS.map(renderModel)}</div>
+        <div className="flex flex-col gap-4">{runnerEntries(runners).map(renderModel)}</div>
       </Field>
 
       <Field
@@ -364,8 +365,9 @@ function DefaultAgentField({
   const projectId = scope.projectId ?? 'default'
   const repoRoot = repo.data?.info?.root
   const selection = repoRoot ? profiles.data?.selections[repoRoot] : undefined
-  const rows = agentPickerRows(profiles.data?.profiles ?? [])
-  const hasAccounts = hasAgentAccounts(rows)
+  const registered = useRunners().data
+  const rows = agentPickerRows(profiles.data?.profiles ?? [], registered)
+  const hasAccounts = hasAgentAccounts(rows, registered)
 
   return (
     <Field

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useCreateAgentProfile } from '@/api/queries'
+import { runnerEntry, useRunners } from '@/api/runners'
 import type { FsBrowseDir, ProviderId } from '@open-mercato/cezar-api-client'
 import { FolderBrowser } from '@/components/folder-browser'
 import { Button } from '@/components/ui/button'
@@ -35,12 +36,9 @@ import { toast } from '@/components/ui/toaster'
  * folder, no control characters); this dialog only refuses an empty field, because that is not a
  * request worth sending.
  */
-/** An example folder per agent. Generic names: this string ships to every Squawk user. */
-const FOLDER_EXAMPLE: Partial<Record<ProviderId, string>> = {
-  claude: '~/.claude-second',
-  codex: '~/.codex-second',
-  pi: '~/.pi-second/agent',
-}
+/** The folder the field suggests when the runner names none. Generic: this string ships to every
+ *  Squawk user. */
+const DEFAULT_FOLDER_EXAMPLE = '~/.claude-second'
 
 export function AddAccountDialog({
   open,
@@ -55,6 +53,7 @@ export function AddAccountDialog({
   /** Which agent's "Add account" was clicked; still switchable in the dialog. */
   initialProvider?: ProviderId
 }) {
+  const runners = useRunners().data
   // `null` = the configured browse root. The dialog never spells that path itself.
   const [path, setPath] = useState<string | null>(null)
   const [selected, setSelected] = useState<FsBrowseDir | null>(null)
@@ -148,7 +147,7 @@ export function AddAccountDialog({
               aria-label="Config folder"
               data-slot="add-account-dir"
               value={configDir}
-              placeholder={FOLDER_EXAMPLE[provider] ?? '~/.claude-second'}
+              placeholder={runnerEntry(runners, provider)?.accountFolderExample ?? DEFAULT_FOLDER_EXAMPLE}
               onChange={(event) => {
                 setConfigDir(event.target.value)
                 setSelected(null)

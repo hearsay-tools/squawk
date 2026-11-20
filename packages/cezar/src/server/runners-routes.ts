@@ -4,11 +4,19 @@ import { registeredRunners } from '../core/runner-registry.ts';
 
 /**
  * `GET /api/v1/runners` (spec 2026-11-18-runner-definitions, decision 2): the registered runners in
- * registration order, each with its `display` part. It reads the registry only and never probes a
- * CLI; `GET /api/v1/health` says which CLIs are installed.
+ * registration order, each with its `display` part, the `suggested` and `retired` model ids of its
+ * `models` part and the `agentConfig` of its `configFiles` part. It reads the registry only and
+ * never probes a CLI; `GET /api/v1/health` says which CLIs are installed.
  */
 export function readRunners(): RunnersResponse {
-  return { runners: registeredRunners().map(({ id, display }) => ({ id, ...display })) };
+  return {
+    runners: registeredRunners().map(({ id, display, models, configFiles }) => ({
+      id,
+      ...display,
+      models: { suggested: [...models.suggested], retired: [...models.retired] },
+      agentConfig: configFiles.agentConfig,
+    })),
+  };
 }
 
 /** The workspace family that answers `GET /runners`. */

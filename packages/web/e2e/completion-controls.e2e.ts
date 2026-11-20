@@ -58,7 +58,12 @@ beforeAll(async () => {
         capabilities: { followups: false, preview: false, localHandoff: false, automations: true } });
       if (path.endsWith('/providers/status')) return json({ providers: [{ provider: 'claude', status: 'connected', enabled: true }] });
       // The registered runners (GET /api/v1/runners): the composer and its runner picker wait for them.
-      if (path.endsWith('/runners')) return json({ runners: [{ id: 'claude', displayName: 'Claude Code', modelListName: 'Claude', modelIdScope: 'own' }] });
+      if (path.endsWith('/runners')) return json({ runners: [{
+        id: 'claude', displayName: 'Claude Code', modelListName: 'Claude', modelIdScope: 'own', pickerLabel: 'claude',
+        pickerDescription: 'Claude Code CLI', icon: 'bot', installHint: 'npm i -g @anthropic-ai/claude-code', loginCommand: 'claude auth login',
+        models: { suggested: [{ id: '', label: 'auto', desc: 'Pick the best model per step' }], retired: [] },
+        agentConfig: { label: 'Claude', groups: [] },
+      }] });
       if (path.endsWith('/workflows')) return json({ workflows: [{ name: 'quick-task', source: 'built-in', steps: [] }], issues: [] });
       if (path.endsWith('/repo')) return json({ info: { root: '/repo', branch: 'main' }, status: [], log: [], branches: ['main'], baseBranch: null });
       if (path.endsWith('/workspace/config')) return json({ agentDefaults: {}, composerDefaults: { inheritedAutonomous: 'source-dependent', inheritedWorktree: true } });

@@ -1,20 +1,19 @@
 import type { AgentConfigFile, Runner } from '@open-mercato/cezar-api-client'
+import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import { runnerEntries } from '@/api/runners'
 
 /**
  * Per-agent descriptor driving the Settings → Agent config pane (spec
  * 2026-07-17-agent-config-by-agent, amending #404): the UI is grouped by AGENT —
  * selector first, then that agent's settings, MCP and memory together — not by
- * purpose across agents. One descriptor entry per agent, keyed by the same
- * `Runner` id the rest of the codebase uses (the per-runner model map precedent from
- * #405: one table entry per agent, extension by design). A new agent is one entry
- * here plus its catalog files — no layout or route work.
+ * purpose across agents. The descriptor's labels, notes and empty-state copy come from the
+ * runner's `agentConfig` in `GET /api/v1/runners` (the `configFiles` part of its definition,
+ * hearsay-tools/squawk#3898); only the file filter below lives in the cockpit. A new agent is
+ * its definition plus its catalog files — no layout or route work.
  *
- * Every `RUNNER_IDS` member has an entry here — the descriptor and the runner's catalog
- * files ship together (AGENT_PROTOCOL.md §10 item 9), and `agent-descriptors.test.ts`
- * fails on a runner without one. A runner the vendor gives no editable file for still
- * gets its tab: the group carries `empty` copy saying why there is nothing to list and
- * what to try instead, rather than the agent being hidden (#322 — Pi's MCP group is the
- * worked example: Pi's README says "No MCP.").
+ * A runner the vendor gives no editable file for still gets its tab: the group carries `empty`
+ * copy saying why there is nothing to list and what to try instead, rather than the agent being
+ * hidden (#322 — Pi's MCP group is the worked example: Pi's README says "No MCP.").
  *
  * Group membership derives from the flat `/api/agent-config` listing: a file
  * belongs to an agent when `runners` INCLUDES it (not `runners[0]` — the shared
@@ -47,113 +46,39 @@ export interface AgentDescriptor {
   groups: AgentGroup[]
 }
 
-const EDITOR_PLUS_COMMIT =
-  'An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.'
-
 function ownedBy(agent: Runner) {
   return (f: AgentConfigFile) => f.runners.includes(agent)
 }
 
-function group(
-  agent: Runner,
-  id: AgentGroup['id'],
-  label: string,
-  note?: string,
-  empty?: string,
-): AgentGroup {
+/** The filter that decides which of the listing's files a group shows for `agent`. */
+function memberOf(agent: Runner, id: AgentGroup['id']): AgentGroup['files'] {
   const owned = ownedBy(agent)
   // `holdsMcp` files appear in the MCP group AND their own kind group — both
   // occurrences open the same editor; hiding either would misstate the file.
-  const member =
-    id === 'mcp'
-      ? (f: AgentConfigFile) => owned(f) && (f.holdsMcp === true || f.kind === 'mcp')
-      : (f: AgentConfigFile) => owned(f) && f.kind === id
-  return { id, label, note, ...(empty ? { empty } : {}), files: member }
+  return id === 'mcp'
+    ? (f) => owned(f) && (f.holdsMcp === true || f.kind === 'mcp')
+    : (f) => owned(f) && f.kind === id
 }
 
-export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
-  {
-    id: 'claude',
-    label: 'Claude',
-    groups: [
-      group('claude', 'settings', 'Settings'),
-      {
-        ...group(
-          'claude',
-          'mcp',
-          'MCP',
-          'A dedicated .mcp.json (key: mcpServers), shared via version control.',
-        ),
-        showsUserMcp: true,
-      },
-      group('claude', 'memory', 'Memory & instructions'),
-    ],
-  },
-  {
-    id: 'codex',
-    label: 'Codex',
-    note: EDITOR_PLUS_COMMIT,
-    groups: [
-      group('codex', 'settings', 'Settings'),
-      group(
-        'codex',
-        'mcp',
-        'MCP',
-        'Inside config.toml under [mcp_servers.<id>] — the same file as Codex’s settings.',
-      ),
-      group('codex', 'memory', 'Memory & instructions'),
-    ],
-  },
-  {
-    id: 'opencode',
-    label: 'OpenCode',
-    note: EDITOR_PLUS_COMMIT,
-    groups: [
-      group('opencode', 'settings', 'Settings'),
-      group(
-        'opencode',
-        'mcp',
-        'MCP',
-        'Under the "mcp" key in opencode.json — the same file as OpenCode’s settings.',
-      ),
-      group('opencode', 'memory', 'Memory & instructions'),
-    ],
-  },
-  {
-    id: 'pi',
-    label: 'Pi',
-    note: EDITOR_PLUS_COMMIT,
-    groups: [
-      group('pi', 'settings', 'Settings'),
-      group(
-        'pi',
-        'mcp',
-        'MCP',
-        'Pi ships no MCP client, so it has no MCP file to edit.',
-        'Nothing to list: Pi’s README says "No MCP." Give Pi tools as CLI programs with a README (Pi skills), or install a Pi extension that adds MCP support and configure servers there.',
-      ),
-      group('pi', 'memory', 'Memory & instructions'),
-    ],
-  },
-  {
-    id: 'omp',
-    label: 'OMP',
-    note: EDITOR_PLUS_COMMIT,
-    groups: [
-      group('omp', 'settings', 'Settings'),
-      group(
-        'omp',
-        'mcp',
-        'MCP',
-        'A dedicated mcp.json (key: mcpServers) at ~/.omp/agent and in the project’s .omp/ folder.',
-      ),
-      group('omp', 'memory', 'Memory & instructions'),
-    ],
-  },
-]
+/** One runner's pane: its `agentConfig` from the runners list, with each group's file filter. */
+export function agentDescriptor(entry: RunnerEntry): AgentDescriptor {
+  const { label, note, groups } = entry.agentConfig
+  return {
+    id: entry.id,
+    label,
+    note,
+    groups: groups.map(({ id, label: groupLabel, note: groupNote, empty, showsUserMcp }) => ({
+      id,
+      label: groupLabel,
+      note: groupNote,
+      ...(empty ? { empty } : {}),
+      ...(showsUserMcp ? { showsUserMcp } : {}),
+      files: memberOf(entry.id, id),
+    })),
+  }
+}
 
-export function descriptorFor(agent: Runner): AgentDescriptor {
-  const found = AGENT_DESCRIPTORS.find((d) => d.id === agent)
-  if (!found) throw new Error(`no agent descriptor for ${agent}`)
-  return found
+/** Every registered runner's pane, in display order. Empty until the runners query answers. */
+export function agentDescriptors(runners: RunnersResponse | undefined): AgentDescriptor[] {
+  return runnerEntries(runners).map(agentDescriptor)
 }

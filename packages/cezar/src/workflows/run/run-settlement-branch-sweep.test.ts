@@ -1,12 +1,12 @@
 import { testHome } from '../../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 import * as retention from '../../runs/retention.ts';
 import { RunStore } from '../../runs/store.ts';
-import { createFixtureManager, removeFixtureRepo, unused } from '../fixture-no-runner.testkit.ts';
+import { unused } from '../unused.testkit.ts';
 import { RunSettlement } from './run-settlement.ts';
 import { TrackedWork } from './tracked-work.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
@@ -14,14 +14,14 @@ import { noRunners } from '../../core/runners-under-test.testkit.ts';
 
 /** The post-terminal trigger of the branch sweep (hearsay-tools/cezarion#2268): every retention
  *  pass hands the sweep its keep-count, which turns it off at 0. */
-const roots: string[] = [];
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeFixtureRepo(root);
+const fixtures: Array<{ root: string; store: RunStore }> = [];
+afterEach(() => {
+  for (const { root, store } of fixtures.splice(0)) { store.flush(); rmSync(root, { recursive: true, force: true }); }
   vi.unstubAllEnvs();
 });
 
 function fixture(retention?: number) {
-  const root = mkdtempSync(join(tmpdir(), 'cez-settlement-sweep-')); roots.push(root);
+  const root = mkdtempSync(join(tmpdir(), 'cez-settlement-sweep-'));
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
   execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'base'], { cwd: root });
   if (retention !== undefined) {
@@ -29,14 +29,15 @@ function fixture(retention?: number) {
     writeFileSync(join(root, '.ai/cezar/config.json'), JSON.stringify({ worktreeRetention: retention }));
   }
   vi.stubEnv('CEZ_DRY_RUN', '1');
-  return { root, store: RunStore.open(join(root, '.ai/cezar')) };
+  const made = { root, store: RunStore.open(join(root, '.ai/cezar')) };
+  fixtures.push(made);
+  return made;
 }
 
 /** Unit-test retention where it lives; public completion also runs other settlement work. */
 function settlement(root: string, store: RunStore, sweepBranches?: (keep: number) => void) {
   const work = new TrackedWork();
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
-  createFixtureManager(store, root, { home: testHome(), work, semaphore });
   const context = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'), work, semaphore, disposed: () => false, sweepBranches };
   const host = unused<ConstructorParameters<typeof RunSettlement>[8]>('RunSettlement.host', { claimWorktreeReclaim: () => null, preview: undefined });
   return new RunSettlement(context, unused('HumanWaits'), unused('WorkerQuestions'), unused('WorktreeAutosave'),

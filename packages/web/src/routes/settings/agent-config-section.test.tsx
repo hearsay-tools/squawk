@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '@/api/queries'
+import { seedRunners } from '@/test/runners.testkit'
 import { createQueryClient } from '@/api/query-client'
 import type { AgentConfigFile, AgentConfigListing } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
@@ -102,7 +103,7 @@ function serveLive(server: LiveServer) {
 const READ_ONLY_REMOTE = { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false }
 const SETTINGS_FILE = fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })
 
-function renderSection(client = createQueryClient()) {
+function renderSection(client = seedRunners(createQueryClient())) {
   return render(
     <QueryClientProvider client={client}>
       <AgentConfigSection />
@@ -299,6 +300,20 @@ describe('AgentConfigSection', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="agent-config-precedence"]')?.textContent).toBe('Overrides user settings key by key.'))
   })
 
+  // hearsay-tools/squawk#3898: the panes come from the runners list, so its failure is shown, not a spinner.
+  it('shows the runners query error instead of loading forever when the runners list fails', async () => {
+    serve({ editable: true, userMcp: null, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.md', kind: 'memory', format: 'markdown' })] })
+    const served = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => (
+      String(input).endsWith('/api/v1/runners')
+        ? new Response(JSON.stringify({ error: 'no runners' }), { status: 404, headers: { 'content-type': 'application/json' } })
+        : served(input, init)
+    )))
+    renderSection(createQueryClient())
+    expect(await screen.findByText('Runners did not load')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-loading"]')).toBeNull()
+  })
+
   it('renders read-only in hosted mode — no Save button', async () => {
     serve({
       editable: false,
@@ -337,7 +352,7 @@ describe('AgentConfigSection', () => {
   // hearsay-tools/cezarion#2428: the host grants and withdraws outside the cockpit, and a remote
   // cockpit gets no live health push, so the section must not trust a cached capability.
   it('opening the section re-reads a grant the host made after the cached read', async () => {
-    const client = createQueryClient()
+    const client = seedRunners(createQueryClient())
     client.setQueryData(queryKeys.health, { ...HEALTH, capabilities: READ_ONLY_REMOTE })
     client.setQueryData(queryKeys.agentConfig, { editable: false, files: [{ ...SETTINGS_FILE, writable: false }], userMcp: null })
     serveLive({ capabilities: REMOTE_ADMIN, listing: { editable: true, files: [SETTINGS_FILE], userMcp: null }, putStatus: 200 })

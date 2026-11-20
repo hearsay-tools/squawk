@@ -7,7 +7,7 @@ import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 import type { ConfigFileDef } from './runner-config-files.ts';
 import type { ProviderCommandResult, ProviderConnectionState } from './provider-auth.ts';
-import type { RunnerEntry } from '@open-mercato/cezar-contract/runners';
+import type { RunnerAgentConfig, RunnerEntry, RunnerModelPreset } from '@open-mercato/cezar-contract/runners';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -39,8 +39,8 @@ export interface RunnerDefinition {
   loadModelCatalog(): Promise<(options: { cwd: string }) => Promise<ModelOption[]>>;
   /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
   loadSkillCatalog(): Promise<(options: SkillDiscoveryOptions) => Promise<SkillCatalog>>;
-  /** The native config files that Settings → Agent config shows, in presentation order. */
-  readonly configFiles: readonly ConfigFileDef[];
+  /** The native config files that Settings → Agent config shows, and the runner's pane there. */
+  readonly configFiles: RunnerConfigFiles;
   /** Extra tools unioned onto the default when a step does not set allowedTools. */
   readonly extraTools: readonly string[];
 
@@ -90,11 +90,33 @@ export interface RunnerMock {
   readonly malformedApprovalEcho?: string;
 }
 
-/** The `display` part: a `GET /api/v1/runners` entry without its id. */
-export type RunnerDisplay = Omit<RunnerEntry, 'id'>;
+/**
+ * The `display` part: a `GET /api/v1/runners` entry without its id, its model presets (the `models`
+ * part) and its agent config pane (the `configFiles` part).
+ */
+export type RunnerDisplay = Omit<RunnerEntry, 'id' | 'models' | 'agentConfig'>;
+
+/** A runner's `configFiles` part: its native files and the pane that groups them. Plain data. */
+export interface RunnerConfigFiles {
+  /** The native config files that Settings → Agent config shows, in presentation order. */
+  readonly files: readonly ConfigFileDef[];
+  /** The runner's tab in Settings → Agent config: its name, notes and groups. The cockpit filters
+   *  the agent config route's files into the groups by each file's `runners`, `kind` and `holdsMcp`. */
+  readonly agentConfig: RunnerAgentConfig;
+}
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
 export interface RunnerModelData {
+  /**
+   * The model picker's fallback suggestions, in order, before host discovery answers. The first is
+   * auto (`id: ''`). The cockpit reads them from `GET /api/v1/runners`.
+   */
+  readonly suggested: readonly RunnerModelPreset[];
+  /**
+   * Retired model ids: no presets any more, but another runner still refuses them as known
+   * foreign ids (`modelConflictsWithRunner` in the cockpit).
+   */
+  readonly retired: readonly string[];
   /**
    * Known preset ids, for mismatch checks (`core/model-presets.ts`). This is not a whitelist:
    * unknown custom ids remain valid. OpenCode uses native discovery plus a structural guard.

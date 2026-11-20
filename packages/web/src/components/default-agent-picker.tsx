@@ -1,8 +1,8 @@
 import type { AgentProfile, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
+import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { cn } from '@/lib/utils'
 import { providerStatusFor } from '@/lib/provider-status'
-import { useRunners } from '@/api/runners'
-import { RUNNERS } from '@/routes/new-task-form'
+import { runnerEntries, runnerIds, useRunners } from '@/api/runners'
 
 /**
  * "Which agent, and which of its logins" as ONE flat list (spec 2026-07-29-agent-profiles):
@@ -20,7 +20,7 @@ import { RUNNERS } from '@/routes/new-task-form'
  */
 
 export interface AgentPickerRow {
-  runner: (typeof RUNNERS)[number]
+  runner: RunnerEntry
   /** `null` is the discovered account — stored as absence, never the reserved `default` id. */
   account: string | null
   label: string
@@ -29,17 +29,17 @@ export interface AgentPickerRow {
 }
 
 /** Build the rows once, so the caller's `checked` logic and the render agree by construction. */
-export function agentPickerRows(profiles: readonly AgentProfile[]): AgentPickerRow[] {
-  return RUNNERS.flatMap((runner) => {
+export function agentPickerRows(profiles: readonly AgentProfile[], runners: RunnersResponse | undefined): AgentPickerRow[] {
+  return runnerEntries(runners).flatMap((runner) => {
     const logins = profiles.filter((p) => p.provider === runner.id)
     // One login is not a choice, so the agent is the row.
     if (logins.length < 2) {
-      return [{ runner, account: null, label: runner.label, desc: runner.desc, missing: false }]
+      return [{ runner, account: null, label: runner.pickerLabel, desc: runner.pickerDescription, missing: false }]
     }
     return logins.map((login) => ({
       runner,
       account: login.isDefault ? null : login.id,
-      label: `${runner.label} · ${login.label}`,
+      label: `${runner.pickerLabel} · ${login.label}`,
       // The folder, because the labels are Squawk's invention and the folder is the account. A
       // folder the CLI has not written yet is called out rather than left looking fine: a run under
       // it fails on auth BY DESIGN — it must not quietly fall back to another login — so the place
@@ -51,8 +51,8 @@ export function agentPickerRows(profiles: readonly AgentProfile[]): AgentPickerR
 }
 
 /** True once any agent has a second login — what turns the strip into a stacked list. */
-export const hasAgentAccounts = (rows: readonly AgentPickerRow[]): boolean =>
-  rows.length > RUNNERS.length
+export const hasAgentAccounts = (rows: readonly AgentPickerRow[], runners: RunnersResponse | undefined): boolean =>
+  rows.length > runnerIds(runners).length
 
 /** The provider status as a picker row reads it: whether the runner can be picked, and why not. */
 export function providerChoice(
@@ -100,9 +100,10 @@ export function DefaultAgentPicker({
   accountDisabled?: boolean
   onPick: (runner: Runner, account: string | null, hasAccountChoice: boolean) => void
 }) {
-  const stacked = hasAgentAccounts(rows)
   // Every row waits for the runners list, as it waits for the provider status.
-  const runnersPending = useRunners().data === undefined
+  const registered = useRunners().data
+  const runnersPending = registered === undefined
+  const stacked = hasAgentAccounts(rows, registered)
   return (
     <div
       role="radiogroup"

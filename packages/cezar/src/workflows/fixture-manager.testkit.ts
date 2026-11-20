@@ -126,5 +126,3 @@ export async function removeFixtureRepo(root: string, timeoutMs?: number): Promi
   await drainFixtureManagers(root, timeoutMs);
   rmSync(root, { recursive: true, force: true });
 }
-
-export { unused } from './unused.testkit.ts';

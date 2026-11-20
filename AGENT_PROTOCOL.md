@@ -15,8 +15,11 @@ The types in `agent-runner.ts` and their doc comments are the contract: `AgentRu
 `RUNNER_FACTS` in `core/runner-facts.ts` reads what each runner's wire can do from the
 registered definitions; each runner declares it in `runners/<id>/facts.ts`. The `display` part of
 a definition (`runners/<id>/display.ts`) holds what the cockpit and the server both read: the
-display name, the model list name and the model id scope. The server reads it from the registry;
-the cockpit reads it from `GET /api/v1/runners`. A runner's definition holds how a terminal
+display name, the model list name, the model id scope, the runner picker's label and line, the
+icon key, the install hint, the login command and the account folder example. The `models` part
+adds the picker's `suggested` presets and the `retired` ids; the `configFiles` part adds the
+`agentConfig` pane of Settings → Agent config. The server reads them from the registry; the
+cockpit reads them from `GET /api/v1/runners` and holds no table keyed by runner id. A runner's definition holds how a terminal
 starts and resumes its CLI and where the installer gets it (`cli`, from `runners/<id>/cli.ts`;
 `core/runner-cli.ts` reads it), and how the host probe finds it (`detection`, from
 `runners/<id>/detection.ts`; `core/backend-detect.ts` runs the probe). Each runner's
@@ -353,9 +356,11 @@ force, or force only in part. The item numbers are stable: code cites them.
    the turn blocked. Each native ask kind that a human can answer needs an entry in
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.
-9. **Plumbing** — Settings → Agent config ships with the runner: the doc comment of
-   `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. Add the composer
-   presets and the Settings → Agents entry. Keep every change additive, so that old run
+9. **Plumbing** — Settings → Agent config ships with the runner: the definition's `configFiles`
+   part holds its files and its `agentConfig` pane (`runners/<id>/config-files.ts`); the doc
+   comment of `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. The
+   composer presets are the `models.suggested` list and the Settings → Agents row comes from
+   the runners route, so the cockpit needs no edit. Keep every change additive, so that old run
    records still parse.
 10. **Model selection** — the definition's `models.idMap` (`runners/<id>/models.ts`) and
     `core/model-identity.test.ts` hold the rules.

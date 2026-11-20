@@ -1,21 +1,25 @@
 import { projectPaths } from '../project-paths.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
+import { createFixtureManager, drainFixtureManagers } from '../workflows/fixture-claude.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { createOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
-import { stores, managers, fixture, durableRun, git, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { roots, stores, managers, fixture, durableRun, git, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 // The timeout of a test that runs a dry-run task to completion through finished().
 // The two such tests take 2.4-2.7 s alone and 2.7-2.9 s in an idle full `npm test`
 // (measured 2026-10-07); a loaded full suite pushed them past vitest's 5 s default
 // (hearsay-tools/cezarion#873). Sized to cover the fixture plus finished()'s 10 s wait.
 const RUN_SETTLE_TEST_MS = 20_000;
+
+// Vitest runs afterEach hooks in reverse order, so this drain runs before the shared
+// fixture disposes the managers and removes the roots.
+afterEach(async () => { for (const root of roots) await drainFixtureManagers(root); });
 
 async function finished(store: RunStore, id: string) {
   await vi.waitFor(() => {

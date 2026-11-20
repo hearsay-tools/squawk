@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { runsOn } from './parity-classes.testkit.ts';
 import { FINAL_MESSAGE_CRITERIA } from './harness-parity.testkit.ts';
-import { describeWorkflowFinalMessage, WORKFLOW_FINAL_MESSAGE_GROUPS } from './workflow-final-message-cells.testkit.ts';
+import { workflowFinalMessageCellNames, WORKFLOW_FINAL_MESSAGE_GROUPS } from './workflow-final-message-rows.testkit.ts';
 
 describe('workflow final-message family registration', () => {
   it('registers every runner and row variant exactly once', () => {
@@ -23,7 +23,7 @@ describe('workflow final-message family registration', () => {
       const source = readFileSync(new URL(`./workflow-final-message-${group}-parity.test.ts`, import.meta.url), 'utf8');
       expect(source).toContain(`describeWorkflowFinalMessage('${group}');`);
       expect(source.match(/describeWorkflowFinalMessage\(/g)).toHaveLength(1);
-      describeWorkflowFinalMessage(group, registration);
+      workflowFinalMessageCellNames(group, registration);
     }
     expect(new Set(names).size).toBe(names.length);
     for (const runner of RUNNER_IDS) for (const row of FINAL_MESSAGE_CRITERIA) {
