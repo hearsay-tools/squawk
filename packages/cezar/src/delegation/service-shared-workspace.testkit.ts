@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { gitSync } from '../git-command.ts';
 import { randomUUID } from 'node:crypto';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 
-export const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+export const git = (cwd: string, ...args: string[]) => gitSync(args, { cwd, stdio: 'pipe' }).trim();
 export const shared = () => ({ task: 'review the change', workspace: 'shared' as const, requestId: randomUUID() });
 
 /** The parent's own worktree, one commit ahead of the base: the directory a shared worker runs in. */

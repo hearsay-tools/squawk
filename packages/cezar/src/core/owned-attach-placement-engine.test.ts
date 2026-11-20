@@ -1,7 +1,7 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { gitSync } from '../git-command.ts';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -31,8 +31,8 @@ describe('attached parent files in the worker worktree', { timeout: 30_000 }, ()
     context: { artifacts: paths.map(path => ({ kind: 'parent-file' as const, path })) } satisfies WorkerSpawnRequest['context'] });
   const commit = (path: string, content: string) => {
     mkdirSync(dirname(join(f.root, path)), { recursive: true }); writeFileSync(join(f.root, path), content);
-    execFileSync('git', ['add', path], { cwd: f.root });
-    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '-qm', path], { cwd: f.root });
+    gitSync(['add', path], { cwd: f.root });
+    gitSync(['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '-qm', path], { cwd: f.root });
   };
   const write = (path: string, content: string) => {
     mkdirSync(dirname(join(f.root, path)), { recursive: true }); writeFileSync(join(f.root, path), content);
@@ -99,7 +99,7 @@ describe('attached parent files in the worker worktree', { timeout: 30_000 }, ()
     commit('.gitignore', 'CLAUDE.local.md\n');
     const parentCwd = mkdtempSync(join(tmpdir(), 'cez-attach-parent-'));
     rmdirSync(parentCwd);
-    execFileSync('git', ['worktree', 'add', '-q', '--detach', parentCwd, 'HEAD'], { cwd: f.root });
+    gitSync(['worktree', 'add', '-q', '--detach', parentCwd, 'HEAD'], { cwd: f.root });
     try {
       f.store.updateRun(f.parent.id, { worktreePath: parentCwd });
       const settings = f.manager.delegationExecutionSettings(f.parent.id);
