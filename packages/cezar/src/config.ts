@@ -5,7 +5,8 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
-import { knownRunnerIds, registeredRunners } from './core/runner-registry.ts';
+import { registeredRunners } from './core/runner-registry.ts';
+import { registeredRunnerIdSchema } from './core/runner-id-schema.ts';
 import { DEFAULT_RUNNER_ID } from './core/runner-ids.ts';
 
 /**
@@ -45,7 +46,7 @@ const configSchema = z.object({
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.
    */
-  defaultRunner: z.string().min(1).refine((id) => knownRunnerIds().includes(id)).default(DEFAULT_RUNNER_ID),
+  defaultRunner: registeredRunnerIdSchema().default(DEFAULT_RUNNER_ID),
   /** Model for the chain planner (spec 008) — cheap but reliable at JSON. */
   plannerModel: z.string().min(1).default('sonnet'),
   /** Model for the task namer (spec 2026-07-17-task-auto-naming) — the cheapest

@@ -20,6 +20,7 @@ import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contr
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { knownRunnerIds, registeredRunners } from '../core/runner-registry.ts';
+import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
 
 /**
  * `~/.cezar/config.json` — the per-user workspace config + project registry
@@ -231,7 +232,7 @@ export function registeredRunnerRecord(field: z.ZodType<string | undefined>) {
  */
 const agentDefaultsSchema = z
   .object({
-    runner: z.string().min(1).refine((id) => knownRunnerIds().includes(id)).optional().catch(undefined),
+    runner: registeredRunnerIdSchema().optional().catch(undefined),
     models: registeredRunnerRecord(z.string().trim().min(1).max(200).optional().catch(undefined))
       .optional()
       .catch(undefined),
