@@ -84,7 +84,10 @@
       "packages/cezar/src/runners/fixture/**",
       "packages/cezar/scripts/mock-fixture-runner.mjs",
       "packages/cezar/src/runners/built-in.ts",
-      "packages/cezar/src/runners/ids.ts"
+      "packages/cezar/src/runners/ids.ts",
+      "packages/cezar/src/runners/opencode/**",
+      "packages/cezar/scripts/mock-opencode-*",
+      "packages/cezar/scripts/mock-skill-data/opencode.mjs"
     ],
     "scripts/regression-proof.test.mjs": [
       "scripts/regression-proofs/*.json",
