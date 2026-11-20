@@ -83,8 +83,8 @@ export function waitInputId(wait: Wait): string {
 
 /** The CI watcher still speaks the schema-3 `CiWait`; an open entry is a parked one to it. */
 export function ciWatchRequest(wait: PrWaitEntry): CiWait {
-  const { id, prUrl, repository, prNumber, headSha, generation, turnId, timeoutSeconds, until, wakeOnConflict, registeredAt, deadline } = wait;
-  return { id, prUrl, repository, prNumber, headSha, generation, turnId, timeoutSeconds, until, wakeOnConflict, registeredAt, deadline, phase: 'parked' };
+  const { id, prUrl, repository, prNumber, headSha, generation, turnId, timeoutSeconds, until, wakeOnConflict, callerHead, registeredAt, deadline } = wait;
+  return { id, prUrl, repository, prNumber, headSha, generation, turnId, timeoutSeconds, until, wakeOnConflict, ...(callerHead ? { callerHead } : {}), registeredAt, deadline, phase: 'parked' };
 }
 
 /** An open or resolved PR wait: it holds conversation input for its own wake (#476). */

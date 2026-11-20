@@ -1,7 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { ciWaitSchema, ciWaitResultSchema, type CiPrIdentity, type CiWait, type CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
 import { githubRequestGate, RequestPermits } from '../server/forge/github-request-gate.ts';
-import { CiGithubError, GithubCiClient, type GithubCheck, type GithubPrMergeState, type GithubPrMetadata } from './github.ts';
+import { CiGithubError, GithubCiClient, type GithubCheck, type GithubPrMergeState, type GithubPrMetadata, type GithubWorkflowRuns } from './github.ts';
 import type { GithubMergeRequest } from './merge-progress.ts';
 import { CiProgressRegistry } from './progress.ts';
 import { QueuedCheckClock } from './queued-checks.ts';
@@ -31,12 +31,43 @@ function transientQuery(error: unknown): error is CiGithubError {
 function failureDiagnostic(error: unknown): string {
   return error instanceof CiGithubError ? `${error.code}: ${error.message}` : 'unavailable: CI watcher failed; register a new wait.';
 }
-function outcome(checks: GithubCheck[]): CiWaitResult['outcome'] | undefined {
-  if (!checks.length || checks.some(c => c.bucket === 'pending')) return undefined;
+/**
+ * The checks that decide a cancellation or an early failure (hearsay-tools/squawk#3972): the
+ * required ones. A head with no required check (no branch protection or ruleset) counts every check.
+ */
+function deciding(checks: GithubCheck[]): GithubCheck[] {
+  const required = checks.filter(c => c.required);
+  return required.length ? required : checks;
+}
+/** The outcome of settled checks. A cancelled check that is not required never decides it. */
+function settledOutcome(checks: GithubCheck[]): 'failed' | 'cancelled' | 'passed' | 'skipped' {
   if (checks.some(c => c.bucket === 'fail')) return 'failed';
-  if (checks.some(c => c.bucket === 'cancel')) return 'cancelled';
+  if (deciding(checks).some(c => c.bucket === 'cancel')) return 'cancelled';
   if (checks.some(c => c.bucket === 'pass')) return 'passed';
   return 'skipped';
+}
+/** The outcome the workflow runs of the head force on settled checks, with its diagnostic. */
+function runsOutcome(runs: GithubWorkflowRuns): { outcome: 'startup_failure' | 'failed'; diagnostic: string } | undefined {
+  const failure = runs.failures.find(run => run.conclusion === 'startup_failure') ?? runs.failures[0];
+  if (!failure) return undefined;
+  const workflow = `Workflow "${clean(failure.workflow, 256)}" run ${failure.id}`;
+  return failure.conclusion === 'startup_failure'
+    ? { outcome: 'startup_failure', diagnostic: `${workflow} ended in startup_failure and created no job, so its checks never appeared. Inspect the workflow file and its trigger.` }
+    : { outcome: 'failed', diagnostic: `${workflow} concluded failure on this head.` };
+}
+/**
+ * Check records that have a conclusion while their status still reads as running, within `budget`
+ * UTF-8 bytes, so the diagnostic beside them stays under the result's 4096-byte limit.
+ */
+function staleDiagnostic(checks: GithubCheck[], budget: number): string | undefined {
+  const stale = checks.filter(c => c.stale).map(c => clean(c.name, 256));
+  if (!stale.length) return undefined;
+  let text = 'Stale check records (a conclusion, but a status other than completed): ';
+  for (const [index, name] of stale.entries()) {
+    if (Buffer.byteLength(text + name) > budget) return `${text}; ${stale.length - index} more.`;
+    text += (index ? '; ' : '') + name;
+  }
+  return text + '.';
 }
 type ObservationExtra = Partial<Pick<CiWaitResult, 'observedHeadSha' | 'diagnostic' | 'mergeable' | 'mergeStateStatus' | 'mergedAt' | 'mergeCommitSha' | 'mergeBlock'>>;
 /** The queue removed the PR because it merged; GitHub can still read the PR as `OPEN` for a moment. */
@@ -57,6 +88,11 @@ function observation(wait: CiWait, result: CiWaitResult['outcome'], rows: Github
   return ciWaitResultSchema.parse(value);
 }
 
+function malformedWait(wait: CiWait): CiWaitResult {
+  const headSha = /^[0-9a-f]{40}$/i.test(wait.headSha ?? '') ? wait.headSha : '0'.repeat(40);
+  return observation({ ...wait, headSha }, 'error', [], { diagnostic: 'malformed_data: Persisted CI wait is invalid; an all-zero head denotes an unavailable original identity. Register a new wait.' });
+}
+
 /** One shared instance per workspace; queues watchers FIFO without extending their deadlines. */
 export class CiWatcherSupervisor {
   private readonly lifetime = new AbortController();
@@ -65,8 +101,6 @@ export class CiWatcherSupervisor {
   private readonly current = new Map<string, Promise<CiWaitResult>>();
   /** The check progress of each watched wait, for the activity view. It never decides an outcome. */
   private readonly progress: CiProgressRegistry;
-  /** The one extra checks read in flight across the supervisor, and its wait. */
-  private progressRead: { waitId: string; abort: AbortController } | undefined;
   constructor(options: { github?: GithubCiClient; progress?: CiProgressRegistry } = {}) {
     this.github = options.github ?? new GithubCiClient({ gate: githubRequestGate });
     this.progress = options.progress ?? new CiProgressRegistry();
@@ -82,10 +116,6 @@ export class CiWatcherSupervisor {
     if (existing) return existing;
     const task = this.run(wait, signal).finally(() => {
       this.current.delete(wait.id);
-      if (this.progressRead?.waitId === wait.id) {
-        this.progressRead.abort.abort();
-        this.progressRead = undefined;
-      }
       this.progress.remove(wait.id);
     });
     this.current.set(wait.id, task);
@@ -146,33 +176,12 @@ export class CiWatcherSupervisor {
   }
 
   /**
-   * The `--watch` phase's extra checks read (spec 2026-11-05-live-activity-view), only while someone
-   * watches the wait's project. It updates the progress and nothing else: its rows never reach
-   * `observe`, and a failed read keeps the last progress and is not an error. The loop never awaits
-   * it, so a slow read delays neither a --watch completion nor the next head probe. It takes none of
-   * the client's query permits (`progressChecks`), which stay with the outcome queries; one read runs
-   * across the supervisor, so a probe that finds one in flight skips its own. The end of the watch
-   * aborts it, and an aborted read publishes nothing.
+   * Own one gh checks watcher until it exits, including abort cleanup, while taking a full snapshot
+   * every `CI_PROBE_MS`: a check whose record keeps a running status after it concluded never ends
+   * the watcher (hearsay-tools/squawk#3972).
    */
-  private startProgressRead(wait: CiWait, signal: AbortSignal): void {
-    if (this.progressRead || !this.progress.wanted(wait.id)) return;
-    const own = new AbortController();
-    const readSignal = AbortSignal.any([signal, own.signal]);
-    const read = this.github.progressChecks(wait, readSignal);
-    const entry = { waitId: wait.id, abort: own };
-    this.progressRead = entry;
-    void read.then(rows => {
-      if (!readSignal.aborted) this.progress.publish(wait.id, rows);
-    }, () => {
-      // The wait continues on the head probe and the --watch process.
-    }).finally(() => {
-      if (this.progressRead === entry) this.progressRead = undefined;
-    });
-  }
-
-  /** Own one gh checks watcher until it exits, including abort cleanup, while probing PR changes. */
   private async watchChecks(wait: CiWait, signal: AbortSignal, snapshot: () => Promise<CiWaitResult | undefined>,
-    probe: () => Promise<CiWaitResult | undefined>, queuedDeadline: number): Promise<CiWaitResult | undefined> {
+    queuedDeadline: number): Promise<CiWaitResult | undefined> {
     const watchAbort = new AbortController();
     const watchSignal = AbortSignal.any([signal, watchAbort.signal]);
     // Attach a rejection handler immediately; the watcher may finish during a head probe.
@@ -194,7 +203,7 @@ export class CiWatcherSupervisor {
           await delay(CI_PROBE_MS, undefined, { signal });
           break;
         }
-        const changed = await probe();
+        const changed = await snapshot();
         if (changed) return changed;
       }
       return undefined;
@@ -207,11 +216,13 @@ export class CiWatcherSupervisor {
 
   private async run(wait: CiWait, caller: AbortSignal): Promise<CiWaitResult> {
     const remaining = Date.parse(wait.deadline) - Date.now();
-    if (!ciWaitSchema.safeParse(wait).success) return observation({ ...wait, headSha: /^[0-9a-f]{40}$/i.test(wait.headSha ?? '') ? wait.headSha : '0'.repeat(40) }, 'error', [], { diagnostic: 'malformed_data: Persisted CI wait is invalid; an all-zero head denotes an unavailable original identity. Register a new wait.' });
+    if (!ciWaitSchema.safeParse(wait).success) return malformedWait(wait);
     const deadline = AbortSignal.timeout(Math.max(0, Math.min(remaining, 7_200_000)));
     const signal = AbortSignal.any([caller, this.lifetime.signal, deadline]);
     let rows: GithubCheck[] = [];
     let workflowActive = false;
+    /** GitHub has shown the watched head as the PR's head at least once. */
+    let headSeen = !wait.callerHead;
     let release: (() => void) | undefined;
     let retry = 0;
     let lastQueryError: CiGithubError | undefined;
@@ -220,40 +231,52 @@ export class CiWatcherSupervisor {
     const observe = (result: CiWaitResult['outcome'], extra: Partial<Pick<CiWaitResult, 'observedHeadSha' | 'diagnostic'>> = {}) =>
       observation(wait, result, rows, { ...(metadata ? { mergeable: metadata.mergeable, mergeStateStatus: metadata.mergeStateStatus } : {}), ...extra });
     const queued = new QueuedCheckClock();
-    const readMetadata = async () => {
-      const value = await this.github.metadata(wait, signal);
-      signal.throwIfAborted();
-      metadata = value;
-      return value;
-    };
     // A PR the agent does not own may conflict without ending its wait (hearsay-tools/cezarion#1425).
     const conflict = () => wait.wakeOnConflict !== false && metadata?.mergeable === 'CONFLICTING'
       ? observe('conflicting', {diagnostic: 'The pull request conflicts with its base. Inspect the PR; this observation does not authorize a repair or merge.'})
       : undefined;
     const stopped = () => {
       const cancelled = caller.aborted || this.lifetime.signal.aborted;
-      return observe(cancelled ? 'cancelled' : 'deadline', !cancelled && lastQueryError
-        ? { diagnostic: `${lastQueryError.code}: ${lastQueryError.message}` } : {});
+      if (cancelled) return observe('cancelled');
+      const queryError = lastQueryError ? `${lastQueryError.code}: ${lastQueryError.message}` : '';
+      // 4000 leaves room for the "N more." tail and the joining space under 4096 bytes.
+      const diagnostic = [queryError, staleDiagnostic(rows, 4000 - Buffer.byteLength(queryError))].filter(Boolean).join(' ');
+      return observe('deadline', diagnostic ? { diagnostic } : {});
     };
+    // A head the caller pushed may reach GitHub after the registration (hearsay-tools/squawk#3972).
+    const awaitingHead = () => !headSeen && Date.now() < Date.parse(wait.registeredAt) + CI_DISCOVERY_MS;
     if (remaining <= 0 || signal.aborted) return stopped();
     // A merge wait polls the PR's state and holds no watcher slot (hearsay-tools/cezarion#1425).
     if (wait.until !== 'checks') return this.runMerge(wait, caller, signal);
+    /**
+     * One observation: the PR head and the watched commit's checks in one query, then, once the
+     * checks have settled or none exist, the head's workflow runs (hearsay-tools/squawk#3972).
+     */
     const snapshot = async (): Promise<CiWaitResult | undefined> => {
-      const before = (await readMetadata()).headSha;
-      if (before !== wait.headSha) return observe('head_changed', { observedHeadSha: before });
-      workflowActive = await this.github.hasActiveRuns(wait, signal);
-      const observed = await this.github.checks(wait, signal);
-      const after = (await readMetadata()).headSha;
-      if (after !== wait.headSha) return observe('head_changed', { observedHeadSha: after });
-      rows = observed;
-      this.progress.publish(wait.id, observed);
+      const seen = await this.github.observe(wait, signal);
+      signal.throwIfAborted();
+      metadata = { headSha: seen.headSha, mergeable: seen.mergeable, mergeStateStatus: seen.mergeStateStatus };
+      if (seen.headSha !== wait.headSha.toLowerCase()) {
+        return awaitingHead() ? undefined : observe('head_changed', { observedHeadSha: seen.headSha });
+      }
+      headSeen = true;
+      rows = seen.checks;
+      this.progress.publish(wait.id, rows);
       const conflicting = conflict();
       if (conflicting) return conflicting;
       queued.observe(rows);
       const diagnostic = queued.diagnostic();
       if (diagnostic) return observe('stuck', {diagnostic});
-      const settled = workflowActive ? undefined : outcome(rows);
-      return settled ? observe(settled) : undefined;
+      if (deciding(rows).some(c => c.bucket === 'fail')) return observe('failed');
+      workflowActive = false;
+      if (rows.some(c => c.bucket === 'pending')) return undefined;
+      const runs = await this.github.workflowRuns(wait, signal);
+      signal.throwIfAborted();
+      workflowActive = runs.active;
+      if (workflowActive) return undefined;
+      const forced = runsOutcome(runs);
+      if (forced && (forced.outcome === 'startup_failure' || rows.length)) return observe(forced.outcome, { diagnostic: forced.diagnostic });
+      return rows.length ? observe(settledOutcome(rows)) : undefined;
     };
     try {
       release = await this.slots.acquire(signal);
@@ -264,7 +287,8 @@ export class CiWatcherSupervisor {
           if (settled) return settled;
           // A rerun may hide all its checks, making gh --watch exit immediately.
           // Probe the workflow itself without spinning or spending model turns.
-          if (workflowActive) {
+          // A head the caller pushed and GitHub has not shown yet has nothing to watch either.
+          if (workflowActive || !headSeen) {
             await delay(CI_PROBE_MS, undefined, { signal });
             continue;
           }
@@ -273,13 +297,7 @@ export class CiWatcherSupervisor {
             await delay(Math.min(CI_PROBE_MS, discoveryDeadline - Date.now()), undefined, { signal });
             continue;
           }
-          const final = await this.watchChecks(wait, signal, snapshot, async () => {
-            const head = (await readMetadata()).headSha;
-            if (head !== wait.headSha) return observe('head_changed', { observedHeadSha: head });
-            const conflicting = conflict();
-            if (!conflicting) this.startProgressRead(wait, signal);
-            return conflicting;
-          }, queued.deadline());
+          const final = await this.watchChecks(wait, signal, snapshot, queued.deadline());
           if (final) return final;
         } catch (error) {
           if (signal.aborted) return stopped();

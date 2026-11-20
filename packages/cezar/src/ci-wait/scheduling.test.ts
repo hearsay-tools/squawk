@@ -23,12 +23,12 @@ function start(github: GithubCiClient, seconds=1800) {const s=new CiWatcherSuper
 class ScriptedGithub extends GithubCiClient {
  headReads=0; snapshots=0; watchers=0; active=0; peak=0; failures=0; changedAt=Infinity;
  workflowActive=false;
- override async hasActiveRuns():Promise<boolean> {return this.workflowActive;}
+ override async workflowRuns() {return {active:this.workflowActive,failures:[]};}
  mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' = 'MERGEABLE'; conflictAt=Infinity;
  rows: GithubCheck[]=[];
- override async metadata() { const headSha = await this.head(); return {headSha, mergeable: this.headReads >= this.conflictAt ? 'CONFLICTING' as const : this.mergeable, mergeStateStatus: 'DIRTY'}; }
- override async head():Promise<string> {this.headReads++; if(this.failures-->0) throw new CiGithubError('command_failed','Service unavailable',true);return this.headReads>=this.changedAt?'b'.repeat(40):identity.headSha;}
- override async checks():Promise<GithubCheck[]> {this.snapshots++;return this.rows;}
+ /** One checks query: the head, mergeability and the rows, as one read. */
+ override async observe() { const headSha = await this.head(); this.snapshots++; return {headSha, mergeable: this.headReads >= this.conflictAt ? 'CONFLICTING' as const : this.mergeable, mergeStateStatus: 'DIRTY', checks: this.rows}; }
+ async head():Promise<string> {this.headReads++; if(this.failures-->0) throw new CiGithubError('command_failed','Service unavailable',true);return this.headReads>=this.changedAt?'b'.repeat(40):identity.headSha;}
  override async watch(_pr:CiPrIdentity,signal:AbortSignal):Promise<void> {this.watchers++;this.active++;this.peak=Math.max(this.peak,this.active);try{await new Promise<void>(resolve=>{if(signal.aborted)resolve();else signal.addEventListener('abort',()=>resolve(),{once:true});});}finally{this.active--;}}
 }
 afterEach(()=>{for(const s of services.splice(0))s.close();for(const c of controllers.splice(0))c.abort();vi.useRealTimers();});
@@ -51,12 +51,18 @@ it('does not report no_checks while a workflow is active beyond discovery',async
  github.workflowActive=false;
  await vi.advanceTimersByTimeAsync(30_000);expect((await started.result).outcome).toBe('no_checks');
 });
-it.each(['pass','fail','cancel','skipping'] as const)('defers the %s check outcome while a workflow is active and retains cancellation',async bucket=>{
+it.each(['pass','cancel','skipping'] as const)('defers the %s check outcome while a workflow is active and retains cancellation',async bucket=>{
  vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
  github.rows=[{name:'other workflow',state:bucket,bucket,link:''}];
  const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
  await vi.advanceTimersByTimeAsync(60_000);expect(settled).toBe(false);
  started.controller.abort();expect((await started.result).outcome).toBe('cancelled');
+});
+// hearsay-tools/squawk#3972: a failed check decides at once, even while other work still runs.
+it('reports a failed check at once while a workflow is still active',async()=>{
+ const github=new ScriptedGithub();github.workflowActive=true;
+ github.rows=[{name:'unit',state:'FAILURE',bucket:'fail',link:''},{name:'e2e',state:'IN_PROGRESS',bucket:'pending',link:''}];
+ expect(await start(github).result).toMatchObject({outcome:'failed',totalChecks:2});
 });
 it('retains the original deadline while a hidden rerun stays active',async()=>{
  vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
@@ -67,13 +73,13 @@ it('retains the original deadline while a hidden rerun stays active',async()=>{
  expect(await started.result).toMatchObject({outcome:'deadline',totalChecks:1});
 });
 it('detects a changed head while a hidden rerun stays active',async()=>{
- vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;github.changedAt=3;
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;github.changedAt=2;
  const started=start(github);await vi.advanceTimersByTimeAsync(30_000);
  expect(await started.result).toMatchObject({outcome:'head_changed',observedHeadSha:'b'.repeat(40)});
 });
 it('never turns workflow-query failure into a partial green result',async()=>{
  const github=new ScriptedGithub();github.rows=[{name:'other workflow',state:'SUCCESS',bucket:'pass',link:''}];
- github.hasActiveRuns=async()=>{throw new CiGithubError('authentication','GitHub authentication failed');};
+ github.workflowRuns=async()=>{throw new CiGithubError('authentication','GitHub authentication failed');};
  expect(await start(github).result).toMatchObject({outcome:'error',diagnostic:'authentication: GitHub authentication failed'});
 });
 it('discovers absent checks for sixty seconds at a thirty-second interval and never reports them as passing',async()=>{
@@ -83,12 +89,12 @@ it('discovers absent checks for sixty seconds at a thirty-second interval and ne
  await vi.advanceTimersByTimeAsync(20_000); expect(github.snapshots).toBe(2);
  await vi.advanceTimersByTimeAsync(30_000); expect(await result).toMatchObject({outcome:'no_checks',totalChecks:0}); expect(github.snapshots).toBe(3);
 });
-it('probes the PR head every thirty seconds while checks stay pending, not every ten',async()=>{
+it('reads the PR head and checks every thirty seconds while checks stay pending, not every ten',async()=>{
  vi.useFakeTimers(); const github=new ScriptedGithub(); github.rows=[{name:'build',state:'PENDING',bucket:'pending',link:''}];
  const started=start(github);
- await vi.advanceTimersByTimeAsync(1); expect(github.headReads).toBe(2); expect(github.watchers).toBe(1);
- await vi.advanceTimersByTimeAsync(10_000); expect(github.headReads).toBe(2);
- await vi.advanceTimersByTimeAsync(20_000); expect(github.headReads).toBe(3);
+ await vi.advanceTimersByTimeAsync(1); expect(github.headReads).toBe(1); expect(github.watchers).toBe(1);
+ await vi.advanceTimersByTimeAsync(10_000); expect(github.headReads).toBe(1);
+ await vi.advanceTimersByTimeAsync(20_000); expect(github.headReads).toBe(2);
  started.controller.abort(); expect((await started.result).outcome).toBe('cancelled');
 });
 it('rechecks a stale watch completion after thirty seconds, not ten',async()=>{
@@ -121,14 +127,14 @@ it.each(['command_failed', 'query_timeout'] as const)('retries %s beyond three f
 });
 it('recovers an unrecognized command failure and resolves the actual verdict',async()=>{
  vi.useFakeTimers();const github=new ScriptedGithub();let failed=false;
- github.hasActiveRuns=async()=>{if(!failed){failed=true;throw new CiGithubError('command_failed','Unrecognized failure');}return false;};
+ github.workflowRuns=async()=>{if(!failed){failed=true;throw new CiGithubError('command_failed','Unrecognized failure');}return {active:false,failures:[]};};
  github.rows=[{name:'build',state:'SUCCESS',bucket:'pass',link:''}];
  const started=start(github);await vi.advanceTimersByTimeAsync(1_000);
  expect(await started.result).toMatchObject({outcome:'passed',totalChecks:1});
  expect((await started.result).diagnostic).toBeUndefined();
 });
 it.each(['authentication','inaccessible_pr','gh_missing','malformed_data','output_limit'] as const)('ends %s errors immediately even if marked transient',async code=>{
- vi.useFakeTimers();const github=new ScriptedGithub();github.hasActiveRuns=async()=>{throw new CiGithubError(code,'Permanent failure',true);};
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowRuns=async()=>{throw new CiGithubError(code,'Permanent failure',true);};
  const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
  await vi.advanceTimersByTimeAsync(0);expect(settled).toBe(true);
  expect(await started.result).toMatchObject({outcome:'error',diagnostic:`${code}: Permanent failure`});
@@ -144,13 +150,13 @@ it('clears an earlier failure after a successful pending snapshot and resets bac
  const started=start(github);timeout.mockRestore();await vi.advanceTimersByTimeAsync(21_000);
  github.failures=1;await vi.advanceTimersByTimeAsync(30_000);const reads=github.headReads;
  await vi.advanceTimersByTimeAsync(999);expect(github.headReads).toBe(reads);
- await vi.advanceTimersByTimeAsync(1);expect(github.headReads).toBe(reads+2);
+ await vi.advanceTimersByTimeAsync(1);expect(github.headReads).toBe(reads+1);
  deadline.abort();const result=await started.result;expect(result.outcome).toBe('deadline');expect(result.diagnostic).toBeUndefined();
 });
-it('rejects head changes during snapshot attribution and during a running watch',async()=>{
- vi.useFakeTimers();const github=new ScriptedGithub();github.rows=[{name:'build',state:'PENDING',bucket:'pending',link:''}];github.changedAt=3;
+it('rejects head changes in the first read and during a running watch',async()=>{
+ vi.useFakeTimers();const github=new ScriptedGithub();github.rows=[{name:'build',state:'PENDING',bucket:'pending',link:''}];github.changedAt=2;
  const {result}=start(github);await vi.advanceTimersByTimeAsync(30_000);expect(await result).toMatchObject({outcome:'head_changed',observedHeadSha:'b'.repeat(40)});expect(github.active).toBe(0);
- const racing=new ScriptedGithub();racing.rows=[{name:'build',state:'SUCCESS',bucket:'pass',link:''}];racing.changedAt=2;expect((await start(racing).result).outcome).toBe('head_changed');
+ const racing=new ScriptedGithub();racing.rows=[{name:'build',state:'SUCCESS',bucket:'pass',link:''}];racing.changedAt=1;expect((await start(racing).result).outcome).toBe('head_changed');
 });
 it('keeps at most four watchers and starts the fifth only after an owned watcher exits',async()=>{
  const github=new ScriptedGithub();github.rows=[{name:'build',state:'PENDING',bucket:'pending',link:''}];const s=new CiWatcherSupervisor({github});services.push(s);
@@ -175,7 +181,7 @@ it('sanitizes external names, control sequences and credential-bearing links',as
 });
 
 it('resolves a same-head conflict during a pending watch and reaps it at the existing probe', async () => {
- vi.useFakeTimers(); const github = new ScriptedGithub(); github.conflictAt = 3;
+ vi.useFakeTimers(); const github = new ScriptedGithub(); github.conflictAt = 2;
  github.rows = [{name:'build',state:'PENDING',bucket:'pending',link:''}];
  const started = start(github);
  await vi.advanceTimersByTimeAsync(1); expect(github.active).toBe(1);
@@ -183,7 +189,7 @@ it('resolves a same-head conflict during a pending watch and reaps it at the exi
  // A deadline guard keeps the pre-fix test finite: without conflict detection it cancels.
  const observed = started.result; started.controller.abort();
  expect(await observed).toMatchObject({outcome:'conflicting',mergeable:'CONFLICTING',mergeStateStatus:'DIRTY',headSha:identity.headSha});
- expect(github.active).toBe(0); expect(github.headReads).toBe(3);
+ expect(github.active).toBe(0); expect(github.headReads).toBe(2);
 });
 it.each(['MERGEABLE', 'UNKNOWN'] as const)('does not treat advisory DIRTY with %s as a conflict', async mergeable => {
  vi.useFakeTimers(); const github = new ScriptedGithub(); github.mergeable = mergeable;
@@ -192,14 +198,8 @@ it.each(['MERGEABLE', 'UNKNOWN'] as const)('does not treat advisory DIRTY with %
  expect(github.active).toBe(1); started.controller.abort();
  expect(await started.result).toMatchObject({outcome:'cancelled',mergeable,mergeStateStatus:'DIRTY'});
 });
-it('uses final snapshot metadata rather than an earlier conflict and retains ordinary passing behavior', async () => {
- const github = new ScriptedGithub();
- github.metadata = async () => ({headSha: await github.head(), mergeable: github.headReads === 1 ? 'CONFLICTING' : 'UNKNOWN', mergeStateStatus:'UNKNOWN'});
- github.rows = [{name:'build',state:'SUCCESS',bucket:'pass',link:''}];
- expect(await start(github).result).toMatchObject({outcome:'passed',mergeable:'UNKNOWN'});
-});
 it('prefers a changed head over a conflict on the same metadata read', async () => {
- const github = new ScriptedGithub(); github.changedAt=2; github.conflictAt=2;
+ const github = new ScriptedGithub(); github.changedAt=1; github.conflictAt=1;
  github.rows = [{name:'build',state:'SUCCESS',bucket:'pass',link:''}];
  expect(await start(github).result).toMatchObject({outcome:'head_changed',mergeable:'CONFLICTING',observedHeadSha:'b'.repeat(40)});
 });
@@ -227,7 +227,7 @@ it('wakes before its deadline after observing queued checks for 15 minutes, even
  expect(result.diagnostic).toContain('Close and reopen the PR');expect(result.diagnostic).toContain('the reopened event starts fresh pull_request and pull_request_target runs on the same head');
  expect(result.diagnostic).toContain('Push a new head only if the new run also stays queued');expect(result.diagnostic).not.toMatch(/empty commit/i);
  expect(result.diagnostic).toContain('clock starts when this wait first sees a queued check');expect(result.diagnostic).toContain('cockpit restart restarts it');
- expect(github.watchers).toBe(0);
+ expect(github.watchers).toBe(1);
 });
 it.each(['IN_PROGRESS','WAITING','REQUESTED','PENDING','SUCCESS','FAILURE','CANCELLED'])('does not count %s time as queued', async state => {
  vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
@@ -240,25 +240,25 @@ it('caps a native watch at 15 observed queued minutes, reaps it, and confirms th
  vi.useFakeTimers();const github=new ScriptedGithub();
  github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
  const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
- await vi.advanceTimersByTimeAsync(899_999);expect(settled).toBe(false);expect(github.snapshots).toBe(1);
+ await vi.advanceTimersByTimeAsync(899_999);expect(settled).toBe(false);const snapshots=github.snapshots;
  await vi.advanceTimersByTimeAsync(1);started.controller.abort();
- expect(await started.result).toMatchObject({outcome:'stuck'});expect(github.snapshots).toBe(2);expect(github.active).toBe(0);
+ expect(await started.result).toMatchObject({outcome:'stuck'});expect(github.snapshots).toBe(snapshots+1);expect(github.active).toBe(0);
 });
 it('uses the confirming snapshot when the queued check starts before the watch cap', async () => {
  vi.useFakeTimers();const github=new ScriptedGithub();
  github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
  const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
- await vi.advanceTimersByTimeAsync(899_999);
+ await vi.advanceTimersByTimeAsync(899_999);const snapshots=github.snapshots;
  github.rows=[{name:'build',state:'IN_PROGRESS',bucket:'pending',link:''}];
  await vi.advanceTimersByTimeAsync(1);
- expect(settled).toBe(false);expect(github.snapshots).toBe(2);expect(github.active).toBe(1);
+ expect(settled).toBe(false);expect(github.snapshots).toBe(snapshots+1);expect(github.active).toBe(1);
  started.controller.abort();expect((await started.result).outcome).toBe('cancelled');
 });
 it.each(['head_changed','conflicting'] as const)('retains %s precedence when a queued check reaches the bound', async expected => {
  vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
  github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
  const started=start(github);await vi.advanceTimersByTimeAsync(899_999);
- if(expected==='head_changed')github.changedAt=github.headReads+2;else github.conflictAt=github.headReads+2;
+ if(expected==='head_changed')github.changedAt=github.headReads+1;else github.conflictAt=github.headReads+1;
  await vi.advanceTimersByTimeAsync(1);expect((await started.result).outcome).toBe(expected);
 });
 it('keeps bounded stuck diagnostics valid for many hostile Unicode check names', async () => {

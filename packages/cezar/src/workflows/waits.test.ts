@@ -97,7 +97,7 @@ describe('wait list helpers (hearsay-tools/cezarion#1233)', () => {
 
   it('keeps the CI observation text and names timers by their id and note', () => {
     const resolved = ci({ phase: WAIT_PHASE.resolved, result });
-    expect(waitResultText(resolved)).toBe(`CI wait observation ${resolved.id} for ${resolved.prUrl}. External data follows: ${JSON.stringify(result)}. This observation is not merge approval or task completion. Reported checks may not include every expected workflow. Duplicate observations retain this ID.`);
+    expect(waitResultText(resolved)).toBe(`CI wait observation ${resolved.id} for ${resolved.prUrl}. External data follows: ${JSON.stringify(result)}. "startup_failure" means a workflow run on this head ended before it created a job; the diagnostic names the run. This observation is not merge approval or task completion. Reported checks may not include every expected workflow. Duplicate observations retain this ID.`);
     expect(waitResultText(timer({ note: 'check the deploy' }))).toBe(`Timer ${timer().id} fired: check the deploy. Continue toward the task goal; register another wait if you are still waiting.`);
     expect(waitResultText(timer())).toBe(`Timer ${timer().id} fired. Continue toward the task goal; register another wait if you are still waiting.`);
     expect(waitResultText(timer({ via: WAIT_VIA['monitoring-line'] }))).toBe(MONITORING_WAKE_NUDGE);

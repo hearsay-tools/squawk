@@ -43,12 +43,11 @@ export interface ActivityRouteDeps extends Omit<ActivitySourceDeps, 'ciOf'>, Act
 /**
  * The CI progress registries the activity view reads (spec 2026-11-05-live-activity-view, CI check
  * progress). A project's registry is its own manager's, which need not be the boot manager's (each
- * workspace semaphore has its own). The first read of a project plugs its registry in once: the
- * registry gets the process's one activity demand, and its changes wake the topics' publishers.
- * `release` undoes every plug; the server's close path calls it. After it, a read that was still
- * in flight then plugs nothing: no demand or listener outlives the server.
+ * workspace semaphore has its own). The first read of a project plugs its registry in once: its
+ * changes wake the topics' publishers. `release` undoes every plug; the server's close path calls
+ * it. After it, a read that was still in flight then plugs nothing: no listener outlives the server.
  */
-export function ciProgressPlugs(demand: ActivityDemand) {
+export function ciProgressPlugs() {
   let closed = false;
   const plugged = new WeakSet<CiProgressRegistry>();
   const releases: Array<() => void> = [];
@@ -64,7 +63,6 @@ export function ciProgressPlugs(demand: ActivityDemand) {
     const registry: CiProgressRegistry | undefined = project.manager.ciProgress;
     if (registry && !closed && !plugged.has(registry)) {
       plugged.add(registry);
-      releases.push(registry.useDemand(demand));
       releases.push(registry.onChange(() => { for (const listener of [...listeners]) listener(); }));
     }
     return registry;
@@ -90,7 +88,7 @@ export function createActivityRoutes(routeDeps: ActivityRouteDeps) {
   const tools = activity.tools ?? toolActivity;
   const deps: ActivityDeps = { ...activity, ...(tools ? { tools } : {}), onUnreadable: unreadableLogger() };
   // An explicit `activity.ci` replaces every project's registry.
-  const ci = ciProgressPlugs(demand);
+  const ci = ciProgressPlugs();
   const sources = createActivitySources({ ...routeDeps, ciOf: (project) => (activity.ci ? undefined : ci.progressOf(project)) });
   // The publishers wake on the tool tracker's changes and on every plugged registry's changes.
   const changes: ActivityChangeSource[] = [...(routeDeps.changes ?? []), ...(toolActivity && !activity.tools ? [toolActivity] : []), ci.changes];

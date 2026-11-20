@@ -1,9 +1,14 @@
 import { expect, it } from 'vitest';
-import { GithubCiClient } from './github.ts';
+import { checksQueryArgs, GithubCiClient } from './github.ts';
 const pr = {prUrl:'https://github.com/org/repo/pull/12',repository:'org/repo',prNumber:12,headSha:'a'.repeat(40)};
 function client(fields: Record<string, unknown>) {
  const body = {url:pr.prUrl,number:12,headRefOid:pr.headSha,...fields};
  return new GithubCiClient({command:{file:process.execPath,args:['-e',`process.stdout.write(${JSON.stringify(JSON.stringify(body))})`]}});
+}
+/** A gh that answers the checks query with one page, as its --jq program prints it. */
+function checksClient(fields: Record<string, unknown>) {
+ const page = {head:pr.headSha,contexts:[],...fields};
+ return new GithubCiClient({command:{file:process.execPath,args:['-e',`process.stdout.write(${JSON.stringify(JSON.stringify(page))})`]}});
 }
 it.each([
  [{mergeable:'CONFLICTING',mergeStateStatus:'DIRTY'},'CONFLICTING','DIRTY'],
@@ -14,20 +19,25 @@ it.each([
  [{mergeable:'FUTURE',mergeStateStatus:'NEW_STATE'},'UNKNOWN','NEW_STATE'],
  [{mergeable:'MERGEABLE',mergeStateStatus:'\x1b[31mDIRTY\x1b[0m\u0000'},'MERGEABLE','DIRTY'],
 ] as const)('normalizes external mergeability %j', async (fields,mergeable,mergeStateStatus) => {
- expect(await client(fields).metadata(pr,new AbortController().signal)).toEqual({headSha:pr.headSha,mergeable,mergeStateStatus});
+ expect(await checksClient(fields).observe(pr,new AbortController().signal)).toEqual({headSha:pr.headSha,mergeable,mergeStateStatus,checks:[]});
 });
 it.each([{mergeable:12},{mergeStateStatus:[]},{mergeStateStatus:{}},{mergeable:{}}])('rejects malformed metadata %j', async fields => {
- await expect(client(fields).metadata(pr,new AbortController().signal)).rejects.toMatchObject({code:'malformed_data'});
+ await expect(checksClient(fields).observe(pr,new AbortController().signal)).rejects.toMatchObject({code:'malformed_data'});
 });
 it('bounds external advisory state', async () => {
- expect((await client({mergeStateStatus:'x'.repeat(100)}).metadata(pr,new AbortController().signal)).mergeStateStatus).toHaveLength(64);
+ expect((await checksClient({mergeStateStatus:'x'.repeat(100)}).observe(pr,new AbortController().signal)).mergeStateStatus).toHaveLength(64);
 });
 
-it('requests mergeability in the same bounded metadata query as head identity', async () => {
- const body = {url:pr.prUrl,number:12,headRefOid:pr.headSha,mergeable:'MERGEABLE',mergeStateStatus:'CLEAN'};
- const source = `const args=process.argv.slice(1); if(args.join(' ') !== 'pr view ${pr.prUrl} --json url,number,headRefOid,mergeable,mergeStateStatus')process.exit(2); process.stdout.write(${JSON.stringify(JSON.stringify(body))});`;
+it('reads the head, mergeability and the watched commit checks in one bounded query', async () => {
+ const page = {head:pr.headSha,mergeable:'MERGEABLE',mergeStateStatus:'CLEAN',contexts:[]};
+ const expected = JSON.stringify(checksQueryArgs(pr));
+ const source = `if(JSON.stringify(process.argv.slice(1)) !== ${JSON.stringify(expected)})process.exit(2); process.stdout.write(${JSON.stringify(JSON.stringify(page))});`;
  const github = new GithubCiClient({command:{file:process.execPath,args:['-e',source]}});
- expect(await github.metadata(pr,new AbortController().signal)).toEqual({headSha:pr.headSha,mergeable:'MERGEABLE',mergeStateStatus:'CLEAN'});
+ expect(await github.observe(pr,new AbortController().signal)).toEqual({headSha:pr.headSha,mergeable:'MERGEABLE',mergeStateStatus:'CLEAN',checks:[]});
+ const args = checksQueryArgs(pr);
+ expect(args.slice(0,5)).toEqual(['api','graphql','--hostname','github.com','--paginate']);
+ for (const variable of ['owner=org','repo=repo','number=12','sha='+pr.headSha]) expect(args).toContain(variable);
+ expect(args.find(arg => arg.startsWith('query='))).toContain('isRequired(pullRequestNumber:$number)');
 });
 
 // hearsay-tools/cezarion#1425: a merge wait reads the PR's state in the same bounded query.

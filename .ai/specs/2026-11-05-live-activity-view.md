@@ -486,33 +486,19 @@ active, it hands over to `gh pr checks --watch` and probes only the head SHA eve
 30 s. It keeps no per-check state outside the loop until the wait resolves.
 
 - Every `snapshot()` publishes its validated rows to an in-memory
-  `CiProgressRegistry`, keyed by wait id. This costs no extra call and covers both
-  loops' existing reads.
-- In the `--watch` phase only, while the project has activity demand, the existing
-  30 s head probe also reads the checks once and updates the progress. Without
-  demand, no extra call runs.
+  `CiProgressRegistry`, keyed by wait id. This costs no extra call. Since
+  hearsay-tools/squawk#3972 the 30 s probe of the `--watch` phase is itself a full
+  snapshot (one GraphQL query reads the head and the checks), so progress updates every
+  30 s whether anyone watches or not. The separate demand-gated progress read, the
+  registry's demand slot and `useDemand` were removed with it.
 - **Demand** for a project exists while a topic subscriber watches it (or the global
-  view), and for 15 s after each HTTP snapshot read of it. So a remote or fallback
-  view that re-reads every 5 s keeps its check counts fresh, and demand ends 15 s
-  after the last reader leaves.
-- A wait does not name its project, and one supervisor serves every project of the
-  workspace. The registry learns a wait's project from the snapshot that reads it
-  (`CiProgressSource.read(waitId, projectId)`), so demand uses the same project ids the
-  activity route marks. A project is read before anyone watches it, so a watched wait
-  has its project by the time its demand matters. The registry records nothing for a
-  wait this process does not watch.
+  view), and for 15 s after each HTTP snapshot read of it. The activity topics use it;
+  the CI registry no longer reads it.
 - The shared CI resource (`acquireCiResources`) holds one `CiProgressRegistry` for each
-  workspace, next to its supervisor, and `RunManager.ciProgress` exposes it. A
-  `RunManager` builds the supervisor, outside the cockpit and often before it, so the
-  registry owns a one-slot demand: the activity route plugs its `ActivityDemand` in with
-  `useDemand(demand)`, which returns a release. With no demand plugged in, nobody
-  watches, and the `--watch` phase reads no extra checks.
-- A progress read never changes the wait's outcome. A failed read keeps the last
-  progress and is not an error. The `--watch` process, the head probe and the result
-  are unchanged.
-- A progress read takes none of the GitHub client's query permits, which stay with
-  the outcome queries; it keeps its own query timeout, and one runs at a time across
-  the supervisor.
+  workspace, next to its supervisor, and `RunManager.ciProgress` exposes it. The
+  activity read model reads a wait's progress with `CiProgressSource.read(waitId)`.
+- Publishing progress never changes the wait's outcome; the outcome comes from the same
+  snapshot's rows.
 - Merge waits poll no checks today and get no progress. The detail shows the PR
   number and the deadline only (see the state table).
 
@@ -520,10 +506,9 @@ Case table for the probe (a detached process):
 
 | Case | Before | After |
 | --- | --- | --- |
-| `--watch` phase, no demand | head probe every 30 s | Same; no checks read |
+| `--watch` phase (since hearsay-tools/squawk#3972) | head probe every 30 s | One snapshot every 30 s: head and checks in one query; rows published to progress |
 | Snapshot step (start, active workflow, no checks yet) | checks read, rows kept in a local | Same read; rows also published to progress |
-| `--watch` phase, demand present | head probe every 30 s | Head probe, then one checks read; result only updates progress |
-| Checks read fails | (no read) | Progress keeps its last value; the wait continues |
+| Read fails | (no read) | Progress keeps its last value; the wait retries on its usual backoff |
 | Wait resolves | result has `checks` and `totalChecks` | Same; the progress entry is removed |
 | Wait cancelled or service restarts | — | Entry removed; a restart starts empty |
 

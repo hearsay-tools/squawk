@@ -38,9 +38,9 @@ describe('hidden CI reruns across native harnesses', {timeout:30_000},()=>{
   it(`${runner} R85 ${recovered?'recovered without a session':'fresh'} keeps partial green pending until rerun checks return`,async()=>{
    const state=join(root,'rerun-state');writeFileSync(state,'hidden');
    const github=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_RERUN_STATE:state}});
-   const checks=github.checks.bind(github),runs=github.hasActiveRuns.bind(github);
-   const checksSpy=vi.spyOn(GithubCiClient.prototype,'checks').mockImplementation(checks);
-   const runsSpy=vi.spyOn(GithubCiClient.prototype,'hasActiveRuns').mockImplementation(runs);
+   const observe=github.observe.bind(github),runs=github.workflowRuns.bind(github);
+   const checksSpy=vi.spyOn(GithubCiClient.prototype,'observe').mockImplementation(observe);
+   const runsSpy=vi.spyOn(GithubCiClient.prototype,'workflowRuns').mockImplementation(runs);
    try {
     const run=manager.startRun(QUICK_TASK_WORKFLOW,{task:'mock:ci-wait https://github.com/org/repo/pull/12',runner});
     await until(()=>probes.size===1 || !!lastWaitOf(run.id)?.deliveredAt);
