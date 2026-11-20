@@ -76,6 +76,10 @@
     ]
   },
   "inputs": {
+    "scripts/plain-node-testkits.test.mjs": [
+      "packages/cezar/src/**/*.ts",
+      "packages/cezar/scripts/**"
+    ],
     "scripts/simulate-sixth-runner.test.mjs": [
       "packages/cezar/src/runners/fixture/**",
       "packages/cezar/scripts/mock-fixture-runner.mjs",

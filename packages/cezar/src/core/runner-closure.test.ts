@@ -1,16 +1,15 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { build, type Plugin } from 'esbuild';
+import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
-import { runtimeImports } from '../lint/import-closure.testkit.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
-// closure is every module the file reaches through static and dynamic imports and through
-// `import.meta.glob`. The wait parity kit runs its workers on the Claude wire whatever the
-// parent's runner is, so a `waits-*` file also loads the Claude adapter;
-// hearsay-tools/cezarion#2959 can replace those workers. R14 runs a mixed-runner chain, so a
-// `harness-<runner>-owned-workflows` file also loads one other runner.
+// closure is every module the file reaches through static and dynamic imports; esbuild reads a
+// folder template such as `../runners/${id}/facts.ts` as every file it matches. The wait parity
+// kit runs its workers on the Claude wire whatever the parent's runner is, so a `waits-*` file
+// also loads the Claude adapter; hearsay-tools/cezarion#2959 can replace those workers. R14 runs a
+// mixed-runner chain, so a `harness-<runner>-owned-workflows` file also loads one other runner.
 const src = join(import.meta.dirname, '..');
 
 /** A runner folder's adapter module: its `<name>-runner.ts` file with the class that implements `AgentRunner`. */
@@ -28,27 +27,11 @@ function perRunnerFiles(): Array<{ file: string; runner: string }> {
   }));
 }
 
-/**
- * esbuild leaves Vite's `import.meta.glob` as it is, while Vitest compiles it into one import per
- * matched file. This plugin adds an import for each file a glob matches, so a closure holds what
- * a testkit loads through a glob (hearsay-tools/squawk#3900).
- */
-const viteGlob: Plugin = {
-  name: 'vite-glob',
-  setup(plugin) {
-    plugin.onLoad({ filter: /\.ts$/ }, ({ path }) => {
-      const source = readFileSync(path, 'utf8');
-      if (!source.includes('import.meta.glob')) return undefined;
-      return { contents: `${source}\n${runtimeImports(source, path).map(specifier => `import ${JSON.stringify(specifier)};`).join('\n')}\n`, loader: 'ts' };
-    });
-  },
-};
-
 /** Each entry's closure, as `src`-relative paths. */
 async function closures(files: readonly string[]): Promise<Map<string, Set<string>>> {
   const result = await build({
     entryPoints: files.map(file => join(src, file)), absWorkingDir: src, bundle: true, write: false, metafile: true,
-    platform: 'node', format: 'esm', packages: 'external', outdir: join(src, '.closure'), logLevel: 'silent', plugins: [viteGlob],
+    platform: 'node', format: 'esm', packages: 'external', outdir: join(src, '.closure'), logLevel: 'silent',
   });
   const byEntry = new Map<string, Set<string>>();
   for (const output of Object.values(result.metafile.outputs)) {

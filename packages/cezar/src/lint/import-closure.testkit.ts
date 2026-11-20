@@ -37,16 +37,30 @@ function children(node: Node): Node[] {
     .filter((child): child is Node => Boolean(child) && typeof child === 'object' && typeof (child as Node).type === 'string');
 }
 
-/** The pattern argument of Vite's `import.meta.glob(…)`; undefined when `node` is no such call. */
-function globArgument(node: Node): Node | null | undefined {
-  if (node.type !== 'CallExpression') return undefined;
+/** Whether `node` calls Vite's `import.meta.glob`, which plain Node does not have. */
+function isViteGlob(node: Node): boolean {
+  if (node.type !== 'CallExpression') return false;
   const callee = node.callee as Node;
-  if (callee.type !== 'MemberExpression' || (callee.object as Node).type !== 'MetaProperty') return undefined;
-  const property = callee.property as Node;
-  return property.type === 'Identifier' && property.name === 'glob' ? (node.arguments as Node[])[0] ?? null : undefined;
+  const property = callee.property as Node | undefined;
+  return callee.type === 'MemberExpression' && (callee.object as Node).type === 'MetaProperty'
+    && property?.type === 'Identifier' && property.name === 'glob';
 }
 
-/** The files a literal `import.meta.glob` pattern written in `file` matches, as sorted relative specifiers. */
+/**
+ * The glob a relative template literal names when each substitution fills one whole folder
+ * segment and the file name is literal: `../runners/${id}/facts.ts` names every `facts.ts` one
+ * folder below `../runners/`. esbuild bundles every file such a template matches; any other
+ * template is undefined.
+ */
+function folderGlob(argument: Node | undefined): string | undefined {
+  if (argument?.type !== 'TemplateLiteral' || (argument.expressions as unknown[]).length === 0) return undefined;
+  const parts = (argument.quasis as Array<{ value: { cooked: string } }>).map(quasi => quasi.value.cooked);
+  const wholeSegments = parts.slice(0, -1).every(part => part.endsWith('/')) && parts.slice(1).every(part => part.startsWith('/'));
+  const pattern = parts.join('*');
+  return /^\.\.?\//.test(pattern) && wholeSegments ? pattern : undefined;
+}
+
+/** The files a glob written in `file` matches, as sorted relative specifiers. */
 export function globMatches(pattern: string, file: string): string[] {
   return globSync(pattern, { cwd: dirname(file) }).map(match => (match.startsWith('.') ? match : `./${match}`)).sort();
 }
@@ -55,10 +69,11 @@ export function globMatches(pattern: string, file: string): string[] {
  * Every module specifier `source` loads at runtime, read from its syntax tree: value `import`,
  * `export … from` and `import x = require(…)` declarations, and `import(…)` and `require(…)`
  * calls. TypeScript erases type-only imports and `import('…').T` type queries, so they are not
- * counted. Vitest compiles Vite's `import.meta.glob('<pattern>')` into one import per matched
- * file, so each file the pattern matches beside `file` counts. A load or a glob whose argument is
- * not one literal throws: a closure pin that skipped it would fail open. `file` picks the JSX
- * grammar for a `.jsx` or `.tsx` source.
+ * counted. An `import(`…`)` template whose substitutions fill whole folder segments loads every
+ * file it matches beside `file`, as esbuild bundles it. A load whose argument is neither one
+ * literal nor such a template throws: a closure pin that skipped it would fail open. So does
+ * Vite's `import.meta.glob`, which plain Node scripts cannot run. `file` picks the JSX grammar
+ * for a `.jsx` or `.tsx` source.
  */
 export function runtimeImports(source: string, file = 'module.ts'): string[] {
   const ast = parse(source, {
@@ -70,11 +85,12 @@ export function runtimeImports(source: string, file = 'module.ts'): string[] {
     if (node.type === 'TSImportType') return;
     const declared = declaredModule(node);
     const argument = declared === undefined ? loadArgument(node) : undefined;
-    const glob = globArgument(node);
-    const call = () => source.slice(node.start ?? 0, node.end ?? 0);
+    const call = source.slice(node.start ?? 0, node.end ?? 0);
+    if (isViteGlob(node)) throw new Error(`${file}: import.meta.glob runs only under Vite; plain Node scripts that load this module fail: ${call}`);
+    const glob = node.type === 'ImportExpression' || (node.callee as Node | undefined)?.type === 'Import' ? folderGlob(argument ?? undefined) : undefined;
     if (declared !== undefined) found.push(declared);
-    else if (argument !== undefined) found.push(literalOrThrow(argument ?? undefined, file, call()));
-    else if (glob !== undefined) found.push(...globMatches(literalOrThrow(glob ?? undefined, file, call()), file));
+    else if (glob !== undefined) found.push(...globMatches(glob, file));
+    else if (argument !== undefined) found.push(literalOrThrow(argument ?? undefined, file, call));
     children(node).forEach(visit);
   };
   visit(ast);

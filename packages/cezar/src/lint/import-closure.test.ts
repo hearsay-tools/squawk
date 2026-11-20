@@ -56,9 +56,10 @@ describe('runtimeImports', () => {
   });
 });
 
-// Vitest compiles `import.meta.glob('<pattern>')` into one import per matched file
-// (hearsay-tools/squawk#3900), so a closure holds every file the pattern matches.
-describe('import.meta.glob', () => {
+// A testkit loads each runner folder's data file through a template whose substitution fills one
+// folder segment (hearsay-tools/squawk#3900). esbuild bundles every file it matches, so a closure
+// holds them too. Vite's `import.meta.glob` breaks plain Node scripts, so the walk refuses it.
+describe('folder templates', () => {
   let root = '';
   afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); });
 
@@ -71,20 +72,28 @@ describe('import.meta.glob', () => {
     return root;
   }
 
-  it('reads each file a literal pattern matches beside the importing file', () => {
+  it('reads each file a folder template matches beside the importing file', () => {
     const dir = tree({ 'kit/rows.ts': '', 'runners/a/facts.ts': '', 'runners/b/facts.ts': '', 'runners/b/other.ts': '' });
-    const source = "const rows = import.meta.glob<Record<string, unknown>>('../runners/*/facts.ts', { eager: true });";
+    const source = 'const rows = await Promise.all(ids.map(id => import(`../runners/${id}/facts.ts`)));';
     expect(runtimeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['../runners/a/facts.ts', '../runners/b/facts.ts']);
-    expect(runtimeImports("const here = import.meta.glob('./*.ts');", join(dir, 'runners/b/facts.ts'))).toEqual(['./facts.ts', './other.ts']);
   });
 
-  it('refuses a pattern it cannot read', () => {
-    expect(() => runtimeImports('const rows = import.meta.glob(pattern);')).toThrow('import.meta.glob(pattern)');
+  it.each([
+    ['const a = await import(`./${name}.ts`);', 'import(`./${name}.ts`)'],
+    ['const b = await import(`../runners/${id}-facts.ts`);', 'import(`../runners/${id}-facts.ts`)'],
+    ['const c = await import(`${root}/runners/facts.ts`);', 'import(`${root}/runners/facts.ts`)'],
+  ])('refuses a template whose substitution is not one whole folder: %s', (source, site) => {
+    expect(() => runtimeImports(source)).toThrow(site);
   });
 
-  it('walks into what the glob loads', () => {
+  it('refuses import.meta.glob, which plain Node scripts cannot run', () => {
+    expect(() => runtimeImports("const rows = import.meta.glob('../runners/*/facts.ts', { eager: true });"))
+      .toThrow("import.meta.glob runs only under Vite; plain Node scripts that load this module fail: import.meta.glob('../runners/*/facts.ts', { eager: true })");
+  });
+
+  it('walks into what a folder template loads', () => {
     const dir = tree({
-      'kit/rows.ts': "export const rows = import.meta.glob('../runners/*/facts.ts', { eager: true });",
+      'kit/rows.ts': 'export const rows = await Promise.all(ids.map(id => import(`../runners/${id}/facts.ts`)));',
       'runners/a/facts.ts': "import './adapter.ts';",
       'runners/a/adapter.ts': '',
     });
