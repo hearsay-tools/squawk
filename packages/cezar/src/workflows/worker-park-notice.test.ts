@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';

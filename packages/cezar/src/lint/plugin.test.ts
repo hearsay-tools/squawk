@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

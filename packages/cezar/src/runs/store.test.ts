@@ -8,7 +8,6 @@ import { piRunner } from '../runners/pi/definition.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(piRunner);
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

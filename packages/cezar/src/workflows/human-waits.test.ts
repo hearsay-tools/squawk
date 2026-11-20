@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';

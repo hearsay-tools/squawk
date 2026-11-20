@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describeWaitParity } from './waits-parity-cells.testkit.ts';
 import { subagentGuard } from './waits-subagents-parity-cells.testkit.ts';

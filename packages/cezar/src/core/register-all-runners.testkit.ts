@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Importing this module registers every built-in runner and nothing else: it sets no runner

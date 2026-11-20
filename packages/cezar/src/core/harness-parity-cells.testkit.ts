@@ -268,9 +268,9 @@ function matrixGuards(r: HarnessRegistrar): void {
           omp: ['cezar_ask'],
         };
         for (const backend of BUILT_IN_RUNNER_IDS) {
-          const cases = HARNESS_ADAPTERS[backend]?.askResumeCases!;
+          const cases = HARNESS_ADAPTERS[backend]?.askResumeCases;
           expect(cases).toBeDefined();
-          if (exemptionFor('R26', backend)) continue;
+          if (cases === undefined || exemptionFor('R26', backend)) continue;
           expect(cases.map(ask => ask.kind)).toEqual(expectedKinds[backend]!);
           expect(cases.length).toBeGreaterThan(0);
           expect(new Set(cases.map(ask => ask.kind)).size).toBe(cases.length);

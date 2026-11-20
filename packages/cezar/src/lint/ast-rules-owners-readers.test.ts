@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { expect, it } from 'vitest';
 /* oxlint-disable cez/run-internals -- The retired name and module path are rule fixtures. */
 import { AST_RULES } from './plugin.ts';
