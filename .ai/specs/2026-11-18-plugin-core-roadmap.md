@@ -42,10 +42,10 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-18 |
+| Step | What | State on 2026-11-20 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
-| 1 | Runners become definitions that register themselves | Planned: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md) |
+| 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Not filed |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Not filed |
 | 4 | Loader and package format | Not filed |
@@ -66,7 +66,12 @@ One definition for each runner holds what the per-runner tables hold now. A regi
 the `switch` in `core/runner-factory.ts`, and the built-in runners register through the same
 call. The contract and the cockpit read the registry. A fixture runner proves that a new runner
 needs no edit outside its own files. The [spec](2026-11-18-runner-definitions.md) records the
-owner's decisions; its plan cuts the work into ten slices.
+owner's decisions and the slices that did the work;
+[ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) records the result.
+
+Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its mock script, one line in
+`runners/built-in.ts` and its id in `runners/ids.ts`. `layer-import.baseline.json` holds no
+`runner` entry and `runner-roster-literal.baseline.json` holds no entry.
 
 ### Step 2: typed lifecycle and store ports
 
@@ -100,6 +105,18 @@ A file exports one function that receives the API object. Squawk finds it by fol
 project and in the user's home. A package holds extensions and workflows. A project's plugins
 load only after a person trusts the project. From this step the API is a promise, so the API
 stays small.
+
+Preconditions from step 1 ([runner definitions](2026-11-18-runner-definitions.md)):
+
+- **Register before config.** The stored-config decoders drop a runner id that no runner
+  registered, on the next write: the workspace `agentDefaults.runner`, `disabledProviders` and
+  the agent-account rows. The loader must register every runner before any config read or write,
+  or the decoders must keep unknown ids. Otherwise a runner that failed to load loses its stored
+  settings: a one-way door.
+- **One runner list.** Folder discovery is expected to replace both `runners/built-in.ts` and
+  `runners/ids.ts`.
+- **Measure with the static closure.** Test-selection counts (rule 5) use Squeal's static
+  closure until Squeal prunes stale observed paths.
 
 ### Step 5: move features out
 

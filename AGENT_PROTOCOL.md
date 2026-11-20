@@ -413,8 +413,9 @@ holds its anchor, and adds every quoted use of the id.
 2. **Load sites of the fold** — `packages/cezar/src/runs/store.ts` (run rows and worker
    results) and `packages/cezar/src/runs/run-summary-page.ts` (stored summaries).
 3. **Record schema** — `packages/contract/src/runs.ts` keeps `removedRunner` and the step's
-   `removedBackend`; `runner` and `backend` are open strings, and the store reads only a
-   registered id (`readableSavedRunner` in `legacy-run-rows.ts`).
+   `removedBackend`; `runner` and `backend` are open strings. The store reads a legacy or
+   registered id, and any id in a process that registered no runner (`readableSavedRunner` in
+   `legacy-run-rows.ts`).
 4. **Session selection** — `latestSession` and `removedRunnerStepAfter` in
    `packages/contract/src/run-predicates.ts` choose the session for terminal hand-off and
    Continue. The usage-limit account hold reads the next turn's account through them
