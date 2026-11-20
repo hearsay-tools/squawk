@@ -89,12 +89,14 @@ Their threads block the merge like any other thread: the `Protect main` ruleset
 requires every review thread resolved. They often arrive after CI and the local review
 round have settled, and a PR wait does not wake on them. So:
 
-- After each push, read the PR's review threads again before you arm auto-merge, settle
-  the task or hand the PR off.
+- After each push, read the PR's review threads again once the `CodeRabbit` check run
+  on the new head completes, and before you arm auto-merge, settle the task or hand the
+  PR off.
 - Answer every thread. A thread that repeats a finding of the local review, which the
   same fix closed, still needs its own reply.
-- Arm auto-merge only when `node .ai/skills/auto-merge/arm-check.mjs --pr <n>` prints
-  `ARM <sha>` ([auto-merge](../../.ai/skills/auto-merge/SKILL.md#arm-it-only-after-the-review)).
+- Arm auto-merge only when `node .ai/skills/auto-merge/arm-check.mjs --pr <n> --head <sha>` prints
+  `ARM <sha>`: no thread is unresolved and the `CodeRabbit` check run on the head is
+  not queued or in progress. It prints `WAIT` while CodeRabbit reviews ([auto-merge](../../.ai/skills/auto-merge/SKILL.md#arm-it-only-after-the-review)).
 
 ### Before the PR
 

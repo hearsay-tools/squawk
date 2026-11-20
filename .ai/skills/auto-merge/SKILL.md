@@ -47,9 +47,13 @@ A qualifying PR does not merge on checks alone. Arm
 
 - The reviewer round has no blocking finding: no finding scored 5 or more.
   Findings scored 4 or lower do not block; list them in the PR body.
-- `node .ai/skills/auto-merge/arm-check.mjs --pr <n>` prints `ARM <sha>`: no
-  review thread is unresolved. The review apps post threads after CI and the
-  reviewer round settle ([Review apps](../../../docs/sdlc/ci.md#review-apps)). Auto-merge waits for no quality
+- `node .ai/skills/auto-merge/arm-check.mjs --pr <n> --head <sha>` prints
+  `ARM <sha>` for the reviewed head `<sha>`: no review thread is unresolved, and
+  CodeRabbit is not still reviewing the head. The review apps post threads after
+  CI and the reviewer round settle
+  ([Review apps](../../../docs/sdlc/ci.md#review-apps)).
+
+Auto-merge waits for no quality
 report: CI's `complexity-gate` job blocks complexity growth over 20, and CRAP is
 reported in CI without blocking
 ([Before a PR](../check-code-quality/references/pre-pr.md)).
