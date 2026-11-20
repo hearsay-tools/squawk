@@ -11,6 +11,7 @@ import { MONITORING_TURN_CRITERIA, MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRI
 import { monitoringTurnFiles } from '../workflows/monitoring-turn-partitions.testkit.ts';
 import { WAIT_CRITERIA } from '../workflows/waits-parity.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
 import { exemptionReasonProblem } from './exemption-reason.testkit.ts';
 import { driveSeam, exemptionFor, promptFor, HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, MODEL_REFUSAL_CRITERIA, PERMISSION_CRITERIA, WORKFLOW_TIMEOUT_CRITERIA, NO_PROGRESS_CRITERIA, AUTONOMOUS_CRITERIA, FINAL_MESSAGE_CRITERIA, WORKER_PROGRESS_WAIT_CRITERIA, WORKFLOW_ASK_CRITERIA, STEP_COMPLETION_CRITERIA, FOLLOWUP_CRITERIA, ANSWER_DELIVERY_CRITERIA, SKILL_RESUME_CRITERIA, SKILL_PROVISION_CRITERIA, WORKTREE_SETUP_CRITERIA, PARITY_EXEMPTIONS, PINNED_SESSION_ID, seedOpencodeMockSession, type ScenarioName, waitFor } from './harness-parity-core.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, harnessParityFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
@@ -258,20 +259,13 @@ function matrixGuards(r: HarnessRegistrar): void {
       });
 
       it('R26 enumerates each runner ask path with a live prompt or a named exemption', () => {
-        // Independent wire inventory: deleting an adapter variant must fail this
-        // guard, even when another ask kind still exercises the same backend.
-        const expectedKinds: Record<string, readonly string[]> = {
-          claude: ['cezar_ask'],
-          codex: ['item/tool/requestUserInput'],
-          opencode: ['question.asked'],
-          pi: ['cezar_ask'],
-          omp: ['cezar_ask'],
-        };
+        // Independent wire inventory (each runner's golden `askKinds`): deleting an adapter
+        // variant must fail this guard, even when another ask kind still exercises the same backend.
         for (const backend of BUILT_IN_RUNNER_IDS) {
           const cases = HARNESS_ADAPTERS[backend]?.askResumeCases;
           expect(cases).toBeDefined();
           if (cases === undefined || exemptionFor('R26', backend)) continue;
-          expect(cases.map(ask => ask.kind)).toEqual(expectedKinds[backend]!);
+          expect(cases.map(ask => ask.kind)).toEqual(runnerGolden(backend, 'askKinds'));
           expect(cases.length).toBeGreaterThan(0);
           expect(new Set(cases.map(ask => ask.kind)).size).toBe(cases.length);
           expect(cases.some(ask => ask.scenario === 'ask-resume')).toBe(true);

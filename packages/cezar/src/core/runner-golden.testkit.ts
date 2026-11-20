@@ -22,6 +22,10 @@ export interface RunnerGolden {
   plannerModels: { planner?: string; namer?: string };
   /** A worker account binding that must parse and survive JSON persistence. */
   workerAccountBinding: Record<string, unknown>;
+  /** The kind of each ask a human can answer on this runner's wire, in its mock's `askResumeCases`
+   *  order (`core/harness-parity-cells.testkit.ts`, R26). It is written apart from the mock, so a
+   *  deleted ask variant fails the guard. */
+  askKinds: string[];
   /** What `GET /api/v1/runners` sends for this runner, and its Agent config pane. */
   runnerEntry: {
     displayName: string; modelListName: string; modelIdScope: string;
