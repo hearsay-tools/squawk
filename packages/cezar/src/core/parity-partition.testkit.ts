@@ -34,15 +34,15 @@ const afterRunner = (key: string): string => key.slice(key.indexOf(' ') + 1);
 
 /**
  * Whether `part` runs the cell `key`. A part lists the cells of the runners that shipped, because
- * the parts split a family's cells across files. A cell of a runner that no part names follows the
- * first part that lists the same row for another runner, so a new runner adds no entry here; a cell
+ * the parts split a family's cells across files. A cell of a runner that no part names by row follows
+ * the first part that lists the same row for another runner, so a new runner adds no entry here; a cell
  * of a listed runner that no part lists still belongs to no part, and the registration guard fails.
  */
 function inPart(part: ParityPart, parts: Readonly<Record<string, readonly string[]>>, key: string): boolean {
   if (parts[part]?.includes(key)) return true;
   const runner = key.slice(0, key.indexOf(' '));
   if (!(BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner)) return false;
-  const named = Object.values(parts).some(entries => entries.some(entry => entry.startsWith(`${runner} `)));
+  const named = Object.values(parts).some(entries => entries.some(entry => entry.startsWith(`${runner} `) && /^\w+ [A-Z]\d+\b/.test(entry)));
   if (named) return false;
   const first = Object.entries(parts).find(([, entries]) => entries.some(entry => afterRunner(entry) === afterRunner(key)));
   return first?.[0] === part;
