@@ -108,14 +108,23 @@ const OUTCOME: Partial<Record<RunStatus, StepStatus>> = { done: 'done', failed: 
 /** The steps as the rail draws them. A finished run has no live step: an open step takes the run's
  *  outcome, and a step it never reached never runs. The server leaves open steps on finished runs
  *  (a failed run keeps its waiting step for Continue; older records keep them all), so the cockpit
- *  must not draw them as running (hearsay-tools/squawk#2589, hearsay-tools/squawk#2590). */
+ *  must not draw them as running (hearsay-tools/squawk#2589, hearsay-tools/squawk#2590).
+ *  A live run has one live step. Each Continue leaves the turn it resumes `waiting`, because the
+ *  server reads a workflow step's `waiting` as its workflow position, so every other `waiting` step
+ *  draws as done: its turn ended. */
 export function railSteps(run: RailRun): StepState[] {
   const outcome = OUTCOME[run.status]
-  if (!outcome) return run.steps
+  if (!outcome) return settleParkedTurns(run)
   return run.steps.map((step) =>
     railVisual(step.status) === 'active' ? { ...step, status: outcome }
       : step.status === 'pending' ? { ...step, status: 'skipped' }
         : step)
+}
+
+function settleParkedTurns(run: RailRun): StepState[] {
+  const live = activeStepIndex(run.currentStepId, run.steps)
+  if (!run.steps.some((step, index) => index !== live && step.status === 'waiting')) return run.steps
+  return run.steps.map((step, index) => index !== live && step.status === 'waiting' ? { ...step, status: 'done' } : step)
 }
 
 /** The step the Workflow row speaks for, in `steps` as `railSteps` returns them: the run's current
