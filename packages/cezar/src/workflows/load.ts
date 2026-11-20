@@ -9,6 +9,8 @@ import {
   workflowFileSchema,
   type WorkflowDef,
 } from './types.ts';
+import { runnerFieldIssues } from '../core/runner-fields.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 
 export const WORKFLOWS_DIR = '.ai/cezar/workflows';
 
@@ -56,6 +58,12 @@ async function loadWorkflowDirs(dirs: readonly string[]): Promise<{ workflows: W
         const parsed = workflowFileSchema.safeParse(parseYaml(raw));
         if (!parsed.success) {
           issues.push({ path, message: parsed.error.issues.map((i) => i.message).join('; ') });
+          continue;
+        }
+        // A step on a runner this process does not have stays a load issue, as the closed enum made it.
+        const unknownRunners = runnerFieldIssues(parsed.data, { ids: ['steps.*.runner'] }, knownRunnerIds);
+        if (unknownRunners.length > 0) {
+          issues.push({ path, message: unknownRunners.map((i) => i.message).join('; ') });
           continue;
         }
         // `skills:` shorthand files become plain agent steps here (spec 012).

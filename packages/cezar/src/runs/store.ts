@@ -1,4 +1,4 @@
-import { legacyIndexRows, upgradeLegacyRunRow, upgradeRemovedRunnerResult } from './legacy-run-rows.ts';
+import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, upgradeRemovedRunnerResult, withKeptFields } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
 import { productEnv } from '../core/product-env.ts';
@@ -62,8 +62,8 @@ import { ISSUE_URL_RE, namesForeignReference, originatingIssue, refUrlNumber, re
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
-import { runnerIdOf } from '../core/runner-registry.ts';
+import type { RunnerId } from '../core/agent-runner.ts';
+import { LEGACY_RUNNER_IDS } from '../core/runner-registry.ts';
 import {
   ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
@@ -103,26 +103,26 @@ export type StepStatus =
   | 'skipped';
 
 /**
- * A runner id as it may appear in a PERSISTED record, normalized to the three
- * ids the rest of Squawk speaks (#547).
+ * A runner id as it may appear in a PERSISTED record (#547), spec 2026-11-18-runner-definitions.
  *
- * `claude-cli` is the legacy spelling of `claude` — still a member of
- * `AgentBackend` and still accepted by `createRunner`, and accepted in `runs.json`. The enum
- * here once failed to accept it: the loader `safeParse`s the
- * WHOLE array, so one record carrying it would have dropped every run in the
- * file.
+ * `claude-cli` is the legacy spelling of `claude`: it is accepted and folded to `claude`
+ * (`LEGACY_RUNNER_IDS`), and its step keeps its session. The loader `safeParse`s the WHOLE array
+ * of a legacy `runs.json`, so one record the schema refused would drop every run in the file.
  *
- * Parse-and-fold rather than widen: the legacy id is accepted on the way in and
- * collapsed to `claude`, so no consumer, wire type or contract schema ever sees
- * a fourth runner. The narrowing is one-way and permanent (the index is
- * re-serialized from the parsed records), which is what "old run records
- * normalise identically to `claude`" in `core/model-identity.ts` has always
- * claimed. Use ONLY for read-back of stored state — request bodies, settings and
- * workflow step defs stay the three selectable ids (`RunnerId`), because nothing
- * should be able to ASK for the legacy spelling.
+ * An id is readable when `readableSavedRunner` says so: a registered id, or, in a process that
+ * registered no runner, a built-in id. Before the parse, `upgradeRemovedRunner`
+ * (legacy-run-rows.ts) reads a retired or unregistered id as a removed-runner run, so this
+ * schema never sees one. An unknown id in a process with no registered runner makes the row
+ * unreadable, as before runner ids were open.
+ *
+ * The legacy fold is one-way and permanent: the next write stores `claude`. Use ONLY for
+ * read-back of stored state. Request bodies, settings and workflow step defs take the ids that
+ * the server's runner registry holds, because nothing should be able to ASK for the legacy
+ * spelling. The output is an open string: a runner that this process registered keeps its own
+ * id.
  */
-const storedRunnerSchema = z.enum([...RUNNER_IDS, 'claude-cli'])
-  .transform(runnerIdOf);
+const storedRunnerSchema = z.string().refine(readableSavedRunner)
+  .transform(id => LEGACY_RUNNER_IDS.get(id) ?? id);
 
 const stepStateSchema = contractStepStateSchema.extend({ backend: storedRunnerSchema.optional() });
 
@@ -204,7 +204,7 @@ function decodeStoredRecord(raw: unknown): DecodedRun | undefined {
   const parsed = parseRunRecords([raw]);
   if (!parsed.success) return undefined;
   const run = parsed.data[0]!;
-  return { run, extras: collectRawExtras(raw, run), ...(upgraded ? { upgraded: true as const } : {}) };
+  return { run, extras: collectRawExtras(withKeptFields(raw), run), ...(upgraded ? { upgraded: true as const } : {}) };
 }
 
 /** One database row's `data` back into a record and its extras. Undefined when it does not parse:

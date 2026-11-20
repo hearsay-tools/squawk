@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 import { AgentBrowser, bootProjectId, readTestEnv } from './agent-browser'
 
@@ -20,14 +20,15 @@ type Health = {
   checks: Array<{ name: string; available: boolean; version?: string; hint?: string }>
 }
 
-/** The agent CLIs among `checks[]` — `gh` and `git` are rows too, but neither runs a task. */
-const RUNNERS = new Set<string>(runnerSchema.options)
+/** The agent CLIs among `checks[]` — `gh` and `git` are rows too, but neither runs a task. Read
+ *  from the server's `GET /api/v1/runners` in `beforeAll`. */
+let runnerIds = new Set<string>()
 
 /** What (if anything) keeps the aggregate dot from green, derived from the live health answer the
  *  same way `toolsBlocker()` derives it: the dot is amber only when cez cannot start a task at all,
  *  not merely because an optional tool is absent. */
 function blockerFor(health: Health): string | null {
-  const runners = health.checks.filter((check) => RUNNERS.has(check.name))
+  const runners = health.checks.filter((check) => runnerIds.has(check.name))
   if (runners.length > 0 && !runners.some((check) => check.available)) {
     return 'no agent CLI found — install one to run tasks'
   }
@@ -51,6 +52,8 @@ const MENU = '[data-slot="tools-menu-content"]'
 beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
   health = (await fetch(`${baseUrl}/api/v1/health`).then((r) => r.json())) as Health
+  const registered = (await fetch(`${baseUrl}/api/v1/runners`).then((r) => r.json())) as RunnersResponse
+  runnerIds = new Set(registered.runners.map((entry) => entry.id))
   bootProject = await bootProjectId(baseUrl)
   browser = AgentBrowser.open(runId)
   browser.setViewport(1440, 900)

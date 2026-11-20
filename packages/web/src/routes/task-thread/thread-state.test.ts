@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { RunEvent } from '@open-mercato/cezar-api-client'
 import { humanInputDeliveredEventSchema } from '@open-mercato/cezar-api-client/contract/events'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS } from '@/test/runners.testkit'
 import type { UiMessageItem, UiToolItem } from '@open-mercato/cezar-api-client'
 
 import bashAndScreenshot from '../../../../cezar/src/runners/claude/__fixtures__/bash-and-screenshot.expected.json'
@@ -663,7 +663,18 @@ describe('reduceThread — provider authorization recovery', () => {
     }])
   })
 
-  it.each(runnerSchema.options)('keeps a %s incident', (provider) => {
+  it('keeps an incident of a runner the cockpit does not know', () => {
+    expect(reduceThread([
+      line(1, 'provider-auth-required', { provider: 'future', authFailureId: 'incident-1' }),
+    ]).turns[0]?.items).toEqual([{
+      kind: 'provider-auth-required',
+      id: 'v1:1',
+      provider: 'future',
+      authFailureId: 'incident-1',
+    }])
+  })
+
+  it.each(RUNNER_IDS)('keeps a %s incident', (provider) => {
     expect(reduceThread([
       line(1, 'provider-auth-required', { provider, authFailureId: 'incident-1' }),
     ]).turns[0]?.items).toEqual([{
@@ -675,7 +686,7 @@ describe('reduceThread — provider authorization recovery', () => {
   })
 
   it.each([
-    ['an unknown provider', { provider: 'future', authFailureId: 'incident-1' }],
+    ['a blank provider', { provider: '', authFailureId: 'incident-1' }],
     ['a blank incident id', { provider: 'claude', authFailureId: '' }],
     ['an overlong incident id', { provider: 'claude', authFailureId: 'x'.repeat(129) }],
     ['a malformed payload', { provider: ['claude'], authFailureId: 'incident-1' }],

@@ -111,10 +111,9 @@ export function stamp(value: unknown): string | undefined {
   return Number.isFinite(new Date(value).getTime()) ? value : undefined
 }
 
-const PROVIDER_IDS: ReadonlySet<string> = new Set<ThreadProviderAuthRequired['provider']>(runnerSchema.options)
-
+/** A runner id from an event: any id `runnerSchema` accepts. */
 export function providerId(value: unknown): ThreadProviderAuthRequired['provider'] | undefined {
-  return typeof value === 'string' && PROVIDER_IDS.has(value) ? value as ThreadProviderAuthRequired['provider'] : undefined
+  return runnerSchema.safeParse(value).data
 }
 
 // ---- turns --------------------------------------------------------------------------------

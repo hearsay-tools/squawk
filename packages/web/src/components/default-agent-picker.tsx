@@ -1,6 +1,7 @@
 import type { AgentProfile, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
 import { cn } from '@/lib/utils'
 import { providerStatusFor } from '@/lib/provider-status'
+import { useRunners } from '@/api/runners'
 import { RUNNERS } from '@/routes/new-task-form'
 
 /**
@@ -53,6 +54,29 @@ export function agentPickerRows(profiles: readonly AgentProfile[]): AgentPickerR
 export const hasAgentAccounts = (rows: readonly AgentPickerRow[]): boolean =>
   rows.length > RUNNERS.length
 
+/** The provider status as a picker row reads it: whether the runner can be picked, and why not. */
+export function providerChoice(
+  providerStatus: { data?: ProviderStatusResponse | undefined; isPending: boolean; isError: boolean },
+  runner: Runner,
+): { providerConnected: boolean; providerReason: string | undefined } {
+  const provider = providerStatusFor(providerStatus.data, runner)
+  const providerConnected =
+    !providerStatus.isPending &&
+    !providerStatus.isError &&
+    provider?.enabled === true &&
+    provider.status === 'connected'
+  const providerReason = providerStatus.isPending
+    ? 'Checking provider authentication…'
+    : providerStatus.isError
+      ? 'Provider authentication could not be verified.'
+      : provider?.enabled === false
+        ? 'This provider is disabled. Enable it above or choose another provider.'
+      : providerConnected
+        ? undefined
+        : 'Connect this provider before selecting it.'
+  return { providerConnected, providerReason }
+}
+
 export function DefaultAgentPicker({
   rows,
   runner,
@@ -77,6 +101,8 @@ export function DefaultAgentPicker({
   onPick: (runner: Runner, account: string | null, hasAccountChoice: boolean) => void
 }) {
   const stacked = hasAgentAccounts(rows)
+  // Every row waits for the runners list, as it waits for the provider status.
+  const runnersPending = useRunners().data === undefined
   return (
     <div
       role="radiogroup"
@@ -90,21 +116,7 @@ export function DefaultAgentPicker({
       )}
     >
       {rows.map((row) => {
-        const provider = providerStatusFor(providerStatus.data, row.runner.id)
-        const providerConnected =
-          !providerStatus.isPending &&
-          !providerStatus.isError &&
-          provider?.enabled === true &&
-          provider.status === 'connected'
-        const providerReason = providerStatus.isPending
-          ? 'Checking provider authentication…'
-          : providerStatus.isError
-            ? 'Provider authentication could not be verified.'
-            : provider?.enabled === false
-              ? 'This provider is disabled. Enable it above or choose another provider.'
-            : providerConnected
-              ? undefined
-              : 'Connect this provider before selecting it.'
+        const { providerConnected, providerReason } = providerChoice(providerStatus, row.runner.id)
         const hasAccountChoice = rows.filter((other) => other.runner.id === row.runner.id).length > 1
         const checked = row.runner.id === runner && row.account === accountFor(row.runner.id)
         return (
@@ -117,7 +129,7 @@ export function DefaultAgentPicker({
             data-account={row.account ?? ''}
             title={providerReason ?? row.desc}
             disabled={
-              disabled || !providerConnected || (hasAccountChoice && accountDisabled)
+              disabled || runnersPending || !providerConnected || (hasAccountChoice && accountDisabled)
             }
             onClick={() => onPick(row.runner.id, row.account, hasAccountChoice)}
             className={cn(

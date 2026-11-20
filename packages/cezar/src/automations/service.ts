@@ -5,7 +5,6 @@ import { writableAutomationTask } from '@open-mercato/cezar-contract/automation-
 import { nextOccurrence, ONCE_PAST_DUE_MESSAGE, onceInstant } from '@open-mercato/cezar-contract/automation-schedule';
 import { automationCreateSchema, automationUpdateSchema, type AutomationEditable } from '@open-mercato/cezar-contract/automation-requests';
 import { SCHEDULED_TASK_NOTE } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { MODEL_DISCOVERY_RUNNERS, type ModelDiscoveryRunner } from '@open-mercato/cezar-contract/workspace';
 import { loadConfig } from '../config.ts';
 import { missingModelChoices, type HostDiscovery } from '../discovery/choices.ts';
 import type { RunStore } from '../runs/store.ts';
@@ -15,6 +14,7 @@ import { githubBaselineState } from './github-baseline.ts';
 import { SCHEDULE_LEASE_HELD_REASON, ScheduleRunner, type ScheduleRunnerHandle } from './schedule-runner.ts';
 import type { AutomationStore } from './store.ts';
 import { validateAutomationPrompt } from './task-template.ts';
+import { isRegisteredRunner } from '../core/runner-registry.ts';
 import {
   isGithubAutomation,
   isOnceSchedule,
@@ -149,8 +149,8 @@ export function createAutomationService(deps: AutomationServiceDeps) {
   const modelRefusal = async (root: string, task: AutomationEditable['task']): Promise<string | undefined> => {
     if (!deps.discovery || !task.model) return undefined;
     const runner = task.runner ?? (await loadConfig(root, deps.home)).defaultRunner;
-    if (!(MODEL_DISCOVERY_RUNNERS as readonly string[]).includes(runner)) return undefined;
-    const choices = await missingModelChoices(deps.discovery, runner as ModelDiscoveryRunner, task.model);
+    if (!isRegisteredRunner(runner)) return undefined;
+    const choices = await missingModelChoices(deps.discovery, runner, task.model);
     if (!choices) return undefined;
     const available = choices.availableModels.map((row) => row.id).join('; ');
     const others = choices.otherRunners.join(', ') || 'none';

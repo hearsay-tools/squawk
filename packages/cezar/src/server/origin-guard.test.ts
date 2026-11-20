@@ -9,6 +9,10 @@ import type { RunManager, StartRunInput } from '../workflows/run.ts';
 import type { WorkflowDef } from '../workflows/types.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createApp } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// Starting a run and checking a request's runner id read the registered runners.
+registerBuiltInRunners();
 
 /**
  * Request-origin guard (#426). The server executes agents with shell access,

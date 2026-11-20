@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { applyProviderStatusRow } from '@/lib/provider-status'
 import { workspaceQueryKeys } from '@/api/queries'
@@ -122,7 +122,7 @@ describe('ProviderSettings', () => {
     await within(card('claude')).findByText('Credentials found')
     expect(
       [...document.querySelectorAll('[data-slot="provider-card"]')].map((item) => item.getAttribute('data-provider')),
-    ).toEqual([...runnerSchema.options])
+    ).toEqual(RUNNER_IDS)
   })
 
   it('presents discovery truth, enablement, and runtime recovery without hiding diagnostics', async () => {

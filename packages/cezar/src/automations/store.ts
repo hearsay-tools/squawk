@@ -31,6 +31,11 @@ import {
   type AutomationRuntimeState,
 } from './types.ts';
 import type { GithubCandidate } from './github-poller.ts';
+import { runnerFieldIssues } from '../core/runner-fields.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
+
+/** Where an automation definition names runners. */
+const AUTOMATION_RUNNER_FIELDS = { ids: ['task.runner', 'task.steps.*.runner'] } as const;
 
 const DEFINITIONS = 'automations.json';
 const STATE = 'automation-state.json';
@@ -667,7 +672,8 @@ export class AutomationStore {
     const definitions = new Map<string, AutomationDefinition>();
     for (const raw of file.automations) {
       const parsed = automationDefinitionSchema.safeParse(raw);
-      if (parsed.success) definitions.set(parsed.data.id, parsed.data);
+      // A task on a runner this process does not have stays unreadable, as the closed enum made it.
+      if (parsed.success && runnerFieldIssues(parsed.data, AUTOMATION_RUNNER_FIELDS, knownRunnerIds).length === 0) definitions.set(parsed.data.id, parsed.data);
       else this.warnOnce('definitions', 'Ignored an invalid GitHub automation definition.');
     }
     this.definitionsFile = file;

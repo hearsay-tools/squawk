@@ -12,7 +12,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import { openHumanWait } from '@/test/run-summary-fixture'
 
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS } from '@/test/runners.testkit'
 import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import type { ApiRun, RunRecord, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 
@@ -270,7 +270,7 @@ describe('resumeHint', () => {
     expect(cliTargetResumes(mixed, `cli:${runner}`)).toBe(false)
   })
 
-  it.each(runnerSchema.options)('shows the server\'s %s take-over command and waits for it instead of guessing', (runner) => {
+  it.each(RUNNER_IDS)('shows the server\'s %s take-over command and waits for it instead of guessing', (runner) => {
     const done = run('done', { runner, steps: [step({ backend: runner, sessionId: 'sess-1' })] })
     expect(resumeHint(done)).toBeUndefined()
     expect(resumeHint({ ...done, cliResumeCommand: "'/opt/Some Agent/bin' --resume sess-1" })).toBe("'/opt/Some Agent/bin' --resume sess-1")

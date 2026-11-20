@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 
 import type { useAccountSelection, useEngineSelection } from './new-task-controller'
 import type { NewTaskDraft } from './new-task-draft'
-import { effortOptionsForModel, modelCatalogStatus, resolveEffort, RUNNERS } from './new-task-form'
+import { effortOptionsForModel, catalogQueryStatus, resolveEffort, RUNNERS } from './new-task-form'
 
 /** The `/new` route's layout sections (hearsay-tools/cezarion#1598), each with explicit inputs. */
 
@@ -111,14 +111,14 @@ function ModelPill({ engine, draftEffort, update }: { engine: Engine; draftEffor
       readOnly={engine.modelsLocked}
       disabledHint={engine.modelsLocked ? 'Model selection is locked to native coding-agent settings.' : undefined}
       onPick={(next) => {
-        const nextOptions = effortOptionsForModel(displayRunner, next, catalog.data)
+        const nextOptions = effortOptionsForModel(next, catalog.data)
         update({
           model: next,
           effort: draftEffort === null ? null : resolveEffort(draftEffort, nextOptions),
         })
       }}
       options={engine.models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(displayRunner, catalog.data, catalog.isError, catalog.isFetching)}
+      status={catalogQueryStatus(displayRunner, engine.registered.data, catalog)}
     />
   )
 }

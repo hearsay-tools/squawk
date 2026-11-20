@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { expect, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 import type { GithubComment, GithubCommentsData, GithubData, GithubItem, HealthResponse, ProviderStatusResponse, Runner, WorkflowsResponse } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
 import { githubTaskRef } from '@/lib/github-task'
@@ -172,6 +173,16 @@ export function githubGetResponse(method: string, path: string): Response | unde
   return undefined
 }
 
+/** The reads a start surface makes: workflows, skills, provider status and the runners list. */
+function startSurfaceResponse(method: string, path: string): Response | undefined {
+  if (method !== 'GET') return undefined
+  if (path === '/api/v1/workflows') return jsonResponse(WORKFLOWS)
+  if (path === '/api/v1/runner-skills?runner=claude') return jsonResponse({ runner: 'claude', skills: SKILLS, problems: [], source: 'live' })
+  if (path === '/api/v1/providers/status') return jsonResponse(PROVIDERS_CONNECTED)
+  if (path === RUNNERS_PATH) return jsonResponse(RUNNERS_RESPONSE)
+  return undefined
+}
+
 export function runSummariesResponse(method: string, path: string): Response | undefined {
   if (method === 'GET' && path === '/api/v1/run-summaries') return jsonResponse([])
   // An issue's linked tasks also search the archived runs past the list's window (#864).
@@ -195,11 +206,8 @@ export function stubFetch(
       if (githubResponse) return githubResponse
       const summariesResponse = runSummariesResponse(method, path)
       if (summariesResponse) return summariesResponse
-      if (method === 'GET' && path === '/api/v1/workflows') return jsonResponse(WORKFLOWS)
-      if (method === 'GET' && path === '/api/v1/runner-skills?runner=claude') return jsonResponse({ runner: 'claude', skills: SKILLS, problems: [], source: 'live' })
-      if (method === 'GET' && path === '/api/v1/providers/status') {
-        return jsonResponse(PROVIDERS_CONNECTED)
-      }
+      const startResponse = startSurfaceResponse(method, path)
+      if (startResponse) return startResponse
       if (path === '/api/v1/models?runner=claude') return jsonResponse({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (method === 'GET' && path === '/api/v1/models?runner=codex') return jsonResponse({ runner: 'codex', models: [{ id: 'gpt-future', label: 'gpt-future', description: 'Newest' }], source: 'live', stale: false })
       if (method === 'POST' && path === '/api/v1/runs') {

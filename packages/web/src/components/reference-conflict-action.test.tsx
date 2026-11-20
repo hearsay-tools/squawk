@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
+import { seedRunners } from '@/test/runners.testkit'
 import { resolveConflictsPrompt } from '@/routes/task-thread/run-actions'
 
 import { ReferenceStatusProvider } from './reference-status'
@@ -80,7 +81,7 @@ const run = (status: RunStatus, extra: Partial<ApiRun> = {}): ApiRun => ({
 
 function renderButton(record: ApiRun) {
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={seedRunners(createQueryClient())}>
       <ResolveConflictsButton run={record} prNumber={864} />
       <Toaster />
     </QueryClientProvider>,

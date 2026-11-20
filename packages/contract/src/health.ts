@@ -7,7 +7,8 @@ export { repoInfoSchema, type RepoInfo } from './repo-info.ts';
 
 /** One probed CLI behind the Tools menu. */
 export const backendCheckSchema = z.object({
-  name: z.enum([...runnerSchema.options, 'gh', 'git']),
+  /** A runner id, `gh` or `git`. */
+  name: z.string().min(1),
   available: z.boolean(),
   version: z.string().optional(),
   hint: z.string().optional(),

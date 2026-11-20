@@ -10,6 +10,7 @@ import type { PastedContent } from '../pasted-content.ts';
 import type { PendingJob } from './run-line.ts';
 import type { RunModuleContext, PendingContinuation, StartRunInput } from './types.ts';
 import { withCutOff } from './cut-off-work.ts';
+import { waitsForUnregisteredRunner } from '../../runs/legacy-run-rows.ts';
 
 export interface QueuedRevivalHost {
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
@@ -50,6 +51,9 @@ export function checkpointRestartContext(context: RunModuleContext, host: Queued
  */
 export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRevivalHost, run: RunRecord, reason: string): Promise<void> {
   if (host.isActive(run.id) || host.workerExecutionStopped(run.id)) return;
+  // A task queued on a runner this process did not register stays queued and untouched: a process
+  // that registers that runner starts it (hearsay-tools/squawk#3897).
+  if (waitsForUnregisteredRunner(run)) return;
   const queuedContinuation = [...run.steps]
     .reverse()
     .find((step) => step.status === 'pending' && host.isSyntheticContinuation(run, step));

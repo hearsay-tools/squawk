@@ -18,6 +18,7 @@ import { resetToasts, Toaster } from '@/components/ui/toaster'
 import { Link } from '@/lib/project-router'
 
 import { useContinueAction } from './follow-up-engine'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 /**
  * The follow-up composer's Continue control (#401): the runner + model pills default to the
@@ -99,6 +100,7 @@ function serve(
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   const reads = new Map<string, unknown>([
     ['/api/v1/health', health],
+    [RUNNERS_PATH, RUNNERS_RESPONSE],
     ['/api/v1/run-summaries', []],
     ['/api/v1/repo', { info: { root: '/repo', branch: 'main' } }],
   ])

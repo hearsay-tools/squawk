@@ -1,6 +1,5 @@
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
-import { runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
-import { RUNNER_COCKPIT_FACTS, runnerModelListName } from '@open-mercato/cezar-api-client/contract/runner-facts'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import type {
   BackendCheck,
   CreateRunInput,
@@ -11,6 +10,7 @@ import type {
   UiState,
   WorkflowDef,
 } from '@open-mercato/cezar-api-client'
+import { runnerModelIdScope, runnerModelListName } from '@/api/runners'
 
 /**
  * The new-task form's picker rules and its POST body, as pure functions — the exact semantics
@@ -106,14 +106,11 @@ export type EffortOption = (typeof EFFORT_OPTIONS)[number]
 
 /** Auto plus advertised levels; without model metadata, auto plus every generic level. */
 export function effortOptionsForModel(
-  runner: Runner,
   model: string,
   catalog?: RunnerModelCatalogResponse,
 ): readonly EffortOption[] {
   const fallback = EFFORT_OPTIONS
-  const levels = runnerDiscoversModels(runner)
-    ? catalog?.models.find((entry) => entry.id === model)?.effortLevels
-    : undefined
+  const levels = catalog?.models.find((entry) => entry.id === model)?.effortLevels
   if (!levels?.length) return fallback
 
   const options: EffortOption[] = [EFFORT_OPTIONS[0]]
@@ -139,7 +136,7 @@ export function resolveEffort(
 
 /** Retired dated model suggestions, by the runner that served them. They are no presets any
  *  more, but another runner still refuses them as known foreign ids. */
-const RETIRED_MODEL_IDS: Partial<Record<Runner, readonly string[]>> = {
+const RETIRED_MODEL_IDS: Readonly<Record<Runner, readonly string[]>> = {
   claude: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
 }
 
@@ -148,60 +145,75 @@ const RETIRED_MODEL_IDS: Partial<Record<Runner, readonly string[]>> = {
  * Unknown ids remain valid custom models; only a known cross-runner mismatch is discarded.
  *
  * A runner whose `modelIdScope` is `provider-spanning` serves ids of every provider, so its ids
- * belong to no runner alone and never conflict with another runner. This is the cockpit's half of the rule the server
+ * belong to no runner alone and never conflict with another runner; a runner the runners list
+ * does not name counts as `own`. This is the cockpit's half of the rule the server
  * states structurally: a runner with no default provider cannot be contradicted, which is why
  * the pi definition's `models.known` is empty in `packages/cezar/src/runners/pi/models.ts`. */
-export function modelConflictsWithRunner(model: string, runner: Runner): boolean {
-  if (!model || MODELS_BY_RUNNER[runner].some((preset) => preset.id === model)) return false
+export function modelConflictsWithRunner(
+  model: string,
+  runner: Runner,
+  runners: RunnersResponse | undefined,
+): boolean {
+  if (!model || MODELS_BY_RUNNER[runner]?.some((preset) => preset.id === model)) return false
   const foreign = (other: string) => other !== runner
   if (Object.entries(RETIRED_MODEL_IDS).some(([other, ids]) => foreign(other) && ids.includes(model))) return true
   return Object.entries(MODELS_BY_RUNNER).some(
     ([other, presets]) =>
       foreign(other) &&
-      RUNNER_COCKPIT_FACTS[other as Runner].modelIdScope === 'own' &&
+      runnerModelIdScope(runners, other) !== 'provider-spanning' &&
       presets.some((preset) => preset.id !== '' && preset.id === model),
   )
 }
 
 export function modelsForRunner(
   runner: Runner,
+  runners: RunnersResponse | undefined,
   catalog?: RunnerModelCatalogResponse,
   customIds: readonly (string | null | undefined)[] = [],
 ): readonly ModelPreset[] {
   const discovered = catalog?.runner === runner ? catalog.models : []
-  const presets = MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude
+  const presets = MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude ?? []
   const base = [...(discovered.length ? presets.slice(0, 1) : presets)]
   const seen = new Set(base.map((model) => model.id))
-  if (runnerDiscoversModels(runner)) {
-    for (const model of discovered) {
-      if (!model.id || seen.has(model.id)) continue
-      seen.add(model.id)
-      base.push({ id: model.id, label: model.label || model.id, desc: model.description })
-    }
+  for (const model of discovered) {
+    if (!model.id || seen.has(model.id)) continue
+    seen.add(model.id)
+    base.push({ id: model.id, label: model.label || model.id, desc: model.description })
   }
   // Native settings may contain a provider-specific/custom id that is not in
   // Squawk's static catalog. Keep it representable so the initial selection
   // matches the agent's own configured default on every backend.
   for (const id of customIds) {
-    if (!id || seen.has(id) || modelConflictsWithRunner(id, runner)) continue
+    if (!id || seen.has(id) || modelConflictsWithRunner(id, runner, runners)) continue
     seen.add(id)
     base.push({ id, label: id, desc: 'Custom or legacy model' })
   }
   return base
 }
 
+/** The model picker's status line. None until the runners list names `runner`. */
 export function modelCatalogStatus(
   runner: Runner,
+  runners: RunnersResponse | undefined,
   catalog: RunnerModelCatalogResponse | undefined,
   failed = false,
   fetching = false,
 ): string | undefined {
-  if (!runnerDiscoversModels(runner)) return undefined
-  const name = runnerModelListName(runner)
+  const name = runnerModelListName(runners, runner)
+  if (name === undefined) return undefined
   if (catalog?.stale) return `Using cached ${name} model list`
   if (failed || catalog?.source === 'unavailable') return `Latest ${name} models unavailable`
   if (fetching && !catalog) return `Loading ${name} models…`
   return undefined
+}
+
+/** {@link modelCatalogStatus} for a runner's catalog query. */
+export function catalogQueryStatus(
+  runner: Runner,
+  runners: RunnersResponse | undefined,
+  query: { data?: RunnerModelCatalogResponse | undefined; isError?: boolean; isFetching?: boolean } | undefined,
+): string | undefined {
+  return modelCatalogStatus(runner, runners, query?.data, query?.isError, query?.isFetching)
 }
 
 /** Which runners the pill offers, from the health checks (legacy `renderChrome`). The `claude`
@@ -245,10 +257,11 @@ export function runnerOverride(
 export function resolveModel(
   picked: string | null,
   runner: Runner,
+  runners: RunnersResponse | undefined,
   defaults?: Partial<Record<Runner, string | undefined>>,
   catalog?: RunnerModelCatalogResponse,
 ): string {
-  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]])
+  const models = modelsForRunner(runner, runners, catalog, [picked, defaults?.[runner]])
   if (picked !== null && models.some((m) => m.id === picked)) return picked
   const preset = defaults?.[runner]
   if (preset !== undefined && models.some((m) => m.id === preset)) return preset

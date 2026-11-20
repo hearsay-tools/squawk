@@ -9,7 +9,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { MODEL_DISCOVERY_RUNNERS } from '@open-mercato/cezar-contract/workspace';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
@@ -185,27 +184,11 @@ describe('workspace model catalog API', () => {
     });
   });
 
+  // The refusal an unknown runner got from the closed enum, kept for the open runner id.
   it.each(['/api/v1/models', '/api/v1/models?runner=unknown'])('rejects invalid query %s', async (path) => {
     const response = await apiRequest(app(async () => []), path);
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: `runner must be ${new Intl.ListFormat('en', { type: 'disjunction' }).format(MODEL_DISCOVERY_RUNNERS)}`,
-    });
-  });
-
-  it('includes newly advertised contract runners in the validation message', async () => {
-    // Exercise enum growth without adding a production backend; restore even on assertion failure.
-    const runners = MODEL_DISCOVERY_RUNNERS as string[];
-    runners.push('future-runner');
-    try {
-      const response = await apiRequest(app(async () => []), '/api/v1/models?runner=unknown');
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
-        error: `runner must be ${new Intl.ListFormat('en', { type: 'disjunction' }).format(MODEL_DISCOVERY_RUNNERS)}`,
-      });
-    } finally {
-      runners.pop();
-    }
+    expect(await response.json()).toEqual({ error: 'runner must be claude, codex, opencode, pi, or omp' });
   });
 
   it('is workspace-level rather than project-scoped', async () => {

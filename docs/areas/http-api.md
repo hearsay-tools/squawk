@@ -14,6 +14,13 @@ Hono app, binds to `127.0.0.1` only. A global `/api/*` request-origin guard (ope
 
 Add the schema in `packages/contract/src/*.ts` FIRST, then chain the route and validate through the trio. `contract-parity*.test.ts` proves the schema and the route agree in both directions, and `typed-bodies.test.ts` proves the route reached `AppType` at all.
 
+A runner id is an open string in the contract (`runnerSchema`). A route whose input names a
+runner passes the `runners` option to its validator (`packages/cezar/src/core/runner-fields.ts`):
+it refuses an id that no runner registered with the refusal the closed enum gave, and drops the
+key of an unregistered runner from an object keyed by runner. The handler narrows the id with
+`registeredRunnerId`. `GET /api/v1/runners` lists the registered runners and their display data
+(hearsay-tools/squawk#3897).
+
 ## Invariants
 
 Four invariants. A feature that breaks any of them compiles on its own branch and stops working

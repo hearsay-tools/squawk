@@ -13,9 +13,10 @@ Every runner emits two event streams together: v1 `AgentEvent` (§2) and v2 `UiE
 The types in `agent-runner.ts` and their doc comments are the contract: `AgentRunner`,
 `AgentSession`, `SessionOptions`, `AgentRunSpec`, `InputDelivery` and `SystemPromptOnResume`.
 `RUNNER_FACTS` in `core/runner-facts.ts` reads what each runner's wire can do from the
-registered definitions; each runner declares it in `runners/<id>/facts.ts`. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
-cockpit and the server both read: the display name, the model catalog delivery, the effort
-levels, the model id scope and the input mode. A runner's definition holds how a terminal
+registered definitions; each runner declares it in `runners/<id>/facts.ts`. The `display` part of
+a definition (`runners/<id>/display.ts`) holds what the cockpit and the server both read: the
+display name, the model list name and the model id scope. The server reads it from the registry;
+the cockpit reads it from `GET /api/v1/runners`. A runner's definition holds how a terminal
 starts and resumes its CLI and where the installer gets it (`cli`, from `runners/<id>/cli.ts`;
 `core/runner-cli.ts` reads it), and how the host probe finds it (`detection`, from
 `runners/<id>/detection.ts`; `core/backend-detect.ts` runs the probe). Each runner's
@@ -327,9 +328,9 @@ force, or force only in part. The item numbers are stable: code cites them.
 2. **Definition** — `runners/<id>/definition.ts` with its facts, `specSupport`, `detection`, `cli` and `loadAdapter`,
    and one line in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
    `loadSkillCatalog`, `configFiles` (`runners/<id>/config-files.ts`) and `extraTools`
-   go in the same definition. The compiler and the guard tests name each other place:
-   `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
-   `ui-events.ts` and in its api-client copy (§3).
+   go in the same definition, and so does its `display` part (`runners/<id>/display.ts`). A
+   runner id is an open string in the contract (`runnerSchema`) and in `UiBackend`; the server
+   checks a request's runner id against the registry (`core/runner-fields.ts`).
 3. **Detection** — declare the runner's `detection` (`runners/<id>/detection.ts`): its PATH name,
    its `*_BIN` override, what dry-run reports and its hints. `core/backend-detect.ts` runs the probe
    from it. An absent CLI never fails the boot.
@@ -374,7 +375,11 @@ force, or force only in part. The item numbers are stable: code cites them.
 ## 10a. Removing a runner
 
 Saved runs outlive the runner they ran on. A run saved on a removed runner still opens, lists,
-shows its transcript and can Continue on another runner (hearsay-tools/squawk#3715). Most
+shows its transcript and can Continue on another runner (hearsay-tools/squawk#3715). A run saved
+on a runner that the reading process did not register (a runner of a newer build, or one that did
+not load) reads the same way, but the fold is undone: the next write keeps its runner, sessions
+and step settings, and a process that registers the runner reads it as before. A queued run on
+such a runner stays queued and untouched (hearsay-tools/squawk#3897). Most
 readers of a saved runner id read the `runner`, `backend` or `removedRunner` field of any value,
 so a text search for the id does not find them. Run
 `node scripts/readers.mjs --runner <id>`: it lists the readers below, checks that each still
@@ -384,18 +389,21 @@ holds its anchor, and adds every quoted use of the id.
    `packages/cezar/src/runs/legacy-run-rows.ts`. That file folds the saved data at read time:
    the run row with its steps and `workflowDef` steps (`upgradeRemovedRunner`), the stored
    list summary (`upgradeRemovedRunnerSummary`) and the worker-result snapshot
-   (`upgradeRemovedRunnerResult`).
+   (`upgradeRemovedRunnerResult`). The fold of a retired id is stored by the next write.
 2. **Load sites of the fold** — `packages/cezar/src/runs/store.ts` (run rows and worker
    results) and `packages/cezar/src/runs/run-summary-page.ts` (stored summaries).
 3. **Record schema** — `packages/contract/src/runs.ts` keeps `removedRunner` and the step's
-   `removedBackend`; `runner` and `backend` accept only shipped ids.
+   `removedBackend`; `runner` and `backend` are open strings, and the store reads only a
+   registered id (`readableSavedRunner` in `legacy-run-rows.ts`).
 4. **Session selection** — `latestSession` and `removedRunnerStepAfter` in
    `packages/contract/src/run-predicates.ts` choose the session for terminal hand-off and
    Continue. The usage-limit account hold reads the next turn's account through them
    (`packages/cezar/src/workflows/execution-account.ts`).
 5. **Queued and interrupted runs** — `packages/cezar/src/workflows/run/queued-revival.ts`
    fails a revived run on a removed runner; `packages/cezar/src/workflows/run-scheduling.ts`
-   skips it; `packages/cezar/src/workflows/run.ts` refuses to start or resume it.
+   skips it; `packages/cezar/src/workflows/run.ts` refuses to start or resume it; the queue
+   watchdog in `packages/cezar/src/workflows/run/run-line.ts` leaves a run on an unregistered
+   runner alone.
 6. **Continue** — admission in `packages/cezar/src/workflows/continuation-admission.ts`,
    provenance by start time in `packages/cezar/src/workflows/run/launch-read-resolver.ts`,
    worker identity in `packages/cezar/src/delegation/execution-identity.ts`, and the HTTP

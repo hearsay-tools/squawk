@@ -33,7 +33,7 @@ import { applyTemplate, resolveExtraSystemPrompt, resumeNotice } from './prompts
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
 import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
-import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID, runnerIdOf, savedRunnerId } from '../../core/runner-registry.ts';
 
 // This view adds no promise continuation before the caller's original post-config gate.
 function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {
@@ -591,7 +591,7 @@ function queuedResumeSession(context: RunModuleContext, host: QueuedRevivalHost,
   let resumeIdentity: WorkerStepIdentity | undefined;
   try { resumeIdentity = host.workerStep(run.id, continuationDefStep(context.store, run, sessionStep.sessionId)?.id); }
   catch (error) { if (!(error instanceof WorkerIdentityError)) throw error; }
-  const backend = resumeIdentity?.account.provider ?? retryInFlightRunner(run) ?? run.runner ?? DEFAULT_RUNNER_ID;
+  const backend = resumeIdentity?.account.provider ?? retryInFlightRunner(run) ?? savedRunnerId(run.runner) ?? DEFAULT_RUNNER_ID;
   const sessionBackend = sessionRunner(sessionStep, run);
   const sessionAccount = sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
   // A provider retry keeps the held step's account, resolved as `sessionAccount` is (hearsay-tools/squawk#3337).
@@ -670,7 +670,7 @@ function heldWorkflowStepId(run: RunRecord): string | undefined {
 /** The runner the held workflow step ran on, which its retry keeps (hearsay-tools/squawk#3337). */
 function heldStepRunner(run: RunRecord): RunnerId | undefined {
   const resumed = resumeCursorStepId(run);
-  return resumed ? run.steps.find(step => step.id === resumed)?.backend : undefined;
+  return resumed ? savedRunnerId(run.steps.find(step => step.id === resumed)?.backend) : undefined;
 }
 
 /** The step the run's `resume` cursor names (ADR 0064): a failed attempt a Continue resumes. */
@@ -706,7 +706,7 @@ function resumableSessionId(store: Pick<RunStore, 'getRun' | 'readEvents'>, runI
   const sessionId = sessionStep?.sessionId;
   if (!sessionId) return undefined;
   const run = store.getRun(runId);
-  if (RUNNER_FACTS[sessionRunner(sessionStep, run)].sessionIdSource === 'launch') return sessionId;
+  if (RUNNER_FACTS[runnerIdOf(sessionRunner(sessionStep, run))].sessionIdSource === 'launch') return sessionId;
   const events = store.readEvents(runId);
   if (events.some(event => event.type === 'session' && event.sessionId === sessionId)) return sessionId;
   const owner = run?.steps.find(step => step.sessionId === sessionId) ?? sessionStep;
@@ -767,7 +767,7 @@ function acceptedSkillHint(workflow: WorkflowDef): string | undefined {
   return workflow.steps.find(candidate => stepKind(candidate) === 'agent' && candidate.skill)?.skill?.trim();
 }
 
-function stepRunner(step: WorkflowStepDef, taskBackend: RunnerId): RunnerId { return step.runner ?? taskBackend; }
+function stepRunner(step: WorkflowStepDef, taskBackend: RunnerId): RunnerId { return savedRunnerId(step.runner) ?? taskBackend; }
 function stepPrompt(step: WorkflowStepDef, source: SourceInput): string { return applyTemplate(step.prompt ?? '{{task}}', sourceInput(source).task); }
 function stepSkill(step: WorkflowStepDef): string | undefined { return step.skill; }
 
@@ -821,7 +821,7 @@ function requeueJob(workflow: WorkflowDef, source: SourceInput, startAt: number 
 type SourceInput = StartRunInput | LaunchSource;
 function sourceInput(source: SourceInput): StartRunInput { return source instanceof InputToken ? inputValue(source) : source; }
 
-function recordedRunner(run: RunRecord): RunnerId | undefined { return run.runner; }
+function recordedRunner(run: RunRecord): RunnerId | undefined { return savedRunnerId(run.runner); }
 function defaultRunner(config: LaunchConfig): RunnerId { return configValue(config).defaultRunner; }
 function runnerless(store: Pick<RunStore, 'getRun'>, id: string): boolean { return store.getRun(id)?.runner === undefined; }
 function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }

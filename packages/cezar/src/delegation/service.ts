@@ -85,6 +85,7 @@ import { parseDelegationEffort } from './effort.ts';
 import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed, workspaceChoiceOf } from './policy.ts';
 import { resolveWorkerBaseline } from './workspace.ts';
 import { workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
+import { registeredRunnerId } from '../core/runner-registry.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
@@ -155,7 +156,7 @@ async function resolveSpawnSteps(manager: DelegationManager, parentId: string, r
   for (const step of workflow.steps) {
     if (stepKind(step) === 'check') continue;
     const selection = {
-      ...(step.runner ?? request.backend) === undefined ? {} : { backend: step.runner ?? request.backend },
+      ...(step.runner ?? request.backend) === undefined ? {} : { backend: registeredRunnerId((step.runner ?? request.backend)!) },
       ...(step.model ?? request.model) === undefined ? {} : { model: step.model ?? request.model },
       ...(step.effort ?? request.effort) === undefined ? {} : { effort: step.effort ?? request.effort },
       ...(step.agentProfile === undefined ? {} : { agentProfile: step.agentProfile }),
@@ -272,7 +273,7 @@ export class DelegationService {
     if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     requireWorkersAllowed(family);
     if (!this.discovery) throw new DelegationPolicyError('unavailable_transport', 'Host discovery is unavailable');
-    return request.kind === 'models' ? this.discovery.models.get(request.runner) : discoveredRunners(await this.discovery.providers());
+    return request.kind === 'models' ? this.discovery.models.get(registeredRunnerId(request.runner)) : discoveredRunners(await this.discovery.providers());
   }
   private async validateModels(request: WorkerSpawnRequest, resolved: Pick<ResolvedSpawnStep, 'step' | 'settings'>[]): Promise<void> {
     if (!this.discovery) return;

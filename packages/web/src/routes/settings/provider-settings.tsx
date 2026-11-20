@@ -9,7 +9,7 @@ import {
   useRetryProviderAuth,
   workspaceQueryKeys,
 } from '@/api/queries'
-import { runnerDiscoversModels, type ProviderId, type ProviderStatus, type ProviderStatusResponse } from '@open-mercato/cezar-api-client/contract/workspace'
+import { type ProviderId, type ProviderStatus, type ProviderStatusResponse } from '@open-mercato/cezar-api-client/contract/workspace'
 import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -255,7 +255,7 @@ export function ProviderSettings() {
     lastConfirmed.current = {
       providers: status.data.providers.map((row) => ({
         ...row,
-        enabled: pendingWrites.current[row.provider] > 0
+        enabled: (pendingWrites.current[row.provider] ?? 0) > 0
           ? providerStatusFor(lastConfirmed.current, row.provider)?.enabled ?? row.enabled
           : row.enabled,
       })),
@@ -269,9 +269,10 @@ export function ProviderSettings() {
       if (!previous) return
       if (!lastConfirmed.current) lastConfirmed.current = previous
       const optimistic = withProviderEnabled(previous, provider, enabled)
-      pendingWrites.current[provider] += 1
+      pendingWrites.current[provider] = (pendingWrites.current[provider] ?? 0) + 1
       queryClient.setQueryData(key, optimistic)
-      const seq = ++latestWrites.current[provider]
+      const seq = (latestWrites.current[provider] ?? 0) + 1
+      latestWrites.current[provider] = seq
       writeChain.current = writeChain.current.then(async () => {
         try {
           const confirmed = await setProviderEnabled(provider, enabled)
@@ -303,7 +304,7 @@ export function ProviderSettings() {
             toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
           }
         } finally {
-          pendingWrites.current[provider] -= 1
+          pendingWrites.current[provider] = (pendingWrites.current[provider] ?? 0) - 1
         }
       })
     },
@@ -323,7 +324,7 @@ export function ProviderSettings() {
           : 'Provider is already connected.',
       )
       await queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.providerStatus })
-      if (runnerDiscoversModels(provider)) await invalidateRunnerModels(queryClient, provider, 'none')
+      await invalidateRunnerModels(queryClient, provider, 'none')
     },
     onError: (error: Error, provider) => {
       if (error instanceof ApiError && error.command) {

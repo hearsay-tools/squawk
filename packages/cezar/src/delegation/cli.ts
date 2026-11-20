@@ -5,6 +5,8 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { readBoundedContextFile } from './context.ts';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
+import { runnerFieldIssues } from '../core/runner-fields.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 import {
   conversationSendRequestSchema,
   conversationSendEffectSchema,
@@ -466,6 +468,9 @@ async function spawnPayload(values: CliValues, positionals: string[], argv: stri
     model: values.model, effort: values.effort, workflow: values.workflow, skill: values.skill,
     context: text === undefined && !attached.length ? undefined : context });
   if (!parsed.success) throw new WorkerCliError(attachIssue(parsed.error, 'spawn', typed) ?? formatWorkerCliError(parsed.error, argv));
+  // The server refuses a runner it did not register; the CLI says so first, as the closed enum did.
+  const unknownRunner = runnerFieldIssues(parsed.data, { ids: ['backend'] }, knownRunnerIds);
+  if (unknownRunner.length > 0) throw new WorkerCliError(formatWorkerCliError(new z.ZodError(unknownRunner), argv));
   return parsed.data;
 }
 function waitPayload(operation: string, values: CliValues, positionals: string[]) {

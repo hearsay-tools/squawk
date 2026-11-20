@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
 import { queryKeys } from '@/api/queries'
 import { SkillsRoute } from './skills'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const skills = [
   { id: 'plugin:check', name: 'Check', description: 'Check changes', scope: 'repo', plugin: 'plugin', path: '.agents/skills/check/SKILL.md' },
@@ -19,6 +20,7 @@ function mount(source = 'live', client = createQueryClient()) {
     requests.push(url)
     const body = url.includes('/runner-skills')
       ? { runner: new URL(url, 'http://localhost').searchParams.get('runner'), skills, problems: [{ message: 'Invalid manifest', path: '/broken' }], source }
+      : url === RUNNERS_PATH ? RUNNERS_RESPONSE
       : url.endsWith('/config') ? { defaultRunner: 'codex' }
       : url.endsWith('/agent-profiles') ? { profiles: [{ provider: 'codex', id: 'work', label: 'Work' }], selections: {} } : {}
     return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })

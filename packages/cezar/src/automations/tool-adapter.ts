@@ -1,4 +1,5 @@
 import { automationToolGithub } from './tool-github.ts';
+import { runnerFieldIssues } from '../core/runner-fields.ts';
 import { withAutomationToolDeadline } from './tool-timeout.ts';
 import { automationToolRequestSchema, type AutomationToolAnswer, type AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
 import { nextOccurrence } from '@open-mercato/cezar-contract/automation-schedule';
@@ -51,6 +52,15 @@ function wallTime(request: { at?: string | undefined; delay?: string | undefined
 }
 
 /** The task settings a create or an update names; an empty one leaves the stored setting. */
+/**
+ * The parsed body, or the refusal of its first issue. A task runner that no runner registered gets
+ * the refusal the closed enum gave (hearsay-tools/squawk#3897).
+ */
+function automationBody<T extends { task: unknown }>(body: { success: true; data: T } | { success: false; error: { issues: readonly { message: string }[] } }): { data: T } | Refusal {
+  const issue = body.success ? runnerFieldIssues(body.data, { ids: ['task.runner'] })[0] : body.error.issues[0];
+  return body.success && !issue ? { data: body.data } : refuse('invalid_request', issue?.message ?? 'invalid schedule');
+}
+
 function taskSettings({ workflow, runner, model, effort }: { workflow?: string | undefined; runner?: string | undefined; model?: string | undefined; effort?: string | undefined }) {
   return { ...(workflow ? { workflow } : {}), ...(runner ? { runner } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
 }
@@ -162,15 +172,15 @@ export function createAutomationToolService(
     async scheduleTask(request: ScheduleTaskRequest): Promise<ScheduleTaskAnswer> {
       const schedule = scheduleOf(request);
       if (isRefusal(schedule)) return schedule;
-      const body = automationCreateSchema.safeParse({
+      const body = automationBody(automationCreateSchema.safeParse({
         name: request.name,
         kind: 'schedule',
         schedule,
         // Nobody waits on a scheduled task: autonomous, as the CLI and the cockpit create it.
         task: { prompt: request.prompt, autonomous: true, ...taskSettings(request) },
         enable: request.enable === true,
-      });
-      if (!body.success) return refuse('invalid_request', body.error.issues[0]?.message ?? 'invalid schedule');
+      }));
+      if (isRefusal(body)) return body;
       const result = await service.create(project, body.data);
       return result.ok ? { ok: true, task: view(result.automation), note: SCHEDULED_TASK_NOTE } : fromStatus(result);
     },
@@ -193,7 +203,7 @@ export function createAutomationToolService(
           const moves = request.at !== undefined || request.delay !== undefined || request.latest_start !== undefined;
           const schedule = moves ? scheduleOf(request, stored.schedule) : stored.schedule;
           if (schedule && isRefusal(schedule)) return schedule;
-          const body = automationUpdateSchema.safeParse({
+          const body = automationBody(automationUpdateSchema.safeParse({
             name: request.name ?? stored.name,
             ...(stored.description !== undefined ? { description: stored.description } : {}),
             enabled: stored.enabled,
@@ -201,8 +211,8 @@ export function createAutomationToolService(
             schedule,
             task: { ...writableAutomationTask(stored.task), ...(request.prompt !== undefined ? { prompt: request.prompt } : {}), ...taskSettings(request) },
             expectedRevision: stored.revision,
-          });
-          if (!body.success) return refuse('invalid_request', body.error.issues[0]?.message ?? 'invalid schedule');
+          }));
+          if (isRefusal(body)) return body;
           return settled(await service.update(project, stored.id, body.data));
         }
       }

@@ -23,7 +23,7 @@ export {
   restoreRememberedStatuses,
 } from './reference-status-memory'
 import { getApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
-import { normalizeSidebarLimits, runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
+import { normalizeSidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
 import { toast } from '@/components/ui/toaster'
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type MutateOptions } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
@@ -302,7 +302,7 @@ export function invalidateRunnerModels(
  * One runner's host-discovered catalog, cached per runner (#794 — this used to be hard-wired to
  * Codex, which is why OpenCode had nothing but stale presets to show).
  *
- * All four runners discover models. Failures retain the existing picker fallback;
+ * Every runner discovers models. Failures retain the existing picker fallback;
  * callers read `data`/`isError` without backend-specific branches.
  *
  * `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue — hooks
@@ -311,14 +311,9 @@ export function invalidateRunnerModels(
 export function useRunnerModels(runner: Runner, enabled = true) {
   return useQuery({
     queryKey: workspaceQueryKeys.models(runner),
-    // The narrowing IS the guard — the query is disabled for a runner with no host catalog, so
-    // this branch is unreachable rather than merely unlikely, and no cast is needed to say so.
-    queryFn: ({ signal }) =>
-      runnerDiscoversModels(runner)
-        ? getRunnerModels(runner, { signal })
-        : Promise.reject(new Error(`${runner} has no host model catalog`)),
+    queryFn: ({ signal }) => getRunnerModels(runner, { signal }),
     staleTime: 5 * 60 * 1_000,
-    enabled: enabled && runnerDiscoversModels(runner),
+    enabled,
   })
 }
 
@@ -395,7 +390,7 @@ export function useRetryProviderAuth() {
     onSuccess: (result, variables, requestStart) => {
       queryClient.setQueryData<ProviderStatusResponse>(workspaceQueryKeys.providerStatus, (cached) =>
         mergeProviderStatusResponse(requestStart, cached, result, variables.authFailureId))
-      if (runnerDiscoversModels(variables.provider)) void invalidateRunnerModels(queryClient, variables.provider)
+      void invalidateRunnerModels(queryClient, variables.provider)
     },
   })
 }
@@ -725,7 +720,7 @@ export function useConnectAgentAccount() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles }),
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.providerStatus }),
-        runnerDiscoversModels(provider) ? invalidateRunnerModels(queryClient, provider, 'none') : Promise.resolve(),
+        invalidateRunnerModels(queryClient, provider, 'none'),
       ])
     },
   })
@@ -746,9 +741,7 @@ export function useRecheckAgentAccount() {
     onSuccess: (answer, routeId) => {
       queryClient.setQueryData(workspaceQueryKeys.agentAccountStatus(routeId), answer)
       void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles })
-      if (runnerDiscoversModels(answer.status.provider)) {
-        void invalidateRunnerModels(queryClient, answer.status.provider)
-      }
+      void invalidateRunnerModels(queryClient, answer.status.provider)
     },
   })
 }

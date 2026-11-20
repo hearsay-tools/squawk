@@ -12,6 +12,7 @@ import { ListViewProvider } from '@/components/list-view'
 import { ThemeProvider } from '@/components/theme-provider'
 import { githubRunBody } from '@/lib/github-task'
 import { AppRoutes } from '@/routes'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 /**
  * `/p/:projectId/tasks/:id/{issue,pr}/:n` (#692), one case per row of the spec's States table,
@@ -225,6 +226,7 @@ describe('TaskGithubItemRoute', () => {
       if (path.endsWith('/workflows')) return json({ workflows: [], issues: [] })
       if (path.includes('/runner-skills?')) return json({ runner: 'claude', skills: [], problems: [], source: 'live' })
       if (path.endsWith('/ui-state')) return json({})
+      if (path === RUNNERS_PATH) return json(RUNNERS_RESPONSE)
       if (path.endsWith('/providers/status')) return json({ providers: [{ provider: 'claude', status: 'connected', enabled: true }] })
       if (path.includes('/models?')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (path.endsWith('/config')) return json({})

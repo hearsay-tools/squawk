@@ -1,9 +1,12 @@
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApiRun } from '@open-mercato/cezar-api-client'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
 import { AskCard } from './ask-card'
 import { AskOriginMarker, firstAnswerControl, jumpLabel, pinnedAnswerControl, pinnedAskFocus } from './pending-ask-navigation'
 import type { ThreadAsk } from './thread-state'
@@ -42,11 +45,16 @@ const ask = (overrides: Partial<ThreadAsk> = {}): ThreadAsk => ({
   ...overrides,
 })
 
-const renderCard = (value: ThreadAsk, onShowOrigin?: () => void) => render(
+/** The card reads runner names from the runners query: serve it the fixture. */
+const withRunners = (ui: React.ReactElement) => (
+  <QueryClientProvider client={seedRunners(createQueryClient())}>{ui}</QueryClientProvider>
+)
+
+const renderCard = (value: ThreadAsk, onShowOrigin?: () => void) => render(withRunners(
   <MemoryRouter>
     <AskCard ask={value} run={run} {...(onShowOrigin ? { onShowOrigin } : {})} />
   </MemoryRouter>,
-)
+))
 
 const card = () => document.querySelector<HTMLElement>('[data-slot="ask-card"]')!
 
@@ -92,7 +100,7 @@ describe('pinnedAskFocus (#1495)', () => {
     const row = document.createElement('div')
     row.dataset.rowKey = `pending-ask:${askId}`
     document.body.append(row)
-    render(<MemoryRouter><AskCard ask={ask({ id: askId })} run={run} /></MemoryRouter>, { container: row })
+    render(withRunners(<MemoryRouter><AskCard ask={ask({ id: askId })} run={run} /></MemoryRouter>), { container: row })
   }
 
   it('focuses only the pinned card of the ask it was made for', () => {

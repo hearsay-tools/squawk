@@ -8,6 +8,7 @@
 import type { SetWorkspaceConfigInput } from '@open-mercato/cezar-contract/workspace';
 import { PROVIDER_IDS } from '../core/provider-auth.ts';
 import type { WorkspaceConfig } from '../workspace/config.ts';
+import { registeredRunnerId } from '../core/runner-registry.ts';
 
 function applyComposerDefaults(
   config: WorkspaceConfig,
@@ -53,7 +54,7 @@ function applyAgentDefaults(
   // `null` CLEARS back to "no opinion" — a partial patch cannot say that by omission,
   // and leaving a stale runner behind would keep overriding repos that never chose.
   if (agentDefaults.runner === null) delete config.agentDefaults.runner;
-  else if (agentDefaults.runner !== undefined) config.agentDefaults.runner = agentDefaults.runner;
+  else if (agentDefaults.runner !== undefined) config.agentDefaults.runner = registeredRunnerId(agentDefaults.runner);
   for (const runner of PROVIDER_IDS) {
     const model = agentDefaults.models?.[runner];
     if (model === undefined) continue;

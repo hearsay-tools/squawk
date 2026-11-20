@@ -7,6 +7,7 @@ import {
   useWorkspaceUiState,
   workspaceQueryKeys,
 } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { WorkspaceUiState } from '@open-mercato/cezar-api-client'
 import { ProviderBanner } from '@/components/provider-banner'
 import { toast } from '@/components/ui/toaster'
@@ -23,6 +24,7 @@ function workspaceUiState(value: unknown): WorkspaceUiState | undefined {
 
 export function ProviderBannerContainer() {
   const providers = useProviderStatus()
+  const runners = useRunners().data
   const uiState = useWorkspaceUiState()
   const queryClient = useQueryClient()
   const writeChain = useRef<Promise<unknown>>(Promise.resolve())
@@ -44,6 +46,7 @@ export function ProviderBannerContainer() {
       const previous = workspaceUiState(queryClient.getQueryData<unknown>(key))
       const currentDismissals = providerAuthDismissals(
         previous?.dismissedProviderAuthFailures,
+        runners,
       )
       const nextDismissals = mergeProviderAuthDismissals(currentDismissals, incidents)
       const optimistic = {
@@ -76,16 +79,18 @@ export function ProviderBannerContainer() {
         }
       })
     },
-    [queryClient],
+    [queryClient, runners],
   )
 
   return (
     <ProviderBanner
       status={providers.data}
+      runners={runners}
       pending={providers.isPending}
       error={providers.isError}
       dismissals={providerAuthDismissals(
         workspaceUiState(uiState.data)?.dismissedProviderAuthFailures,
+        runners,
       )}
       onDismissAuthFailures={dismiss}
     />

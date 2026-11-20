@@ -65,13 +65,14 @@ export const workflowDefSchema = z.object({
 });
 export type WorkflowDef = z.infer<typeof workflowDefSchema>;
 
-/** Providers an original workflow executes; command-only steps need no agent. */
-export function providersRequiredByWorkflow(workflow: WorkflowDef, fallback: Runner): Runner[] {
+/** Providers an original workflow executes, in the order of `runners` (the registered runners);
+ *  command-only steps need no agent. */
+export function providersRequiredByWorkflow(workflow: WorkflowDef, fallback: Runner, runners: readonly Runner[]): Runner[] {
   const required = new Set<Runner>();
   for (const step of workflow.steps) {
     if (!step.command) required.add(step.runner ?? fallback);
   }
-  return runnerSchema.options.filter(provider => required.has(provider));
+  return runners.filter(provider => required.has(provider));
 }
 
 

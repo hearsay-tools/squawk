@@ -34,8 +34,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   command and install source in `runners/<id>/cli.ts`, its model data in
   `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
   native mock script and scenario prompts in `runners/<id>/mock.ts` (the `mock` part), its
-  definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its cockpit facts in
-  `RUNNER_COCKPIT_FACTS`. When it adds a value
+  definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its display
+  facts in `runners/<id>/display.ts`, which `GET /api/v1/runners` sends. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 

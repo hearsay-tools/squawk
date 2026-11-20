@@ -14,6 +14,9 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { workflowsResponseSchema } from '@open-mercato/cezar-contract/workflows';
 import { createRunInputSchema } from '@open-mercato/cezar-contract/runs';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Tightened request validation (#429): the mutating routes now bound their
@@ -131,8 +134,9 @@ describe('request validation bounds (#429)', () => {
     { name: 'negative timeout', body: { task: 'work', steps: [{ ...agentStep, timeoutMs: -1 }] }, status: 400 },
     { name: 'fractional timeout', body: { task: 'work', steps: [{ ...agentStep, timeoutMs: 0.5 }] }, status: 400 },
     { name: 'timeout on check', body: { task: 'work', steps: [{ id: 'check', command: 'true', timeoutMs: 0 }] }, status: 400 },
-    { name: 'legacy runner', body: { ...inlineBody, runner: 'claude-cli' }, status: 400 },
-    { name: 'legacy step runner', body: { task: 'work', steps: [{ ...agentStep, runner: 'claude-cli' }] }, status: 400 },
+    // The contract takes any runner id; the route refuses one that no runner registered.
+    { name: 'legacy runner', body: { ...inlineBody, runner: 'claude-cli' }, status: 400, schemaValid: true },
+    { name: 'legacy step runner', body: { task: 'work', steps: [{ ...agentStep, runner: 'claude-cli' }] }, status: 400, schemaValid: true },
     { name: 'empty step profile', body: { task: 'work', steps: [{ ...agentStep, agentProfile: '' }] }, status: 400 },
     { name: 'step profile over cap', body: { task: 'work', steps: [{ ...agentStep, agentProfile: 'x'.repeat(65) }] }, status: 400 },
     { name: 'profile over cap', body: { ...inlineBody, agentProfile: 'x'.repeat(65) }, status: 400 },

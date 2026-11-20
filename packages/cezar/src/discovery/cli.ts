@@ -3,6 +3,8 @@ import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { productEnv } from '../core/product-env.ts';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
+import { runnerFieldIssues } from '../core/runner-fields.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 import { delegationErrorResponseSchema } from '@open-mercato/cezar-contract/delegation';
 import {
   discoveredRunnersSchema,
@@ -83,7 +85,8 @@ function parseDiscoveryRequest(argv: string[]): ParsedDiscovery {
   catch { throw new TaskCliError(64, { code: 'invalid_input', error: commandText('Use cez discover runners or cez discover models --runner=<runner>. See cez discover --help.') }); }
   if (parsed.values.help) return { help: true };
   const selected = discoveryRequestSchema.safeParse({ kind: parsed.positionals[0], ...(parsed.values.runner === undefined ? {} : { runner: parsed.values.runner }) });
-  if (parsed.positionals.length !== 1 || !selected.success) throw new TaskCliError(64, { code: 'invalid_input', error: commandText('Use cez discover runners or cez discover models --runner=<runner>.') });
+  const unknownRunner = selected.success && runnerFieldIssues(selected.data, { ids: ['runner'] }, knownRunnerIds).length > 0;
+  if (parsed.positionals.length !== 1 || !selected.success || unknownRunner) throw new TaskCliError(64, { code: 'invalid_input', error: commandText('Use cez discover runners or cez discover models --runner=<runner>.') });
   const request = selected.data;
   return { help: false, values: parsed.values, request, schema: request.kind === 'runners' ? discoveredRunnersSchema : runnerModelCatalogResponseSchema };
 }

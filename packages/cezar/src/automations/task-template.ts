@@ -7,6 +7,7 @@ import type { StartRunInput } from '../workflows/run/types.ts';
 import { AutomationCandidateChangedError, GithubPoller, type GithubCandidate } from './github-poller.ts';
 import { stopOnceSchedule, type ScheduleOccurrence } from './schedule-runner.ts';
 import type { AutomationStore } from './store.ts';
+import { registeredRunnerId } from '../core/runner-registry.ts';
 import { githubBaselineState } from './github-baseline.ts';
 import { ProjectMigrationFencedError } from '../server/cockpit-ownership.ts';
 import { parseRemote } from '../server/forge/index.ts';
@@ -110,7 +111,7 @@ function startRun(manager: Pick<RunManager, 'startRun'>, workflow: WorkflowDef, 
     task,
     model: definition.task.model,
     effort: definition.task.effort,
-    runner: definition.task.runner,
+    runner: definition.task.runner === undefined ? undefined : registeredRunnerId(definition.task.runner),
     systemPrompt: definition.task.systemPrompt,
     worktree: definition.task.worktree,
     autonomous: definition.task.autonomous,

@@ -11,6 +11,7 @@ import { OMP_LOGIN } from './login.ts';
 import { OMP_ACCOUNTS } from './accounts.ts';
 import { OMP_ENV } from './env.ts';
 import { OMP_MOCK } from './mock.ts';
+import { OMP_DISPLAY } from './display.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -36,4 +37,5 @@ export const ompRunner = defineRunner({
   env: OMP_ENV,
   mock: OMP_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),
+  display: OMP_DISPLAY,
 });
