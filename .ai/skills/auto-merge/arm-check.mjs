@@ -35,8 +35,10 @@ export async function decideArm({ github, reviewedHead, readHead, readCheckRuns,
   if (head !== reviewedHead) {
     return { outcome: 'refuse', head, reasons: [`the head is ${head}, not the reviewed head ${reviewedHead}: decide again for the new head`] }
   }
-  const threads = await listReviewThreads({ github, owner, repo, pullNumber })
+  // Check runs first: a review that completes after this read posted its threads
+  // before the thread read below, so a completed run never hides one of its threads.
   const runs = await readCheckRuns(head)
+  const threads = await listReviewThreads({ github, owner, repo, pullNumber })
   const after = await readHead()
   if (after !== head) return { outcome: 'refuse', head: after, reasons: [`the head moved from ${head} to ${after} during the check`] }
   const unresolved = threads.filter((thread) => !thread.isResolved).length

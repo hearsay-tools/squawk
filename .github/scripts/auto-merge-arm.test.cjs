@@ -55,6 +55,14 @@ test('waits while CodeRabbit is queued or reviewing the head', async () => {
   }
 });
 
+test('reads the CodeRabbit check run before the review threads', async () => {
+  const { decideArm } = await load();
+  const order = [];
+  const github = { graphql: async (...call) => { order.push('threads'); return threadPages([]).graphql(...call); } };
+  await decideArm({ ...args(github), readCheckRuns: async () => { order.push('runs'); return []; } });
+  assert.deepEqual(order, ['runs', 'threads']);
+});
+
 test('a check run of the same name from another app does not hold arming', async () => {
   const { decideArm } = await load();
   const other = { name: 'CodeRabbit', app: { slug: 'someone-else' }, status: 'in_progress' };
