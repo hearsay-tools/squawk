@@ -1,4 +1,4 @@
-import type { AgentRunner, AgentRunSpecSupport, RunnerId } from './agent-runner.ts';
+import type { AgentRunner, AgentRunSpecSupport } from './agent-runner.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { BackendModelMap } from './model-identity.ts';
 import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
@@ -18,7 +18,7 @@ import type { RunnerAgentConfig, RunnerEntry, RunnerModelPreset } from '@open-me
  */
 export interface RunnerDefinition {
   /** The runner id. */
-  readonly id: RunnerId;
+  readonly id: string;
   /** What the runner's wire can do (`RunnerFacts`). */
   readonly facts: RunnerFacts;
   /** Imports the adapter module and builds a new runner. */
