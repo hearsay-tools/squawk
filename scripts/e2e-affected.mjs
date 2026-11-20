@@ -345,7 +345,7 @@ export function classify(file, { map, graph, changes, partial, boot }) {
  * that would need every spec: that code is new since the map, and a path from a spec into it
  * passes through an edit the map does answer.
  */
-export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map) }) {
+export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles) }) {
   const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
@@ -365,12 +365,13 @@ export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot
 }
 
 /**
- * The spec that shows the server still boots: the shortest spec with complete evidence, by
- * measured duration, then by name. Every spec boots the shared server.
+ * The spec that shows the server still boots: the shortest spec in `specFiles` with complete
+ * evidence, by measured duration, then by name. Every spec boots the shared server. A spec removed
+ * since the map cannot run, so it never counts.
  */
-export function bootSpec(map, durationsMs = {}) {
+export function bootSpec(map, specFiles, durationsMs = {}) {
   const time = spec => durationsMs[posix.basename(spec)] ?? Number.POSITIVE_INFINITY;
-  return map.specs.filter(spec => !map.incomplete.includes(spec))
+  return map.specs.filter(spec => !map.incomplete.includes(spec) && specFiles.includes(spec))
     .sort((a, b) => time(a) - time(b) || a.localeCompare(b))[0] ?? null;
 }
 
@@ -480,7 +481,7 @@ function chooseSpecs(root, run, loaded, specFiles, fork, base) {
   const driftFiles = run('git', ['diff', '--no-renames', '--name-only', '-z', map.commit, fork, '--']).split('\0').filter(Boolean);
   const drift = { files: driftFiles, changes: lineChanges(driftFiles, [fork]) };
   return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift,
-    boot: bootSpec(map, durations(root) ?? {}) });
+    boot: bootSpec(map, specFiles, durations(root) ?? {}) });
 }
 
 export function main(argv) {

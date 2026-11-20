@@ -338,9 +338,21 @@ test('startup and top-level edits select the boot spec, not every spec', () => {
 
 test('the boot spec is the shortest spec with complete evidence', () => {
   const map = sampleMap({ incomplete: [spec('chat-code-fence')] });
-  assert.equal(bootSpec(map, { 'chat-code-fence.e2e.ts': 1, 'smoke.e2e.ts': 5, 'artifact-project-links.e2e.ts': 9 }), spec('smoke'));
-  assert.equal(bootSpec(map), spec('artifact-project-links'));
-  assert.equal(bootSpec(sampleMap({ incomplete: sampleMap().specs })), null);
+  const specFiles = map.specs;
+  assert.equal(bootSpec(map, specFiles, { 'chat-code-fence.e2e.ts': 1, 'smoke.e2e.ts': 5, 'artifact-project-links.e2e.ts': 9 }), spec('smoke'));
+  assert.equal(bootSpec(map, specFiles), spec('artifact-project-links'));
+  assert.equal(bootSpec(sampleMap({ incomplete: sampleMap().specs }), specFiles), null);
+  // A spec removed since the map never boots; with no current spec left, there is no boot spec.
+  assert.equal(bootSpec(map, [spec('artifact-project-links')], { 'smoke.e2e.ts': 1 }), spec('artifact-project-links'));
+  assert.equal(bootSpec(map, [spec('chat-code-fence')]), null);
+  const file = 'packages/cezar/src/boot.ts';
+  const booting = sampleMap({ functions: { [file]: [{ start: 1, end: 9, specs: [], startup: true }, { start: 2, end: 3, specs: [], startup: true }] } });
+  const removed = selectSpecs({ files: [file], map: booting, graph, specFiles: [spec('artifact-project-links')],
+    changes: new Map([[file, [{ start: 2, end: 2 }]]]) });
+  assert.deepEqual(removed.specs, [spec('artifact-project-links')]);
+  const none = selectSpecs({ files: [file], map: { ...booting, incomplete: [spec('artifact-project-links')] }, graph,
+    specFiles: [spec('artifact-project-links')], changes: new Map([[file, [{ start: 2, end: 2 }]]]) });
+  assert.equal(none.all, true);
 });
 
 test('specs added or changed on main after the map run when the branch touches mapped code', () => {
