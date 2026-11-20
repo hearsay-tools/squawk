@@ -12,9 +12,11 @@ reads, so that "every spec" is the answer only when the evidence really says so.
 
 - The PR policy for a full selection. A full selection still runs no spec on the PR, and the
   merge queue still runs every spec (owner decision, 2026-11-20).
-- Narrowing the static rules by hand: type-only imports in the setup scan, the duration JSON
-  files, extra `NO_SPEC` rows. Slice 3 makes most of these unnecessary for code files. Files
-  that are not code keep their current rules.
+- Narrowing the static rules by hand: type-only imports in the setup scan and extra `NO_SPEC`
+  rows. Slice 3 makes most of these unnecessary for code files. Files that are not code keep their
+  current rules, except the duration JSON files (below).
+- Function evidence for the contract: `inline-contract.mjs` bundles it without a source map, so
+  contract edits keep selecting every spec (owner chose option A over B, 2026-11-20).
 - Cockpit (`packages/web/src`) selection. It already works per file.
 
 ## Evidence
@@ -80,23 +82,40 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 
 ### Slice 3: coverage of every process the suite starts (capture, map, selector)
 
-- The capture records coverage, with its owning spec, for every Node process and worker thread
-  the suite starts:
-  - CLI and other children the shared server or a mock starts, not only `mock-*.mjs` children;
-  - worker threads, such as the transcript-facts worker, including source `.ts` entries run
-    through `tsx`;
-  - the Vitest process: setup files and the spec files' Node helpers, with setup evidence kept
-    apart from per-spec evidence.
-- `scriptFunctions` keeps every repository code file, not only `dist/` server files and mocks.
-- The map lists every repository code file that any process loaded (`loaded`), and the roots
-  whose processes the capture covers (`covered`).
-- The selector gets a new rule. A code file under a covered root that exists at the map's commit
-  and that no process loaded selects **no spec**: "no process the suite starts loads it". Today
-  it selects every spec.
-- Vitest-side setup code follows the slice 2 rules. Setup functions that ran select every spec,
-  and top-level setup code selects the boot spec.
-- The static setup scan and the `.ai/scripts/` and root `scripts/` rules remain only for files
-  that are not code (JSON, shell, PowerShell).
+- Every Node process the suite starts, and its worker threads, writes `NODE_V8_COVERAGE` into
+  `logs/loaded/`, a directory marked by `capture.json`. The boot step (it builds the server) and the
+  Vitest step set it. The shared server
+  passes it to the processes it starts. CLI children, agents and `tsx` workers inherit it.
+  Mock processes keep their per-spec directory.
+- Each marked process records `started-<pid>.json`, and writes its coverage on SIGTERM as well as
+  on exit. Each of its threads also appends every module it loads through Node's loader to
+  `loads-<pid>-<thread>.txt` (`module.registerHooks`), so a record survives SIGKILL and
+  `process.execve`. Measured in the first slice 3 map run: 60 mock processes from skill and
+  model-catalog probes, which the probe ends with SIGKILL, and TypeScript 7's `tsc.js`, which
+  `execve`s the native compiler, left no coverage. A process counts as recorded when it left
+  coverage or a main-thread load log. The preload also wraps `node:vm` and logs every file name
+  code is evaluated under (Vitest's module runner evaluates test files and helpers that way, and
+  its fork pool follows SIGTERM with SIGKILL after 500 ms). Code evaluated without a file name
+  names no file in coverage either. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
+- The map gets `nodeLoaded`: every repository code file in any coverage report. A dist file
+  counts as the sources in its source map. The contract bundle, which `inline-contract.mjs` builds
+  without a map, counts as every contract source. A copy in the served test project counts as its
+  repository file. The map includes `nodeLoaded` only when every started process left coverage and
+  every other generated file a process loaded has a source map. Otherwise the merge log names the
+  cause, and the selector keeps today's rules.
+- The selector gets a new rule. A code file under `packages/cezar/{src,scripts}`, `packages/contract/src`,
+  `packages/web/e2e`, `.ai/scripts` or `scripts/` selects **no spec** when it existed at the map's
+  commit and is absent from `nodeLoaded`, `sources` and `functions`: "no process the browser suite
+  starts loads it". Such a file still selects the specs that load it now, by the static spec scan,
+  and the incomplete specs. The rule counts as mapped, so drift adds its specs.
+- What the Vitest config imports (its import closure) still selects every spec, before this rule:
+  Vite bundles it into a temporary file, so no coverage report names it. The rest of the static
+  setup scan (setup files, the reporter and what they reach) loads at run time with real paths, so
+  this rule runs before it, and a type-only import that only the scan reaches selects no spec.
+  Measured: a Vitest fork under the preload writes its coverage on SIGTERM, naming the test file
+  and its helper by `file://` path; the config file appears in no report.
+- Loaded code keeps today's rules.
+  Files that are not code (JSON, shell, PowerShell) also keep today's rules.
 
 ## Case tables
 
@@ -110,10 +129,14 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Line inside a function that no spec ran | No spec | No spec (no change) |
 | Line in the module's top-level code, an import above the first recorded line, or a range across two functions | Every spec, or all 97 through startup credit | Boot spec + specs that ran any function of the file |
 | Any startup edit when no spec has complete evidence | Every spec | Every spec (no boot spec) |
-| File no process loaded, existed at the map commit | Every spec | No spec |
+| Code file no process loaded, existed at the map commit, every process left coverage | Every spec | Specs that load it now + incomplete specs; none when both are empty |
+| The same, but some process left no coverage | Every spec | Every spec (no `nodeLoaded` in the map) |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
-| Vitest setup function that ran | Every spec (static scan) | Every spec |
-| Vitest setup module that the static scan reaches but no process loaded (for example a type-only import) | Every spec | No spec |
+| File the Vitest config imports | Every spec | Every spec (Vite bundles it) |
+| Code file the static setup scan reaches and a process loaded | Every spec | Boot spec + its own answer (function evidence, readers); every spec when its own answer is every spec (owner decision A, 2026-11-20) |
+| `.github/test-durations.json`, `.github/cockpit-test-durations.json` | Every spec (setup reads them) | No spec: they only order and shard the specs (owner decision, 2026-11-20) |
+| Code file the static setup scan reaches but no process loaded (a type-only import, say) | Every spec | Specs that load it now + incomplete specs |
+| The same, after `main` changed a file the setup scan reaches since the map (drift) | Every spec | Every spec |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |
 
 ### Map selection (slice 1)

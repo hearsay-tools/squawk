@@ -1,19 +1,80 @@
 // Loaded only by the spec-map workflow through NODE_OPTIONS. No application imports this hook.
 import childProcess from 'node:child_process';
-import { syncBuiltinESMExports } from 'node:module';
+import vm from 'node:vm';
+import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { Session } from 'node:inspector';
 import { createServer } from 'node:net';
-import { mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { flushCoverage as takeCoverage } from './node-coverage.mjs';
-import { isMainThread } from 'node:worker_threads';
+import { isMainThread, threadId } from 'node:worker_threads';
 
 const root = process.env.E2E_SPEC_MAP_NODE_DIR;
 const owner = process.env.E2E_SPEC_MAP_OWNER;
 const isServer = /[/\\]dist[/\\]index\.js$/.test(process.argv[1] ?? '');
+// Every process the suite starts writes NODE_V8_COVERAGE into a directory marked by `capture.json`,
+// so the map can show which files no process loaded. The shared server's descendants inherit it.
+export const LOADED_MARKER = 'capture.json';
+if (isMainThread && root && isServer && existsSync(join(root, 'loaded', LOADED_MARKER))) {
+  process.env.NODE_V8_COVERAGE ??= join(root, 'loaded');
+}
+const loaded = process.env.NODE_V8_COVERAGE;
+const capturing = Boolean(loaded && existsSync(join(loaded, LOADED_MARKER)));
+if (capturing) logLoads(loaded);
+if (isMainThread && !isServer && !owner && capturing) recordProcess(loaded);
+
+/**
+ * Appends each module this thread loads to `loads-<pid>-<thread>.txt` as it loads, so the record
+ * survives SIGKILL and `process.execve`, which write no coverage: what Node's loader loads, and
+ * every file name code is evaluated under through `node:vm`, as Vitest's module runner does.
+ * Code evaluated without a file name names no file in the coverage either.
+ */
+function logLoads(directory) {
+  const log = join(directory, `loads-${process.pid}-${threadId}.txt`);
+  // Written before anything loads: an empty log records a process that loaded no repository file,
+  // such as TypeScript 7's tsc.js, which execve()s the native compiler.
+  appendFileSync(log, '');
+  const record = name => {
+    if (typeof name !== 'string' || name.includes('/node_modules/')) return;
+    if (name.startsWith('file:') || name.startsWith('/')) appendFileSync(log, `${name}\n`);
+  };
+  const filename = options => typeof options === 'string' ? options : options?.filename;
+  registerHooks({
+    load(url, context, nextLoad) {
+      record(url);
+      return nextLoad(url, context);
+    },
+  });
+  const { Script, compileFunction, runInThisContext, runInContext, runInNewContext } = vm;
+  vm.Script = class extends Script {
+    constructor(code, options) { record(filename(options)); super(code, options); }
+  };
+  vm.compileFunction = function(code, params, options) { record(filename(options)); return compileFunction.apply(this, arguments); };
+  vm.runInThisContext = function(code, options) { record(filename(options)); return runInThisContext.apply(this, arguments); };
+  vm.runInContext = function(code, context, options) { record(filename(options)); return runInContext.apply(this, arguments); };
+  vm.runInNewContext = function(code, context, options) { record(filename(options)); return runInNewContext.apply(this, arguments); };
+  syncBuiltinESMExports();
+}
 if (isMainThread && root && (isServer || owner)) await install(root, owner);
+
+/**
+ * A process that writes its coverage into the capture's loaded directory. `started-<pid>.json`
+ * lets the merge refuse the loaded list when a process left neither coverage nor a load log, and
+ * SIGTERM writes the coverage first: Node writes it only on a normal exit.
+ */
+function recordProcess(directory) {
+  writeRecord(join(directory, `started-${process.pid}.json`), { pid: process.pid, argv: process.argv.slice(1, 3).map(arg => basename(arg)) });
+  function flushSignal() {
+    takeCoverage();
+    if (process.listenerCount('SIGTERM') === 1) {
+      process.removeListener('SIGTERM', flushSignal);
+      process.kill(process.pid, 'SIGTERM');
+    }
+  }
+  process.prependListener('SIGTERM', flushSignal);
+}
 
 async function install(root, owner) {
   mkdirSync(join(root, 'processes'), { recursive: true });

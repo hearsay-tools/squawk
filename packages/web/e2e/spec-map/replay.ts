@@ -23,7 +23,7 @@ function allowed(path: string): boolean {
   if (path === 'results.json') return true
   if (/^(?:server|served|sourcemaps)\//.test(path)) return /\.(?:js|map)$/.test(path)
   if (!path.startsWith('logs/') || /\/(?:processes|servers)\//.test(path)) return false
-  return path.endsWith('.log') || /\/(?:coverage-.*|server-.*|shared-startup-.*|expected|expected-server-\d+|ambiguous-task-.*)\.json$/.test(path)
+  return path.endsWith('.log') || /\/loads-\d+-\d+\.txt$/.test(path) || /\/(?:coverage-.*|server-.*|shared-startup-.*|expected|expected-server-\d+|ambiguous-task-.*|started-\d+|capture)\.json$/.test(path)
 }
 
 function roots(repo: string, capture: string) {
@@ -66,6 +66,9 @@ function relocate(value: unknown, before: string, after: string): unknown {
 
 function replayContent(record: RecordFile, header: Header, repo: string, shard: number): Buffer {
   const bytes = Buffer.from(record.content, 'base64')
+  if (record.path.endsWith('.txt')) {
+    return Buffer.from(bytes.toString().split('\n').map(line => relocate(line, header.repo, repo) as string).join('\n'))
+  }
   if (!/\.(?:json|map)$/.test(record.path)) return bytes
   let data = JSON.parse(bytes.toString())
   if (record.path.endsWith('.map')) {

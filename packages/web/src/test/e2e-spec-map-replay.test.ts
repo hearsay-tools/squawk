@@ -40,6 +40,10 @@ it('rebuilds browser and server evidence from an allowlisted raw archive in a fr
     put(join(capture, 'logs/shared-startup-1.json'), JSON.stringify({ result: [{ url: pathToFileURL(server).href,
       functions: [{ ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }] }] }] }))
     put(join(capture, 'logs/artifact-project-links/node/server-1-0.json'), '{"result":[]}')
+    // A load log names the original checkout; the rebuild reads it from the fresh one.
+    put(join(capture, 'logs/loaded/capture.json'), '{}')
+    put(join(capture, 'logs/loaded/started-5.json'), '{"pid":5}')
+    put(join(capture, 'logs/loaded/loads-5-0.txt'), `${pathToFileURL(server).href}\n`)
     put(join(capture, 'logs/.env'), 'must stay out')
     put(join(capture, 'logs/control.json'), '{"must":"stay out"}')
     const archive = join(root, 'capture.jsonl.gz')
@@ -63,6 +67,7 @@ it('rebuilds browser and server evidence from an allowlisted raw archive in a fr
     // The shared server's boot ran the function; no spec ran it after the boot.
     expect(map.functions['packages/cezar/src/a.ts']).toEqual([{ start: 1, end: 1, specs: [], startup: true }])
     expect(map.sources['packages/web/src/routes/task-thread/markdown.tsx']).toEqual([0])
+    expect(map.nodeLoaded).toEqual(['packages/cezar/src/a.ts'])
     await expect(rebuildCapture([archive], target, out)).rejects.toThrow('fresh generated path')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

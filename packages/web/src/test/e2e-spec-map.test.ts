@@ -9,7 +9,7 @@ import { merge, partial } from '../../e2e/spec-map/build-map'
 import { Bundle, assertSameJavaScript } from '../../e2e/spec-map/bundle'
 import { WORKSPACE_PACKAGES, moduleFacts, resolveImport, type ModuleFacts } from '../../e2e/spec-map/module-graph'
 import {
-  SPEC_STATUSES, buildMap, joinPartials, mapProblems, partialMap, reach, specStatuses,
+  SPEC_STATUSES, buildMap, joinLoaded, joinPartials, mapProblems, partialMap, reach, specStatuses,
   type SpecEvidence, type SpecMap,
 } from '../../e2e/spec-map/spec-map'
 import { captureBrowserArgs, compiledFunctions } from '../../e2e/spec-map/v8-log'
@@ -253,6 +253,21 @@ describe('spec reach', () => {
     expect(Object.keys(joinPartials([shard('a.e2e.ts'), shard('b.e2e.ts')], ['a.e2e.ts', 'b.e2e.ts']))).toEqual(['a.e2e.ts', 'b.e2e.ts'])
     expect(() => joinPartials([shard('a.e2e.ts'), shard('a.e2e.ts')], ['a.e2e.ts'])).toThrow(/two capture shards/)
     expect(() => joinPartials([shard('a.e2e.ts')], ['a.e2e.ts', 'b.e2e.ts'])).toThrow(/no capture shard ran b\.e2e\.ts/)
+  })
+
+  it('lists the loaded files only when every shard recorded them and every process left coverage', () => {
+    // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+    const shard = (nodeLoaded?: string[], unflushed?: string[] | null) => ({ version: 1 as const, specs: {},
+      ...(nodeLoaded ? { nodeLoaded } : {}), ...(unflushed !== undefined ? { unflushed } : {}) })
+    expect(joinLoaded([shard(['b.ts'], []), shard(['a.ts', 'b.ts'], [])])).toEqual({ files: ['b.ts', 'a.ts', 'b.ts'] })
+    expect(joinLoaded([shard(['a.ts'], []), shard()])).toEqual({ problem: 'shard 2 recorded no loaded files' })
+    expect(joinLoaded([shard(['a.ts'], null)])).toEqual({ problem: 'shard 1 had no loaded directory' })
+    expect(joinLoaded([shard(['a.ts'], ['8 (index.js)'])])).toEqual({ problem: 'shard 1 has processes without coverage: 8 (index.js)' })
+    expect(joinLoaded([{ ...shard(['a.ts'], []), unattributed: ['.ai/qa/build/cezar/dist/chunk.js'] }]))
+      .toEqual({ problem: 'shard 1 loaded generated files without a source map: .ai/qa/build/cezar/dist/chunk.js' })
+    const map = buildMap({}, new Map(), 'f'.repeat(40), '', [], ['b.ts', 'a.ts', 'b.ts'])
+    expect(map.nodeLoaded).toEqual(['a.ts', 'b.ts'])
+    expect(buildMap({}, new Map(), 'f'.repeat(40), '')).not.toHaveProperty('nodeLoaded')
   })
 })
 

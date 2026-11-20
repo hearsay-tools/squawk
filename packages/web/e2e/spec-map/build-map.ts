@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util'
 import { Bundle, assertSameJavaScript } from './bundle.ts'
 import { readModuleGraph } from './module-graph.ts'
 import {
-  SPEC_DIR, buildMap, joinPartials, mapProblems, partialMap, specStatuses,
+  SPEC_DIR, buildMap, joinLoaded, joinPartials, mapProblems, partialMap, specStatuses,
   type Expectation, type PartialMap,
 } from './spec-map.ts'
 
@@ -48,6 +48,9 @@ export function partial(args: string[], repoRoot = REPO_ROOT): void {
   write(out, map)
   const withEvidence = Object.values(map.specs).filter((spec) => spec.executed.length > 0).length
   console.log(`spec map: ${withEvidence} of ${statuses.size} specs left V8 evidence`)
+  if (map.nodeLoaded) console.log(`spec map: processes loaded ${map.nodeLoaded.length} repository code files`)
+  if (map.unflushed?.length) console.log(`spec map: processes without coverage: ${map.unflushed.join(', ')}`)
+  if (map.unattributed?.length) console.log(`spec map: generated files without a source map: ${map.unattributed.join(', ')}`)
 }
 
 function expectation(text: string): Expectation {
@@ -77,7 +80,10 @@ export function merge(args: string[], repoRoot = REPO_ROOT): void {
   const evidence = joinPartials(shards, specFiles)
   const sources = new Set(Object.values(evidence).flatMap((spec) => spec.loaded))
   const startup = shards.flatMap((shard) => shard.startup ?? [])
-  const map = buildMap(evidence, readModuleGraph(repoRoot, sources), commit, new Date().toISOString(), startup)
+  const loaded = joinLoaded(shards)
+  if ('problem' in loaded) console.log(`spec map: no loaded file list, so unloaded files select every spec: ${loaded.problem}`)
+  const map = buildMap(evidence, readModuleGraph(repoRoot, sources), commit, new Date().toISOString(), startup,
+    'files' in loaded ? loaded.files : undefined)
   const problems = mapProblems(map, (values.expect ?? []).map(expectation), MIN_EVIDENCE)
   if (problems.length > 0) throw new Error(`the spec map is not published:\n  ${problems.join('\n  ')}`)
   write(out, map)

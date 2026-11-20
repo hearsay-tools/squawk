@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
-import { nodeCaptureComplete, nodeEvidence, scriptFunctions, startupEvidence } from '../../e2e/spec-map/node-evidence'
+import { nodeCaptureComplete, nodeEvidence, nodeLoaded, scriptFunctions, startupEvidence, unflushedProcesses } from '../../e2e/spec-map/node-evidence'
 import { buildMap, mapProblems } from '../../e2e/spec-map/spec-map'
 
 it('keeps executed and unexecuted mock functions separate in the published map', () => {
@@ -115,4 +115,59 @@ it('keeps the shared server boot apart from the specs that ran a function', () =
     { start: 5, end: 9, specs: [0], startup: true },
     { start: 20, end: 22, specs: [], startup: true },
   ])
+})
+
+it('lists the repository code files any process loaded, and the processes that left no coverage', () => {
+  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+  const root = mkdtempSync(join(tmpdir(), 'cez-node-loaded-'))
+  try {
+    const put = (path: string, text = '') => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
+    put('.ai/qa/build/cezar/dist/a.js')
+    put('.ai/qa/build/cezar/dist/a.js.map', JSON.stringify({ version: 3, sources: ['../../../../../packages/cezar/src/a.ts', '../../../../../node_modules/x/y.ts'] }))
+    put('packages/web/e2e/environment.ts')
+    put('scripts/readers.mjs')
+    put('node_modules/vitest/index.js')
+    put('packages/cezar/src/data.json')
+    const logs = join(root, 'logs')
+    const report = (path: string, urls: string[]) => put(path, JSON.stringify({ result: urls.map(url => ({ url, functions: [] })) }))
+    report('logs/shared-startup-1.json', [pathToFileURL(join(root, '.ai/qa/build/cezar/dist/a.js')).href, 'node:fs'])
+    report('logs/loaded/coverage-7-1-0.json', [`${pathToFileURL(join(root, 'packages/web/e2e/environment.ts')).href}?v=3`,
+      pathToFileURL(join(root, 'node_modules/vitest/index.js')).href, pathToFileURL(join(root, 'packages/cezar/src/data.json')).href,
+      pathToFileURL(join(root, 'gone.ts')).href])
+    report('logs/smoke/node/tasks/t/1/coverage-9-1-0.json', [join(root, 'scripts/readers.mjs')])
+    expect(nodeLoaded(logs, root)).toEqual({ files: ['packages/cezar/src/a.ts', 'packages/web/e2e/environment.ts', 'scripts/readers.mjs'], unattributed: [] })
+
+    // The contract bundle stands for every contract source; a served copy for its repository file;
+    // a generated file without a source map names no source.
+    put('.ai/qa/build/cezar/dist/contract/index.js')
+    put('packages/contract/src/index.ts')
+    put('packages/contract/src/workflow-file.ts')
+    put('.ai/qa/served/checkout/.ai/cezar/worktrees/t1/scripts/served.mjs')
+    put('.ai/qa/build/cezar/dist/chunk.js')
+    put('node_modules/.pnpm/x/dist/y.js')
+    report('logs/loaded/coverage-8-1-0.json', [pathToFileURL(join(root, '.ai/qa/build/cezar/dist/contract/index.js')).href,
+      pathToFileURL(join(root, '.ai/qa/served/checkout/.ai/cezar/worktrees/t1/scripts/served.mjs')).href,
+      pathToFileURL(join(root, 'node_modules/.pnpm/x/dist/y.js')).href])
+    expect(nodeLoaded(logs, root)).toEqual({ files: ['packages/cezar/src/a.ts', 'packages/contract/src/index.ts',
+      'packages/contract/src/workflow-file.ts', 'packages/web/e2e/environment.ts', 'scripts/readers.mjs', 'scripts/served.mjs'], unattributed: [] })
+    report('logs/loaded/coverage-9-1-0.json', [pathToFileURL(join(root, '.ai/qa/build/cezar/dist/chunk.js')).href])
+    expect(nodeLoaded(logs, root).unattributed).toEqual(['.ai/qa/build/cezar/dist/chunk.js'])
+
+    expect(unflushedProcesses(logs)).toBeNull()
+    put('logs/loaded/capture.json', '{}')
+    expect(unflushedProcesses(logs)).toEqual([])
+    put('logs/loaded/started-7.json', JSON.stringify({ pid: 7, argv: ['vitest.mjs', 'run'] }))
+    put('logs/loaded/started-10.json', JSON.stringify({ pid: 10, argv: ['index.js'] }))
+    expect(unflushedProcesses(logs)).toEqual(['10 (index.js)'])
+    // A process killed before it wrote coverage still left the log of the modules it loaded.
+    put('logs/loaded/loads-10-0.txt', `${pathToFileURL(join(root, 'packages/cezar/scripts/mock-claude.mjs')).href}\n`)
+    put('packages/cezar/scripts/mock-claude.mjs')
+    expect(unflushedProcesses(logs)).toEqual([])
+    put('logs/loaded/loads-10-1.txt', `${pathToFileURL(join(root, 'scripts/worker-only.mjs')).href}\n`)
+    put('scripts/worker-only.mjs')
+    // A file evaluated through node:vm is logged by its plain path.
+    put('scripts/evaluated.mjs')
+    put('logs/loaded/loads-10-0.txt', `${pathToFileURL(join(root, 'packages/cezar/scripts/mock-claude.mjs')).href}\n${join(root, 'scripts/evaluated.mjs')}\n`)
+    expect(nodeLoaded(logs, root).files).toEqual(expect.arrayContaining(['packages/cezar/scripts/mock-claude.mjs', 'scripts/evaluated.mjs', 'scripts/worker-only.mjs']))
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

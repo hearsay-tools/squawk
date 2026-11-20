@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import type { Bundle } from './bundle.ts'
 import type { ModuleFacts } from './module-graph.ts'
 import { compiledFunctions } from './v8-log.ts'
-import { nodeCaptureComplete, nodeEvidence, startupEvidence, type FunctionEvidence } from './node-evidence.ts'
+import { nodeCaptureComplete, nodeEvidence, nodeLoaded, startupEvidence, unflushedProcesses, type FunctionEvidence } from './node-evidence.ts'
 
 /**
  * The spec map: each cockpit source file and the browser specs that run it
@@ -34,6 +34,12 @@ export interface PartialMap {
   specs: Record<string, SpecEvidence>
   /** Functions the shard's shared server ran while it booted, before any spec began. */
   startup?: FunctionEvidence[]
+  /** Repository code files any process of the shard loaded. */
+  nodeLoaded?: string[]
+  /** Generated files without a source map that a process loaded. */
+  unattributed?: string[]
+  /** Processes that left no coverage; null when the shard had no loaded directory. */
+  unflushed?: string[] | null
 }
 
 /** One recorded server or mock function: the specs that ran it, and whether the shared server's boot ran it. */
@@ -52,6 +58,12 @@ export interface SpecMap {
   /** Each repository file in the bundle and the specs that reach it; `[]` when none does. */
   sources: Record<string, number[]>
   functions?: Record<string, FunctionEntry[]>
+  /**
+   * Every repository code file a process the suite started loaded, present only when every
+   * process left its coverage. A code file absent from it, from `sources` and from `functions`
+   * was not loaded by any spec.
+   */
+  nodeLoaded?: string[]
 }
 
 /** Spec statuses from a Vitest JSON report, keyed by repository path. */
@@ -96,7 +108,13 @@ export function partialMap(logDir: string, statuses: Map<string, SpecStatus>, bu
       loaded: [...new Set([...browser.loaded, ...functions.map((fn) => fn.source)])],
     }
   }
-  return { version: 1, specs, ...(nodeLogs && repoRoot ? { startup: startupEvidence(nodeLogs, repoRoot) } : {}) }
+  const loaded = nodeLogs && repoRoot ? nodeLoaded(nodeLogs, repoRoot) : undefined
+  return { version: 1, specs, ...(nodeLogs && repoRoot && loaded ? {
+    startup: startupEvidence(nodeLogs, repoRoot),
+    nodeLoaded: loaded.files,
+    unattributed: loaded.unattributed,
+    unflushed: unflushedProcesses(nodeLogs),
+  } : {}) }
 }
 
 /** Joins shard maps; a spec in two shards or a spec no shard ran is an error. */
@@ -169,6 +187,7 @@ export function buildMap(
   commit: string,
   createdAt: string,
   startup: FunctionEvidence[] = [],
+  loaded?: string[],
 ): SpecMap {
   const specs = Object.keys(evidence).sort()
   const sources: Record<string, number[]> = {}
@@ -190,7 +209,21 @@ export function buildMap(
     }
   })
   for (const fn of startup) entryOf(fn).startup = true
-  return { version: 2, commit, createdAt, specs, incomplete, sources, ...(Object.keys(functions).length ? { functions } : {}) }
+  return { version: 2, commit, createdAt, specs, incomplete, sources, ...(Object.keys(functions).length ? { functions } : {}),
+    ...(loaded ? { nodeLoaded: [...new Set(loaded)].sort() } : {}) }
+}
+
+/** The shards' loaded files, or why the map cannot say which files no process loaded. */
+export function joinLoaded(partials: PartialMap[]): { files: string[] } | { problem: string } {
+  const files: string[] = []
+  for (const [index, partial] of partials.entries()) {
+    if (!partial.nodeLoaded || partial.unflushed === undefined) return { problem: `shard ${index + 1} recorded no loaded files` }
+    if (partial.unflushed === null) return { problem: `shard ${index + 1} had no loaded directory` }
+    if (partial.unflushed.length > 0) return { problem: `shard ${index + 1} has processes without coverage: ${partial.unflushed.join(', ')}` }
+    if (partial.unattributed?.length) return { problem: `shard ${index + 1} loaded generated files without a source map: ${partial.unattributed.join(', ')}` }
+    files.push(...partial.nodeLoaded)
+  }
+  return { files }
 }
 
 export interface Expectation {

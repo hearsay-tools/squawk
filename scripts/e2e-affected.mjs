@@ -48,7 +48,22 @@ const SPEC_PATH = /^packages\/web\/e2e\/[^/]+\.e2e\.ts$/;
 const isIndexList = (value, size) => Array.isArray(value)
   && value.every(index => Number.isInteger(index) && index >= 0 && index < size);
 
-/** Why `value` is not a version 1 spec map, or null when it is one. */
+const badEntry = (entry, size) => !Number.isInteger(entry.start) || entry.start < 1 || !Number.isInteger(entry.end)
+  || entry.end < entry.start || !isIndexList(entry.specs, size) || (entry.startup !== undefined && entry.startup !== true);
+
+/** Why the map's optional `functions` and `nodeLoaded` are invalid, or null when they are valid. */
+function nodeProblem(value) {
+  if (value.nodeLoaded !== undefined && (!Array.isArray(value.nodeLoaded) || value.nodeLoaded.some(file => typeof file !== 'string'))) {
+    return 'its loaded files are not a list of paths';
+  }
+  if (value.functions === undefined) return null;
+  if (!value.functions || typeof value.functions !== 'object') return 'its functions are not an object';
+  const bad = Object.entries(value.functions).find(([, entries]) => !Array.isArray(entries)
+    || entries.some(entry => badEntry(entry, value.specs.length)));
+  return bad ? `its function ranges for ${bad[0]} are invalid` : null;
+}
+
+/** Why `value` is not a version 2 spec map, or null when it is one. */
 export function mapProblem(value) {
   if (value?.version !== 2) return 'its version is not 2';
   if (typeof value.commit !== 'string' || !/^[0-9a-f]{40}$/.test(value.commit)) return 'it names no full commit id';
@@ -59,17 +74,7 @@ export function mapProblem(value) {
   if (typeof value.sources !== 'object' || value.sources === null) return 'it has no sources';
   const bad = Object.entries(value.sources).find(([, indexes]) => !isIndexList(indexes, value.specs.length));
   if (bad) return `its entry for ${bad[0]} is not a list of spec indexes`;
-  if (value.functions !== undefined) {
-    if (!value.functions || typeof value.functions !== 'object') return 'its functions are not an object';
-    for (const [file, entries] of Object.entries(value.functions)) {
-      if (!Array.isArray(entries) || entries.some(entry => !Number.isInteger(entry.start) || entry.start < 1
-        || !Number.isInteger(entry.end) || entry.end < entry.start || !isIndexList(entry.specs, value.specs.length)
-        || (entry.startup !== undefined && entry.startup !== true))) {
-        return `its function ranges for ${file} are invalid`;
-      }
-    }
-  }
-  return null;
+  return nodeProblem(value);
 }
 
 export function readMap(file) {
@@ -200,14 +205,45 @@ function closure(root, start, cache) {
   return reached;
 }
 
+/** The module specifiers a code file imports statically or with a literal `import()` or `require()`. */
+export function importSpecifiers(text) {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+  const patterns = [
+    /\b(?:import|export)\s[^'"`;]*?\bfrom\s*(['"])([^'"\n]+)\1/g,
+    /\bimport\s*(['"])([^'"\n]+)\1/g,
+    /\b(?:import|require)\(\s*(['"])([^'"\n]+)\1\s*\)/g,
+  ];
+  return patterns.flatMap(pattern => [...code.matchAll(pattern)].map(match => match[2]));
+}
+
+/**
+ * The files Vite bundles into the configuration it loads: `start` and what it imports, transitively.
+ * Their code runs from a temporary bundle, so no coverage report names them.
+ */
+function importClosure(root, start) {
+  const reached = new Set();
+  const pending = [start];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (reached.has(file)) continue;
+    reached.add(file);
+    if (!CODE.test(file) || !existsSync(join(root, file))) continue;
+    const imports = importSpecifiers(readFileSync(join(root, file), 'utf8'));
+    pending.push(...imports.map(literal => resolveLiteral(root, file, literal)).filter(file => file && !file.endsWith('/')));
+  }
+  return reached;
+}
+
 /**
  * What the browser suite reads in Node: `setup` is what its configuration loads for every spec,
- * `specs` what each spec loads itself, the spec file included.
+ * `config` the part of it Vite bundles with the configuration file, and `specs` what each spec
+ * loads itself, the spec file included.
  */
 export function referenceGraph(root, specFiles) {
   const cache = new Map();
   return {
     setup: closure(root, `${SPEC_DIR}/vitest.config.ts`, cache),
+    config: importClosure(root, `${SPEC_DIR}/vitest.config.ts`),
     specs: new Map(specFiles.map(spec => [spec, closure(root, spec, cache)])),
   };
 }
@@ -240,7 +276,38 @@ export const NO_SPEC = [
   [/^squeal\.config\.json$/, "Squeal's configuration, which no spec or server reads"],
 ];
 
+// Files the suite setup reads only to order and shard the specs: a change reorders the run, and
+// any spec order must pass (owner decision, 2026-11-20).
+export const ORDER_ONLY = [
+  [/^\.github\/(?:cockpit-)?test-durations\.json$/, 'measured durations, which only order and shard the specs'],
+];
+
+// Code that only a Node process can load, so the map's `nodeLoaded` list answers for it. Cockpit
+// and api-client sources are bundled: the browser evidence in `sources` answers for those.
+const NODE_CODE = /^(?:packages\/cezar\/(?:src|scripts)\/|packages\/contract\/src\/|packages\/web\/e2e\/|\.ai\/scripts\/|scripts\/).+\.(?:[cm]?[jt]s|tsx|jsx)$/;
+
+/**
+ * True when the map shows that no process the suite started loaded `file`. Only a file that
+ * existed at the map's commit counts: a new file has no evidence either way.
+ */
+export function unloaded(file, map, atMap) {
+  return Array.isArray(map.nodeLoaded) && NODE_CODE.test(file) && atMap?.has(file) === true
+    && !map.nodeLoaded.includes(file) && map.sources[file] === undefined && map.functions?.[file] === undefined;
+}
+
 const none = reason => ({ specs: [], reason });
+
+/**
+ * A file no process loaded at the map's commit: the specs that load it now, and the specs whose
+ * evidence is incomplete, which may have loaded it unrecorded. Mapped, so main's later changes
+ * that may load it now (drift) still add their specs.
+ */
+function notLoaded(map, readers) {
+  const specs = [...new Set([...readers, ...map.incomplete])];
+  return { specs, mapped: true, reason: specs.length > 0
+    ? 'no process the browser suite started loaded it; the specs that load it now or have incomplete evidence'
+    : 'no process the browser suite starts loads it' };
+}
 const every = reason => ({ specs: null, reason });
 
 function mappedSpecs(file, map, readers) {
@@ -318,10 +385,8 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes, partial, boot }) {
-  if (isDocsPath(file)) return none('documentation');
-  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
-  const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
+/** The specs one changed file selects by the static rules and the function evidence. */
+function ruleSpecs(file, { map, changes, partial, boot }, readers) {
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
@@ -332,6 +397,51 @@ export function classify(file, { map, graph, changes, partial, boot }) {
   const unread = NO_SPEC.find(([pattern]) => pattern.test(file));
   if (unread) return readers.length > 0 ? { specs: readers, reason: 'the specs that load it' } : none(unread[1]);
   return every(EVERY_SPEC.find(([pattern]) => pattern.test(file))[1]);
+}
+
+/**
+ * For a file no process the suite started loaded: an answer of every spec narrows to the specs that
+ * load it now and the incomplete specs, and a list adds the incomplete specs; an answer of no spec
+ * (a unit test, a reviewed path) stays. The evidence that it was unloaded is the map's, so the
+ * answer counts as mapped and main's later changes (drift) add their specs.
+ */
+function narrowUnloaded(result, map, readers) {
+  if (result.specs !== null && result.specs.length === 0) return result;
+  const narrowed = notLoaded(map, readers);
+  return result.specs === null ? narrowed : { ...result, specs: [...new Set([...result.specs, ...narrowed.specs])], mapped: true };
+}
+
+/**
+ * Code the suite setup loads runs once before any spec, so a break fails every spec and any one
+ * spec shows it: the boot spec joins the file's own answer (owner decision, 2026-11-20).
+ */
+function withSetupBoot(result, boot) {
+  if (result.specs === null) return result;
+  if (!boot) return every('the browser suite setup loads it, and no spec has complete evidence to show setup still runs');
+  return { ...result, specs: [...new Set([...result.specs, boot])],
+    reason: `${result.reason}, and the boot spec: the browser suite setup loads it` };
+}
+
+/** The specs one changed file selects: a list, or null for every spec, with the reason. */
+export function classify(file, context) {
+  const { map, graph, atMap, boot, setupChanged = false } = context;
+  if (isDocsPath(file)) return none('documentation');
+  const order = ORDER_ONLY.find(([pattern]) => pattern.test(file));
+  if (order) return none(order[1]);
+  // Vite bundles the Vitest config and what it imports into a temporary file, so no coverage
+  // report names them.
+  if (graph.config?.has(file)) return every('the browser suite configuration imports it');
+  const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
+  const result = ruleSpecs(file, context, readers);
+  const setup = reaches(graph.setup, file);
+  if (unloaded(file, map, atMap)) {
+    // A setup main changed after the map may load what the map saw no process load.
+    if (setup && setupChanged) return every('the browser suite setup loads it, and main changed the setup after the map');
+    return narrowUnloaded(result, map, readers);
+  }
+  if (!setup) return result;
+  // A data file the setup reads (a fixture, say) carries no evidence of what reads it.
+  return CODE.test(file) ? withSetupBoot(result, boot) : every('the browser suite setup loads it');
 }
 
 /**
@@ -346,13 +456,14 @@ export function classify(file, { map, graph, changes, partial, boot }) {
  * that would need every spec: that code is new since the map, and a path from a spec into it
  * passes through an edit the map does answer.
  */
-export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles) }) {
-  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot }) }));
+export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles), atMap }) {
+  const setupChanged = (drift?.files ?? []).some(file => reaches(graph.setup, file));
+  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot, atMap, setupChanged }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
-    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot }) }))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot, atMap, setupChanged }) }))
     .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
   if (mapped) {
@@ -481,8 +592,9 @@ function chooseSpecs(root, run, loaded, specFiles, fork, base) {
   };
   const driftFiles = run('git', ['diff', '--no-renames', '--name-only', '-z', map.commit, fork, '--']).split('\0').filter(Boolean);
   const drift = { files: driftFiles, changes: lineChanges(driftFiles, [fork]) };
+  const atMap = new Set(run('git', ['ls-tree', '-r', '--name-only', '-z', map.commit]).split('\0').filter(Boolean));
   return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift,
-    boot: bootSpec(map, specFiles, durations(root) ?? {}) });
+    boot: bootSpec(map, specFiles, durations(root) ?? {}), atMap });
 }
 
 export function main(argv) {

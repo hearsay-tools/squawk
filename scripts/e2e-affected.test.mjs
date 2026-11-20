@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import {
-  bootSpec, changedLines, classify, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
+  bootSpec, changedLines, classify, importSpecifiers, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
 } from './e2e-affected.mjs';
 
 // hearsay-tools/cezarion#1816: npm run test:e2e:affected chooses browser specs from the spec map.
@@ -128,6 +128,20 @@ test('the map comes from the newest run at or before the fork point, never from 
     /^no spec map: no successful e2e-spec-map\.yml run on main maps the fork point or an earlier commit$/);
 });
 
+test('import specifiers: static, re-exported, side-effect and literal dynamic imports, never comments', () => {
+  const text = [
+    "import { a } from './a.ts'",
+    "import type { B } from './b.ts'",
+    "export { c } from '../c.mjs'",
+    "import './side-effect.mjs'",
+    "const d = await import('./d.ts')",
+    "const e = require('./e.cjs')",
+    "// import { x } from './commented.ts'",
+    "const path = resolve(import.meta.dirname, 'environment.ts')",
+  ].join('\n');
+  assert.deepEqual(importSpecifiers(text).sort(), ['../c.mjs', './a.ts', './b.ts', './d.ts', './e.cjs', './side-effect.mjs']);
+});
+
 test('string literals: imports and spec-relative paths, never comments', () => {
   const text = [
     "import { browser } from './agent-browser' // the seam's 'helper'",
@@ -178,6 +192,8 @@ test('the reference graph splits what the suite setup loads from what each spec 
     '.github/scripts/seq.mjs', 'packages/web/e2e/agent-browser.ts', 'packages/web/e2e/environment.ts',
     'packages/web/e2e/failure-setup.ts', 'packages/web/e2e/vitest.config.ts',
   ]);
+  // Only what the config imports is bundled with it; setup files load at run time.
+  assert.deepEqual([...graph.config].sort(), ['.github/scripts/seq.mjs', 'packages/web/e2e/vitest.config.ts']);
   assert.deepEqual([...graph.specs.get(spec('a'))].sort(), [spec('a'), 'packages/web/e2e/fixtures/run.ndjson', 'packages/web/e2e/poll.ts']);
   assert.deepEqual([...graph.specs.get(spec('b'))].sort(), [spec('b'), 'packages/web/src/lib/cn.ts', 'packages/web/src/thing.ts']);
 });
@@ -237,6 +253,90 @@ test('each kind of changed file selects its specs, none, or every spec', () => {
     const result = choose(file);
     assert.deepEqual(result.specs === null ? null : [...result.specs].sort(), specs, file);
     assert.ok(result.reason, file);
+  }
+});
+
+test('a code file no process loaded selects no spec when the map lists every loaded file', () => {
+  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+  const map = sampleMap({ nodeLoaded: ['packages/cezar/src/server/server.ts', 'packages/web/e2e/agent-browser.ts'] });
+  const atMap = new Set(['packages/cezar/src/server/server.ts', 'packages/cezar/src/delegation/owned-workspace-release.ts',
+    'packages/web/e2e/agent-browser.ts', '.github/scripts/cockpit-test-sequencer.mjs', 'packages/contract/src/runs.ts',
+    '.ai/scripts/probe-startup.ts', 'scripts/readers.mjs', '.ai/scripts/test-env-up.sh', 'packages/cezar/src/file-length.baseline.json',
+    'packages/web/src/lib/unused.ts']);
+  const pick = (file, chosenMap = map) => classify(file, { map: chosenMap, graph, atMap }).specs;
+  for (const file of ['packages/cezar/src/delegation/owned-workspace-release.ts', 'packages/contract/src/runs.ts',
+    '.ai/scripts/probe-startup.ts', 'scripts/readers.mjs']) {
+    assert.deepEqual(pick(file), [], file);
+    assert.match(classify(file, { map, graph, atMap }).reason, /no process the browser suite starts loads it/);
+  }
+  // .github/ is outside the covered roots: the suite setup still selects every spec for it.
+  assert.equal(pick('.github/scripts/cockpit-test-sequencer.mjs'), null);
+  // A file the suite setup reaches by a literal but no process loaded (a type-only import, say)
+  // selects no spec. What the Vitest config imports still selects every spec: Vite bundles it into
+  // a temporary file, so no coverage report names it.
+  const definition = 'packages/cezar/src/core/runner-definition.ts';
+  const withSetup = { ...graph, setup: new Set([...graph.setup, definition, 'scripts/check-workspace-resolution.mjs']),
+    config: new Set(['packages/web/e2e/vitest.config.ts', 'scripts/check-workspace-resolution.mjs']) };
+  const both = new Set([definition, 'scripts/check-workspace-resolution.mjs']);
+  assert.deepEqual(classify(definition, { map, graph: withSetup, atMap: both }).specs, []);
+  assert.equal(classify('scripts/check-workspace-resolution.mjs', { map, graph: withSetup, atMap: both }).specs, null);
+  assert.equal(classify(definition, { map: sampleMap({ nodeLoaded: [definition] }), graph: withSetup, atMap: both }).specs, null);
+  // When main changed the suite setup after the map, the setup may load it now: every spec.
+  const setupDrift = selectSpecs({ files: [definition], map, graph: withSetup, specFiles: map.specs, atMap: both,
+    drift: { files: ['packages/web/e2e/vitest.config.ts'], changes: new Map() } });
+  assert.equal(setupDrift.all, true);
+  assert.match(setupDrift.reason, /runner-definition\.ts needs every spec \(the browser suite setup loads it, and main changed the setup after the map\)/);
+  // A spec that loads the file now, and the specs with incomplete evidence, still run.
+  assert.deepEqual(classify('packages/web/e2e/poll.ts', { map, graph, atMap: new Set(['packages/web/e2e/poll.ts']) }).specs,
+    [spec('artifact-project-links')]);
+  const incomplete = sampleMap({ nodeLoaded: [], incomplete: [spec('smoke')] });
+  assert.deepEqual(classify('scripts/readers.mjs', { map: incomplete, graph, atMap }).specs, [spec('smoke')]);
+  // Main may have loaded the file since the map: the rule counts as mapped, so drift adds its specs.
+  const drifted = selectSpecs({ files: ['scripts/readers.mjs'], map: { ...map, sources: { ...map.sources, 'packages/web/src/App.tsx': [2] } },
+    graph, specFiles: map.specs, atMap, drift: { files: ['packages/web/src/App.tsx'], changes: new Map() } });
+  assert.deepEqual(drifted.specs, [spec('smoke')]);
+  // Loaded files, new files, files that are not code and maps without the list keep the other rules.
+  assert.equal(pick('packages/cezar/src/server/server.ts'), null);
+  assert.equal(pick('packages/web/e2e/agent-browser.ts'), null);
+  assert.equal(pick('packages/cezar/src/delegation/new-file.ts'), null);
+  assert.equal(pick('.ai/scripts/test-env-up.sh'), null);
+  assert.equal(pick('packages/cezar/src/file-length.baseline.json'), null);
+  assert.equal(pick('packages/cezar/src/delegation/owned-workspace-release.ts', sampleMap()), null);
+  // Cockpit sources keep their browser evidence.
+  assert.deepEqual(pick('packages/web/src/lib/unused.ts'), []);
+  // The rule only narrows an answer of every spec: unit tests and reviewed no-spec paths stay at
+  // none, even with incomplete specs (replay of hearsay-tools/squawk#3961 and hearsay-tools/squawk#3954).
+  const withIncomplete = sampleMap({ nodeLoaded: [], incomplete: [spec('smoke')] });
+  const unitAtMap = new Set(['packages/cezar/src/workflows/process-waits.test.ts', 'packages/cezar/src/lint/rule.ts']);
+  assert.deepEqual(classify('packages/cezar/src/workflows/process-waits.test.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
+  assert.deepEqual(classify('packages/cezar/src/lint/rule.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
+  // A helper a spec loads now keeps its readers, adds the incomplete specs and counts as mapped.
+  const helper = classify('packages/web/e2e/poll.ts', { map: withIncomplete, graph, atMap: new Set(['packages/web/e2e/poll.ts']) });
+  assert.deepEqual(helper.specs, [spec('artifact-project-links'), spec('smoke')]);
+  assert.equal(helper.mapped, true);
+  assert.match(mapProblem(sampleMap({ nodeLoaded: [3] })), /loaded files/);
+  assert.match(mapProblem(sampleMap({ nodeLoaded: 'x' })), /loaded files/);
+});
+
+test('code the suite setup loads selects the boot spec and its own answer; durations select none', () => {
+  // Owner decisions, 2026-11-20 (.ai/specs/2026-11-20-e2e-selection-evidence-plan.md).
+  const file = 'packages/cezar/src/core/runner-definition.ts';
+  const withSetup = { ...graph, setup: new Set([...graph.setup, file, '.github/test-durations.json', '.github/cockpit-test-durations.json']) };
+  const map = sampleMap({ functions: { [file]: [{ start: 1, end: 50, specs: [], startup: true }, { start: 10, end: 20, specs: [1] }] } });
+  const pick = (ranges, boot = spec('smoke')) => classify(file, { map, graph: withSetup, boot, changes: new Map([[file, ranges]]) });
+  assert.deepEqual(pick([{ start: 15, end: 15 }]).specs, [spec('chat-code-fence'), spec('smoke')]);
+  assert.match(pick([{ start: 15, end: 15 }]).reason, /and the boot spec: the browser suite setup loads it/);
+  // Code without its own answer (an e2e helper no spec names) still selects every spec.
+  assert.equal(classify('packages/web/e2e/agent-browser.ts', { map, graph: withSetup, boot: spec('smoke') }).specs, null);
+  // Without a boot spec, setup code selects every spec.
+  assert.equal(pick([{ start: 15, end: 15 }], null).specs, null);
+  // A data file the setup reads still selects every spec, even with a spec that reads it.
+  const fixture = 'packages/web/e2e/fixtures/setup.json';
+  const withFixture = { ...withSetup, setup: new Set([...withSetup.setup, fixture]),
+    specs: new Map([...withSetup.specs, [spec('smoke'), new Set([spec('smoke'), fixture])]]) };
+  assert.equal(classify(fixture, { map, graph: withFixture, boot: spec('smoke') }).specs, null);
+  for (const durations of ['.github/test-durations.json', '.github/cockpit-test-durations.json']) {
+    assert.deepEqual(classify(durations, { map, graph: withSetup, boot: spec('smoke') }).specs, [], durations);
   }
 });
 
@@ -442,6 +542,20 @@ test('--plan diffs the working tree against the map’s commit, untracked files 
   assert.match(result.stdout, /→ packages\/web\/e2e\/artifact-project-links\.e2e\.ts\n {2}→ packages\/web\/e2e\/chat-code-fence\.e2e\.ts\n/);
   assert.match(result.stdout, /Selected 2 of 3 specs, about 3 min\./);
   assert.doesNotMatch(result.stdout, /TEST_E2E_STATUS/);
+});
+
+test('--plan reads the files that existed at the map\'s commit for the loaded-file rule', t => {
+  const { dir, put, map } = repository(t);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  put('packages/cezar/src/cli/unused.ts', 'export const a = 1;\n');
+  git('add', '.'); git('commit', '-qm', 'cli');
+  const mapFlag = map({ nodeLoaded: ['packages/cezar/src/server.ts'] });
+  put('packages/cezar/src/cli/unused.ts', 'export const a = 2;\n');
+  put('packages/cezar/src/cli/added.ts', 'export const b = 1;\n');
+  const result = affected(dir, '--plan', mapFlag);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /unused\.ts: 0 specs \(no process the browser suite starts loads it\)/);
+  assert.match(result.stdout, /added\.ts needs every spec \(server or CLI code without function evidence\)/);
 });
 
 test('a change no spec reaches runs nothing and exits 0', t => {
