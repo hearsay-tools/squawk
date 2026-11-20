@@ -1,8 +1,9 @@
 import { defineRunner } from '../../core/runner-definition.ts';
 import {
-  FIXTURE_ACCOUNTS, FIXTURE_CLI, FIXTURE_DETECTION, FIXTURE_DISPLAY, FIXTURE_ENV, FIXTURE_FACTS, FIXTURE_LOGIN, FIXTURE_MOCK,
-  FIXTURE_MODELS, FIXTURE_SPEC_SUPPORT,
+  FIXTURE_ACCOUNTS, FIXTURE_CLI, FIXTURE_DETECTION, FIXTURE_DISPLAY, FIXTURE_ENV, FIXTURE_FACTS, FIXTURE_LOGIN, FIXTURE_MODELS,
+  FIXTURE_SPEC_SUPPORT,
 } from './data.testkit.ts';
+import { FIXTURE_MOCK } from './mock.testkit.ts';
 
 /**
  * The fixture runner (hearsay-tools/squawk#3899): a definition over a small mock script, in test files only.

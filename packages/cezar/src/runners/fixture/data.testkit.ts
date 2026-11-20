@@ -1,8 +1,7 @@
 import type { AgentRunSpecSupport } from '../../core/agent-runner.ts';
 import { SQUAWK_SIDE_SPEC_SUPPORT } from '../../core/agent-runner-values.ts';
 import type { RunnerFacts } from '../../core/runner-facts.ts';
-import type { RunnerAccounts, RunnerCli, RunnerDetection, RunnerDisplay, RunnerEnv, RunnerLoginData, RunnerMock, RunnerModelData } from '../../core/runner-definition.ts';
-import { MOCK_BASELINE_PROMPT } from '../mock-prompts.ts';
+import type { RunnerAccounts, RunnerCli, RunnerDetection, RunnerDisplay, RunnerEnv, RunnerLoginData, RunnerModelData } from '../../core/runner-definition.ts';
 
 /**
  * The data of the fixture runner: a registered runner that no built-in list names, used by the parity
@@ -97,26 +96,3 @@ export const FIXTURE_DISPLAY = {
   installHint: 'none',
   loginCommand: 'fixture-runner login',
 } as const satisfies RunnerDisplay;
-
-/**
- * The scenarios the mock answers: those of the baseline seam rows the test runs. Every other scenario
- * is absent, so a row for it needs an exemption or a prompt before this runner can run it.
- */
-export const FIXTURE_MOCK = {
-  askResumeCases: [],
-  binEnv: FIXTURE_BIN_ENV,
-  script: 'mock-fixture-runner.mjs',
-  scenarios: {
-    baseline: MOCK_BASELINE_PROMPT,
-    'missing-binary': MOCK_BASELINE_PROMPT,
-    hold: 'mock:hold',
-    'provider-error': 'mock:provider-error',
-  },
-  // The parity kit requires an A9 reason from every runner whose facts declare no answerable native ask.
-  parityExemptions: {
-    A9: {
-      kind: 'scenario-unconstructible',
-      reason: 'The fixture mock answers no ask scenario and its wire has no native ask, so no native mid-turn ask.requested can arise.',
-    },
-  },
-} as const satisfies RunnerMock;
