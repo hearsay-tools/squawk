@@ -6,13 +6,15 @@ import { type RunRecord } from '../runs/store.ts';
 import * as runnerFactory from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { COMPLETION_WILL_WAIT } from './run.ts';
-import { fixtureUpdateRun, manager, parent, register, restart, root, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { fixtureUpdateRun, manager, parent, register, restart, root, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { completionNudges, idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

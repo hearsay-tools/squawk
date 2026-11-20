@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -20,9 +21,7 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { startServer } from './start-server.ts';
 import { WorkspaceEventBus } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 const temporary: string[] = [];
 function directory(): string {

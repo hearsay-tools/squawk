@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -13,10 +17,11 @@ import type { WorkflowDef } from '../workflows/types.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { createApp } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { DISABLED_MESSAGE, memoryWorkspaceConfig, providerAuth } from './provider-action-gating.testkit.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 describe('provider action gating', () => {
   let repoRoot: string;

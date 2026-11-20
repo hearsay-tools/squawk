@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
@@ -13,9 +14,7 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { Cockpit } from './http.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 /**
  * A real cockpit app on a real loopback socket for `cez task` tests (#504). No agent slot is

@@ -7,10 +7,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { acceptanceOver } from './continuation-acceptance-fakes.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
 // Session affinity and model presets read the runner definitions, as the engine fixture registered them.
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 const roots: string[] = [];
 function fixture() {

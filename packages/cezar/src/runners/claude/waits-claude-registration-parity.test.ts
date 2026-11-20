@@ -5,4 +5,4 @@ import { claudeRunner } from './definition.ts';
 
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
-describeWaitParity({ runner: 'claude', part: 'registration' });
+describeWaitParity({ runner: claudeRunner, part: 'registration' });

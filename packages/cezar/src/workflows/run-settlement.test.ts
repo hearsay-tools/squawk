@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunSettlement } from './run/run-settlement.ts';
@@ -14,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type StepState } from '../runs/store.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+registerRunner(claudeRunner);
 
 vi.mock('../git-worktree.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../git-worktree.ts')>(),

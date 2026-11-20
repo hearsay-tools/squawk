@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -16,10 +22,13 @@ import {
   selectProfile,
 } from './agent-profiles.ts';
 import { loadAgentAccounts } from './agent-accounts.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 // Profile resolution reads each provider's account data from the registry; the cases use all five.
-registerBuiltInRunners();
 
 /**
  * Resolution rules from spec 2026-07-29-agent-profiles. The pair worth reading closely is the two

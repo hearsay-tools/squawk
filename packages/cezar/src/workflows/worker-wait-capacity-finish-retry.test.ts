@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -6,10 +8,12 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { type RunRecord } from '../runs/store.ts';
 import { withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
-import { bookkeeping, collect, manager, parent, restart, root, store, until, worker, work, semaphore } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { bookkeeping, collect, manager, parent, restart, root, store, until, worker, work, semaphore } from './worker-wait-core.testkit.ts';
 import { blockRunWrites, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { monitoringWakeOf } from './waits.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+registerRunner(claudeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

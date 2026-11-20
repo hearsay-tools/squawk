@@ -1,13 +1,17 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import '../core/created-runners.testkit.ts';
 import {
   controlledWire, manager, root, semaphore, store, terminal, until,
   useWorkerWaitFixture,
-} from './worker-wait.testkit.ts';
+} from './worker-wait-core.testkit.ts';
+registerRunner(claudeRunner);
 
 describe('worker inbox holds nonfinal agent completion', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();

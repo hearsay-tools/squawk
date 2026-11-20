@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
@@ -11,9 +13,8 @@ import { RunManager } from '../workflows/run.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectContextDeps } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
-registerBuiltInRunners();
 
 /** Lets a test hold a build inside its migration step; open when `gate` is unset. */
 const preparing = vi.hoisted(() => ({ gate: undefined as Promise<void> | undefined, entered: () => {} }));

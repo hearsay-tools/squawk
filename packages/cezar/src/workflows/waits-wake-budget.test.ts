@@ -1,9 +1,12 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
-import { manager, restart, root, semaphore, store, until, work } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { manager, restart, root, semaphore, store, until, work } from './worker-wait-core.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import {
@@ -24,6 +27,7 @@ import {
   notes,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
+registerRunner(claudeRunner);
 
 // hearsay-tools/cezarion#1233: the automatic-wake budget: one charge per batch, the cap, refusals and
 // restarts. Shared setup: waits-wake.testkit.ts.

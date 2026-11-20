@@ -1,14 +1,18 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiWaitResult, RunRecord } from '@open-mercato/cezar-contract';
 import { RUN_STATUS, STEP_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { HARNESS_ADAPTERS, promptFor } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS, promptFor } from '../core/harness-parity-core.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { WorktreeAutosave } from './run/worktree-autosave.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS } from './run.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
-import { manager, restart, root, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait.testkit.ts';
+import { manager, restart, root, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-core.testkit.ts';
+registerRunner(claudeRunner);
 
 // hearsay-tools/squawk#1621: a workflow step that fails while its run holds waits is the resume
 // cursor. Review D1: on disk before the final autosave, so a crash there keeps it. Review B1:

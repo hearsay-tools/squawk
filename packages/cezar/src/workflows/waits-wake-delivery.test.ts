@@ -1,7 +1,10 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
-import { manager, restart, root, store, until, work } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { manager, restart, root, store, until, work } from './worker-wait-core.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { noJitter, retryDelayMs, WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAITS_DISCARDED_NOTE, WAKE_DELIVERY_CAP_NOTE } from './run.ts';
@@ -24,6 +27,7 @@ import {
   timerOwedWithoutSession,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
+registerRunner(claudeRunner);
 
 // hearsay-tools/cezarion#1233: what every delivered turn ends with, failed wake deliveries across
 // restarts, usage limits and Stop. Shared setup: waits-wake.testkit.ts.

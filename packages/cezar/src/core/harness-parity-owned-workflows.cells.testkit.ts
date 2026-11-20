@@ -9,8 +9,7 @@ import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from '../workflows/
 import { supportsProfiles } from './agent-profiles.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, probeEnv, readRecording, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { withOwnedInputRun, withSkillParentRun } from './workflow-parity-core.testkit.ts';
 
 export const OWNED_WORKFLOWS_GROUPS = {
@@ -128,6 +127,6 @@ export const OWNED_WORKFLOWS_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the owned-workflows part's cells for one runner: `harness-<runner>-owned-workflows-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('owned-workflows', OWNED_WORKFLOWS_GROUPS, scope, registration);
 }

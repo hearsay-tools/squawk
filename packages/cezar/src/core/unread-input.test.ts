@@ -1,3 +1,7 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -8,8 +12,12 @@ import type { AgentInput } from '@open-mercato/cezar-contract';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
-import { HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 // #505: accepted input a finished turn never read goes back to the queue and is
 // submitted again; DONE and park never finish over it.

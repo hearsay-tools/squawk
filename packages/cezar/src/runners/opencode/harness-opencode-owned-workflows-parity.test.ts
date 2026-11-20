@@ -8,4 +8,4 @@ import { piRunner } from '../pi/definition.ts';
 // R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
 useRunners(onlyRunners([[opencodeRunner, () => new OpencodeServerRunner()], [piRunner, () => new PiRunner()]]));
 
-describeHarnessParity({ runner: 'opencode', part: 'owned-workflows' });
+describeHarnessParity({ runner: opencodeRunner, part: 'owned-workflows' });

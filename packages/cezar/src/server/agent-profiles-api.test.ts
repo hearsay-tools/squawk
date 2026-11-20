@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -13,11 +14,9 @@ import { loadAgentAccounts, mergeWriteAgentAccounts } from '../workspace/agent-a
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { PROVIDER_IDS, ProviderAuthService } from '../core/provider-auth.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { createApp, type ServerDeps } from './server.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

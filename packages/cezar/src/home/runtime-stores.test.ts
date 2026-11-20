@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from './test-home.testkit.ts';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,10 +9,8 @@ import { runtimeHomes } from './runtime-isolation.testkit.ts';
 import { loadConfig, resolveWorktreeRetention } from '../config.ts';
 import { agentModelsLocked } from '../core/agent-model-policy.ts';
 import { resolveProfileEnvForRoot, resolveRuntimeAuthVerificationTarget } from '../workspace/agent-profiles.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The stores resolve Claude and Codex accounts and machine defaults through the registry.
-registerBuiltInRunners();
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { listProjects, registerProject, removeProject } from '../workspace/projects.ts';
 import { registryEntry } from '../workspace/registry-entry.ts';
@@ -17,6 +18,8 @@ import { createWorkspaceProjects } from '../server/workspace-projects.ts';
 import { resolveServerDeps } from '../server/server-deps.ts';
 import { modelLockRefusal as startRefusal } from '../server/start-run-options.ts';
 import { modelLockRefusal as continueRefusal } from '../workflows/continuation-admission.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 it('loads machine defaults and retention from the selected Home', async () => {
   const { root, selected } = runtimeHomes();

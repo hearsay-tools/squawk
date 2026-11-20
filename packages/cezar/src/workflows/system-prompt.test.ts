@@ -3,7 +3,8 @@ import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled, removeFixtureRepo } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled, removeFixtureRepo } from './fixture-manager.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,9 +25,10 @@ import {
 } from './run.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { RunMemory } from './run/run-memory.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // Publication guidance is additive for both fresh sessions and Continue; the
 // full prompt assertions below must still pin the unchanged handoff contract.

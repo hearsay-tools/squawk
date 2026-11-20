@@ -5,4 +5,4 @@ import { piRunner } from './definition.ts';
 
 useRunners(onlyRunner(piRunner, () => new PiRunner()));
 
-describeHarnessParity({ runner: 'pi', part: 'pending-request' });
+describeHarnessParity({ runner: piRunner, part: 'pending-request' });

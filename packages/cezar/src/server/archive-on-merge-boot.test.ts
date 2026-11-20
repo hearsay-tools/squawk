@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -26,9 +27,7 @@ const forgeFactory = (root: string) => ({
 });
 import { startServer } from './start-server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

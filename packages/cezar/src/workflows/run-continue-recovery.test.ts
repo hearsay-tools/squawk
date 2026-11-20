@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,10 +10,10 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import type { ContinueRunOptions } from './continuation-admission.ts';
 import { acceptanceOver } from './continuation-acceptance-fakes.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Session affinity and model presets read the runner definitions, as the engine fixture registered them.
-registerBuiltInRunners();
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 /** The record patch and refusals a Continue's admission and acceptance compute
  *  (`continuation-admission.ts`, `run/continuation-acceptance.ts`). The launch that follows,

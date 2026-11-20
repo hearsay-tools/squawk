@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,9 +25,7 @@ import {
 } from './server-deps.ts';
 import { createApp, type WorkspaceEventBus } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 const response = (statuses: Partial<Record<ProviderId, 'connected' | 'disconnected'>>): ProviderStatusResponse => ({
   providers: PROVIDER_IDS.map((provider) => ({ provider, status: statuses[provider] ?? 'connected' })),

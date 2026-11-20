@@ -1,13 +1,17 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { beforeEach, expect, it } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { crashStore } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
-import { createFixtureManager, fixtureWork, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, fixtureWork, fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import type { RunManager } from './run.ts';
 import { join } from 'node:path';
+registerRunner(claudeRunner);
 
 const f = setupMonitoringFixture();
 const catalog = () => fixedSkillCatalog([{ id: 'known', name: 'Known', path: '/listed/known', scope: 'repo' }]);

@@ -11,7 +11,8 @@ import { workerDestroyView } from '../runs/delegation-state.ts';
 import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { unused } from '../workflows/unused.testkit.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { CredentialRegistry, type Caller } from './credentials.ts';
@@ -28,7 +29,7 @@ import { ensureOwnedWorkspace } from './workspace.ts';
 export type HolderFixture = { root: string; store: RunStore; manager: DelegationManager; parent: RunRecord; caller: Caller; service: DelegationService; close(): void };
 
 // The worker's account binding names its runner, so spawn reads the runner definitions.
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 export let f: HolderFixture;
 

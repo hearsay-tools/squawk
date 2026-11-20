@@ -1,8 +1,14 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { createServer } from 'node:net';
 
 import { expect, it, vi } from 'vitest';
 
-import { driveSeam, waitFor } from './harness-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 
 it('opencode session reaches its first turn end when the requested runner port is occupied', async () => {

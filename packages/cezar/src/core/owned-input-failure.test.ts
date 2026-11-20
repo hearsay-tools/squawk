@@ -1,3 +1,6 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { captureSessions } from '../workflows/runner-session-capture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
@@ -5,9 +8,12 @@ import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import type { AgentSession } from './agent-runner.ts';
 import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
-import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { blockRunWrites, muteLockedDatabaseLogs } from '../runs/run-store.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 type Fixture = Parameters<Parameters<typeof withOwnedInputRun>[2]>[0];
 

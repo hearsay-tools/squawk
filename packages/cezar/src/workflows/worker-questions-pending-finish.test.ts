@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -5,11 +7,13 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { COMPLETION_NUDGE_NOTE } from './run.ts';
 import type { AgentSession } from '../core/agent-runner.ts';
-import { delegatingParent, manager, register, root, semaphore, store, until, waitOf, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { delegatingParent, manager, register, root, semaphore, store, until, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { gate, thenSay, toolCall } from './waits-parity.testkit.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import { conversationOf, eventsOf, closedAs, noHumanCard, steeringParent, askedPair, expectSettledParentRefusal, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
+registerRunner(claudeRunner);
 
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();

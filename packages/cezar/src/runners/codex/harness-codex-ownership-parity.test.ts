@@ -5,4 +5,4 @@ import { codexRunner } from './definition.ts';
 
 useRunners(onlyRunner(codexRunner, () => new CodexAppServerRunner()));
 
-describeHarnessParity({ runner: 'codex', part: 'ownership' });
+describeHarnessParity({ runner: codexRunner, part: 'ownership' });

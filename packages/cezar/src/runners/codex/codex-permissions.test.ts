@@ -1,9 +1,15 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../claude/definition.ts';
+import { codexRunner } from './definition.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CODEX_MINIMAL_CONFIG } from './codex-thread-config.ts';
-import { driveSeam, waitFor } from '../../core/harness-parity.testkit.ts';
+import '../../core/created-runners.testkit.ts';
+import { driveSeam, waitFor } from '../../core/harness-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 const directories: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });

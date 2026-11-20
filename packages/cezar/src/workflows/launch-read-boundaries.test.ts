@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -26,9 +30,13 @@ import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { runnerHook, waitForProduct } from './run-fixture.testkit.ts';
 import * as runnerFactories from '../core/runners-under-test.testkit.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(piRunner);
 
 let root: string;
 let store: RunStore;

@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -15,10 +21,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentAccountsPath, workspaceConfigPath } from '../paths.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The store's schema asks the registry which agents can carry an account; the cases use all five.
-registerBuiltInRunners();
 import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from './config.ts';
 import {
   defaultAgentAccountStore,
@@ -27,6 +31,11 @@ import {
   mergeWriteAgentAccounts,
   selectionFor,
 } from './agent-accounts.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 /**
  * `~/.cezar/agent-accounts.json` (spec 2026-07-29-agent-profiles).

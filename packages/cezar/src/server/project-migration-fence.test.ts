@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { spawn, spawnSync } from 'node:child_process';
@@ -42,9 +44,8 @@ import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } fr
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
-registerBuiltInRunners();
 
 /**
  * The exclusive project migration fence (hearsay-tools/cezarion#3087): one claim file beside both

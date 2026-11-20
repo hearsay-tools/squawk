@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from './test-home.testkit.ts';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -13,9 +16,9 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { AGENT_MODELS_LOCKED_ERROR } from '../core/agent-model-policy.ts';
 import { workerIdentity } from '../delegation/execution-identity.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
-registerBuiltInRunners();
 
 it('keeps accepted run pins on the selected model policy through RunManager', () => {
   const { root, selected } = runtimeHomes();
