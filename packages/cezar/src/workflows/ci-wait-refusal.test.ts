@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import {
   RUN_STATUS,

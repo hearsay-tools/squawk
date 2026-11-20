@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from './runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import { checkRule } from './lint/ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_MOCKS, mockScenarioBoundary as rule } from './lint/mock-scenario-boundary.ts';

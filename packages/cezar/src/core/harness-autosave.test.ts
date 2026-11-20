@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import childProcess, { type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';

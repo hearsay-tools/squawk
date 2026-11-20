@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../src/runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../src/runners/ids.ts';
 /**
  * Prints the parity row index: every row the parity kits declare, and the runners exempt from it.
  *

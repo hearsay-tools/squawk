@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';

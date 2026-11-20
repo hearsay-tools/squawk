@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';

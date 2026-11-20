@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';

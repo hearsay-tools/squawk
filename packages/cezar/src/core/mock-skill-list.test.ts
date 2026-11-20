@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { homedir } from 'node:os'; // test-home-read: compare mock metadata paths only; no home file is read or written.
 import { describe, expect, it } from 'vitest';
 import { mockSkillList } from '../../scripts/mock-skill-list.mjs';

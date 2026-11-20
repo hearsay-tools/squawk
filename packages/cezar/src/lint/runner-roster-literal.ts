@@ -8,7 +8,7 @@ import { declaredRunnerIds, literalText, parserPlugins } from './runner-id-branc
 import { repoRoot } from './source-rule.ts';
 
 /**
- * `runners/built-in.ts` is the one roster of runners. A second list written by
+ * `runners/ids.ts` is the one roster of runner ids. A second list written by
  * hand keeps compiling when a runner is added, and that runner is then missing
  * from one seam (open-mercato/cezar#387).
  *
@@ -24,7 +24,7 @@ import { repoRoot } from './source-rule.ts';
  * and a reason. It only shrinks: `npm run lint` fails a stale entry, and CI's baseline-growth
  * gate refuses a new one.
  */
-const DEFINITION = 'packages/cezar/src/runners/built-in.ts';
+const DEFINITION = 'packages/cezar/src/runners/ids.ts';
 
 export const runnerRostersFile = 'packages/cezar/src/lint/runner-roster-literal.baseline.json';
 

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { build } from 'esbuild';
@@ -52,5 +52,18 @@ describe('per-runner test closures', () => {
         ...(closure.has('runners/built-in.ts') ? ['built-in'] : [])] };
     });
     expect(loaded.filter(entry => !entry.own || entry.others.length)).toEqual([]);
+  }, 60_000);
+
+  it('keep the global test setup off every runner definition and adapter (hearsay-tools/squawk#3936 review E1)', async () => {
+    // The setup file rides along with EVERY server test, so a runner definition in its closure
+    // would put that runner's adapter in every test's environment: any adapter edit would then
+    // invalidate every server test. The setup reads the id list from `runners/ids.ts`, a data-only
+    // module, never from `runners/built-in.ts`.
+    const closure = (await closures(['../vitest.setup.ts'])).get('../vitest.setup.ts') ?? new Set();
+    const banned = [
+      ...BUILT_IN_RUNNER_IDS.flatMap(id => [`runners/${id}/definition.ts`, ADAPTERS[id]!]),
+      'runners/built-in.ts',
+    ].filter(path => closure.has(path));
+    expect(banned).toEqual([]);
   }, 60_000);
 });

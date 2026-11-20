@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { runsOn } from '../core/parity-classes.testkit.ts';
 
 /** A file's monitoring cells: its modes and rows, on each runner its rows' class names

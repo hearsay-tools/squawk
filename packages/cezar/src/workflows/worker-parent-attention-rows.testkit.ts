@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 // The worker parent attention rows and their file groups. Apart from the cells, so the registration
 // guard reads them without loading the run engine.

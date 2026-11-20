@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';

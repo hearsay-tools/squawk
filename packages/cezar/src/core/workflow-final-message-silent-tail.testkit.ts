@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
 import type { UiEvent } from './ui-events.ts';
 import { driveSeam } from './harness-parity.testkit.ts';

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { it } from 'vitest';
 import { NO_PROGRESS_CRITERIA } from './harness-parity.testkit.ts';
 import { checkParityRegistration } from './parity-partition.testkit.ts';

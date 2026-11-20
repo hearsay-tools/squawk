@@ -1,4 +1,5 @@
-import { BUILT_IN_RUNNER_IDS, BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { CodexAppServerRunner } from '../runners/codex/codex-app-server-runner.ts';
@@ -14,6 +15,10 @@ import { codexRunner } from '../runners/codex/definition.ts';
 
 describe('registerRunner', () => {
   registerBuiltInRunners();
+
+it('keeps the built-in definitions and the data-only id list aligned (runners/ids.ts)', () => {
+  expect(BUILT_IN_RUNNERS.map(definition => definition.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
+});
 
   it('ignores the same definition registered again', () => {
     registerRunner(codexRunner);

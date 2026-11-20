@@ -109,8 +109,14 @@ export const RUNNER_FACTS: Readonly<Record<string, RunnerFacts>> = new Proxy({} 
     if (typeof id !== 'string' || !knownRunnerIds().includes(id)) return undefined;
     return { enumerable: true, configurable: true, writable: false, value: runnerDefinition(id).facts };
   },
+  // Read-only, like the frozen table this proxy replaced (review B1): every mutation trap
+  // refuses, so no descriptor change, deletion, prototype change or extension can later make a
+  // facts read throw a Proxy invariant error.
   set: () => false,
   deleteProperty: () => false,
+  defineProperty: () => false,
+  setPrototypeOf: () => false,
+  preventExtensions: () => false,
 });
 
 /** The registered runners whose declared facts match, in registration order. */

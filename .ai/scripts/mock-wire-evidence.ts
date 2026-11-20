@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, expect, test, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from '../../packages/cezar/src/core/agent-runner.ts';
-import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/runners/ids.ts';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } from '../../packages/cezar/src/core/harness-parity.testkit.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';

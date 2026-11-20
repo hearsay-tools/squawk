@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';

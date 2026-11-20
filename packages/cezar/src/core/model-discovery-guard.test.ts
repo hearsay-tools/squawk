@@ -1,5 +1,5 @@
 import '../core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 /**
  * Host model discovery guard — AGENT_PROTOCOL.md §10, "Host model discovery".
  *

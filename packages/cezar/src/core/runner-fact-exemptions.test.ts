@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.testkit.ts';
 
@@ -7,7 +7,7 @@ import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.tes
 // of `runner-fact-rows.testkit.ts`, so `factsWhere` reads the swapped rows.
 vi.mock('./runner-fact-rows.testkit.ts', async (load) => {
   const actual = await load<typeof import('./runner-fact-rows.testkit.ts')>();
-  const { BUILT_IN_RUNNER_IDS: ids } = await import('../runners/built-in.ts');
+  const { BUILT_IN_RUNNER_IDS: ids } = await import('../runners/ids.ts');
   const rows = actual.factRows();
   const facts = {
     ...rows,

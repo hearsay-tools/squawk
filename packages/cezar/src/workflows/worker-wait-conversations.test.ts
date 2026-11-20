@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';

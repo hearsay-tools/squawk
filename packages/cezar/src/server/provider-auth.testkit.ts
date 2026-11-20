@@ -1,5 +1,5 @@
 import { ProviderAuthService, type ProviderStatusResponse } from '../core/provider-auth.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 class ConnectedProviderAuthService extends ProviderAuthService {
   override status(): Promise<ProviderStatusResponse> {

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, it } from 'vitest';
 import { runsOn } from './parity-classes.testkit.ts';
 import { FINAL_MESSAGE_CRITERIA, exemptionFor } from './harness-parity-core.testkit.ts';

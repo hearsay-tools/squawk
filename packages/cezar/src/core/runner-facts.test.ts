@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { inputDeliveryOf } from './agent-runner-values.ts';
@@ -8,6 +8,16 @@ import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
 
 
 describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
+  it('stays read-only: every mutation of the table refuses, as the frozen table did (review B1)', () => {
+    expect(() => Object.defineProperty(RUNNER_FACTS, 'claude', { value: {} })).toThrow(TypeError);
+    expect(() => delete (RUNNER_FACTS as Record<string, unknown>).claude).toThrow(TypeError);
+    expect(() => Object.setPrototypeOf(RUNNER_FACTS, null)).toThrow(TypeError);
+    expect(() => Object.preventExtensions(RUNNER_FACTS)).toThrow(TypeError);
+    expect(() => { (RUNNER_FACTS as Record<string, unknown>).claude = {}; }).toThrow(TypeError);
+    // Refused mutations leave the reads intact.
+    expect(RUNNER_FACTS.claude!.skillUnknownName).toBe(runnerDefinition('claude').facts.skillUnknownName);
+  });
+
   it('reads the facts of each runner from its registered definition', () => {
     for (const id of BUILT_IN_RUNNER_IDS) expect(RUNNER_FACTS[id], id).toBe(runnerDefinition(id).facts);
   });

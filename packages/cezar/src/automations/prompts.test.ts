@@ -1,5 +1,5 @@
 import '../core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
 import { createAutomationInputSchema } from '@open-mercato/cezar-contract/automations';
 import { SCHEDULE_HOURS_OPTIONS, SCHEDULE_TYPES } from '@open-mercato/cezar-contract/automation-schedule';

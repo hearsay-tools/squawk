@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';

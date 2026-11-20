@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { registrationGroups } from '../core/registration-coverage.testkit.ts';
 
 /** The provision matrix rows and the files that register them. Apart from the provision fixture,

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { registrationCollector, registrationCalls } from '../core/split-registration.testkit.ts';
 import { expect, it } from 'vitest';
 import { familyCells, runsOn } from '../core/parity-classes.testkit.ts';

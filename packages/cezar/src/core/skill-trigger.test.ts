@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 const { captures } = await import(/* @vite-ignore */ new URL('../../scripts/mock-skill-trigger-data.mjs', import.meta.url).href) as { captures: Record<string, unknown> };

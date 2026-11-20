@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import {

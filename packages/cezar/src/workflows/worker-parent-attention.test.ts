@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { ACK_WIRES, ATTENTION_GROUPS, attentionRowKey } from './worker-parent-attention-rows.testkit.ts';

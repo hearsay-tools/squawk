@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from './runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import { expect, it, vi } from 'vitest';
 // The CLI entry registers the built-in runners before it dispatches, so every command, the
 // cockpit, a headless task and each child process that reruns index.ts read runner data from the

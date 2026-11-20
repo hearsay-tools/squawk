@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { afterEach, describe, it, vi } from 'vitest';
 import { runsOn } from './parity-classes.testkit.ts';
 import { WORKFLOW_ASK_CRITERIA } from './harness-parity-core.testkit.ts';

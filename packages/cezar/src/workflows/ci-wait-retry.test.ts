@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 // Register the external CI mock before loading RunManager.
 import { ciWaitOf, lastCiWaitOf, githubByPr, registerPr, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 

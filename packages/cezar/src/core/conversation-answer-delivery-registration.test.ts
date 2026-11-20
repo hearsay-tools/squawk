@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { registrationCollector, registrationCalls } from './split-registration.testkit.ts';
 import { expect, it } from 'vitest';
 import { ANSWER_DELIVERY_GROUPS, answerDeliveryCellNames } from './conversation-answer-delivery-rows.testkit.ts';

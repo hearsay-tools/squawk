@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,7 +53,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   });
 
   it.each([
-    ['packages/cezar/src/runners/built-in.ts', false],
+    ['packages/cezar/src/runners/ids.ts', false],
     ['packages/cezar/src/core/provider-auth.ts', true],
     ['packages/cezar/src/core/ui-parity.test.ts', true],
     ['packages/web/e2e/tools-menu.e2e.ts', true],
@@ -95,7 +95,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), text);
     };
-    const definition = 'packages/cezar/src/runners/built-in.ts';
+    const definition = 'packages/cezar/src/runners/ids.ts';
     const derived = 'packages/web/src/lib/derived.ts';
     const unreasoned = 'packages/web/src/lib/unreasoned.ts';
     write(file, `const a = [${ALL}];\n`);

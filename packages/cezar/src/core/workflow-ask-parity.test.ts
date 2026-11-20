@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runsOn } from './parity-classes.testkit.ts';

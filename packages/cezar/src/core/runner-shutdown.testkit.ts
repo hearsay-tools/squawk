@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import * as childProcess from 'node:child_process';
 import { execFileSync, type ChildProcess } from 'node:child_process';
 import type { IncomingMessage } from 'node:http';

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { parityRunnerSubset, runnerSubsets } from './parity-runner-subset.ts';
