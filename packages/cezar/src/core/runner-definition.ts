@@ -52,6 +52,37 @@ export interface RunnerDefinition {
   readonly accounts: RunnerAccounts;
   /** The environment allow-list prefixes (the `env` part). */
   readonly env: RunnerEnv;
+
+  // The native mock and its scenario adapter (hearsay-tools/squawk#3899).
+  /** The runner's native mock script and the prompts that drive it, for tests and lint (the `mock` part). */
+  readonly mock: RunnerMock;
+}
+
+/**
+ * A runner's native mock (the `mock` part): the script in `packages/cezar/scripts/`, the variable
+ * that points the runner at it, and the prompt each shared parity scenario sends it. Plain data in
+ * `runners/<id>/mock.ts`. `core/skill-probe.ts` and the parity kit read it from the registry, and
+ * `lint/mock-scenario-boundary.ts` reads it from the built-in list.
+ */
+export interface RunnerMock {
+  /** The mock script's file name in `packages/cezar/scripts/`. */
+  readonly script: string;
+  /** The env var the runner reads to locate its binary; a test points it at the mock script. */
+  readonly binEnv: string;
+  /** Every human ask wire this runner exposes; cezar_ask when it has no native one. */
+  readonly askResumeCases: readonly { kind: string; scenario: 'ask-resume'; answer: string }[];
+  /**
+   * Scenario name -> the prompt text this runner's mock answers it with. The names are the parity
+   * kit's `ScenarioName`s; `parity-classes.test.ts` checks each. The kit adds the `cezar-ask` and
+   * `cezar-wait` prompts, which every mock answers the same way.
+   */
+  readonly scenarios: Readonly<Record<string, string>>;
+  /** P1: the option to pick (matched case-insensitively against its label) and the text the
+   *  mock echoes once that native reply arrives. Required with `scenarios.approval`. */
+  readonly approvalDecisions?: readonly { pick: string; echo: string }[];
+  /** P6: the text the mock echoes once Squawk refuses its malformed request. Required with
+   *  `scenarios['approval-malformed']`. */
+  readonly malformedApprovalEcho?: string;
 }
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */

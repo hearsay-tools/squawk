@@ -10,6 +10,7 @@ import { OMP_CLI } from './cli.ts';
 import { OMP_LOGIN } from './login.ts';
 import { OMP_ACCOUNTS } from './accounts.ts';
 import { OMP_ENV } from './env.ts';
+import { OMP_MOCK } from './mock.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -33,5 +34,6 @@ export const ompRunner = defineRunner({
   login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },
   accounts: OMP_ACCOUNTS,
   env: OMP_ENV,
+  mock: OMP_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),
 });

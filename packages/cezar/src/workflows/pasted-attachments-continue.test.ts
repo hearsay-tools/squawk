@@ -1,5 +1,8 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8,6 +11,7 @@ import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import type { WorkflowDef } from './types.ts';
 import { crashAfterContinue, TINY_PDF, TINY_PDF_B64, TINY_PNG_B64, usePastedAttachmentsFixture } from './pasted-attachments.testkit.ts';
+registerRunner(claudeRunner);
 
 // Continue's pasted attachments: a closed run's composer, a failed disk write and a restart before
 // the continuation spawns. Shared setup in pasted-attachments.testkit.ts.

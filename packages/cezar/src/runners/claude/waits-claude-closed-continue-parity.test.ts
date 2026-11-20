@@ -7,4 +7,4 @@ useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
 // The closed part runs one file per row family (`FAMILY_FILE_PARTS` in waits-parity-catalog.testkit.ts,
 // hearsay-tools/squawk#3683): this file runs its continue rows.
-describeWaitParity({ runner: 'claude', part: 'closed', family: 'continue' });
+describeWaitParity({ runner: claudeRunner, part: 'closed', family: 'continue' });

@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -5,12 +7,14 @@ import { observationClock } from '../core/observation-clock.testkit.ts';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { IDLE_TIMEOUT_MS } from './run.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
-import { fixtureUpdateRun, manager, parent, restart, root, semaphore, store, until, useWorkerWaitFixture, worker, work, toolGenerationOf, controlledWire } from './worker-wait.testkit.ts';
+import { fixtureUpdateRun, manager, parent, restart, root, semaphore, store, until, useWorkerWaitFixture, worker, work, toolGenerationOf, controlledWire } from './worker-wait-core.testkit.ts';
 
 import { pr, identity, entryOf, settledOf, inputOf, heldParent } from './worker-waits-shared.testkit.ts';
+registerRunner(claudeRunner);
 
 /**
  * Parks, slots, idle close, failure and recovery (hearsay-tools/cezarion#1235 phase 3a): a park

@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os'; // test-home-read: checks refusal of the pinned test home; never writes it.
 import { join } from 'node:path';
@@ -12,10 +14,9 @@ import { previewRefusal } from '../ci-wait/errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
 // The agent-config listing reads every runner's config files.
-registerBuiltInRunners();
 
 it('names the product in an API refusal and installer label without changing their contracts', async () => {
   const { displayName: name, command } = productIdentity();

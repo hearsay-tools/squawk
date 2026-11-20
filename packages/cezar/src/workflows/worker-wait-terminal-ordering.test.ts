@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import type { AgentEvent } from '../core/agent-runner.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { randomUUID } from 'node:crypto';
@@ -6,9 +8,11 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { type WorkerWait } from '@open-mercato/cezar-contract/delegation';
 import { RunStore } from '../runs/store.ts';
-import { captureState, controlledWire, fixtureUpdateRun, manager, parent, register, restart, root, semaphore, store, timeline, until, useWorkerWaitFixture, waitOf, workerEntryOf, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { captureState, controlledWire, fixtureUpdateRun, manager, parent, register, restart, root, semaphore, store, timeline, until, useWorkerWaitFixture, waitOf, workerEntryOf, worker } from './worker-wait-core.testkit.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+registerRunner(claudeRunner);
 
 const runnerEvents = vi.hoisted(() => new Map<string, (event: UiEvent) => void>());
 const runnerTurnEvents = vi.hoisted(() => new Map<string, (event: AgentEvent) => void>());

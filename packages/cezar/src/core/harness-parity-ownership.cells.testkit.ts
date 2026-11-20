@@ -1,6 +1,4 @@
-import type { RunnerId } from './agent-runner.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
 import { expect, vi } from 'vitest';
@@ -286,6 +284,6 @@ export const OWNERSHIP_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the ownership part's cells for one runner: `harness-<runner>-ownership-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('ownership', OWNERSHIP_GROUPS, scope, registration);
 }

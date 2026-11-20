@@ -1,4 +1,7 @@
-import '../core/every-runner.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -14,6 +17,9 @@ import { registerProject } from '../workspace/projects.ts';
 import type { RunManager } from './run.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
 import { agentEnv, agentEnvForStep } from './run/launch-context.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(piRunner);
 
 /**
  * Which agent account a STEP spawns under (spec 2026-07-29-agent-profiles).

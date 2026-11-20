@@ -1,7 +1,8 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunnerSkill, RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,9 +23,10 @@ import { workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps } from './types.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 const LAUNCH_WAIT_MS = 15_000;
 const execFileAsync = promisify(execFile);

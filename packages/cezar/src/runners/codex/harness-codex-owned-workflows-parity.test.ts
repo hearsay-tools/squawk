@@ -8,4 +8,4 @@ import { opencodeRunner } from '../opencode/definition.ts';
 // R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
 useRunners(onlyRunners([[codexRunner, () => new CodexAppServerRunner()], [opencodeRunner, () => new OpencodeServerRunner()]]));
 
-describeHarnessParity({ runner: 'codex', part: 'owned-workflows' });
+describeHarnessParity({ runner: codexRunner, part: 'owned-workflows' });

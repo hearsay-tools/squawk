@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -9,7 +11,7 @@ import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import { clearAutosaveCleanup, retainAutosaveCleanup } from '../autosave-cleanup.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
 import { projectPaths } from '../project-paths.ts';
 import { isReclaimable, reclaimWorktree } from '../runs/retention.ts';
@@ -20,6 +22,7 @@ import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
+registerRunner(claudeRunner);
 
 const mutationLock = vi.hoisted(() => ({ taken: 0 }));
 vi.mock('../git-worktree-lock.ts', async importOriginal => {

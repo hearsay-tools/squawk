@@ -1,14 +1,20 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { setImmediate } from 'node:timers/promises';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { COMPLETION_NUDGE_NOTE, COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './run.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { checkpoint, collect, manager, parent, semaphore, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait.testkit.ts';
+import { checkpoint, collect, manager, parent, semaphore, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { completionNudges, sentTexts, recordAgentInput, blockedDone, sessionOf } from './worker-wait-readiness.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

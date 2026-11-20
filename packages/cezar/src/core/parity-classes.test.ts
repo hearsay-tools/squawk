@@ -122,6 +122,8 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
   });
 
   it('classes every scenario a native mock declares, and every scenario a row drives', () => {
+    // The adapters are the registered runners' `mock` parts: a test file that registered fewer would declare fewer scenarios.
+    expect(Object.keys(HARNESS_ADAPTERS)).toEqual([...RUNNER_IDS]);
     const declared = new Set(Object.values(HARNESS_ADAPTERS).flatMap(adapter => Object.keys(adapter.scenarios)));
     expect([...declared].filter(name => !Object.hasOwn(SCENARIO_CLASSES, name))).toEqual([]);
     expect(parityRowScenarios().filter(row => !Object.hasOwn(SCENARIO_CLASSES, row.scenario)).map(row => row.id)).toEqual([]);

@@ -10,10 +10,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import '../core/created-runners.testkit.ts';
+import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait-core.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 
 describe('CI wait delivery', { timeout: 30_000 }, () => {

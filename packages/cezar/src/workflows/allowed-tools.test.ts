@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
@@ -7,10 +8,8 @@ import {
   toolGrantLists,
 } from './types.ts';
 import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The extras table covers every runner.
-registerBuiltInRunners();
 
 describe('allowedToolsForStep', () => {
   it('unions Pi extras onto the default list when the step does not set allowedTools', () => {

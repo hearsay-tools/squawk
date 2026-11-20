@@ -6,4 +6,4 @@ import { codexRunner } from './definition.ts';
 useRunners(onlyRunner(codexRunner, () => new CodexAppServerRunner()));
 
 // Squawk's wait on native subagents on the codex wire (hearsay-tools/cezarion#2431).
-subagentCells(['codex']);
+subagentCells([codexRunner]);

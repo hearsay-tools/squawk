@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -5,8 +7,10 @@ import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/ceza
 import { COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './run.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { randomUUID } from 'node:crypto';
-import { collect, manager, parent, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { collect, manager, parent, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { completionNudges, sentTexts, recordAgentInput, blockedDone, sessionOf } from './worker-wait-readiness.testkit.ts';
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

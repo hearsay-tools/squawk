@@ -5,6 +5,7 @@ import { buildChildEnv } from './agent-env.ts';
 import { profileEnv } from './agent-profiles.ts';
 import type { RunnerId } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { processGroupAlive, sessionGroupOf, signalOwnedSessionGroup, signalSession, spawnSessionLeader } from './session-process.ts';
 
 export interface SkillDiscoveryOptions {
@@ -19,12 +20,8 @@ export interface SkillDiscoveryOptions {
 export function skillExecutable(runner: RunnerId, bin?: string): string {
   return bin ?? { claude: productEnv('CLAUDE_BIN'), codex: productEnv('CODEX_BIN'),
     opencode: productEnv('OPENCODE_BIN'), pi: productEnv('PI_BIN'), omp: productEnv('OMP_BIN') }[runner] ?? (productEnv('DRY_RUN') === '1'
-    ? fileURLToPath(new URL(`../../scripts/${MOCKS[runner]}`, import.meta.url)) : runner);
+    ? fileURLToPath(new URL(`../../scripts/${runnerDefinition(runner).mock.script}`, import.meta.url)) : runner);
 }
-const MOCKS: Record<RunnerId, string> = {
-  claude: 'mock-claude.mjs', codex: 'mock-codex-app-server.mjs', opencode: 'mock-opencode-serve.mjs',
-  pi: 'mock-pi-rpc.mjs', omp: 'mock-omp-rpc.mjs',
-};
 
 /** A no-turn probe owns a process group. Kill it and observe exit before releasing its caller. */
 export async function skillProbe<T>(

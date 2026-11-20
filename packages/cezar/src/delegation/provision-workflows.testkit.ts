@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import type { Caller } from './credentials.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -10,7 +11,6 @@ import { mkdirSync } from 'node:fs';
 import { onTestFinished, afterEach, beforeEach, expect, vi } from 'vitest';
 import type { AgentRunResult, AgentRunSpec, AgentSession, AgentEvent } from '../core/agent-runner.ts';
 import * as runners from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';
@@ -22,7 +22,6 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 export { PROVISION_ROWS } from './provision-rows.testkit.ts';
 
-registerBuiltInRunners();
 export function delegationToken(spec: AgentRunSpec): string {
   const token = spec.env?.CEZ_DELEGATION_TOKEN;
   expect(token).toBeDefined();

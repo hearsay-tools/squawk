@@ -9,9 +9,10 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 describe('scheduler repository probe budget (#364)', () => {
   const fixtures: Array<{ root: string; store: RunStore; manager: RunManager }> = [];

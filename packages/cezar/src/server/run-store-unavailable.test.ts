@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -17,9 +19,8 @@ import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
-registerBuiltInRunners();
 
 /**
  * A project whose run store cannot be opened (#779, plan step 4) answers every route with why,

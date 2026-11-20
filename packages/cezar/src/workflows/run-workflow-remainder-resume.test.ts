@@ -1,10 +1,14 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose } from './worker-wait-readiness.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { type RunRecord } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+registerRunner(claudeRunner);
 describe('RunManager workflow remainder resume', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor } = fixture;

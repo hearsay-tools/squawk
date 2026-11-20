@@ -15,9 +15,12 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import { TrackedWork } from './run/tracked-work.ts';
 import type { WorkflowDef } from './types.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 const workflow: WorkflowDef = {
   name: 'startup-cancel', source: 'built-in',

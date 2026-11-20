@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +12,13 @@ import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contra
 import { WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { wakeRetryClock } from './waits-wake.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
-import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 /** One accumulating conversation per root, committed the way the delegation service does. */
 function conversation(rootId: string) {

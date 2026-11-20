@@ -197,8 +197,9 @@ Owners. Paths are relative to `packages/cezar/src/`.
 - **Tiers:** `driveSeam` (`core/harness-parity-core.testkit.ts`) drives a real runner class
   against its own offline mock. `driveRun` (`core/workflow-parity-core.testkit.ts`) drives a
   real `RunManager` run in a temp git repo.
-- **Scenario catalog:** `SCENARIOS` and `HARNESS_ADAPTERS` in
-  `core/harness-parity-core.testkit.ts`. The steps of each scenario are in
+- **Scenario catalog:** `SCENARIOS` in `core/harness-parity-core.testkit.ts`. Each runner's
+  prompt for a scenario is in the `mock` part of its definition (`runners/<id>/mock.ts`);
+  `HARNESS_ADAPTERS` in the same kit reads it from the registry. The steps of each scenario are in
   `packages/cezar/scripts/mock-scenario.mjs`.
 - **Row classes, the scenario runner and the fact-value unit tests:** `PARITY_FAMILIES`,
   `SCENARIO_RUNNER` and `FACT_VALUE_TESTS` in `core/parity-classes.testkit.ts`.
@@ -337,8 +338,9 @@ force, or force only in part. The item numbers are stable: code cites them.
    stream.
 6. **Golden fixtures** — follow §8, and cover every §6 capability that the wire supports.
 7. **Parity** — every §6 row passes or carries a named exemption.
-8. **Harness parity** — add the runner to `HARNESS_ADAPTERS`
-   (`core/harness-parity-core.testkit.ts`) and make its offline mock a wire encoder over
+8. **Harness parity** — give the runner's definition a `mock` part (`runners/<id>/mock.ts`: the
+   mock script, its `*_BIN` variable and the prompt for each scenario it runs), and make its
+   offline mock a wire encoder over
    `packages/cezar/scripts/mock-scenario.mjs`. That module owns scenario selection and scripts; the mock
    emits the backend's native frames. A wire gap is a `PARITY_EXEMPTIONS` entry; the guard
    tests of the matrix hold what an entry may say.

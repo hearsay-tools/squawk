@@ -7,4 +7,4 @@ useRunners(onlyRunner(opencodeRunner, () => new OpencodeServerRunner()));
 
 // opencode is not the scenario runner: it runs only the wait rows that run on every runner. This file
 // runs one group of their parts (WAIT_FOLDS in waits-parity-catalog.testkit.ts, hearsay-tools/cezarion#2991).
-describeWaitParity({ runner: 'opencode', part: 'every-runner', fold: 'entries-nudges' });
+describeWaitParity({ runner: opencodeRunner, part: 'every-runner', fold: 'entries-nudges' });

@@ -1,9 +1,14 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { setRunStatus, runIds } from '../runs/run-store.testkit.ts';
 import { syncBuiltinESMExports } from 'node:module';
-import { createFixtureManager } from '../workflows/fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,6 +30,9 @@ import { ensureOwnedWorkspace } from "./workspace.ts";
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 describe('delegation service durable authority', () => {
   let f: ReturnType<typeof fixture>;

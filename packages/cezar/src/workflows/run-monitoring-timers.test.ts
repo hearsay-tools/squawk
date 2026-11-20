@@ -1,12 +1,18 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setupMonitoringFixture, runnerHook } from './run-fixture.testkit.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(piRunner);
 describe('RunManager monitoring timers', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor, openTimer } = fixture;

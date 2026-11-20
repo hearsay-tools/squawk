@@ -1,10 +1,16 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../claude/definition.ts';
+import { opencodeRunner } from './definition.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PINNED_SESSION_ID, seedOpencodeMockSession } from '../../core/harness-parity-core.testkit.ts';
-import { driveSeam } from '../../core/harness-parity.testkit.ts';
+import '../../core/created-runners.testkit.ts';
+import { driveSeam } from '../../core/harness-parity-core.testkit.ts';
 import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeMinimalEnv } from './opencode-minimal.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 const directories: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
