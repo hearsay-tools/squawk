@@ -1,5 +1,5 @@
 import type { RunnerMock } from './runner-definition.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { factRows } from './runner-fact-rows.testkit.ts';
 
 declare global {
   interface ImportMeta {
@@ -15,7 +15,8 @@ declare global {
 // guard (`runner-closure.test.ts`) holds.
 const MOCK_MODULES = import.meta.glob<Readonly<Record<string, RunnerMock>>>('../runners/*/mock.ts', { eager: true });
 
-const MOCK_ROWS: Readonly<Record<string, RunnerMock>> = Object.fromEntries(BUILT_IN_RUNNER_IDS.map(id => {
+// The roster is the fact rows' (`factRows()`), so a table that crosses both reads the same runners.
+const MOCK_ROWS: Readonly<Record<string, RunnerMock>> = Object.fromEntries(Object.keys(factRows()).map(id => {
   const path = `../runners/${id}/mock.ts`;
   const module = MOCK_MODULES[path];
   if (!module) throw new Error(`Runner ${id} has no ${path}.`);
@@ -24,7 +25,7 @@ const MOCK_ROWS: Readonly<Record<string, RunnerMock>> = Object.fromEntries(BUILT
   return [id, values[0]!];
 }));
 
-/** Every built-in runner's `mock` part, by runner id, in `BUILT_IN_RUNNER_IDS` order. */
+/** Every built-in runner's `mock` part, by runner id, in fact-row order. */
 export function mockRows(): Readonly<Record<string, RunnerMock>> {
   return MOCK_ROWS;
 }
