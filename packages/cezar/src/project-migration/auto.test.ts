@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { reportsIndex } from '../artifacts/reports-index.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -36,9 +37,7 @@ import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 /**
  * The cockpit's automatic project move (hearsay-tools/cezarion#3089): at cockpit start and at a project's first open, a legacy project moves before anything

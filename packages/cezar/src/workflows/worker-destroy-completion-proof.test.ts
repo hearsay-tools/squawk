@@ -19,16 +19,18 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 
 import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, worker, workspace, useWorkerDestroyFixture, replaceWorkerDestroyManager } from "./worker-destroy.testkit.ts";
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

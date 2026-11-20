@@ -20,6 +20,7 @@
  * by driving the real runner classes. A new backend must pass both
  * (`AGENT_PROTOCOL.md` §6 and §7).
  */
+import '../core/register-all-runners.testkit.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,9 +29,7 @@ import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runnersWhere } from './runner-facts.ts';
 import type { UiEvent, UiItem } from './ui-events.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BACKENDS = RUNNER_IDS;

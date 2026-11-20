@@ -14,9 +14,10 @@ import { IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES } from './run.ts';
 import { stateOf } from './run-states.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
 import { controlledWire, manager, parent, restart, root, store, semaphore, work, toolGenerationOf, worker, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 /**
  * Squawk's wait on native subagents (hearsay-tools/cezarion#2431): one test per `waiting:subagents`

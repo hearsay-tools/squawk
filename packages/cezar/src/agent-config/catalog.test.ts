@@ -1,10 +1,19 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { describe, expect, it } from 'vitest';
 import { findConfigFile, listConfigFiles } from './catalog.ts';
 import type { AgentHomePaths } from '../core/runner-config-files.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 // The catalog lists every registered runner's config files.
-registerBuiltInRunners();
 
 const HOME: AgentHomePaths = {
   claude: '/home/u/.claude',

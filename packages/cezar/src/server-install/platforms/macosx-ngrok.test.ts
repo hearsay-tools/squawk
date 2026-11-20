@@ -1,3 +1,5 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../../runners/claude/definition.ts';
 import { Home } from '../../home/home.ts';
 import { useTestHome } from '../../home/test-home.testkit.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
@@ -11,10 +13,9 @@ import { runInstall, runUninstall } from '../engine.ts';
 import { loadServerState } from '../state.ts';
 import { createAutoUi } from '../ui.ts';
 import type { InstallContext, Runner, Ui } from '../types.ts';
-import { registerBuiltInRunners } from '../../runners/built-in.ts';
+registerRunner(claudeRunner);
 
 // The dry-run install walks the dependency step, which probes every runner.
-registerBuiltInRunners();
 
 const okRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
 

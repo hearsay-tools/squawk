@@ -26,9 +26,10 @@ import { until, root, store, manager, releases, worker, workspace, useWorkerDest
 import { createRunner } from '../core/runner-registry.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
   useWorkerDestroyFixture();

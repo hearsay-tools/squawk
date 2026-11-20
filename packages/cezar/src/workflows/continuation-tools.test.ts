@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -13,6 +16,8 @@ import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import { DEFAULT_ALLOWED_TOOLS, type WorkflowDef } from './types.ts';
+registerRunner(codexRunner);
+registerRunner(piRunner);
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

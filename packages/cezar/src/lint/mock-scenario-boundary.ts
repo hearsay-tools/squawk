@@ -1,15 +1,13 @@
-import type { RunnerId } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
 import { child, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 
-/** Exhaustive runner keys keep a new backend from bypassing the import guard. */
-export const RUNNER_MOCKS = {
-  claude: 'mock-claude.mjs',
-  codex: 'mock-codex-app-server.mjs',
-  opencode: 'mock-opencode-serve.mjs',
-  pi: 'mock-pi-rpc.mjs',
-  omp: 'mock-omp-rpc.mjs',
-} satisfies Record<RunnerId, string>;
-const REQUIRED_MOCKS = new Set(Object.values(RUNNER_MOCKS).map(name => `packages/cezar/scripts/${name}`));
+/**
+ * The mock script of every built-in runner, read from its definition's `mock` part, so a new
+ * built-in runner cannot bypass the import guard. The rule reads the list directly: a lint run has
+ * no registry, and a definition module imports only types and data.
+ */
+export const RUNNER_MOCKS: ReadonlyMap<string, string> = new Map(BUILT_IN_RUNNERS.map(definition => [definition.id, definition.mock.script]));
+const REQUIRED_MOCKS = new Set([...RUNNER_MOCKS.values()].map(name => `packages/cezar/scripts/${name}`));
 
 const SHARED = ['agent-echo', 'autonomous', 'cezar-ask', 'cezar-done', 'cezar-tool', 'ci-wait',
   'crash-stderr', 'deferred-turn-start', 'hold', 'multi-pr-refs', 'no-progress', 'gate-prompt-ack',

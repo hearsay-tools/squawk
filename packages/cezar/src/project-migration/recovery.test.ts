@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
@@ -27,9 +29,8 @@ import { writeSettledJournal } from './project-migration.testkit.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import { prepareBeforeTicks, prepareProjects } from './auto.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
-registerBuiltInRunners();
 
 /**
  * Early recovery of an unfinished project migration (hearsay-tools/cezarion#3089): every entry

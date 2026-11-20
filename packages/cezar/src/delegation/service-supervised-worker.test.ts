@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { realpathSync, writeFileSync } from 'node:fs';
@@ -7,7 +9,7 @@ import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factori
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { supervisedReceipts } from '../runs/task-rights.ts';
 import { parentReadiness } from './readiness.ts';
@@ -17,6 +19,7 @@ import { NO_SPAWN_GRANT, WORKERS_OFF } from './policy.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { fixture, workerCleanupInternals } from './service.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+registerRunner(claudeRunner);
 
 // A worker that supervises (hearsay-tools/squawk#3819): R is the root task, W the worker R
 // started in its own worktree, C the shared worker W started.

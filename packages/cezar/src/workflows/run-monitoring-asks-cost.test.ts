@@ -1,6 +1,10 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct, setupMonitoringFixture, FINISHED_RUN_STATUSES } from './run-fixture.testkit.ts';
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -15,6 +19,8 @@ import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { fileURLToPath } from 'node:url';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 describe('RunManager reported cost accounting', () => {
   let repoRoot: string;

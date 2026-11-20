@@ -10,6 +10,7 @@ import { PI_CLI } from './cli.ts';
 import { PI_LOGIN } from './login.ts';
 import { PI_ACCOUNTS } from './accounts.ts';
 import { PI_ENV } from './env.ts';
+import { PI_MOCK } from './mock.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
@@ -30,5 +31,6 @@ export const piRunner = defineRunner({
   login: { ...PI_LOGIN, executable: () => productEnv('PI_BIN') ?? 'pi' },
   accounts: PI_ACCOUNTS,
   env: PI_ENV,
+  mock: PI_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parsePiStatus }),
 });

@@ -1,11 +1,15 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { monitoringTimerWait } from './waits.testkit.ts';
 import { resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
+registerRunner(claudeRunner);
 describe('RunManager idle close', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor } = fixture;

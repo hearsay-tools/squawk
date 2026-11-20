@@ -1,16 +1,22 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { type RunRecord } from '../runs/store.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { bookkeeping, collect, manager, register, root, semaphore, store, terminal, until, waitOf, workerEntryOf, worker } from './worker-wait.testkit.ts';
+import { bookkeeping, collect, manager, register, root, semaphore, store, terminal, until, waitOf, workerEntryOf, worker } from './worker-wait-core.testkit.ts';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { parkedOnWorkers, useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

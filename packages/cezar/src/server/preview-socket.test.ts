@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -15,10 +16,8 @@ import type { Viewer } from '../preview/session.ts';
 import { createPreviewSocket, type PreviewSocket, type PreviewSocketHost } from './preview-socket.ts';
 import { startServer } from './start-server.ts';
 import { verifyWsUpgrade } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 import { attachUpgradeRouter } from './upgrade-router.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 

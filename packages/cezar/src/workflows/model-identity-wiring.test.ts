@@ -1,4 +1,8 @@
-import { createFixtureManager, drainFixtureManagers, removeFixtureRepo } from './fixture-cleanup.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, removeFixtureRepo } from './fixture-manager.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,6 +12,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { RunStore } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import type { RunManager } from './run.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

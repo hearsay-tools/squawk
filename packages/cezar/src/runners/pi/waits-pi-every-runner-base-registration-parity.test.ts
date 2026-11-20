@@ -7,4 +7,4 @@ useRunners(onlyRunner(piRunner, () => new PiRunner()));
 
 // pi is not the scenario runner: it runs only the wait rows that run on every runner. This file
 // runs one group of their parts (WAIT_FOLDS in waits-parity-catalog.testkit.ts, hearsay-tools/cezarion#2991).
-describeWaitParity({ runner: 'pi', part: 'every-runner', fold: 'base-registration' });
+describeWaitParity({ runner: piRunner, part: 'every-runner', fold: 'base-registration' });

@@ -8,7 +8,7 @@ const adopted = "import { play, scenarioFor } from './mock-scenario.mjs';\n";
 
 describe('shared scenario boundary', () => {
   it('requires an encoder entry for every runner', () => {
-    expect(Object.keys(RUNNER_MOCKS).sort()).toEqual([...RUNNER_IDS].sort());
+    expect([...RUNNER_MOCKS.keys()].sort()).toEqual([...RUNNER_IDS].sort());
   });
 
   it.each([

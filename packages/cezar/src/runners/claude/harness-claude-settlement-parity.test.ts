@@ -5,4 +5,4 @@ import { claudeRunner } from './definition.ts';
 
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
-describeHarnessParity({ runner: 'claude', part: 'settlement' });
+describeHarnessParity({ runner: claudeRunner, part: 'settlement' });

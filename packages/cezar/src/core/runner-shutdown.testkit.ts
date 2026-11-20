@@ -46,11 +46,8 @@ vi.mock('node:child_process', async (original) => {
 
 import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from './agent-runner.js';
 import { createRunner } from './runner-registry.js';
-import { registerBuiltInRunners } from '../runners/built-in.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
-
-registerBuiltInRunners();
 
 /** The runners whose EOF cleanup cells (the `eof-` families) run. */
 export const EOF_CLEANUP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi');

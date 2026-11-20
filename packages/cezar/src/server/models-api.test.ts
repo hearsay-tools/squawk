@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,15 +11,18 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MODEL_DISCOVERY_RUNNERS } from '@open-mercato/cezar-contract/workspace';
 import { ProviderAuthService } from '../core/provider-auth.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
-registerBuiltInRunners();
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 describe('workspace model catalog API', () => {
   let root: string;

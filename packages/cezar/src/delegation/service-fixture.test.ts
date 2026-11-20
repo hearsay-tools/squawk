@@ -5,11 +5,12 @@ import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import type { AgentRunResult } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { fixture } from './service.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 it('accepts a queued worker after release while two running parents fill the default slots', async () => {
 

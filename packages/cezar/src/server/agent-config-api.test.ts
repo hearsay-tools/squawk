@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -10,10 +11,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // The agent-config routes list every runner's config files.
-registerBuiltInRunners();
 
 /**
  * `GET/PUT /api/v1/agent-config` (spec #404). The contract under test: files are

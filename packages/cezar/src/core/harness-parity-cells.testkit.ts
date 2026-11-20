@@ -10,10 +10,11 @@ import { MONITORING_TURN_CRITERIA, MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRI
 import { monitoringTurnFiles } from '../workflows/monitoring-turn-partitions.testkit.ts';
 import { WAIT_CRITERIA } from '../workflows/waits-parity.testkit.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { exemptionReasonProblem } from './exemption-reason.testkit.ts';
 import { driveSeam, exemptionFor, promptFor, HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, MODEL_REFUSAL_CRITERIA, PERMISSION_CRITERIA, WORKFLOW_TIMEOUT_CRITERIA, NO_PROGRESS_CRITERIA, AUTONOMOUS_CRITERIA, FINAL_MESSAGE_CRITERIA, WORKER_PROGRESS_WAIT_CRITERIA, WORKFLOW_ASK_CRITERIA, STEP_COMPLETION_CRITERIA, FOLLOWUP_CRITERIA, ANSWER_DELIVERY_CRITERIA, SKILL_RESUME_CRITERIA, SKILL_PROVISION_CRITERIA, WORKTREE_SETUP_CRITERIA, PARITY_EXEMPTIONS, PINNED_SESSION_ID, seedOpencodeMockSession, type ScenarioName, waitFor } from './harness-parity-core.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, harnessParityFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessGroups, vitestRegistration, type HarnessGroup, type HarnessParityScope, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessGroups, vitestRegistration, type HarnessGroup, type HarnessParityScope, type HarnessPartScope, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { CONTROL_CRITERIA } from './harness-parity-rows.testkit.ts';
 import { RUN_CRITERIA } from './harness-parity-run-tier.testkit.ts';
 import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
@@ -316,7 +317,7 @@ function matrixGuards(r: HarnessRegistrar): void {
           const url = new URL(`../runners/${backend}/${file}`, import.meta.url);
           expect(existsSync(url), file).toBe(true);
           const source = readFileSync(url, 'utf8');
-          expect(source, file).toContain(`describeHarnessParity({ runner: '${backend}', part: '${part}' });`);
+          expect(source, file).toContain(`describeHarnessParity({ runner: ${backend}Runner, part: '${part}' });`);
           expect(source.match(/describeHarnessParity\(/g), file).toHaveLength(1);
           // Each part file loads only its own part's cells (hearsay-tools/cezarion#3242).
           const cells = `../../core/${harnessParityCellsFile(part)}`;
@@ -426,7 +427,7 @@ const HARNESS_PARITY_ORDER: readonly HarnessGroup[] = [
 ];
 
 /** Each part's own `describeHarnessParity`, the one its runner files call. */
-const HARNESS_PARITY_PARTS: Readonly<Record<HarnessParityPart, (scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration) => void>> = {
+const HARNESS_PARITY_PARTS: Readonly<Record<HarnessParityPart, (scope: HarnessPartScope, registration?: HarnessRegistration) => void>> = {
   contract: describeContractParity, startup: describeStartupParity, session: describeSessionParity, provider: describeProviderParity,
   run: describeRunParity, ownership: describeOwnershipParity, 'owned-input': describeOwnedInputParity,
   'owned-workflows': describeOwnedWorkflowsParity, settlement: describeSettlementParity, 'pending-request': describePendingRequestParity,
@@ -441,7 +442,7 @@ export function describeHarnessParity(scope: HarnessParityScope, registration: H
 export function harnessGroupRows(): Map<string, Set<string>> {
   const rows = new Map<string, Set<string>>();
   for (const runner of RUNNER_IDS) {
-    describeHarnessParity({ runner, part: 'session' }, {
+    describeHarnessParity({ runner: runnerDefinition(runner), part: 'session' }, {
       describe: ((_name: string, ...args: unknown[]) => { (args.at(-1) as () => void)(); }) as typeof describe,
       it: (() => undefined) as unknown as typeof it,
       beforeAll: (() => undefined) as typeof beforeAll,
@@ -469,7 +470,8 @@ export function harnessParityRegistrations(runner: RunnerId, part?: HarnessParit
     allGroups: part === undefined,
   };
   // A part goes through its own module, so a group that module lacks is missing from its routes.
-  if (part) HARNESS_PARITY_PARTS[part]({ runner, part }, registration);
-  else describeHarnessParity({ runner, part: 'session' }, registration);
+  const definition = runnerDefinition(runner);
+  if (part) HARNESS_PARITY_PARTS[part]({ runner: definition, part }, registration);
+  else describeHarnessParity({ runner: definition, part: 'session' }, registration);
   return names;
 }

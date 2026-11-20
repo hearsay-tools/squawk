@@ -5,4 +5,4 @@ import { opencodeRunner } from './definition.ts';
 
 useRunners(onlyRunner(opencodeRunner, () => new OpencodeServerRunner()));
 
-describeHarnessParity({ runner: 'opencode', part: 'ownership' });
+describeHarnessParity({ runner: opencodeRunner, part: 'ownership' });

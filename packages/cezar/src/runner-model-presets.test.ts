@@ -1,3 +1,4 @@
+import './core/register-all-runners.testkit.ts';
 import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
 import { testHome, useTestHome } from './home/test-home.testkit.ts';
@@ -8,9 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS, type AgentRunner, type RunnerId } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
 import { generateRunName } from './runs/auto-name.ts';
-import { registerBuiltInRunners } from './runners/built-in.ts';
 
-registerBuiltInRunners();
 
 const run = vi.fn(async () => ({ text: '' }));
 const runners = async (): Promise<AgentRunner> => ({ run }) as unknown as AgentRunner;
