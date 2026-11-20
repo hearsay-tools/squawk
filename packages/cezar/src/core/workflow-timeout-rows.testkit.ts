@@ -9,11 +9,15 @@ import { WORKFLOW_TIMEOUT_CRITERIA } from './harness-parity-core.testkit.ts';
 // T7 is their seam row: each runner applies a set `spec.timeoutMs` in place of its own default.
 // T4 and T7 run on every runner (core/parity-classes.testkit.ts).
 // The family's class drops the cells a runner does not run before a part is chosen.
+// T4 and T7 call driveSeam only, so their parts load no engine; every `-engine` part and `defaults`
+// run a workflow through RunManager and install the engine cells first.
 const cells = (...rows: string[]) => BUILT_IN_RUNNER_IDS.flatMap(runner => rows.map(row => `${runner} ${row}`));
 const PARTS: Readonly<Record<string, readonly string[]>> = {
   defaults: cells('T1', 'T6'),
-  'explicit-zero': cells('T2', 'T7'),
-  'authored-and-standalone': cells('T3', 'T4', 'T5'),
+  'explicit-zero': cells('T7'),
+  'explicit-zero-engine': cells('T2'),
+  'authored-and-standalone': cells('T4'),
+  'authored-and-standalone-engine': cells('T3', 'T5'),
 };
 
 export type WorkflowTimeoutCell = (backend: string, criterion: (typeof WORKFLOW_TIMEOUT_CRITERIA)[number]) => CellBody;
