@@ -304,6 +304,12 @@ test('a code file no process loaded selects no spec when the map lists every loa
   assert.equal(pick('packages/cezar/src/delegation/owned-workspace-release.ts', sampleMap()), null);
   // Cockpit sources keep their browser evidence.
   assert.deepEqual(pick('packages/web/src/lib/unused.ts'), []);
+  // The rule only narrows an answer of every spec: unit tests and reviewed no-spec paths stay at
+  // none, even with incomplete specs (replay of hearsay-tools/squawk#3961 and hearsay-tools/squawk#3954).
+  const withIncomplete = sampleMap({ nodeLoaded: [], incomplete: [spec('smoke')] });
+  const unitAtMap = new Set(['packages/cezar/src/workflows/process-waits.test.ts', 'packages/cezar/src/lint/rule.ts']);
+  assert.deepEqual(classify('packages/cezar/src/workflows/process-waits.test.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
+  assert.deepEqual(classify('packages/cezar/src/lint/rule.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
   assert.match(mapProblem(sampleMap({ nodeLoaded: [3] })), /loaded files/);
   assert.match(mapProblem(sampleMap({ nodeLoaded: 'x' })), /loaded files/);
 });

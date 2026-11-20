@@ -379,16 +379,9 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes, partial, boot, atMap, setupChanged = false }) {
-  if (isDocsPath(file)) return none('documentation');
-  // Before the loaded-file rule: Vite bundles the Vitest config and what it imports into a
-  // temporary file, so their coverage names no repository path.
-  if (graph.config?.has(file)) return every('the browser suite configuration imports it');
-  const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
-  const setup = reaches(graph.setup, file);
-  // A setup main changed after the map may load what the map saw no process load.
-  if (unloaded(file, map, atMap) && !(setup && setupChanged)) return notLoaded(map, readers);
-  if (setup) return every('the browser suite setup loads it');
+/** The specs one changed file selects by the static rules and the function evidence. */
+function ruleSpecs(file, { map, graph, changes, partial, boot }, readers) {
+  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
@@ -399,6 +392,24 @@ export function classify(file, { map, graph, changes, partial, boot, atMap, setu
   const unread = NO_SPEC.find(([pattern]) => pattern.test(file));
   if (unread) return readers.length > 0 ? { specs: readers, reason: 'the specs that load it' } : none(unread[1]);
   return every(EVERY_SPEC.find(([pattern]) => pattern.test(file))[1]);
+}
+
+/**
+ * The specs one changed file selects: a list, or null for every spec, with the reason. The
+ * loaded-file rule only narrows an answer of every spec: a file no process the suite started
+ * loaded selects the specs that load it now and the incomplete specs instead.
+ */
+export function classify(file, context) {
+  const { map, graph, atMap, setupChanged = false } = context;
+  if (isDocsPath(file)) return none('documentation');
+  // Vite bundles the Vitest config and what it imports into a temporary file, so no coverage
+  // report names them.
+  if (graph.config?.has(file)) return every('the browser suite configuration imports it');
+  const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
+  const result = ruleSpecs(file, context, readers);
+  if (result.specs !== null || !unloaded(file, map, atMap)) return result;
+  // A setup main changed after the map may load what the map saw no process load.
+  return setupChanged && reaches(graph.setup, file) ? result : notLoaded(map, readers);
 }
 
 /**
