@@ -11,56 +11,18 @@ import {
   type RunProviderCommand,
 } from './provider-auth.ts';
 import { registeredRunners } from './runner-registry.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
 
-// The service reads every provider's login data from the registry; this file probes all five.
+// The service reads every provider's login data from the registry; this file probes every runner.
 
 /** One status probe runs one command per provider. */
 const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 const ROSTER = PROVIDER_IDS.length;
 
-const connectedResults: Record<string, ProviderCommandResult> = {
-  claude: { stdout: '{"loggedIn":true}', stderr: '', exitCode: 0 },
-  codex: { stdout: 'Logged in using ChatGPT', stderr: '', exitCode: 0 },
-  opencode: {
-    stdout: [
-      '┌  Credentials ~/.local/share/opencode/auth.json',
-      '│',
-      '●  Anthropic oauth',
-      '│',
-      '└  1 credential',
-    ].join('\n'),
-    stderr: '',
-    exitCode: 0,
-  },
-  pi: {
-    stdout: 'provider  model  context  max-out  thinking  images\nanthropic  claude  200K  64K  yes  yes',
-    stderr: '',
-    exitCode: 0,
-  },
-  // Recorded from the real OMP v18.4.11 binary (`omp models --json`, ANTHROPIC_API_KEY set),
-  // trimmed to two entries: an object wrapping the array, not a bare array.
-  omp: {
-    stdout: JSON.stringify({
-      models: [
-        {
-          provider: 'anthropic', kind: 'chat', id: 'claude-3-5-sonnet-20240620',
-          selector: 'anthropic/claude-3-5-sonnet-20240620', name: 'Claude Sonnet 3.5',
-          contextWindow: 200000, maxTokens: 8192, reasoning: false, thinking: null,
-          input: ['text', 'image'], cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-          pricingStatus: 'fixed',
-        },
-        {
-          provider: 'anthropic', kind: 'chat', id: 'claude-opus-4-1', selector: 'anthropic/claude-opus-4-1',
-          name: 'Claude Opus 4.1', contextWindow: 200000, maxTokens: 32000, reasoning: true,
-          thinking: ['low', 'medium', 'high', 'xhigh', 'max'], input: ['text', 'image'],
-          cost: { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 }, pricingStatus: 'fixed',
-        },
-      ],
-    }),
-    stderr: '',
-    exitCode: 0,
-  },
-};
+/** Each runner's status command and its recorded connected output are in its own folder (`runner-golden.testkit.ts`). */
+const goldens = Object.fromEntries(PROVIDER_IDS.map(id => [id, runnerGolden(id, 'providerAuth')]));
+const connectedResults: Record<string, ProviderCommandResult> = Object.fromEntries(PROVIDER_IDS.map(id => [id, goldens[id]!.connected]));
 
 /** Recorded from the real binary with no credentials: exit 0, an empty `models` array. */
 const ompUnauthenticated: ProviderCommandResult = { stdout: '{"models":[]}\n', stderr: '', exitCode: 0 };
@@ -94,12 +56,12 @@ afterEach(() => {
   }
 });
 
+/** The connected output of the runner whose status command `executable` is, or runs by a path that holds its name. */
 function resultFor(executable: string): ProviderCommandResult {
-  if (executable === 'claude') return connectedResults.claude!;
-  if (executable.includes('codex')) return connectedResults.codex!;
-  if (executable.includes('opencode')) return connectedResults.opencode!;
-  if (executable === 'omp') return connectedResults.omp!;
-  return connectedResults.pi!;
+  const byLength = [...PROVIDER_IDS].sort((a, b) => goldens[b]!.command.executable.length - goldens[a]!.command.executable.length);
+  const id = byLength.find(candidate => executable === goldens[candidate]!.command.executable)
+    ?? byLength.find(candidate => executable.includes(goldens[candidate]!.command.executable));
+  return connectedResults[id ?? 'pi']!;
 }
 
 function runner(
@@ -605,21 +567,16 @@ describe('omp provider status (omp models --json)', () => {
 });
 
 describe('ProviderAuthService', () => {
-  it('always returns claude, codex, opencode, pi, omp in descriptor order', async () => {
+  it('always returns every registered runner in descriptor order', async () => {
     const service = new ProviderAuthService({ runCommand: runner() });
 
     await expect(service.status()).resolves.toMatchObject({
-      providers: [
-        { provider: 'claude' },
-        { provider: 'codex' },
-        { provider: 'opencode' },
-        { provider: 'pi' },
-        { provider: 'omp' },
-      ],
+      providers: BUILT_IN_RUNNER_IDS.map(provider => ({ provider })),
     });
+    expect(PROVIDER_IDS).toEqual([...BUILT_IN_RUNNER_IDS]);
   });
 
-  it('runs the five status commands concurrently with a 10 second timeout', async () => {
+  it('runs every runner\'s status command concurrently with a 10 second timeout', async () => {
     const calls: Array<{ executable: string; args: readonly string[]; timeoutMs: number }> = [];
     let release!: () => void;
     const waiting = new Promise<void>((resolve) => { release = resolve; });
@@ -633,13 +590,7 @@ describe('ProviderAuthService', () => {
 
     // bound: the provider command callback must publish this step before the next action.
     await vi.waitFor(() => expect(calls).toHaveLength(ROSTER), { timeout: 10_000 });
-    expect(calls).toEqual([
-      { executable: 'claude', args: ['auth', 'status', '--json'], timeoutMs: 10_000 },
-      { executable: 'codex', args: ['login', 'status'], timeoutMs: 10_000 },
-      { executable: 'opencode', args: ['auth', 'list'], timeoutMs: 10_000 },
-      { executable: 'pi', args: ['--list-models'], timeoutMs: 10_000 },
-      { executable: 'omp', args: ['models', '--json'], timeoutMs: 10_000 },
-    ]);
+    expect(calls).toEqual(PROVIDER_IDS.map(id => ({ ...goldens[id]!.command, timeoutMs: 10_000 })));
     release();
     await expect(pending).resolves.toBeDefined();
   });
@@ -1423,13 +1374,7 @@ describe('ProviderAuthService', () => {
     expect(providerAuthChecksDisabled()).toBe(true);
     expect(service.reportRuntimeAuthFailure('claude')).toBeNull();
     await expect(service.status({ refresh: true })).resolves.toEqual({
-      providers: [
-        { provider: 'claude', status: 'connected' },
-        { provider: 'codex', status: 'connected' },
-        { provider: 'opencode', status: 'connected' },
-        { provider: 'pi', status: 'connected' },
-        { provider: 'omp', status: 'connected' },
-      ],
+      providers: PROVIDER_IDS.map(provider => ({ provider, status: 'connected' })),
     });
     expect(runCommand).not.toHaveBeenCalled();
     expect(createAuthFailureId).not.toHaveBeenCalled();
@@ -1544,7 +1489,7 @@ describe('ProviderAuthService', () => {
       .toBe('"C:\\Program Files\\op^%en^&co^!de^".exe" auth login');
   });
 
-  it('reports all five providers connected in CEZ_DRY_RUN without executing a command', async () => {
+  it('reports every provider connected in CEZ_DRY_RUN without executing a command', async () => {
     process.env.CEZ_DRY_RUN = '1';
     const runCommand = runner();
     const createAuthFailureId = vi.fn(() => 'unused-incident');
@@ -1553,13 +1498,7 @@ describe('ProviderAuthService', () => {
     expect(createAuthFailureId).not.toHaveBeenCalled();
 
     await expect(service.status()).resolves.toEqual({
-      providers: [
-        { provider: 'claude', status: 'connected' },
-        { provider: 'codex', status: 'connected' },
-        { provider: 'opencode', status: 'connected' },
-        { provider: 'pi', status: 'connected' },
-        { provider: 'omp', status: 'connected' },
-      ],
+      providers: PROVIDER_IDS.map(provider => ({ provider, status: 'connected' })),
     });
     expect(runCommand).not.toHaveBeenCalled();
   });

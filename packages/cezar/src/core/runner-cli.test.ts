@@ -1,20 +1,19 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
-import { readFileSync } from 'node:fs';
+import { runnerGolden } from './runner-golden.testkit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSafeSessionId, resumeCommand, terminalExecutable } from './runner-cli.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
-// The golden take-over command of every runner is a file in its own folder.
-const goldenCommand = (runner: string): string => readFileSync(new URL(`../runners/${runner}/__fixtures__/resume-command.txt`, import.meta.url), 'utf8').trimEnd();
+// The golden take-over command of every runner is in its own folder (`runner-golden.testkit.ts`).
 
 describe('resume commands — shared golden parity across BUILT_IN_RUNNER_IDS', () => {
   beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });
   afterEach(() => vi.unstubAllEnvs());
 
   it.each(BUILT_IN_RUNNER_IDS)('matches the golden take-over command for %s', (runner) => {
-    expect(resumeCommand(runner, sessionId)).toBe(goldenCommand(runner));
+    expect(resumeCommand(runner, sessionId)).toBe(runnerGolden(runner, 'resumeCommand'));
   });
 
   it.each(BUILT_IN_RUNNER_IDS)('rejects unsafe session ids for %s', (runner) => {

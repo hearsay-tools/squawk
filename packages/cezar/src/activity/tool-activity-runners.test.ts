@@ -1,9 +1,9 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync } from 'node:fs';
+import { runnerGolden } from '../core/runner-golden.testkit.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { ActivityTool } from '@open-mercato/cezar-contract';
 import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
 import type { UiEvent } from '../core/ui-events.ts';
 import { z } from 'zod';
@@ -20,20 +20,14 @@ const TOOL_STATUS = activityToolSchema.shape.status.enum;
 const WIRE_TOOL_STATUS = z.enum(Object.keys(OPENCODE_TOOL_STATUS_MAP)).enum;
 
 /**
- * One golden fixture for each runner: the events its mapper emits for that wire (each mapper's own
- * test holds the replay equal to `<fixture>.expected.json`), and what the tracker must show after
- * them. The `Record` makes a new runner fail to compile until it has a row.
+ * One golden for each runner (`runnerGolden(runner, 'toolActivity')`): the fixture whose events its
+ * mapper emits (each mapper's own test holds the replay equal to `<fixture>.expected.json`), and what
+ * the tracker must show after them.
  */
-const CASES: Record<string, { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> }> = {
-  // The denied call is first seen at its completion.
-  claude: { fixture: 'claude/__fixtures__/failed-and-denied', calls: 2, latest: { title: 'Ran rm -rf node_modules', toolKind: 'execute', status: TOOL_STATUS.declined } },
-  codex: { fixture: 'codex/__fixtures__/command-lifecycle', calls: 2, latest: { title: 'Ran bash -lc npm run lint', toolKind: 'execute', status: TOOL_STATUS.failed } },
-  // A pending → running update replaces the title.
-  opencode: { fixture: 'opencode/__fixtures__/tool-lifecycle', calls: 2, latest: { title: 'Fetch https://example.com/docs', toolKind: 'fetch', status: TOOL_STATUS.failed } },
-  pi: { fixture: 'pi/__fixtures__/rpc-lifecycle', calls: 4, latest: { title: 'Ran npm test', toolKind: 'execute', status: TOOL_STATUS.failed } },
-  // Two edits take their final title only at completion.
-  omp: { fixture: 'omp/__fixtures__/rpc-edit-todo', calls: 7, latest: { title: 'Update plan', toolKind: 'plan', status: TOOL_STATUS.completed } },
-};
+function golden(runner: string) {
+  const { fixture, calls, latest } = runnerGolden(runner, 'toolActivity');
+  return { fixture: `${runner}/__fixtures__/${fixture}`, calls, latest };
+}
 
 function events(fixture: string): UiEvent[] {
   return JSON.parse(readFileSync(join(FIXTURES, `${fixture}.expected.json`), 'utf8')) as UiEvent[];
@@ -49,12 +43,8 @@ function track(fixture: string, runId = 'run-1'): ToolActivityTracker {
 }
 
 describe('tool activity from each runner’s mapper output', () => {
-  it('has a fixture for every runner', () => {
-    expect(Object.keys(CASES).sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
-  });
-
   it.each(BUILT_IN_RUNNER_IDS)('%s: its tool items reach the tracker through the UI event sink', (runner) => {
-    const { fixture, calls, latest } = CASES[runner]!;
+    const { fixture, calls, latest } = golden(runner);
     const read = track(fixture).read('run-1', NOW);
     expect(read?.tool).toEqual({ ...latest, startedAt: AT, endedAt: AT });
     expect(read?.rate.at(-1)).toBe(calls);

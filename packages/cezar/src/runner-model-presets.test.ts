@@ -1,5 +1,6 @@
 import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import './core/register-all-runners.testkit.ts';
+import { runnerGolden } from './core/runner-golden.testkit.ts';
 import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
 import { testHome, useTestHome } from './home/test-home.testkit.ts';
@@ -15,14 +16,8 @@ import { generateRunName } from './runs/auto-name.ts';
 const run = vi.fn(async () => ({ text: '' }));
 const runners = async (): Promise<AgentRunner> => ({ run }) as unknown as AgentRunner;
 
-/** `plannerModel` and `namerModel` are Claude model aliases: only the Claude runner gets them. */
-const EXPECTED: Record<string, { planner: string | undefined; namer: string | undefined }> = {
-  claude: { planner: 'sonnet', namer: 'haiku' },
-  codex: { planner: undefined, namer: undefined },
-  opencode: { planner: undefined, namer: undefined },
-  pi: { planner: undefined, namer: undefined },
-  omp: { planner: undefined, namer: undefined },
-};
+/** `plannerModel` and `namerModel` are Claude model aliases: only the Claude runner gets them. Each runner's golden holds its own. */
+const EXPECTED = (runner: string): { planner?: string; namer?: string } => runnerGolden(runner, 'plannerModels');
 
 describe('planner and namer model presets per default runner', () => {
   let home: string;
@@ -52,13 +47,13 @@ describe('planner and namer model presets per default runner', () => {
     useDefaultRunner(runner);
     await planChain(repoRoot, 'do it', fixedSkillCatalog(), testHome(), runners);
     expect(run).toHaveBeenCalled();
-    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner]!.planner);
+    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED(runner).planner);
   });
 
   it.each(BUILT_IN_RUNNER_IDS)('names on %s with its preset model or none', async (runner) => {
     useDefaultRunner(runner);
     await generateRunName(repoRoot, { task: 'rename the settings page' }, testHome(), runners);
     expect(run).toHaveBeenCalled();
-    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner]!.namer);
+    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED(runner).namer);
   });
 });

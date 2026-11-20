@@ -6,17 +6,12 @@ import { spawnSessionLeader } from './session-process.ts';
 import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
 import { profileEnv } from './agent-profiles.ts';
-import { discoverClaudeSkills } from '../runners/claude/claude-skill-catalog.ts';
-import { discoverCodexSkills } from '../runners/codex/codex-skill-catalog.ts';
-import { discoverOpencodeSkills } from '../runners/opencode/opencode-skill-catalog.ts';
-import { discoverPiSkills } from '../runners/pi/pi-skill-catalog.ts';
-import { discoverOmpSkills } from '../runners/omp/omp-skill-catalog.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
 import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
 // Every case runs over each runner id; the probe builds each one's child env through the registry.
-const discovers: Record<string, (options: SkillDiscoveryOptions) => Promise<import('./runner-skill-catalog.ts').SkillCatalog>> = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
 // The member reports readiness after installing its handlers; only then does its leader crash.
 const leaderFirst = `const { spawn } = require('node:child_process');
 const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSource()} setInterval(() => {}, 1000); process.send('ready')`)}],
@@ -43,8 +38,10 @@ for (const runner of BUILT_IN_RUNNER_IDS) describe(`${runner} skill probe proces
       exit = once(child, 'exit');
       return child;
     };
+    // Loaded before the catalog's deadline starts, so its first import cannot use it up.
+    const discoverSkills = await runnerDefinition(runner).loadSkillCatalog();
     const catalog = new RunnerSkillCatalog({ timeoutMs: failure === 'hung' ? 200 : 4000, adapters: { [runner]: {
-      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discovers[runner]!({ ...q, spawn: launch, timeoutMs: 3000, signal }),
+      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discoverSkills({ ...q, spawn: launch, timeoutMs: 3000, signal }),
     } } });
     // Real child exit and OS process-group reaping require the product's exit signal.
     const result = await catalog.get({ runner, cwd: tmpdir(), accountHome: '/profiles/probe' });

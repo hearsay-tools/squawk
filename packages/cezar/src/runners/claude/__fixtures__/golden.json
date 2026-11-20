@@ -1,0 +1,72 @@
+{
+  "resumeCommand": "claude --resume s1",
+  "toolActivity": {
+    "note": "The denied call is first seen at its completion.",
+    "fixture": "failed-and-denied",
+    "calls": 2,
+    "latest": {
+      "title": "Ran rm -rf node_modules",
+      "toolKind": "execute",
+      "status": "declined"
+    }
+  },
+  "providerAuth": {
+    "command": {
+      "executable": "claude",
+      "args": [
+        "auth",
+        "status",
+        "--json"
+      ]
+    },
+    "connected": {
+      "stdout": "{\"loggedIn\":true}",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disconnected": {
+      "stdout": "{\"loggedIn\":false}",
+      "stderr": "",
+      "exitCode": 1
+    }
+  },
+  "installerDryRun": "info: DRY RUN — would run: npm install -g @anthropic-ai/claude-code",
+  "plannerModels": {
+    "planner": "sonnet",
+    "namer": "haiku"
+  },
+  "workerAccountBinding": {
+    "provider": "claude",
+    "profileId": "work",
+    "homePath": "/home/x/.claude",
+    "claudeLayout": {
+      "kind": "relocated"
+    }
+  },
+  "runnerEntry": {
+    "displayName": "Claude Code",
+    "modelListName": "Claude",
+    "modelIdScope": "own",
+    "pickerLabel": "claude",
+    "pickerDescription": "Claude Code CLI",
+    "icon": "bot",
+    "installHint": "npm i -g @anthropic-ai/claude-code",
+    "loginCommand": "claude auth login",
+    "accountFolderExample": "~/.claude-second",
+    "suggested": [
+      "",
+      "opus",
+      "sonnet",
+      "haiku"
+    ],
+    "retired": [
+      "claude-fable-5",
+      "claude-opus-4-8",
+      "claude-sonnet-5",
+      "claude-haiku-4-5"
+    ],
+    "paneLabel": "Claude",
+    "showsUserMcp": true,
+    "emptyGroups": []
+  }
+}

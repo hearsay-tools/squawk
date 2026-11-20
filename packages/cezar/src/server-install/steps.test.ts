@@ -1,5 +1,6 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
+import { runnerGolden } from '../core/runner-golden.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoUi } from './ui.ts';
@@ -255,26 +256,20 @@ describe('agent CLI installers', () => {
     } };
   }
 
-  const EXPECTED: Record<(typeof BUILT_IN_RUNNER_IDS)[number], string> = {
-    claude: 'info: DRY RUN — would run: npm install -g @anthropic-ai/claude-code',
-    codex: 'info: DRY RUN — would run: npm install -g @openai/codex',
-    opencode: 'note opencode: Install OpenCode from https://opencode.ai, then re-run.',
-    pi: 'warn: no known installer for pi — install it manually',
-    omp: 'warn: no known installer for omp — install it manually',
-  };
+  const EXPECTED = (runner: string): string => runnerGolden(runner, 'installerDryRun');
 
   it.each(BUILT_IN_RUNNER_IDS)('brew installer handles %s', async (runner) => {
     const { ui, lines } = recordingUi();
     await brewInstallTool(makeCtx({ ui, dryRun: true }), runner);
-    expect(lines).toEqual([EXPECTED[runner]]);
+    expect(lines).toEqual([EXPECTED(runner)]);
   });
 
   it.each(BUILT_IN_RUNNER_IDS)('apt installer handles %s', async (runner) => {
     const { ui, lines } = recordingUi();
     const interactive = vi.fn(async () => 0);
     await aptInstallTool(makeCtx({ ui, dryRun: true, runner: { interactive } }), runner);
-    const npm = /npm install -g \S+$/.exec(EXPECTED[runner]!);
-    expect(lines).toEqual([npm ? `info: DRY RUN — would run: sudo bash -lc '${npm[0]}'` : EXPECTED[runner]]);
+    const npm = /npm install -g \S+$/.exec(EXPECTED(runner));
+    expect(lines).toEqual([npm ? `info: DRY RUN — would run: sudo bash -lc '${npm[0]}'` : EXPECTED(runner)]);
     expect(interactive).not.toHaveBeenCalled();
   });
 });

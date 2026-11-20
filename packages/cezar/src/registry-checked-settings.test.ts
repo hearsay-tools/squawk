@@ -1,5 +1,6 @@
 import './core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNERS } from './runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
+import { runnerGolden } from './core/runner-golden.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome, testHome } from './home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -38,7 +39,7 @@ describe('registry-checked stored settings with every built-in registered', () =
   });
 
   it('project config keeps every built-in defaultRunner, and a raw-merge write keeps the file value', async () => {
-    for (const { id } of BUILT_IN_RUNNERS) {
+    for (const id of BUILT_IN_RUNNER_IDS) {
       writeFileSync(join(repoRoot, '.ai/cezar', 'config.json'), JSON.stringify({ defaultRunner: id }), 'utf8');
       expect((await loadConfig(repoRoot, testHome())).defaultRunner, id).toBe(id);
     }
@@ -83,18 +84,11 @@ describe('registry-checked stored settings with every built-in registered', () =
   });
 
   it('worker account bindings parse for every built-in provider and survive their JSON persistence', () => {
-    const bindings = [
-      { provider: 'claude', profileId: 'work', homePath: '/home/x/.claude', claudeLayout: { kind: 'relocated' as const } },
-      { provider: 'codex', profileId: 'work', homePath: '/home/x/codex-work' },
-      // OpenCode carries no named accounts: only its home-less default binding parses.
-      { provider: 'opencode', profileId: 'default' },
-      { provider: 'pi', profileId: 'work', homePath: '/home/x/pi-work' },
-      { provider: 'omp', profileId: 'default' },
-    ];
+    // A runner that carries no named accounts (OpenCode, OMP) writes only its home-less default binding.
+    const bindings = BUILT_IN_RUNNER_IDS.map(runner => runnerGolden(runner, 'workerAccountBinding'));
     for (const binding of bindings) {
       const read = workerAccountBindingSchema.parse(JSON.parse(JSON.stringify(binding)));
       expect(read.provider).toBe(binding.provider);
     }
-    expect(bindings).toHaveLength(BUILT_IN_RUNNERS.length);
   });
 });

@@ -1,0 +1,57 @@
+{
+  "resumeCommand": "codex resume s1",
+  "toolActivity": {
+    "fixture": "command-lifecycle",
+    "calls": 2,
+    "latest": {
+      "title": "Ran bash -lc npm run lint",
+      "toolKind": "execute",
+      "status": "failed"
+    }
+  },
+  "providerAuth": {
+    "command": {
+      "executable": "codex",
+      "args": [
+        "login",
+        "status"
+      ]
+    },
+    "connected": {
+      "stdout": "Logged in using ChatGPT",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disconnected": {
+      "stdout": "Not logged in",
+      "stderr": "",
+      "exitCode": 1
+    }
+  },
+  "installerDryRun": "info: DRY RUN — would run: npm install -g @openai/codex",
+  "plannerModels": {},
+  "workerAccountBinding": {
+    "provider": "codex",
+    "profileId": "work",
+    "homePath": "/home/x/codex-work"
+  },
+  "runnerEntry": {
+    "displayName": "Codex",
+    "modelListName": "Codex",
+    "modelIdScope": "own",
+    "pickerLabel": "codex",
+    "pickerDescription": "OpenAI Codex (app-server)",
+    "icon": "sparkles",
+    "installHint": "npm i -g @openai/codex",
+    "loginCommand": "codex login",
+    "accountFolderExample": "~/.codex-second",
+    "suggested": [
+      ""
+    ],
+    "retired": [],
+    "paneLabel": "Codex",
+    "paneNote": "An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.",
+    "showsUserMcp": false,
+    "emptyGroups": []
+  }
+}

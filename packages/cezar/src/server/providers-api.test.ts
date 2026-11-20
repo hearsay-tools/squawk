@@ -13,6 +13,7 @@ import {
   type RunProviderCommand,
 } from '../core/provider-auth.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
+import { runnerGolden } from '../core/runner-golden.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -28,32 +29,13 @@ const HANG_GUARD_MS = 15_000;
 
 const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 
-const CONNECTED_OUTPUT: Record<ProviderId, string> = {
-  claude: '{"loggedIn":true}',
-  codex: 'Logged in using ChatGPT',
-  opencode: [
-    '┌  Credentials ~/.local/share/opencode/auth.json',
-    '●  Anthropic oauth',
-    '└  1 credential',
-  ].join('\n'),
-  pi: 'provider  model  context  max-out  thinking  images\nanthropic  claude  200K  64K  yes  yes',
-  omp: '{"models":[{"provider":"anthropic","id":"claude-sonnet-4-5"}]}',
-};
-
-const DISCONNECTED_OUTPUT: Record<ProviderId, string> = {
-  claude: '{"loggedIn":false}',
-  codex: 'Not logged in',
-  opencode: [
-    '┌  Credentials ~/.local/share/opencode/auth.json',
-    '└  0 credentials',
-  ].join('\n'),
-  pi: 'No models available. Use /login to authenticate.',
-  omp: '{"models":[]}',
-};
+/** Each runner's status command, and what it prints connected and not, are in its own folder (`runner-golden.testkit.ts`). */
+const GOLDENS = Object.fromEntries(PROVIDER_IDS.map(id => [id, runnerGolden(id, 'providerAuth')]));
 
 const providerForExecutable = (executable: string): ProviderId => {
-  if (executable === 'claude' || executable === 'codex' || executable === 'opencode' || executable === 'pi' || executable === 'omp') return executable;
-  throw new Error(`unexpected executable: ${executable}`);
+  const provider = PROVIDER_IDS.find(id => GOLDENS[id]!.command.executable === executable);
+  if (provider === undefined) throw new Error(`unexpected executable: ${executable}`);
+  return provider;
 };
 
 const memoryWorkspaceConfig = (disabledProviders: ProviderId[] = []) => {
@@ -112,11 +94,7 @@ describe('workspace provider API', () => {
       if (state === 'unknown') {
         return { stdout: 'secret output', stderr: 'secret error', exitCode: 17 };
       }
-      return {
-        stdout: state === 'connected' ? CONNECTED_OUTPUT[provider]! : DISCONNECTED_OUTPUT[provider]!,
-        stderr: '',
-        exitCode: state === 'connected' || provider === 'opencode' || provider === 'omp' ? 0 : 1,
-      };
+      return GOLDENS[provider]![state === 'connected' ? 'connected' : 'disconnected'];
     }),
   });
 
@@ -168,26 +146,24 @@ describe('workspace provider API', () => {
     }), '/api/v1/providers/status');
 
     expect(response.status).toBe(200);
+    const rows: Record<string, unknown> = {
+      codex: { provider: 'codex', status: 'disconnected', enabled: false },
+      opencode: {
+        provider: 'opencode',
+        status: 'not-installed',
+        hint: 'Install OpenCode, then run `opencode auth login`.',
+        enabled: true,
+      },
+    };
     expect(await response.json()).toEqual({
-      providers: [
-        { provider: 'claude', status: 'connected', enabled: true },
-        { provider: 'codex', status: 'disconnected', enabled: false },
-        {
-          provider: 'opencode',
-          status: 'not-installed',
-          hint: 'Install OpenCode, then run `opencode auth login`.',
-          enabled: true,
-        },
-        { provider: 'pi', status: 'connected', enabled: true },
-        { provider: 'omp', status: 'connected', enabled: true },
-      ],
+      providers: PROVIDER_IDS.map(provider => rows[provider] ?? { provider, status: 'connected', enabled: true }),
     });
   });
 
   it('GET /api/v1/providers/status skips probes and provider preferences under the explicit model lock', async () => {
     process.env.CEZ_AGENT_MODELS_LOCKED = '1';
     const runCommand = vi.fn<RunProviderCommand>();
-    const workspaceConfig = memoryWorkspaceConfig(['claude', 'codex', 'opencode', 'pi']);
+    const workspaceConfig = memoryWorkspaceConfig(PROVIDER_IDS.slice(0, -1));
     const response = await apiRequest(app({
       providerAuth: service({}, runCommand),
       workspaceConfig,
@@ -195,13 +171,7 @@ describe('workspace provider API', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      providers: [
-        { provider: 'claude', status: 'connected', enabled: true },
-        { provider: 'codex', status: 'connected', enabled: true },
-        { provider: 'opencode', status: 'connected', enabled: true },
-        { provider: 'pi', status: 'connected', enabled: true },
-        { provider: 'omp', status: 'connected', enabled: true },
-      ],
+      providers: PROVIDER_IDS.map(provider => ({ provider, status: 'connected', enabled: true })),
     });
     expect(runCommand).not.toHaveBeenCalled();
   });
@@ -706,7 +676,7 @@ describe('workspace provider API', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'provider must be claude, codex, opencode, pi, or omp' });
+    expect(await response.json()).toEqual({ error: `provider must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}` });
   });
 
   it('never places request-controlled text in the opened command', async () => {

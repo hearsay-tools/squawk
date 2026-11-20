@@ -13,11 +13,14 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { jsonZodValidator } from './validators.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 registerBuiltInRunners();
 
 /** The closed enum's refusal of a runner id, recorded on main at 9b5394c4a. */
-const ENUM = 'Invalid option: expected one of "claude"|"codex"|"opencode"|"pi"|"omp"';
+const ENUM = `Invalid option: expected one of ${BUILT_IN_RUNNER_IDS.map(id => `"${id}"`).join('|')}`;
+/** The route messages that list the runner ids: "a, b, or c". */
+const IDS = `${BUILT_IN_RUNNER_IDS.slice(0, -1).join(', ')}, or ${BUILT_IN_RUNNER_IDS.at(-1)}`;
 const step = { id: 'a', name: 'A', prompt: 'x', runner: 'gemini' };
 
 /**
@@ -49,7 +52,7 @@ describe('an unknown runner id on each request route', () => {
     ['POST', '/api/v1/runs', { task: 't', workflow: 'quick-task', runner: 'gemini' }, `runner: ${ENUM}`],
     ['POST', '/api/v1/runs', { task: 't', steps: [step] }, `steps.0.runner: ${ENUM}`],
     ['POST', '/api/v1/runs/r1/continue', { runner: 'gemini' }, `runner: ${ENUM}`],
-    ['POST', '/api/v1/providers/connect', { provider: 'gemini' }, 'provider must be claude, codex, opencode, pi, or omp'],
+    ['POST', '/api/v1/providers/connect', { provider: 'gemini' }, `provider must be ${IDS}`],
     ['PUT', '/api/v1/providers/gemini/enabled', { enabled: true }, 'provider and enabled boolean are required'],
     ['POST', '/api/v1/providers/gemini/retry', { authFailureId: 'f1' }, 'provider and current authFailureId are required'],
     ['POST', '/api/v1/workspace/agent-profiles', { provider: 'gemini', configDir: '/x' }, `provider: ${ENUM}`],
@@ -57,7 +60,7 @@ describe('an unknown runner id on each request route', () => {
     ['PUT', '/api/v1/workspace/config', { agentDefaults: { runner: 'gemini' } }, `agentDefaults.runner: ${ENUM}`],
     ['PUT', '/api/v1/workspace/ui-state', { dismissedProviderAuthFailures: { gemini: 'x' } }, 'dismissedProviderAuthFailures: Unrecognized key: "gemini"'],
     ['PUT', '/api/v1/config', { defaultRunner: 'gemini' }, `defaultRunner: ${ENUM}`],
-    ['GET', '/api/v1/models?runner=gemini', undefined, 'runner must be claude, codex, opencode, pi, or omp'],
+    ['GET', '/api/v1/models?runner=gemini', undefined, `runner must be ${IDS}`],
     ['GET', '/api/v1/runner-skills?runner=gemini', undefined, `runner: ${ENUM}`],
     ['POST', '/api/v1/workflows', { name: 'w', steps: [step] }, `steps.0.runner: ${ENUM}`],
     ['POST', '/api/v1/automations', { name: 'n', task: { prompt: 'p', runner: 'gemini' } }, `task.runner: ${ENUM}`],

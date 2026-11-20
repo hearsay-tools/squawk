@@ -1,0 +1,56 @@
+{
+  "resumeCommand": "opencode --session s1",
+  "toolActivity": {
+    "note": "A pending → running update replaces the title.",
+    "fixture": "tool-lifecycle",
+    "calls": 2,
+    "latest": {
+      "title": "Fetch https://example.com/docs",
+      "toolKind": "fetch",
+      "status": "failed"
+    }
+  },
+  "providerAuth": {
+    "command": {
+      "executable": "opencode",
+      "args": [
+        "auth",
+        "list"
+      ]
+    },
+    "connected": {
+      "stdout": "┌  Credentials ~/.local/share/opencode/auth.json\n│\n●  Anthropic oauth\n│\n└  1 credential",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disconnected": {
+      "stdout": "┌  Credentials ~/.local/share/opencode/auth.json\n└  0 credentials",
+      "stderr": "",
+      "exitCode": 0
+    }
+  },
+  "installerDryRun": "note opencode: Install OpenCode from https://opencode.ai, then re-run.",
+  "plannerModels": {},
+  "workerAccountBinding": {
+    "provider": "opencode",
+    "profileId": "default"
+  },
+  "runnerEntry": {
+    "displayName": "OpenCode",
+    "modelListName": "OpenCode",
+    "modelIdScope": "provider-spanning",
+    "pickerLabel": "opencode",
+    "pickerDescription": "OpenCode (serve)",
+    "icon": "bot",
+    "installHint": "https://opencode.ai",
+    "loginCommand": "opencode auth login",
+    "suggested": [
+      ""
+    ],
+    "retired": [],
+    "paneLabel": "OpenCode",
+    "paneNote": "An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.",
+    "showsUserMcp": false,
+    "emptyGroups": []
+  }
+}

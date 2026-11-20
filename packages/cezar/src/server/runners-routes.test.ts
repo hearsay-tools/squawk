@@ -11,31 +11,24 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { readRunners } from './runners-routes.ts';
 import { createApp } from './server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { runnerGolden } from '../core/runner-golden.testkit.ts';
 
 registerBuiltInRunners();
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
-/** Today's display facts of the built-in runners, in display order (hearsay-tools/squawk#3897). */
-const BUILT_IN_DISPLAY = [
-  { id: 'claude', displayName: 'Claude Code', modelListName: 'Claude', modelIdScope: 'own' },
-  { id: 'codex', displayName: 'Codex', modelListName: 'Codex', modelIdScope: 'own' },
-  { id: 'opencode', displayName: 'OpenCode', modelListName: 'OpenCode', modelIdScope: 'provider-spanning' },
-  { id: 'pi', displayName: 'pi', modelListName: 'Pi', modelIdScope: 'provider-spanning' },
-  { id: 'omp', displayName: 'OMP', modelListName: 'OMP', modelIdScope: 'provider-spanning' },
-];
-
-/** What the cockpit's tables held before hearsay-tools/squawk#3898 moved them into the definitions:
- *  the runner picker (`RUNNERS`), `PROVIDER_INSTALL`, `PROVIDERS`' login, `FOLDER_EXAMPLE`, the
- *  icon map, `MODELS_BY_RUNNER`, `RETIRED_MODEL_IDS` and the labels of `AGENT_DESCRIPTORS`. */
-const BUILT_IN_COCKPIT_DATA = [
-  { id: 'claude', pickerLabel: 'claude', pickerDescription: 'Claude Code CLI', icon: 'bot', installHint: 'npm i -g @anthropic-ai/claude-code', loginCommand: 'claude auth login', accountFolderExample: '~/.claude-second', suggested: ['', 'opus', 'sonnet', 'haiku'], retired: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'], paneLabel: 'Claude' },
-  { id: 'codex', pickerLabel: 'codex', pickerDescription: 'OpenAI Codex (app-server)', icon: 'sparkles', installHint: 'npm i -g @openai/codex', loginCommand: 'codex login', accountFolderExample: '~/.codex-second', suggested: [''], retired: [], paneLabel: 'Codex' },
-  { id: 'opencode', pickerLabel: 'opencode', pickerDescription: 'OpenCode (serve)', icon: 'bot', installHint: 'https://opencode.ai', loginCommand: 'opencode auth login', suggested: [''], retired: [], paneLabel: 'OpenCode' },
-  { id: 'pi', pickerLabel: 'pi', pickerDescription: 'pi CLI (provider/model)', icon: 'bot', installHint: 'https://github.com/badlogic/pi-mono', loginCommand: 'pi /login', accountFolderExample: '~/.pi-second/agent', suggested: [''], retired: [], paneLabel: 'Pi' },
-  { id: 'omp', pickerLabel: 'OMP', pickerDescription: 'Oh My Pi CLI (provider/model)', icon: 'bot', installHint: 'https://omp.sh', loginCommand: 'omp login', suggested: [''], retired: [], paneLabel: 'OMP' },
-];
+/** Each runner's entry as `GET /api/v1/runners` sends it, with its Agent config pane's differences, is in its own
+ *  folder (`runnerGolden(runner, 'runnerEntry')`): its display facts (hearsay-tools/squawk#3897) and what the cockpit's
+ *  tables held before hearsay-tools/squawk#3898 moved them into the definitions: the runner picker (`RUNNERS`),
+ *  `PROVIDER_INSTALL`, `PROVIDERS`' login, `FOLDER_EXAMPLE`, the icon map, `MODELS_BY_RUNNER`, `RETIRED_MODEL_IDS`
+ *  and the labels of `AGENT_DESCRIPTORS`. */
+const entries = BUILT_IN_RUNNER_IDS.map((id) => ({ id, ...runnerGolden(id, 'runnerEntry') }));
+const BUILT_IN_DISPLAY = entries.map(({ id, displayName, modelListName, modelIdScope }) => ({ id, displayName, modelListName, modelIdScope }));
+const BUILT_IN_COCKPIT_DATA = entries.map(({ id, pickerLabel, pickerDescription, icon, installHint, loginCommand, accountFolderExample, suggested, retired, paneLabel }) => ({
+  id, pickerLabel, pickerDescription, icon, installHint, loginCommand, ...(accountFolderExample === undefined ? {} : { accountFolderExample }), suggested, retired, paneLabel,
+}));
 
 it('GET /api/v1/runners lists the registered runners in display order with their display part', async () => {
   const detectEnvironment = vi.fn<() => Promise<BackendCheck[]>>(async () => []);
@@ -69,8 +62,7 @@ it('sends each runner’s Agent config pane: three groups, the MCP note, and who
     expect(pane.groups.map((group) => group.id)).toEqual(['settings', 'mcp', 'memory']);
     expect(pane.groups.find((group) => group.id === 'mcp')?.note).toBeTruthy();
   }
-  const editorPlusCommit = 'An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.';
-  expect([...panes].map(([id, pane]) => [id, pane.note])).toEqual([['claude', undefined], ['codex', editorPlusCommit], ['opencode', editorPlusCommit], ['pi', editorPlusCommit], ['omp', editorPlusCommit]]);
-  expect([...panes].flatMap(([id, pane]) => pane.groups.filter((group) => group.showsUserMcp).map(() => id))).toEqual(['claude']);
-  expect([...panes].flatMap(([id, pane]) => pane.groups.filter((group) => group.empty !== undefined).map((group) => `${id}:${group.id}`))).toEqual(['pi:mcp']);
+  expect([...panes].map(([id, pane]) => [id, pane.note])).toEqual(entries.map(({ id, paneNote }) => [id, paneNote]));
+  expect([...panes].flatMap(([id, pane]) => pane.groups.filter((group) => group.showsUserMcp).map(() => id))).toEqual(entries.filter(({ showsUserMcp }) => showsUserMcp).map(({ id }) => id));
+  expect([...panes].flatMap(([id, pane]) => pane.groups.filter((group) => group.empty !== undefined).map((group) => `${id}:${group.id}`))).toEqual(entries.flatMap(({ id, emptyGroups }) => emptyGroups.map((group) => `${id}:${group}`)));
 });
