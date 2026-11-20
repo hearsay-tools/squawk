@@ -1,7 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
+import { runsOn, SCENARIO_RUNNER, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { registrationStrings } from './registration-coverage.testkit.ts';
 
 type Cell = { name: string; body: CellBody; timeout: number | undefined };
@@ -77,12 +77,54 @@ function cellKind(name: string): string {
   return (BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner) ? `<runner> ${afterRunner(key)}` : key;
 }
 
+/**
+ * Each runner registers each kind of cell, so the loss of one runner's cell fails whatever else the
+ * family registers. The expected side does not come from the registrations:
+ * - a row's cells (`R92`, with its variants): every runner that has the row has the same variants, and
+ *   every runner it exempts has its exemption (which runners have the row is the `pairs` check, from
+ *   the parity classes);
+ * - a runner's cell with no row (`relative project skillPath ...`): every registered runner has it, or
+ *   only `SCENARIO_RUNNER` does, as in a shared family; a kind in `runnerKinds` is on exactly the
+ *   runners its rule selects. The rule reads the runner's declared facts, never a list of ids.
+ * A cell that no runner owns is its own kind, pinned by `count`.
+ */
+function expectEveryRunnerRegistersEveryKind(expected: readonly string[], runnerKinds: Readonly<Record<string, (runner: string) => boolean>>): void {
+  const roster = BUILT_IN_RUNNER_IDS as readonly string[];
+  const rows = new Map<string, Map<string, Set<string>>>();
+  const loose = new Map<string, Set<string>>();
+  for (const name of expected) {
+    const key = parityCellKey(name);
+    const runner = key.slice(0, key.indexOf(' '));
+    if (!roster.includes(runner)) continue;
+    const rest = afterRunner(key);
+    const row = /^[A-Z]\d+\b/.exec(rest)?.[0];
+    if (row === undefined) { loose.set(rest, (loose.get(rest) ?? new Set()).add(runner)); continue; }
+    // A runner the parity exemptions exempt from a row registers its exemption, not the row's live cells.
+    const kind = name.includes(' exemption — ') ? `${row} exemption` : row;
+    const byRunner = rows.get(kind) ?? new Map<string, Set<string>>();
+    byRunner.set(runner, (byRunner.get(runner) ?? new Set()).add(rest));
+    rows.set(kind, byRunner);
+  }
+  for (const [row, byRunner] of rows) {
+    const [first, ...others] = [...byRunner.entries()];
+    for (const [runner, kinds] of others) expect([...kinds].sort(), `${row}: ${runner} registers the variants ${first![0]} does`).toEqual([...first![1]].sort());
+  }
+  for (const [kind, runners] of loose) {
+    const rule = runnerKinds[kind];
+    const owners = rule ? roster.filter(rule) : undefined;
+    const registered = roster.filter(runner => runners.has(runner));
+    if (owners) expect(registered, kind).toEqual(owners);
+    else if (!(registered.length === 1 && registered[0] === SCENARIO_RUNNER)) expect(registered, kind).toEqual([...roster]);
+  }
+}
+
 /** Read the actual entrypoints, then compare their registrations with the unsplit suite. */
 export function checkParityRegistration(
   family: string,
   register: (part: ParityPart, collect?: ParityCollector) => void,
   pairs: readonly string[],
   count: number,
+  runnerKinds: Readonly<Record<string, (runner: string) => boolean>> = {},
   directory = new URL('.', import.meta.url),
 ): void {
   const expected: string[] = [];
@@ -90,6 +132,7 @@ export function checkParityRegistration(
   // `count` pins the kinds of cell, not their copies per runner: a new runner adds copies of the
   // kinds that exist, so it changes no count, while a lost shared cell or constructor variant does.
   expect(new Set(expected.map(cellKind)).size).toBe(count);
+  expectEveryRunnerRegistersEveryKind(expected, runnerKinds);
   const registeredPairs = expected.flatMap(name => {
     const pair = /^(\w+) ([A-Z]\d+)\b/.exec(name);
     return pair ? [`${pair[1]} ${pair[2]}`] : [];
