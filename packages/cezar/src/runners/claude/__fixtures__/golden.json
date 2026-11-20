@@ -68,5 +68,8 @@
     "paneLabel": "Claude",
     "showsUserMcp": true,
     "emptyGroups": []
-  }
+  },
+  "askKinds": [
+    "cezar_ask"
+  ]
 }

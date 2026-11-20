@@ -53,5 +53,8 @@
     "paneNote": "An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.",
     "showsUserMcp": false,
     "emptyGroups": []
-  }
+  },
+  "askKinds": [
+    "item/tool/requestUserInput"
+  ]
 }
