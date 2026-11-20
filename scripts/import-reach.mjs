@@ -147,6 +147,12 @@ function childNodes(node, skipped) {
   return out;
 }
 
+// The child that holds a name, not a reference, when the node is not computed: `x.Hub`,
+// `{ Hub: 1 }` and `class { Hub() {} }` do not use an import named Hub. A shorthand `{ Hub }`
+// still does, through its value.
+const NAME_KEYS = { MemberExpression: 'property', OptionalMemberExpression: 'property', ObjectProperty: 'key', ObjectMethod: 'key',
+  ClassProperty: 'key', ClassMethod: 'key', ClassAccessorProperty: 'key', JSXAttribute: 'name', LabeledStatement: 'label' };
+
 const typeOnly = (n) => TYPE_NODE.test(n.type) || n.type === 'ImportDeclaration' || (n.type === 'ExportNamedDeclaration' && n.exportKind === 'type');
 
 /** Names used in value positions: an import whose names never appear here is type-only. */
@@ -161,7 +167,8 @@ function valueNames(ast) {
       continue;
     }
     if (n.type === 'Identifier' || n.type === 'JSXIdentifier') names.add(n.name);
-    stack.push(...childNodes(n, SKIPPED_KEYS));
+    const nameKey = n.computed ? undefined : NAME_KEYS[n.type];
+    stack.push(...childNodes(n, nameKey ? new Set([...SKIPPED_KEYS, nameKey]) : SKIPPED_KEYS));
   }
   return names;
 }
@@ -190,27 +197,30 @@ function loadSpecifier(node) {
   return null;
 }
 
-/** `it.concurrent.each` as ['it', 'concurrent', 'each']; null for any other callee shape. */
+/** The root name and property names of a callee, through member access and calls:
+ *  `it.runIf(c).each(rows)` gives ['it', 'runIf', 'each']; null for any other shape. */
 function calleeChain(node) {
   const props = [];
   let n = node;
-  while (n.type === 'MemberExpression' && !n.computed && n.property.type === 'Identifier') {
-    props.unshift(n.property.name);
-    n = n.object;
+  while (n.type === 'CallExpression' || (n.type === 'MemberExpression' && !n.computed && n.property.type === 'Identifier')) {
+    if (n.type === 'MemberExpression') props.unshift(n.property.name);
+    n = n.type === 'CallExpression' ? n.callee : n.object;
   }
   return n.type === 'Identifier' ? [n.name, ...props] : null;
 }
 
-/** test() and it() call sites, with modifier chains and curried forms such as it.runIf(c)(…);
- *  `.skip` and `.todo` are left out, and a table call counts once. */
+const lastProperty = (node) => (node.type === 'MemberExpression' ? node.property.name : null);
+
+/** A call that registers a test: test(), it(), modifier chains, and the last call of a curried
+ *  form such as it.runIf(c).each(rows)(…); `.skip` and `.todo` are left out. A call that only
+ *  returns the registering function, such as it.each(rows), is not one, so a table counts once. */
 function isTestCall(node) {
   if (node.type !== 'CallExpression') return false;
+  const chain = calleeChain(node.callee);
+  if (!chain || !TEST_CALLEES.has(chain[0])) return false;
+  if (chain.slice(1).some((p) => SKIPPED_TESTS.has(p) || !(TEST_MODIFIERS.has(p) || TEST_CURRIED.has(p)))) return false;
   const curried = node.callee.type === 'CallExpression';
-  const chain = calleeChain(curried ? node.callee.callee : node.callee);
-  if (!chain || !TEST_CALLEES.has(chain[0]) || chain.some((p) => SKIPPED_TESTS.has(p))) return false;
-  const modifiers = curried ? chain.slice(1, -1) : chain.slice(1);
-  if (curried && !TEST_CURRIED.has(chain.at(-1))) return false;
-  return modifiers.every((p) => TEST_MODIFIERS.has(p));
+  return TEST_CURRIED.has(lastProperty(curried ? node.callee.callee : node.callee)) === curried;
 }
 
 /** The runtime import specifiers of one source file, and its test call sites. */

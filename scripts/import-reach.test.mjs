@@ -38,13 +38,15 @@ const EDGES = {
   'src/export-type.ts': "export type { HubShape } from './hub.js';\n",
   'src/via-export-type.test.ts': "import { x } from './export-type.js';\ntest('a', () => x);\n",
   'src/mock.test.ts': "vi.mock('./hub.js');\ntest('a', () => {});\n",
+  'src/name-only.test.ts': "import { Hub } from './hub.js';\nconst h: Hub = {} as Hub;\ntest('a', () => ({ Hub: 1, x: h, y: globalThis.Hub }));\nclass K { Hub() {} }\n",
+  'src/shorthand.test.ts': "import { Hub } from './hub.js';\ntest('a', () => ({ Hub }));\n",
 };
 
-test('static imports, export … from, dynamic import() and require() load the module; type-only imports and vi.mock do not', (t) => {
+test('static imports, export … from, dynamic import() and require() load the module; type-only imports, vi.mock and names that only spell a property do not', (t) => {
   const root = checkout(t, EDGES);
   assert.deepEqual(loaders(root, 'src/hub.ts'), [
-    'src/dynamic.test.ts', 'src/require.test.cjs', 'src/side-effect.test.ts', 'src/static.test.ts',
-    'src/template.test.ts', 'src/via-reexport.test.ts', 'src/via-star.test.ts',
+    'src/dynamic.test.ts', 'src/require.test.cjs', 'src/shorthand.test.ts', 'src/side-effect.test.ts',
+    'src/static.test.ts', 'src/template.test.ts', 'src/via-reexport.test.ts', 'src/via-star.test.ts',
   ]);
 });
 
@@ -135,9 +137,13 @@ test('the tests cost counts modifier chains and curried registrations, and leave
       "test.todo('g');",
       "it.concurrent.skip('h', () => hub);",
       "test.describe('i', () => hub);",
+      "it.runIf(true).each([1, 2])('j', () => hub);",
+      "it.skipIf(false).concurrent.each([1])('k', () => hub);",
+      "it.each([1]);",
+      "it.runIf(true).skip('l', () => hub);",
     ].join('\n'),
   });
-  assert.equal(reachJson(root, 'src/hub.ts').tests, 5);
+  assert.equal(reachJson(root, 'src/hub.ts').tests, 7);
 });
 
 test('--files prints the shortest import chain to the module, or OK', (t) => {
