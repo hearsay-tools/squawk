@@ -6,7 +6,8 @@
 // cockpit source file and covered Node functions to the specs that ran them. The selector reads the
 // branch's own changes, from its merge-base with --base (default origin/main) to the working tree, so
 // merges after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines of mapped
-// functions are diffed against the map's commit, where the map's line numbers hold. A change the map
+// functions are diffed against the map's commit, where the map's line numbers hold. Code the shared
+// server runs while it boots selects the boot spec, not every spec. A change the map
 // cannot answer for (unmapped server code, styles, the test environment) selects every spec.
 // packages/web/e2e/README.md § Choosing specs for a change has the rules.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -49,7 +50,7 @@ const isIndexList = (value, size) => Array.isArray(value)
 
 /** Why `value` is not a version 1 spec map, or null when it is one. */
 export function mapProblem(value) {
-  if (value?.version !== 1) return 'its version is not 1';
+  if (value?.version !== 2) return 'its version is not 2';
   if (typeof value.commit !== 'string' || !/^[0-9a-f]{40}$/.test(value.commit)) return 'it names no full commit id';
   if (!Array.isArray(value.specs) || !value.specs.every(spec => SPEC_PATH.test(spec))) return 'its specs are not spec paths';
   if (!Array.isArray(value.incomplete) || !value.incomplete.every(spec => value.specs.includes(spec))) {
@@ -62,7 +63,8 @@ export function mapProblem(value) {
     if (!value.functions || typeof value.functions !== 'object') return 'its functions are not an object';
     for (const [file, entries] of Object.entries(value.functions)) {
       if (!Array.isArray(entries) || entries.some(entry => !Number.isInteger(entry.start) || entry.start < 1
-        || !Number.isInteger(entry.end) || entry.end < entry.start || !isIndexList(entry.specs, value.specs.length))) {
+        || !Number.isInteger(entry.end) || entry.end < entry.start || !isIndexList(entry.specs, value.specs.length)
+        || (entry.startup !== undefined && entry.startup !== true))) {
         return `its function ranges for ${file} are invalid`;
       }
     }
@@ -255,35 +257,55 @@ function e2eFileSpecs(file, readers) {
   return every('an e2e file no spec names: a spec may read it through a computed path');
 }
 
-/** Adds the specs of the innermost recorded functions enclosing start..end; false when none does. */
-function addInnermost(entries, start, end, indexes) {
-  const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
-  if (enclosing.length === 0) return false;
-  const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
-  for (const fn of enclosing.filter(fn => fn.end - fn.start === width)) {
-    for (const index of fn.specs) indexes.add(index);
-  }
-  return true;
+/** The entry that encloses every other entry of a file: the module's own top-level code. */
+function moduleEntry(entries) {
+  const start = Math.min(...entries.map(fn => fn.start));
+  const end = Math.max(...entries.map(fn => fn.end));
+  return entries.find(fn => fn.start === start && fn.end === end);
 }
 
 /**
- * Choose the innermost recorded function enclosing each changed old-source line range. With
- * `partial`, each changed line takes its own innermost function, so a range across a function
- * boundary keeps the specs of every function it touches, and a line outside all of them adds none.
+ * What one changed old-source range of a mapped file selects; true when it needs the boot spec.
+ * The innermost recorded functions that enclose it add the specs that ran them. A range in code
+ * the shared server's boot ran, in the module's top-level code, or outside every recorded function
+ * (an import above the first mapped line, say) adds the boot spec and every spec that ran any
+ * function of the file: such code sets up what the file's other functions read and serve, such as
+ * the route handlers a factory registers.
  */
-export function functionSpecs(file, map, readers, ranges, partial = false) {
+function rangeSpecs(entries, start, end, top, indexes) {
+  const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
+  const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
+  const innermost = enclosing.filter(fn => fn.end - fn.start === width);
+  if (innermost.length === 0 || innermost.includes(top) || innermost.some(fn => fn.startup)) {
+    for (const fn of entries) for (const index of fn.specs) indexes.add(index);
+    return true;
+  }
+  for (const fn of innermost) for (const index of fn.specs) indexes.add(index);
+  return false;
+}
+
+/**
+ * Choose the specs for each changed old-source line range of a mapped file (see `rangeSpecs`).
+ * With `partial`, each changed line counts on its own, so a range across a function boundary keeps
+ * the specs of each function it touches rather than those of the whole file.
+ */
+export function functionSpecs(file, map, readers, ranges, partial = false, boot = null) {
   if (!ranges?.length) return every('no line evidence for this change');
   const entries = map.functions[file];
+  const top = moduleEntry(entries);
   const indexes = new Set();
+  let booted = false;
   for (const { start, end } of ranges) {
     if (partial) {
-      for (let line = start; line <= end; line += 1) addInnermost(entries, line, line, indexes);
-    } else if (!addInnermost(entries, start, end, indexes)) {
-      return every('the changed lines have no function evidence');
+      for (let line = start; line <= end; line += 1) booted = rangeSpecs(entries, line, line, top, indexes) || booted;
+    } else {
+      booted = rangeSpecs(entries, start, end, top, indexes) || booted;
     }
   }
-  return { specs: [...new Set([...indexes].map(index => map.specs[index]).concat(readers))],
-    reason: 'the specs that ran the changed functions', mapped: true };
+  if (booted && !boot) return every('the changed lines run while the server boots, and no spec has complete evidence to show it boots');
+  const specs = [...new Set([...[...indexes].map(index => map.specs[index]), ...readers, ...(booted ? [boot] : [])])];
+  return { specs, reason: booted ? 'the specs that ran a function of the file, and the boot spec, for code the server runs while it boots or top-level code'
+    : 'the specs that ran the changed functions', mapped: true };
 }
 
 /** Old-source hunk lines; insertions include both neighbours so a boundary stays conservative. */
@@ -296,7 +318,7 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes, partial }) {
+export function classify(file, { map, graph, changes, partial, boot }) {
   if (isDocsPath(file)) return none('documentation');
   if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
@@ -304,7 +326,7 @@ export function classify(file, { map, graph, changes, partial }) {
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
   if (map.functions?.[file] && /^packages\/cezar\/(?:src\/|scripts\/mock-[^/]+\.mjs$)/.test(file)) {
-    return functionSpecs(file, map, readers, changes?.get(file), partial);
+    return functionSpecs(file, map, readers, changes?.get(file), partial, boot);
   }
   if (file.startsWith('.github/')) return none('CI configuration the browser suite does not load');
   const unread = NO_SPEC.find(([pattern]) => pattern.test(file));
@@ -324,13 +346,13 @@ export function classify(file, { map, graph, changes, partial }) {
  * that would need every spec: that code is new since the map, and a path from a spec into it
  * passes through an edit the map does answer.
  */
-export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
-  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes }) }));
+export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles) }) {
+  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
-    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true }) }))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot }) }))
     .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
   if (mapped) {
@@ -341,6 +363,17 @@ export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
   const reason = specs.length > 0 ? 'the specs the changed files reach'
     : files.length > 0 ? 'no changed file reaches a browser spec' : 'the branch changes no file';
   return { lines, drift: driftLines, all: false, specs, reason };
+}
+
+/**
+ * The spec that shows the server still boots: the shortest spec in `specFiles` with complete
+ * evidence, by measured duration, then by name. Every spec boots the shared server. A spec removed
+ * since the map cannot run, so it never counts.
+ */
+export function bootSpec(map, specFiles, durationsMs = {}) {
+  const time = spec => durationsMs[posix.basename(spec)] ?? Number.POSITIVE_INFINITY;
+  return map.specs.filter(spec => !map.incomplete.includes(spec) && specFiles.includes(spec))
+    .sort((a, b) => time(a) - time(b) || a.localeCompare(b))[0] ?? null;
 }
 
 // The command ----------------------------------------------------------------------------------
@@ -390,11 +423,15 @@ function listSpecs(root) {
   return readdirSync(join(root, SPEC_DIR)).filter(file => file.endsWith('.e2e.ts')).map(file => `${SPEC_DIR}/${file}`).sort();
 }
 
-function minutes(root, specs) {
+function durations(root) {
   const file = join(root, DURATIONS);
-  if (!existsSync(file)) return '';
-  const durations = JSON.parse(readFileSync(file, 'utf8')).durationsMs ?? {};
-  const total = specs.reduce((sum, spec) => sum + (durations[posix.basename(spec)] ?? 0), 0);
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).durationsMs ?? {} : null;
+}
+
+function minutes(root, specs) {
+  const measured = durations(root);
+  if (!measured) return '';
+  const total = specs.reduce((sum, spec) => sum + (measured[posix.basename(spec)] ?? 0), 0);
   return `, about ${Math.max(1, Math.round(total / 60_000))} min`;
 }
 
@@ -444,7 +481,8 @@ function chooseSpecs(root, run, loaded, specFiles, fork, base) {
   };
   const driftFiles = run('git', ['diff', '--no-renames', '--name-only', '-z', map.commit, fork, '--']).split('\0').filter(Boolean);
   const drift = { files: driftFiles, changes: lineChanges(driftFiles, [fork]) };
-  return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift });
+  return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift,
+    boot: bootSpec(map, specFiles, durations(root) ?? {}) });
 }
 
 export function main(argv) {

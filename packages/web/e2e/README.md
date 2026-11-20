@@ -396,7 +396,8 @@ npm run test:e2e:affected -- --plan --base=<ref>   # changes since the merge-bas
 
 The `E2E spec map` workflow records which specs run cockpit code, server functions and
 `packages/cezar/scripts/mock-*.mjs` functions. Coverage hooks run only in that workflow.
-The shared server reports precise V8 coverage between specs; its startup functions count for every spec. Mock coverage stays with the
+The shared server reports precise V8 coverage between specs. Its boot is kept apart: the map (version 2)
+marks each function the boot ran `startup` and credits it to no spec. Mock coverage stays with the
 spec and task that started the process, even when that process survives into another spec.
 The source-map build must match the served browser JavaScript byte for byte.
 A task without a known creating spec makes Node evidence incomplete.
@@ -418,13 +419,15 @@ and every spec the map does not list runs. The log lists these files as `changed
 | Change | Specs |
 | --- | --- |
 | Cockpit or api-client source | Specs that ran the file, loaded its top-level effects, or reached its exported values, plus incomplete specs |
-| Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs |
+| Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs. A line in a function the shared server's boot ran, in the module's top-level code or outside every recorded function: the boot spec and every spec that ran a function of the file |
 | Spec, helper or fixture | Specs that load it; every spec if suite setup loads it or no spec names the helper |
 | Documentation, unit tests, `spec-map/`, `.github/` outside suite setup | None |
 | A reviewed path no spec reads (`NO_SPEC` in the selector, each with its reason): lint rules and configs, `packages/cezar/src/lint/`, repository skills, benchmarks no spec imports, `AGENT_PROTOCOL.md`, `.env.example`, `squeal.config.json` | None, unless suite setup or a spec loads it |
 | Server/CLI paths without function evidence; the contract; styles; build configuration; test environment; dependencies; any other unknown path | Every spec |
 
-An edit outside recorded function ranges selects every spec. Insertions at function boundaries
+The boot spec is the shortest spec with complete evidence, by `.github/cockpit-test-durations.json`;
+every spec boots the shared server, so it shows the server still starts. Without one, an edit to
+code the boot runs selects every spec. Insertions at function boundaries
 include both neighbouring lines. Cockpit coverage stays per file. A selected pass is iteration
 feedback. PR CI uses the same map rules, but runs specs only for a selection shorter than
 the full set. Merge-group jobs run every spec.

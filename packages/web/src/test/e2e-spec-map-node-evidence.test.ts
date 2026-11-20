@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
-import { nodeCaptureComplete, nodeEvidence, scriptFunctions } from '../../e2e/spec-map/node-evidence'
+import { nodeCaptureComplete, nodeEvidence, scriptFunctions, startupEvidence } from '../../e2e/spec-map/node-evidence'
 import { buildMap, mapProblems } from '../../e2e/spec-map/spec-map'
 
 it('keeps executed and unexecuted mock functions separate in the published map', () => {
@@ -58,9 +58,11 @@ it('maps server function offsets back to TypeScript and refuses missing process 
     expect(nodeCaptureComplete(logs, spec)).toBe(false)
     expect(nodeEvidence(logs, spec, root)).toEqual([{ source, start: 1, end: 1, executed: true }])
     expect(nodeEvidence(logs, 'packages/web/e2e/missing.e2e.ts', root)).toEqual([])
+    expect(startupEvidence(logs, root)).toEqual([])
     writeFileSync(join(logs, 'shared-startup-1.json'), JSON.stringify({ result: [script] }))
-    expect(nodeEvidence(logs, 'packages/web/e2e/missing.e2e.ts', root))
-      .toEqual([{ source, start: 1, end: 1, executed: true }])
+    // The shared server's boot is its own evidence, never a spec's.
+    expect(nodeEvidence(logs, 'packages/web/e2e/missing.e2e.ts', root)).toEqual([])
+    expect(startupEvidence(logs, root)).toEqual([{ source, start: 1, end: 1, executed: true }])
 
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
@@ -89,4 +91,28 @@ it('refuses publication when a captured server function has invalid source bound
     functions: [{ source, start: 25, end: 8, executed: true }],
   } }, new Map(), 'a'.repeat(40), 'now')
   expect(mapProblems(map, [], 0.9)).toContain(`invalid function ranges for ${source}`)
+})
+
+it('keeps the shared server boot apart from the specs that ran a function', () => {
+  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 2.
+  const source = 'packages/cezar/src/catalog.ts'
+  const map = buildMap({
+    'packages/web/e2e/a.e2e.ts': { status: 'passed', executed: ['packages/web/src/main.tsx'], loaded: [], functions: [
+      { source, start: 1, end: 40, executed: false },
+      { source, start: 5, end: 9, executed: true },
+    ] },
+    'packages/web/e2e/b.e2e.ts': { status: 'passed', executed: ['packages/web/src/main.tsx'], loaded: [], functions: [
+      { source, start: 1, end: 40, executed: false },
+    ] },
+  }, new Map(), 'a'.repeat(40), 'now', [
+    { source, start: 1, end: 40, executed: true },
+    { source, start: 5, end: 9, executed: true },
+    { source, start: 20, end: 22, executed: true },
+  ])
+  expect(map.version).toBe(2)
+  expect(map.functions?.[source]).toEqual([
+    { start: 1, end: 40, specs: [], startup: true },
+    { start: 5, end: 9, specs: [0], startup: true },
+    { start: 20, end: 22, specs: [], startup: true },
+  ])
 })
