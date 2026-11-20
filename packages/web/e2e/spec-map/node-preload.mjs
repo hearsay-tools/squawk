@@ -1,5 +1,6 @@
 // Loaded only by the spec-map workflow through NODE_OPTIONS. No application imports this hook.
 import childProcess from 'node:child_process';
+import vm from 'node:vm';
 import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { Session } from 'node:inspector';
 import { createServer } from 'node:net';
@@ -26,17 +27,32 @@ if (isMainThread && !isServer && !owner && capturing) recordProcess(loaded);
 
 /**
  * Appends each module this thread loads to `loads-<pid>-<thread>.txt` as it loads, so the record
- * survives SIGKILL and `process.execve`, which write no coverage. Code evaluated outside Node's
- * loader, such as Vitest's module runner, still needs the coverage.
+ * survives SIGKILL and `process.execve`, which write no coverage: what Node's loader loads, and
+ * every file name code is evaluated under through `node:vm`, as Vitest's module runner does.
+ * Code evaluated without a file name names no file in the coverage either.
  */
 function logLoads(directory) {
   const log = join(directory, `loads-${process.pid}-${threadId}.txt`);
+  const record = name => {
+    if (typeof name !== 'string' || name.includes('/node_modules/')) return;
+    if (name.startsWith('file:') || name.startsWith('/')) appendFileSync(log, `${name}\n`);
+  };
+  const filename = options => typeof options === 'string' ? options : options?.filename;
   registerHooks({
     load(url, context, nextLoad) {
-      if (url.startsWith('file:') && !url.includes('/node_modules/')) appendFileSync(log, `${url}\n`);
+      record(url);
       return nextLoad(url, context);
     },
   });
+  const { Script, compileFunction, runInThisContext, runInContext, runInNewContext } = vm;
+  vm.Script = class extends Script {
+    constructor(code, options) { record(filename(options)); super(code, options); }
+  };
+  vm.compileFunction = function(code, params, options) { record(filename(options)); return compileFunction.apply(this, arguments); };
+  vm.runInThisContext = function(code, options) { record(filename(options)); return runInThisContext.apply(this, arguments); };
+  vm.runInContext = function(code, context, options) { record(filename(options)); return runInContext.apply(this, arguments); };
+  vm.runInNewContext = function(code, context, options) { record(filename(options)); return runInNewContext.apply(this, arguments); };
+  syncBuiltinESMExports();
 }
 if (isMainThread && root && (isServer || owner)) await install(root, owner);
 

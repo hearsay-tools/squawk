@@ -91,8 +91,10 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
   `process.execve`. Measured in the first slice 3 map run: 60 mock processes from skill and
   model-catalog probes, which the probe ends with SIGKILL, and TypeScript 7's `tsc.js`, which
   `execve`s the native compiler, left no coverage. A process counts as recorded when it left
-  coverage or a main-thread load log. Code evaluated outside Node's loader (Vitest's module
-  runner) appears only in coverage; Vitest stops its workers with SIGTERM, which writes it. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
+  coverage or a main-thread load log. The preload also wraps `node:vm` and logs every file name
+  code is evaluated under (Vitest's module runner evaluates test files and helpers that way, and
+  its fork pool follows SIGTERM with SIGKILL after 500 ms). Code evaluated without a file name
+  names no file in coverage either. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
 - The map gets `nodeLoaded`: every repository code file in any coverage report. A dist file
   counts as the sources in its source map. The contract bundle, which `inline-contract.mjs` builds
   without a map, counts as every contract source. A copy in the served test project counts as its

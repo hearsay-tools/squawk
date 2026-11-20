@@ -165,6 +165,9 @@ it('lists the repository code files any process loaded, and the processes that l
     expect(unflushedProcesses(logs)).toEqual([])
     put('logs/loaded/loads-10-1.txt', `${pathToFileURL(join(root, 'scripts/worker-only.mjs')).href}\n`)
     put('scripts/worker-only.mjs')
-    expect(nodeLoaded(logs, root).files).toEqual(expect.arrayContaining(['packages/cezar/scripts/mock-claude.mjs', 'scripts/worker-only.mjs']))
+    // A file evaluated through node:vm is logged by its plain path.
+    put('scripts/evaluated.mjs')
+    put('logs/loaded/loads-10-0.txt', `${pathToFileURL(join(root, 'packages/cezar/scripts/mock-claude.mjs')).href}\n${join(root, 'scripts/evaluated.mjs')}\n`)
+    expect(nodeLoaded(logs, root).files).toEqual(expect.arrayContaining(['packages/cezar/scripts/mock-claude.mjs', 'scripts/evaluated.mjs', 'scripts/worker-only.mjs']))
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

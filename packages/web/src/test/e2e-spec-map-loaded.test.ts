@@ -57,7 +57,11 @@ test('a process killed with SIGKILL leaves the modules it loaded, its worker thr
   writeFileSync(join(directory, 'dep.js'), 'exports.x = 1')
   writeFileSync(join(directory, 'inner.js'), "require('./dep.js')")
   const script = join(directory, 'killed.js')
+  const evaluated = join(directory, 'evaluated.mjs')
   writeFileSync(script, `require('./dep.js');
+    // Evaluated outside Node's loader, as Vitest's module runner does.
+    require('node:vm').runInThisContext('1', { filename: ${JSON.stringify(evaluated)} });
+    new (require('node:vm').Script)('2', ${JSON.stringify(pathToFileURL(evaluated).href)});
     const { Worker } = require('node:worker_threads');
     new Worker(${JSON.stringify(join(directory, 'inner.js'))}, { execArgv: [] }).on('exit', () => console.log('ready'));
     process.stdin.resume();`)
@@ -67,7 +71,8 @@ test('a process killed with SIGKILL leaves the modules it loaded, its worker thr
   child.kill('SIGKILL')
   await exited
   const log = (thread: number) => readFileSync(join(loaded, `loads-${child.pid}-${thread}.txt`), 'utf8').split('\n').filter(Boolean)
-  expect(log(0)).toEqual(expect.arrayContaining([pathToFileURL(script).href, pathToFileURL(join(directory, 'dep.js')).href]))
+  expect(log(0)).toEqual(expect.arrayContaining([pathToFileURL(script).href, pathToFileURL(join(directory, 'dep.js')).href,
+    evaluated, pathToFileURL(evaluated).href]))
   expect(log(1)).toEqual(expect.arrayContaining([pathToFileURL(join(directory, 'inner.js')).href, pathToFileURL(join(directory, 'dep.js')).href]))
 })
 
