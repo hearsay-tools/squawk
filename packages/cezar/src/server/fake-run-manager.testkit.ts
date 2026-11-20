@@ -147,7 +147,7 @@ export class FakeRunManager implements ProjectRunManager {
   }
 
   /** No execution runs here, so termination is proven once the worker's proof is complete or absent. */
-  async awaitRunTermination(runId: string): Promise<boolean> {
+  async awaitRunTermination(...[runId]: Method<'awaitRunTermination'>): Promise<boolean> {
     const proof = this.#store.readWorkerExecution(runId);
     return !proof || proof.phase === 'complete';
   }
