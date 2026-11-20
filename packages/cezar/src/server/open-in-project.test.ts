@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +17,8 @@ import { createApp, type ServerDeps } from './server.ts';
  * and the detection are mocked, so the suite never spawns a GUI app and never depends on which
  * editors happen to be installed on the machine running it.
  */
+registerRunner(claudeRunner);
+
 vi.mock('./open-in-app.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./open-in-app.ts')>();
   return {

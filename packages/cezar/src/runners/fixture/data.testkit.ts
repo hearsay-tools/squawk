@@ -63,6 +63,7 @@ export const FIXTURE_CLI = {
   terminalExecutable: { kind: 'path-name', name: 'fixture-runner' },
   resumeArgs: id => `--resume ${id}`,
   installSource: null,
+  openTarget: { label: 'Fixture CLI', icon: 'fixture' },
 } as const satisfies RunnerCli;
 
 export const FIXTURE_MODELS: RunnerModelData = {

@@ -182,6 +182,8 @@ export interface RunnerCli {
   readonly resumeArgs: (sessionId: string) => string;
   /** Where the installer gets the CLI: an npm package, a site the operator installs from, or nowhere it knows. */
   readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | null;
+  /** The "Open in" menu entry (`cli:<id>`) that hands a session to this CLI: its label and its icon key. */
+  readonly openTarget: { readonly label: string; readonly icon: string };
 }
 
 /** Login and auth status (the `login` part, spec 2026-11-18-runner-definitions): the data half of

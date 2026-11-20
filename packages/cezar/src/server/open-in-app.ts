@@ -1,4 +1,4 @@
-import { productEnv } from '../core/product-env.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { accessSync, constants, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -123,21 +123,13 @@ function editorAvailable(editor: EditorDef): boolean {
   return false;
 }
 
-/** Coding-agent CLIs a session can be handed off to (#cli-handoff). Selecting one opens a
- *  terminal that resumes THIS run's session when the runner matches, or launches a fresh CLI in
- *  the worktree otherwise. The actual command is built server-side (needs the run's session). */
-const AGENT_CLIS: Array<{ runner: string; label: string; icon: string; bin: string; envBin?: string | undefined }> = [
-  { runner: 'claude', label: 'Claude CLI', icon: 'claude', bin: 'claude', envBin: productEnv('CLAUDE_BIN') },
-  { runner: 'codex', label: 'Codex CLI', icon: 'codex', bin: 'codex', envBin: productEnv('CODEX_BIN') },
-  { runner: 'opencode', label: 'OpenCode', icon: 'opencode', bin: 'opencode', envBin: productEnv('OPENCODE_BIN') },
-  { runner: 'pi', label: 'pi CLI', icon: 'pi', bin: 'pi', envBin: productEnv('PI_BIN') },
-  { runner: 'omp', label: 'OMP CLI', icon: 'omp', bin: 'omp', envBin: productEnv('OMP_BIN') },
-];
-
-/** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. */
+/** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. Every
+ *  registered runner's CLI is a handoff target (#cli-handoff): selecting one opens a terminal that
+ *  resumes THIS run's session when the runner matches, or launches a fresh CLI in the worktree
+ *  otherwise. The actual command is built server-side (needs the run's session). */
 export function agentCliRunner(targetId: string): string | null {
-  const match = AGENT_CLIS.find((c) => `cli:${c.runner}` === targetId);
-  return match ? match.runner : null;
+  const match = registeredRunners().find((definition) => `cli:${definition.id}` === targetId);
+  return match ? match.id : null;
 }
 
 /** The open targets available on this machine: the file manager, a terminal, every detected
@@ -150,9 +142,11 @@ export function detectOpenTargets(): OpenTarget[] {
   for (const editor of EDITORS) {
     if (editorAvailable(editor)) targets.push({ id: editor.id, label: editor.label, icon: editor.icon });
   }
-  for (const cli of AGENT_CLIS) {
-    if ((cli.envBin && existsSync(cli.envBin)) || onPath(cli.bin)) {
-      targets.push({ id: `cli:${cli.runner}`, label: cli.label, icon: cli.icon });
+  // Registration order: the built-in runners register in display order.
+  for (const { id, cli, detection } of registeredRunners()) {
+    const override = detection.binOverride();
+    if ((override && existsSync(override)) || onPath(detection.binary)) {
+      targets.push({ id: `cli:${id}`, label: cli.openTarget.label, icon: cli.openTarget.icon });
     }
   }
   return targets;

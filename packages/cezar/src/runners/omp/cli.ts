@@ -6,4 +6,5 @@ export const OMP_CLI = {
   terminalExecutable: { kind: 'configured', resolve: () => productEnv('OMP_BIN') ?? 'omp' },
   resumeArgs: id => `--resume ${id}`,
   installSource: null,
+  openTarget: { label: 'OMP CLI', icon: 'omp' },
 } as const satisfies RunnerCli;
