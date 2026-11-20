@@ -47,12 +47,17 @@ it('lets only a runner folder load a runner module', () => {
 
 it('reads a runner class with a base class or beside other interfaces, and no other class', () => {
   expect(runnerClassNames([
-    'export class A implements AgentRunner {',
-    'export class B extends Base implements AgentRunner {',
-    'class C<T> extends D<T> implements Other, AgentRunner {',
-    'class E implements AgentRunnerLike {',
+    'export class A implements AgentRunner {}',
+    'export class B extends Base implements AgentRunner {}',
+    'class C<T> extends D<T> implements Other, AgentRunner {}',
+    'class C2 implements Map<string, number>, AgentRunner {}',
+    'export abstract class C3\n  extends Base\n  implements seam.AgentRunner {}',
+    'class E implements AgentRunnerLike {}',
+    'export class Factory implements Provider<AgentRunner> {}',
+    'class Pair implements Map<AgentRunner, AgentRunner> {}',
     'class F extends G {}\nconst h: AgentRunner = runner;',
-  ].join('\n'))).toEqual(['A', 'B', 'C']);
+  ].join('\n'))).toEqual(['A', 'B', 'C', 'C2', 'C3']);
+  expect(runnerClassNames('export default class implements AgentRunner {}')).toEqual(['default']);
 });
 
 it('throws for a runner module in a runner folder whose class it cannot read', () => {
