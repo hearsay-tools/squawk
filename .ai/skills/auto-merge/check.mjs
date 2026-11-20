@@ -30,7 +30,7 @@ export const NEVER = [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
     '.github/scripts/{baseline-growth*,test-budget*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,require-e2e-passed,release-*,pr-snapshot,node-floor-reporter,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
     '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics,vitest-worker-count,vitest-coverage-tests,vitest-file-duration}.*',
-    '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission}.test.cjs', '.github/actions/**',
+    '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission,auto-merge-arm}.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',
     'squeal.config.json',
     'scripts/{test-changed,test-inputs,test-git-env,prepr,direct-importers,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',

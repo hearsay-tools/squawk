@@ -43,9 +43,17 @@ PR the usual way, without the label; this skill is then finished.
 ## Arm it only after the review
 
 A qualifying PR does not merge on checks alone. Arm
-`gh pr merge --auto --squash` only when the reviewer round for the PR's current
-head has no blocking finding: no finding scored 5 or more. Findings scored 4 or
-lower do not block; list them in the PR body. Auto-merge waits for no quality
+`gh pr merge --auto --squash` only when both hold for the PR's current head:
+
+- The reviewer round has no blocking finding: no finding scored 5 or more.
+  Findings scored 4 or lower do not block; list them in the PR body.
+- `node .ai/skills/auto-merge/arm-check.mjs --pr <n> --head <sha>` prints
+  `ARM <sha>` for the reviewed head `<sha>`: no review thread is unresolved, and
+  CodeRabbit is not still reviewing the head. The review apps post threads after
+  CI and the reviewer round settle
+  ([Review apps](../../../docs/sdlc/ci.md#review-apps)).
+
+Auto-merge waits for no quality
 report: CI's `complexity-gate` job blocks complexity growth over 20, and CRAP is
 reported in CI without blocking
 ([Before a PR](../check-code-quality/references/pre-pr.md)).
@@ -55,7 +63,8 @@ Before any later push to a PR with auto-merge armed, turn it off
 arm it again only when the precondition holds for the new head.
 
 Like the review round, this arming rule is an agent rule: queue admission
-checks native CI and review threads only. GitHub enqueues
+checks native CI and review threads only, and removes a queued PR with an open
+thread. GitHub enqueues
 the PR when its required checks pass.
 
 ## Labeled PRs

@@ -150,7 +150,7 @@ row's value when the thing it names changes, rather than its label.
 | Issue tracker | GitHub Issues |
 | Stack | TypeScript (Node ≥24.21.0), pnpm workspaces (npm script metadata retained); Hono + Zod server; React 19 + Vite + Tailwind v4 cockpit |
 | Verification | Local: Squeal when installed and validating, otherwise focused npm checks. Full gate in CI: `npm run typecheck`, `npm test -- --shard=N/8 --maxWorkers=4` (N=1..8), `npm run test:unit`, `npm run build`, `npm run test:package`, `npm run test:e2e` |
-| Automated reviewer | None in CI. The local pre-PR review is the only automated review; see `docs/sdlc/ci.md`. |
+| Automated reviewer | CodeRabbit and the Codex connector, apps outside CI; their threads block merge. See `docs/sdlc/ci.md`. |
 | Commit convention | Conventional Commits |
 | Specs and plans | `.ai/specs/` (tracked; new files are `YYYY-MM-DD-<slug>.md`, and plans end in `-plan.md`) |
 | Board | **Cezarion**, org `hearsay-tools`, project #1. Open PRs ready: no `--draft`. For same-repository PRs targeting `main`, `pr-readiness.yml` syncs existing PR and closing-linked issue cards and never changes draft state: a ready PR whose head has passing required checks and no unresolved review thread → In review; anything else, a human's draft too → In progress. Fix checks and threads; do not move the card to In review by hand. After a manual thread change, dispatch `PR Readiness` with `pr_number`. Board sync skips without project access and never moves Done cards back. The initial claim still moves the issue to In progress. |

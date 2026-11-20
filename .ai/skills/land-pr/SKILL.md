@@ -45,8 +45,9 @@ Each item must hold at the same current head:
 4. **CI:** every required check passes on `H`; an absent or pending required
    result is not a pass. Read failures before classifying them. A flake needs
    its tracking issue and still needs a passing required check.
-5. **Review and QA:** CI runs no automated reviewer
-   ([the repo's review policy](../../../docs/sdlc/ci.md#ci-verification)); a
+5. **Review and QA:** CI runs no automated reviewer, and two review apps post
+   threads outside CI
+   ([the repo's review policy](../../../docs/sdlc/ci.md#review-apps)); a
    caller that requires a review names its own evidence. Immediately before
    enqueueing, read the PR and require its live head to equal the reviewed
    head `H` and `draft=false`, then fetch every page of the PR's review

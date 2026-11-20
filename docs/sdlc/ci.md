@@ -49,11 +49,12 @@ Heavy jobs run beside typecheck and cheap deterministic preflight. `verify`
 job. A type error or cheap-gate failure fails the required aggregate even though
 heavy jobs run. `verify` is the only required check.
 
-CI runs no automated reviewer. The local pre-PR review that agents run before they
-open a PR is the only automated review, and CI cannot prove that it ran. A
+CI runs no automated reviewer. Agents run a local pre-PR review before they open a
+PR, and CI cannot prove that it ran. A
 root task starts a worker for it. A worker starts one too, in its own worktree, and
 reads the change report of that round
-([Run a review round from a worker](../workers.md#run-a-review-round-from-a-worker)). The
+([Run a review round from a worker](../workers.md#run-a-review-round-from-a-worker)).
+Two GitHub apps also review PRs, outside CI ([Review apps](#review-apps)). The
 `Protect main` ruleset requires every review thread resolved, so GitHub refuses
 queue entry while a thread is open.
 
@@ -67,6 +68,35 @@ after the application build. The root typecheck also compares tracked and untrac
 TypeScript files with the files reached by those invoked compiler configs. It fails
 when executable TypeScript falls outside both phases; it does not build or run the
 post-build package check.
+
+### Review apps
+
+<a id="review-apps"></a>
+
+Two GitHub apps review pull requests into `main`. Neither is part of CI, and
+neither check is required:
+
+- **CodeRabbit** (`coderabbitai`) reviews each new head, usually within 20 minutes of
+  the push. Its `CodeRabbit` check run on the head is in progress while it reviews and
+  completes when it is done, `neutral` when it skipped the review ("Review rate
+  limited").
+- **The Codex connector** (`chatgpt-codex-connector`) reviews once, a few minutes
+  after the PR opens, and not later heads. It posts no check run.
+
+The Macroscope app also posts a check run, which it skips; it opens no threads.
+
+Their threads block the merge like any other thread: the `Protect main` ruleset
+requires every review thread resolved. They often arrive after CI and the local review
+round have settled, and a PR wait does not wake on them. So:
+
+- After each push, read the PR's review threads again once the `CodeRabbit` check run
+  on the new head completes, and before you arm auto-merge, settle the task or hand the
+  PR off.
+- Answer every thread. A thread that repeats a finding of the local review, which the
+  same fix closed, still needs its own reply.
+- Arm auto-merge only when `node .ai/skills/auto-merge/arm-check.mjs --pr <n> --head <sha>` prints
+  `ARM <sha>`: no thread is unresolved and the `CodeRabbit` check run on the head is
+  not queued or in progress. It prints `WAIT` while CodeRabbit reviews ([auto-merge](../../.ai/skills/auto-merge/SKILL.md#arm-it-only-after-the-review)).
 
 ### Before the PR
 
