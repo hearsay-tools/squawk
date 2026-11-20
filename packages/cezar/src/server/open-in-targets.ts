@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Context } from 'hono';
 import { imageMimeType, isOsOpenableImage } from '@open-mercato/cezar-contract/image-path';
 import type { RunnerId } from '../core/agent-runner.ts';
-import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
+import { runnerDefinition } from '../core/runner-registry.ts';
 import { terminalExecutable, type resumeCommand } from '../core/runner-cli.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
@@ -121,7 +121,7 @@ export async function freshCliHandoff(cliRunner: RunnerId, repoRoot: string, hom
   // Only a configured executable can fail to quote; a PATH name always can.
   const command = terminalExecutable(cliRunner);
   if (command === null) {
-    return { error: `the configured ${runnerDisplayName(cliRunner)} executable cannot be used in a terminal command` };
+    return { error: `the configured ${runnerDefinition(cliRunner).display.displayName} executable cannot be used in a terminal command` };
   }
   const { env } = await resolveProfileEnvForRoot(repoRoot, cliRunner, undefined, process.env, home);
   return { command, env };

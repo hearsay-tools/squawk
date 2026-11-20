@@ -13,9 +13,13 @@ Every runner emits two event streams together: v1 `AgentEvent` (§2) and v2 `UiE
 The types in `agent-runner.ts` and their doc comments are the contract: `AgentRunner`,
 `AgentSession`, `SessionOptions`, `AgentRunSpec`, `InputDelivery` and `SystemPromptOnResume`.
 `RUNNER_FACTS` in `core/runner-facts.ts` reads what each runner's wire can do from the
-registered definitions; each runner declares it in `runners/<id>/facts.ts`. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
-cockpit and the server both read: the display name, the model catalog delivery, the effort
-levels, the model id scope and the input mode. A runner's definition holds how a terminal
+registered definitions; each runner declares it in `runners/<id>/facts.ts`. The `display` part of
+a definition (`runners/<id>/display.ts`) holds what the cockpit and the server both read: the
+display name, the model list name, the model id scope, the runner picker's label and line, the
+icon key, the install hint, the login command and the account folder example. The `models` part
+adds the picker's `suggested` presets and the `retired` ids; the `configFiles` part adds the
+`agentConfig` pane of Settings → Agent config. The server reads them from the registry; the
+cockpit reads them from `GET /api/v1/runners` and holds no table keyed by runner id. A runner's definition holds how a terminal
 starts and resumes its CLI and where the installer gets it (`cli`, from `runners/<id>/cli.ts`;
 `core/runner-cli.ts` reads it), and how the host probe finds it (`detection`, from
 `runners/<id>/detection.ts`; `core/backend-detect.ts` runs the probe). Each runner's
@@ -197,8 +201,9 @@ Owners. Paths are relative to `packages/cezar/src/`.
 - **Tiers:** `driveSeam` (`core/harness-parity-core.testkit.ts`) drives a real runner class
   against its own offline mock. `driveRun` (`core/workflow-parity-core.testkit.ts`) drives a
   real `RunManager` run in a temp git repo.
-- **Scenario catalog:** `SCENARIOS` and `HARNESS_ADAPTERS` in
-  `core/harness-parity-core.testkit.ts`. The steps of each scenario are in
+- **Scenario catalog:** `SCENARIOS` in `core/harness-parity-core.testkit.ts`. Each runner's
+  prompt for a scenario is in the `mock` part of its definition (`runners/<id>/mock.ts`);
+  `HARNESS_ADAPTERS` in the same kit reads it from the registry. The steps of each scenario are in
   `packages/cezar/scripts/mock-scenario.mjs`.
 - **Row classes, the scenario runner and the fact-value unit tests:** `PARITY_FAMILIES`,
   `SCENARIO_RUNNER` and `FACT_VALUE_TESTS` in `core/parity-classes.testkit.ts`.
@@ -326,9 +331,9 @@ force, or force only in part. The item numbers are stable: code cites them.
 2. **Definition** — `runners/<id>/definition.ts` with its facts, `specSupport`, `detection`, `cli` and `loadAdapter`,
    and one line in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
    `loadSkillCatalog`, `configFiles` (`runners/<id>/config-files.ts`) and `extraTools`
-   go in the same definition. The compiler and the guard tests name each other place:
-   `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
-   `ui-events.ts` and in its api-client copy (§3).
+   go in the same definition, and so does its `display` part (`runners/<id>/display.ts`). A
+   runner id is an open string in the contract (`runnerSchema`) and in `UiBackend`; the server
+   checks a request's runner id against the registry (`core/runner-fields.ts`).
 3. **Detection** — declare the runner's `detection` (`runners/<id>/detection.ts`): its PATH name,
    its `*_BIN` override, what dry-run reports and its hints. `core/backend-detect.ts` runs the probe
    from it. An absent CLI never fails the boot.
@@ -337,8 +342,9 @@ force, or force only in part. The item numbers are stable: code cites them.
    stream.
 6. **Golden fixtures** — follow §8, and cover every §6 capability that the wire supports.
 7. **Parity** — every §6 row passes or carries a named exemption.
-8. **Harness parity** — add the runner to `HARNESS_ADAPTERS`
-   (`core/harness-parity-core.testkit.ts`) and make its offline mock a wire encoder over
+8. **Harness parity** — give the runner's definition a `mock` part (`runners/<id>/mock.ts`: the
+   mock script, its `*_BIN` variable and the prompt for each scenario it runs), and make its
+   offline mock a wire encoder over
    `packages/cezar/scripts/mock-scenario.mjs`. That module owns scenario selection and scripts; the mock
    emits the backend's native frames. A wire gap is a `PARITY_EXEMPTIONS` entry; the guard
    tests of the matrix hold what an entry may say.
@@ -350,9 +356,11 @@ force, or force only in part. The item numbers are stable: code cites them.
    the turn blocked. Each native ask kind that a human can answer needs an entry in
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.
-9. **Plumbing** — Settings → Agent config ships with the runner: the doc comment of
-   `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. Add the composer
-   presets and the Settings → Agents entry. Keep every change additive, so that old run
+9. **Plumbing** — Settings → Agent config ships with the runner: the definition's `configFiles`
+   part holds its files and its `agentConfig` pane (`runners/<id>/config-files.ts`); the doc
+   comment of `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. The
+   composer presets are the `models.suggested` list and the Settings → Agents row comes from
+   the runners route, so the cockpit needs no edit. Keep every change additive, so that old run
    records still parse.
 10. **Model selection** — the definition's `models.idMap` (`runners/<id>/models.ts`) and
     `core/model-identity.test.ts` hold the rules.
@@ -372,7 +380,11 @@ force, or force only in part. The item numbers are stable: code cites them.
 ## 10a. Removing a runner
 
 Saved runs outlive the runner they ran on. A run saved on a removed runner still opens, lists,
-shows its transcript and can Continue on another runner (hearsay-tools/squawk#3715). Most
+shows its transcript and can Continue on another runner (hearsay-tools/squawk#3715). A run saved
+on a runner that the reading process did not register (a runner of a newer build, or one that did
+not load) reads the same way, but the fold is undone: the next write keeps its runner, sessions
+and step settings, and a process that registers the runner reads it as before. A queued run on
+such a runner stays queued and untouched (hearsay-tools/squawk#3897). Most
 readers of a saved runner id read the `runner`, `backend` or `removedRunner` field of any value,
 so a text search for the id does not find them. Run
 `node scripts/readers.mjs --runner <id>`: it lists the readers below, checks that each still
@@ -382,18 +394,21 @@ holds its anchor, and adds every quoted use of the id.
    `packages/cezar/src/runs/legacy-run-rows.ts`. That file folds the saved data at read time:
    the run row with its steps and `workflowDef` steps (`upgradeRemovedRunner`), the stored
    list summary (`upgradeRemovedRunnerSummary`) and the worker-result snapshot
-   (`upgradeRemovedRunnerResult`).
+   (`upgradeRemovedRunnerResult`). The fold of a retired id is stored by the next write.
 2. **Load sites of the fold** — `packages/cezar/src/runs/store.ts` (run rows and worker
    results) and `packages/cezar/src/runs/run-summary-page.ts` (stored summaries).
 3. **Record schema** — `packages/contract/src/runs.ts` keeps `removedRunner` and the step's
-   `removedBackend`; `runner` and `backend` accept only shipped ids.
+   `removedBackend`; `runner` and `backend` are open strings, and the store reads only a
+   registered id (`readableSavedRunner` in `legacy-run-rows.ts`).
 4. **Session selection** — `latestSession` and `removedRunnerStepAfter` in
    `packages/contract/src/run-predicates.ts` choose the session for terminal hand-off and
    Continue. The usage-limit account hold reads the next turn's account through them
    (`packages/cezar/src/workflows/execution-account.ts`).
 5. **Queued and interrupted runs** — `packages/cezar/src/workflows/run/queued-revival.ts`
    fails a revived run on a removed runner; `packages/cezar/src/workflows/run-scheduling.ts`
-   skips it; `packages/cezar/src/workflows/run.ts` refuses to start or resume it.
+   skips it; `packages/cezar/src/workflows/run.ts` refuses to start or resume it; the queue
+   watchdog in `packages/cezar/src/workflows/run/run-line.ts` leaves a run on an unregistered
+   runner alone.
 6. **Continue** — admission in `packages/cezar/src/workflows/continuation-admission.ts`,
    provenance by start time in `packages/cezar/src/workflows/run/launch-read-resolver.ts`,
    worker identity in `packages/cezar/src/delegation/execution-identity.ts`, and the HTTP

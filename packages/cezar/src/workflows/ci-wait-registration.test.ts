@@ -7,16 +7,18 @@ import { writeFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
-import { manager, store, root, parent, controlledWire, until, useWorkerWaitFixture, toolGenerationOf } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { manager, store, root, parent, controlledWire, until, useWorkerWaitFixture, toolGenerationOf } from './worker-wait-core.testkit.ts';
 import type { AgentSession } from '../core/agent-runner.ts';
 import * as runners from '../core/runner-registry.ts';
 import { createActiveRun } from './active-run.ts';
 import { WaitRegistry } from './run/wait-registry.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 const pr = 'https://github.com/acme/repo/pull/12';
 const identity = { prUrl: pr, repository: 'acme/repo', prNumber: 12, headSha: 'a'.repeat(40) };

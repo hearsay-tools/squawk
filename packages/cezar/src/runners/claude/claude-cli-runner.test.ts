@@ -17,6 +17,7 @@ import { TOOL_GRANT_CASES } from '../../core/tool-grant-parity-cells.testkit.ts'
 import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from './definition.ts';
 
+import './claude-runner.testkit.ts';
 registerRunner(claudeRunner);
 
 /** Only the escalation tests below swap the child out; every other test in this
@@ -515,7 +516,7 @@ it('steers non-human input behind a queued human turn', async () => {
   // workflow's to hold (`InputDelivery.admitsAgentInput`), not the runner's.
   // bound: waitFor defaults to 10s; Vitest's 5s testTimeout cut this cell off before
   // (hearsay-tools/cezarion#976).
-  const { driveSeam, waitFor } = await import('../../core/harness-parity.testkit.ts');
+  const { driveSeam, waitFor } = await import('../../core/harness-parity-core.testkit.ts');
   await driveSeam('claude', 'hold', {
     whileOpen: async (session, { v1 }) => {
       expect(session.sendMessage([{ type: 'text', text: 'mock:cezar-ask' }])).toBe(true);

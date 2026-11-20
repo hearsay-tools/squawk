@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -11,7 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import { setRunStatus, crashStore, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
-import { createFixtureManager, fixtureWork, fixtureWorkSettled, drainFixtureManagers } from '../workflows/fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, fixtureWork, fixtureWorkSettled, drainFixtureManagers } from '../workflows/fixture-manager.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
@@ -20,9 +23,8 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createApp, projectRouteManifest } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
 
-registerBuiltInRunners();
 
 /**
  * Run controls when two Squawk processes share a project (#779, plan step 3). The other process is

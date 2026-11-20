@@ -2,6 +2,8 @@ import type { RunnerModelData } from '../../core/runner-definition.ts';
 
 /** The pi runner's model data. Data only: importing it loads no adapter. */
 export const PI_MODELS: RunnerModelData = {
+  suggested: [{ id: '', label: 'auto', desc: 'Use your pi default model' }],
+  retired: [],
   // pi lists nothing for the same reason OpenCode does (#794), plus one of its own: it picks a
   // model with the canonical `provider/model` convention and has no default provider, so the
   // structural check in `modelConflictsWithRunner` already guards it without vendor

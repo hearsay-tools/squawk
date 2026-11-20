@@ -1,6 +1,4 @@
-import type { RunnerId } from './agent-runner.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -485,6 +483,6 @@ export const SETTLEMENT_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the settlement part's cells for one runner: `harness-<runner>-settlement-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('settlement', SETTLEMENT_GROUPS, scope, registration);
 }

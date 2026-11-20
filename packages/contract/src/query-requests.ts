@@ -27,7 +27,11 @@ export const refreshQuery = z.object({ refresh: queryValue });
 
 export const waitQuery = z.object({ wait: queryValue });
 
-export const modelDiscoveryQuerySchema = z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(modelDiscoveryRunnerSchema) });
+/** A runner id in a query string. A typed client may send a required string query key as an
+ *  array (hono types it `string | string[]`); a repeated key takes its first value. */
+export const queryRunnerSchema = z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(modelDiscoveryRunnerSchema);
+
+export const modelDiscoveryQuerySchema = z.object({ runner: queryRunnerSchema });
 
 export const strictRefreshQuerySchema = z.object({ refresh: queryValue.refine((v) => v === undefined || v === '1') });
 

@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -15,9 +16,7 @@ import { ProjectContexts } from './project-context.ts';
 import { startServer } from './start-server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-registerBuiltInRunners();
 
 /**
  * #774: the cockpit hands every project's RunManager the address it BOUND (`--port 0` asks for an

@@ -377,7 +377,7 @@ type ResponseValidator<T> = {
  * Its own server cannot produce such a body (`contract-parity.test.ts` pins both response types
  * to these schemas) — this guards the boundary against a proxy, a stale server, or a stub.
  */
-async function unwrapValidated<R extends ClientResponse<unknown, number, ResponseFormat>>(
+export async function unwrapValidated<R extends ClientResponse<unknown, number, ResponseFormat>>(
   res: R,
   label: string,
   schema: ResponseValidator<OkJson<R>>,

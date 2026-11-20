@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
 
 const OMP_CONFIG_DOCS = 'https://github.com/can1357/oh-my-pi/blob/main/docs/config-usage.md';
@@ -92,3 +94,18 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   // <repo>/AGENTS.md, shared with Codex, OpenCode, Pi and OMP: the catalog lists it once.
   PROJECT_AGENTS_FILE,
 ];
+
+/** The OMP tab of Settings → Agent config (the `agentConfig` of its `configFiles` part). Data only. */
+export const OMP_AGENT_CONFIG: RunnerAgentConfig = {
+  label: 'OMP',
+  note: EDITOR_PLUS_COMMIT_NOTE,
+  groups: [
+    { id: 'settings', label: 'Settings' },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      note: 'A dedicated mcp.json (key: mcpServers) at ~/.omp/agent and in the project’s .omp/ folder.',
+    },
+    { id: 'memory', label: 'Memory & instructions' },
+  ],
+};

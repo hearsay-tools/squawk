@@ -4,11 +4,13 @@ import type { AgentRunResult, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import { fixture } from '../delegation/service.testkit.ts';
-import { fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // bound: Git and the manager must have time to launch on a loaded host.
 const until = (predicate: () => boolean) => vi.waitFor(() => expect(predicate()).toBe(true), { timeout: 15_000, interval: 10 });

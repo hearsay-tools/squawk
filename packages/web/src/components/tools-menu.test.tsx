@@ -3,6 +3,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 import { AppShell } from './app-shell'
 import { ThemeProvider } from './theme-provider'
 import { ToolsMenu, forgeNote, toolsBlocker, toolsTooltip } from './tools-menu'
@@ -84,7 +85,7 @@ const PI_DEFAULT_DOWN: HealthResponse = {
 function renderMenu(health: HealthResponse | undefined) {
   return render(
     <MemoryRouter initialEntries={['/']}>
-      <ToolsMenu health={health} />
+      <ToolsMenu health={health} runners={RUNNERS_RESPONSE} />
       <LocationProbe />
     </MemoryRouter>
   )
@@ -109,7 +110,7 @@ const rowsIn = (menu: HTMLElement) =>
 
 describe('toolsTooltip', () => {
   it('is just the cezar version while everything is available', () => {
-    expect(toolsTooltip(ALL_GOOD)).toBe(`Squawk v0.1.3`)
+    expect(toolsTooltip(ALL_GOOD, RUNNERS_RESPONSE)).toBe(`Squawk v0.1.3`)
   })
 
   it('names the missing alternatives as optional while the default runner works', () => {
@@ -117,35 +118,42 @@ describe('toolsTooltip', () => {
       ...HEALTH,
       checks: [...HEALTH.checks, { name: 'opencode', available: false, hint: 'optional: install OpenCode' }],
     }
-    expect(toolsTooltip(twoDown)).toBe(`Squawk v0.1.3 · optional: codex, opencode not installed`)
+    expect(toolsTooltip(twoDown, RUNNERS_RESPONSE)).toBe(`Squawk v0.1.3 · optional: codex, opencode not installed`)
   })
 
   it('names the default runner when it is the missing one', () => {
-    expect(toolsTooltip(DEFAULT_DOWN)).toBe(`Squawk v0.1.3 · default runner (codex) not found`)
+    expect(toolsTooltip(DEFAULT_DOWN, RUNNERS_RESPONSE)).toBe(`Squawk v0.1.3 · default runner (codex) not found`)
   })
 
   it('says so when no agent CLI is present at all', () => {
-    expect(toolsTooltip(NO_RUNNER)).toBe(`Squawk v0.1.3 · no agent CLI found — install one to run tasks`)
+    expect(toolsTooltip(NO_RUNNER, RUNNERS_RESPONSE)).toBe(`Squawk v0.1.3 · no agent CLI found — install one to run tasks`)
+  })
+})
+
+describe('toolsTooltip before the runners list answers', () => {
+  it('claims nothing beyond the version: no missing default runner shown as optional', () => {
+    expect(toolsTooltip(DEFAULT_DOWN, undefined)).toBe('Squawk v0.1.3')
+    expect(toolsTooltip(NO_RUNNER, undefined)).toBe('Squawk v0.1.3')
   })
 })
 
 describe('toolsBlocker', () => {
   it('is null while the default runner works, whatever else is missing', () => {
-    expect(toolsBlocker(HEALTH)).toBeNull()
-    expect(toolsBlocker({ ...HEALTH, checks: HEALTH.checks.map(unavailableIf('gh')) })).toBeNull()
+    expect(toolsBlocker(HEALTH, RUNNERS_RESPONSE)).toBeNull()
+    expect(toolsBlocker({ ...HEALTH, checks: HEALTH.checks.map(unavailableIf('gh')) }, RUNNERS_RESPONSE)).toBeNull()
   })
 
   it('stays quiet when an older server never probed the default runner', () => {
-    expect(toolsBlocker({ ...HEALTH, defaultRunner: 'opencode' })).toBeNull()
+    expect(toolsBlocker({ ...HEALTH, defaultRunner: 'opencode' }, RUNNERS_RESPONSE)).toBeNull()
   })
 
   it('counts every runner the contract knows — a `pi`-only host can start tasks', () => {
-    expect(toolsBlocker(PI_ONLY)).toBeNull()
-    expect(toolsTooltip(PI_ONLY)).toBe(`Squawk v0.1.3 · optional: claude, codex not installed`)
+    expect(toolsBlocker(PI_ONLY, RUNNERS_RESPONSE)).toBeNull()
+    expect(toolsTooltip(PI_ONLY, RUNNERS_RESPONSE)).toBe(`Squawk v0.1.3 · optional: claude, codex not installed`)
   })
 
   it('names `pi` when it is the configured default and the missing one', () => {
-    expect(toolsBlocker(PI_DEFAULT_DOWN)).toBe('default runner (pi) not found')
+    expect(toolsBlocker(PI_DEFAULT_DOWN, RUNNERS_RESPONSE)).toBe('default runner (pi) not found')
   })
 })
 
@@ -278,7 +286,7 @@ describe('ToolsMenu in the app shell', () => {
     return render(
       <ThemeProvider>
         <MemoryRouter initialEntries={['/']}>
-          <AppShell toolsMenu={<ToolsMenu health={HEALTH} />}>
+          <AppShell toolsMenu={<ToolsMenu health={HEALTH} runners={RUNNERS_RESPONSE} />}>
             <p>route content</p>
           </AppShell>
         </MemoryRouter>

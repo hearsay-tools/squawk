@@ -1,4 +1,5 @@
 import { useConfig, useProviderStatus } from '@/api/queries'
+import { runnerIds, useRunners } from '@/api/runners'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { usableRunners } from '@/lib/provider-status'
@@ -35,28 +36,41 @@ function continuationReason(input: ContinuationReasonInput): string | undefined 
               : 'Connect an agent provider to continue.'
 }
 
+/** The provider status and the runners list, read as one: a continuation needs both. */
+function useProviderSources() {
+  const providers = useProviderStatus()
+  const registered = useRunners()
+  return {
+    providers,
+    registered,
+    providersPending: providers.isPending || registered.isPending,
+    providersError: providers.isError || registered.isError,
+    providersReady: providers.isSuccess && registered.isSuccess,
+  }
+}
+
 /** One provider decision for every UI path that reopens an existing agent session. */
 export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null) {
-  const providers = useProviderStatus()
+  const { providers, registered, providersPending, providersError, providersReady } = useProviderSources()
   const config = useConfig()
   const untouched = isStoppedBeforeStarting(run)
   // A task saved on a removed runner has no runner of its own: it starts on the project's default
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
   const removed = run.removedRunner !== undefined
   const needsConfig = (untouched && !run.runner) || removed
-  const runners = usableRunners(providers.data)
+  const runners = usableRunners(providers.data, registered.data)
   const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
-  const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner) : [runner]
+  const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner, runnerIds(registered.data)) : [runner]
   const missing = required.filter(provider => !runners.includes(provider))
-  const canContinue = providers.isSuccess && (!needsConfig || config.isSuccess) && missing.length === 0
+  const canContinue = providersReady && (!needsConfig || config.isSuccess) && missing.length === 0
   const reason = continuationReason({
     needsConfig,
     configPending: config.isPending,
     configError: config.isError,
-    providersPending: providers.isPending,
-    providersError: providers.isError,
+    providersPending,
+    providersError,
     canContinue,
     untouched,
     missing,
@@ -68,8 +82,8 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
     runner,
     currentRunnerConnected,
     canContinue,
-    providerPending: providers.isPending || (needsConfig && config.isPending),
-    providerError: providers.isError,
+    providerPending: providersPending || (needsConfig && config.isPending),
+    providerError: providersError,
     reason,
     runnerOverride:
       pickedRunner !== null || !currentRunnerConnected || removed

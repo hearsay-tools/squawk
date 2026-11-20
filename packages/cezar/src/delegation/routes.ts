@@ -56,8 +56,8 @@ export function createDelegationRoutes(service: DelegationService, credentials: 
     .use('*', bodyLimit({ maxSize: 1_048_576, onError: c => c.json({ code: 'invalid_input' as const, error: 'Delegation request too large' }, 400) }))
     .get('/list', queryZodValidator(workerListQuerySchema, invalid), async c => c.json(await service.list(c.get('caller'), c.req.valid('query')), 200))
     .use('*', queryZodValidator(workerEmptyRequestSchema, invalid))
-    .post('/discover', jsonZodValidator(discoveryRequestSchema, invalid), async c => c.json(await service.discover(c.get('caller'), c.req.valid('json')), 200))
-    .post('/spawn', jsonZodValidator(workerSpawnRequestSchema, invalid), async c => c.json(await service.spawn(c.get('caller'), c.req.valid('json')), 201))
+    .post('/discover', jsonZodValidator(discoveryRequestSchema, { ...invalid, runners: { ids: ['runner'] } }), async c => c.json(await service.discover(c.get('caller'), c.req.valid('json')), 200))
+    .post('/spawn', jsonZodValidator(workerSpawnRequestSchema, { ...invalid, runners: { ids: ['backend'] } }), async c => c.json(await service.spawn(c.get('caller'), c.req.valid('json')), 201))
     .post('/wait', jsonZodValidator(z.union([workerWaitRequestSchema, requestWaitRequestSchema, peerWaitRequestSchema]), invalid), async c => {
       const value = c.req.valid('json');
       return c.json(await ('peerIds' in value ? service.waitPeers(c.get('caller'), value) : 'requestIds' in value ? service.waitRequests(c.get('caller'), value) : service.wait(c.get('caller'), value)), 200);

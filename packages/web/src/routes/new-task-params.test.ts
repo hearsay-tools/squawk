@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { newTaskPrefillHref, parseNewTaskParams, type NewTaskParams } from './new-task-params'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const empty: NewTaskParams = { skill: '', ref: '' }
 
@@ -30,12 +31,16 @@ describe('parseNewTaskParams', () => {
 
   for (const [name, search, expected] of cases) {
     it(name, () => {
-      expect(parseNewTaskParams(search)).toEqual(expected)
+      expect(parseNewTaskParams(search, RUNNERS_RESPONSE)).toEqual(expected)
     })
   }
 
+  it('leaves the runner out until the runners list answers', () => {
+    expect(parseNewTaskParams('?runner=codex', undefined)).toEqual(empty)
+  })
+
   it('takes a URLSearchParams too (what useSearchParams hands the route)', () => {
-    expect(parseNewTaskParams(new URLSearchParams('skill=om-fix'))).toEqual({ ...empty, skill: 'om-fix' })
+    expect(parseNewTaskParams(new URLSearchParams('skill=om-fix'), RUNNERS_RESPONSE)).toEqual({ ...empty, skill: 'om-fix' })
   })
 })
 
@@ -51,7 +56,7 @@ describe('newTaskPrefillHref', () => {
 
   it('round-trips through the parser (in-app links use the same shape /new reads)', () => {
     const href = newTaskPrefillHref({ skill: 'om-fix', ref: 'fix it\nnow' })
-    expect(parseNewTaskParams(href.split('?')[1] ?? '')).toEqual({
+    expect(parseNewTaskParams(href.split('?')[1] ?? '', RUNNERS_RESPONSE)).toEqual({
       ...empty,
       skill: 'om-fix',
       ref: 'fix it\nnow',
@@ -60,6 +65,6 @@ describe('newTaskPrefillHref', () => {
 
   it('round-trips a runner skill pick including its account and path', () => {
     const pick = { skill: 'plugin:check', skillPath: 'repo/SKILL.md', runner: 'codex' as const, account: 'work' }
-    expect(parseNewTaskParams(newTaskPrefillHref(pick).split('?')[1] ?? '')).toEqual({ ...empty, ...pick })
+    expect(parseNewTaskParams(newTaskPrefillHref(pick).split('?')[1] ?? '', RUNNERS_RESPONSE)).toEqual({ ...empty, ...pick })
   })
 })

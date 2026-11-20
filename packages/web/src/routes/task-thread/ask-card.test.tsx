@@ -1,9 +1,13 @@
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
 import { AskCard } from './ask-card'
 import type { ThreadAsk } from './thread-state'
 import type { ApiRun, ProviderStatusResponse, StepState } from '@open-mercato/cezar-api-client'
@@ -61,11 +65,16 @@ const closedRun: ApiRun = {
   steps: [step({ sessionId: 'sess-1' })],
 }
 
-const renderAsk = (ask: ThreadAsk, run: ApiRun = activeRun) => render(
+/** The runners list is in the cache, as the app shell leaves it before a task opens. */
+const withRunners = (ui: ReactNode) => (
+  <QueryClientProvider client={seedRunners(createQueryClient())}>{ui}</QueryClientProvider>
+)
+
+const renderAsk = (ask: ThreadAsk, run: ApiRun = activeRun) => render(withRunners(
   <MemoryRouter>
     <AskCard ask={ask} run={run} />
   </MemoryRouter>,
-)
+))
 
 const singleAsk: ThreadAsk = {
   kind: 'ask',
@@ -415,11 +424,11 @@ describe('AskCard for a worker question routed to its parent (#505)', () => {
     expect(screen.queryByRole('button', { name: /Send/ })).toBeNull()
     expect(screen.getByRole('link', { name: 'parent task' }).getAttribute('href')).toContain(`/tasks/${parentId}`)
     cleanup()
-    render(
+    render(withRunners(
       <MemoryRouter initialEntries={['/p/acme/tasks/worker']}>
         <AskCard ask={{ ...singleAsk, routedToParent: true, parentRunId: parentId }} run={activeRun} />
       </MemoryRouter>,
-    )
+    ))
     expect(screen.getByRole('link', { name: 'parent task' }).getAttribute('href')).toBe(`/p/acme/tasks/${parentId}`)
     expect(document.querySelector('[data-slot="ask-routed-hint"]')?.textContent).toContain('Routed to parent')
   })

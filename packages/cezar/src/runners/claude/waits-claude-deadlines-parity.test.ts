@@ -6,4 +6,4 @@ import { claudeRunner } from './definition.ts';
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
 // The wait list's deadline-accounting cells on the claude wire (hearsay-tools/cezarion#1446).
-describeWaitParity({ runner: 'claude', part: 'deadlines' });
+describeWaitParity({ runner: claudeRunner, part: 'deadlines' });

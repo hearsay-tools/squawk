@@ -8,4 +8,4 @@ import { claudeRunner } from '../claude/definition.ts';
 // R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
 useRunners(onlyRunners([[ompRunner, () => new OmpRunner()], [claudeRunner, () => new ClaudeCliRunner()]]));
 
-describeHarnessParity({ runner: 'omp', part: 'owned-workflows' });
+describeHarnessParity({ runner: ompRunner, part: 'owned-workflows' });

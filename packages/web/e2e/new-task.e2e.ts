@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 import { waitForSettledSample } from './visual-ready'
 import { dismissWithEscape } from './contrast'
@@ -212,7 +212,8 @@ describe('the full-screen /new against a live dry-run server', () => {
       )
       return snapshot.checks.length > 0 ? snapshot : undefined
     }, () => 'runner availability never finished its first background sweep', { tries: 120 })
-    const runners = runnerSchema.options.filter((id) =>
+    const registered = await getJson<RunnersResponse>(`${baseUrl}/api/v1/runners`)
+    const runners = registered.runners.map((entry) => entry.id).filter((id) =>
       health.checks.some((c) => c.name === id && c.available),
     )
     const expectedPills = runners.length > 1 ? 1 : 0

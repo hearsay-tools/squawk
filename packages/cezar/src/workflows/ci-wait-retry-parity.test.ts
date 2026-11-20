@@ -1,15 +1,19 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { parityRunners } from '../core/parity-classes.testkit.ts';
 import { CiGithubError, GithubCiClient } from '../ci-wait/github.ts';
-import { manager, store, root, restart, toolGenerationOf, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, store, root, restart, toolGenerationOf, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
+registerRunner(claudeRunner);
 
 // Control only the initial retry delay, retaining abort behavior and native
 // runner processes. Releasing the delay represents its one-second backoff.

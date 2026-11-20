@@ -6,6 +6,7 @@ import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import type { SubagentWaitEntry, TimerWaitEntry, Wait } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS, SUBAGENT_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
+import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { exemptionReasonProblem } from '../core/exemption-reason.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
@@ -63,9 +64,9 @@ async function parkedOnSubagents(runner: RunnerId, tokens = '') {
 }
 
 /** The cells of `SUBAGENT_CRITERIA` for each runner in `runners`. */
-export function subagentCells(runners: readonly RunnerId[]): void {
+export function subagentCells(runners: readonly RunnerDefinition[]): void {
   if (!runners.length) return;
-  for (const runner of runners) {
+  for (const { id: runner } of runners) {
     describe(`native subagents on the ${runner} wire (hearsay-tools/cezarion#2431)`, { timeout: 60_000 }, () => {
       useWorkerWaitFixture({ subagentGraceMs: 200 });
       const cell = (criterion: SubagentCriterion, body: () => Promise<void>) => {

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RunnerId } from './agent-runner.ts';
+import type { RunnerDefinition } from './runner-definition.ts';
 import { exemptionFor, HARNESS_ADAPTERS, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { parityRowId, runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
@@ -28,7 +29,9 @@ export interface SeamCriterion<T = SeamObservation> {
 export type Cells<Rows extends readonly { readonly id: string }[], Criterion> =
   Readonly<Record<Rows[number]['id'], Omit<Criterion, 'id' | 'name' | 'scenario'>>>;
 
-export type HarnessParityScope = { runner: RunnerId; part: HarnessParityPart } | 'once';
+/** One part of the kit for one runner, named by its definition. */
+export type HarnessPartScope = { runner: RunnerDefinition; part: HarnessParityPart };
+export type HarnessParityScope = HarnessPartScope | 'once';
 
 // The once file keeps matrix guards and single-runner checks. Runner parts own disjoint groups.
 export type HarnessRegistration = Pick<typeof import('vitest'), 'describe' | 'it' | 'beforeAll' | 'afterAll'> & {
@@ -80,7 +83,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
   const it = new Proxy(registration.it, {
     apply: (target, self, args: unknown[]) => {
       if (scope !== 'once' && currentGroup !== undefined && typeof args[0] === 'string'
-        && !runsOn(`harness:${currentGroup}` as ParityFamilyName, parityRowId(args[0]), scope.runner)) return undefined;
+        && !runsOn(`harness:${currentGroup}` as ParityFamilyName, parityRowId(args[0]), scope.runner.id)) return undefined;
       if (typeof registration.probe === 'function' && currentGroup !== undefined && typeof args[0] === 'string') registration.probe(currentGroup, args[0]);
       return Reflect.apply(target, self, args);
     },
@@ -153,7 +156,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
   };
 
   return {
-    scope, runners: scope === 'once' ? [] : [scope.runner], registration,
+    scope, runners: scope === 'once' ? [] : [scope.runner.id], registration,
     describe, it, beforeAll: registration.beforeAll, afterAll: registration.afterAll,
     registeredGroups, describeRunners, parityRow, permissionExemption,
   };

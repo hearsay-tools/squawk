@@ -3,9 +3,7 @@
  * retires, an answer it refuses, a malformed request, and requests that arrive before or after the
  * turn. Split from the settlement part so each runner file stays well under the per-file duration cap.
  */
-import type { RunnerId } from './agent-runner.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -337,6 +335,6 @@ export const PENDING_REQUEST_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the pending-request part's cells for one runner: `harness-<runner>-pending-request-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('pending-request', PENDING_REQUEST_GROUPS, scope, registration);
 }

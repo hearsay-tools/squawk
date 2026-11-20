@@ -1,3 +1,5 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../../runners/claude/definition.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -19,10 +21,12 @@ import { completionRefusalQueueDecision } from './turn-nudges.ts';
 import * as activeRuns from '../active-run.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
-import { createFixtureManager as createRunnerFixtureManager } from '../fixture-cleanup.testkit.ts';
+import '../../core/created-runners.testkit.ts';
+import { createFixtureManager as createRunnerFixtureManager } from '../fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
+registerRunner(claudeRunner);
 
 describe('completionRefusalQueueDecision', () => {
   it.each([
@@ -302,6 +306,14 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     // The idle path opens no Needs You.
     expect(f.store.getRun(id)?.waits ?? []).toEqual([]);
   }
+
+  it('closes a run whose nudge gets no acknowledgement and no reply through the idle path', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    expect(nudged.end).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expectClosedWaiting(id, nudged);
+  });
 
   // hearsay-tools/squawk#3741: an ACK means the transport took the nudge, not that a turn started.
   const answerNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_REPLY_NOTE);

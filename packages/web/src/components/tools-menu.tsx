@@ -4,7 +4,9 @@ import type { ReactNode } from 'react'
 import { Link } from '@/lib/project-router'
 import { Link as RouterLink } from 'react-router'
 
-import type { BackendCheck, HealthResponse, Runner } from '@open-mercato/cezar-api-client'
+import type { BackendCheck, HealthResponse } from '@open-mercato/cezar-api-client'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import { runnerIds } from '@/api/runners'
 import { StatusDot } from '@/components/status-dot'
 import { TOOL_SETTINGS_PATH, toolHint, toolTone } from '@/lib/tool-status'
 import {
@@ -28,14 +30,11 @@ import {
  */
 
 /** The agent CLIs among `checks[]` — the tools a task actually needs one of. `gh` and `git` are
- *  the other rows; neither picks a runner. Spelled as an exhaustive `Record<Runner, true>` rather
- *  than a hand-kept list: the contract's runner enum is what `defaultRunner` is drawn from, so a
- *  fifth runner joining it (as `pi` did, #470) must fail the typecheck here instead of quietly
- *  dropping out of the dot's idea of what can start a task. A type-level set, so no zod schema —
- *  and no zod — is pulled into the cockpit bundle for it. */
-const RUNNER_NAMES: Record<Runner, true> = { claude: true, codex: true, opencode: true, pi: true, omp: true }
-
-const isRunner = (check: BackendCheck): boolean => Object.hasOwn(RUNNER_NAMES, check.name)
+ *  the other rows; neither picks a runner. A runner is one the server's runners list names
+ *  (`GET /api/v1/runners`), so a runner that registers is counted with no edit here. None until
+ *  that list answers: the menu then claims nothing, as it claims nothing for an unprobed CLI. */
+const isRunner = (check: BackendCheck, runners: RunnersResponse | undefined): boolean =>
+  runnerIds(runners).includes(check.name)
 
 /**
  * What (if anything) keeps the aggregate dot from green. Only two things do: having no agent
@@ -44,8 +43,8 @@ const isRunner = (check: BackendCheck): boolean => Object.hasOwn(RUNNER_NAMES, c
  * creation") is a choice not taken, not a problem: the per-row red dot already says so.
  * Exported for the tests — the wording is a small contract of its own.
  */
-export function toolsBlocker(health: HealthResponse): string | null {
-  const runners = health.checks.filter(isRunner)
+export function toolsBlocker(health: HealthResponse, registered: RunnersResponse | undefined): string | null {
+  const runners = health.checks.filter((check) => isRunner(check, registered))
   if (runners.length && !runners.some((check) => check.available)) {
     return 'no agent CLI found — install one to run tasks'
   }
@@ -58,10 +57,14 @@ export function toolsBlocker(health: HealthResponse): string | null {
 }
 
 /** The trigger's hover tooltip: the Squawk version, then the blocker if there is one — else
- *  the optional tools still worth knowing about. Exported for the tests. */
-export function toolsTooltip(health: HealthResponse): string {
+ *  the optional tools still worth knowing about. The version alone until the runners list
+ *  answers. Exported for the tests. */
+export function toolsTooltip(health: HealthResponse, runners: RunnersResponse | undefined): string {
   const base = `Squawk v${health.version}`
-  const blocker = toolsBlocker(health)
+  // Until the runners list answers there is no telling a runner from another tool, so the tooltip
+  // claims nothing beyond the version.
+  if (runners === undefined) return base
+  const blocker = toolsBlocker(health, runners)
   if (blocker) return `${base} · ${blocker}`
   const missing = health.checks.filter((check) => !check.available).map((check) => check.name)
   return missing.length ? `${base} · optional: ${missing.join(', ')} not installed` : base
@@ -80,12 +83,20 @@ export function forgeNote(health: HealthResponse): string | null {
   return `GitHub is unreachable — ${health.forge.reason ?? 'unknown reason'}. The GitHub tab is hidden until it comes back.`
 }
 
-export function ToolsMenu({ health, sessionScope }: { health: HealthResponse | undefined; sessionScope?: ReactNode }) {
+export function ToolsMenu({
+  health,
+  runners,
+  sessionScope,
+}: {
+  health: HealthResponse | undefined
+  runners: RunnersResponse | undefined
+  sessionScope?: ReactNode
+}) {
   if (!health) return null
 
   // Green when cez can actually work: at least one agent CLI is present and the default runner
   // is among them. `pending` (amber), not `danger`, otherwise — per-row dots are where red lives.
-  const blocker = toolsBlocker(health)
+  const blocker = toolsBlocker(health, runners)
 
   return (
     <DropdownMenu>
@@ -94,7 +105,7 @@ export function ToolsMenu({ health, sessionScope }: { health: HealthResponse | u
           type="button"
           data-slot="tools-menu-trigger"
           aria-label="Tools"
-          title={toolsTooltip(health)}
+          title={toolsTooltip(health, runners)}
           className="relative flex items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[12px] font-normal text-soft-foreground transition-colors hover:bg-sidebar-row-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:bg-sidebar-row-selected data-[state=open]:text-foreground"
         >
           <WrenchIcon className="size-[15px]" aria-hidden="true" />

@@ -2,7 +2,8 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager, fixtureWork } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, fixtureWork } from './fixture-manager.testkit.ts';
 
 import { randomUUID } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
@@ -28,9 +29,10 @@ import { monitoringWakeOf } from './waits.testkit.ts';
 import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, worker, workspace, destroy, useWorkerDestroyFixture, replaceWorkerDestroyManager } from './worker-destroy.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

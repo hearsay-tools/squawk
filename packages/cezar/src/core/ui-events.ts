@@ -7,10 +7,9 @@ import type { ToolKind } from '@open-mercato/cezar-contract/tool-display';
 
 import type { PermissionOption as ContractPermissionOption, PermissionOptionKind as ContractPermissionOptionKind, PermissionRequest, PermissionResolution } from '@open-mercato/cezar-contract';
 
-/** The backend that produced a session — mirrors `RunnerId` in
- *  `agent-runner.ts` (kept structurally identical; a type-level test
- *  guards against drift so this module stays dependency-free). */
-export type UiBackend = 'claude' | 'codex' | 'opencode' | 'pi' | 'omp';
+/** The backend that produced a session: a runner id, an open string (spec
+ *  2026-11-18-runner-definitions). */
+export type UiBackend = string;
 
 /**
  * Tool lifecycle status (ACP: pending/in_progress/completed/failed).

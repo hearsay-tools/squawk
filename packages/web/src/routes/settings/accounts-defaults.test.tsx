@@ -9,7 +9,7 @@ import type {
   AgentProfilesResponse,
   WorkspaceConfigResponse,
 } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
@@ -120,6 +120,7 @@ function serve({ agentDefaults = {} }: { agentDefaults?: WorkspaceConfigResponse
 function renderAccounts() {
   const client = createQueryClient()
   client.setQueryData(queryKeys.health, { bootProject: 'boot' })
+  seedRunners(client)
   client.setQueryData(workspaceQueryKeys.projects, {
     projects: [],
     bootProject: 'boot',
@@ -194,7 +195,7 @@ describe('Agent accounts → Defaults for new projects', () => {
     )
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
+    await waitFor(() => expect(rows()).toHaveLength(RUNNER_IDS.length))
     // The built-in fallback, rendered rather than thrown.
     expect(rowFor('claude')?.getAttribute('aria-checked')).toBe('true')
   })
@@ -203,8 +204,8 @@ describe('Agent accounts → Defaults for new projects', () => {
     serve()
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
-    expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(runnerSchema.options)
+    await waitFor(() => expect(rows()).toHaveLength(RUNNER_IDS.length))
+    expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(RUNNER_IDS)
     // No machine opinion: claude is checked, which is what an unconfigured repo runs.
     expect(rowFor('claude')?.getAttribute('aria-checked')).toBe('true')
   })
@@ -213,7 +214,7 @@ describe('Agent accounts → Defaults for new projects', () => {
     serve()
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
+    await waitFor(() => expect(rows()).toHaveLength(RUNNER_IDS.length))
     fireEvent.click(rowFor('codex')!)
 
     await waitFor(() => expect(configPuts()).toHaveLength(1))

@@ -13,6 +13,7 @@ import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
 import { ThreadView } from './task-thread'
 import { reduceThread } from './thread-state'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 afterEach(() => {
   act(() => resetToasts())
@@ -77,6 +78,7 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
       if (path === '/api/v1/models?runner=claude') return jsonResponse({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (method === 'GET' && path === '/api/v1/runs/r1/diff') return new Response(DIFF, { status: 200 })
       if (method === 'GET' && path === '/api/v1/run-summaries') return jsonResponse([])
+      if (method === 'GET' && path === RUNNERS_PATH) return jsonResponse(RUNNERS_RESPONSE)
       if (method === 'GET' && path === '/api/v1/providers/status') {
         return jsonResponse({
           providers: [

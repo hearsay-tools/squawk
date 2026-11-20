@@ -22,6 +22,7 @@ import { MobileRunBarSlotContext } from '@/components/mobile-run-bar'
 
 import { RunHeader, visibleItemTabs, type RunTab } from './run-header'
 import { PreviewPaneContext, type PreviewPane } from './preview/preview-state'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 afterEach(() => {
   act(() => resetToasts())
@@ -83,6 +84,7 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
       const override = overrides[path]
       if (override) return override()
       if (method === 'GET' && path.endsWith('/run-summaries')) return jsonResponse([])
+      if (method === 'GET' && path === RUNNERS_PATH) return jsonResponse(RUNNERS_RESPONSE)
       if (method === 'GET' && path === '/api/v1/providers/status') {
         return jsonResponse({
           providers: [
@@ -691,6 +693,24 @@ describe('Open in… menu — agent CLI resume labeling (#402)', () => {
     expect(await within(menu).findByRole('button', { name: 'IntelliJ IDEA' })).not.toBeNull()
     expect(within(menu).queryByRole('button', { name: /Terminal \(resume session\)/ })).toBeNull()
     expect(within(menu).queryByRole('button', { name: /Codex CLI/ })).toBeNull()
+  })
+
+  // hearsay-tools/squawk#3898: only the runners list names the runners, so an agent handoff waits for it.
+  it('hides agent handoff targets while the runners list has not answered, and keeps non-agent targets', async () => {
+    stubFetch({
+      [RUNNERS_PATH]: () => jsonResponse({ error: 'no runners' }, 404),
+      '/api/v1/open-targets': () => jsonResponse({
+        targets: [
+          { id: 'cli:claude', label: 'Claude CLI' },
+          { id: 'idea', label: 'IntelliJ IDEA', icon: 'idea' },
+        ],
+      }),
+    })
+    renderHeader(run('done', { runner: 'claude', worktreePath: '/tmp/wt' }))
+    const menu = await openMenu()
+
+    expect(await within(menu).findByRole('button', { name: 'IntelliJ IDEA' })).not.toBeNull()
+    expect(within(menu).queryByRole('button', { name: /Claude CLI/ })).toBeNull()
   })
 })
 

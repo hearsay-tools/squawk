@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { AttachmentWriter } from './run/attachment-writer.ts';
@@ -9,7 +12,8 @@ import { seedWaits, setRunStatus } from '../runs/run-store.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct, TURN_TEXT, setupMonitoringFixture, FINISHED_RUN_STATUSES } from './run-fixture.testkit.ts';
 import { beginUsageInvocation, recordUsageUiEvent } from './run/usage-accounting.ts';
 import { createActiveRun } from './active-run.ts';
-import { createFixtureManager, drainFixtureManagers, unused, fixtureWork } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, unused, fixtureWork } from './fixture-manager.testkit.ts';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +33,8 @@ import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 describe('appendTurnText', () => {
   it(

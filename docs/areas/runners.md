@@ -33,8 +33,16 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   `runners/<id>/spec-support.ts`, its host probe in `runners/<id>/detection.ts`, its terminal
   command and install source in `runners/<id>/cli.ts`, its model data in
   `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
-  definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its cockpit facts in
-  `RUNNER_COCKPIT_FACTS`. When it adds a value
+  native mock script and scenario prompts in `runners/<id>/mock.ts` (the `mock` part), its
+  definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its display
+  facts in `runners/<id>/display.ts`, which `GET /api/v1/runners` sends with the `models.suggested`
+  and `models.retired` ids and the `agentConfig` pane of its `configFiles` part. The cockpit holds
+  no table keyed by runner id: the runner picker's label and line, the model presets, the install
+  hint, the login command, the account folder example, the icon key and the Agent config pane are
+  all in the definition (hearsay-tools/squawk#3898). `display.icon` is a key of the cockpit's icon
+  set (`OPEN_IN_ICONS` in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the
+  generic runner icon is `bot`. A runner's `login.installHint` (the server's message) and
+  `display.installHint` (the accounts pane) are different strings. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 
@@ -86,7 +94,22 @@ that one runner. `core/runner-fact-exemptions.test.ts` swaps facts rows and chec
 that the exemptions follow (hearsay-tools/squawk#3642).
 
 A per-runner parity file loads only its own adapter. It picks its runner with
-`useRunners(onlyRunner(definition, make))`, which registers only that runner's definition. The
+`useRunners(onlyRunner(definition, make))`, which registers only that runner's definition, and
+passes the definition to the kit: `describeHarnessParity({ runner: piRunner, part })`,
+`describeWaitParity({ runner: piRunner, ... })`, `subagentCells([piRunner])`. `HARNESS_ADAPTERS`
+(`core/harness-parity-core.testkit.ts`) reads each registered runner's `mock` part, and reading a
+runner that is not registered throws. A test file registers only the runners it drives
+(`registerRunner(definition)`), and where it would import a plain kit (`harness-parity.testkit`,
+`fixture-cleanup.testkit`, `worker-wait.testkit`, `workflow-parity.testkit`,
+`every-runner.testkit`) it imports the kit's `-core` file and `core/created-runners.testkit.ts`,
+which makes `createRunner` the factory at the same point of the import order, so a
+`vi.spyOn(createRunner)` still reaches it. `createRunner` gives Claude to an id that no runner
+registered, so a test that starts a runner it did not register runs it on Claude without an error:
+register every runner a test starts. A file that enumerates runners (`runnersWhere`,
+`registeredRunners`, `RUNNER_IDS`), or that builds the server, whose readers walk every
+`RUNNER_IDS` id until the runner list reads the registry (`workspace/agent-profiles.ts`), imports
+`core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
+`core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude

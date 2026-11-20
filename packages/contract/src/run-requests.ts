@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { attachmentInputSchema } from './runs.ts';
 import { runnerSchema } from './runner.ts';
-const RUNNER_IDS = runnerSchema.options;
 
 // PATCH semantics are load-bearing here: an omitted field keeps its current value.
 // In particular, the cockpit edits text without re-uploading existing attachments.
@@ -23,7 +22,7 @@ export const queuedMessagePatchSchema = z
 export const continueSchema = z.object({
   text: z.string().max(100_000, 'must be at most 100000 characters').optional(),
   images: z.array(attachmentInputSchema).max(4).optional(),
-  runner: z.enum(RUNNER_IDS).optional(),
+  runner: runnerSchema.optional(),
   model: z.string().max(200).optional(),
   /** Reasoning-effort pin (legacy reference 45). Omitted keeps the run's pin; empty string clears it. */
   effort: z.string().max(32).optional(),

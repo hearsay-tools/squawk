@@ -12,7 +12,7 @@ import type {
   RepoResponse,
   Runner,
 } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
@@ -214,12 +214,13 @@ function serve({
 /** Seeds the step-3.2 route gates — boot id (legacy redirect) + registry (known-check) — so a
  *  flat entry URL lands scoped immediately. The boot project mounts UNSCOPED, so the exact
  *  `/api/v1/*` paths this file's fetch stub matches stay byte-identical. */
-function gateSeededClient() {
+function gateSeededClient(withRunners = true) {
   const client = createQueryClient()
   client.setDefaultOptions({
     queries: { ...client.getDefaultOptions().queries, retry: false },
   })
   client.setQueryData(queryKeys.health, { bootProject: 'boot' })
+  if (withRunners) seedRunners(client)
   // Seeded WITH the boot project, not an empty list: the client's staleTime is 5 minutes, so an
   // empty seed is never refetched and `project` stays undefined for the whole test — which renders
   // the Account picker disabled and let its assertions pass only because `fireEvent` ignores
@@ -232,8 +233,8 @@ function gateSeededClient() {
   return client
 }
 
-function renderAt(entry: string) {
-  const client = gateSeededClient()
+function renderAt(entry: string, withRunners = true) {
+  const client = gateSeededClient(withRunners)
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
@@ -318,6 +319,17 @@ describe('the agents form', () => {
     expect(screen.getByLabelText<HTMLSelectElement>('Default model for claude').disabled).toBe(true)
     expect((screen.getByLabelText<HTMLTextAreaElement>('System prompt')).disabled).toBe(false)
     expect((screen.getByLabelText<HTMLButtonElement>('Live title updates')).disabled).toBe(false)
+  })
+
+  // hearsay-tools/squawk#3897 and hearsay-tools/squawk#3898: the runner rows come from the runners query, so they wait for it.
+  it('lists the model selectors only once the runners query answers', async () => {
+    serve()
+    const client = renderAt('/settings/agents', false)
+    await waitFor(() => expect(client.getQueryState(workspaceQueryKeys.providerStatus)?.status).toBe('success'))
+    expect(screen.queryByLabelText('Default model for claude')).toBeNull()
+    seedRunners(client)
+    const select = await screen.findByLabelText<HTMLSelectElement>('Default model for claude')
+    await waitFor(() => expect(select.disabled).toBe(false))
   })
 
   it('keeps unrelated settings usable when provider status errors', async () => {
@@ -445,7 +457,7 @@ describe('the agents form', () => {
     await waitFor(() => expect(form()).not.toBeNull())
     expect(
       [...document.querySelectorAll('[data-slot="agents-model"]')].map((el) => el.getAttribute('data-runner')),
-    ).toEqual([...runnerSchema.options])
+    ).toEqual(RUNNER_IDS)
   })
 
   it('offers each runner the models its own host CLI reports (#794)', async () => {
@@ -589,7 +601,7 @@ describe('the agents form', () => {
       await waitFor(() => expect(form()).not.toBeNull())
       // Settled: the default-models field below it has rendered, so the pane is not mid-load.
       await screen.findByLabelText('Default model for claude')
-      expect(rows().map((r) => r.getAttribute('data-value'))).toEqual([...runnerSchema.options])
+      expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(RUNNER_IDS)
     })
 
     it('splits ONLY the agent that has a second login, and names each folder', async () => {
@@ -600,7 +612,7 @@ describe('the agents form', () => {
       expect(rows().map((r) => `${r.getAttribute('data-value')}:${r.getAttribute('data-account')}`)).toEqual([
         'claude:',
         'claude:klaudiusz',
-        ...runnerSchema.options.filter((id) => id !== 'claude').map((id) => `${id}:`),
+        ...RUNNER_IDS.filter((id) => id !== 'claude').map((id) => `${id}:`),
       ])
       expect(rowFor('claude', '')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('/home/u/.claude')
       expect(rowFor('claude', 'klaudiusz')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('~/.claude-klaudiusz')

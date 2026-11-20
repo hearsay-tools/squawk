@@ -14,13 +14,11 @@ import {
   availableRunners,
   buildCreateRunBody,
   effortOptionsForModel,
-  MODELS_BY_RUNNER,
   modelConflictsWithRunner,
   modelsForRunner,
   modelCatalogStatus,
   pushRecentSource,
   resolveEffort,
-  RUNNERS,
   resolveModel,
   resolveRunner,
   resolveSource,
@@ -28,6 +26,10 @@ import {
   startedRunPath,
   type TaskSource,
 } from './new-task-form'
+import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
+import { runnerPickerLabel } from '@/api/runners'
+import { usableRunners } from '@/lib/provider-status'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available })
 
@@ -64,18 +66,18 @@ describe('task access in create bodies (hearsay-tools/cezarion#2784)', () => {
 
 describe('availableRunners (legacy renderChrome rule)', () => {
   it('offers OMP only when detected, after the other backends', () => {
-    expect(availableRunners([check('omp', true), check('claude', true)])).toEqual(['claude', 'omp'])
-    expect(availableRunners([check('claude', true), check('omp', false)])).toEqual(['claude'])
-    expect(RUNNERS.find((runner) => runner.id === 'omp')).toMatchObject({ label: 'OMP' })
+    expect(availableRunners([check('omp', true), check('claude', true)], RUNNERS_RESPONSE)).toEqual(['claude', 'omp'])
+    expect(availableRunners([check('claude', true), check('omp', false)], RUNNERS_RESPONSE)).toEqual(['claude'])
+    expect(RUNNERS_RESPONSE.runners.find((runner) => runner.id === 'omp')).toMatchObject({ pickerLabel: 'OMP' })
   })
-  it('offers exactly the detected backends, in RUNNERS order', () => {
+  it('offers exactly the detected backends, in the order of the runners list', () => {
     const checks = [check('opencode', true), check('git', true), check('claude', true), check('codex', false)]
-    expect(availableRunners(checks)).toEqual(['claude', 'opencode'])
+    expect(availableRunners(checks, RUNNERS_RESPONSE)).toEqual(['claude', 'opencode'])
   })
 
   it('falls back to claude when nothing is detected — the form always has a runner', () => {
-    expect(availableRunners([])).toEqual(['claude'])
-    expect(availableRunners([check('git', true), check('gh', true)])).toEqual(['claude'])
+    expect(availableRunners([], RUNNERS_RESPONSE)).toEqual(['claude'])
+    expect(availableRunners([check('git', true), check('gh', true)], RUNNERS_RESPONSE)).toEqual(['claude'])
   })
 })
 
@@ -95,33 +97,33 @@ describe('resolveRunner (legacy preselection order)', () => {
 
 describe('model option resolution', () => {
   it('every runner leads with auto (empty id — no model flag sent)', () => {
-    for (const models of Object.values(MODELS_BY_RUNNER)) {
-      expect(models[0]).toMatchObject({ id: '', label: 'auto' })
+    for (const { models } of RUNNERS_RESPONSE.runners) {
+      expect(models.suggested[0]).toMatchObject({ id: '', label: 'auto' })
     }
   })
 
   it('claude: usable aliases when discovery is unavailable', () => {
-    expect(modelsForRunner('claude').map((m) => m.id)).toEqual([
+    expect(modelsForRunner('claude', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([
       '', 'opus', 'sonnet', 'haiku',
     ])
   })
 
   it('codex: auto plus host-discovered and custom ids', () => {
     const catalog = { runner: 'codex' as const, models: [{ id: 'gpt-future', label: 'Future', description: 'New' }], source: 'live' as const, stale: false }
-    expect(modelsForRunner('codex', catalog, ['legacy-id']).map((m) => m.id)).toEqual(['', 'gpt-future', 'legacy-id'])
-    expect(modelsForRunner('codex', catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
+    expect(modelsForRunner('codex', RUNNERS_RESPONSE, catalog, ['legacy-id']).map((m) => m.id)).toEqual(['', 'gpt-future', 'legacy-id'])
+    expect(modelsForRunner('codex', RUNNERS_RESPONSE, catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
   })
 
   it('reports stale and unavailable Codex catalogs without exposing reasons', () => {
-    expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
-    expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
-    expect(modelCatalogStatus('claude', undefined, true)).toBe('Latest Claude models unavailable')
+    expect(modelCatalogStatus('codex', RUNNERS_RESPONSE, { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
+    expect(modelCatalogStatus('codex', RUNNERS_RESPONSE, { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
+    expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, true)).toBe('Latest Claude models unavailable')
   })
 
   it('opencode: auto alone until the host catalog answers (#794)', () => {
-    expect(modelsForRunner('opencode').map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('opencode', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
     expect(
-      modelsForRunner('opencode', {
+      modelsForRunner('opencode', RUNNERS_RESPONSE, {
         runner: 'opencode',
         models: [
           { id: 'openai/gpt-5.4', label: 'openai/gpt-5.4', description: 'via openai' },
@@ -137,6 +139,7 @@ describe('model option resolution', () => {
     expect(
       modelsForRunner(
         'opencode',
+        RUNNERS_RESPONSE,
         { runner: 'opencode', models: [], source: 'unavailable', stale: false },
         ['openai/gpt-5.1'],
       ).map((m) => m.id),
@@ -148,17 +151,17 @@ describe('model option resolution', () => {
     // Counting either's list as evidence of "belongs to another runner" would silently strip
     // those ids from the other picker's catalog — the #794 bug, reintroduced through the back door.
     for (const model of ['openai/gpt-5.1', 'anthropic/claude-sonnet-5']) {
-      expect(modelConflictsWithRunner(model, 'opencode')).toBe(false)
-      expect(modelConflictsWithRunner(model, 'pi')).toBe(false)
+      expect(modelConflictsWithRunner(model, 'opencode', RUNNERS_RESPONSE)).toBe(false)
+      expect(modelConflictsWithRunner(model, 'pi', RUNNERS_RESPONSE)).toBe(false)
     }
     // The guard it must NOT lose: a bare id that is unmistakably one single-provider runner's.
-    expect(modelConflictsWithRunner('opus', 'codex')).toBe(true)
+    expect(modelConflictsWithRunner('opus', 'codex', RUNNERS_RESPONSE)).toBe(true)
   })
 
   it('pi: auto alone until the host catalog answers', () => {
-    expect(modelsForRunner('pi').map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('pi', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
     expect(
-      modelsForRunner('pi', {
+      modelsForRunner('pi', RUNNERS_RESPONSE, {
         runner: 'pi',
         models: [{ id: 'xai/grok-4.6', label: 'grok-4.6', description: 'via xai' }],
         source: 'live',
@@ -168,10 +171,10 @@ describe('model option resolution', () => {
   })
 
   it('omp: auto alone until the host catalog answers, and never conflicts', () => {
-    expect(modelsForRunner('omp').map((m) => m.id)).toEqual([''])
-    expect(modelsForRunner('omp')[0]).toMatchObject({ desc: 'Use your OMP default model' })
+    expect(modelsForRunner('omp', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('omp', RUNNERS_RESPONSE)[0]).toMatchObject({ desc: 'Use your OMP default model' })
     expect(
-      modelsForRunner('omp', {
+      modelsForRunner('omp', RUNNERS_RESPONSE, {
         runner: 'omp',
         models: [{ id: 'anthropic/claude-sonnet-5', label: 'sonnet-5', description: '' }],
         source: 'live',
@@ -180,40 +183,40 @@ describe('model option resolution', () => {
     ).toEqual(['', 'anthropic/claude-sonnet-5'])
     // OMP spans every configured provider like pi, so its ids are never another runner's exclusive model
     // and `opus` stays a claude-only bare id from its point of view too.
-    expect(modelConflictsWithRunner('openai/gpt-5.1', 'omp')).toBe(false)
-    expect(modelConflictsWithRunner('openai/gpt-5.1', 'codex')).toBe(false)
-    expect(modelCatalogStatus('omp', undefined, true)).toBe('Latest OMP models unavailable')
+    expect(modelConflictsWithRunner('openai/gpt-5.1', 'omp', RUNNERS_RESPONSE)).toBe(false)
+    expect(modelConflictsWithRunner('openai/gpt-5.1', 'codex', RUNNERS_RESPONSE)).toBe(false)
+    expect(modelCatalogStatus('omp', RUNNERS_RESPONSE, undefined, true)).toBe('Latest OMP models unavailable')
   })
 
   it('names the runner whose catalog is stale or unavailable', () => {
     expect(
-      modelCatalogStatus('opencode', { runner: 'opencode', models: [], source: 'cache', stale: true, reason: 'raw' }),
+      modelCatalogStatus('opencode', RUNNERS_RESPONSE, { runner: 'opencode', models: [], source: 'cache', stale: true, reason: 'raw' }),
     ).toBe('Using cached OpenCode model list')
-    expect(modelCatalogStatus('opencode', undefined, true)).toBe('Latest OpenCode models unavailable')
+    expect(modelCatalogStatus('opencode', RUNNERS_RESPONSE, undefined, true)).toBe('Latest OpenCode models unavailable')
     expect(
-      modelCatalogStatus('pi', { runner: 'pi', models: [], source: 'cache', stale: true, reason: 'raw' }),
+      modelCatalogStatus('pi', RUNNERS_RESPONSE, { runner: 'pi', models: [], source: 'cache', stale: true, reason: 'raw' }),
     ).toBe('Using cached Pi model list')
-    expect(modelCatalogStatus('pi', undefined, true)).toBe('Latest Pi models unavailable')
+    expect(modelCatalogStatus('pi', RUNNERS_RESPONSE, undefined, true)).toBe('Latest Pi models unavailable')
   })
 
   it('resolveModel keeps known picks and arbitrary native model pins', () => {
-    expect(resolveModel('opus', 'claude')).toBe('opus')
-    expect(resolveModel('custom-codex-id', 'codex')).toBe('custom-codex-id')
-    expect(resolveModel(null, 'opencode', { opencode: 'provider/custom-model' })).toBe('provider/custom-model')
-    expect(resolveModel(null, 'claude')).toBe('')
+    expect(resolveModel('opus', 'claude', RUNNERS_RESPONSE)).toBe('opus')
+    expect(resolveModel('custom-codex-id', 'codex', RUNNERS_RESPONSE)).toBe('custom-codex-id')
+    expect(resolveModel(null, 'opencode', RUNNERS_RESPONSE, { opencode: 'provider/custom-model' })).toBe('provider/custom-model')
+    expect(resolveModel(null, 'claude', RUNNERS_RESPONSE)).toBe('')
   })
 
   it('resolveModel falls back to the Settings → Agents per-runner preset (R6 1.5)', () => {
     const defaults = { claude: 'opus', codex: 'not-a-preset' }
     // Untouched pill: the configured preset for THIS runner preselects.
-    expect(resolveModel(null, 'claude', defaults)).toBe('opus')
+    expect(resolveModel(null, 'claude', RUNNERS_RESPONSE, defaults)).toBe('opus')
     // An explicit pick — including explicitly picking auto ('') — beats the preset.
-    expect(resolveModel('sonnet', 'claude', defaults)).toBe('sonnet')
-    expect(resolveModel('', 'claude', defaults)).toBe('')
+    expect(resolveModel('sonnet', 'claude', RUNNERS_RESPONSE, defaults)).toBe('sonnet')
+    expect(resolveModel('', 'claude', RUNNERS_RESPONSE, defaults)).toBe('')
     // Configured custom ids remain representable even when discovery is unavailable.
-    expect(resolveModel(null, 'codex', defaults)).toBe('not-a-preset')
+    expect(resolveModel(null, 'codex', RUNNERS_RESPONSE, defaults)).toBe('not-a-preset')
     // No preset for the runner → auto, exactly as before.
-    expect(resolveModel(null, 'opencode', defaults)).toBe('')
+    expect(resolveModel(null, 'opencode', RUNNERS_RESPONSE, defaults)).toBe('')
   })
 })
 
@@ -242,32 +245,32 @@ describe('effort option resolution (#55)', () => {
   const full = ['', 'low', 'medium', 'high', 'xhigh', 'max']
 
   it('offers auto plus exactly the selected model levels in backend order', () => {
-    expect(effortOptionsForModel('opencode', 'zai/glm-5.3', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('zai/glm-5.3', catalog).map((option) => option.value))
       .toEqual(['', 'max', 'low', 'high'])
-    expect(effortOptionsForModel('opencode', 'openai/gpt-5.4', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('openai/gpt-5.4', catalog).map((option) => option.value))
       .toEqual(['', 'low', 'medium', 'high', 'xhigh'])
   })
 
   it('resets an unsupported effort to auto and keeps a supported effort', () => {
-    const options = effortOptionsForModel('opencode', 'zai/glm-5.3', catalog)
+    const options = effortOptionsForModel('zai/glm-5.3', catalog)
     expect(resolveEffort('medium', options)).toBe('')
     expect(resolveEffort('high', options)).toBe('high')
     expect(resolveEffort(null, options)).toBe('')
   })
 
   it('falls back per model for static runners, old metadata, custom ids, and missing catalogs', () => {
-    expect(effortOptionsForModel('claude', 'opus').map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('codex', 'gpt-future').map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'openai/legacy', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'openai/empty', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'provider/custom', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('pi', 'xai/grok')).toHaveLength(full.length)
+    expect(effortOptionsForModel('opus').map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('gpt-future').map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('openai/legacy', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('openai/empty', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('provider/custom', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('xai/grok')).toHaveLength(full.length)
   })
 
   it('does not let one model metadata entry affect another', () => {
-    expect(effortOptionsForModel('opencode', 'zai/glm-5.3', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('zai/glm-5.3', catalog).map((option) => option.value))
       .not.toContain('medium')
-    expect(effortOptionsForModel('opencode', 'openai/legacy', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('openai/legacy', catalog).map((option) => option.value))
       .toContain('medium')
   })
 })
@@ -390,7 +393,7 @@ describe('buildCreateRunBody — the exact POST /api/v1/runs payloads legacy sen
   })
 
   it('keeps a locked native default visible while omitting it from direct and automation requests', () => {
-    const model = resolveModel(null, 'claude', { claude: 'native-sonnet' })
+    const model = resolveModel(null, 'claude', RUNNERS_RESPONSE, { claude: 'native-sonnet' })
     expect(model).toBe('native-sonnet')
 
     const opts = {
@@ -511,18 +514,68 @@ describe('buildAutomationTask', () => {
  describe('Claude host discovery (#89)', () => {
   it('replaces suggestions with host rows while retaining explicit pins', () => {
     const catalog = { runner: 'claude' as const, models: [{ id: 'opus[1m]', label: 'Host Opus', description: 'Host choice' }], source: 'live' as const, stale: false }
-    expect(modelsForRunner('claude', catalog, ['claude-opus-4-8', 'private-model']).map(m => m.id)).toEqual(['', 'opus[1m]', 'claude-opus-4-8', 'private-model'])
-    expect(resolveModel('private-model', 'claude', undefined, catalog)).toBe('private-model')
-    expect(modelCatalogStatus('claude', { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude model list')
+    expect(modelsForRunner('claude', RUNNERS_RESPONSE, catalog, ['claude-opus-4-8', 'private-model']).map(m => m.id)).toEqual(['', 'opus[1m]', 'claude-opus-4-8', 'private-model'])
+    expect(resolveModel('private-model', 'claude', RUNNERS_RESPONSE, undefined, catalog)).toBe('private-model')
+    expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude model list')
   })
   it('retains the cross-runner guard for retired dated suggestions', () => {
-    expect(modelConflictsWithRunner('claude-opus-4-8', 'codex')).toBe(true)
+    expect(modelConflictsWithRunner('claude-opus-4-8', 'codex', RUNNERS_RESPONSE)).toBe(true)
   })
  })
 
 it('reports discovery in progress without masking cached feedback', () => {
-  expect(modelCatalogStatus('claude', undefined, false, true)).toBe('Loading Claude models…')
-  expect(modelCatalogStatus('claude', { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude model list')
-  expect(modelCatalogStatus('claude', undefined, false, false)).toBeUndefined()
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, false, true)).toBe('Loading Claude models…')
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude model list')
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, false, false)).toBeUndefined()
 })
 
+// Spec 2026-11-18-runner-definitions, "State restore cases", rows 1 to 5 (row 6, a run saved on an
+// unregistered runner, is `run-session-details.test.tsx`). The runner and model data come from the
+// runners list (hearsay-tools/squawk#3898), and a runner that list does not name is not restorable.
+describe('state restore cases of the runners list', () => {
+  const connected = (...providers: string[]): ProviderStatusResponse => ({
+    providers: providers.map((provider) => ({ provider, status: 'connected', enabled: true })),
+  })
+
+  it('row 1: reopening with no saved selection picks the preferred usable runner, shown by its picker label and first preset', () => {
+    const usable = usableRunners(connected('claude', 'codex'), RUNNERS_RESPONSE)
+    expect(usable).toEqual(['claude', 'codex'])
+    const runner = resolveRunner(null, usable, 'codex')
+    expect(runner).toBe('codex')
+    expect(runnerPickerLabel(RUNNERS_RESPONSE, runner)).toBe('codex')
+    expect(modelsForRunner(runner, RUNNERS_RESPONSE)[0]).toMatchObject({ id: '', label: 'auto' })
+    expect(resolveModel(null, runner, RUNNERS_RESPONSE)).toBe('')
+  })
+
+  it('row 2: a saved runner that is registered and usable keeps its saved model', () => {
+    const usable = usableRunners(connected('claude', 'codex'), RUNNERS_RESPONSE)
+    expect(resolveRunner('claude', usable, 'codex')).toBe('claude')
+    expect(resolveModel('opus', 'claude', RUNNERS_RESPONSE)).toBe('opus')
+    expect(runnerPickerLabel(RUNNERS_RESPONSE, 'claude')).toBe('claude')
+  })
+
+  it('row 3: a saved runner that is no longer registered falls to the resolved pick, and its id is not offered', () => {
+    const usable = usableRunners(connected('retired', 'codex'), RUNNERS_RESPONSE)
+    expect(usable).toEqual(['codex'])
+    expect(resolveRunner('retired', usable, 'claude')).toBe('codex')
+    expect(availableRunners([check('retired', true), check('claude', true)], RUNNERS_RESPONSE)).toEqual(['claude'])
+  })
+
+  it('row 4: a saved model that is a known or retired preset of another runner with its own id scope is discarded', () => {
+    // `opus` is a Claude preset and `claude-opus-4-8` a retired Claude id; Codex's ids are its own.
+    for (const saved of ['opus', 'claude-opus-4-8']) {
+      expect(modelConflictsWithRunner(saved, 'codex', RUNNERS_RESPONSE)).toBe(true)
+      expect(resolveModel(saved, 'codex', RUNNERS_RESPONSE)).toBe('')
+      expect(modelsForRunner('codex', RUNNERS_RESPONSE, undefined, [saved]).map((model) => model.id)).toEqual([''])
+    }
+    // A provider-spanning runner's presets and ids belong to no runner alone, so they never conflict.
+    expect(modelConflictsWithRunner('anthropic/claude-sonnet-5', 'claude', RUNNERS_RESPONSE)).toBe(false)
+  })
+
+  it('row 5: before the runners list answers there is no runner, preset or label to restore', () => {
+    expect(usableRunners(connected('claude'), undefined)).toEqual([])
+    expect(modelsForRunner('claude', undefined)).toEqual([])
+    expect(modelConflictsWithRunner('opus', 'codex', undefined)).toBe(false)
+    expect(runnerPickerLabel(undefined, 'claude')).toBe('claude')
+  })
+})

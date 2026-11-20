@@ -10,9 +10,12 @@ import { RunManager } from './run.js';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.js';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
+registerRunner(piRunner);
 
 const workflow: WorkflowDef = {
   name: 'quick-task', source: 'built-in',

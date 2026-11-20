@@ -2,15 +2,10 @@ import { expectTypeOf, it } from 'vitest';
 import type { AgentAccountSelection } from './agent-profiles.ts';
 import type { RunnerModels, WorkspaceConfigResponse, WorkspaceUiState } from './workspace.ts';
 
-type OptionalRunnerStrings = {
-  claude?: string | undefined;
-  codex?: string | undefined;
-  opencode?: string | undefined;
-  pi?: string | undefined;
-  omp?: string | undefined;
-};
+/** Keyed by runner id, an open string (spec 2026-11-18-runner-definitions, decision 1). */
+type OptionalRunnerStrings = Record<string, string | undefined>;
 
-it('keeps the four existing inferred per-runner types', () => {
+it('keys the four per-runner types by any runner id', () => {
   expectTypeOf<AgentAccountSelection>().toEqualTypeOf<OptionalRunnerStrings>();
   expectTypeOf<RunnerModels>().toEqualTypeOf<OptionalRunnerStrings>();
   expectTypeOf<WorkspaceConfigResponse['agentDefaults']['models']>()

@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -8,9 +10,11 @@ import * as processes from '../core/process-usage.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { COMPLETION_NUDGE_NOTE } from './run.ts';
 import { gate, thenSay, toolCall } from './waits-parity.testkit.ts';
-import { delegatingParent, manager, restart, root, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { delegatingParent, manager, restart, root, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait-core.testkit.ts';
 
 import { entryOf, inputOf } from './worker-waits-shared.testkit.ts';
+registerRunner(claudeRunner);
 
 describe('messages wake without being waits', { timeout: 45_000 }, () => {
   useWorkerWaitFixture();

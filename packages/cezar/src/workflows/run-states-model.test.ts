@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose } from './worker-wait-readiness.testkit.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { spawn } from 'node:child_process';
@@ -7,14 +9,16 @@ import type { CiWaitResult, ProcessWaitResult } from '@open-mercato/cezar-contra
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { ProcessWaitSupervisor } from '../process-wait/supervisor.ts';
 import { takeRunExitViolations } from '../runs/run-exits.ts';
 import { runThenCleanUp } from '../runs/run-exits.testkit.ts';
 import { RUN_TRIGGERS, stateOf, type RunState } from './run-states.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { toolCall } from './waits-parity.testkit.ts';
-import { manager, restart, store, timeline, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, restart, store, timeline, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
+registerRunner(claudeRunner);
 
 /**
  * The run state table drives a real run (hearsay-tools/cezarion#1804). Each command takes its

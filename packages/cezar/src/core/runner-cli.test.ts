@@ -1,12 +1,11 @@
+import '../core/register-all-runners.testkit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { isSafeSessionId, resumeCommand, terminalExecutable } from './runner-cli.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
 // The golden take-over commands cover every runner.
-registerBuiltInRunners();
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {
   beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });

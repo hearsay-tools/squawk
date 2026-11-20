@@ -6,4 +6,4 @@ import { claudeRunner } from './definition.ts';
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
 // Squawk's wait on native subagents on the claude wire (hearsay-tools/cezarion#2431).
-subagentCells(['claude']);
+subagentCells([claudeRunner]);

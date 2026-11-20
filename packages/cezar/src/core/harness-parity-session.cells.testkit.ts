@@ -9,8 +9,7 @@ import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
 import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf, RUNNER_IDS, type AgentEvent, type AgentRunSpec, type AgentRunSpecField, type ContentBlock, type RunnerId, type ToolGrant } from './agent-runner.ts';
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedOpencodeMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
 import { SEAM_CRITERIA, seamRows } from './harness-parity-seam-tier.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
@@ -199,7 +198,7 @@ export const SESSION_GROUPS = {
   'tool-grants'(r: HarnessRegistrar) {
     const { describeRunners, scope, registration } = r;
     describeRunners('tool-grants', 'harness parity — tool grants', () => {
-      (registration.toolGrants ?? describeToolGrantParity)(scope === 'once' ? 'once' : scope.runner);
+      (registration.toolGrants ?? describeToolGrantParity)(scope === 'once' ? 'once' : scope.runner.id);
     }, true);
   },
 
@@ -662,6 +661,6 @@ export const SESSION_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the session part's cells for one runner: `harness-<runner>-session-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('session', SESSION_GROUPS, scope, registration, TOOL_GRANT_CASES.length);
 }

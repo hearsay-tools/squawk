@@ -8,4 +8,4 @@ import { ompRunner } from '../omp/definition.ts';
 // R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
 useRunners(onlyRunners([[piRunner, () => new PiRunner()], [ompRunner, () => new OmpRunner()]]));
 
-describeHarnessParity({ runner: 'pi', part: 'owned-workflows' });
+describeHarnessParity({ runner: piRunner, part: 'owned-workflows' });

@@ -16,6 +16,7 @@ import { resetToasts, Toaster } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
 import { resetDraft } from './new-task-draft'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 /**
  * The composer's project pill (multi-project spec, step 3.4).
@@ -177,6 +178,7 @@ function serve({
         'GET /api/v1/projects': registry,
         'GET /api/v1/health': health,
         'GET /api/v1/providers/status': PROVIDERS,
+        [`GET ${RUNNERS_PATH}`]: RUNNERS_RESPONSE,
         // The rail's hand-picked order, opposite to registry order.
         'GET /api/v1/workspace/ui-state': { sidebar: { projectOrder: [OTHER, BOOT] } },
       }

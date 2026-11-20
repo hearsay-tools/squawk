@@ -1,8 +1,11 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { transitionTurnBoundary } from './run/turn-boundary.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -34,6 +37,7 @@ import type { AgentSession } from '../core/agent-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import { outcomeWord } from './turn-outcomes.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+registerRunner(claudeRunner);
 
 // The completion gate's refusal of a live session's done outside a turn end (`settleTurn`'s `gate`
 // entry, hearsay-tools/cezarion#1525). Mid-turn, the live turn end decides the refusal; at the

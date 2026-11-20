@@ -1,9 +1,15 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { createServer } from 'node:net';
 
 import { expect, it, vi } from 'vitest';
 
-import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 
 it('opencode fixture reaches waiting when the requested runner port is occupied', async () => {

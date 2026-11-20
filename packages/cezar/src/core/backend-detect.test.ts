@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,10 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { detectEnvironment, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // DetectEnvironment probes every registered runner.
-registerBuiltInRunners();
 
 const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);
 

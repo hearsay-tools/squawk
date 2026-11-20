@@ -23,8 +23,8 @@ import {
   type AgentProfile,
   type AgentProfilesResponse,
 } from '@open-mercato/cezar-api-client/contract/agent-profiles'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
-import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import { runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
 import type {
   BackendCheck,
   ProviderId,
@@ -48,7 +48,7 @@ import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { agentPickerRows } from '@/components/default-agent-picker'
-import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -78,15 +78,6 @@ import { SettingsAgentPicker } from './settings-agent-picker'
  *    says so out loud, because "Remove" next to a path reads as "delete my folder".
  */
 
-/** The vendor's own install/login instruction, shown when the CLI is not on this machine. */
-const PROVIDER_INSTALL: Record<ProviderId, string> = {
-  claude: 'npm i -g @anthropic-ai/claude-code',
-  codex: 'npm i -g @openai/codex',
-  opencode: 'https://opencode.ai',
-  pi: 'https://github.com/badlogic/pi-mono',
-  omp: 'https://omp.sh',
-}
-
 /** Same vocabulary the Providers card uses — one wording for "is this logged in?". */
 const STATUS_PRESENTATION = {
   connected: { label: 'Connected', tone: 'success' },
@@ -97,8 +88,9 @@ const STATUS_PRESENTATION = {
 
 export function AccountsSection() {
   const profiles = useAgentProfiles()
+  const runners = useRunners()
 
-  if (profiles.isPending) {
+  if (profiles.isPending || runners.isPending) {
     return (
       <p data-slot="accounts-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading agent accounts…
@@ -116,10 +108,21 @@ export function AccountsSection() {
       />
     )
   }
-  return <AccountsPane data={profiles.data} />
+  if (runners.isError) {
+    return (
+      <CenteredState
+        icon={<IdCardIcon />}
+        tone="danger"
+        title="Agent accounts did not load"
+        subtitle={runners.error.message}
+        heading="h2"
+      />
+    )
+  }
+  return <AccountsPane data={profiles.data} runners={runners.data} />
 }
 
-function AccountsPane({ data }: { data: AgentProfilesResponse }) {
+function AccountsPane({ data, runners }: { data: AgentProfilesResponse; runners: RunnersResponse }) {
   const health = useHealth()
   const [adding, setAdding] = useState<ProviderId | null>(null)
   const [confirming, setConfirming] = useState<AgentProfile | null>(null)
@@ -128,7 +131,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
   // Every agent gets a tab, including one that cannot carry a second login: the tab is where its
   // install state and config folder live, and hiding OpenCode would just move the question
   // "is OpenCode set up?" somewhere else.
-  const providers: readonly ProviderId[] = runnerSchema.options
+  const providers: readonly ProviderId[] = runners.runners.map((entry) => entry.id)
 
   if (!data.editable) {
     return (
@@ -161,7 +164,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
         <TabsList variant="line" data-slot="accounts-tabs">
           {providers.map((provider) => (
             <TabsTrigger key={provider} value={provider} data-provider={provider}>
-              {runnerDisplayName(provider)}
+              {runnerDisplayName(runners, provider)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -170,6 +173,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
           <TabsContent key={provider} value={provider} className="pt-4">
             <AgentTab
               provider={provider}
+              runners={runners}
               // `checks` is read defensively: health is also patched in place from the WS topic and
               // seeded by route gates, so a partially-populated cache entry is a real state — and
               // "Checking…" is the honest thing to show for it.
@@ -183,7 +187,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
         ))}
       </Tabs>
 
-      <DefaultsForNewProjects />
+      <DefaultsForNewProjects runners={runners} />
 
       {/* Keyed by provider so reopening under a different agent starts from a clean form rather
           than the previous agent's half-typed folder. */}
@@ -237,6 +241,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
 /** One agent: what the machine has, then the logins configured for it. */
 function AgentTab({
   provider,
+  runners,
   check,
   accounts,
   canCarryAccounts,
@@ -244,6 +249,7 @@ function AgentTab({
   onRemove,
 }: {
   provider: ProviderId
+  runners: RunnersResponse
   /** The `/api/v1/health` probe for this CLI — the ONE place a version can honestly come from. */
   check: BackendCheck | undefined
   accounts: AgentProfile[]
@@ -258,12 +264,12 @@ function AgentTab({
     <div data-slot="accounts-provider" data-provider={provider} className="flex flex-col gap-4">
       {/* Facts about the BINARY, not about any one account: a version and an install are shared by
           every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 className="settings-account-provider-title">{runnerDisplayName(provider)}</h3>
+      <h3 className="settings-account-provider-title">{runnerDisplayName(runners, provider)}</h3>
       <div className="settings-account-installation settings-readout">
         {check === undefined ? <span>Checking…</span> : installed ? (
           <span data-slot="agent-installed">Installed</span>
         ) : (
-          <span data-slot="agent-installed">Not installed — <code>{PROVIDER_INSTALL[provider]}</code></span>
+          <span data-slot="agent-installed">Not installed — <code>{runnerEntry(runners, provider)?.installHint}</code></span>
         )}
         {installed && check?.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
         <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
@@ -271,7 +277,7 @@ function AgentTab({
 
       <ul className="bg-card">
         {accounts.map((account) => (
-          <AccountRow key={account.id} account={account} onRemove={() => onRemove(account)} />
+          <AccountRow key={account.id} account={account} runners={runners} onRemove={() => onRemove(account)} />
         ))}
       </ul>
 
@@ -283,7 +289,7 @@ function AgentTab({
 
       {!canCarryAccounts ? (
         <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-          {runnerDisplayName(provider)} can only hold one account here: it keeps its credentials
+          {runnerDisplayName(runners, provider)} can only hold one account here: it keeps its credentials
           outside its config folder, so a second folder would change settings without changing the
           login — which would say “work account” while billing the other one.
         </p>
@@ -297,13 +303,13 @@ function AgentTab({
  * subject as the agents above. DEFAULTS, never overrides: a project's own `.ai/cezar/config.json`
  * still wins key by key. Which account a project uses is that project's own setting.
  */
-function DefaultsForNewProjects() {
+function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
   const [modelRunner, setModelRunner] = useState<Runner | null>(null)
   const queryClient = useQueryClient()
   const config = useWorkspaceConfig()
   const providerStatus = useProviderStatus()
   // Keep each host catalog available while the model-agent chooser switches (#794).
-  const catalogs = useRunnerModelCatalogs()
+  const catalogs = useRunnerModelCatalogs(runnerIds(runners))
   const save = useMutation({
     mutationFn: (patch: SetWorkspaceConfigInput) => putWorkspaceConfig(patch),
     onSuccess: (result) => queryClient.setQueryData(workspaceQueryKeys.config, result),
@@ -313,7 +319,7 @@ function DefaultsForNewProjects() {
   if (config.data === undefined) return null
 
   // One row per agent: an account is a project's choice, never a machine-wide one.
-  const rows = agentPickerRows([])
+  const rows = agentPickerRows([], runners)
   // Absent means "no opinion", and the built-in fallback is claude — the same answer a project with
   // no config gets today. Showing it checked is honest: it IS what an unconfigured project runs.
   const runner = config.data.agentDefaults.runner ?? 'claude'
@@ -344,15 +350,15 @@ function DefaultsForNewProjects() {
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
           <select aria-label="Model agent" value={modelRunner ?? runner} onChange={(event) => setModelRunner(event.target.value as Runner)}>
-            {RUNNERS.map((entry) => <option key={entry.id} value={entry.id}>{runnerDisplayName(entry.id)}</option>)}
+            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
           </select>
         </label>
-        {RUNNERS.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
+        {runners.runners.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
           <label key={entry.id} className="settings-account-model flex items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{runnerDisplayName(entry.id)}</span>
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
             <select
-              aria-label={`Default model for ${entry.label}`}
+              aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
               data-runner={entry.id}
               value={models[entry.id] ?? ''}
@@ -370,16 +376,12 @@ function DefaultsForNewProjects() {
               }
               className="block w-full max-w-xs rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             >
-              {modelsForRunner(entry.id, catalogs[entry.id].data, [models[entry.id]]).map((model) => (
+              {modelsForRunner(entry.id, runners, catalogs[entry.id]?.data, [models[entry.id]]).map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.id === '' ? 'Native default' : model.label}
                 </option>
               ))}
-              {modelCatalogStatus(entry.id, catalogs[entry.id].data, catalogs[entry.id].isError, catalogs[entry.id].isFetching) ? (
-                <option disabled>
-                  {modelCatalogStatus(entry.id, catalogs[entry.id].data, catalogs[entry.id].isError, catalogs[entry.id].isFetching)}
-                </option>
-              ) : null}
+              <CatalogStatusOption runner={entry.id} runners={runners} catalog={catalogs[entry.id]} />
             </select>
           </label>
         ))}
@@ -388,7 +390,17 @@ function DefaultsForNewProjects() {
   )
 }
 
-function AccountRow({ account, onRemove }: { account: AgentProfile; onRemove: () => void }) {
+/** The model catalog's status line as a disabled option, when there is one to show. */
+function CatalogStatusOption({ runner, runners, catalog }: {
+  runner: Runner
+  runners: RunnersResponse
+  catalog: ReturnType<typeof useRunnerModelCatalogs>[string] | undefined
+}) {
+  const status = catalogQueryStatus(runner, runners, catalog)
+  return status ? <option disabled>{status}</option> : null
+}
+
+function AccountRow({ account, runners, onRemove }: { account: AgentProfile; runners: RunnersResponse; onRemove: () => void }) {
   const routeId = agentAccountRouteId(account)
   const connect = useConnectAgentAccount()
   const recheck = useRecheckAgentAccount()
@@ -432,7 +444,7 @@ function AccountRow({ account, onRemove }: { account: AgentProfile; onRemove: ()
               <span data-slot="account-missing">— folder not created yet; Connect will make it</span>
             ) : !account.looksValid ? (
               <span data-slot="account-unrecognised">
-                — this folder does not look like {runnerDisplayName(account.provider)} config yet
+                — this folder does not look like {runnerDisplayName(runners, account.provider)} config yet
               </span>
             ) : null}
           </div>

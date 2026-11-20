@@ -25,8 +25,9 @@ import {
 import type { ReactNode } from 'react'
 
 import type { OpenTarget, Runner } from '@open-mercato/cezar-api-client'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import { runnerEntry, useRunners } from '@/api/runners'
 import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -50,7 +51,9 @@ import {
  * list and report the pick.
  */
 
-/** Icon key (`OpenTarget.icon`, #361) → the Lucide icon that renders it in the menu. Distinct per
+/** Icon key (`OpenTarget.icon`, #361, and a runner's `icon` from `GET /api/v1/runners`) → the Lucide
+ *  icon that renders it in the menu. The runners' keys (`bot`, `sparkles`) are keys of the icon
+ *  set, not runner ids: a runner names its key in its definition's `display` part. Distinct per
  *  target so the "Open in…" list reads at a glance instead of as a wall of text — a few picks
  *  lean on the target's own branding (RubyMine → gem, Android Studio → phone, CLion → cpu),
  *  the rest just aim for visual variety. An icon key the client doesn't recognize (older server,
@@ -74,25 +77,25 @@ const OPEN_IN_ICONS: Record<string, LucideIcon> = {
   'android-studio': SmartphoneIcon,
   xcode: HammerIcon,
   warp: RocketIcon,
-  claude: BotIcon,
-  codex: SparklesIcon,
-  opencode: BotIcon,
-  pi: BotIcon,
-  omp: BotIcon,
+  bot: BotIcon,
+  sparkles: SparklesIcon,
 }
 
 /** The icon component for a target — `target.icon` when it's one the UI knows, else the
- *  same generic glyph the trigger button itself uses. */
-export function openInIcon(target: OpenTarget): LucideIcon {
-  return ownLookup(OPEN_IN_ICONS, target.icon) ?? ExternalLinkIcon
+ *  same generic glyph the trigger button itself uses. An agent CLI target takes the icon key of
+ *  its runner's entry in the runners list, so it shows the generic glyph until that list answers. */
+export function openInIcon(target: OpenTarget, runners?: RunnersResponse): LucideIcon {
+  const runner = cliTargetRunner(target.id)
+  const key = runner === undefined ? target.icon : runnerEntry(runners, runner)?.icon
+  return ownLookup(OPEN_IN_ICONS, key) ?? ExternalLinkIcon
 }
 
 /** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other
- *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)
- *  without importing server code into the bundle. */
+ *  target (editors, Finder, terminal). The server names a `cli:` target only for a registered
+ *  runner (`agentCliRunner`, open-in-app.ts), so any non-empty id after the prefix is one. */
 export function cliTargetRunner(targetId: string): Runner | undefined {
   const runner = targetId.startsWith('cli:') ? targetId.slice('cli:'.length) : ''
-  return (runnerSchema.options as readonly string[]).includes(runner) ? (runner as Runner) : undefined
+  return runner === '' ? undefined : runner
 }
 
 /** A target the caller has decided is applicable, plus how it should read in the menu. */
@@ -129,6 +132,7 @@ export function OpenInMenu({
   /** Extra trigger classes — a phone row needs the 44px target. */
   className?: string | undefined
 }) {
+  const runners = useRunners().data
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -141,7 +145,7 @@ export function OpenInMenu({
         {leading}
         {leading && choices.length > 0 ? <DropdownMenuSeparator /> : null}
         {choices.map(({ target, suffix, title: itemTitle }) => {
-          const Icon = openInIcon(target)
+          const Icon = openInIcon(target, runners)
           return (
             <DropdownMenuItem
               key={target.id}

@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
@@ -5,7 +7,8 @@ import { RunSettlement } from './run/run-settlement.ts';
 import { createActiveRun, type ActiveRun } from './active-run.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { createFixtureManager, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
 import type { RunManager } from './run.ts';
@@ -16,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type StepState } from '../runs/store.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+registerRunner(claudeRunner);
 
 vi.mock('../git-worktree.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../git-worktree.ts')>(),

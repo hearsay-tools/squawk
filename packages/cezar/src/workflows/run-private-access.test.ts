@@ -10,9 +10,10 @@ import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 function privateMembers() {
   const source = readFileSync(new URL('./run.ts', import.meta.url), 'utf8');

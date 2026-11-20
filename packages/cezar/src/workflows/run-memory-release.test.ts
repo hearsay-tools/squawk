@@ -1,6 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +17,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { type RunManager } from './run.ts';
 import { type WorkflowDef } from './types.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+registerRunner(claudeRunner);
 
 /** hearsay-tools/squawk#2064: per-run memory ends with the run. */
 describe('run memory release (hearsay-tools/squawk#2064)', () => {

@@ -1,6 +1,4 @@
-import type { RunnerId } from './agent-runner.ts';
-import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
-import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { agentInputEventSchema } from '@open-mercato/cezar-contract/events';
@@ -299,6 +297,6 @@ export const OWNED_INPUT_GROUPS = {
 } satisfies Readonly<Record<string, HarnessGroup>>;
 
 /** Register the owned-input part's cells for one runner: `harness-<runner>-owned-input-parity.test.ts`. */
-export function describeHarnessParity(scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration): void {
+export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
   describeHarnessPart('owned-input', OWNED_INPUT_GROUPS, scope, registration);
 }

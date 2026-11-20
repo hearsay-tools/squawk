@@ -424,12 +424,12 @@ export function waitPartDescribers(part: WaitParityPart, cells: WaitCells) {
     if (scope.part !== part) throw Error(`The ${part} cells cannot run the ${scope.part} part: import ${waitPartModule(scope.part)}`);
     const families = fileFamilies(part);
     if ((scope.family === undefined) !== (families.length === 0)) throw Error(`The ${part} part runs ${families.length ? `one file per row family: ${families.join(', ')}` : 'one file, with no family'}`);
-    const classed = familyCells('waits', scope.runner, registerTest);
+    const classed = familyCells('waits', scope.runner.id, registerTest);
     // A family file registers only the rows of its family (`FAMILY_FILE_PARTS`).
     const register = scope.family === undefined ? classed : ((title: string, body: () => Promise<void>) => {
       if (rowFamily(part as FamilyPart, title) === scope.family) classed(title, body);
     }) as typeof registerTest;
-    describeWaitCells(() => cells([scope.runner], register));
+    describeWaitCells(() => cells([scope.runner.id], register));
   };
   return { describeWaitParity };
 }
@@ -439,7 +439,7 @@ export function waitFoldDescriber(fold: WaitFold, cells: Partial<Record<WaitPari
   return (scope: WaitFoldScope): void => {
     if (scope.fold !== fold) throw Error(`The ${fold} fold cannot run the ${scope.fold} fold: import ${waitFoldModule(scope.fold)}`);
     // Each row runs on the runners its class names (core/parity-classes.testkit.ts).
-    describeWaitCells(() => foldCells(scope.runner, fold, cells, registerTest));
+    describeWaitCells(() => foldCells(scope.runner.id, fold, cells, registerTest));
   };
 }
 

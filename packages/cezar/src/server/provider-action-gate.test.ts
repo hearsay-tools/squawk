@@ -8,6 +8,9 @@ import {
   providersRequiredByWorkflow,
   unavailableProviderMessage,
 } from './provider-action-gate.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: 'run-1',

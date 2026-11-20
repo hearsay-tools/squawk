@@ -22,6 +22,7 @@ import { plannedWorkflow, workflowStepSchema, stepsIssue, type WorkflowDef, type
 import type { WorkspaceProject } from '../workspace/config.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';
 import { providersRequiredByWorkflow } from './provider-action-gate.ts';
+import { registeredRunnerId } from '../core/runner-registry.ts';
 
 /** A refusal `POST /runs` answers as `{ error }` with this status. */
 export interface StartRunRefusal {
@@ -50,7 +51,9 @@ type ProfileResolver = (provider: ProviderId, profileId?: string) => Promise<{ p
 type RegistryLookup = (projectId: string) => Promise<WorkspaceProject | undefined>;
 
 /** The options of a start request that become the run's input. */
-type StartRunOptions = Omit<StartRunInput, 'images' | 'stackedImages' | 'automation' | 'automationTrigger'> & {
+type StartRunOptions = Omit<StartRunInput, 'images' | 'stackedImages' | 'automation' | 'automationTrigger' | 'runner'> & {
+  /** A runner id the route's runner check admitted. */
+  runner?: string | undefined;
   images?: Parameters<typeof toPastedContent>[0][] | undefined;
   steps?: Array<WorkflowStepDef & { skillPath?: string | undefined }> | undefined;
 };
@@ -151,7 +154,7 @@ export function startRunInput(body: StartRunOptions): StartRunInput {
     notify: body.notify,
     model: body.model,
     effort: body.effort,
-    runner: body.runner,
+    runner: body.runner === undefined ? undefined : registeredRunnerId(body.runner),
     agentProfile: body.agentProfile,
     images,
     systemPrompt: body.systemPrompt,

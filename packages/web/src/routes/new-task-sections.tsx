@@ -6,6 +6,7 @@ import { Link } from '@/lib/project-router'
 
 import { putConfig } from '@/api/client'
 import { hasAccountChoice } from '@/api/agent-accounts'
+import { runnerPickerLabel, useRunners } from '@/api/runners'
 import { queryKeys } from '@/api/queries'
 import type { RepoResponse } from '@open-mercato/cezar-api-client'
 import { CompletionControls } from '@/components/completion-controls'
@@ -18,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 import type { useAccountSelection, useEngineSelection } from './new-task-controller'
 import type { NewTaskDraft } from './new-task-draft'
-import { effortOptionsForModel, modelCatalogStatus, resolveEffort, RUNNERS } from './new-task-form'
+import { effortOptionsForModel, catalogQueryStatus, resolveEffort } from './new-task-form'
 
 /** The `/new` route's layout sections (hearsay-tools/cezarion#1598), each with explicit inputs. */
 
@@ -111,14 +112,14 @@ function ModelPill({ engine, draftEffort, update }: { engine: Engine; draftEffor
       readOnly={engine.modelsLocked}
       disabledHint={engine.modelsLocked ? 'Model selection is locked to native coding-agent settings.' : undefined}
       onPick={(next) => {
-        const nextOptions = effortOptionsForModel(displayRunner, next, catalog.data)
+        const nextOptions = effortOptionsForModel(next, catalog.data)
         update({
           model: next,
           effort: draftEffort === null ? null : resolveEffort(draftEffort, nextOptions),
         })
       }}
       options={engine.models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(displayRunner, catalog.data, catalog.isError, catalog.isFetching)}
+      status={catalogQueryStatus(displayRunner, engine.registered.data, catalog)}
     />
   )
 }
@@ -166,13 +167,14 @@ export function ExecutionSettings({
   completionDisabled: boolean
 }) {
   const { displayRunner } = engine
+  const registered = useRunners().data
   return (
     <details data-slot="execution-options" open className="group rounded-xl border border-border bg-card xl:self-start">
       <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs text-muted-foreground pointer-hover:bg-muted/50 active:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
         <SlidersHorizontalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
         <span className="font-medium text-foreground">Execution settings</span>
         <span data-slot="execution-summary" hidden className="min-w-0 basis-full truncate pl-5 xl:ml-auto xl:basis-auto xl:pl-0">
-          {RUNNERS.find((runner) => runner.id === displayRunner)?.label ?? displayRunner}
+          {runnerPickerLabel(registered, displayRunner)}
           {' · '}{engine.models.find((item) => item.id === engine.model)?.label ?? 'auto'}
         </span>
         <ChevronDownIcon aria-hidden="true" className="new-task-settings-chevron size-4 shrink-0" />

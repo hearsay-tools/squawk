@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -5,9 +9,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 const model = (id: string) => ({ id, label: id, description: '', effortLevels: ['low', 'high'] as const });
 describe('parent discovery and model admission', () => {
@@ -104,7 +111,13 @@ describe('parent discovery and model admission', () => {
     const models = await request({ kind: 'models', runner: 'codex' });
     expect(models.status).toBe(200);
     expect(await models.json()).toMatchObject({ runner: 'codex', models: [{ id: 'gpt-current', effortLevels: ['low', 'high'] }] });
-    expect((await request({ kind: 'models', runner: 'bogus' })).status).toBe(400);
+    // An unknown runner gets the refusal the closed enum gave (hearsay-tools/squawk#3897).
+    const unknownRunner = await request({ kind: 'models', runner: 'bogus' });
+    expect(unknownRunner.status).toBe(400);
+    expect(await unknownRunner.json()).toEqual({ code: 'invalid_input', error: 'Invalid delegation input' });
+    const unknownBackend = await app.request('http://127.0.0.1/spawn', { method: 'POST', headers: { host: '127.0.0.1', authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ task: 'work', baseline: 'HEAD', requestId: randomUUID(), backend: 'bogus' }) });
+    expect(unknownBackend.status).toBe(400);
+    expect(await unknownBackend.json()).toEqual({ code: 'invalid_input', error: 'Invalid delegation input' });
     expect((await request({ kind: 'runners', runId: f.parent.id })).status).toBe(400);
     expect((await request({ kind: 'runners' }, 'x'.repeat(43))).status).toBe(401);
     const rejected = await app.request('http://127.0.0.1/spawn', { method: 'POST', headers: { host: '127.0.0.1', authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ task: 'work', baseline: 'HEAD', requestId: randomUUID(), backend: 'codex', model: 'gpt-retired' }) });

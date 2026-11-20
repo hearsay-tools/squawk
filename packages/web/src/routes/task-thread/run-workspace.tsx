@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { ApiError, openRunIn, openRunInCli } from '@/api/client'
 import { useOpenTargets, useProjectRepoBase, useProviderStatus, useReferenceProjectId } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CopyIcon, XIcon } from '@/components/design-icons'
 import { OpenInMenu, openInIcon, type OpenInChoice } from '@/components/open-in-menu'
@@ -84,22 +85,24 @@ export function useResumeInTerminal(run: ApiRun) {
 function useOpenInChoices(run: ApiRun, canResume: boolean) {
   const targets = useOpenTargets()
   const providers = useProviderStatus()
+  const registered = useRunners()
   const open = useMutation({
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  const availableRunners = usableRunners(providers.data)
-  // The action routes remain authoritative for a stale browser. Once the complete status has
-  // arrived, hide only unavailable *agent* handoffs; editors, Finder, and file tools stay
-  // available because they do not launch a provider.
+  const availableRunners = usableRunners(providers.data, registered.data)
+  // The action routes remain authoritative for a stale browser. Once the complete status and the
+  // runners list have arrived, hide only unavailable *agent* handoffs; editors, Finder, and file
+  // tools stay available because they do not launch a provider.
   const agentAvailable = (runner: ApiRun['runner']) =>
-    !providers.isSuccess || availableRunners.includes(runner ?? 'claude')
+    !providers.isSuccess || !registered.isSuccess || availableRunners.includes(runner ?? 'claude')
   const canResumeHere = canResume && agentAvailable(lastSessionBackend(run))
   const choices: OpenInChoice[] = run.worktreePath
     ? (targets.data?.targets ?? [])
         .filter((target) => {
           const runner = cliTargetRunner(target.id)
-          return runner === undefined || agentAvailable(runner)
+          // An agent CLI target waits for the runners list, which names the runners at all.
+          return runner === undefined || (registered.isSuccess && agentAvailable(runner))
         })
         // Agent-CLI targets (#402): the one matching this run's own runner resumes THIS run's
         // session when one exists — label that explicitly so it reads as different from just
@@ -126,6 +129,7 @@ export function useHasOpenInTargets(run: ApiRun, canResume: boolean): boolean {
  *  when the session cannot be resumed and the machine offers no targets (hosted mode). */
 export function OpenInTargets({ run, canResume, onResume }: { run: ApiRun; canResume: boolean; onResume: () => void }) {
   const { canResumeHere, choices, open } = useOpenInChoices(run, canResume)
+  const registered = useRunners().data
   const hint = resumeHint(run)
   if (!canResumeHere && choices.length === 0 && !hint) return null
   const copyPath = () => {
@@ -142,7 +146,7 @@ export function OpenInTargets({ run, canResume, onResume }: { run: ApiRun; canRe
         <div className="task-open-targets flex flex-wrap gap-3">
           {canResumeHere ? <Button variant="outline" data-target="terminal-resume" onClick={onResume}><SquareTerminalIcon />Terminal (resume session)</Button> : null}
           {choices.map(({ target, suffix, title }) => {
-            const Icon = openInIcon(target)
+            const Icon = openInIcon(target, registered)
             return <Button variant="outline" key={target.id} data-target={target.id} title={title} disabled={open.isPending} onClick={() => open.mutate(target.id)}><Icon aria-hidden="true" />{target.label}{suffix ?? ''}</Button>
           })}
           {run.worktreePath ? <Button variant="outline" onClick={copyPath}><CopyIcon />Copy worktree path</Button> : null}

@@ -9,28 +9,14 @@ import {
   useRetryProviderAuth,
   workspaceQueryKeys,
 } from '@/api/queries'
-import { runnerDiscoversModels, type ProviderId, type ProviderStatus, type ProviderStatusResponse } from '@open-mercato/cezar-api-client/contract/workspace'
+import { type ProviderId, type ProviderStatus, type ProviderStatusResponse } from '@open-mercato/cezar-api-client/contract/workspace'
 import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { providerStatusFor } from '@/lib/provider-status'
-
-const PROVIDERS = [
-  { id: 'claude', label: 'Claude Code', login: 'claude auth login' },
-  { id: 'codex', label: 'Codex', login: 'codex login' },
-  { id: 'opencode', label: 'OpenCode', login: 'opencode auth login' },
-  { id: 'pi', label: 'pi', login: 'pi /login' },
-  { id: 'omp', label: 'OMP', login: 'omp login' },
-] as const
-
-const providerWriteState = <T,>(value: T): Record<ProviderId, T> => ({
-  claude: value,
-  codex: value,
-  opencode: value,
-  pi: value,
-  omp: value,
-})
+import { runnerDisplayName, runnerEntries, useRunners } from '@/api/runners'
+import type { RunnerEntry } from '@open-mercato/cezar-api-client/contract/runners'
 
 const STATUS_PRESENTATION = {
   connected: { label: 'Credentials found', tone: 'success' },
@@ -83,7 +69,7 @@ function ProviderHint({
   current,
   statusIsError,
 }: {
-  provider: (typeof PROVIDERS)[number]
+  provider: RunnerEntry
   state: ProviderState | undefined
   current: ProviderStatus | undefined
   statusIsError: boolean
@@ -91,7 +77,7 @@ function ProviderHint({
   if (state === 'not-installed') {
     return (
       <p className="mt-1.5 text-xs text-soft-foreground">
-        Install {provider.label}, then run <code>{provider.login}</code>.
+        Install {provider.displayName}, then run <code>{provider.loginCommand}</code>.
       </p>
     )
   }
@@ -121,7 +107,7 @@ function ProviderActions({
   retry,
   queueToggle,
 }: {
-  provider: (typeof PROVIDERS)[number]
+  provider: RunnerEntry
   state: ProviderState | undefined
   current: ProviderStatus | undefined
   isConnecting: boolean
@@ -137,7 +123,7 @@ function ProviderActions({
       {state !== 'not-installed' ? (
         <Switch
           checked={current?.enabled ?? true}
-          aria-label={`Use ${provider.label}`}
+          aria-label={`Use ${provider.displayName}`}
           onCheckedChange={(enabled) => queueToggle(provider.id, enabled)}
         />
       ) : null}
@@ -175,7 +161,7 @@ function ProviderActions({
             retry.mutate(
               { provider: provider.id, authFailureId: incidentId },
               {
-                onSuccess: () => toast(`${provider.label} can be tried again.`),
+                onSuccess: () => toast(`${provider.displayName} can be tried again.`),
                 onError: (error) => toast(error.message, { tone: 'danger' }),
               },
             )
@@ -227,14 +213,15 @@ function ManualSignIn({
 }
 
 export function ProviderSettings() {
+  const runners = useRunners()
   const status = useProviderStatus()
   const refresh = useRefreshProviderStatus()
   const retry = useRetryProviderAuth()
   const queryClient = useQueryClient()
   const [manual, setManual] = useState<ManualCommand | null>(null)
   const writeChain = useRef<Promise<unknown>>(Promise.resolve())
-  const latestWrites = useRef(providerWriteState(0))
-  const pendingWrites = useRef(providerWriteState(0))
+  const latestWrites = useRef<Record<string, number>>({})
+  const pendingWrites = useRef<Record<string, number>>({})
   const lastConfirmed = useRef<ProviderStatusResponse | undefined>(status.data)
 
   useEffect(() => {
@@ -255,7 +242,7 @@ export function ProviderSettings() {
     lastConfirmed.current = {
       providers: status.data.providers.map((row) => ({
         ...row,
-        enabled: pendingWrites.current[row.provider] > 0
+        enabled: (pendingWrites.current[row.provider] ?? 0) > 0
           ? providerStatusFor(lastConfirmed.current, row.provider)?.enabled ?? row.enabled
           : row.enabled,
       })),
@@ -269,9 +256,10 @@ export function ProviderSettings() {
       if (!previous) return
       if (!lastConfirmed.current) lastConfirmed.current = previous
       const optimistic = withProviderEnabled(previous, provider, enabled)
-      pendingWrites.current[provider] += 1
+      pendingWrites.current[provider] = (pendingWrites.current[provider] ?? 0) + 1
       queryClient.setQueryData(key, optimistic)
-      const seq = ++latestWrites.current[provider]
+      const seq = (latestWrites.current[provider] ?? 0) + 1
+      latestWrites.current[provider] = seq
       writeChain.current = writeChain.current.then(async () => {
         try {
           const confirmed = await setProviderEnabled(provider, enabled)
@@ -303,7 +291,7 @@ export function ProviderSettings() {
             toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
           }
         } finally {
-          pendingWrites.current[provider] -= 1
+          pendingWrites.current[provider] = (pendingWrites.current[provider] ?? 0) - 1
         }
       })
     },
@@ -323,11 +311,11 @@ export function ProviderSettings() {
           : 'Provider is already connected.',
       )
       await queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.providerStatus })
-      if (runnerDiscoversModels(provider)) await invalidateRunnerModels(queryClient, provider, 'none')
+      await invalidateRunnerModels(queryClient, provider, 'none')
     },
     onError: (error: Error, provider) => {
       if (error instanceof ApiError && error.command) {
-        const label = PROVIDERS.find((item) => item.id === provider)?.label ?? provider
+        const label = runnerDisplayName(runners.data, provider)
         setManual({ provider, label, message: error.message, command: error.command })
         return
       }
@@ -377,7 +365,7 @@ export function ProviderSettings() {
       ) : null}
 
       <div className="flex flex-col gap-2">
-        {PROVIDERS.map((provider) => {
+        {runnerEntries(runners.data).map((provider) => {
           const current = providerStatusFor(status.data, provider.id)
           const state = current?.status
           const presentation = presentationFor(state, status.isPending)
@@ -393,7 +381,7 @@ export function ProviderSettings() {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="text-[13px] font-semibold text-foreground">{provider.label}</h3>
+                    <h3 className="text-[13px] font-semibold text-foreground">{provider.displayName}</h3>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                       <StatusDot tone={presentation.tone} pulse={status.isPending} />
                       <span>{presentation.label}</span>

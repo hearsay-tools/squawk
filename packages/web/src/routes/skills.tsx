@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import { getRunnerSkills } from '@/api/client'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { queryKeys, useConfig, useRunnerSkills } from '@/api/queries'
 import { RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { searchSkills } from '@/lib/skills'
 import { cn } from '@/lib/utils'
-import { RUNNERS } from './new-task-form'
 import { groupRunnerSkills, SkillGroups } from './skills-list'
 import type { Runner } from '@open-mercato/cezar-api-client'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
@@ -65,13 +64,16 @@ function SkillsResult({ skills, search, openId, runner, account, unchecked }: {
   return <SkillGroups groups={groupRunnerSkills(matches)} openId={openId} searching={search.trim() !== ''} runner={runner} account={account} />
 }
 
+/** Renders once the runners list has answered, so every button shows the runner's name. */
 function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner: Runner) => void }) {
+  const runners = useRunners().data
+  if (!runners) return null
   return (
     <div role="group" aria-label="Runner" className="flex max-w-full gap-0.5 overflow-x-auto rounded-[10px] border border-border bg-card p-[3px]">
-      {RUNNERS.map((entry) => (
+      {runners.runners.map((entry) => (
         <button key={entry.id} type="button" aria-pressed={entry.id === runner} onClick={() => onChange(entry.id)}
           className="h-8 shrink-0 rounded-[7px] px-3 text-[13px] text-muted-foreground focus-visible:outline-2 aria-pressed:bg-muted aria-pressed:font-semibold aria-pressed:text-foreground pointer-hover:text-foreground">
-          {runnerDisplayName(entry.id)}
+          {runnerDisplayName(runners, entry.id)}
         </button>
       ))}
     </div>

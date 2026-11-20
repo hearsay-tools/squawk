@@ -8,13 +8,14 @@ import { useState, type ReactNode } from 'react'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { ApiError, continueRun } from '@/api/client'
 import { useConfig, useRunnerModels } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { ApiRun, ContinueResponse, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
 import {
   effortOptionsForModel,
   modelsForRunner,
-  modelCatalogStatus,
+  catalogQueryStatus,
   resolveEffort,
   resolveModel,
 } from '@/routes/new-task-form'
@@ -48,11 +49,12 @@ export interface ContinueAction {
 
 type ContinueConfig = ReturnType<typeof useConfig>['data']
 type ContinueCatalog = ReturnType<typeof useRunnerModels>['data']
+type ContinueRunners = ReturnType<typeof useRunners>['data']
 type ContinueAccounts = ReturnType<typeof useAgentAccounts>
 
 function resolveContinueModel(
   run: ApiRun, runner: Runner, runnerChanged: boolean, modelsLocked: boolean,
-  config: ContinueConfig, catalog: ContinueCatalog,
+  config: ContinueConfig, catalog: ContinueCatalog, registered: ContinueRunners,
   pickedModel: string | null, pickedEffort: string | null,
 ) {
   // While the runner is unchanged, the model pill starts on the run's own pin; switching the
@@ -62,9 +64,9 @@ function resolveContinueModel(
       ? { ...config?.defaultModels, [runner]: run.model }
       : config?.defaultModels
   const effectivePickedModel = modelsLocked ? null : pickedModel
-  const models = modelsForRunner(runner, catalog, [effectivePickedModel, modelDefaults?.[runner]])
-  const model = resolveModel(effectivePickedModel, runner, modelDefaults, catalog)
-  const effortOptions = effortOptionsForModel(runner, model, catalog)
+  const models = modelsForRunner(runner, registered, catalog, [effectivePickedModel, modelDefaults?.[runner]])
+  const model = resolveModel(effectivePickedModel, runner, registered, modelDefaults, catalog)
+  const effortOptions = effortOptionsForModel(model, catalog)
   const rawEffort = modelsLocked ? '' : (pickedEffort ?? run.effort ?? '')
   const effort = resolveEffort(rawEffort, effortOptions)
   const mustClearStoredEffort =
@@ -174,10 +176,11 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   // fetches at all — every other thread (running, queued, closed with no session) would be
   // fetching it to render nothing.
   const catalog = useRunnerModels(runner, available)
+  const registered = useRunners()
   const modelsLocked = config.data?.modelsLocked === true
   const runnerChanged = runner !== currentRunner
   const modelSelection = resolveContinueModel(
-    run, runner, runnerChanged, modelsLocked, config.data, catalog.data, pickedModel, pickedEffort,
+    run, runner, runnerChanged, modelsLocked, config.data, catalog.data, registered.data, pickedModel, pickedEffort,
   )
   const { models, model, effortOptions, effort } = modelSelection
   const { modelLabel, effortLabel } = continueLabels(modelSelection)
@@ -253,11 +256,11 @@ export function useContinueAction(run: ApiRun): ContinueAction {
           disabledHint="Model selection is locked to native coding-agent settings."
           onPick={(next) => {
             setPickedModel(next)
-            const nextOptions = effortOptionsForModel(runner, next, catalog.data)
+            const nextOptions = effortOptionsForModel(next, catalog.data)
             if (effort !== '' && resolveEffort(effort, nextOptions) === '') setPickedEffort('')
           }}
           options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-          status={modelCatalogStatus(runner, catalog.data, catalog.isError, catalog.isFetching)}
+          status={catalogQueryStatus(runner, registered.data, catalog)}
         />
         <PickerPill
           icon={<GaugeIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}

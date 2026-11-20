@@ -24,9 +24,10 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import { enqueueAgentInput, nextAgentInput, agentInputBatch } from './input.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 /** Read at call time, so a test's `vi.spyOn(runners, 'createRunner')` reaches managers built before it. */
 const spiedRunners: RunnerFactory = backend => runners.createRunner(backend);

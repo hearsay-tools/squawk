@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
@@ -5,8 +7,10 @@ import { apiRunSchema } from '@open-mercato/cezar-contract/runs';
 import { createApp } from './server.js';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.js';
 import { apiRequest } from './loopback-request.testkit.js';
-import { collect, manager, parent, root, store, until, useWorkerWaitFixture, worker } from '../workflows/worker-wait.testkit.js';
+import '../core/created-runners.testkit.ts';
+import { collect, manager, parent, root, store, until, useWorkerWaitFixture, worker } from '../workflows/worker-wait-core.testkit.ts';
 import { setRunStatus, hasPendingAsk } from '../runs/run-store.testkit.ts';
+registerRunner(claudeRunner);
 
 describe('authoritative finishability (#449)', () => {
   // The race below includes the final autosave, so its worktree keeps the mock's notes.md change.

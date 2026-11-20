@@ -11,14 +11,15 @@ import type { WorkerSpawnRequest } from '@open-mercato/cezar-contract';
 import type { AgentRunResult, AgentRunSpec, AgentSession } from './agent-runner.ts';
 import * as runners from './runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
-import './every-runner.testkit.ts';
+import './created-runners.testkit.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { parentFileSnapshotPath, placeWorkerAttachments } from '../delegation/context.ts';
 import { ensureOwnedWorkspace, readOwnedDiff } from '../delegation/workspace.ts';
 import { autosaveCommit } from '../autosave-commit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerBuiltInRunners();
+registerRunner(claudeRunner);
 
 // A one-shot hook around `open`: it may change the filesystem just before a matching path is opened,
 // and its returned step receives the opened handle, so a test can land a race or a failing write.

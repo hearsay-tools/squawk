@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDefinition } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
 import { AutomationEditor } from './editor'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 // Radix's Switch and the composer pills measure themselves; jsdom has no ResizeObserver.
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
@@ -15,11 +16,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 type Call = { path: string; method: string; body: unknown }
 /** A fetch double: the editor's pickers read workflows (everything else 404s and degrades), and
  *  the write routes answer with whatever `write` returns. */
+function readAnswer(path: string): Response {
+  if (path.endsWith('/workflows')) return json({ workflows: [{ name: 'quick-task', description: '', steps: [] }] })
+  return path === RUNNERS_PATH ? json(RUNNERS_RESPONSE) : json({ error: 'not found' }, 404)
+}
+
 function stubFetch(write: (call: Call) => Response) {
   const calls: Call[] = []
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const call = { path: String(input), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined }
-    if (call.method === 'GET') return call.path.endsWith('/workflows') ? json({ workflows: [{ name: 'quick-task', description: '', steps: [] }] }) : json({ error: 'not found' }, 404)
+    if (call.method === 'GET') return readAnswer(call.path)
     calls.push(call)
     return write(call)
   }))

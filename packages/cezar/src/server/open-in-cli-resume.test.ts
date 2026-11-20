@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -9,7 +15,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
-import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
@@ -17,10 +22,13 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 // The cases span the Claude, Codex, OpenCode and OMP take-over commands.
-registerBuiltInRunners();
 
 // The terminal launcher actually spawns a process (osascript/cmd/x-terminal-emulator) — mocked
 // so this suite exercises only the command construction, never a real terminal window.
@@ -196,7 +204,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       const response = await openInCli(run.id);
       expect(response.status).toBe(409);
       expect(await response.json()).toEqual({
-        error: `the configured ${runnerDisplayName(backend)} executable cannot be used in a terminal command`,
+        error: 'the configured OMP executable cannot be used in a terminal command',
       });
       expect(mockOpenInTerminal).not.toHaveBeenCalled();
     } finally {
