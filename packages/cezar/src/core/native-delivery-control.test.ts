@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeliveryControl, readDeliveryControl, type DeliveryControlOptions, type DeliveryKind } from '../../scripts/mock-delivery-control.mjs';
-import { type AgentEvent, type AgentSession } from './agent-runner.ts';
+import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 

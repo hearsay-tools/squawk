@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
-import { type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentToolCallRecord, type ContentBlock, type InputDelivery, type AgentSession, type SessionOptions } from '../../core/agent-runner.ts';
+import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentRunner, AgentToolCallRecord, ContentBlock, InputDelivery, AgentSession, SessionOptions } from '../../core/agent-runner.ts';
 import { isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit } from '../../core/agent-runner-values.ts';
 import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';

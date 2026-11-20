@@ -33,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
-import { type AgentEvent, type AgentSession, type InputDelivery } from './agent-runner.ts';
+import type { AgentEvent, AgentSession, InputDelivery } from './agent-runner.ts';
 import { inputDeliveryOf } from './agent-runner-values.ts';
 import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';

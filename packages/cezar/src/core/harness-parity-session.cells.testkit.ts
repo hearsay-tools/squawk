@@ -8,7 +8,7 @@ import { expect, vi } from 'vitest';
 import { testHome } from '../home/test-home.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
-import { type AgentEvent, type AgentRunSpec, type AgentRunSpecField, type ContentBlock, type ToolGrant } from './agent-runner.ts';
+import type { AgentEvent, AgentRunSpec, AgentRunSpecField, ContentBlock, ToolGrant } from './agent-runner.ts';
 import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedOpencodeMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';

@@ -1,4 +1,4 @@
-import { type ToolGrant } from './agent-runner.ts';
+import type { ToolGrant } from './agent-runner.ts';
 import { unknownToolGrant } from './agent-runner-values.ts';
 
 /**

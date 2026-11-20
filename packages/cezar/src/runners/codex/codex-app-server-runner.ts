@@ -6,7 +6,7 @@ import { uiAskQuestions, parseAskRequest, type AskQuestion } from '../../core/as
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type InputDelivery } from '../../core/agent-runner.ts';
+import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentRunner, AgentSession, AgentToolCallRecord, ContentBlock, SessionOptions, InputDelivery } from '../../core/agent-runner.ts';
 import { prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit } from '../../core/agent-runner-values.ts';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_SPEC_SUPPORT } from './spec-support.ts';

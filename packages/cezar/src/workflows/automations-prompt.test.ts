@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type AgentRunSpec } from '../core/agent-runner.ts';
+import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';

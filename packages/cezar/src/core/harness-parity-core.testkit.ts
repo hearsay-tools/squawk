@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSession, type SessionOptions } from './agent-runner.ts';
+import type { AgentRunSpec, AgentEvent, AgentRunResult, AgentSession, SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerDefinition } from './runner-definition.ts';

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { type AgentEvent, type ToolGrant } from './agent-runner.ts';
+import type { AgentEvent, ToolGrant } from './agent-runner.ts';
 import { TOOL_GRANT_KINDS } from './agent-runner-values.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
