@@ -1,3 +1,4 @@
+import './core/register-all-runners.testkit.ts';
 import { resolveHome } from './home/resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 const env: NodeJS.ProcessEnv = {};
 const testHome = () => resolveHome({ purpose: 'cli', env, layout: 'legacy' }); // test-home-read: pure path resolution; result not written
@@ -40,6 +41,28 @@ describe('instanceSlug', () => {
 });
 
 describe('agentHomePaths', () => {
+  // hearsay-tools/squawk#3900: one home per registered runner, in registration order.
+  it('lists each built-in runner\'s home slot and path, at the defaults and under every override', () => {
+    expect(Object.entries(agentHomePaths({ HOME: '/home/u' } as NodeJS.ProcessEnv))).toEqual([
+      ['claude', '/home/u/.claude'],
+      ['codex', '/home/u/.codex'],
+      ['opencodeConfig', '/home/u/.config/opencode'],
+      ['pi', '/home/u/.pi/agent'],
+      ['omp', '/home/u/.omp/agent'],
+    ]);
+    expect(Object.entries(agentHomePaths({
+      HOME: '/home/u', CLAUDE_CONFIG_DIR: '/o/claude', CODEX_HOME: '/o/codex', XDG_CONFIG_HOME: '/o/xdg',
+      PI_CODING_AGENT_DIR: '/o/pi', PI_CONFIG_DIR: '.omp-alt',
+    } as NodeJS.ProcessEnv))).toEqual([
+      ['claude', '/o/claude'],
+      ['codex', '/o/codex'],
+      ['opencodeConfig', '/o/xdg/opencode'],
+      ['pi', '/o/pi'],
+      ['omp', '/o/pi'],
+    ]);
+    expect(agentHomePaths({ HOME: '/home/u', PI_CONFIG_DIR: '.omp-alt' } as NodeJS.ProcessEnv).omp).toBe('/home/u/.omp-alt/agent');
+  });
+
   it('defaults to the agents\' documented home directories', () => {
     const paths = agentHomePaths({ HOME: '/home/u' } as NodeJS.ProcessEnv);
     expect(paths.claude).toBe('/home/u/.claude');
