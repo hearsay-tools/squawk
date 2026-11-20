@@ -87,6 +87,7 @@
       "packages/cezar/src/runners/ids.ts",
       "packages/cezar/src/runners/opencode/**",
       "packages/cezar/scripts/mock-opencode-*",
+      "packages/cezar/scripts/opencode-*",
       "packages/cezar/scripts/mock-skill-data/opencode.mjs"
     ],
     "scripts/regression-proof.test.mjs": [

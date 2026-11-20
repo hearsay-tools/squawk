@@ -14,7 +14,7 @@ const SRC = 'packages/cezar/src';
 const SCRIPTS = 'packages/cezar/scripts';
 const INPUTS = [`${SRC}/runners/fixture`, `${SCRIPTS}/mock-fixture-runner.mjs`, `${SRC}/runners/built-in.ts`, `${SRC}/runners/ids.ts`,
   `${SRC}/runners/opencode`, `${SCRIPTS}/mock-skill-data/opencode.mjs`,
-  ...readdirSync(join(REPO, SCRIPTS)).filter(file => file.startsWith('mock-opencode-')).map(file => `${SCRIPTS}/${file}`)];
+  ...readdirSync(join(REPO, SCRIPTS)).filter(file => /^(?:mock-)?opencode-/.test(file)).map(file => `${SCRIPTS}/${file}`)];
 const ROSTER_TEST = `${SRC}/core/roster-reader.test.ts`;
 const OTHER_TEST = `${SRC}/core/other.test.ts`;
 
@@ -108,6 +108,11 @@ test('--complete copies the opencode runner as hexacode in its places only, with
   assert.equal(statSync(mock).mode, statSync(join(root, SCRIPTS, 'mock-opencode-serve.mjs')).mode);
   assert.match(readFileSync(mock, 'utf8'), /from '\.\/mock-hexacode-questions\.mjs'/);
   assert.ok(statSync(join(root, SCRIPTS, 'mock-skill-data/hexacode.mjs')).isFile());
+  // The shipped task-scope plugin is the runner's own script: copied, and the copy's paths name it.
+  assert.match(readFileSync(join(root, SCRIPTS, 'hexacode-task-scope.mjs'), 'utf8'), /^\/\/ HexaCode plugin that Squawk loads/);
+  assert.ok(statSync(join(root, SCRIPTS, 'hexacode-task-scope.d.mts')).isFile());
+  assert.match(readFileSync(join(runner, 'hexacode-task-scope.ts'), 'utf8'), /'\.\.\/\.\.\/\.\.\/scripts\/hexacode-task-scope\.mjs'/);
+  assert.ok(!shared.some(line => line.includes('task-scope')));
   assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'omp', 'hexacode'\]/);
   assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /import \{ hexacodeRunner \} from '\.\/hexacode\/definition\.ts';\n[^]*ompRunner, hexacodeRunner\]/);
   // Only what the copy takes from outside the copied files keeps the old spelling, and each one is reported.

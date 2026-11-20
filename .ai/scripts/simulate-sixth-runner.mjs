@@ -14,7 +14,8 @@
 // name each missing piece inside the four places.
 //
 // `--complete` adds `hexacode`: a complete runner, every file of `runners/opencode/`, its mock
-// scripts `mock-opencode-*` and its skill data `mock-skill-data/opencode.mjs`, with each name
+// scripts `mock-opencode-*`, its shipped scripts `opencode-*` (the task-scope plugin) and its
+// skill data `mock-skill-data/opencode.mjs`, with each name
 // renamed (identifiers, ids, env variables, binary and file names). `hexacode` cannot collide: no
 // file of the repository holds it, it holds no other runner's id, and it has the length of
 // `opencode`, so no line changes length. A relative path or an imported name that a copied file
@@ -51,8 +52,9 @@ export const FOUR_PLACES = [`${SRC}/runners/sixth/`, `${SCRIPTS}/mock-sixth-runn
 /** The runner that `--complete` copies, and the id of its copy. */
 export const COMPLETE_SOURCE = 'opencode';
 export const COMPLETE_ID = 'hexacode';
-/** The places of the complete runner: its folder, its mock scripts, its skill data and its registration. */
-export const COMPLETE_PLACES = [`${SRC}/runners/${COMPLETE_ID}/`, `${SCRIPTS}/mock-${COMPLETE_ID}-`, `${SCRIPTS}/mock-skill-data/${COMPLETE_ID}.mjs`, ...REGISTRATION];
+/** The places of the complete runner: its folder, its mock and shipped scripts, its skill data and its registration. */
+export const COMPLETE_PLACES = [`${SRC}/runners/${COMPLETE_ID}/`, `${SCRIPTS}/mock-${COMPLETE_ID}-`, `${SCRIPTS}/${COMPLETE_ID}-`,
+  `${SCRIPTS}/mock-skill-data/${COMPLETE_ID}.mjs`, ...REGISTRATION];
 const ROSTER_MODULES = new Set(['runners/ids', 'runners/built-in', 'core/register-all-runners.testkit']);
 const GUARD_TESTS = [`${SRC}/runner-class-rule.test.ts`, `${SRC}/core/harness-parity-closure.test.ts`, `${SRC}/vitest-setup-closure.test.ts`];
 
@@ -159,13 +161,14 @@ function register(target, id) {
 const COMPLETE_SPELLINGS = [['opencode', 'hexacode'], ['Opencode', 'Hexacode'], ['OpenCode', 'HexaCode'], ['OPENCODE', 'HEXACODE'], ['openCode', 'hexaCode']];
 const SOURCE_NAME = new RegExp(COMPLETE_SOURCE, 'i');
 
-/** The checkout-relative files that `--complete` copies: the runner folder, its mock scripts and its skill data. */
+/** The checkout-relative files that `--complete` copies: the runner folder, its mock and shipped scripts and its skill data. */
 function completeSources(target) {
   const folder = `${SRC}/runners/${COMPLETE_SOURCE}`;
   const runnerFiles = readdirSync(join(target, folder), { recursive: true, encoding: 'utf8' })
     .filter(file => statSync(join(target, folder, file)).isFile()).map(file => `${folder}/${file}`);
-  const mockFiles = readdirSync(join(target, SCRIPTS)).filter(file => file.startsWith(`mock-${COMPLETE_SOURCE}-`)).map(file => `${SCRIPTS}/${file}`);
-  return [...runnerFiles, ...mockFiles, `${SCRIPTS}/mock-skill-data/${COMPLETE_SOURCE}.mjs`].sort();
+  const scripts = readdirSync(join(target, SCRIPTS)).filter(file => file.startsWith(`mock-${COMPLETE_SOURCE}-`) || file.startsWith(`${COMPLETE_SOURCE}-`))
+    .map(file => `${SCRIPTS}/${file}`);
+  return [...runnerFiles, ...scripts, `${SCRIPTS}/mock-skill-data/${COMPLETE_SOURCE}.mjs`].sort();
 }
 
 function renameComplete(text) {
