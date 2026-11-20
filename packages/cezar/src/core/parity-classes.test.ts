@@ -1,3 +1,4 @@
+import './every-runner.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +15,7 @@ import {
 import { WAIT_CRITERIA } from '../workflows/waits-parity.testkit.ts';
 import { MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRITERIA, MONITORING_TURN_CRITERIA } from '../workflows/monitoring-turn.testkit.ts';
 import {
-  FACT_VALUE_TESTS, NO_SESSION_RUNNER, PARITY_FAMILIES, PARITY_FILES, SCENARIO_RUNNER, SHARED_RUNNERS, parityRowId, parityRunners, turnPathValues,
+  FACT_VALUE_TESTS, NO_SESSION_RUNNER, PARITY_FAMILIES, PARITY_FILES, SCENARIO_RUNNER, SHARED_RUNNERS, parityRowId, parityRunners, runsOn, turnPathValues,
   type ParityFamilyName, type TurnPathFact,
   SCENARIO_CLASSES,
 } from './parity-classes.testkit.ts';
@@ -100,6 +101,15 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
     expect(parityRunners('waits', undefined)).toEqual(BUILT_IN_RUNNER_IDS);
     expect(parityRunners('waits', 'U2')).toEqual(SHARED_RUNNERS);
     expect(parityRunners('server-contract', 'R1')).toEqual([NO_SESSION_RUNNER]);
+  });
+
+  it('runs on a runner outside the built-in roster every row that runs on every built-in runner, and no shared row (hearsay-tools/squawk#3899)', () => {
+    expect(runsOn('harness:run', 'R1', 'fixture')).toBe(true);
+    expect(runsOn('waits', 'U27', 'fixture')).toBe(true);
+    expect(runsOn('waits', undefined, 'fixture')).toBe(true);
+    expect(runsOn('waits', 'U2', 'fixture')).toBe(false);
+    expect(runsOn('server-contract', 'R1', 'fixture')).toBe(false);
+    for (const runner of BUILT_IN_RUNNER_IDS) expect(runsOn('waits', 'U2', runner)).toBe(runner === SCENARIO_RUNNER);
   });
 
   // A row whose scenario runs the runner's own code cannot be shared: a provider error is mapped by

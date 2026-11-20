@@ -1,9 +1,10 @@
+import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WorkerOrphans } from './run/worker-orphans.ts';
-import { fixtureWork } from './fixture-cleanup.testkit.ts';
+import { fixtureWork } from './fixture-manager.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { nonDumpableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { randomUUID } from 'node:crypto';

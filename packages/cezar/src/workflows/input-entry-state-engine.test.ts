@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { randomUUID } from 'node:crypto';

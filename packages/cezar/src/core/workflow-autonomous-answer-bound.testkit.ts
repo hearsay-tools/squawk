@@ -15,9 +15,9 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { NO_WAIT_NUDGE_REPLY_MS } from '../workflows/run.ts';
 import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE } from '../workflows/turn-end.ts';
 
-import { waitFor } from './harness-parity.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 
 /** The step bound of each wait in the cell; the run's own signals end every wait. */
 const STEP_MS = 20_000;

@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -13,9 +12,9 @@ import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { inputDeliveryOf } from './agent-runner-values.ts';
 import { createRunner } from './runner-registry.ts';
-import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { ANSWER_DELIVERY_GROUPS, answerDeliveryFamilies } from './conversation-answer-delivery-rows.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 
 
 // hearsay-tools/cezarion#935: a Continue executing an answer keeps that answer's checkpoint until

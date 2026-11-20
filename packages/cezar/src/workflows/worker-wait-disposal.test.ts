@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { isDisposedDelegatedRun } from './run/run-guards.ts';
@@ -8,9 +9,12 @@ import { randomUUID } from 'node:crypto';
 import { makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { currentUsage } from '../core/process-usage.ts';
-import { bookkeeping, executions, manager, parent, register, reopenRuntime, root, semaphore, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait.testkit.ts';
+import { bookkeeping, executions, manager, parent, register, reopenRuntime, root, semaphore, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait-core.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { RunMemory } from './run/run-memory.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

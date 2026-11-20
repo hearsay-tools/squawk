@@ -14,6 +14,9 @@ import { runRecordSchema, toRunSummary } from '@open-mercato/cezar-contract/runs
 import { startTestCockpit, type TestCockpit } from './cockpit.testkit.ts';
 import type { Wait } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

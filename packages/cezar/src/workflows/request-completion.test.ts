@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -14,7 +15,6 @@ import { RUN_STATUS, STEP_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/waits';
-import '../core/created-runners.testkit.ts';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';

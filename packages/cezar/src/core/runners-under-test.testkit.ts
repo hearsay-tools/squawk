@@ -24,6 +24,33 @@ export function useRunners(factory: RunnerFactory): void {
   currentRank = Number.POSITIVE_INFINITY;
 }
 
+/** Whether `workflows/runner-hook.testkit.ts` made the explicit choice. */
+let hookedFactory = false;
+
+/**
+ * The runner hook's choice (`workflows/runner-hook.testkit.ts`): an explicit factory that wraps the
+ * registry's `createRunner` to inject `runnerHook.runner` and capture each session's UI channel.
+ */
+export function useRunnerHook(factory: RunnerFactory): void {
+  useRunners(factory);
+  hookedFactory = true;
+}
+
+/**
+ * The import-time choice of the production factory (`core/created-runners.testkit.ts`). It refuses to
+ * run after the runner hook chose, because it would replace the hook and bypass `runnerHook.runner`
+ * and the UI capture without a failure: import `created-runners.testkit.ts` (or `every-runner.testkit.ts`)
+ * before `run-fixture.testkit.ts`, `runner-hook.testkit.ts` and the kits that import them. A test body
+ * that calls `useRunners` after its imports still replaces either choice on purpose.
+ */
+export function useCreatedRunners(factory: RunnerFactory): void {
+  if (hookedFactory) {
+    throw new Error('created-runners.testkit.ts loaded after runner-hook.testkit.ts, so it would replace the hook\'s factory: '
+      + 'import created-runners.testkit.ts (or every-runner.testkit.ts) before run-fixture.testkit.ts and runner-hook.testkit.ts.');
+  }
+  useRunners(factory);
+}
+
 /** Offer a default factory: it applies only when no explicit choice and no stronger offer exists. */
 export function offerRunners(factory: RunnerFactory, rank: number): void {
   if (rank <= currentRank) return;

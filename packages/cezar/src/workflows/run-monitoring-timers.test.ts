@@ -1,9 +1,9 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setupMonitoringFixture, runnerHook } from './run-fixture.testkit.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

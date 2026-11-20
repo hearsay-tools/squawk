@@ -28,6 +28,9 @@ even without a predicted hot file. Report a complete committed head and readines
 evidence; request release and
 open only after an explicit reply for that head. A changed head or base
 invalidates release: request a fresh check under campaign/references/hot-file-release.md.
+If your baseline was another PR's head and that PR was squash-merged, restack with
+npm run restack -- <that PR> (docs/areas/git-worktree.md § Stacked and
+overlapping branches), never a plain merge or rebase of origin/main.
 
 The change is behavior-neutral: every existing test keeps its expected outcome.
 The issue and the facts above are the approved plan. Ask the coordinator, and

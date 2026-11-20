@@ -108,7 +108,10 @@ with the fix. Record preserved guarantees when changing a test's expectation.
 Report the PR, head, criterion-to-check results, changed contracts,
 limitations and friction. Fix in-scope CI/review findings; report inherited
 failures with evidence. Register a PR wait. Rebase only when the coordinator
-requests it, push with --force-with-lease, then refresh affected evidence.
+requests it, push with --force-with-lease, then refresh affected evidence. If
+your baseline was another PR's head and that PR was squash-merged, restack with
+npm run restack -- <that PR> (docs/areas/git-worktree.md § Stacked and
+overlapping branches), never a plain merge or rebase of origin/main.
 
 When checks and review are clear, report readiness at the exact head and
 finish the worker with cezar_done. A settled worker can be resumed for review

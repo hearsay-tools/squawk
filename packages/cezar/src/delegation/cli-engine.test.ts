@@ -1,14 +1,17 @@
+import '../core/created-runners.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runWorkerCommand, runMessageCommand } from './cli.ts';
-import '../core/every-runner.testkit.ts';
 import { fixture } from './service-engine.testkit.ts';
 import { seedWorkerWait } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 // The resume answer needs Continue admission and cancel-wait needs an open wait: both need the run engine.
 // Every test spawns real worker worktrees through git. Alone at load 91 they take 0.25-1.2 s

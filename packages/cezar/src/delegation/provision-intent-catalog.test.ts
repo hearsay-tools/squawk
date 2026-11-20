@@ -1,3 +1,4 @@
+import '../core/every-runner.testkit.ts';
 import { openTestRunStore, runPersistence } from '../runs/run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';

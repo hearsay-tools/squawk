@@ -1,3 +1,4 @@
+import '../core/every-runner.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { openTestRunStore } from '../runs/run-store-open.testkit.ts';

@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -17,9 +16,11 @@ import { createPreviewSocket, type PreviewSocket, type PreviewSocketHost } from 
 import { startServer } from './start-server.ts';
 import { verifyWsUpgrade } from './server.ts';
 
-// The server reads every registered runner (provider lists, login probes); register the built-ins.
 import { attachUpgradeRouter } from './upgrade-router.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

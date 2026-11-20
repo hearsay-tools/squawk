@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { reportsIndex } from '../artifacts/reports-index.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -9,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
-import { createRunner } from '../core/runner-registry.ts';
+import { createRunner, registerRunner } from '../core/runner-registry.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { Home } from '../home/home.ts';
 import { holdCockpitLease } from '../home/leases.ts';
@@ -37,6 +36,8 @@ import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/engine-run-manager.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 
 /**

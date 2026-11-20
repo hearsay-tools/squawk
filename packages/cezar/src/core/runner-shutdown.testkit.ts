@@ -47,7 +47,7 @@ vi.mock('node:child_process', async (original) => {
 
 import type { AgentEvent, AgentSession } from './agent-runner.js';
 import { createRunner } from './runner-registry.js';
-import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity.testkit.js';
+import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity-core.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
 
 /** The runners whose EOF cleanup cells (the `eof-` families) run. */
