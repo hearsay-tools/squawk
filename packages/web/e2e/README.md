@@ -402,8 +402,10 @@ The source-map build must match the served browser JavaScript byte for byte.
 A task without a known creating spec makes Node evidence incomplete.
 Failed specs and specs without complete evidence stay incomplete and always run for mapped edits.
 
-The selector downloads the newest successful map from `main` with `gh` into
-`.ai/qa/e2e-spec-map/`. Without a download it uses the newest cached map. Without a usable map it
+The selector downloads, with `gh`, the newest successful map from `main` whose commit is the
+branch's fork point or one of its ancestors, into `.ai/qa/e2e-spec-map/`. A newer map would count
+`main`'s later merges as drift, and its line numbers would not match the branch. Without a
+download it uses the newest such cached map. Without a usable map it
 runs every spec. The changed files are the branch's own: the diff from its merge-base with `--base`
 (default `origin/main`, then `main`) to the working tree, untracked files included. Merges on `main`
 after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines in mapped
