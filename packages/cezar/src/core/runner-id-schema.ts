@@ -3,7 +3,7 @@ import { knownRunnerIds } from './runner-registry.ts';
 
 /**
  * A runner id the registry holds, read when each value parses. A value outside the registry is
- * refused with the issue the closed `z.enum(RUNNER_IDS)` gave: code `invalid_value`, the
+ * refused with the issue the closed runner enum gave: code `invalid_value`, the
  * registered ids as `values`, the same message and path, and no later check on that value
  * (hearsay-tools/squawk#3936). `z.lazy` would keep the ids of its first parse.
  */
