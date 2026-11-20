@@ -1,8 +1,9 @@
 import { productIdentity } from '../home/identity.ts';
 import { defined } from '../core/defined.ts';
 import { readFile } from 'node:fs/promises';
-import { agentHomePaths, claudeStateFilePath } from '../paths.ts';
+import { agentHomeDir, agentHomePaths, claudeStateFilePath } from '../paths.ts';
 import { listConfigFiles } from './catalog.ts';
+import { isRegisteredRunner } from '../core/runner-registry.ts';
 import type { ConfigFileDef } from '../core/runner-config-files.ts';
 import { hashBytes, statConfigPath } from './files.ts';
 
@@ -64,11 +65,15 @@ async function versionOf(path: string, exists: boolean): Promise<string | null> 
   }
 }
 
-/** Read the user-scope MCP server *names* from ~/.claude.json — never its contents, never for writing. */
-export async function readUserMcpServers(env: NodeJS.ProcessEnv): Promise<UserMcpListing> {
+/**
+ * Read the user-scope MCP server *names* from ~/.claude.json — never its contents, never for writing.
+ * null when no Claude runner is registered: there is no Claude state to list.
+ */
+export async function readUserMcpServers(env: NodeJS.ProcessEnv): Promise<UserMcpListing | null> {
+  if (!isRegisteredRunner('claude')) return null;
   // Claude's own MCP state file. Sibling of `~/.claude/` by default, INSIDE the
   // dir once CLAUDE_CONFIG_DIR relocates it — `claudeStateFilePath` owns that rule.
-  const path = claudeStateFilePath(agentHomePaths(env).claude, env);
+  const path = claudeStateFilePath(agentHomeDir('claude', env), env);
   try {
     const { size } = await statConfigPath(path);
     if (size > CLAUDE_JSON_CAP) return { path, servers: [], readable: false };

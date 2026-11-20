@@ -16,25 +16,26 @@ export type ConfigKind = 'settings' | 'memory' | 'mcp';
  */
 export type ConfigTracked = 'tracked' | 'gitignored' | 'outside-repo';
 
-/** Resolved home directories per agent, injected so the catalog stays pure and testable. */
-export interface AgentHomePaths {
-  /** `~/.claude` */
-  claude: string;
-  /** `$CODEX_HOME` or `~/.codex` */
-  codex: string;
-  /** `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode` */
-  opencodeConfig: string;
-  /** `$PI_CODING_AGENT_DIR` or `~/.pi/agent` */
-  pi: string;
-  /** `$PI_CODING_AGENT_DIR` or `~/${PI_CONFIG_DIR || '.omp'}/agent` — OMP's default profile. */
-  omp: string;
+/**
+ * Each registered runner's default home, keyed by its `accounts.homeSlot`. `agentHomePaths()`
+ * (paths.ts) builds it from the registry and injects it, so the catalog stays pure and testable.
+ */
+export type AgentHomePaths = Readonly<Record<string, string>>;
+
+/** The home in `slot`. Throws naming the slot when no registered runner declares it. */
+export function agentHome(home: AgentHomePaths, slot: string): string {
+  const dir = home[slot];
+  if (dir === undefined) throw new Error(`No registered runner declares the agent home slot ${slot}.`);
+  return dir;
 }
 
-export interface ConfigFileDef {
+/**
+ * One native config file in a runner's `configFiles.files`. Its readers are not listed here: a
+ * file that several runners read (`<repo>/AGENTS.md`) is one object that each of them lists.
+ */
+export interface RunnerConfigFile {
   /** Stable, opaque, URL-safe. The ONLY thing a client may name (traversal-proof). */
   id: string;
-  /** Every runner that reads this file. `<repo>/AGENTS.md` is one file, two readers. */
-  runners: string[];
   kind: ConfigKind;
   scope: ConfigScope;
   /** Absolute path, resolved per request so `$CODEX_HOME`/`$XDG_CONFIG_HOME` are honoured. */
@@ -60,4 +61,10 @@ export interface ConfigFileDef {
   /** Documented mid-run reload behaviour, or undefined when the vendor is silent. */
   hotReload?: string;
   docsUrl: string;
+}
+
+/** A catalog entry (`agent-config/catalog.ts`): a {@link RunnerConfigFile} and its readers. */
+export interface ConfigFileDef extends RunnerConfigFile {
+  /** Every registered runner that lists this file in its `configFiles.files`, in registration order. */
+  runners: string[];
 }

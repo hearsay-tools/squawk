@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { CLAUDE_FACTS } from './facts.ts';
@@ -30,7 +31,11 @@ export const claudeRunner = defineRunner({
   configFiles: { files: CLAUDE_CONFIG_FILES, agentConfig: CLAUDE_AGENT_CONFIG },
   extraTools: CLAUDE_EXTRA_TOOLS,
   login: { ...CLAUDE_LOGIN, executable: () => productEnv('CLAUDE_BIN') ?? 'claude' },
-  accounts: CLAUDE_ACCOUNTS,
+  accounts: {
+    ...CLAUDE_ACCOUNTS,
+    // `$CLAUDE_CONFIG_DIR` relocates Claude Code's home; a blank value is ignored.
+    homeDir: (env, home) => env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude'),
+  },
   env: CLAUDE_ENV,
   mock: CLAUDE_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseClaudeStatus }),

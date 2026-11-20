@@ -9,6 +9,7 @@ import { OMP_DETECTION } from './detection.ts';
 import { OMP_CLI } from './cli.ts';
 import { OMP_LOGIN } from './login.ts';
 import { OMP_ACCOUNTS } from './accounts.ts';
+import { resolveOmpAgentDir } from './agent-dir.ts';
 import { OMP_ENV } from './env.ts';
 import { OMP_MOCK } from './mock.ts';
 import { OMP_DISPLAY } from './display.ts';
@@ -33,7 +34,7 @@ export const ompRunner = defineRunner({
   configFiles: { files: OMP_CONFIG_FILES, agentConfig: OMP_AGENT_CONFIG },
   extraTools: OMP_EXTRA_TOOLS,
   login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },
-  accounts: OMP_ACCOUNTS,
+  accounts: { ...OMP_ACCOUNTS, homeDir: resolveOmpAgentDir },
   env: OMP_ENV,
   mock: OMP_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),

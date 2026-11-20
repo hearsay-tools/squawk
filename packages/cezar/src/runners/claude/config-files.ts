@@ -1,6 +1,9 @@
 import { join } from 'node:path';
-import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import { CLAUDE_ACCOUNTS } from './accounts.ts';
+
+const claudeHome = (home: AgentHomePaths): string => agentHome(home, CLAUDE_ACCOUNTS.homeSlot);
 
 const CLAUDE_SETTINGS_DOCS = 'https://code.claude.com/docs/en/settings';
 const CLAUDE_MEMORY_DOCS = 'https://code.claude.com/docs/en/memory';
@@ -11,14 +14,13 @@ const CLAUDE_MCP_DOCS = 'https://code.claude.com/docs/en/mcp';
  * loads no adapter. Order is presentation order: user → project → local, so the scope ladder
  * reads top (broad) to bottom (specific).
  */
-export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
+export const CLAUDE_CONFIG_FILES: readonly RunnerConfigFile[] = [
   // ---- Claude Code ----
   {
     id: 'claude.user.settings',
-    runners: ['claude'],
     kind: 'settings',
     scope: 'user',
-    resolve: (_repo, home) => join(home.claude, 'settings.json'),
+    resolve: (_repo, home) => join(claudeHome(home), 'settings.json'),
     label: '~/.claude/settings.json',
     format: 'json',
     tracked: 'outside-repo',
@@ -32,7 +34,6 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.project.settings',
-    runners: ['claude'],
     kind: 'settings',
     scope: 'project',
     resolve: (repo) => join(repo, '.claude', 'settings.json'),
@@ -49,7 +50,6 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.local.settings',
-    runners: ['claude'],
     kind: 'settings',
     scope: 'local',
     resolve: (repo) => join(repo, '.claude', 'settings.local.json'),
@@ -67,7 +67,6 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.project.mcp',
-    runners: ['claude'],
     kind: 'mcp',
     scope: 'project',
     resolve: (repo) => join(repo, '.mcp.json'),
@@ -81,10 +80,9 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.user.memory',
-    runners: ['claude'],
     kind: 'memory',
     scope: 'user',
-    resolve: (_repo, home) => join(home.claude, 'CLAUDE.md'),
+    resolve: (_repo, home) => join(claudeHome(home), 'CLAUDE.md'),
     label: '~/.claude/CLAUDE.md',
     format: 'markdown',
     tracked: 'outside-repo',
@@ -93,7 +91,6 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.project.memory',
-    runners: ['claude'],
     kind: 'memory',
     scope: 'project',
     resolve: (repo) => join(repo, 'CLAUDE.md'),
@@ -106,7 +103,6 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'claude.local.memory',
-    runners: ['claude'],
     kind: 'memory',
     scope: 'local',
     resolve: (repo) => join(repo, 'CLAUDE.local.md'),

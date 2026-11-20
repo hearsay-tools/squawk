@@ -1,8 +1,11 @@
 import { join } from 'node:path';
-import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
+import { PI_ACCOUNTS } from './accounts.ts';
+
+const piHome = (home: AgentHomePaths): string => agentHome(home, PI_ACCOUNTS.homeSlot);
 
 const PI_SETTINGS_DOCS = 'https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md';
 const PI_CONTEXT_FILES_DOCS = 'https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md#context-files';
@@ -12,16 +15,15 @@ const PI_CONTEXT_FILES_DOCS = 'https://github.com/badlogic/pi-mono/blob/main/pac
  * loads no adapter. Order is presentation order: user → project → local, so the scope ladder
  * reads top (broad) to bottom (specific).
  */
-export const PI_CONFIG_FILES: readonly ConfigFileDef[] = [
+export const PI_CONFIG_FILES: readonly RunnerConfigFile[] = [
   // ---- Pi ----
   // Pi has no MCP file of its own: its README says "No MCP." — servers arrive only through a Pi
   // extension, so nothing here carries `holdsMcp` and the cockpit's MCP group states that instead.
   {
     id: 'pi.user.settings',
-    runners: ['pi'],
     kind: 'settings',
     scope: 'user',
-    resolve: (_repo, home) => join(home.pi, 'settings.json'),
+    resolve: (_repo, home) => join(piHome(home), 'settings.json'),
     label: '~/.pi/agent/settings.json',
     format: 'json',
     tracked: 'outside-repo',
@@ -34,7 +36,6 @@ export const PI_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'pi.project.settings',
-    runners: ['pi'],
     kind: 'settings',
     scope: 'project',
     resolve: (repo) => join(repo, '.pi', 'settings.json'),
@@ -50,10 +51,9 @@ export const PI_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'pi.user.memory',
-    runners: ['pi'],
     kind: 'memory',
     scope: 'user',
-    resolve: (_repo, home) => join(home.pi, 'AGENTS.md'),
+    resolve: (_repo, home) => join(piHome(home), 'AGENTS.md'),
     label: '~/.pi/agent/AGENTS.md',
     format: 'markdown',
     tracked: 'outside-repo',

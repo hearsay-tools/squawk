@@ -1,6 +1,13 @@
-import '../core/register-all-runners.testkit.ts';
+// These tests pin the five built-in runners' config files, so they register only those five.
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { productIdentity } from '../home/identity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,8 +18,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
 
-// The agent-config routes list every runner's config files.
 
 /**
  * `GET/PUT /api/v1/agent-config` (spec #404). The contract under test: files are
@@ -65,6 +72,82 @@ describe('the agent-config API', () => {
     expect(body.editable).toBe(true);
     expect(body.files.length).toBeGreaterThan(10);
     expect(body.userMcp).not.toBeNull();
+  });
+
+  // hearsay-tools/squawk#3900: the listing that the runner definitions build, pinned for the five
+  // built-ins with each agent home at its default and under the overrides that move it. Rows read
+  // `id runners path`, with `<repo>` and `<home>` for the two roots; the digest covers the whole body.
+  const listing = async (overrides: Record<string, string>) => {
+    const home = process.env.HOME!;
+    for (const [key, value] of Object.entries(overrides)) process.env[key] = value.replace('<home>', home);
+    const text = JSON.stringify(await (await apiRequest(app, '/api/v1/agent-config')).json())
+      .replaceAll(repoRoot, '<repo>').replaceAll(home, '<home>');
+    const files = (JSON.parse(text) as { files: { id: string; runners: string[]; path: string }[] }).files;
+    return { rows: files.map((f) => `${f.id} ${f.runners.join(',')} ${f.path}`), digest: createHash('sha256').update(text).digest('hex') };
+  };
+
+  it('GET lists the same files, readers and paths with every agent home at its default', async () => {
+    expect(await listing({})).toEqual({
+      digest: '5abcf0ab80b7ab51b579241ae15940815901e0ea4be8a395d47b2429dfefa6af',
+      rows: [
+        'claude.user.settings claude <home>/.claude/settings.json',
+        'claude.project.settings claude <repo>/.claude/settings.json',
+        'claude.local.settings claude <repo>/.claude/settings.local.json',
+        'claude.project.mcp claude <repo>/.mcp.json',
+        'claude.user.memory claude <home>/.claude/CLAUDE.md',
+        'claude.project.memory claude <repo>/CLAUDE.md',
+        'claude.local.memory claude <repo>/CLAUDE.local.md',
+        'codex.user.config codex <home>/.codex/config.toml',
+        'codex.project.config codex <repo>/.codex/config.toml',
+        'codex.user.memory codex <home>/.codex/AGENTS.md',
+        'opencode.user.config opencode <home>/.config/opencode/opencode.json',
+        'opencode.project.config opencode <repo>/opencode.json',
+        'opencode.user.memory opencode <home>/.config/opencode/AGENTS.md',
+        'pi.user.settings pi <home>/.pi/agent/settings.json',
+        'pi.project.settings pi <repo>/.pi/settings.json',
+        'pi.user.memory pi <home>/.pi/agent/AGENTS.md',
+        'omp.user.settings omp <home>/.omp/agent/config.yml',
+        'omp.project.settings omp <repo>/.omp/config.yml',
+        'omp.user.mcp omp <home>/.omp/agent/mcp.json',
+        'omp.project.mcp omp <repo>/.omp/mcp.json',
+        'omp.user.memory omp <home>/.omp/agent/AGENTS.md',
+        'project.agents codex,opencode,pi,omp <repo>/AGENTS.md',
+      ],
+    });
+  });
+
+  it.each([
+    ['CLAUDE_CONFIG_DIR, CODEX_HOME, XDG_CONFIG_HOME and PI_CODING_AGENT_DIR', {
+      CLAUDE_CONFIG_DIR: '<home>/o/claude', CODEX_HOME: '<home>/o/codex', XDG_CONFIG_HOME: '<home>/o/xdg', PI_CODING_AGENT_DIR: '<home>/o/pi',
+    }, { digest: 'b048dd699596bfecc4f9eecb02ee4f4722d41b3af50955e7f82574e71d4a2d01', rows: [
+      'claude.user.settings claude <home>/o/claude/settings.json',
+      'claude.user.memory claude <home>/o/claude/CLAUDE.md',
+      'codex.user.config codex <home>/o/codex/config.toml',
+      'codex.user.memory codex <home>/o/codex/AGENTS.md',
+      'opencode.user.config opencode <home>/o/xdg/opencode/opencode.json',
+      'opencode.user.memory opencode <home>/o/xdg/opencode/AGENTS.md',
+      'pi.user.settings pi <home>/o/pi/settings.json',
+      'pi.user.memory pi <home>/o/pi/AGENTS.md',
+      'omp.user.settings omp <home>/o/pi/config.yml',
+      'omp.user.mcp omp <home>/o/pi/mcp.json',
+      'omp.user.memory omp <home>/o/pi/AGENTS.md',
+    ] }],
+    ['PI_CONFIG_DIR and OMP_PROFILE', { PI_CONFIG_DIR: '.omp-alt', OMP_PROFILE: 'work' }, { digest: '9ee9cfba873c9ed4546ddb0aec79afa245f35865aa9efba3c0fc1132d94b937f', rows: [
+      'claude.user.settings claude <home>/.claude/settings.json',
+      'claude.user.memory claude <home>/.claude/CLAUDE.md',
+      'codex.user.config codex <home>/.codex/config.toml',
+      'codex.user.memory codex <home>/.codex/AGENTS.md',
+      'opencode.user.config opencode <home>/.config/opencode/opencode.json',
+      'opencode.user.memory opencode <home>/.config/opencode/AGENTS.md',
+      'pi.user.settings pi <home>/.pi/agent/settings.json',
+      'pi.user.memory pi <home>/.pi/agent/AGENTS.md',
+      'omp.user.settings omp <home>/.omp-alt/profiles/work/agent/config.yml',
+      'omp.user.mcp omp <home>/.omp-alt/profiles/work/agent/mcp.json',
+      'omp.user.memory omp <home>/.omp-alt/profiles/work/agent/AGENTS.md',
+    ] }],
+  ])('GET resolves the agent homes that %s move', async (_name, overrides, expected) => {
+    const { rows, digest } = await listing(overrides);
+    expect({ rows: rows.filter((row) => row.includes('<home>')), digest }).toEqual(expected);
   });
 
   it('GET :id → 404 for an unknown id', async () => {

@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { CODEX_FACTS } from './facts.ts';
@@ -30,7 +31,11 @@ export const codexRunner = defineRunner({
   configFiles: { files: CODEX_CONFIG_FILES, agentConfig: CODEX_AGENT_CONFIG },
   extraTools: CODEX_EXTRA_TOOLS,
   login: { ...CODEX_LOGIN, executable: () => productEnv('CODEX_BIN') ?? 'codex' },
-  accounts: CODEX_ACCOUNTS,
+  accounts: {
+    ...CODEX_ACCOUNTS,
+    // `$CODEX_HOME` relocates Codex's home; a blank value is ignored.
+    homeDir: (env, home) => env.CODEX_HOME?.trim() || join(home, '.codex'),
+  },
   env: CODEX_ENV,
   mock: CODEX_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseCodexStatus }),

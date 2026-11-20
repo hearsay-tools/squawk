@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { OPENCODE_FACTS } from './facts.ts';
@@ -30,7 +31,11 @@ export const opencodeRunner = defineRunner({
   configFiles: { files: OPENCODE_CONFIG_FILES, agentConfig: OPENCODE_AGENT_CONFIG },
   extraTools: OPENCODE_EXTRA_TOOLS,
   login: { ...OPENCODE_LOGIN, executable: () => productEnv('OPENCODE_BIN') ?? 'opencode' },
-  accounts: OPENCODE_ACCOUNTS,
+  accounts: {
+    ...OPENCODE_ACCOUNTS,
+    // OpenCode's config dir sits under `$XDG_CONFIG_HOME`, else `~/.config`.
+    homeDir: (env, home) => join(env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'opencode'),
+  },
   env: OPENCODE_ENV,
   mock: OPENCODE_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOpenCodeStatus }),

@@ -2,7 +2,7 @@ import type { Home } from '../home/home.ts';
 import { readdir, realpath } from 'node:fs/promises';
 import { profileEnv, looksLikeProfileDir } from '../core/agent-profiles.ts';
 import type { ProviderId } from '../core/provider-auth.ts';
-import { agentHomePaths, agentHomeSlot, expandTilde } from '../paths.ts';
+import { agentHomeDir, expandTilde } from '../paths.ts';
 import {
   DEFAULT_AGENT_ACCOUNT_ID,
   loadAgentAccounts,
@@ -34,7 +34,7 @@ export interface ResolvedAgentProfile {
 }
 
 /**
- * The implicit account for a provider: whatever `agentHomePaths()` discovers, which already
+ * The implicit account for a provider: whatever `agentHomeDir()` discovers, which already
  * honours the vendors' own `CLAUDE_CONFIG_DIR` / `CODEX_HOME` / `XDG_CONFIG_HOME`. Setting one of
  * those on the Squawk process therefore moves the DEFAULT account rather than being ignored.
  */
@@ -42,8 +42,7 @@ export function defaultAgentProfile(
   provider: ProviderId,
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedAgentProfile {
-  const home = agentHomePaths(env);
-  const path = home[agentHomeSlot(provider)];
+  const path = agentHomeDir(provider, env);
   return {
     id: DEFAULT_AGENT_ACCOUNT_ID,
     provider,

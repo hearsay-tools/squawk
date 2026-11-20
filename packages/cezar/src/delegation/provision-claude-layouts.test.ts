@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
-import { agentHomePaths, claudeStateFilePath } from '../paths.ts';
+import { agentHomeDir, claudeStateFilePath } from '../paths.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
@@ -44,7 +44,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
   }
   function claudeState(spec: AgentRunSpec) {
     const env = buildChildEnv({ backend: 'claude', extraEnv: spec.env });
-    return claudeStateFilePath(agentHomePaths(env).claude, env);
+    return claudeStateFilePath(agentHomeDir('claude', env), env);
   }
   it.each(PROVISION_ROWS.claudeLayout)('preserves Claude $layout state-file layout on $mode', async ({ mode, layout }) => {
     const a = await acceptClaudeLayout(layout);
