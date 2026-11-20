@@ -332,9 +332,15 @@ export function parityRunners(family: ParityFamilyName, row: string | undefined)
   return SHARED_RUNNERS;
 }
 
-/** Whether `runner` runs the family's row. */
+/**
+ * Whether `runner` runs the family's row. A runner outside the built-in roster (a fixture runner a
+ * test registers, hearsay-tools/squawk#3899) runs every row that runs on every built-in runner: the
+ * rows of an every-runner family, and the rows of a shared family that differ by runner. It never runs
+ * the rows that run on the scenario runner only.
+ */
 export function runsOn(family: ParityFamilyName, row: string | undefined, runner: string): boolean {
-  return parityRunners(family, row).includes(runner);
+  const runners = parityRunners(family, row);
+  return runners.includes(runner) || (!ROSTER.includes(runner) && runners === ROSTER);
 }
 
 
