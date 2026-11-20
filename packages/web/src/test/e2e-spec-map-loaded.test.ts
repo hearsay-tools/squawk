@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, expect, test } from 'vitest'
 import { flushProcesses, pending } from '../../e2e/spec-map/flush-processes.ts'
 
-// .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3: every process the suite starts
+// packages/web/e2e/README.md § Choosing specs for a change: every process the suite starts
 // writes its coverage into the loaded directory (flush-processes.ts stops the ones still running).
 const preload = resolve(import.meta.dirname, '../../e2e/spec-map/node-preload.mjs')
 const directories: string[] = []

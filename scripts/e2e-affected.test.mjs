@@ -257,7 +257,7 @@ test('each kind of changed file selects its specs, none, or every spec', () => {
 });
 
 test('a code file no process loaded selects no spec when the map lists every loaded file', () => {
-  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+  // packages/web/e2e/README.md § Choosing specs for a change.
   const map = sampleMap({ nodeLoaded: ['packages/cezar/src/server/server.ts', 'packages/web/e2e/agent-browser.ts'] });
   const atMap = new Set(['packages/cezar/src/server/server.ts', 'packages/cezar/src/delegation/owned-workspace-release.ts',
     'packages/web/e2e/agent-browser.ts', '.github/scripts/cockpit-test-sequencer.mjs', 'packages/contract/src/runs.ts',
@@ -319,7 +319,7 @@ test('a code file no process loaded selects no spec when the map lists every loa
 });
 
 test('code the suite setup loads selects the boot spec and its own answer; durations select none', () => {
-  // Owner decisions, 2026-11-20 (.ai/specs/2026-11-20-e2e-selection-evidence-plan.md).
+  // Owner decisions, 2026-11-20 (packages/web/e2e/README.md § Choosing specs for a change).
   const file = 'packages/cezar/src/core/runner-definition.ts';
   const withSetup = { ...graph, setup: new Set([...graph.setup, file, '.github/test-durations.json', '.github/cockpit-test-durations.json']) };
   const map = sampleMap({ functions: { [file]: [{ start: 1, end: 50, specs: [], startup: true }, { start: 10, end: 20, specs: [1] }] } });
@@ -400,7 +400,7 @@ test('a mapped caller main changed keeps its evidenced specs when other drift li
 });
 
 test('startup and top-level edits select the boot spec, not every spec', () => {
-  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 2.
+  // packages/web/e2e/README.md § Choosing specs for a change.
   const file = 'packages/cezar/src/ci-wait/tool-catalog.ts';
   const map = sampleMap({ functions: { [file]: [
     { start: 3, end: 60, specs: [], startup: true }, // the module's top-level code
