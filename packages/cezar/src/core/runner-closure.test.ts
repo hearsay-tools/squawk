@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
+import { runnerClassNames } from '../lint/owner-reader-rules.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
 // closure is every module the file reaches through static and dynamic imports; esbuild reads a
@@ -12,12 +13,15 @@ import { describe, expect, it } from 'vitest';
 // mixed-runner chain, so a `harness-<runner>-owned-workflows` file also loads one other runner.
 const src = join(import.meta.dirname, '..');
 
-/** A runner folder's adapter module: its `<name>-runner.ts` file with the class that implements `AgentRunner`. */
-function adapterModule(id: string): string | undefined {
-  return readdirSync(join(src, 'runners', id)).filter(file => /^[a-z0-9-]+-runner\.ts$/.test(file)).map(file => `runners/${id}/${file}`)
-    .find(file => /\bclass\s+\w+\s+implements\s+AgentRunner\b/.test(readFileSync(join(src, file), 'utf8')));
+/** A runner folder's adapter module: its `<name>-runner.ts` file with the class that implements
+ *  `AgentRunner`. A built-in runner without one throws, so the guard never checks a missing path. */
+function adapterModule(id: string): string {
+  const adapter = readdirSync(join(src, 'runners', id)).filter(file => /^[a-z0-9-]+-runner\.ts$/.test(file)).map(file => `runners/${id}/${file}`)
+    .find(file => runnerClassNames(readFileSync(join(src, file), 'utf8')).length > 0);
+  if (!adapter) throw new Error(`Built-in runner ${id} has no runners/${id}/<name>-runner.ts with a class that implements AgentRunner.`);
+  return adapter;
 }
-const ADAPTERS: Record<string, string | undefined> = Object.fromEntries(BUILT_IN_RUNNER_IDS.map(id => [id, adapterModule(id)]));
+const ADAPTERS: Record<string, string> = Object.fromEntries(BUILT_IN_RUNNER_IDS.map(id => [id, adapterModule(id)]));
 const PER_RUNNER = new RegExp(`^(?:harness|waits)-(${BUILT_IN_RUNNER_IDS.join('|')})-.*-parity\\.test\\.ts$`);
 
 function perRunnerFiles(): Array<{ file: string; runner: string }> {

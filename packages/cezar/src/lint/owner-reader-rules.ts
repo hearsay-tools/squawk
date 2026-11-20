@@ -50,14 +50,22 @@ export const runSearchFields = ownerRule(OWNER_POLICIES['run-search-field-list-o
 export function concreteRunnerModule(specifier: string): boolean {
   return /(^|\/)(?:core|runners\/[a-z0-9-]+)\/[a-z0-9-]+-runner(\.ts|\.js)?$/.test(specifier) && !/\/agent-runner(\.ts|\.js)?$/.test(specifier);
 }
-/** The classes that implement `AgentRunner` in the runner modules of the runner folders
- *  (`runners/<id>/<name>-runner.ts`), so a new runner folder needs no edit here. */
-function runnerFolderClasses(): string[] {
-  const runners = join(repoRoot, 'packages/cezar/src/runners');
+/** The names of the classes `source` declares as implementing `AgentRunner`, with or without a
+ *  base class and beside other interfaces: `class A extends Base implements Other, AgentRunner`. */
+export function runnerClassNames(source: string): string[] {
+  return [...source.matchAll(/\bclass\s+(\w+)\b[^{;]*?\bimplements\b[^{;]*?\bAgentRunner\b/g)].map(match => match[1]!);
+}
+/** The classes that implement `AgentRunner` in the runner modules of the runner folders under
+ *  `runners` (`runners/<id>/<name>-runner.ts`), so a new runner folder needs no edit here. A runner
+ *  module that declares no such class throws: the rule would miss its class. */
+export function runnerFolderClasses(runners = join(repoRoot, 'packages/cezar/src/runners')): string[] {
   return readdirSync(runners, { withFileTypes: true }).filter(entry => entry.isDirectory())
     .flatMap(folder => readdirSync(join(runners, folder.name)).filter(file => concreteRunnerModule(`runners/${folder.name}/${file}`))
-      .flatMap(file => [...readFileSync(join(runners, folder.name, file), 'utf8').matchAll(/\bclass\s+(\w+)\s+implements\s+AgentRunner\b/g)])
-      .map(match => match[1]!));
+      .flatMap(file => {
+        const names = runnerClassNames(readFileSync(join(runners, folder.name, file), 'utf8'));
+        if (names.length === 0) throw new Error(`runners/${folder.name}/${file} is a runner module, but no class in it implements AgentRunner.`);
+        return names;
+      }));
 }
 export const RUNNER_CLASSES: readonly string[] = runnerFolderClasses();
 const runnerSource = (node: EsNode | undefined) => concreteRunnerModule(literalString(node) ?? '');

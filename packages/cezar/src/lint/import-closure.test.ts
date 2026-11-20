@@ -72,10 +72,17 @@ describe('folder templates', () => {
     return root;
   }
 
-  it('reads each file a folder template matches beside the importing file', () => {
-    const dir = tree({ 'kit/rows.ts': '', 'runners/a/facts.ts': '', 'runners/b/facts.ts': '', 'runners/b/other.ts': '' });
+  it('reads each file a folder template matches beside the importing file, at any depth', () => {
+    const dir = tree({ 'kit/rows.ts': '', 'runners/a/facts.ts': '', 'runners/b/facts.ts': '', 'runners/b/other.ts': '', 'runners/a/nested/facts.ts': '' });
     const source = 'const rows = await Promise.all(ids.map(id => import(`../runners/${id}/facts.ts`)));';
-    expect(runtimeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['../runners/a/facts.ts', '../runners/b/facts.ts']);
+    expect(runtimeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['../runners/a/facts.ts', '../runners/a/nested/facts.ts', '../runners/b/facts.ts']);
+  });
+
+  it('keeps a match under a dot folder relative', () => {
+    const dir = tree({ 'kit/rows.ts': '', 'kit/.cache/a/facts.ts': '' });
+    const source = 'const rows = await Promise.all(ids.map(id => import(`./.cache/${id}/facts.ts`)));';
+    expect(runtimeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['./.cache/a/facts.ts']);
+    expect(relativeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['./.cache/a/facts.ts']);
   });
 
   it.each([

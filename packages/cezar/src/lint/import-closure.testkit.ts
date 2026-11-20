@@ -47,22 +47,22 @@ function isViteGlob(node: Node): boolean {
 }
 
 /**
- * The glob a relative template literal names when each substitution fills one whole folder
- * segment and the file name is literal: `../runners/${id}/facts.ts` names every `facts.ts` one
- * folder below `../runners/`. esbuild bundles every file such a template matches; any other
- * template is undefined.
+ * The glob a relative template literal names when each substitution sits between two slashes and
+ * the file name is literal: `../runners/${id}/facts.ts` names every `facts.ts` at any depth below
+ * `../runners/`. A substitution may hold slashes, and esbuild bundles every file such a template
+ * matches at any depth, so the glob does too. Any other template is undefined.
  */
 function folderGlob(argument: Node | undefined): string | undefined {
   if (argument?.type !== 'TemplateLiteral' || (argument.expressions as unknown[]).length === 0) return undefined;
   const parts = (argument.quasis as Array<{ value: { cooked: string } }>).map(quasi => quasi.value.cooked);
   const wholeSegments = parts.slice(0, -1).every(part => part.endsWith('/')) && parts.slice(1).every(part => part.startsWith('/'));
-  const pattern = parts.join('*');
+  const pattern = parts.join('**');
   return /^\.\.?\//.test(pattern) && wholeSegments ? pattern : undefined;
 }
 
-/** The files a glob written in `file` matches, as sorted relative specifiers. */
+/** The files a glob written in `file` matches, as sorted relative specifiers: `./` or `../` first. */
 export function globMatches(pattern: string, file: string): string[] {
-  return globSync(pattern, { cwd: dirname(file) }).map(match => (match.startsWith('.') ? match : `./${match}`)).sort();
+  return globSync(pattern, { cwd: dirname(file) }).map(match => (/^\.\.?\//.test(match) ? match : `./${match}`)).sort();
 }
 
 /**
