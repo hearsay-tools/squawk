@@ -120,7 +120,9 @@ describe('Continue after a crash before the native session event', () => {
   async function continueWire(runId: string, backend: string): Promise<WireRow[]> {
     expect(manager!.continueRun(runId, { text: promptFor(backend, 'baseline') })).toEqual({ ok: true });
     const read = () => rows(existsSync(argsFile) ? readFileSync(argsFile, 'utf8') : '');
-    const settled = () => ['failed', 'review', 'done'].includes(store.getRun(runId)?.status ?? '');
+    // A turn that ended or a run that settled has written whatever its mock records.
+    const settled = () => ['failed', 'review', 'done'].includes(store.getRun(runId)?.status ?? '')
+      || store.readEvents(runId).some(event => event.type === 'turn-end');
     // bound: hang guard; the turn's first request on the wire is the product signal.
     await waitFor(() => wireOf(backend).started(read()) || settled(), 30_000);
     if (!existsSync(argsFile)) {
