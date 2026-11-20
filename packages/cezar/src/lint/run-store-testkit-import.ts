@@ -24,7 +24,8 @@ const LOADERS = new Set([
   'CallExpression',
 ]);
 
-function insideLoader(node: EsNode): boolean {
+/** Whether `node` sits inside an import, an export, an `import()`, an `import x = require()` or a call. */
+export function insideLoader(node: EsNode): boolean {
   for (let at = node.parent; at; at = at.parent) if (LOADERS.has(at.type)) return true;
   return false;
 }

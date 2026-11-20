@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
-import type { AstRule, EsNode } from './ast-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { insideLoader } from './run-store-testkit-import.ts';
 
 /**
  * `runners/ids.ts` lists the built-in runner ids as plain data for tests, testkits, the global
@@ -24,21 +25,6 @@ const ID_READERS = new Set([
   'packages/cezar/src/lint/runner-roster-literal.ts',
   'packages/cezar/src/lint/runner-id-branch.ts',
 ]);
-
-const LOADERS = new Set([
-  'ImportDeclaration',
-  'ExportNamedDeclaration',
-  'ExportAllDeclaration',
-  'ExportDefaultDeclaration',
-  'ImportExpression',
-  'TSImportEqualsDeclaration',
-  'CallExpression',
-]);
-
-function insideLoader(node: EsNode): boolean {
-  for (let at = node.parent; at; at = at.parent) if (LOADERS.has(at.type)) return true;
-  return false;
-}
 
 /** Whether `specifier`, written in `file`, names `runners/ids.ts`. */
 export function namesRunnerIds(file: string, specifier: string): boolean {
