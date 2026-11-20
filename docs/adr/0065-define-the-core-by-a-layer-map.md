@@ -11,7 +11,7 @@ core is. It puts every non-test source file under `packages/cezar/src` in one la
 | Layer | What it holds |
 | --- | --- |
 | `core` | The run engine and what every task needs: runs, workflows, the wait engine, the agent tools `cezar_ask`, `cezar_done` and `cezar_wait`, home and workspace state, git and worktrees, paths, config and the handoff journal |
-| `runner` | The six runner adapters in `core/` (`claude-*`, `codex-*`, `cursor-*`, `omp-*`, `opencode-*`, `pi-*`) |
+| `runner` | Each runner's folder `runners/<id>/`: its definition, adapter and data ([ADR 0067](0067-register-each-runner-as-one-definition.md)) |
 | `feature:<name>` | One feature that the core could run without: workers, forge, preview, automations, skills, autosave and the others the map names |
 | `shell` | The process and transport around the core: the HTTP server, CLI entry and dispatch, and `serve` |
 | `tooling` | The repository's own lint rules |
