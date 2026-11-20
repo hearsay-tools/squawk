@@ -9,6 +9,7 @@ import { ompRunner } from './omp/definition.ts';
 /** The runners that ship with Squawk, in display order. A new built-in runner adds one line. */
 export const BUILT_IN_RUNNERS: readonly RunnerDefinition[] = [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner];
 
+
 /**
  * Register every built-in runner. Each process entry calls it before it reads config or runs a
  * task. A second call registers the same objects again, which the registry ignores.

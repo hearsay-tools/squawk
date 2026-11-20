@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.testkit.ts';
 
 // Swap the declarations of three runners, so the test proves the parity exemptions read the
@@ -7,7 +7,7 @@ import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.tes
 // of `runner-fact-rows.testkit.ts`, so `factsWhere` reads the swapped rows.
 vi.mock('./runner-fact-rows.testkit.ts', async (load) => {
   const actual = await load<typeof import('./runner-fact-rows.testkit.ts')>();
-  const { RUNNER_IDS: ids } = await import('./agent-runner.ts');
+  const { BUILT_IN_RUNNER_IDS: ids } = await import('../runners/ids.ts');
   const rows = actual.factRows();
   const facts = {
     ...rows,
@@ -15,11 +15,12 @@ vi.mock('./runner-fact-rows.testkit.ts', async (load) => {
     pi: { ...rows.pi, hookEvents: 'reported', childWork: 'nested', nativePermission: 'after-turn', humanPromptHold: 'consumption' },
     opencode: { ...rows.opencode, transport: 'stdio', nativePermission: 'none' },
   } as const;
-  return { ...actual, factRows: () => facts, factsWhere: (matches: (row: typeof facts[keyof typeof facts]) => boolean) =>
-    ids.filter(id => matches(facts[id])) };
+  const rowsById = facts as unknown as Record<string, (typeof facts)[keyof typeof facts]>;
+  return { ...actual, factRows: () => facts, factsWhere: (matches: (row: (typeof facts)[keyof typeof facts]) => boolean) =>
+    ids.filter(id => matches(rowsById[id]!)) };
 });
 
-const exempted = (criterion: string) => RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined);
+const exempted = (criterion: string) => BUILT_IN_RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined);
 
 describe('parity expectations follow the runner facts rows', () => {
   it('exempts R77 exactly where the wire carries no hook frame (hookEvents)', () => {

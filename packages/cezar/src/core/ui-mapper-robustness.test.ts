@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 /**
  * The mapper robustness contract, for every runner at once.
  *
@@ -22,8 +23,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { RUNNER_IDS } from './agent-runner.ts';
-import type { RunnerId } from './agent-runner.ts';
 import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage } from '../runners/claude/claude-ui-mapper.ts';
 import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex-ui-mapper.ts';
 import { createOmpUiState, mapOmpRpcMessage, ompTurnStarted } from '../runners/omp/omp-ui-mapper.ts';
@@ -51,7 +50,7 @@ function mapper<S extends object>(
 }
 
 /** A new runner id fails typecheck here until its mapper has a row. */
-const MAPPERS: Record<RunnerId, Mapper> = {
+const MAPPERS: Record<string, Mapper> = {
   claude: mapper(() => claudeTurnStarted(createClaudeUiState()).state, mapClaudeMessage),
   codex: mapper(createCodexUiState, mapCodexNotification),
   opencode: mapper(
@@ -112,7 +111,7 @@ interface Frame {
   parse(): unknown;
 }
 
-function fixtureFrames(runner: RunnerId): Frame[][] {
+function fixtureFrames(runner: string): Frame[][] {
   const dir = join(FIXTURES, runner, '__fixtures__');
   return readdirSync(dir)
     .filter((file) => file.endsWith('.ndjson'))
@@ -247,8 +246,8 @@ interface Position {
 }
 
 /** Replays every fixture of `runner` and gives `visit` each position. */
-function replay(runner: RunnerId, visit: (position: Position) => void): Report {
-  const row = MAPPERS[runner];
+function replay(runner: string, visit: (position: Position) => void): Report {
+  const row = MAPPERS[runner]!;
   const report: Report = { calls: 0, failures: [] };
   for (const frames of fixtureFrames(runner)) {
     let state = row.seed();
@@ -271,8 +270,8 @@ function expectNoFailures(report: Report): void {
   expect({ failed: report.failures.length, first: report.failures.slice(0, FAILURES_SHOWN) }).toEqual({ failed: 0, first: [] });
 }
 
-describe.each(RUNNER_IDS)('%s UI mapper robustness', (runner) => {
-  const row = MAPPERS[runner];
+describe.each(BUILT_IN_RUNNER_IDS)('%s UI mapper robustness', (runner) => {
+  const row = MAPPERS[runner]!;
 
   it('has golden fixture frames to replay', () => {
     expect(fixtureFrames(runner).flat().length).toBeGreaterThan(0);

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { createRunner, DEFAULT_RUNNER_ID, isRegisteredRunner, LEGACY_RUNNER_IDS, registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { createRunner, isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 
 // This file registers no runner, so the registry is empty: an entry that forgot
 // registerBuiltInRunners() fails at once instead of falling back to Claude.

@@ -17,7 +17,8 @@ import { ownLimitRefusal, workerCapacity } from './capacity.ts';
 import type { Caller } from './credentials.ts';
 import { NO_SPAWN_GRANT, WORKERS_OFF } from './policy.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
-import { fixture, workerCleanupInternals } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
+import { workerCleanupInternals } from './service.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 registerRunner(claudeRunner);
 

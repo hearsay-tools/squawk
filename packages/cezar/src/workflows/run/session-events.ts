@@ -24,7 +24,7 @@ import type { RunLine } from './run-line.ts';
 import type { HumanWaits } from './human-waits.ts';
 import * as inputReceipts from './input-receipts.ts';
 
-import type { AgentEvent, AgentSession, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
 import { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { ExecutionEmit, LaunchCiTools, LaunchDelegation, RunModuleContext, SessionTurn } from './types.ts';
@@ -46,7 +46,7 @@ export interface SessionEventHost {
 export type SessionEventHandler = (event: AgentEvent, emitting: AgentSession | undefined) => void;
 
 export function createSessionEventHandler(context: RunModuleContext, host: SessionEventHost, options: {
-  runId: string; state: ActiveRun; turn: SessionTurn; stepId: string; backend: RunnerId; sink: UiEventSink;
+  runId: string; state: ActiveRun; turn: SessionTurn; stepId: string; backend: string; sink: UiEventSink;
   tokenBase: number; emit: ExecutionEmit; acknowledge(): boolean;
 }): SessionEventHandler {
   const { runId, state, turn, stepId, backend, sink, tokenBase, emit, acknowledge } = options;
@@ -118,7 +118,7 @@ export interface SessionHelperHost {
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   workerExecutionStopped(runId: string): boolean;
   executionBlockedByRootFinish(run: RunRecord): boolean;
-  agentEnvForStep(runId: string, backend: RunnerId, options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<StepProfile>;
+  agentEnvForStep(runId: string, backend: string, options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<StepProfile>;
   sessionContextFor(runId: string, state: ActiveRun, stepId: string, openingPrompt: string): SessionContext;
   automationsPart(): string | undefined;
   flushAgentInputs(runId: string): boolean;
@@ -175,7 +175,7 @@ export function markTurnBoundary(context: RunModuleContext, host: SessionHelperH
  */
 export async function stepProfileFor(context: RunModuleContext, host: SessionHelperHost,
   runId: string,
-  stepBackend: RunnerId,
+  stepBackend: string,
   options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' },
 ): Promise<StepProfile | string> {
   try {
@@ -230,7 +230,7 @@ export function launchSystemTail(context: RunModuleContext, host: SessionHelperH
   ciTools: LaunchCiTools;
   handoffInjected: boolean;
   /** The session's runner: one that reports its native subagents is taught to end its turn while they run. */
-  runner?: RunnerId | undefined;
+  runner?: string | undefined;
 }): string {
   return composeSystemPrompt(
     launch.extraSystemPrompt,

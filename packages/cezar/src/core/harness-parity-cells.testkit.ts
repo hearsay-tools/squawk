@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,7 +10,6 @@ import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { MONITORING_TURN_CRITERIA, MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRITERIA } from '../workflows/monitoring-turn.testkit.ts';
 import { monitoringTurnFiles } from '../workflows/monitoring-turn-partitions.testkit.ts';
 import { WAIT_CRITERIA } from '../workflows/waits-parity.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { exemptionReasonProblem } from './exemption-reason.testkit.ts';
 import { driveSeam, exemptionFor, promptFor, HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, MODEL_REFUSAL_CRITERIA, PERMISSION_CRITERIA, WORKFLOW_TIMEOUT_CRITERIA, NO_PROGRESS_CRITERIA, AUTONOMOUS_CRITERIA, FINAL_MESSAGE_CRITERIA, WORKER_PROGRESS_WAIT_CRITERIA, WORKFLOW_ASK_CRITERIA, STEP_COMPLETION_CRITERIA, FOLLOWUP_CRITERIA, ANSWER_DELIVERY_CRITERIA, SKILL_RESUME_CRITERIA, SKILL_PROVISION_CRITERIA, WORKTREE_SETUP_CRITERIA, PARITY_EXEMPTIONS, PINNED_SESSION_ID, seedOpencodeMockSession, type ScenarioName, waitFor } from './harness-parity-core.testkit.ts';
@@ -245,10 +245,10 @@ function matrixGuards(r: HarnessRegistrar): void {
         return row.scenario;
       };
 
-      // AC #6: a new id in RUNNER_IDS fails here until every row is addressed.
+      // AC #6: a new id in BUILT_IN_RUNNER_IDS fails here until every row is addressed.
       it('every criterion is a live row or a declared exemption for every runner', () => {
         const missing: string[] = [];
-        for (const backend of RUNNER_IDS) {
+        for (const backend of BUILT_IN_RUNNER_IDS) {
           for (const id of allIds) {
             const declared = HARNESS_ADAPTERS[backend]?.scenarios[scenarioOf(id)] !== undefined;
             if (!declared && !exemptionFor(id, backend)) missing.push(`${backend}/${id}`);
@@ -260,18 +260,18 @@ function matrixGuards(r: HarnessRegistrar): void {
       it('R26 enumerates each runner ask path with a live prompt or a named exemption', () => {
         // Independent wire inventory: deleting an adapter variant must fail this
         // guard, even when another ask kind still exercises the same backend.
-        const expectedKinds: Record<RunnerId, readonly string[]> = {
+        const expectedKinds: Record<string, readonly string[]> = {
           claude: ['cezar_ask'],
           codex: ['item/tool/requestUserInput'],
           opencode: ['question.asked'],
           pi: ['cezar_ask'],
           omp: ['cezar_ask'],
         };
-        for (const backend of RUNNER_IDS) {
+        for (const backend of BUILT_IN_RUNNER_IDS) {
           const cases = HARNESS_ADAPTERS[backend]?.askResumeCases;
           expect(cases).toBeDefined();
-          if (exemptionFor('R26', backend)) continue;
-          expect(cases.map(ask => ask.kind)).toEqual(expectedKinds[backend]);
+          if (cases === undefined || exemptionFor('R26', backend)) continue;
+          expect(cases.map(ask => ask.kind)).toEqual(expectedKinds[backend]!);
           expect(cases.length).toBeGreaterThan(0);
           expect(new Set(cases.map(ask => ask.kind)).size).toBe(cases.length);
           expect(cases.some(ask => ask.scenario === 'ask-resume')).toBe(true);
@@ -312,7 +312,7 @@ function matrixGuards(r: HarnessRegistrar): void {
         const routes = Object.values(HARNESS_PARITY_GROUPS).flat();
         expect([...routes].sort()).toEqual([...registeredGroups].sort());
         expect(new Set(registeredGroups).size).toBe(registeredGroups.length);
-        for (const backend of RUNNER_IDS) for (const part of Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]) {
+        for (const backend of BUILT_IN_RUNNER_IDS) for (const part of Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]) {
           const file = harnessParityFile(backend, part);
           const url = new URL(`../runners/${backend}/${file}`, import.meta.url);
           expect(existsSync(url), file).toBe(true);
@@ -328,7 +328,7 @@ function matrixGuards(r: HarnessRegistrar): void {
       });
 
       it('every runner id has an adapter', () => {
-        for (const backend of RUNNER_IDS) {
+        for (const backend of BUILT_IN_RUNNER_IDS) {
           expect(HARNESS_ADAPTERS[backend]?.backend).toBe(backend);
         }
       });
@@ -336,7 +336,7 @@ function matrixGuards(r: HarnessRegistrar): void {
       it('no exemption names a criterion or runner that does not exist', () => {
         for (const exemption of PARITY_EXEMPTIONS) {
           expect(allIds).toContain(exemption.criterion);
-          expect(RUNNER_IDS as readonly string[]).toContain(exemption.backend);
+          expect(BUILT_IN_RUNNER_IDS as readonly string[]).toContain(exemption.backend);
           expect(exemptionReasonProblem(exemption.reason), `${exemption.criterion}/${exemption.backend}`).toBeUndefined();
         }
       });
@@ -344,7 +344,7 @@ function matrixGuards(r: HarnessRegistrar): void {
       it('each exemption kind agrees with whether a scenario prompt is declared', () => {
         for (const exemption of PARITY_EXEMPTIONS) {
           const declared =
-            HARNESS_ADAPTERS[exemption.backend].scenarios[scenarioOf(exemption.criterion)] !==
+            HARNESS_ADAPTERS[exemption.backend]!.scenarios[scenarioOf(exemption.criterion)] !==
             undefined;
           // A contradictory entry is worse than none: `capability-absent` needs the
           // scenario to be drivable so the inversion means something, and
@@ -441,7 +441,7 @@ export function describeHarnessParity(scope: HarnessParityScope, registration: H
 /** The row ids each group registers on any runner, from its cell titles (hearsay-tools/cezarion#2991). */
 export function harnessGroupRows(): Map<string, Set<string>> {
   const rows = new Map<string, Set<string>>();
-  for (const runner of RUNNER_IDS) {
+  for (const runner of BUILT_IN_RUNNER_IDS) {
     describeHarnessParity({ runner: runnerDefinition(runner), part: 'session' }, {
       describe: ((_name: string, ...args: unknown[]) => { (args.at(-1) as () => void)(); }) as typeof describe,
       it: (() => undefined) as unknown as typeof it,
@@ -459,7 +459,7 @@ export function harnessGroupRows(): Map<string, Set<string>> {
 }
 
 /** Collect the real row registrations without starting their hooks or test bodies. */
-export function harnessParityRegistrations(runner: RunnerId, part?: HarnessParityPart): string[] {
+export function harnessParityRegistrations(runner: string, part?: HarnessParityPart): string[] {
   const names: string[] = [];
   const registration: HarnessRegistration = {
     describe: ((_name: string, body: () => void) => body()) as typeof describe,

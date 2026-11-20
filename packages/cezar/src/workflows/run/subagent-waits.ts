@@ -9,7 +9,7 @@ import {
   SUBAGENT_WAIT_GRACE_SECONDS,
 } from '@open-mercato/cezar-contract/wait-limits';
 import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
-import type { AgentSession, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
@@ -65,8 +65,8 @@ interface SubagentWaitsHost {
  * monitoring timer. `waits-subagents-parity-cells.testkit.ts` derives its exemptions from the same
  * declaration.
  */
-export function reportsNativeSubagents(runner: RunnerId | undefined): boolean {
-  return runner !== undefined && RUNNER_FACTS[runner].nativeSubagents === 'reported';
+export function reportsNativeSubagents(runner: string | undefined): boolean {
+  return runner !== undefined && RUNNER_FACTS[runner]!.nativeSubagents === 'reported';
 }
 
 /** The child a UI event reports: a root tool item the runner marks background, with its status. A

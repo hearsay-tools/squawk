@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import type { AccountHolds } from '../../workspace/semaphore.ts';
 import { oldestEligibleWakeAt } from './run-line.ts';
 
@@ -13,7 +13,7 @@ function fixture(entries: Array<[string, number | undefined]>, held = false) {
     wakeJoinedAt: vi.fn((id: string) => { trace.push(`wake:${id}`); return new Map(entries).get(id); }),
     accountHolds: vi.fn(() => { trace.push('holds'); return holds; }),
     getRun: vi.fn((id: string) => { trace.push(`run:${id}`); return runs.get(id); }),
-    canLeaveLine: vi.fn((id: string, actual: AccountHolds, fallback: RunnerId) => {
+    canLeaveLine: vi.fn((id: string, actual: AccountHolds, fallback: string) => {
       trace.push(`leave:${id}:${fallback}`); expect(actual).toBe(holds); return !blocked.has(id);
     }),
   };

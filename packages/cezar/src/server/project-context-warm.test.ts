@@ -12,7 +12,7 @@ import { processStartToken } from '../delegation/process-liveness.ts';
 import type { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectWarmCandidate } from './project-context.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

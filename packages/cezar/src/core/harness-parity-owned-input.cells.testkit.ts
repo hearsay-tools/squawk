@@ -11,7 +11,7 @@ import { historyPaths } from '../runs/history-file.ts';
 import { blockRunWrites, hasPendingAsk, muteLockedDatabaseLogs } from '../runs/run-store.testkit.ts';
 import { TranscriptFactsQueue } from '../runs/transcript-facts-queue.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
-import { inputDeliveryOf } from './agent-runner.ts';
+import { inputDeliveryOf } from './agent-runner-values.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';

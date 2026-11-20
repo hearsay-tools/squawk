@@ -14,7 +14,7 @@ import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';
-import { fixture, waitForOwnedWork } from './service.testkit.ts';
+import { fixture, waitForOwnedWork } from './service-engine.testkit.ts';
 import { DelegationController } from './provision.ts';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

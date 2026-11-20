@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '../../core/agent-runner.ts';
-import { isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { buildClaudeArgs, ClaudeCliRunner, claudeHelpFeatures } from './claude-cli-runner.ts';
 import { AUTO_END_DELAY_MS, EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS, KILL_GRACE_MS } from '../../core/runner-runtime.ts';
 import { autoEndObservationClock } from '../../core/observation-clock.testkit.ts';

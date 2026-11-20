@@ -1,3 +1,4 @@
+import { registeredRunners } from './runner-registry.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
@@ -7,7 +8,6 @@ import { expect } from 'vitest';
 import { workerWorkflowHash, type WorkerAccountBinding, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from '../workflows/types.ts';
 import { supportsProfiles } from './agent-profiles.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { withOwnedInputRun, withSkillParentRun } from './workflow-parity-core.testkit.ts';
@@ -90,11 +90,12 @@ export const OWNED_WORKFLOWS_GROUPS = {
         }, 60_000);
 
         it(`${backend} R14 runs an accepted mixed-runner chain under per-step identity, each step on its own pinned account (#452)`, async () => {
-          const other = RUNNER_IDS[(RUNNER_IDS.indexOf(backend) + 1) % RUNNER_IDS.length]!;
+          const roster = registeredRunners().map(({ id }) => id);
+          const other = roster[(roster.indexOf(backend) + 1) % roster.length]!;
           const homes = realpathSync(mkdtempSync(join(tmpdir(), 'cez-parity-accounts-')));
           // What acceptance captures for a default account: a relocated home for the providers that
           // have one (never the developer's real login), a bare provider marker for the rest.
-          const binding = (provider: RunnerId): WorkerAccountBinding => {
+          const binding = (provider: string): WorkerAccountBinding => {
             if (!supportsProfiles(provider)) return { provider, profileId: 'default' };
             const homePath = join(homes, provider); mkdirSync(homePath, { recursive: true });
             return { provider, profileId: 'default', homePath, ...(provider === 'claude' ? { claudeLayout: { kind: 'relocated' } } : {}) };

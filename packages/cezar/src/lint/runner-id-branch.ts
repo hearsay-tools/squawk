@@ -6,6 +6,7 @@ import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.t
 import { literal, propertyName, unwrap } from './ast-syntax.ts';
 import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
+import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
 
 /**
  * Only `packages/cezar/src/core/` and `packages/cezar/src/runners/` branch on a runner id. Shared
@@ -16,8 +17,9 @@ import { repoRoot } from './source-rule.ts';
  * `packages/web/src/`. `packages/contract/` is not scanned: it declares `RUNNER_COCKPIT_FACTS`. The rule reports
  * - an equality comparison (`===`, `!==`, `==`, `!=`) with a runner-id string literal on one side;
  * - a `switch` with one or more runner-id `case` labels, as one site that names its labels.
- * The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy ids. A literal may
- * sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution.
+ * The ids come from `runners/built-in.ts`, the one roster of runners, plus the legacy ids. A
+ * literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no
+ * substitution.
  *
  * The rule tracks no value and knows no type, so it over-approximates: `'pi'` is also a plain
  * word, and a message tag can spell a runner id. So the rule leaves out
@@ -31,28 +33,15 @@ import { repoRoot } from './source-rule.ts';
  * that file and a reason. It only shrinks: `npm run lint` fails a stale entry, and CI's
  * baseline-growth gate refuses a new one.
  */
-const DEFINITION = 'packages/cezar/src/core/agent-runner.ts';
-/** Ids that old run records still carry; `RUNNER_IDS` does not list them. */
 const LEGACY_IDS = ['claude-cli'];
 const SEAMS = ['packages/cezar/src/core/', 'packages/cezar/src/runners/'];
 const OPERATORS = new Set(['===', '!==', '==', '!=']);
 
 export const runnerIdBranchesFile = 'packages/cezar/src/lint/runner-id-branch.baseline.json';
 
-/** The string elements of `export const RUNNER_IDS = [...] as const`, read from the source. */
-export function declaredRunnerIds(read: (path: string) => string = path => readFileSync(join(repoRoot, path), 'utf8')): string[] {
-  const { program } = parse(read(DEFINITION), { sourceType: 'module', plugins: ['typescript'] });
-  for (const statement of program.body) {
-    const declaration = statement.type === 'ExportNamedDeclaration' && statement.declaration ? statement.declaration : statement;
-    if (declaration.type !== 'VariableDeclaration') continue;
-    for (const { id, init } of declaration.declarations) {
-      if (id.type !== 'Identifier' || id.name !== 'RUNNER_IDS' || !init) continue;
-      const list = unwrapped(init);
-      const ids = list.type === 'ArrayExpression' ? list.elements.map(element => (element ? literalText(element) : undefined)) : [];
-      if (ids.length > 0 && ids.every(value => value !== undefined)) return ids as string[];
-    }
-  }
-  throw new Error(`runner-id-branch: RUNNER_IDS is not a string array literal in ${DEFINITION}`);
+/** The ids of the runners Squawk ships: `runners/built-in.ts`, the one roster. */
+export function declaredRunnerIds(): string[] {
+  return BUILT_IN_RUNNERS.map(({ id }) => id);
 }
 
 export function unwrapped(node: Node): Node {

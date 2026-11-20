@@ -2,7 +2,7 @@ import { controlLocation } from '@open-mercato/cezar-contract/control-locations'
 import type { ProviderId } from '../core/provider-auth.ts';
 import type { ProviderStatusResponse } from '@open-mercato/cezar-contract/workspace';
 import type { RunRecord } from '../runs/store.ts';
-import { registeredRunners, runnerDefinition, runnerIdOf } from '../core/runner-registry.ts';
+import { registeredRunners, runnerDefinition, resolveRunnerId } from '../core/runner-registry.ts';
 import { providersRequiredByWorkflow as requiredByWorkflow } from '@open-mercato/cezar-contract/workflows';
 import type { WorkflowDef } from '@open-mercato/cezar-contract/workflows';
 
@@ -16,7 +16,7 @@ export function providerForExistingRun(
   override?: ProviderId,
 ): ProviderId {
   if (override) return override;
-  return runnerIdOf(run.runner);
+  return resolveRunnerId(run.runner);
 }
 
 export function unavailableProviderMessage(

@@ -24,7 +24,7 @@ import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from '../../core/agent-runner.ts';
-import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant } from '../../core/agent-runner.ts';
+import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant } from '../../core/agent-runner-values.ts';
 import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.ts';
 import { buildChildEnv } from '../../core/agent-env.ts';
 import { squawkToolEnvNames, squawkToolNames } from '../../ci-wait/tool-catalog.ts';

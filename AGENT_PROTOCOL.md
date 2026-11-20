@@ -315,9 +315,11 @@ it. A Squawk-owned event such as
 A new backend is one class behind the seam, its mapper, its fixtures and its rows in both
 parity matrices. No backend-specific type leaves `packages/cezar/src/runners/`.
 
-Add the id to `RUNNER_IDS` (`agent-runner.ts`) first. The compiler and the guard tests
-then name most of the missing pieces. The items below are the steps that they do not
-force, or force only in part. The item numbers are stable: code cites them.
+Add the runner's definition (`runners/<id>/definition.ts`) to `BUILT_IN_RUNNERS`
+(`runners/built-in.ts`) and its id to `runners/ids.ts` first; `core/runner-registry.test.ts`
+holds the two lists equal. The guard tests then name most of the missing pieces. The items
+below are the steps that they do not force, or force only in part. The item numbers are
+stable: code cites them.
 
 1. **Runner** — `runners/<id>/<id>-runner.ts` implements `AgentRunner` / `AgentSession`.
    Declare `specSupport` (`runners/<id>/spec-support.ts`) and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a

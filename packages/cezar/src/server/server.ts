@@ -112,7 +112,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { registeredRunnerId, registeredRunners, runnerIdOf } from '../core/runner-registry.ts';
+import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -141,7 +141,7 @@ import {
 import type { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
-import { PROVIDER_IDS, ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
+import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { allUsage, currentUsage, onUsage } from '../core/process-usage.ts';
@@ -175,7 +175,6 @@ import { resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { artifactParamsSchema, fileLinkQuerySchema } from '@open-mercato/cezar-contract/artifacts';
 import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/store.ts';
 import { artifactPreview, loadFileLink, rasterMime } from '../artifacts/resolve.ts';
-import type { RunManager } from '../workflows/run.ts';
 import { toPastedContent, type PastedContent } from '../workflows/pasted-content.ts';
 import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { worktreeDiff, worktreeSizeBytes } from '../git-worktree.ts';
@@ -246,7 +245,7 @@ import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/u
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { createProject, listGithubOwners, type CommandRunner } from './create-project.ts';
 import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
-import { ProjectContexts, type ProjectContext, type RunManagerFactory } from './project-context.ts';
+import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
 import { expandTilde } from '../paths.ts';
@@ -310,7 +309,7 @@ export interface ServerDeps extends ActivityServerDeps {
   delegation?: DelegationController; workerCleanup?: WorkerCleanupFactory;
   repoRoot: string;
   store: RunStore;
-  manager: RunManager;
+  manager: ProjectRunManager;
   version: string;
   /** Mutable holder for the async npm-registry update check (#368) —
    *  `latest` appears once the registry answers with a newer version. */
@@ -1161,7 +1160,7 @@ export function createApp(deps: ServerDeps) {
     await providerAuth.status().catch(() => {});
     if (!capabilities().localHandoff) return;
     const store = await loadAgentAccounts(deps.home).catch(() => defaultAgentAccountStore());
-    for (const account of listAgentProfiles(store, PROVIDER_IDS)) {
+    for (const account of listAgentProfiles(store, registeredRunners().map(({ id }) => id))) {
       if (account.isDefault) continue; // covered by `status()` above
       await providerAuth
         .profileStatus(account.provider, { id: account.id, configDir: account.path })
@@ -1178,7 +1177,7 @@ export function createApp(deps: ServerDeps) {
     // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
     // authoritative host-local catalog (#794), so the client compiles against exactly what this
     // validates, including Claude stream-json discovery (#89).
-    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
+    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
       const query = { data: c.req.valid('query') };
       const runner = registeredRunnerId(query.data.runner);
       return c.json(await modelCatalog.get(runner));
@@ -1285,7 +1284,7 @@ export function createApp(deps: ServerDeps) {
             const disabled = new Set(config.disabledProviders);
             if (body.data.enabled) disabled.delete(provider.data);
             else disabled.add(provider.data);
-            config.disabledProviders = PROVIDER_IDS.filter((id) => disabled.has(id));
+            config.disabledProviders = registeredRunners().map(({ id }) => id).filter((id) => disabled.has(id));
           });
         } catch {
           return c.json({ error: 'Provider preference could not be saved.' }, 500);
@@ -1316,7 +1315,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;
@@ -1438,7 +1437,7 @@ export function createApp(deps: ServerDeps) {
   const accountById = async (id: string): Promise<ResolvedAgentProfile | null> => {
     const [head, tail] = id.split(':');
     if (head === DEFAULT_AGENT_ACCOUNT_ID) {
-      const provider = PROVIDER_IDS.find((p) => p === tail);
+      const provider = registeredRunners().find(({ id }) => id === tail)?.id;
       return provider ? defaultAgentProfile(provider) : null;
     }
     try {
@@ -1507,7 +1506,7 @@ export function createApp(deps: ServerDeps) {
         }
       }
       const profiles = editable
-        ? await Promise.all(listAgentProfiles(store, PROVIDER_IDS).map(agentProfileBody))
+        ? await Promise.all(listAgentProfiles(store, registeredRunners().map(({ id }) => id)).map(agentProfileBody))
         : [];
       return c.json<AgentProfilesResponse>({
         editable,
@@ -2784,7 +2783,7 @@ export function createApp(deps: ServerDeps) {
   const withUsage = (run: RunRecord, finishBlocked?: string | null): ApiRun => {
     const usage = currentUsage(run.id);
     const { sessionId, backend } = latestSession(run);
-    const command = sessionId ? resumeCommand(runnerIdOf(backend), sessionId) : null;
+    const command = sessionId ? resumeCommand(resolveRunnerId(backend), sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
   };
@@ -3092,7 +3091,7 @@ export function createApp(deps: ServerDeps) {
       // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
       // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
       if (run.status !== 'queued') {
-        const blocked = await providerActionError([runnerIdOf(providerForActiveRun(run))]);
+        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))]);
         if (blocked) return c.json({ error: blocked }, 409);
       }
       const content: PastedContent[] = [
@@ -3228,7 +3227,7 @@ export function createApp(deps: ServerDeps) {
       }
       const untouched = isUntouchedCancelledRun(run);
       const originalProvider = untouched
-        ? run.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : runnerIdOf(run.runner)
+        ? run.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : resolveRunnerId(run.runner)
         : providerForExistingRun(run);
       const provider = parsed.data.runner === undefined ? originalProvider : registeredRunnerId(parsed.data.runner);
       const required = untouched
@@ -3255,7 +3254,7 @@ export function createApp(deps: ServerDeps) {
       const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
       if ('status' in checkout) return c.json(checkout.body, checkout.status);
       if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
-      const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = runnerIdOf(savedBackend);
+      const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       const blocked = await providerActionError([backend]);
       if (blocked) return c.json({ error: blocked }, 409);

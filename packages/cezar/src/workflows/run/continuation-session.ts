@@ -8,7 +8,7 @@ import type { QueuedInput } from './queued-input.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { join } from 'node:path';
 import type { ContentBlock } from '../../core/agent-runner.ts';
-import { inputDeliveryOf } from '../../core/agent-runner.ts';
+import { inputDeliveryOf } from '../../core/agent-runner-values.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { AutosaveReason } from '../../autosave-commit.ts';
@@ -23,7 +23,7 @@ import * as inputReceipts from './input-receipts.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { RunSettlement } from './run-settlement.ts';
 import type { SessionTurn, ContinuationSessionLaunch, ContinuationClose, LaunchDelegation, LaunchCiTools } from './types.ts';
-import type { AgentRunner, AgentSession, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, AgentSession } from '../../core/agent-runner.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { seedHandoffFile } from '../../handoff.ts';
 import { atContinue } from './launch-read-resolver.ts';
@@ -199,7 +199,7 @@ export class ContinuationSession {
     stepId: string,
     record: RunRecord | undefined,
     sessionId: string | undefined,
-    backend: RunnerId,
+    backend: string,
   ): void {
     this.host.move(runId, 'start', {
       error: undefined,
@@ -265,7 +265,7 @@ export class ContinuationSession {
     state: ActiveRun,
     record: RunRecord | undefined,
     sessionId: string | undefined,
-    backend: RunnerId,
+    backend: string,
     sink: UiEventSink,
   ): Promise<ContinuationSettings | undefined> {
     // Resuming reattaches to a session that lives inside ONE account's config dir, so the
@@ -332,7 +332,7 @@ export class ContinuationSession {
     runId: string,
     stepId: string,
     state: ActiveRun,
-    backend: RunnerId,
+    backend: string,
     settings: ContinuationSettings,
   ): void {
     this.context.store.updateStep(runId, stepId, { profileId: settings.profile.profileId, ...(settings.owningStep?.skillPath ? { skillPath: settings.owningStep.skillPath } : {}) });
@@ -372,7 +372,7 @@ export class ContinuationSession {
     runId: string,
     stepId: string,
     sessionId: string | undefined,
-    backend: RunnerId,
+    backend: string,
     prompt: string,
     images: PastedContent[],
     persistedImages: ContentBlock[],

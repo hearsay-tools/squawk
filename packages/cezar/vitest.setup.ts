@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from './src/runners/ids.ts'
 import { configureTestHome } from '../../scripts/test-home-setup.mjs'
-import { RUNNER_IDS } from './src/core/agent-runner.ts'
 import { configureTestHomeSelector } from './src/home/test-home-selector.testkit.ts'
 import { checkWorkspaceResolution } from '../../scripts/check-workspace-resolution.mjs'
 
@@ -41,7 +41,7 @@ process.env.TEMP = sandboxTemp
 // to ENOENT. A test that sets its own binary or PATH still runs what it names. Set once per file,
 // like the task keys below. The mirror directories live in the sandbox and go with it.
 // Each runner's CLI is named after its runner id.
-const HOST_RUNNER_COMMANDS = [...RUNNER_IDS]
+const HOST_RUNNER_COMMANDS = [...BUILT_IN_RUNNER_IDS]
 process.env.PATH = hideHostCommands(HOST_RUNNER_COMMANDS, join(sandboxTemp, 'path'))
 // Nor the host gh, which answers with the developer's login and leaves its state in the sandbox
 // (hearsay-tools/squawk#2459), nor a browser opener (hearsay-tools/squawk#2369). They live in

@@ -1,6 +1,5 @@
 import { expect } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
-import type { RunnerId } from './agent-runner.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { skillProvisionParity, type SkillProvisionCells } from './skill-provision-rows.testkit.ts';
@@ -32,10 +31,10 @@ function installed(cell: string): SkillProvisionEngineCells {
 }
 
 const engineCell = (key: EngineCellBody): CellBody => () => installed(key)[key]();
-const engineRunnerCell = (key: EngineRunnerCell) => (runner: RunnerId): CellBody => () => installed(`${runner} ${key}`)[key](runner)();
+const engineRunnerCell = (key: EngineRunnerCell) => (runner: string): CellBody => () => installed(`${runner} ${key}`)[key](runner)();
 
 /** Selects a skill the way a step opens on `runner` with the default account and `skills` listed. */
-async function selection(runner: RunnerId, skills: readonly RunnerSkill[]): Promise<(id: string, path?: string) => unknown> {
+async function selection(runner: string, skills: readonly RunnerSkill[]): Promise<(id: string, path?: string) => unknown> {
   const runSkills = new RunSkills(unused<RunModuleContext>('run context', { skillCatalog: fixedSkillCatalog(skills) }));
   const state = createActiveRun({ cwd: '/repo', pendingHumanAsk: false, autonomous: false });
   await runSkills.loadRunSkills(state, runner, { env: {}, profileId: 'default' });

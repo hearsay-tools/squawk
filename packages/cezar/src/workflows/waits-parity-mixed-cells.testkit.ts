@@ -1,7 +1,7 @@
 import { waitPartDescribers, github, parentWithWorker, pr, parentTurn, waitOfKind, workerWaits, turnEnds, settled, prompted, workerWake, parkedOn, agentWaits, inputsFor, fireTimer, timerText, conversingParent, delivered, parentOn, parkNotices, conversationOf } from './waits-parity-fixture.testkit.ts';
 import { it as registerTest, expect } from 'vitest';
 import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { parkNoticeId } from '../delegation/park-notice.ts';
 import { fixtureUpdateRun, until, store, manager, worker, timeline, spendWorkerBudget, root, terminal } from './worker-wait-core.testkit.ts';
 import type { TimedWait } from './waits.testkit.ts';
@@ -12,7 +12,7 @@ import { toolCall, thenSay, ciNativeMessages, ciNativeSteers } from './waits-par
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('mixed', mixedCells);
 
-export function mixedCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function mixedCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U2w ci and worker open: the worker resolving wakes the agent with ci still open and in the footer, and the later ci result is delivered`, async () => {
       const external = github();

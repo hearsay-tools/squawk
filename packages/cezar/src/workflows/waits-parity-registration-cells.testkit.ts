@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { it as registerTest, vi, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { STEP_STATUS, WAIT_KIND, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { ToolsUnavailableError, CiToolController } from '../ci-wait/controller.ts';
 import { manager, until, store, semaphore, toolGenerationOf, restart, root, terminal } from './worker-wait-core.testkit.ts';
@@ -19,7 +19,7 @@ import { toolCall } from './waits-parity.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('registration', registrationCells);
 
-export function registrationCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function registrationCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     for (const [kind, row] of [['worker', 'U28w'], ['request', 'U28r'], ['peer', 'U28p']] as const) {
       it(`${runner} ${row} ${kind} accepts a two-hour wait on the native wire and names the range above it`, async () => {
@@ -51,14 +51,14 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
       const cause = new RegExp(String.raw`Squawk tools could not start: ENOSPC: no space left on device, mkdtemp '\/tmp\/cez-ci-XXXXXX'\. .*Free space in \/tmp or fix its permissions, then Continue the task\.`);
       // A fresh start: nothing spawns, the step and the run fail with the cause.
       broken();
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${HARNESS_ADAPTERS[runner].scenarios.baseline!} u26-opening` });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${HARNESS_ADAPTERS[runner]!.scenarios.baseline!} u26-opening` });
       await until(() => store.getRun(run.id)?.status === 'failed' && !manager.isActive(run.id));
       expect(store.getRun(run.id)?.error).toMatch(cause);
       expect(store.getRun(run.id)?.steps[0]).toMatchObject({ status: STEP_STATUS.failed, error: expect.stringMatching(cause) });
       expect(prompted(runner, 'u26-opening')).toEqual([]);
       // Its slot is free: at maxParallel 1 another task starts.
       expect(semaphore.maxParallel()).toBe(1);
-      const other = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${HARNESS_ADAPTERS[runner].scenarios.baseline!} u26-other` });
+      const other = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${HARNESS_ADAPTERS[runner]!.scenarios.baseline!} u26-other` });
       await until(() => prompted(runner, 'u26-other').length > 0 && store.getRun(other.id)?.status === 'waiting');
       sessionOf(other.id).end();
       await until(() => !manager.isActive(other.id));
@@ -156,7 +156,7 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
       nativeWire(runner);
       const release = join(root, 'u10-release');
       process.env.CEZ_MOCK_RELEASE_FILE = release;
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios['hold-gated']!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
       await until(() => store.readEvents(run.id).some(event => event.type === 'turn.started'));
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const open = async (seconds: number, note: string) => {
@@ -202,7 +202,7 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
     it(`${runner} U10 a timer due while a charged batch awaits its acknowledgement is cancelled at the cap, and CI still wakes`, async () => {
       const external = github();
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const open = async (request: Parameters<typeof tools.registerWait>[0]) => {
@@ -246,7 +246,7 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
     // hearsay-tools/cezarion#1234: the budget is on the record, so a new session does not refill it.
     it(`${runner} U16 a scheduler continuation keeps the automatic-wake budget and a human Continue resets it`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const { timer } = await timerWaits(run.id);
       store.updateRun(run.id, { automaticWakes: 39 });
@@ -274,7 +274,7 @@ export function registrationCells(runners: RunnerId[], it: typeof registerTest =
     // nothing, and once no wait is left the run must still wait on the user through a wait.
     it(`${runner} U16b timers due at the spent budget with no live session are cancelled, and the last one opens a budget human wait the user answers`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const { timer, later } = await timerWaits(run.id);
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });

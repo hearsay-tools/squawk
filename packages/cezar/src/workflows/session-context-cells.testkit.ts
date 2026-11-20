@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { runsOn } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { handoffPath } from '../handoff.ts';
@@ -33,8 +33,8 @@ rules:
     template: "ROLE={{role}} RUN={{run.id}} STEP={{step.id}}"
 `;
 
-function native(runner: RunnerId) {
-  const adapter = HARNESS_ADAPTERS[runner];
+function native(runner: string) {
+  const adapter = HARNESS_ADAPTERS[runner]!;
   vi.stubEnv('CEZ_DRY_RUN', '0');
   vi.stubEnv(adapter.binEnv, adapter.mockBin);
   vi.stubEnv('CEZ_MOCK_ARGS_FILE', join(root, 'args'));
@@ -84,11 +84,11 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
     suite.useWorkerWaitFixture();
     suite.afterEach(() => vi.unstubAllEnvs());
 
-    for (const runner of RUNNER_IDS) {
+    for (const runner of BUILT_IN_RUNNER_IDS) {
       if (rows.includes('R120') && runsOn('session-context', 'R120', runner)) suite.it(`${runner} R120 opens a fresh step with the whole handoff and parent rules, then refreshes them on Continue`, async () => {
         const messages = native(runner);
         projectContext();
-        const task = HARNESS_ADAPTERS[runner].scenarios['cezar-done']!;
+        const task = HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!;
         const run = manager.startRun(QUICK_TASK_WORKFLOW, { task, runner, worktree: false });
         await finished(run.id);
         const first = messages()[0]!;
@@ -131,10 +131,10 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
       if (rows.includes('R121') && runsOn('session-context', 'R121', runner)) suite.it(`${runner} R121 never injects into a live message`, async () => {
         const messages = native(runner);
         projectContext();
-        const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner, worktree: false });
+        const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, worktree: false });
         await until(() => store.getRun(run.id)?.status === 'waiting');
         const before = messages().length;
-        const text = `${HARNESS_ADAPTERS[runner].scenarios.baseline!} live follow-up 1584`;
+        const text = `${HARNESS_ADAPTERS[runner]!.scenarios.baseline!} live follow-up 1584`;
         expect(manager.sendMessage(run.id, [{ type: 'text', text }])).toBe(true);
         await until(() => messages().slice(before).some((message) => message.includes('live follow-up 1584')));
         const live = messages().slice(before).find((message) => message.includes('live follow-up 1584'))!;
@@ -146,7 +146,7 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         const messages = native(runner);
         projectContext();
         const workflow: WorkflowDef = { name: 'retry-1584', source: 'built-in', steps: [
-          { id: 'implement', prompt: HARNESS_ADAPTERS[runner].scenarios['cezar-done']!, runner },
+          { id: 'implement', prompt: HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!, runner },
           { id: 'verify', command: 'node -e "const fs=require(\'node:fs\');if(!fs.existsSync(\'retried-1584\')){fs.writeFileSync(\'retried-1584\',\'\');process.exit(1)}"', onFail: { retry: 'implement', max: 1 } },
         ] };
         const run = manager.startRun(workflow, { task: 'retry task', runner, worktree: false });
@@ -161,7 +161,7 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
       if (rows.includes('R123') && runsOn('session-context', 'R123', runner)) suite.it(`${runner} R123 injects into restart recovery with no live session`, async () => {
         const messages = native(runner);
         projectContext();
-        const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios['cezar-done']!, runner, worktree: false });
+        const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!, runner, worktree: false });
         await finished(run.id);
         store.updateStep(run.id, 'task', { status: STEP_STATUS.running, finishedAt: undefined });
         setRunStatus(store, run.id, RUN_STATUS.running, { currentStepId: 'task', finishedAt: undefined, continuationMessage: undefined });
@@ -180,10 +180,10 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
       if (rows.includes('R124') && runsOn('session-context', 'R124', runner)) suite.it(`${runner} R124 renders an owned worker's own handoff and worker rules, never the parent's`, async () => {
         const messages = native(runner);
         projectContext();
-        const parent = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+        const parent = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
         store.commitDelegation([{ id: parent.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
         await until(() => store.getRun(parent.id)?.status === 'waiting');
-        const child = await worker(parent.id, HARNESS_ADAPTERS[runner].scenarios['cezar-done']!, runner);
+        const child = await worker(parent.id, HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!, runner);
         manager.enqueueOwnedRun(child.id);
         await until(() => messages().some((message) => message.includes(handoffBlock(child.id))));
         const opening = messages().find((message) => message.includes(handoffBlock(child.id)))!;

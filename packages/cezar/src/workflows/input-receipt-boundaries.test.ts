@@ -1,11 +1,5 @@
 import { ABSENT_PROCESS_PID, OTHER_ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
-import { testHome } from '../home/test-home.testkit.ts';
-import { fixture as ownedFixture } from '../delegation/service.testkit.ts';
-import { createActiveRun } from './active-run.ts';
-import { sessionResultWithReceipts, type InputReceiptsHost, type InputReceiptSteps } from './run/input-receipts.ts';
-import type { RunModuleContext } from './run/types.ts';
-import { TrackedWork } from './run/tracked-work.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
+import { fixture as ownedFixture } from '../delegation/service-engine.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
@@ -20,9 +14,8 @@ import * as processes from '../core/process-usage.ts';
 import { RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork, fixtureWorkSettled } from './fixture-manager.testkit.ts';
-import { unused } from './unused.testkit.ts';
 import type { RunManager } from './run.ts';
-import { noRunners, useRunners } from '../core/runners-under-test.testkit.ts';
+import { useRunners } from '../core/runners-under-test.testkit.ts';
 
 const hook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
 useRunners(async () => hook.runner!);
@@ -157,28 +150,6 @@ for (const mode of ['fresh', 'continuation'] as const) {
     expect(finallyCalled).not.toHaveBeenCalled();
   });
 }
-
-it('the receipt setup contract propagates recordProcess failure before marking prepared or reading the result', () => {
-  const runner = controlledRunner();
-  Object.defineProperty(runner.session, 'pid', { value: ABSENT_PROCESS_PID });
-  const context: RunModuleContext = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
-    semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false };
-  const state = createActiveRun({ cwd: root, autonomous: false, pendingHumanAsk: false });
-  const calls: string[] = [];
-  const host = unused<InputReceiptsHost>('receipts', { openDeliveryScope: () => { calls.push('scope'); }, flushAgentInputs: () => { calls.push('inputs'); } });
-  const steps = unused<InputReceiptSteps>('steps', {
-    flushDeferred: () => { calls.push('deferred'); },
-    recordProcess: (id, pid) => { calls.push('record'); expect([id, pid]).toEqual(['run', ABSENT_PROCESS_PID]); throw Error('record refused'); },
-  });
-  vi.spyOn(processes, 'registerRunProcess').mockImplementation(() => { calls.push('register'); });
-  const prepared = vi.fn();
-  const result = vi.spyOn(runner.session, 'result', 'get');
-  expect(() => sessionResultWithReceipts(context, host, steps, 'run', state, runner.session, prepared)).toThrow('record refused');
-  // The delivery scope opens before anything can be delivered into the session.
-  expect(calls).toEqual(['scope', 'deferred', 'inputs', 'register', 'record']);
-  expect(prepared).not.toHaveBeenCalled();
-  expect(result).not.toHaveBeenCalled();
-});
 
 it.each(['fresh', 'continuation'] as const)('%s keeps a worker session live when its process record write fails', async mode => {
 

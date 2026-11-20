@@ -1,7 +1,8 @@
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import type { AgentBackend } from './agent-runner.ts';
-import { LEGACY_RUNNER_IDS, registeredRunners } from './runner-registry.ts';
+
+import { registeredRunners } from './runner-registry.ts';
+import { LEGACY_RUNNER_IDS } from './runner-ids.ts';
 import {
   ModelIdentityError,
   formatModelIdentity,
@@ -54,7 +55,7 @@ describe('formatModelIdentity', () => {
 
 describe('resolveModelIdentity — empty / auto', () => {
   it('is undefined for empty/whitespace on every backend (the backend picks)', () => {
-    for (const backend of [...registeredRunners().map(runner => runner.id), ...LEGACY_RUNNER_IDS.keys()] as AgentBackend[]) {
+    for (const backend of [...registeredRunners().map(runner => runner.id), ...LEGACY_RUNNER_IDS.keys()] as string[]) {
       expect(resolveModelIdentity(backend, undefined)).toBeUndefined();
       expect(resolveModelIdentity(backend, '')).toBeUndefined();
       expect(resolveModelIdentity(backend, '   ')).toBeUndefined();
@@ -193,7 +194,7 @@ describe('toBackendModel — wire form per backend', () => {
 
 describe('round-trip: composer preset → resolve → render back to the wire string', () => {
   // Representative ids each backend still accepts on the wire, per backend.
-  const cases: Array<{ backend: AgentBackend; presets: string[] }> = [
+  const cases: Array<{ backend: string; presets: string[] }> = [
     { backend: 'claude', presets: ['opus', 'sonnet', 'haiku', 'claude-opus-4-8', 'claude-sonnet-5'] },
     { backend: 'codex', presets: ['gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5-codex'] },
     {

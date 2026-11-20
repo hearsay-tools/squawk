@@ -19,7 +19,7 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { ProjectContexts } from '../server/project-context.ts';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from '../server/run-manager.testkit.ts';
+import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';

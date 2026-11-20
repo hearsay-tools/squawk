@@ -1,7 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
 import { applyTemplate, resumeNotice, withResumeContext } from './prompts.ts';
-import { RUNNER_IDS } from '../../core/agent-runner.ts';
-
 describe('applyTemplate (hearsay-tools/squawk#1207)', () => {
   it('fills every {{task}} with the task text byte for byte, $ patterns included', () => {
     const task = 'a $& $$ $1 $` $\' b';
@@ -17,7 +16,7 @@ describe('resume notice (hearsay-tools/squawk#3882)', () => {
     const notice = resumeNotice(checkpoint)!;
     expect(notice).toContain('The previous step "continue-4" failed: Credit balance is too low');
     expect(notice).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
-    for (const runner of RUNNER_IDS) expect(notice).not.toMatch(new RegExp(`\\b${runner}\\b`, 'i'));
+    for (const runner of BUILT_IN_RUNNER_IDS) expect(notice).not.toMatch(new RegExp(`\\b${runner}\\b`, 'i'));
     expect(withResumeContext('Continue.', checkpoint)).toBe(`${notice}\nContinue.`);
   });
 

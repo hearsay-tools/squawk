@@ -38,7 +38,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
   it('claude every delivered turn ends with the open-waits footer, and none when nothing is open', async () => {
     github();
     nativeWire('claude');
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios.baseline!, runner: 'claude' });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios.baseline!, runner: 'claude' });
     await until(() => store.getRun(run.id)?.status === 'waiting');
     expect(manager.sendMessage(run.id, [{ type: 'text', text: 'first message' }])).toBe(true);
     await until(() => prompted('claude', 'first message').length > 0);
@@ -117,7 +117,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     nativeWire('claude');
     persistentWakeFailure(root, 'claude');
     const retry = wakeRetryClock();
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios.baseline!, runner: 'claude' });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios.baseline!, runner: 'claude' });
     await until(() => store.getRun(run.id)?.status === 'waiting');
     const timer = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 60, note: 'owed' });
     const later = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 7200, note: 'later' });

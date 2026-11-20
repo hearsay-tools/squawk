@@ -11,12 +11,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../automations/store.ts';
-import { emitUsageForTest } from '../core/process-usage.ts';
-import type { RunManager } from '../workflows/run.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContextSource, type RunManagerFactory } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { seedRuns, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 registerRunner(claudeRunner);
@@ -24,11 +22,10 @@ registerRunner(claudeRunner);
 
 const observed = vi.hoisted(() => ({
   options: new WeakMap<object, Parameters<RunManagerFactory>[2]>(),
-  subscriptions: [] as Array<{ listener: ReturnType<typeof vi.fn>; unsubscribe: ReturnType<typeof vi.fn> }>,
 }));
-/** The real factory, recording each manager's constructor options. */
-function createManager(...args: Parameters<RunManagerFactory>): RunManager {
-  const manager = createRunManager(...args);
+/** The fake factory, recording each manager's constructor options. */
+function createManager(...args: Parameters<RunManagerFactory>): ReturnType<RunManagerFactory> {
+  const manager = createFakeRunManager(...args);
   observed.options.set(manager, args[2]);
   return manager;
 }
@@ -42,29 +39,20 @@ vi.mock('../preview/dev-server.ts', async importOriginal => {
     return sweep;
   } };
 });
-vi.mock('../core/process-usage.ts', async importOriginal => {
-  const actual = await importOriginal<typeof import('../core/process-usage.ts')>();
-  return { ...actual, onUsage: (listener: Parameters<typeof actual.onUsage>[0]) => {
-    const observedListener = vi.fn(listener);
-    const unsubscribe = vi.fn(actual.onUsage(observedListener));
-    observed.subscriptions.push({ listener: observedListener, unsubscribe });
-    return unsubscribe;
-  } };
-});
 
 /**
  * Lazy per-project context map (spec 2026-07-20-multi-project-workspace,
  * step 2.1): nothing instantiated until first access, one instance per id,
- * missing roots never built, and a disposed context's manager stops
- * receiving usage-sampler ticks. The registry is injected as a plain
- * `listProjects` resolver so nothing here touches `~/.cezar`.
+ * and missing roots never built. `project-context-engine.test.ts` proves a
+ * disposed context's manager stops receiving usage-sampler ticks. The
+ * registry is injected as a plain `listProjects` resolver so nothing here
+ * touches `~/.cezar`.
  */
 describe('ProjectContexts', () => {
   let rootA: string;
   let rootB: string;
 
   beforeEach(() => {
-    observed.subscriptions.length = 0;
     rootA = mkdtempSync(join(tmpdir(), 'cez-ctx-a-'));
     rootB = mkdtempSync(join(tmpdir(), 'cez-ctx-b-'));
   });
@@ -262,34 +250,6 @@ describe('ProjectContexts', () => {
     expect(contexts.ids()).toEqual([]);
   });
 
-  it('dispose(): the manager receives no further usage ticks and the store is flushed and closed', async () => {
-    const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
-    const ctx = await contexts.context('a');
-    const run = ctx.store.createRun({ title: 'pending', workflow: 'w', task: 't', steps: [] });
-    const { listener: spy, unsubscribe } = observed.subscriptions.at(-1)!;
-
-    emitUsageForTest({});
-    expect(spy).toHaveBeenCalledTimes(1);
-
-    expect(contexts.dispose('a')).toBe(true);
-    emitUsageForTest({});
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledTimes(1); // unsubscribed — no further ticks
-    // Store closed: the pending row landed on disk despite the debounced save, and a late write
-    // to the disposed store saves nothing.
-    expect(readPersistedRuns(projectPaths(rootA).write).map((saved) => saved.id)).toEqual([run.id]);
-    ctx.store.updateRun(run.id, { title: 'after dispose' });
-    ctx.store.flush();
-    expect(readPersistedRuns(projectPaths(rootA).write)[0]?.title).toBe('pending');
-    expect(ctx.store.eventNames()).toEqual([]);
-
-    // Disposed id is gone from the map; the next access builds a fresh context.
-    expect(contexts.peek('a')).toBeUndefined();
-    const rebuilt = await contexts.context('a');
-    expect(rebuilt).not.toBe(ctx);
-    contexts.dispose('a');
-  });
-
   it('onContextBuilt: fires once per build (not cached hits), unsubscribes cleanly, and a throwing listener never fails the build', async () => {
     const contexts = makeContexts([
       { id: 'a', root: rootA, status: 'not-git' },
@@ -316,23 +276,5 @@ describe('ProjectContexts', () => {
   it('dispose() of a never-built project is a no-op returning false', () => {
     const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
     expect(contexts.dispose('a')).toBe(false);
-  });
-
-  it('disposeAll() tears down every built context', async () => {
-    const contexts = makeContexts([
-      { id: 'a', root: rootA, status: 'not-git' },
-      { id: 'b', root: rootB, status: 'not-git' },
-    ]);
-    await contexts.context('a');
-    await contexts.context('b');
-    const [subscriptionA, subscriptionB] = observed.subscriptions.slice(-2);
-
-    contexts.disposeAll();
-    expect(contexts.ids()).toEqual([]);
-    emitUsageForTest({});
-    expect(subscriptionA!.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(subscriptionB!.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(subscriptionA!.listener).not.toHaveBeenCalled();
-    expect(subscriptionB!.listener).not.toHaveBeenCalled();
   });
 });

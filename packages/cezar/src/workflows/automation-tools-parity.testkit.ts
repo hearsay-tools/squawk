@@ -1,7 +1,7 @@
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { testHome } from '../home/test-home.testkit.ts';
 import { createAutomationService, type AutomationServiceProject } from '../automations/service.ts';
 import { createAutomationToolService } from '../automations/tool-adapter.ts';
@@ -14,7 +14,7 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 
 /** These cells use HARNESS_ADAPTERS through the wait fixture. Every tool call crosses the
  * runner's native mock wire and the real bundled MCP adapter or extension and controller. */
-export function describeAutomationToolsParity(runner: RunnerId): void {
+export function describeAutomationToolsParity(runner: string): void {
   describeWaitCells(() => {
     it(`${runner} A1 creates paused and previews on fresh, Continue and recovered sessions`, async () => {
       nativeWire(runner);

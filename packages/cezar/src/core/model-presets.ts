@@ -1,4 +1,3 @@
-import type { RunnerId } from './agent-runner.ts';
 import { backendModelMap, parseModelIdentity } from './model-identity.ts';
 import { isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
 
@@ -15,7 +14,7 @@ const KNOWN_PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter'] as const
  * The runner's known picker presets: its definition's `models.known`, mirrored for mismatch
  * checks. An id that no runner registered has none.
  */
-function knownPresets(runner: RunnerId): readonly string[] | undefined {
+function knownPresets(runner: string): readonly string[] | undefined {
   return isRegisteredRunner(runner) ? runnerDefinition(runner).models.known : undefined;
 }
 
@@ -29,7 +28,7 @@ function knownPresets(runner: RunnerId): readonly string[] | undefined {
  * the run-time gate accepts once it has read the config. Only a prefix naming another known
  * vendor is evidence enough to refuse the pairing up front.
  */
-function namesAnotherKnownProvider(model: string, runner: RunnerId): boolean {
+function namesAnotherKnownProvider(model: string, runner: string): boolean {
   const map = backendModelMap(runner);
   // Nothing to contradict: OpenCode spans providers (no default of its own), and Claude Code
   // accepts explicit gateway/custom provider ids by design.
@@ -42,7 +41,7 @@ function namesAnotherKnownProvider(model: string, runner: RunnerId): boolean {
 /** True when `model` is recognizably a preset of a runner OTHER than `runner` (and not also one
  *  of `runner`'s own presets), or when its provider prefix is one this runner is known not to
  *  serve. `''`/unknown/custom ids never conflict. */
-export function modelConflictsWithRunner(model: string, runner: RunnerId): boolean {
+export function modelConflictsWithRunner(model: string, runner: string): boolean {
   if (!model) return false;
   if (knownPresets(runner)?.includes(model)) return false;
   // The provider half of the guard needs no vendor model knowledge, so — unlike the preset

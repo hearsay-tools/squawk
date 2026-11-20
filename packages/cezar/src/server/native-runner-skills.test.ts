@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,6 @@ import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from '../core/runner-skill-catalog.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
@@ -35,7 +35,7 @@ describe('runner-native skills API', () => {
     mkdirSync(join(root, '.ai/cezar'), { recursive: true });
     store = RunStore.open(join(root, '.ai/cezar'));
     calls = [];
-    catalog = new RunnerSkillCatalog({ adapters: Object.fromEntries(RUNNER_IDS.map(runner => [runner, {
+    catalog = new RunnerSkillCatalog({ adapters: Object.fromEntries(BUILT_IN_RUNNER_IDS.map(runner => [runner, {
       discover: async (query: SkillCatalogQuery) => {
         calls.push(query);
         return { skills: [
@@ -63,7 +63,7 @@ describe('runner-native skills API', () => {
     return runnerSkillListSchema.parse(await response.json());
   };
 
-  it.each(RUNNER_IDS)('reads %s with the project folder and portable paths', async runner => {
+  it.each(BUILT_IN_RUNNER_IDS)('reads %s with the project folder and portable paths', async runner => {
     const answer = await list(`runner=${runner}`);
     expect(calls).toEqual([{ runner, cwd: root, accountHome: undefined }]);
     expect(answer).toMatchObject({ runner, source: 'live', problems: [], skills: [

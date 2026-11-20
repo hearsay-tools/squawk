@@ -36,7 +36,7 @@ import { artifactDirectory } from '../artifacts/store.ts';
 import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
-import { createRunManager } from '../server/run-manager.testkit.ts';
+import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 
 
 /**

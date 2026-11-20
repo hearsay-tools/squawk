@@ -1,16 +1,15 @@
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
-import { runnerDefinition } from '../core/runner-registry.ts';
+import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
 import type { AgentModelSettings } from '../core/runner-model-settings.ts';
 
 /** The model defaults exposed by the coding agents' own settings files. */
-export type AgentModelDefaults = Partial<Record<RunnerId, string>>;
+export type AgentModelDefaults = Partial<Record<string, string>>;
 
 /**
  * Each runner owns its native-settings policy: its definition's `models.loadSettings`. Vendor
  * precedence, environment variables, and provider composition stay inside that runner's module.
  */
 export async function readAgentModelSettings(
-  runner: RunnerId,
+  runner: string,
   repoRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AgentModelSettings> {
@@ -23,17 +22,17 @@ export async function readAgentModelDefaults(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AgentModelDefaults> {
   const entries = await Promise.all(
-    RUNNER_IDS.map(async (runner) => [
-      runner,
-      (await readAgentModelSettings(runner, repoRoot, env)).model,
+    registeredRunners().map(async ({ id }) => [
+      id,
+      (await readAgentModelSettings(id, repoRoot, env)).model,
     ] as const),
   );
-  return Object.fromEntries(entries.filter((entry): entry is readonly [RunnerId, string] => entry[1] !== undefined));
+  return Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => entry[1] !== undefined));
 }
 
 /** Read the provider that the agent itself will use for a bare model id. */
 export async function readAgentModelProvider(
-  runner: RunnerId,
+  runner: string,
   repoRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {

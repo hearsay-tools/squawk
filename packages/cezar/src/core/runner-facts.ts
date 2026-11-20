@@ -1,9 +1,9 @@
-import { RUNNER_IDS, type InputDelivery, type RunnerId, type SystemPromptOnResume } from './agent-runner.ts';
-import { registeredRunners, runnerDefinition } from './runner-registry.ts';
+import type { InputDelivery, SystemPromptOnResume } from './agent-runner.ts';
+import { knownRunnerIds, registeredRunners, resolveRunnerId, runnerDefinition } from './runner-registry.ts';
 
 /**
  * What one runner's wire can do, declared once per runner id (hearsay-tools/cezarion#2991) in its
- * `runners/<id>/facts.ts`. Shared code often holds only a `RunnerId`, because it builds the
+ * `runners/<id>/facts.ts`. Shared code often holds only a `string`, because it builds the
  * runner later, so it reads `RUNNER_FACTS` instead of comparing runner ids. Each runner class
  * exposes its own value as `facts`, and reads its `inputDelivery` and `systemPromptOnResume` from
  * it. `runner-facts.test.ts` checks that every runner `createRunner` builds carries the facts of
@@ -89,13 +89,37 @@ export interface RunnerFacts {
 
 /**
  * Each runner's facts, by runner id. A read goes to the registry (`core/runner-registry.ts`): each
- * runner declares its facts in its definition (`runners/<id>/facts.ts`), and reading a runner that
- * is not registered throws.
+ * runner declares its facts in its definition (`runners/<id>/facts.ts`), the table lists the
+ * registered ids, and reading any id resolves it as `resolveRunnerId` does (a legacy id to its
+ * runner, an unregistered one to the default runner's definition), so a registered id that is no
+ * built-in still reads its own facts.
  */
-export const RUNNER_FACTS: Readonly<Record<RunnerId, RunnerFacts>> = Object.freeze(Object.defineProperties({} as Record<RunnerId, RunnerFacts>,
-  Object.fromEntries(RUNNER_IDS.map(id => [id, { enumerable: true, get: () => runnerDefinition(id).facts }]))));
+export const RUNNER_FACTS: Readonly<Record<string, RunnerFacts>> = new Proxy({} as Record<string, RunnerFacts>, {
+  get(target, id) {
+    if (typeof id !== 'string') return Reflect.get(target, id);
+    return runnerDefinition(resolveRunnerId(id)).facts;
+  },
+  has(_, id) {
+    return typeof id === 'string' && knownRunnerIds().includes(id);
+  },
+  ownKeys() {
+    return [...registeredRunners().map(({ id }) => id)];
+  },
+  getOwnPropertyDescriptor(_, id) {
+    if (typeof id !== 'string' || !knownRunnerIds().includes(id)) return undefined;
+    return { enumerable: true, configurable: true, writable: false, value: runnerDefinition(id).facts };
+  },
+  // Read-only, like the frozen table this proxy replaced (review B1): every mutation trap
+  // refuses, so no descriptor change, deletion, prototype change or extension can later make a
+  // facts read throw a Proxy invariant error.
+  set: () => false,
+  deleteProperty: () => false,
+  defineProperty: () => false,
+  setPrototypeOf: () => false,
+  preventExtensions: () => false,
+});
 
 /** The registered runners whose declared facts match, in registration order. */
-export function runnersWhere(matches: (facts: RunnerFacts) => boolean): RunnerId[] {
+export function runnersWhere(matches: (facts: RunnerFacts) => boolean): string[] {
   return registeredRunners().filter(definition => matches(definition.facts)).map(definition => definition.id);
 }

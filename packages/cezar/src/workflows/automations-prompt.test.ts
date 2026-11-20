@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
@@ -10,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS, type AgentRunSpec, type RunnerId } from '../core/agent-runner.ts';
+import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
@@ -89,7 +90,7 @@ describe('automations prompt part and cockpit address (#774)', () => {
   }
 
   /** A fresh run, then a Continue of it: the two construction sites, in that order. */
-  async function startAndContinue(runner: RunnerId): Promise<[AgentRunSpec, AgentRunSpec]> {
+  async function startAndContinue(runner: string): Promise<[AgentRunSpec, AgentRunSpec]> {
     const record = manager!.startRun(TASK_DEF, { task: 'do it', worktree: false, runner });
     const opening = await specAt(0);
     expect(opening.backend).toBe(runner);
@@ -123,7 +124,7 @@ describe('automations prompt part and cockpit address (#774)', () => {
     }
   });
 
-  it.each(RUNNER_IDS)('%s: an addressed manager composes the part by default at both sites', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('%s: an addressed manager composes the part by default at both sites', async (runner) => {
     delete process.env.CEZ_AUTOMATIONS;
     manager!.setCockpitAddress(ADDRESS);
     const [opening, continued] = await startAndContinue(runner);

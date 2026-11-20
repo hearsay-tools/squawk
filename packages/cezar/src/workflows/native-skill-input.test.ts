@@ -1,7 +1,7 @@
 import { makeHumanWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
-import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock, RunnerId } from '../core/agent-runner.ts';
+import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
@@ -14,7 +14,7 @@ let emit: (event: AgentEvent) => void;
 let opened: Promise<void>;
 let openedResolve: () => void;
 let sent: ContentBlock[][];
-let backend: RunnerId;
+let backend: string;
 let launches: AgentRunSpec[];
 
 beforeEach(() => {
@@ -41,7 +41,7 @@ beforeEach(() => {
   };
 });
 
-async function start(runner: RunnerId = 'claude', skills: RunnerSkill[] = [{ id: 'known', name: 'Known', path: '/listed/known', scope: 'repo' as const }]) {
+async function start(runner: string = 'claude', skills: RunnerSkill[] = [{ id: 'known', name: 'Known', path: '/listed/known', scope: 'repo' as const }]) {
   backend = runner;
   f.manager.setSkillCatalog(fixedSkillCatalog(skills));
   const record = f.manager.startRun(f.SINGLE_STEP, { task: 'work', runner, worktree: false });
@@ -66,7 +66,7 @@ it('holds a known trigger during a turn and sends it at the turn end', async () 
 });
 
 it('skillTriggerMidTurn true sends a native trigger during a running turn', async () => {
-  expect(String(RUNNER_FACTS.pi.skillTriggerMidTurn)).toBe('true');
+  expect(String(RUNNER_FACTS.pi!.skillTriggerMidTurn)).toBe('true');
   const id = await start('pi');
   expect(say(id, '/known now')).toBe(true);
   await readFinished();
@@ -74,7 +74,7 @@ it('skillTriggerMidTurn true sends a native trigger during a running turn', asyn
 });
 
 it('skillUnknownName error still receives an unknown typed name as unchanged text', async () => {
-  expect(RUNNER_FACTS.opencode.skillUnknownName).toBe('error');
+  expect(RUNNER_FACTS.opencode!.skillUnknownName).toBe('error');
   const id = await start('opencode');
   expect(say(id, '/unknown verbatim')).toBe(true);
   await readFinished();
@@ -103,7 +103,7 @@ it('keeps the session snapshot and explains a name that appears only in a fresh 
 });
 
 it('skillsSeenBySession live resolves a newly listed name at send time', async () => {
-  expect(RUNNER_FACTS.codex.skillsSeenBySession).toBe('live');
+  expect(RUNNER_FACTS.codex!.skillsSeenBySession).toBe('live');
   const id = await start('codex');
   f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'new', name: 'New', path: '/new', scope: 'repo' }]));
   expect(say(id, '/new arguments')).toBe(true);

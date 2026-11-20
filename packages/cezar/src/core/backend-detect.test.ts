@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { detectEnvironment, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
 
@@ -108,7 +108,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
   it('reports one check for every runner, then gh and git', async () => {
     process.env.CEZ_DRY_RUN = '1';
     const rows = await detectEnvironment();
-    expect(rows.map((row) => row.name)).toEqual([...RUNNER_IDS, 'gh', 'git']);
+    expect(rows.map((row) => row.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'gh', 'git']);
   });
 
   it('spawns neither CLI under CEZ_DRY_RUN=1 and reports both mocks present', async () => {

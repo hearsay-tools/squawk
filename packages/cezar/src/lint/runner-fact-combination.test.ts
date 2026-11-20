@@ -113,7 +113,7 @@ describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
       ['consumption', 'mode']],
     ['a renamed value import', "import { RUNNER_FACTS as table } from '../../core/runner-facts.ts';\nfunction f(id) { const row = table[id]; return row.nativeAsk && row.costReport; }",
       ['costReport', 'nativeAsk']],
-    ['a renamed inputDeliveryOf import', "import { inputDeliveryOf as deliveryOf } from '../../core/agent-runner.ts';\nfunction f(runner) { const d = deliveryOf(runner); return d.mode && d.acknowledgement; }",
+    ['a renamed inputDeliveryOf import', "import type { inputDeliveryOf as deliveryOf } from '../../core/agent-runner.ts';\nfunction f(runner) { const d = deliveryOf(runner); return d.mode && d.acknowledgement; }",
       ['acknowledgement', 'mode']],
     ['a local alias of the type', 'type Policy = Readonly<InputDelivery>;\nfunction f(d: Policy) { return d.mode && d.humanInputAtTurnEnd; }', ['humanInputAtTurnEnd', 'mode']],
     ['a module-level captured value', 'const d = RUNNER_FACTS.codex.inputDelivery;\nfunction f() { return d.mode && d.acknowledgement; }', ['acknowledgement', 'mode']],

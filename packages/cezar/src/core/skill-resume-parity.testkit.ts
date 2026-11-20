@@ -1,8 +1,8 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { PINNED_SESSION_ID, driveSeam } from './harness-parity.testkit.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { createRunner } from './runner-registry.ts';
@@ -30,7 +30,7 @@ function installed(cell: string): SkillResumeEngineCells {
 }
 
 const engineCell = (key: EngineCellBody): CellBody => () => installed(key)[key]();
-const engineRunnerCell = (key: EngineRunnerCell) => (backend: RunnerId): CellBody => () => installed(`${backend} ${key}`)[key](backend)();
+const engineRunnerCell = (key: EngineRunnerCell) => (backend: string): CellBody => () => installed(`${backend} ${key}`)[key](backend)();
 
 export function parsedLines(recording: string): unknown[] {
   return recording.split('\n').filter(Boolean).flatMap((line) => {
@@ -69,14 +69,14 @@ export const describeSkillResumeParity = skillResumeParity({
   skillGone: engineRunnerCell('skillGone'),
   freshSession: engineRunnerCell('freshSession'),
   declaresResumeMode: async () => {
-    const expected: Record<RunnerId, 'resent' | 'in-thread'> = {
+    const expected: Record<string, 'resent' | 'in-thread'> = {
       claude: 'resent',
       pi: 'resent',
       omp: 'resent',
       opencode: 'in-thread',
       codex: 'in-thread',
     };
-    for (const backend of RUNNER_IDS) {
+    for (const backend of BUILT_IN_RUNNER_IDS) {
       expect((await createRunner(backend)).systemPromptOnResume).toBe(expected[backend]);
     }
   },

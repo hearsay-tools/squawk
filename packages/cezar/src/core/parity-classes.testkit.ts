@@ -1,4 +1,4 @@
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import { factRows } from './runner-fact-rows.testkit.ts';
 import { PARITY_EXEMPTIONS, type ScenarioName } from './harness-parity-core.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 
@@ -6,7 +6,7 @@ import type { RunnerFacts } from './runner-facts.ts';
  * Which runners each parity family runs on (hearsay-tools/cezarion#2991, `docs/adr/0063-one-scenario-runner.md`).
  *
  * - `every-runner`: the cells branch on a runner's own code, or read a narrow fact (native ask,
- *   native subagents, the native timer tool, cumulative cost). Every runner in `RUNNER_IDS`.
+ *   native subagents, the native timer tool, cumulative cost). Every registered runner.
  * - `shared`: the cells test Squawk's logic above the seam. They run on `SCENARIO_RUNNER` only.
  *   A row of a shared family still runs on every runner when the family lists it in
  *   `everyRunner`, when `PARITY_EXEMPTIONS` exempts any runner from it, or when its cell title
@@ -49,13 +49,17 @@ export function turnPathValues<Id extends string>(ids: readonly Id[], facts: Rea
  * 2026-11-14 showed every shared regression failing on every runner that ran its row, and almost
  * every single-runner failure as a flake (`docs/adr/0063-one-scenario-runner.md`).
  */
-export const SCENARIO_RUNNER: RunnerId = 'claude';
+export const SCENARIO_RUNNER: string = 'claude';
 
 /** The runners a shared parity row runs on. */
-export const SHARED_RUNNERS: readonly RunnerId[] = [SCENARIO_RUNNER];
+/** The built-in runners, from the fact rows' keys: a static roster, read at collection time
+ *  before any registration, exactly as the closed list answered before runner ids opened. */
+const ROSTER: readonly string[] = Object.keys(factRows());
+
+export const SHARED_RUNNERS: readonly string[] = [SCENARIO_RUNNER];
 
 /** The runner a family with no session runs on. */
-export const NO_SESSION_RUNNER: RunnerId = SCENARIO_RUNNER;
+export const NO_SESSION_RUNNER: string = SCENARIO_RUNNER;
 
 const FACT_VALUES = 'workflows/turn-path-fact-values.test.ts';
 
@@ -117,7 +121,7 @@ export const PARITY_FAMILIES = {
     R38: 'parses each runner\'s own prompt channel', R39: 'parses each runner\'s own prompt channel',
   }),
   'harness:owned-workflows': shared('owned workflow steps run through RunManager', {
-    R14: 'a mixed-runner chain: each runner hands over to the next in RUNNER_IDS',
+    R14: 'a mixed-runner chain: each runner hands over to the next registered runner',
     R41: 'asserts on the native wire recording', R42: 'asserts on the native wire recording',
   }),
   'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by each runner\'s delivery', {
@@ -217,7 +221,7 @@ export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamily
   [/^core\/skill-resume-.*parity\.test\.ts$/, ['skill-resume']],
   [/^core\/skill-provision-.*parity\.test\.ts$/, ['skill-provision']],
   [/^core\/worktree-setup-parity\.test\.ts$/, ['worktree-setup']],
-  [/^core\/model-refusal-parity\.test\.ts$/, ['model-refusal']],
+  [/^core\/model-refusal-(?:workflow-)?parity\.test\.ts$/, ['model-refusal']],
   [/^core\/runner-shutdown-.*parity\.test\.ts$/, ['runner-shutdown']],
   [/^workflows\/monitoring-turn-[a-z-]+\.test\.ts$/, ['monitoring-turn']],
   [/^core\/ui-parity\.test\.ts$/, ['ui-parity']],
@@ -320,16 +324,16 @@ const EXEMPT_ROWS = new Set(PARITY_EXEMPTIONS.map(exemption => exemption.criteri
  * The runners a family's row runs on. `row` is the row id in the cell title; a cell whose title
  * names no row runs on every runner its kit registers it for.
  */
-export function parityRunners(family: ParityFamilyName, row: string | undefined): readonly RunnerId[] {
+export function parityRunners(family: ParityFamilyName, row: string | undefined): readonly string[] {
   const entry: ParityFamily = PARITY_FAMILIES[family];
-  if (entry.class === 'every-runner' || row === undefined) return RUNNER_IDS;
+  if (entry.class === 'every-runner' || row === undefined) return ROSTER;
   if (entry.class === 'no-session') return [NO_SESSION_RUNNER];
-  if (entry.everyRunner?.[row] !== undefined || EXEMPT_ROWS.has(row)) return RUNNER_IDS;
+  if (entry.everyRunner?.[row] !== undefined || EXEMPT_ROWS.has(row)) return ROSTER;
   return SHARED_RUNNERS;
 }
 
 /** Whether `runner` runs the family's row. */
-export function runsOn(family: ParityFamilyName, row: string | undefined, runner: RunnerId): boolean {
+export function runsOn(family: ParityFamilyName, row: string | undefined, runner: string): boolean {
   return parityRunners(family, row).includes(runner);
 }
 
@@ -350,6 +354,6 @@ type Register = (title: string, ...rest: never[]) => unknown;
  * runner. Collectors and Vitest's `it` pass through the same filter, so a registration guard counts
  * what runs. A title with no row id always registers.
  */
-export function familyCells<T extends Register>(family: ParityFamilyName, runner: RunnerId, register: T): T {
+export function familyCells<T extends Register>(family: ParityFamilyName, runner: string, register: T): T {
   return ((title: string, ...rest: never[]) => runsOn(family, parityRowId(title), runner) ? register(title, ...rest) : undefined) as T;
 }

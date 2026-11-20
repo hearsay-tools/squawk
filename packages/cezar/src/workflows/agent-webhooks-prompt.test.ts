@@ -1,80 +1,32 @@
-import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
-import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
-import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentRunSpec } from '../core/agent-runner.ts';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
-import { RunStore } from '../runs/store.ts';
-import type { RunManager } from './run.ts';
-import type { WorkflowDef } from './types.ts';
-
-const run = promisify(execFile);
-const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
-
-/** Every spec a (mocked) runner's `startSession` receives, with the backend it was built for. */
-const captured = vi.hoisted(() => ({ specs: [] as Array<{ backend: string; spec: AgentRunSpec }> }));
-
-// What is under test is what RunManager puts INTO the spec before the runner seam, at both
-// session construction sites (`execute` and `runContinuation`). The stub reports whichever
-// backend it was asked for, so every runner id walks the same path.
-useRunners(fakeRunnerFactory((backend: string) => ({
-    backend,
-    systemPromptOnResume: 'resent' as const,
-    run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
-    startSession: (spec: AgentRunSpec) => {
-      captured.specs.push({ backend, spec });
-      return {
-        result: Promise.resolve({ text: 'ok', toolCalls: [], tokensUsed: 0 }),
-        sendMessage: () => false,
-        discardQueuedMessages: () => {}, holdsHumanInput: () => false,
-        end: () => {},
-        interrupt: () => {},
-        open: false,
-      };
-    },
-    interrupt: async () => {},
-  })));
+import { agentWebhooksPart } from './run/launch-context.ts';
+import { unused } from './unused.testkit.ts';
 
 const HEADING = '## Project webhooks';
-const TASK_DEF: WorkflowDef = { name: 'quick-task', source: 'built-in', steps: [{ id: 'task', prompt: '{{task}}' }] };
+const COCKPIT_ORIGIN = 'http://127.0.0.1:5555';
 
 /**
  * The "Project webhooks" part (hearsay-tools/cezarion#1576): an addressed manager lists the
- * webhooks its project exposes to agents, at both session construction sites; nothing exposed,
- * or no cockpit to send through, composes nothing.
+ * webhooks its project exposes to agents; nothing exposed, or no cockpit to send through,
+ * composes nothing. Both session construction sites take this part through the shared
+ * `launchSystemTail`; launch-system-prompt.test.ts pins the whole prompt at both sites.
  */
 describe('agent webhooks prompt part (#1576)', () => {
   let repoRoot: string;
-  let store: RunStore;
-  let manager: RunManager | undefined;
   let projectId: string;
 
   beforeEach(async () => {
-    captured.specs.length = 0;
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-webhooks-prompt-'));
-    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
-    await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
-    await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
-    writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
-    await run('git', ['add', '-A'], { cwd: repoRoot });
-    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
     projectId = (await registerProject(repoRoot, undefined, testHome())).id;
-    store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
   });
 
   afterEach(async () => {
-    await drainFixtureManagers(repoRoot);
-    manager?.dispose();
-    manager = undefined;
-    store.flush();
     await mergeWriteWorkspaceConfig((config) => {
       config.projects = config.projects.filter((project) => project.id !== projectId);
     }, testHome());
@@ -88,53 +40,31 @@ describe('agent webhooks prompt part (#1576)', () => {
       }));
     }, testHome());
 
-  async function specAt(index: number): Promise<AgentRunSpec> {
-    await expect.poll(() => captured.specs.length, { timeout: 15_000 }).toBeGreaterThan(index);
-    return captured.specs[index]!.spec;
-  }
+  /** The part a session launch composes, for a manager with this cockpit address. */
+  const part = (cockpit: { origin: string; projectId: string } | undefined) =>
+    agentWebhooksPart(unused<Parameters<typeof agentWebhooksPart>[0]>('launch context', { repoRoot, home: testHome() }), cockpit);
 
-  async function settled(runId: string): Promise<void> {
-    await expect
-      .poll(() => store.getRun(runId)?.status, { timeout: 15_000 })
-      .toSatisfy((status) => ['done', 'review', 'failed', 'cancelled'].includes(String(status)));
-  }
-
-  /** A fresh run, then a Continue of it: the two construction sites, in that order. */
-  async function startAndContinue(): Promise<[AgentRunSpec, AgentRunSpec]> {
-    const record = manager!.startRun(TASK_DEF, { task: 'do it', worktree: false, runner: 'claude' });
-    const opening = await specAt(0);
-    await settled(record.id);
-    store.updateStep(record.id, 'task', { sessionId: 'sess-1', backend: 'claude' });
-    expect(manager!.continueRun(record.id, { text: 'keep going' })).toEqual({ ok: true });
-    const continued = await specAt(1);
-    await settled(record.id);
-    return [opening, continued];
-  }
-
-  it('lists the exposed webhooks by name and description, with the send command, at both sites', async () => {
+  it('lists the exposed webhooks by name and description, with the send command', async () => {
     await setWebhooks([
       { id: 'friction', name: 'Friction reports', description: 'Friction you hit with tools.\nNot GitHub issues.', agent: true },
       { id: 'tasks', name: 'Task bot', agent: false },
     ]);
-    manager!.setCockpitAddress({ origin: 'http://127.0.0.1:5555', projectId });
-    for (const spec of await startAndContinue()) {
-      expect(spec.systemPrompt).toContain(HEADING);
-      expect(spec.systemPrompt).toContain('- "Friction reports": Friction you hit with tools. Not GitHub issues.');
-      expect(spec.systemPrompt).toContain(' webhook send ');
-      expect(spec.systemPrompt).not.toContain('Task bot');
-      expect(spec.systemPrompt).not.toContain('friction.example');
-      expect(spec.systemPrompt).not.toContain('never-in-a-prompt');
-    }
+    const prompt = await part({ origin: COCKPIT_ORIGIN, projectId });
+    expect(prompt).toContain(HEADING);
+    expect(prompt).toContain('- "Friction reports": Friction you hit with tools. Not GitHub issues.');
+    expect(prompt).toContain(' webhook send ');
+    expect(prompt).not.toContain('Task bot');
+    expect(prompt).not.toContain('friction.example');
+    expect(prompt).not.toContain('never-in-a-prompt');
   });
 
   it('composes nothing when no webhook is exposed to agents', async () => {
     await setWebhooks([{ id: 'tasks', name: 'Task bot', agent: false }]);
-    manager!.setCockpitAddress({ origin: 'http://127.0.0.1:5555', projectId });
-    for (const spec of await startAndContinue()) expect(spec.systemPrompt ?? '').not.toContain(HEADING);
+    expect(await part({ origin: COCKPIT_ORIGIN, projectId }) ?? '').not.toContain(HEADING);
   });
 
   it('composes nothing without a cockpit to send through (headless `cez run`)', async () => {
     await setWebhooks([{ id: 'friction', name: 'Friction reports', agent: true }]);
-    for (const spec of await startAndContinue()) expect(spec.systemPrompt ?? '').not.toContain(HEADING);
+    expect(await part(undefined) ?? '').not.toContain(HEADING);
   });
 });

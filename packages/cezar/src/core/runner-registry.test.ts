@@ -1,18 +1,24 @@
+import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { CodexAppServerRunner } from '../runners/codex/codex-app-server-runner.ts';
 import { OmpRunner } from '../runners/omp/omp-runner.ts';
 import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
 import { PiRunner } from '../runners/pi/pi-runner.ts';
 import { defineRunner } from './runner-definition.ts';
-import { createRunner, DEFAULT_RUNNER_ID, isRegisteredRunner, LEGACY_RUNNER_IDS, registeredRunners, registerRunner, runnerDefinition } from './runner-registry.ts';
-import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
+import { createRunner, isRegisteredRunner, registeredRunners, registerRunner, runnerDefinition } from './runner-registry.ts';
+import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
+
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
 describe('registerRunner', () => {
   registerBuiltInRunners();
+
+  it('keeps the built-in definitions and the data-only id list aligned (runners/ids.ts)', () => {
+    expect(BUILT_IN_RUNNERS.map(definition => definition.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
+  });
 
   it('ignores the same definition registered again', () => {
     registerRunner(codexRunner);
@@ -33,23 +39,15 @@ describe('registerRunner', () => {
   });
 });
 
-describe('the built-in runners', () => {
-  registerBuiltInRunners();
-
-  it('list the ids of RUNNER_IDS, in the same order', () => {
-    expect(BUILT_IN_RUNNERS.map(definition => definition.id)).toEqual([...RUNNER_IDS]);
-    expect(registeredRunners().map(definition => definition.id)).toEqual([...RUNNER_IDS]);
-  });
-});
+registerBuiltInRunners();
 
 // The production factory the entry points inject (hearsay-tools/cezarion#2939).
 describe('createRunner', () => {
-  registerBuiltInRunners();
-  const classes = { claude: ClaudeCliRunner, codex: CodexAppServerRunner, opencode: OpencodeServerRunner, pi: PiRunner, omp: OmpRunner };
+  const classes = { claude: ClaudeCliRunner, codex: CodexAppServerRunner, opencode: OpencodeServerRunner, pi: PiRunner, omp: OmpRunner } as Record<string, abstract new (...args: never[]) => object>;
 
-  it.each(RUNNER_IDS)('builds the %s runner', async (id) => {
+  it.each(BUILT_IN_RUNNER_IDS)('builds the %s runner', async (id) => {
     const runner = await createRunner(id);
-    expect(runner).toBeInstanceOf(classes[id]);
+    expect(runner).toBeInstanceOf(classes[id]!);
     expect(runner.backend).toBe(id);
   });
 

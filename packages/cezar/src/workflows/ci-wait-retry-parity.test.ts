@@ -41,7 +41,7 @@ describe('CI query retries across native harnesses', {timeout:30_000},()=>{
  for(const runner of parityRunners('ci-wait-retry', 'R92')) for(const recovered of [false,true]) {
   it(`${runner} R92 ${recovered?'recovered without a session':'fresh'} retains a failed query until the CI verdict`,async()=>{
    process.env.CEZ_DRY_RUN='0';
-   process.env[HARNESS_ADAPTERS[runner].binEnv]=HARNESS_ADAPTERS[runner].mockBin;
+   process.env[HARNESS_ADAPTERS[runner]!.binEnv]=HARNESS_ADAPTERS[runner]!.mockBin;
    process.env.CEZ_MOCK_ARGS_FILE=join(root,'args');process.env.CEZ_MOCK_STDIN_FILE=join(root,'stdin');
    const state=join(root,'rerun-state');writeFileSync(state,'complete');
    const github=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_RERUN_STATE:state}});
@@ -56,7 +56,7 @@ describe('CI query retries across native harnesses', {timeout:30_000},()=>{
     return runs(...args);
    });
    try {
-    const run=manager.startRun(QUICK_TASK_WORKFLOW,{task:HARNESS_ADAPTERS[runner].scenarios.baseline!,runner});
+    const run=manager.startRun(QUICK_TASK_WORKFLOW,{task:HARNESS_ADAPTERS[runner]!.scenarios.baseline!,runner});
     await until(()=>store.getRun(run.id)?.status==='waiting');
     await manager.registerWait(run.id,{kind: WAIT_KIND.pr,pr:'https://github.com/org/repo/pull/12',timeout_seconds:120},'cezar_wait',toolGenerationOf(run.id));
     await until(()=>probes.size===1 || !!lastWaitOf(run.id)?.deliveredAt);

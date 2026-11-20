@@ -16,7 +16,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { startServer } from './start-server.ts';
 
 
@@ -67,7 +67,7 @@ describe('restart shutdown', () => {
   it('closes sockets and secondary projects and writes pending runs before it waits for delegation, then frees the port', async () => {
     const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
     const otherId = (await registerProject(otherRoot, undefined, testHome())).id;
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
     await contexts.context(otherId);
     const dataDir = join(bootRoot, '.ai/cezar');
     const store = RunStore.open(dataDir, { keepLive: true });

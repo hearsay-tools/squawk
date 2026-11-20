@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { it as registerTest } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { ANSWER_DELIVERY_CRITERIA, exemptionFor, type ParityExemption } from './harness-parity-core.testkit.ts';
 import { collectedOnly, type CellBody } from './parity-partition.testkit.ts';
 
@@ -7,12 +7,12 @@ import { collectedOnly, type CellBody } from './parity-partition.testkit.ts';
 // drive, so the registration guard collects the same names without loading it.
 type AnswerDeliveryRow = (typeof ANSWER_DELIVERY_CRITERIA)[number];
 export type AnswerDeliveryBodies = {
-  steerExemption: (backend: RunnerId, steer: AnswerDeliveryRow, steerExemption: ParityExemption) => CellBody;
-  steering: (backend: RunnerId, steer: AnswerDeliveryRow) => CellBody;
-  declaredDelivery: (backend: RunnerId, declared: AnswerDeliveryRow) => CellBody;
-  pendingQuestion: (backend: RunnerId, held: AnswerDeliveryRow) => CellBody;
+  steerExemption: (backend: string, steer: AnswerDeliveryRow, steerExemption: ParityExemption) => CellBody;
+  steering: (backend: string, steer: AnswerDeliveryRow) => CellBody;
+  declaredDelivery: (backend: string, declared: AnswerDeliveryRow) => CellBody;
+  pendingQuestion: (backend: string, held: AnswerDeliveryRow) => CellBody;
 };
-type AnswerDeliveryFamily = (backend: RunnerId, it?: typeof registerTest) => void;
+type AnswerDeliveryFamily = (backend: string, it?: typeof registerTest) => void;
 
 /** The registrar of each family's cell over its bodies. */
 export function answerDeliveryFamilies(bodies: AnswerDeliveryBodies): Record<'steering' | 'declared-delivery' | 'pending-question', AnswerDeliveryFamily> {
@@ -29,7 +29,7 @@ export function answerDeliveryFamilies(bodies: AnswerDeliveryBodies): Record<'st
 }
 
 const FAMILIES = ['steering', 'declared-delivery', 'pending-question'] as const;
-export const ANSWER_DELIVERY_GROUPS = Object.fromEntries(FAMILIES.map(family => [family, RUNNER_IDS.map(runner => ({ runner, family }))]));
+export const ANSWER_DELIVERY_GROUPS = Object.fromEntries(FAMILIES.map(family => [family, BUILT_IN_RUNNER_IDS.map(runner => ({ runner, family }))]));
 
 /** The same cells by name only, for the registration guard. */
 export const answerDeliveryCellNames = answerDeliveryFamilies({ steerExemption: collectedOnly, steering: collectedOnly, declaredDelivery: collectedOnly, pendingQuestion: collectedOnly });

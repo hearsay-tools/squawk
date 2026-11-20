@@ -24,7 +24,8 @@ Check current code and evidence before applying an old example or assumption.
 
 Apply the checks relevant to the changed mechanism.
 
-- **Scope and preserved behavior:** compare the diff with the accepted outcome.
+- **Scope and preserved behavior:** compare the diff with the spec's *Done when*
+  and *Out of scope* sections, or with the accepted outcome when there is no spec.
   Check the guarantees the old mechanism provided, shipped defaults, failure paths
   and applicable case tables. Follow [Changing working behavior](#changing-working-behavior)
   and require the relevant [regression proof](docs/sdlc/regression-proof.md).
@@ -104,8 +105,9 @@ required field fails to compile. For saved data and user-facing messages, search
 the old and new form.
 
 Changes to a run state or how a run leaves an existing state (an exit trigger or
-recovery path), cross-run relationship, ToolGrant mapping, running task's
-worktree files, detached process or restored client state need the applicable
+recovery path), a hold, park or resume, cross-run relationship, ToolGrant mapping,
+running task's worktree files, detached process, lock or ownership check, or restored
+client state need the applicable
 [case tables](.ai/specs/TEMPLATE.md#case-tables) in the spec or plan before implementation.
 
 ## CI surface rules

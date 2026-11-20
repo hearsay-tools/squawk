@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import type { SquawkWaitRequestInput, CiWait, CiWaitResult, Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
@@ -38,9 +38,9 @@ export function github() {
   return { settle: (n = 12) => watches.get(n)!(passed('a'.repeat(40))) };
 }
 
-export function nativeWire(runner: RunnerId) {
+export function nativeWire(runner: string) {
   process.env.CEZ_DRY_RUN = '0';
-  process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+  process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
   process.env.CEZ_MOCK_ARGS_FILE = join(root, 'args');
   process.env.CEZ_MOCK_STDIN_FILE = join(root, 'stdin');
 }
@@ -80,7 +80,7 @@ export const turnEnds = (id: string) => store.readEvents(id).filter(event => eve
 export const asks = (id: string) => store.readEvents(id).filter(event => event.type === 'ask.requested');
 export const waitById = (id: string, waitId: string) => store.getRun(id)?.waits?.find(wait => wait.id === waitId);
 export const settled = (id: string, waitId: string) => store.getRun(id)?.lastWaits?.find(wait => wait.id === waitId);
-export const prompted = (runner: RunnerId, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
+export const prompted = (runner: string, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
 export const label = (id: string) => deriveAttention(store.getRun(id)!).label;
 export const answered = (id: string, askSeq: number) => store.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
 export const flushMicrotasks = async () => { for (let n = 0; n < 5; n++) await Promise.resolve(); };
@@ -88,11 +88,11 @@ export const FOOTER_END = 'Call cezar_cancel_wait for any you no longer need.';
 export const notes = (id: string, text: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).includes(text));
 
 /** A portable question parked beside an open CI wait registered during its turn. */
-export async function questionBesideCi(runner: RunnerId) {
+export async function questionBesideCi(runner: string) {
   nativeWire(runner);
   const release = join(root, 'ask-release');
   process.env.CEZ_MOCK_RELEASE_FILE = release;
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios['hold-cezar-ask']!, runner });
+  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-cezar-ask']!, runner });
   await until(() => turnStarted(run.id));
   const ci = await openWait(run.id, { kind: WAIT_KIND.pr, pr, timeout_seconds: 600 });
   writeFileSync(release, '');
@@ -105,7 +105,7 @@ export async function questionBesideCi(runner: RunnerId) {
 /** A timer owed by a run whose session is closed: its wake is a scheduler continuation. The
  *  baseline task, quoted in that continuation's opening prompt, starts no scenario of its own. */
 export async function timerOwedWithoutSession() {
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios.baseline!, runner: 'claude' });
+  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios.baseline!, runner: 'claude' });
   await until(() => store.getRun(run.id)?.status === 'waiting');
   const timer = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 60, note: 'owed' });
   session().end();

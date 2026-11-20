@@ -1,5 +1,5 @@
+import { registeredRunners } from '../core/runner-registry.ts';
 import type { it as registerTest } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { familyCells, SHARED_RUNNERS } from '../core/parity-classes.testkit.ts';
 
@@ -14,10 +14,10 @@ import { familyCells, SHARED_RUNNERS } from '../core/parity-classes.testkit.ts';
 export const WAIT_PARITY_PARTS = ['registration', 'input', 'delivery', 'asks', 'done', 'answers', 'mixed', 'recovery', 'conversations', 'refusal', 'completion', 'completion-replies', 'closed', 'process', 'deadlines', 'entries'] as const;
 export type WaitParityPart = typeof WAIT_PARITY_PARTS[number];
 /** One part's cells, registered for each runner in `runners`. */
-export type WaitCells = (runners: RunnerId[], it?: typeof registerTest) => void;
+export type WaitCells = (runners: string[], it?: typeof registerTest) => void;
 export const WAIT_PARITY_FILES = Object.fromEntries(
-  WAIT_PARITY_PARTS.map(part => [part, (runner: RunnerId) => `waits-${runner}-${part}-parity.test.ts`]),
-) as Record<WaitParityPart, (runner: RunnerId) => string>;
+  WAIT_PARITY_PARTS.map(part => [part, (runner: string) => `waits-${runner}-${part}-parity.test.ts`]),
+) as Record<WaitParityPart, (runner: string) => string>;
 /** The module of each part's cells. A part's test files import it first, and a family file imports its part's. */
 export const waitPartModule = (part: WaitParityPart): string => `waits-parity-${part}-cells.testkit.ts`;
 
@@ -39,7 +39,7 @@ export const FAMILY_FILE_PARTS: readonly FamilyPart[] = ['closed'];
 /** The row families of a part that runs one file per family, or none for a part with one file. */
 export const fileFamilies = (part: WaitParityPart): readonly RowFamily[] =>
   (FAMILY_FILE_PARTS as readonly WaitParityPart[]).includes(part) ? Object.keys(ROW_FAMILIES[part as FamilyPart]) as RowFamily[] : [];
-export const waitFamilyFile = (runner: RunnerId, part: WaitParityPart, family: RowFamily): string => `waits-${runner}-${part}-${family}-parity.test.ts`;
+export const waitFamilyFile = (runner: string, part: WaitParityPart, family: RowFamily): string => `waits-${runner}-${part}-${family}-parity.test.ts`;
 
 /**
  * A runner other than the scenario runner runs only the rows that run on every runner, a few per
@@ -51,7 +51,8 @@ export const waitFamilyFile = (runner: RunnerId, part: WaitParityPart, family: R
  * `registration` holds U1 alone, the slowest row, so it keeps a small group. The guard computes the
  * folded runners from the class table and their files from these groups.
  */
-export const FOLDED_WAIT_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => !SHARED_RUNNERS.includes(runner));
+/** The registered runners that fold their wait lists, beyond the shared ones. Read at call time: the roster is the registry's. */
+export const foldedWaitRunners = (): readonly string[] => registeredRunners().map(({ id }) => id).filter(runner => !SHARED_RUNNERS.includes(runner));
 type WaitFoldGroup = {
   readonly parts?: readonly WaitParityPart[];
   readonly families?: { readonly [P in FamilyPart]?: readonly (keyof typeof ROW_FAMILIES[P])[] };
@@ -67,15 +68,15 @@ export const WAIT_FOLDS = {
   'entries-nudges': { families: { entries: ['completion', 'timer'] } },
 } as const satisfies Record<string, WaitFoldGroup>;
 export type WaitFold = keyof typeof WAIT_FOLDS;
-export const foldedWaitFile = (runner: RunnerId, fold: WaitFold): string => `waits-${runner}-every-runner-${fold}-parity.test.ts`;
-export const folded = (runner: RunnerId): boolean => FOLDED_WAIT_RUNNERS.includes(runner);
+export const foldedWaitFile = (runner: string, fold: WaitFold): string => `waits-${runner}-every-runner-${fold}-parity.test.ts`;
+export const folded = (runner: string): boolean => foldedWaitRunners().includes(runner);
 /** The module of each fold's parts. A folded runner's file imports the one of its fold. */
 export const waitFoldModule = (fold: WaitFold): string => `waits-parity-${fold}-fold.testkit.ts`;
 export type WaitPartScope = { runner: RunnerDefinition; part: WaitParityPart; family?: RowFamily };
 export type WaitFoldScope = { runner: RunnerDefinition; part: 'every-runner'; fold: WaitFold };
 
 /** Register a folded runner's cells of one group, each row only where its class runs it. */
-export function foldCells(runner: RunnerId, fold: WaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
+export function foldCells(runner: string, fold: WaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
   const group: WaitFoldGroup = WAIT_FOLDS[fold];
   const partCells = (part: WaitParityPart): WaitCells => {
     const found = cells[part];

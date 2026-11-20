@@ -7,7 +7,7 @@ import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
 import { readAgentModelProvider } from '../../agent-config/models.ts';
 import { loadConfig, type CezConfig } from '../../config.ts';
 import { buildChildEnv } from '../../core/agent-env.ts';
-import type { AgentRunner, ContentBlock, RunnerFactory, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, ContentBlock, RunnerFactory } from '../../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../../core/agent-model-policy.ts';
 import { ModelIdentityError, formatModelIdentity, normalizeModelForBackend } from '../../core/model-identity.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
@@ -33,7 +33,8 @@ import { applyTemplate, resolveExtraSystemPrompt, resumeNotice } from './prompts
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
 import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
-import { DEFAULT_RUNNER_ID, runnerIdOf, savedRunnerId } from '../../core/runner-registry.ts';
+import { resolveRunnerId, savedRunnerId } from '../../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-ids.ts';
 
 // This view adds no promise continuation before the caller's original post-config gate.
 function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {
@@ -43,14 +44,14 @@ function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {
 type LaunchContext = Pick<RunModuleContext, 'store' | 'repoRoot' | 'dataDir' | 'home'>;
 
 async function configuredModelProvider(
-  backend: RunnerId,
+  backend: string,
   repoRoot: string,
 ): Promise<string | undefined> {
   return readAgentModelProvider(backend, repoRoot).catch(() => undefined);
 }
 
 /** The model-identity gate shared by fresh steps and Continue. */
-async function resolveLaunchModel(backend: RunnerId, model: string | undefined, cwd: string) {
+async function resolveLaunchModel(backend: string, model: string | undefined, cwd: string) {
   return normalizeModelForBackend(backend, model, { configuredProvider: await configuredModelProvider(backend, cwd) });
 }
 
@@ -71,7 +72,7 @@ async function continuationModel(
   record: RunRecord | undefined,
   toolsStep: WorkflowStepDef | undefined,
   stepIdentity: WorkerStepIdentity | undefined,
-  backend: RunnerId,
+  backend: string,
   home: Home,
 ): Promise<{ backendModel: string | undefined } | string> {
   // The owning step's authored `model` wins over the run-level pin, exactly as the first
@@ -122,7 +123,7 @@ function continuationEffort(
 /** The Continue's runner, and whether it resumes into a thread that already holds the skill
  *  playbook. */
 async function continuationRunner(
-  backend: RunnerId,
+  backend: string,
   sessionId: string | undefined,
   owningStep: RunRecord['steps'][number] | undefined,
   factory: RunnerFactory,
@@ -137,7 +138,7 @@ async function continuationRunner(
  * beside the free-text `model`. Best-effort here (a per-step `runner`/`model`
  * can still override it); the authoritative fail-loud gate is at spawn.
  */
-async function taskModelIdentity(repoRoot: string, taskBackend: RunnerId, source: SourceInput, home: Home): Promise<string | undefined> {
+async function taskModelIdentity(repoRoot: string, taskBackend: string, source: SourceInput, home: Home): Promise<string | undefined> {
   const input = sourceInput(source);
   try {
     const normalized = await resolveLaunchModel(
@@ -166,7 +167,7 @@ async function stepModel(
   state: ActiveRun,
   step: WorkflowStepDef,
   source: SourceInput,
-  stepBackend: RunnerId,
+  stepBackend: string,
   stepIdentity: WorkerStepIdentity | undefined,
   home: Home,
 ): Promise<StepModel | string> {
@@ -442,7 +443,7 @@ async function agentEnvForStep(
   { store, repoRoot, home }: LaunchContext,
   host: LaunchContextHost,
   runId: string,
-  backend: RunnerId,
+  backend: string,
   options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' } = {},
 ): Promise<{ env: Record<string, string>; profileId: string; accountBinding?: WorkerAccountBinding | undefined }> {
   // An owned worker binds the account its identity pinned for THIS step; a legacy identity
@@ -504,7 +505,7 @@ function inputValue(handle: LaunchSource): StartRunInput {
 function configValue(handle: LaunchConfig): CezConfig {
   return handle as unknown as CezConfig;
 }
-function taskRunner(source: LaunchSource, config: LaunchConfig): RunnerId {
+function taskRunner(source: LaunchSource, config: LaunchConfig): string {
   return inputValue(source).runner ?? configValue(config).defaultRunner;
 }
 function taskSystemPrompt(store: RunStore, runId: string, source: LaunchSource, config: LaunchConfig): string | undefined {
@@ -557,7 +558,7 @@ function acceptInput(repoRoot: string, input: StartRunInput, home: Home): StartR
 function continuationOwningStep(record: RunRecord | undefined, sessionId: string | undefined): RunRecord['steps'][number] | undefined {
   return sessionId === undefined ? undefined : record?.steps.find(candidate => candidate.sessionId === sessionId);
 }
-function continuationToolGrant(identity: WorkerStepIdentity | undefined, definition: WorkflowStepDef | undefined, backend: RunnerId) {
+function continuationToolGrant(identity: WorkerStepIdentity | undefined, definition: WorkflowStepDef | undefined, backend: string) {
   return stepToolGrant(identity?.grants, definition, backend);
 }
 function continuedSystemPrompt(record: RunRecord | undefined): string | undefined { return record?.systemPrompt; }
@@ -668,7 +669,7 @@ function heldWorkflowStepId(run: RunRecord): string | undefined {
 }
 
 /** The runner the held workflow step ran on, which its retry keeps (hearsay-tools/squawk#3337). */
-function heldStepRunner(run: RunRecord): RunnerId | undefined {
+function heldStepRunner(run: RunRecord): string | undefined {
   const resumed = resumeCursorStepId(run);
   return resumed ? savedRunnerId(run.steps.find(step => step.id === resumed)?.backend) : undefined;
 }
@@ -681,7 +682,7 @@ function resumeCursorStepId(run: Pick<RunRecord, 'workflowCursor'>): string | un
 /** A provider-error retry keeps the held step's runner across a restart, as its admission chose
  *  (hearsay-tools/squawk#3337). The reason and the held step are on the record from the hold's own
  *  write, so a crash right after admission cannot lose them. */
-function retryInFlightRunner(run: RunRecord): RunnerId | undefined {
+function retryInFlightRunner(run: RunRecord): string | undefined {
   return run.autoResumeReason === 'provider-error' ? heldStepRunner(run) : undefined;
 }
 
@@ -706,7 +707,7 @@ function resumableSessionId(store: Pick<RunStore, 'getRun' | 'readEvents'>, runI
   const sessionId = sessionStep?.sessionId;
   if (!sessionId) return undefined;
   const run = store.getRun(runId);
-  if (RUNNER_FACTS[runnerIdOf(sessionRunner(sessionStep, run))].sessionIdSource === 'launch') return sessionId;
+  if (RUNNER_FACTS[resolveRunnerId(sessionRunner(sessionStep, run))]!.sessionIdSource === 'launch') return sessionId;
   const events = store.readEvents(runId);
   if (events.some(event => event.type === 'session' && event.sessionId === sessionId)) return sessionId;
   const owner = run?.steps.find(step => step.sessionId === sessionId) ?? sessionStep;
@@ -767,7 +768,7 @@ function acceptedSkillHint(workflow: WorkflowDef): string | undefined {
   return workflow.steps.find(candidate => stepKind(candidate) === 'agent' && candidate.skill)?.skill?.trim();
 }
 
-function stepRunner(step: WorkflowStepDef, taskBackend: RunnerId): RunnerId { return savedRunnerId(step.runner) ?? taskBackend; }
+function stepRunner(step: WorkflowStepDef, taskBackend: string): string { return savedRunnerId(step.runner) ?? taskBackend; }
 function stepPrompt(step: WorkflowStepDef, source: SourceInput): string { return applyTemplate(step.prompt ?? '{{task}}', sourceInput(source).task); }
 function stepSkill(step: WorkflowStepDef): string | undefined { return step.skill; }
 
@@ -805,7 +806,7 @@ function resumedJob(run: RunRecord, job: PendingJob): PendingJob { return { ...j
 function storedWorkflow(run: RunRecord): WorkflowDef | undefined { return run.workflowDef; }
 function interruptedIndex(run: RunRecord, stepId: string | undefined): number { return run.workflowDef?.steps.findIndex(step => step.id === stepId) ?? -1; }
 function interruptedDefinition(run: RunRecord, index: number): WorkflowStepDef | undefined { return index >= 0 ? run.workflowDef?.steps[index] : undefined; }
-function heldAccount(run: RunRecord, runner: RunnerId, readHolds: () => Parameters<typeof accountHeldFor>[1]): boolean {
+function heldAccount(run: RunRecord, runner: string, readHolds: () => Parameters<typeof accountHeldFor>[1]): boolean {
   const selected = { ...run, runner };
   return accountHeldFor(selected, readHolds(), runner);
 }
@@ -821,14 +822,14 @@ function requeueJob(workflow: WorkflowDef, source: SourceInput, startAt: number 
 type SourceInput = StartRunInput | LaunchSource;
 function sourceInput(source: SourceInput): StartRunInput { return source instanceof InputToken ? inputValue(source) : source; }
 
-function recordedRunner(run: RunRecord): RunnerId | undefined { return savedRunnerId(run.runner); }
-function defaultRunner(config: LaunchConfig): RunnerId { return configValue(config).defaultRunner; }
+function recordedRunner(run: RunRecord): string | undefined { return savedRunnerId(run.runner); }
+function defaultRunner(config: LaunchConfig): string { return configValue(config).defaultRunner; }
 function runnerless(store: Pick<RunStore, 'getRun'>, id: string): boolean { return store.getRun(id)?.runner === undefined; }
 function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }
 function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<typeof executionAccount> { return executionAccount(...args); }
 
 /** The native list reads the account and working folder selected for this process. */
-function runSkillQuery(state: ActiveRun, runner: RunnerId, profile: StepProfile) {
+function runSkillQuery(state: ActiveRun, runner: string, profile: StepProfile) {
   return { runner, cwd: state.liveSession.cwd, accountHome: profile.accountBinding?.homePath };
 }
 

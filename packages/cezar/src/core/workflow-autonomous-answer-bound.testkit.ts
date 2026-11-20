@@ -14,7 +14,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { NO_WAIT_NUDGE_REPLY_MS } from '../workflows/run.ts';
 import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE } from '../workflows/turn-end.ts';
-import type { RunnerId } from './agent-runner.ts';
+
 import { waitFor } from './harness-parity.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { driveRun } from './workflow-parity.testkit.ts';
@@ -25,7 +25,7 @@ const STEP_MS = 20_000;
 const HEARTBEAT_WINDOW_MS = 300;
 
 /** Drive A16 on `backend`. */
-export async function acknowledgedNudgeAnswerBound(backend: RunnerId): Promise<void> {
+export async function acknowledgedNudgeAnswerBound(backend: string): Promise<void> {
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   let clock: ReturnType<typeof observationClock> | undefined;
   let finished = false;

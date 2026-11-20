@@ -1,10 +1,9 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { homedir } from 'node:os'; // test-home-read: compare mock metadata paths only; no home file is read or written.
 import { describe, expect, it } from 'vitest';
 import { mockSkillList } from '../../scripts/mock-skill-list.mjs';
 import { captures } from '../../scripts/mock-skill-list-data.mjs';
 import { skillListFixtures } from '../../scripts/mock-skill-fixtures.mjs';
-import { RUNNER_IDS } from './agent-runner.ts';
-
 it('replaces the recorded skill lists for all five runner fixtures', () => {
   const replies = skillListFixtures([{ id: 'only-check', name: 'Check', path: '/p/SKILL.md' }]);
   expect(replies.claude).toMatchObject({ response: { response: { skills: [{ name: 'only-check' }] } } });
@@ -16,7 +15,7 @@ it('replaces the recorded skill lists for all five runner fixtures', () => {
 });
 
 describe('native mock skill paths', () => {
-  for (const runner of RUNNER_IDS) it(`${runner}: substitutes string values before wire serialization`, () => {
+  for (const runner of BUILT_IN_RUNNER_IDS) it(`${runner}: substitutes string values before wire serialization`, () => {
     const cwd = 'C:\\Users\\probe\\repo "quoted" $&\nfolder';
     const original = structuredClone(captures[runner]);
     const result = mockSkillList(runner, cwd);

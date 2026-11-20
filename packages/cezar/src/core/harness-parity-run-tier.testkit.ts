@@ -181,7 +181,7 @@ export function runRows({ runners, it }: HarnessRegistrar, criteria: readonly Ru
       const exempt = exemptionFor(criterion.id, backend);
       if (exempt?.kind === 'scenario-unconstructible') {
         it(`${backend} is exempt from ${criterion.id} — ${exempt.reason}`, () => {
-          expect(HARNESS_ADAPTERS[backend].scenarios[criterion.scenario]).toBeUndefined();
+          expect(HARNESS_ADAPTERS[backend]!.scenarios[criterion.scenario]!).toBeUndefined();
         });
         continue;
       }

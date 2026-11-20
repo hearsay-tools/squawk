@@ -19,7 +19,7 @@ import { writableAutomationTask } from '@open-mercato/cezar-contract/automation-
 import { EXIT } from '../task-cli/cli.ts';
 import { resolveCockpit, type DiscoverOptions } from '../task-cli/discovery.ts';
 import { fetchJson, refuse, TaskCliError, type Cockpit, type HttpResult } from '../task-cli/http.ts';
-import { AUTOMATION_SCHEMA_REFERENCE } from './prompts.ts';
+import { automationSchemaReference } from './prompts.ts';
 
 /**
  * JSON automation client over the cockpit’s shared service. Use supplied task address/project
@@ -308,7 +308,7 @@ export async function runAutomationCommand(
     }
     // The reference needs no server: an agent reads it before it has anything to send.
     if (argv[0] === 'schema') {
-      io.stdout(AUTOMATION_SCHEMA_REFERENCE);
+      io.stdout(automationSchemaReference());
       return EXIT.ok;
     }
     // Input is judged before any cockpit is looked for: a usage error is 64 with or without one.

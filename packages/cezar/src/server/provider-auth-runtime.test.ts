@@ -59,7 +59,7 @@ function loggedOutClaudeProviderAuth(): ProviderAuthService {
     runCommand: vi.fn<RunProviderCommand>(async (executable) => (
       executable === 'claude'
         ? { stdout: '{"loggedIn":false}', stderr: '', exitCode: 1 }
-        : { stdout: CONNECTED_OUTPUT[providerForExecutable(executable)], stderr: '', exitCode: 0 }
+        : { stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!, stderr: '', exitCode: 0 }
     )),
     createAuthFailureId: () => 'auth-incident-1',
   });
@@ -77,7 +77,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     store = RunStore.open(join(root, '.ai/cezar'));
     delete process.env.CEZ_DRY_RUN;
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)],
+      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
       stderr: '',
       exitCode: 0,
     }));
@@ -475,7 +475,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       // run's agentProfile belongs to the run's runner, and asking for it under codex answers a
       // question nobody asked.
       const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-        stdout: CONNECTED_OUTPUT[providerForExecutable(executable)],
+        stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
         stderr: '',
         exitCode: 0,
       }));

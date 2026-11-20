@@ -1,13 +1,13 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { ACK_WIRES, ATTENTION_GROUPS, attentionRowKey } from './worker-parent-attention-rows.testkit.ts';
 
-it('classifies every RUNNER_IDS delayed-ACK cell without omissions', () => {
-  expect(Object.keys(ACK_WIRES).sort()).toEqual([...RUNNER_IDS].sort());
+it('classifies every BUILT_IN_RUNNER_IDS delayed-ACK cell without omissions', () => {
+  expect(Object.keys(ACK_WIRES).sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
 });
 it('registers every attention runner/mode/transport row exactly once', () => {
- const expected = RUNNER_IDS.flatMap(backend => { return [
+ const expected = BUILT_IN_RUNNER_IDS.flatMap(backend => { return [
   ...['fresh', 'continuation'].flatMap(mode => { return ['ordinary', ACK_WIRES[backend]].map(transport => `${backend}:progress:${mode}:${transport}`); }),
   ...['fresh', 'continuation'].map(mode => `${backend}:spawn-ask:${mode}`),
   ...['completion', 'timeout', 'restart', 'human-ask'].map(family => `${backend}:${family}`),

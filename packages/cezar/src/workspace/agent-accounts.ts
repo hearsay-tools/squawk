@@ -4,9 +4,10 @@ import { realpathSync } from 'node:fs';
 import { posix, resolve, win32 } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
-import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
+import type { ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
+import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
 import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
 /**
@@ -70,7 +71,7 @@ const agentAccountSchema = z
     // returns `{}` for it, so the step records the account, the UI names it, and the CLI runs on
     // the default login anyway. Dropped by the per-entry salvage instead, which is the one
     // degradation that cannot mislead.
-    provider: z.enum(PROVIDER_IDS).refine(supportsProfiles, {
+    provider: registeredRunnerIdSchema().refine(supportsProfiles, {
       message: 'this agent cannot carry more than one account (its credentials do not follow its config dir)',
     }),
     configDir: z

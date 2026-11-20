@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { WORKFLOW_TIMEOUT_CRITERIA } from './harness-parity-core.testkit.ts';
 
 // The workflow-timeout cells and their partition, apart from the engine the cell bodies drive,
@@ -11,7 +11,7 @@ import { WORKFLOW_TIMEOUT_CRITERIA } from './harness-parity-core.testkit.ts';
 // The family's class drops the cells a runner does not run before a part is chosen.
 // T4 and T7 call driveSeam only, so their parts load no engine; every `-engine` part and `defaults`
 // run a workflow through RunManager and install the engine cells first.
-const cells = (...rows: string[]) => RUNNER_IDS.flatMap(runner => rows.map(row => `${runner} ${row}`));
+const cells = (...rows: string[]) => BUILT_IN_RUNNER_IDS.flatMap(runner => rows.map(row => `${runner} ${row}`));
 const PARTS: Readonly<Record<string, readonly string[]>> = {
   defaults: cells('T1', 'T6'),
   'explicit-zero': cells('T7'),
@@ -20,14 +20,14 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   'authored-and-standalone-engine': cells('T3', 'T5'),
 };
 
-export type WorkflowTimeoutCell = (backend: RunnerId, criterion: (typeof WORKFLOW_TIMEOUT_CRITERIA)[number]) => CellBody;
+export type WorkflowTimeoutCell = (backend: string, criterion: (typeof WORKFLOW_TIMEOUT_CRITERIA)[number]) => CellBody;
 
 /** The registrar over one cell body per runner and criterion. */
 export function workflowTimeoutParity(cell: WorkflowTimeoutCell) {
   return function describeWorkflowTimeoutParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-timeout');
     describe('workflow wall-clock policy — #470', () => {
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         for (const criterion of WORKFLOW_TIMEOUT_CRITERIA) it(`${backend} ${criterion.id} ${criterion.name}`, cell(backend, criterion), 30_000);
       }
     });

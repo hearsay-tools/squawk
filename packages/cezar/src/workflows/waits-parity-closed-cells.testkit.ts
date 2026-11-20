@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { it as registerTest, expect, onTestFinished } from 'vitest';
 import { WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { exemptionFor, HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { until, timeline, store, manager, semaphore, eventCheckpoint, root, restart, checkpoint, delegatingParent, worker, parent } from './worker-wait-core.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
@@ -21,7 +21,7 @@ export const { describeWaitParity } = waitPartDescribers('closed', closedCells);
 
 /** Claude U22c/k/x cross several real process launches. Keep the shared 15 s guard per
  *  signal, rather than charging every delivery attempt to one window (hearsay-tools/cezarion#1450). */
-const refusalStep = (runner: RunnerId, id: string, step: string, predicate: () => boolean) =>
+const refusalStep = (runner: string, id: string, step: string, predicate: () => boolean) =>
   until(predicate, runner === 'claude' ? () => `${runner} ${step}\n${timeline(id)}` : undefined);
 
 /** The failure these cells mean is the delivery cap, on every runner: any other failure fails the
@@ -31,7 +31,7 @@ function expectDeliveryCap(id: string) {
   expect(store.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE), timeline(id)).toHaveLength(1);
 }
 
-async function refusalDeliveryBound(runner: RunnerId, id: string, cell: string, closed: () => number) {
+async function refusalDeliveryBound(runner: string, id: string, cell: string, closed: () => number) {
   const failed = () => store.getRun(id)?.status === 'failed' && !manager.isActive(id);
   if (runner !== 'claude') {
     await until(failed);
@@ -85,7 +85,7 @@ const refusedDoneReply = () => `${toolCall('cezar_done', {})} ${thenSay('Still d
  *  Squawk's human wait. Never on the completion wait: the tool refused the done. */
 const parkedOnWorkersTimer = (id: string) => workerWaits(id).length === 0 && (parkedOn(id, viaOf(id, WAIT_VIA['monitoring-line'])) || gated(id));
 
-export function closedCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function closedCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     for (const legacy of [false, true]) {
       it(`${runner} U22c a refusal whose reopened sessions keep closing cleanly is queued once, stops at the delivery bound, and Continue delivers it once${legacy ? ' (legacy Finish)' : ''}`, async () => {
@@ -339,9 +339,9 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
     // wait or done asks its parent, and the parent's reply resumes it, charged to its budget.
     it(`${runner} U24 a worker's second no-wait turn end asks its parent, and the reply resumes it`, async () => {
       nativeWire(runner);
-      const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer'] });
+      const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer'] });
       await until(() => store.getRun(p.id)?.status === 'waiting');
-      const w = await worker(p.id, HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      const w = await worker(p.id, HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       manager.enqueueOwnedRun(w.id);
       const routed = () => store.readEvents(w.id).find(event => event.type === 'worker-question-routed');
       await until(() => routed() !== undefined && store.getRun(w.id)?.status === 'waiting');
@@ -380,7 +380,7 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
     // store never reads the reply consumed with the question still open.
     it(`${runner} U24r a parent's reply to a worker question whose session closed opens a continuation that answers it in one commit`, async () => {
       nativeWire(runner);
-      const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer'] });
+      const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer'] });
       await until(() => store.getRun(p.id)?.status === 'waiting');
       const w = await worker(p.id, toolCall('cezar_ask', { context: ASK_CONTEXT, questions }), runner);
       manager.enqueueOwnedRun(w.id);
@@ -407,12 +407,12 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
     // gets an outcome, and the parent's done is no longer blocked by the question.
     it(`${runner} U25 an automatic message supersedes a worker's fallback question`, async () => {
       nativeWire(runner);
-      const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       await until(() => store.getRun(p.id)?.status === 'waiting');
       const delegation = store.getRun(p.id)!.delegation!;
       if (delegation.role !== 'root') throw Error('root fixture');
       store.commitDelegation([{ id: p.id, delegation: { ...delegation, permissions: [...delegation.permissions, 'steer'] } }]);
-      const w = await worker(p.id, HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      const w = await worker(p.id, HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       manager.enqueueOwnedRun(w.id);
       const routed = () => store.readEvents(w.id).find(event => event.type === 'worker-question-routed');
       await until(() => routed() !== undefined && store.getRun(w.id)?.status === 'waiting');

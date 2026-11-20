@@ -18,7 +18,7 @@ import { MAX_AUTO_CONTINUES, NO_WAIT_NUDGE_REPLY_MS } from '../workflows/run.ts'
 import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NUDGE } from '../workflows/turn-end.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
-import type { RunnerId } from './agent-runner.ts';
+
 import { waitFor } from './harness-parity.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
@@ -69,7 +69,7 @@ async function assertAcknowledged({ store, runId }: Fixture, cell: Cell): Promis
 }
 
 /** Drive A15 on `backend`. `heldAck` is false on a wire whose acknowledgement is its own write. */
-export async function unacknowledgedNudgeBound(backend: RunnerId, { heldAck }: { heldAck: boolean }): Promise<void> {
+export async function unacknowledgedNudgeBound(backend: string, { heldAck }: { heldAck: boolean }): Promise<void> {
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   const states: activeRuns.ActiveRun[] = [];
   const create = activeRuns.createActiveRun;

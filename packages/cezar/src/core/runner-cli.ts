@@ -1,10 +1,9 @@
-import type { RunnerId } from './agent-runner.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { quoteExecutable } from './shell-env.ts';
 
 /** The terminal executable of a runner as a shell word; null when the configured one cannot be
  *  spelled safely on this platform. */
-export function terminalExecutable(runner: RunnerId, platform: NodeJS.Platform = process.platform): string | null {
+export function terminalExecutable(runner: string, platform: NodeJS.Platform = process.platform): string | null {
   const executable = runnerDefinition(runner).cli.terminalExecutable;
   return executable.kind === 'path-name' ? executable.name : quoteExecutable(executable.resolve(), platform);
 }
@@ -27,7 +26,7 @@ export function isSafeSessionId(sessionId: string): boolean {
  * The native session take-over command. Refuse unrecognized session-id shapes, and configured
  * executables the platform cannot quote, rather than embed unsafe or platform-misquoted values.
  */
-export function resumeCommand(runner: RunnerId, sessionId: string): string | null {
+export function resumeCommand(runner: string, sessionId: string): string | null {
   if (!isSafeSessionId(sessionId)) return null;
   const executable = terminalExecutable(runner);
   return executable === null ? null : `${executable} ${runnerDefinition(runner).cli.resumeArgs(sessionId)}`;

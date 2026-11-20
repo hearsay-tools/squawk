@@ -4,7 +4,7 @@
  * mechanism.
  */
 import { fileURLToPath } from 'node:url';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -20,7 +20,8 @@ export function automationCliCommand(): string {
  * The definition reference, as `cez automation schema` prints it and as the skill body embeds it.
  * One string so the two never disagree; `prompts.test.ts` pins it to the storage schema.
  */
-export const AUTOMATION_SCHEMA_REFERENCE = `An automation definition is one JSON object. Two kinds: a GitHub poll ("kind": "github") or a schedule ("kind": "schedule"). The three examples below are valid definitions as written; the keys they use are explained after them.
+export function automationSchemaReference(): string {
+  return `An automation definition is one JSON object. Two kinds: a GitHub poll ("kind": "github") or a schedule ("kind": "schedule"). The three examples below are valid definitions as written; the keys they use are explained after them.
 
 A GitHub poll:
 
@@ -78,7 +79,7 @@ Top-level keys:
 "task" keys:
 - "prompt": required, the prompt template.
 - "workflow": a workflow name. OR "steps", never both. To run a skill, use one agent step naming it: "steps": [{ "id": "task", "skill": "some-skill", "prompt": "{{task}}" }].
-- "runner": ${RUNNER_IDS.join(' | ')}. "model" and "effort": optional overrides.
+- "runner": ${knownRunnerIds().join(' | ')}. "model" and "effort": optional overrides.
 - "worktree": isolate each run in its own git worktree (recommended: true).
 - "autonomous": never park to ask; an automation has no one watching (recommended: true).
 - "archiveWhenDone": boolean (default false). Archive each launched task after Done. Without a PR, archive on Done even when autoMergePr is true.
@@ -92,6 +93,7 @@ For a GitHub poll, name, events and task are required; for a schedule, name, kin
 Prompt placeholders, substituted per launch. GitHub poll: {{github.kind}} (issue | pull request), {{github.number}}, {{github.title}}, {{github.url}}, {{github.author}}, {{github.assignees}}, {{github.labels}} and {{github.event}}. Schedule: {{date}}, {{time}}, {{project}} and {{automation}}. Any other placeholder is rejected. The matched item's details (or the scheduled instant) are also appended to every launched task as untrusted context, so the prompt need not repeat them.
 
 A new automation is PAUSED unless created with --enable. Enabling a GitHub poll establishes a current-time baseline by default; filters.includeExisting opts in to older matches within the configured lookback. Test filter previews the selected window without advancing the execution cursor or launching tasks. Enabling a schedule arms its next occurrence.`;
+}
 
 /** The part composed into every task's system prompt while automations are on and reachable. */
 export function automationsPrompt(command: string): string {
