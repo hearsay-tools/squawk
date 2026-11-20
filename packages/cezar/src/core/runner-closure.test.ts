@@ -45,7 +45,28 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
+/** Shared runner support (such as runners/acp/) is allowed. Adapters, definitions and
+ * the built-in roster remain private to each allowed runner, including transitive imports. */
+function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
+  const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
+  return [...others.filter(id => closure.has(ADAPTERS[id]!)),
+    ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
+    ...(closure.has('runners/built-in.ts') ? ['built-in'] : [])];
+}
+
 describe('per-runner test closures', () => {
+  it.each([false, true])('allows a runner-shaped ACP consumer and refuses a foreign adapter: %s', async foreign => {
+    const result = await build({
+      stdin: { contents: `import { AcpSession } from './runners/acp/session.ts';
+        ${foreign ? "import { PiRunner } from './runners/pi/pi-runner.ts';" : ''}
+        export class FixtureRunner { session = AcpSession; ${foreign ? 'foreign = PiRunner;' : ''} }`, resolveDir: src },
+      absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
+    });
+    const closure = new Set(Object.keys(result.metafile.inputs));
+    expect(closure.has('runners/acp/session.ts')).toBe(true);
+    expect(foreignRunnerModules(closure, new Set(['fixture']))).toEqual(foreign ? ['pi'] : []);
+  });
+
   it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and not the built-in runner list', async () => {
     const files = perRunnerFiles();
     expect(new Set(files.map(entry => entry.runner))).toEqual(new Set(BUILT_IN_RUNNER_IDS));
@@ -56,10 +77,7 @@ describe('per-runner test closures', () => {
       const base = new Set<string>([runner, ...(file.split('/').at(-1)?.startsWith('waits-') ? ['claude' as const] : [])]);
       const partner = file.endsWith('-owned-workflows-parity.test.ts') ? BUILT_IN_RUNNER_IDS.find(id => !base.has(id) && loads(id)) : undefined;
       const allowed = new Set<string>([...base, ...(partner ? [partner] : [])]);
-      const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
-      return { file, own: closure.has(ADAPTERS[runner]!), others: [...others.filter(id => closure.has(ADAPTERS[id]!)),
-        ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
-        ...(closure.has('runners/built-in.ts') ? ['built-in'] : [])] };
+      return { file, own: closure.has(ADAPTERS[runner]!), others: foreignRunnerModules(closure, allowed) };
     });
     expect(loaded.filter(entry => !entry.own || entry.others.length)).toEqual([]);
   }, 60_000);
