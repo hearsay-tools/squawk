@@ -1,13 +1,14 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it as registerTest, vi } from 'vitest';
 import { familyCells } from '../core/parity-classes.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
+import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 
@@ -29,26 +30,7 @@ function native(runner: string) {
 
 /** The native skill input, including its context; plain prompts cannot satisfy this read. */
 function skillOpening(runner: string): string | undefined {
-  const file = join(root, runner === 'codex' || runner === 'opencode' ? 'args' : 'stdin');
-  if (!existsSync(file)) return undefined;
-  const rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as SkillOpeningRow);
-  return rows.map(row => skillOpeningRow(runner, row)).find(text => text !== undefined);
-}
-
-type SkillOpeningRow = { userText?: string; blocks?: Array<{ text?: string }>; method?: string;
-  params?: { input?: Array<{ type?: string; text?: string; name?: string }> };
-  url?: string; body?: { command?: string; arguments?: string } };
-
-function skillOpeningRow(runner: string, row: SkillOpeningRow): string | undefined {
-  if (runner === 'claude' && row.blocks?.at(-1)?.text?.startsWith('/probe-project')) {
-    return row.blocks.map(part => part.text ?? '').join('\n');
-  }
-  if (runner === 'codex' && row.method === 'turn/start' && row.params?.input?.some(part => part.type === 'skill' && part.name === 'probe-project')) {
-    return row.params.input.map(part => part.text ?? '').join('\n');
-  }
-  if (runner === 'opencode' && row.url?.endsWith('/command') && row.body?.command === 'probe-project') return row.body.arguments;
-  if ((runner === 'pi' || runner === 'omp') && row.userText?.startsWith('/skill:probe-project ')) return row.userText;
-  return undefined;
+  return sessionWire(runner).skillTriggers(nativeRecording(join(root, 'args'), join(root, 'stdin')), 'probe-project')[0];
 }
 
 async function start(runner: string, scenario: 'provider-error' | 'cezar-done') {

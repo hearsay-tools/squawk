@@ -123,5 +123,6 @@
       "empty": "An empty list removes every built-in tool and keeps the Squawk tools (hearsay-tools/squawk#1849)."
     }
   },
-  "postParkChildFrames": "shown"
+  "postParkChildFrames": "shown",
+  "systemPromptOnResume": "resent"
 }

@@ -56,6 +56,9 @@ export interface RunnerGolden {
    *  config loads, in order (D1, `core/harness-parity-session.cells.testkit.ts`). Only a runner that
    *  governs a session through a runtime plugin writes it. */
   runtimePlugins: string[];
+  /** How the runner carries a system prompt onto a resumed session, as its built runner reports it
+   *  (`core/skill-resume-parity.testkit.ts`). */
+  systemPromptOnResume: 'resent' | 'in-thread';
   /** What `GET /api/v1/runners` sends for this runner, and its Agent config pane. */
   runnerEntry: {
     displayName: string; modelListName: string; modelIdScope: string;

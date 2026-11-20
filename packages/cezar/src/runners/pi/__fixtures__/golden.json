@@ -182,5 +182,6 @@
       "explicit-copy": "The copy takes the default path, which leaves every MCP and extension tool on (hearsay-tools/cezarion#1417)."
     }
   },
-  "rejectedAgentInput": "keeps-session"
+  "rejectedAgentInput": "keeps-session",
+  "systemPromptOnResume": "resent"
 }

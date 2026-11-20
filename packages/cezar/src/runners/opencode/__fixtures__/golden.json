@@ -66,5 +66,6 @@
   "rejectedAgentInput": "ends-session",
   "runtimePlugins": [
     "opencode-task-scope.mjs"
-  ]
+  ],
+  "systemPromptOnResume": "in-thread"
 }

@@ -59,5 +59,6 @@
   ],
   "toolGrant": "same as unset",
   "postParkChildFrames": "shown",
-  "rejectedAgentInput": "keeps-session"
+  "rejectedAgentInput": "keeps-session",
+  "systemPromptOnResume": "in-thread"
 }

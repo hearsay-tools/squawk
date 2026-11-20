@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { appendedSystemPrompt, flagValues, stdinPrompts, wireArgv, wireRecord, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
+import { appendedSystemPrompt, flagValues, isCommand, stdinPrompts, wireArgv, wireRecord, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
 
 type Block = { type?: string; text?: string };
 const blocksOf = (row: Parameters<typeof wireRecord>[0]) => wireRecord(row)?.blocks as Block[] | undefined;
@@ -16,7 +16,7 @@ export const CLAUDE_SESSION_WIRE: SessionWire = {
   systemPrompt: appendedSystemPrompt,
   skillTriggers: ({ args, stdin }, name) => [...args, ...stdin].flatMap(row => {
     const blocks = blocksOf(row);
-    return blocks?.some(block => block.text?.startsWith(`/${name}`)) ? [blocks.map(block => block.text ?? '').join('\n')] : [];
+    return isCommand(blocks?.at(-1)?.text, `/${name}`) ? [blocks!.map(block => block.text ?? '').join('\n')] : [];
   }),
   expectSkillTrigger: ({ args, stdin }, { name, args: skillArgs, context }) => {
     const message = [...args, ...stdin].map(blocksOf).find(Boolean)!;

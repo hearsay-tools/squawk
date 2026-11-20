@@ -84,7 +84,12 @@ export function joinedParts(parts: unknown): string {
 
 /** Each stdin message that runs skill `name` as the slash command `/skill:<name>`, in order. */
 export function slashSkillTriggers({ args, stdin }: NativeRecording, name: string): string[] {
-  return stdinPrompts({ args, stdin: [...args, ...stdin] }).filter(text => text.startsWith(`/skill:${name}`));
+  return stdinPrompts({ args, stdin: [...args, ...stdin] }).filter(text => isCommand(text, `/skill:${name}`));
+}
+
+/** `text` runs the slash command `command`: the command alone, or the command and its arguments. */
+export function isCommand(text: string | undefined, command: string): boolean {
+  return text === command || text?.startsWith(`${command} `) === true;
 }
 
 /** Fails unless the first `/skill:<name>` message is exactly the command, its arguments and its context. */
