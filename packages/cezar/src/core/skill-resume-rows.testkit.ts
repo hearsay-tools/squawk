@@ -53,13 +53,15 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   "wire-and-fallback": [
     "claude R56",
     "codex R56",
-    "codex fresh-session continuation includes the skill",
     "every runner declares systemPromptOnResume",
     "omp R56",
     "opencode R56",
-    "opencode fresh-session continuation includes the skill",
-    "opens a fresh session with the skill, one note, and a new session id",
     "pi R56"
+  ],
+  "wire-and-fallback-engine": [
+    "codex fresh-session continuation includes the skill",
+    "opencode fresh-session continuation includes the skill",
+    "opens a fresh session with the skill, one note, and a new session id"
   ]
 };
 
