@@ -99,6 +99,35 @@ test('the newest map from main is downloaded once, and the cache answers when gh
   assert.match(latestMap(empty.dir, gh([{ databaseId: 3, event: 'pull_request' }])).error, /no successful run on main/);
 });
 
+test('the map comes from the newest run at or before the fork point, never from a later one', t => {
+  const { dir, put } = tempDir(t);
+  const LATER = 'c'.repeat(40);
+  const OLDER = 'd'.repeat(40);
+  const usable = commit => commit !== LATER;
+  const downloads = [];
+  const gh = runs => (command, args) => {
+    if (args[1] === 'list') return JSON.stringify(runs);
+    const id = args[2];
+    downloads.push(id);
+    put(join(CACHE, id, 'e2e-spec-map.json'), JSON.stringify(sampleMap({ commit: id === '8' ? LATER : OLDER })));
+  };
+  const CACHE = '.ai/qa/e2e-spec-map';
+  const runs = [{ databaseId: 8, event: 'push', headSha: LATER }, { databaseId: 6, event: 'push', headSha: OLDER }];
+
+  const loaded = latestMap(dir, gh(runs), usable);
+  assert.equal(loaded.map.commit, OLDER);
+  assert.deepEqual(downloads, ['6']);
+
+  // Offline, the cache skips a map newer than the fork point.
+  put(join(CACHE, '8', 'e2e-spec-map.json'), JSON.stringify(sampleMap({ commit: LATER })));
+  t.mock.method(console, 'warn', () => {});
+  const offline = () => { throw new Error('offline'); };
+  assert.equal(latestMap(dir, offline, usable).map.commit, OLDER);
+  assert.match(latestMap(dir, offline, () => false).error, /^no spec map: gh cannot list/);
+  assert.match(latestMap(tempDir(t).dir, gh([runs[0]]), usable).error,
+    /^no spec map: no successful e2e-spec-map\.yml run on main maps the fork point or an earlier commit$/);
+});
+
 test('string literals: imports and spec-relative paths, never comments', () => {
   const text = [
     "import { browser } from './agent-browser' // the seam's 'helper'",

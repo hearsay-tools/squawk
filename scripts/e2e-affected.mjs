@@ -85,39 +85,48 @@ function firstLine(error) {
   return String(error?.stderr || error?.message || error).trim().split('\n')[0];
 }
 
-function cachedMap(root, why) {
+function cachedMap(root, why, usable) {
   const dir = join(root, CACHE_DIR);
   const runs = existsSync(dir) ? readdirSync(dir).filter(name => /^\d+$/.test(name)) : [];
-  const newest = runs.sort((a, b) => Number(b) - Number(a)).find(id => existsSync(join(dir, id, `${ARTIFACT}.json`)));
-  if (!newest) return { error: `no spec map: ${why}` };
-  console.warn(`${LOG} ${why}; using the map cached from run ${newest}.`);
-  return readMap(join(dir, newest, `${ARTIFACT}.json`));
+  for (const id of runs.sort((a, b) => Number(b) - Number(a))) {
+    const file = join(dir, id, `${ARTIFACT}.json`);
+    if (!existsSync(file)) continue;
+    const loaded = readMap(file);
+    if (loaded.error || !usable(loaded.map.commit)) continue;
+    console.warn(`${LOG} ${why}; using the map cached from run ${id}.`);
+    return loaded;
+  }
+  return { error: `no spec map: ${why}` };
 }
 
 /**
- * The map from the newest successful refresh on main, downloaded once into `.ai/qa/e2e-spec-map/`.
- * Without `gh`, a network or a successful run, the newest cached map; without one, an error.
+ * The map from the newest successful refresh on main whose commit `usable` accepts (the fork
+ * point or one of its ancestors), downloaded once into `.ai/qa/e2e-spec-map/`. A newer map would
+ * count main's later merges as the branch's drift, and its line numbers would not match the
+ * branch. Without `gh`, a network or such a run, the newest such cached map; without one, an error.
  */
-export function latestMap(root, run) {
+export function latestMap(root, run, usable = () => true) {
   let runs;
   try {
     runs = JSON.parse(run('gh', [
       'run', 'list', '--workflow', WORKFLOW, '--branch', 'main', '--status', 'success',
-      '--limit', '20', '--json', 'databaseId,event',
+      '--limit', '20', '--json', 'databaseId,event,headSha',
     ]));
   } catch (error) {
-    return cachedMap(root, `gh cannot list the ${WORKFLOW} runs (${firstLine(error)})`);
+    return cachedMap(root, `gh cannot list the ${WORKFLOW} runs (${firstLine(error)})`, usable);
   }
   // A pull request run from a branch named main maps that branch, not main.
-  const latest = runs.find(({ event }) => event === 'push' || event === 'workflow_dispatch');
-  if (!latest) return cachedMap(root, `${WORKFLOW} has no successful run on main`);
+  const fromMain = runs.filter(({ event }) => event === 'push' || event === 'workflow_dispatch');
+  if (fromMain.length === 0) return cachedMap(root, `${WORKFLOW} has no successful run on main`, usable);
+  const latest = fromMain.find(({ headSha }) => usable(headSha));
+  if (!latest) return cachedMap(root, `no successful ${WORKFLOW} run on main maps the fork point or an earlier commit`, usable);
   const dir = join(root, CACHE_DIR, String(latest.databaseId));
   const file = join(dir, `${ARTIFACT}.json`);
   if (!existsSync(file)) {
     try {
       run('gh', ['run', 'download', String(latest.databaseId), '--name', ARTIFACT, '--dir', dir]);
     } catch (error) {
-      return cachedMap(root, `gh cannot download the map of run ${latest.databaseId} (${firstLine(error)})`);
+      return cachedMap(root, `gh cannot download the map of run ${latest.databaseId} (${firstLine(error)})`, usable);
     }
   }
   return readMap(file);
@@ -404,14 +413,24 @@ function report(root, loaded, selection, specFiles, ci) {
   console.log(`${LOG} The merge queue runs every spec.`);
 }
 
-function chooseSpecs(root, run, loaded, specFiles, base) {
+/** Whether `commit` is `fork` or one of its ancestors, fetching it when the clone lacks it. */
+function atOrBefore(run, commit, fork) {
+  if (typeof commit !== 'string' || !hasCommit(run, commit)) return false;
+  try {
+    run('git', ['merge-base', '--is-ancestor', commit, fork]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function chooseSpecs(root, run, loaded, specFiles, fork, base) {
   const full = reason => ({ all: true, specs: specFiles, reason });
+  if (!fork) return full(`HEAD has no merge-base with ${base ?? 'origin/main or main'}`);
   if (loaded.error) return full(loaded.error);
   if (!hasCommit(run, loaded.map.commit)) {
     return full(`the map's commit ${loaded.map.commit.slice(0, 8)} is not in this clone and cannot be fetched`);
   }
-  const fork = forkPoint(run, base);
-  if (!fork) return full(`HEAD has no merge-base with ${base ?? 'origin/main or main'}`);
   const { map } = loaded;
   const files = changedFiles(run, fork);
   const lineChanges = (paths, target) => {
@@ -435,9 +454,14 @@ export function main(argv) {
   const specFiles = listSpecs(root);
   let loaded;
   const select = () => {
-    loaded = options.map ? readMap(resolve(options.map)) : latestMap(root, run);
-    if (options.map && loaded.error) throw new Error(loaded.error);
-    return chooseSpecs(root, run, loaded, specFiles, options.base);
+    const fork = forkPoint(run, options.base);
+    if (options.map) {
+      loaded = readMap(resolve(options.map));
+      if (loaded.error) throw new Error(loaded.error);
+    } else {
+      loaded = fork ? latestMap(root, run, commit => atOrBefore(run, commit, fork)) : {};
+    }
+    return chooseSpecs(root, run, loaded, specFiles, fork, options.base);
   };
   return options.ci ? runCi(root, options, select, specFiles, () => loaded) : runLocal(root, options, select(), loaded, specFiles);
 }
