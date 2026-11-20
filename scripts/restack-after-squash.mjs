@@ -90,6 +90,18 @@ function checkStacked(git, { finalHead, upstream, squash, pr }) {
 }
 
 /**
+ * The branch's tip on origin, which the printed push lease expects; empty when it was never pushed.
+ * A tip this branch does not contain holds work a force-push would delete, so it refuses first.
+ */
+function readRemoteHead(git, branch) {
+  const remoteHead = git.ok('ls-remote', '--heads', 'origin', `refs/heads/${branch}`).split('\t')[0];
+  if (remoteHead && !git.isAncestor(remoteHead, 'HEAD')) {
+    refuse(`origin/${branch} (${remoteHead}) has commits this branch does not contain. Fetch and integrate them first, so the restack and its push keep them.`);
+  }
+  return remoteHead;
+}
+
+/**
  * The sorted lines of a diff without context, hunk positions and blob ids: equal for the same patch
  * on a different base. Mode changes and binary patches count, so a lost one reads as changed.
  */
@@ -159,8 +171,7 @@ export function restack({ cwd, pr, mode, dryRun }) {
   const upstreamRef = `origin/${base}`;
   const upstream = git.ok('rev-parse', '--verify', `${upstreamRef}^{commit}`);
   const fork = checkStacked(git, { finalHead, upstream, squash, pr });
-  // The lease expects the remote branch as it is now; empty when the branch was never pushed.
-  const remoteHead = git.ok('ls-remote', '--heads', 'origin', `refs/heads/${branch}`).split('\t')[0];
+  const remoteHead = readRemoteHead(git, branch);
   const ctx = { pr, branch, finalHead, upstream, upstreamRef, fork, remoteHead, oldHead: git.ok('rev-parse', 'HEAD') };
   const own = git.ok('log', '--oneline', '--no-merges', `${finalHead}..HEAD`);
   const header = [`${branch}: own commits after PR #${pr}'s final head ${finalHead.slice(0, 12)}:`, own || '(none)'];

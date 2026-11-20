@@ -175,6 +175,10 @@ test('it refuses and changes nothing when the PR is not merged or the checkout i
     ['a dirty tree', {}, repo => write(repo.w, 'b', ['dirty']), /working tree has changes/],
     ['a detached HEAD', {}, repo => repo.git('switch', '-q', '--detach'), /HEAD is detached/],
     ['the base branch', {}, repo => repo.git('switch', '-q', 'main'), /HEAD is on main/],
+    ['a remote branch with commits this branch lacks', {}, repo => {
+      repo.git('push', '-q', 'origin', 'child');
+      repo.git('reset', '-q', '--hard', 'child~1');
+    }, /origin\/child \([0-9a-f]{40}\) has commits this branch does not contain/],
     ['a branch off main before the squash', {}, repo => repo.git('switch', '-q', '-c', 'plain', 'main~2'), /was not stacked on it, or it is already restacked/],
   ];
   for (const [name, options, arrange, message] of cases) {
