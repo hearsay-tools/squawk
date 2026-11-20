@@ -36,6 +36,8 @@ export interface PartialMap {
   startup?: FunctionEvidence[]
   /** Repository code files any process of the shard loaded. */
   nodeLoaded?: string[]
+  /** Generated files without a source map that a process loaded. */
+  unattributed?: string[]
   /** Processes that left no coverage; null when the shard had no loaded directory. */
   unflushed?: string[] | null
 }
@@ -106,9 +108,11 @@ export function partialMap(logDir: string, statuses: Map<string, SpecStatus>, bu
       loaded: [...new Set([...browser.loaded, ...functions.map((fn) => fn.source)])],
     }
   }
-  return { version: 1, specs, ...(nodeLogs && repoRoot ? {
+  const loaded = nodeLogs && repoRoot ? nodeLoaded(nodeLogs, repoRoot) : undefined
+  return { version: 1, specs, ...(nodeLogs && repoRoot && loaded ? {
     startup: startupEvidence(nodeLogs, repoRoot),
-    nodeLoaded: nodeLoaded(nodeLogs, repoRoot),
+    nodeLoaded: loaded.files,
+    unattributed: loaded.unattributed,
     unflushed: unflushedProcesses(nodeLogs),
   } : {}) }
 }
@@ -216,6 +220,7 @@ export function joinLoaded(partials: PartialMap[]): { files: string[] } | { prob
     if (!partial.nodeLoaded || partial.unflushed === undefined) return { problem: `shard ${index + 1} recorded no loaded files` }
     if (partial.unflushed === null) return { problem: `shard ${index + 1} had no loaded directory` }
     if (partial.unflushed.length > 0) return { problem: `shard ${index + 1} has processes without coverage: ${partial.unflushed.join(', ')}` }
+    if (partial.unattributed?.length) return { problem: `shard ${index + 1} loaded generated files without a source map: ${partial.unattributed.join(', ')}` }
     files.push(...partial.nodeLoaded)
   }
   return { files }

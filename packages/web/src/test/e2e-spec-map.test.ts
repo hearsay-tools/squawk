@@ -263,6 +263,8 @@ describe('spec reach', () => {
     expect(joinLoaded([shard(['a.ts'], []), shard()])).toEqual({ problem: 'shard 2 recorded no loaded files' })
     expect(joinLoaded([shard(['a.ts'], null)])).toEqual({ problem: 'shard 1 had no loaded directory' })
     expect(joinLoaded([shard(['a.ts'], ['8 (index.js)'])])).toEqual({ problem: 'shard 1 has processes without coverage: 8 (index.js)' })
+    expect(joinLoaded([{ ...shard(['a.ts'], []), unattributed: ['.ai/qa/build/cezar/dist/chunk.js'] }]))
+      .toEqual({ problem: 'shard 1 loaded generated files without a source map: .ai/qa/build/cezar/dist/chunk.js' })
     const map = buildMap({}, new Map(), 'f'.repeat(40), '', [], ['b.ts', 'a.ts', 'b.ts'])
     expect(map.nodeLoaded).toEqual(['a.ts', 'b.ts'])
     expect(buildMap({}, new Map(), 'f'.repeat(40), '')).not.toHaveProperty('nodeLoaded')

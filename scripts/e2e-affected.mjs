@@ -259,6 +259,18 @@ export function unloaded(file, map, atMap) {
 }
 
 const none = reason => ({ specs: [], reason });
+
+/**
+ * A file no process loaded at the map's commit: the specs that load it now, and the specs whose
+ * evidence is incomplete, which may have loaded it unrecorded. Mapped, so main's later changes
+ * that may load it now (drift) still add their specs.
+ */
+function notLoaded(map, readers) {
+  const specs = [...new Set([...readers, ...map.incomplete])];
+  return { specs, mapped: true, reason: specs.length > 0
+    ? 'no process the browser suite started loaded it; the specs that load it now or have incomplete evidence'
+    : 'no process the browser suite starts loads it' };
+}
 const every = reason => ({ specs: null, reason });
 
 function mappedSpecs(file, map, readers) {
@@ -338,9 +350,11 @@ export function changedLines(diff) {
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
 export function classify(file, { map, graph, changes, partial, boot, atMap }) {
   if (isDocsPath(file)) return none('documentation');
-  if (unloaded(file, map, atMap)) return none('no process the browser suite starts loads it');
+  // Before the loaded-file rule: Vite bundles the Vitest config and what it imports into a
+  // temporary file, so their coverage names no repository path.
   if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
+  if (unloaded(file, map, atMap)) return notLoaded(map, readers);
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);

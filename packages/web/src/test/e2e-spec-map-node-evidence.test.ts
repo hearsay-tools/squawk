@@ -135,13 +135,29 @@ it('lists the repository code files any process loaded, and the processes that l
       pathToFileURL(join(root, 'node_modules/vitest/index.js')).href, pathToFileURL(join(root, 'packages/cezar/src/data.json')).href,
       pathToFileURL(join(root, 'gone.ts')).href])
     report('logs/smoke/node/tasks/t/1/coverage-9-1-0.json', [join(root, 'scripts/readers.mjs')])
-    expect(nodeLoaded(logs, root)).toEqual(['packages/cezar/src/a.ts', 'packages/web/e2e/environment.ts', 'scripts/readers.mjs'])
+    expect(nodeLoaded(logs, root)).toEqual({ files: ['packages/cezar/src/a.ts', 'packages/web/e2e/environment.ts', 'scripts/readers.mjs'], unattributed: [] })
+
+    // The contract bundle stands for every contract source; a served copy for its repository file;
+    // a generated file without a source map names no source.
+    put('.ai/qa/build/cezar/dist/contract/index.js')
+    put('packages/contract/src/index.ts')
+    put('packages/contract/src/workflow-file.ts')
+    put('.ai/qa/served/checkout/.ai/cezar/worktrees/t1/scripts/served.mjs')
+    put('.ai/qa/build/cezar/dist/chunk.js')
+    put('node_modules/.pnpm/x/dist/y.js')
+    report('logs/loaded/coverage-8-1-0.json', [pathToFileURL(join(root, '.ai/qa/build/cezar/dist/contract/index.js')).href,
+      pathToFileURL(join(root, '.ai/qa/served/checkout/.ai/cezar/worktrees/t1/scripts/served.mjs')).href,
+      pathToFileURL(join(root, 'node_modules/.pnpm/x/dist/y.js')).href])
+    expect(nodeLoaded(logs, root)).toEqual({ files: ['packages/cezar/src/a.ts', 'packages/contract/src/index.ts',
+      'packages/contract/src/workflow-file.ts', 'packages/web/e2e/environment.ts', 'scripts/readers.mjs', 'scripts/served.mjs'], unattributed: [] })
+    report('logs/loaded/coverage-9-1-0.json', [pathToFileURL(join(root, '.ai/qa/build/cezar/dist/chunk.js')).href])
+    expect(nodeLoaded(logs, root).unattributed).toEqual(['.ai/qa/build/cezar/dist/chunk.js'])
 
     expect(unflushedProcesses(logs)).toBeNull()
     put('logs/loaded/capture.json', '{}')
     expect(unflushedProcesses(logs)).toEqual([])
     put('logs/loaded/started-7.json', JSON.stringify({ pid: 7, argv: ['vitest.mjs', 'run'] }))
-    put('logs/loaded/started-8.json', JSON.stringify({ pid: 8, argv: ['index.js'] }))
-    expect(unflushedProcesses(logs)).toEqual(['8 (index.js)'])
+    put('logs/loaded/started-10.json', JSON.stringify({ pid: 10, argv: ['index.js'] }))
+    expect(unflushedProcesses(logs)).toEqual(['10 (index.js)'])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

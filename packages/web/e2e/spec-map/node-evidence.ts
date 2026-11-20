@@ -140,16 +140,36 @@ function scriptPath(url: string): string | null {
   return bare.startsWith('/') ? bare : null
 }
 
-/** The repository code files one loaded script stands for: its source-map sources, or itself. */
-function repositoryFiles(file: string, root: string, cache: Map<string, string[]>): string[] {
-  const known = cache.get(file)
-  if (known) return known
-  let files: string[]
+// inline-contract.mjs bundles the contract into the server's dist without a source map.
+const CONTRACT_BUNDLE = /\/dist\/contract\/index\.js$/
+const CONTRACT_SOURCES = 'packages/contract/src'
+
+// The served test project (.ai/qa/served/<checkout>) and its task worktrees hold copies of the
+// repository's files.
+const COPY = /^\.ai\/qa\/served\/[^/]+\/(?:\.ai\/(?:cezar|squawk)\/worktrees\/[^/]+\/)?(.+)$/
+
+function codeFilesUnder(root: string, dir: string): string[] {
+  return existsSync(join(root, dir)) ? readdirSync(join(root, dir), { recursive: true, encoding: 'utf8' })
+    .map((name) => `${dir}/${name.split('\\').join('/')}`).filter((path) => CODE_FILE.test(path)) : []
+}
+
+/**
+ * The repository code files one loaded script stands for: its source-map sources, every contract
+ * source for the contract bundle, or itself. Null for a generated file without a source map, whose
+ * sources no one can name.
+ */
+function repositoryFiles(file: string, root: string, cache: Map<string, string[] | null>): string[] | null {
+  if (cache.has(file)) return cache.get(file)!
+  const path = relative(root, file)
+  let files: string[] | null
   if (existsSync(`${file}.map`)) {
     const map = JSON.parse(readFileSync(`${file}.map`, 'utf8')) as { sources?: string[]; sourceRoot?: string }
     files = (map.sources ?? []).map((source) => relative(root, resolve(dirname(file), map.sourceRoot ?? '', source)))
-  } else files = [relative(root, file)]
-  files = files.filter((path) => !path.startsWith('..') && !path.split('/').includes('node_modules') && CODE_FILE.test(path))
+  } else if (CONTRACT_BUNDLE.test(file)) files = codeFilesUnder(root, CONTRACT_SOURCES)
+  else if (COPY.test(path) && !path.split('/').includes('dist')) files = [COPY.exec(path)![1]!]
+  else if (path.startsWith('.ai/qa/') || path.split('/').includes('dist')) files = null
+  else files = [path]
+  files = files?.filter((path) => !path.startsWith('..') && !path.split('/').includes('node_modules') && CODE_FILE.test(path)) ?? null
   cache.set(file, files)
   return files
 }
@@ -157,20 +177,27 @@ function repositoryFiles(file: string, root: string, cache: Map<string, string[]
 /**
  * Every repository code file a process the suite started loaded: the shared server's snapshots,
  * the mocks' coverage and the coverage every other process wrote into the loaded directory.
+ * `unattributed` lists the generated files without a source map that a process loaded: while it
+ * is not empty, `files` may miss their sources.
  */
-export function nodeLoaded(logs: string, root: string): string[] {
+export function nodeLoaded(logs: string, root: string): { files: string[]; unattributed: string[] } {
   const files = new Set<string>()
-  const cache = new Map<string, string[]>()
+  const unattributed = new Set<string>()
+  const cache = new Map<string, string[] | null>()
   const reports = existsSync(logs) ? readdirSync(logs, { recursive: true, encoding: 'utf8' })
     .filter((name) => /^(?:coverage-.*|server-.*|shared-startup-\d+)\.json$/.test(basename(name))) : []
   for (const name of reports) {
     const report = JSON.parse(readFileSync(join(logs, name), 'utf8')) as { result?: Array<{ url: string }> }
     for (const { url } of report.result ?? []) {
       const file = scriptPath(url)
-      if (file && existsSync(file)) for (const source of repositoryFiles(file, root, cache)) files.add(source)
+      const path = file ? relative(root, file) : '..'
+      if (!file || path.startsWith('..') || path.split('/').includes('node_modules') || !existsSync(file)) continue
+      const sources = repositoryFiles(file, root, cache)
+      if (sources) for (const source of sources) files.add(source)
+      else unattributed.add(path)
     }
   }
-  return [...files].sort()
+  return { files: [...files].sort(), unattributed: [...unattributed].sort() }
 }
 
 /**

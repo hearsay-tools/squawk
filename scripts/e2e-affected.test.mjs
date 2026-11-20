@@ -255,10 +255,20 @@ test('a code file no process loaded selects no spec when the map lists every loa
   }
   // .github/ is outside the covered roots: the suite setup still selects every spec for it.
   assert.equal(pick('.github/scripts/cockpit-test-sequencer.mjs'), null);
-  // A static setup reference a process never loaded (a type-only import, say) selects no spec.
-  assert.deepEqual(classify('packages/cezar/src/core/runner-definition.ts', { map, graph: { ...graph,
+  // The suite setup still selects every spec: Vite bundles the Vitest config and its imports into a
+  // temporary file, so the processes' coverage cannot show that setup did not load a file.
+  assert.equal(classify('packages/cezar/src/core/runner-definition.ts', { map, graph: { ...graph,
     setup: new Set([...graph.setup, 'packages/cezar/src/core/runner-definition.ts']) },
-  atMap: new Set(['packages/cezar/src/core/runner-definition.ts']) }).specs, []);
+  atMap: new Set(['packages/cezar/src/core/runner-definition.ts']) }).specs, null);
+  // A spec that loads the file now, and the specs with incomplete evidence, still run.
+  assert.deepEqual(classify('packages/web/e2e/poll.ts', { map, graph, atMap: new Set(['packages/web/e2e/poll.ts']) }).specs,
+    [spec('artifact-project-links')]);
+  const incomplete = sampleMap({ nodeLoaded: [], incomplete: [spec('smoke')] });
+  assert.deepEqual(classify('scripts/readers.mjs', { map: incomplete, graph, atMap }).specs, [spec('smoke')]);
+  // Main may have loaded the file since the map: the rule counts as mapped, so drift adds its specs.
+  const drifted = selectSpecs({ files: ['scripts/readers.mjs'], map: { ...map, sources: { ...map.sources, 'packages/web/src/App.tsx': [2] } },
+    graph, specFiles: map.specs, atMap, drift: { files: ['packages/web/src/App.tsx'], changes: new Map() } });
+  assert.deepEqual(drifted.specs, [spec('smoke')]);
   // Loaded files, new files, files that are not code and maps without the list keep the other rules.
   assert.equal(pick('packages/cezar/src/server/server.ts'), null);
   assert.equal(pick('packages/web/e2e/agent-browser.ts'), null);

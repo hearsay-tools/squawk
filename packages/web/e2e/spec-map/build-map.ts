@@ -50,6 +50,7 @@ export function partial(args: string[], repoRoot = REPO_ROOT): void {
   console.log(`spec map: ${withEvidence} of ${statuses.size} specs left V8 evidence`)
   if (map.nodeLoaded) console.log(`spec map: processes loaded ${map.nodeLoaded.length} repository code files`)
   if (map.unflushed?.length) console.log(`spec map: processes without coverage: ${map.unflushed.join(', ')}`)
+  if (map.unattributed?.length) console.log(`spec map: generated files without a source map: ${map.unattributed.join(', ')}`)
 }
 
 function expectation(text: string): Expectation {

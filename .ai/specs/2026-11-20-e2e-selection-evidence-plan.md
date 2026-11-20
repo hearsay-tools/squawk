@@ -81,20 +81,26 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 ### Slice 3: coverage of every process the suite starts (capture, map, selector)
 
 - Every Node process the suite starts, and its worker threads, writes `NODE_V8_COVERAGE` into
-  `logs/loaded/`, a directory marked by `capture.json`. The Vitest step sets it. The shared server
+  `logs/loaded/`, a directory marked by `capture.json`. The boot step (it builds the server) and the
+  Vitest step set it. The shared server
   passes it to the processes it starts. CLI children, agents and `tsx` workers inherit it.
   Mock processes keep their per-spec directory.
 - Each marked process records `started-<pid>.json`, and writes its coverage on SIGTERM as well as
   on exit. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
-- The map gets `nodeLoaded`: every repository code file in any coverage report, with dist files
-  resolved through their source maps. The map includes it only when every started process left
-  coverage. Otherwise the merge log names the processes, and the selector keeps today's rules.
+- The map gets `nodeLoaded`: every repository code file in any coverage report. A dist file
+  counts as the sources in its source map. The contract bundle, which `inline-contract.mjs` builds
+  without a map, counts as every contract source. A copy in the served test project counts as its
+  repository file. The map includes `nodeLoaded` only when every started process left coverage and
+  every other generated file a process loaded has a source map. Otherwise the merge log names the
+  cause, and the selector keeps today's rules.
 - The selector gets a new rule. A code file under `packages/cezar/{src,scripts}`, `packages/contract/src`,
   `packages/web/e2e`, `.ai/scripts` or `scripts/` selects **no spec** when it existed at the map's
   commit and is absent from `nodeLoaded`, `sources` and `functions`: "no process the browser suite
-  starts loads it". This rule runs before the static setup scan, so a type-only import that the scan
-  reaches selects no spec.
-- Loaded code keeps today's rules: function evidence, or the static setup scan, which selects every spec.
+  starts loads it". Such a file still selects the specs that load it now, by the static spec scan,
+  and the incomplete specs. The rule counts as mapped, so drift adds its specs.
+- The static setup scan runs first and still selects every spec: Vite bundles the Vitest config and
+  its imports into a temporary file, so coverage cannot show that setup did not load a file.
+- Loaded code keeps today's rules.
   Files that are not code (JSON, shell, PowerShell) also keep today's rules.
 
 ## Case tables
@@ -109,11 +115,10 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Line inside a function that no spec ran | No spec | No spec (no change) |
 | Line in the module's top-level code, an import above the first recorded line, or a range across two functions | Every spec, or all 97 through startup credit | Boot spec + specs that ran any function of the file |
 | Any startup edit when no spec has complete evidence | Every spec | Every spec (no boot spec) |
-| Code file no process loaded, existed at the map commit, every process left coverage | Every spec | No spec |
+| Code file no process loaded, existed at the map commit, every process left coverage | Every spec | Specs that load it now + incomplete specs; none when both are empty |
 | The same, but some process left no coverage | Every spec | Every spec (no `nodeLoaded` in the map) |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
-| Code file the suite setup loaded | Every spec (static scan) | Every spec |
-| Vitest setup module that the static scan reaches but no process loaded (for example a type-only import) | Every spec | No spec |
+| Code file the static setup scan reaches, loaded or not | Every spec | Every spec (Vite bundles the config) |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |
 
 ### Map selection (slice 1)

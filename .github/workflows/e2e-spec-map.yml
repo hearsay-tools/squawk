@@ -83,9 +83,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/spec-map/logs/loaded"
           echo '{}' > "$RUNNER_TEMP/spec-map/logs/loaded/capture.json"
 
+      # The boot builds the server and the cockpit: its build scripts are code a change can break.
       - name: Boot the test environment
         env:
           NODE_OPTIONS: --import=${{ github.workspace }}/packages/web/e2e/spec-map/node-preload.mjs
+          NODE_V8_COVERAGE: ${{ runner.temp }}/spec-map/logs/loaded
         run: |
           sh .ai/scripts/test-env-up.sh
           node -e 'const d = JSON.parse(require("fs").readFileSync(".ai/qa/test-env.json", "utf8")); if (!d.browser?.installed) { console.error(d.browser?.notes || "agent-browser is unavailable"); process.exit(1) }'
