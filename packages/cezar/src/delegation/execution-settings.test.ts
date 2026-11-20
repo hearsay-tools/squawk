@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DelegationPolicyError } from './policy.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 
 describe('delegation execution settings boundary', () => {
   let f: ReturnType<typeof fixture>;
