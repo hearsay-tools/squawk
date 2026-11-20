@@ -29,8 +29,8 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `id` | `definition.ts` | The runner id, an open string |
 | `facts` | `facts.ts` | The wire and turn facts that `RUNNER_FACTS` (`core/runner-facts.ts`) reads |
 | `specSupport` | `spec-support.ts` | Which `AgentRunSpec` fields the wire honors |
-| `detection` | `detection.ts` | The PATH name, the `*_BIN` override, the dry-run rule, the version banner and the hints |
-| `cli` | `cli.ts` | How a terminal starts and resumes the CLI, and the installer's source |
+| `detection` | `detection.ts` | The PATH name, the `*_BIN` override, the dry-run rule, the version banner and the hints. The "Open in" menu reads the binary and the override from here |
+| `cli` | `cli.ts` | How a terminal starts and resumes the CLI, the installer's source and `openTarget`, the "Open in" menu entry's label and icon key |
 | `login`, `loadLogin()` | `login.ts`, `login-probe.ts` | The status and login arguments, the install hint and the status parser |
 | `accounts` | `accounts.ts` | The account folder layout, the profile markers and the home slot |
 | `env` | `env.ts` | The environment allow-list prefixes |
@@ -39,9 +39,17 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
-| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts and `askResumeCases` |
+| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases` and `parityExemptions`, the parity cells this runner's wire cannot carry (A9 exactly where `facts.nativeAsk` is not `answerable`) |
 | `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
 | `loadAdapter()` | `<id>-runner.ts` (or the adapter's own name) | The `AgentRunner` class |
+
+The folder also holds the runner's test data: `session-wire.testkit.ts` (how the mock's recorded
+command lines show a session), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
+and `__fixtures__/golden.json` (values that tests outside the runner pin;
+`core/runner-golden.testkit.ts`). A test reads them through `runnerDataRows`
+(`core/runner-data-rows.testkit.ts`), which imports `runners/<id>/<file>` for each id in
+`runners/ids.ts`. The session-wire and golden readers name the missing file when a runner has
+none.
 
 The definition has no tool-injection part. OpenCode's tool server setup is OpenCode code
 (`ciOpenCodeEnv` in `runners/opencode/opencode-runtime-config.ts`).
@@ -111,7 +119,9 @@ No setup file registers every runner. A test registers the runners it drives wit
 `registerRunner(definition)`. A test that needs every built-in runner (it enumerates
 `runnersWhere` or `registeredRunners`) imports `core/register-all-runners.testkit.ts`. A test that
 needs only the ids reads `runners/ids.ts`, which loads no definition. A static test table that
-crosses runners reads `core/runner-fact-rows.testkit.ts`. `runners/fixture/` is a runner that
+crosses runners reads the runner folders' data files, never a hand list:
+`core/runner-fact-rows.testkit.ts` for facts and extra tools, `runnerDataRows` for the others.
+The lint rule's runner classes and the closure guard's adapter paths come from the folders too. `runners/fixture/` is a runner that
 exists only in tests: `runners/fixture/fixture-runner.test.ts` registers it, runs a task and runs
 the parity kit on it. The per-runner parity files are in
 [Runner regressions ship with shared coverage](#runner-regressions-ship-with-shared-coverage).
@@ -135,8 +145,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its mock script, one
-  line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
+- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its mock script and that
+  script's data files, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
   names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
   in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
   is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the
@@ -211,7 +221,8 @@ production code never imports it (`cez/runner-ids-import`). The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
-adapter for its workers, and an owned-workflows file the next runner for R14's mixed chain. `core/runner-closure.test.ts` enforces this
+adapter for its workers, and an owned-workflows file exactly one other runner for R14's mixed
+chain. `core/runner-closure.test.ts` enforces this
 (hearsay-tools/cezarion#2939).
 
 The binding limit on a parity test file is CI's per-file cap: `FILE_DURATION_LIMIT_MS`

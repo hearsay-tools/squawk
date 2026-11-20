@@ -20,8 +20,8 @@ runners register through the same call that a later outside runner uses
 - a fixture runner registers in a test, runs a task and passes the parity kit, with no edit to
   another source file;
 - `AGENT_PROTOCOL.md` §10, the new-runner checklist, names only the runner's folder, its mock
-  script, its line in `runners/built-in.ts` and its id in `runners/ids.ts` (decision 5 as
-  amended).
+  script and that script's data files, its line in `runners/built-in.ts` and its id in
+  `runners/ids.ts` (decision 5 as amended; D2a to D2c).
 
 This step changes no runner behavior. It moves declarations and the code that reads them.
 
@@ -132,8 +132,8 @@ other runner's adapter, so `core/runner-closure.test.ts` passes. Some runner-nam
 | `id` | The runner id | The `RUNNER_IDS` entry |
 | `facts` | The wire and turn facts | The `RUNNER_FACTS` row |
 | `display` | Display name, model list name, model id scope, runner picker label and line, icon name, install hint, login command, account folder example | `RUNNER_COCKPIT_FACTS`, `PROVIDERS`, `PROVIDER_INSTALL`, `FOLDER_EXAMPLE`, the icon map, `RUNNER_NAMES`, the runner picker's labels |
-| `detection` | How to probe the CLI and read its version | The `RUNNER_PROBES` row |
-| `cli` | The executable and how to open it; the server installer's source | `RUNNER_CLI`, `AGENT_CLI_SOURCE` |
+| `detection` | How to probe the CLI and read its version | The `RUNNER_PROBES` row; the binary and `*_BIN` override of the `AGENT_CLIS` row (`server/open-in-targets.ts`) |
+| `cli` | The executable and how to open it; the server installer's source; `openTarget`, the "Open in" menu entry's label and icon key | `RUNNER_CLI`, `AGENT_CLI_SOURCE`, the label and icon of the `AGENT_CLIS` row |
 | `login` | Login and auth status arguments, install hint, executable | The `DESCRIPTORS` entry in `core/provider-auth.ts` |
 | `loadLogin()` | `import()` of the status parser (`runners/<id>/login-probe.ts`) | The parser in that entry |
 | `accounts` | Account folder layout, profile markers, home slot | `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS`, `AGENT_HOME_SLOT` |
@@ -142,7 +142,7 @@ other runner's adapter, so `core/runner-closure.test.ts` passes. Some runner-nam
 | `configFiles` | The native config files that Settings → Agent config shows, and the pane's groups: label, note, empty-state text, whether the MCP group shows the user-level MCP listing | The row in `agent-config/catalog.ts`, the `AGENT_DESCRIPTORS` entry |
 | `extraTools` | Extra tool grants | The `HARNESS_EXTRA_TOOLS` row |
 | `specSupport` | Which `AgentRunSpec` fields the wire honors | `specSupport` on the runner class |
-| `mock` | The native mock script and its scenario adapter, for tests and lint | `MOCKS` in `core/skill-probe.ts`, the row in `lint/mock-scenario-boundary.ts`, the `HARNESS_ADAPTERS` row |
+| `mock` | The native mock script and its scenario adapter, for tests and lint; `parityExemptions`, the parity cells this runner's wire cannot carry (A9 exactly where `facts.nativeAsk` is not `answerable`) | `MOCKS` in `core/skill-probe.ts`, the row in `lint/mock-scenario-boundary.ts`, the `HARNESS_ADAPTERS` row, the one-runner rows of `PARITY_EXEMPTIONS` |
 | `loadAdapter()` | `import()` of the adapter module; returns an `AgentRunner` | The `case` in `createRunner` |
 | `loadModelCatalog()` | `import()` of the model catalog adapter | The adapter map in `core/host-model-catalog.ts` |
 | `loadSkillCatalog()` | `import()` of the skill list adapter | `hostSkillCatalogAdapters` |
@@ -196,8 +196,9 @@ the entry registers the built-ins (`index-runners.test.ts`). Scripts under
 `RUNNER_IDS` and `RunnerId` left the service in C3 (decision 5).
 `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
 `runners/ids.ts` holds the same ids as plain data for tests (decision 5 as amended). A new
-built-in runner adds its folder, its mock script, one line in `runners/built-in.ts` and its id in
-`runners/ids.ts`; an outside runner (step 4) only calls `registerRunner`.
+built-in runner adds its folder, its mock script and that script's data files, one line in
+`runners/built-in.ts` and its id in `runners/ids.ts`; an outside runner (step 4) only calls
+`registerRunner`.
 
 The lint rule `runner-class-outside-factory` lets a runner class be constructed only inside its
 own runner folder, and `runner-class-rule.test.ts` scans `runners/`.
@@ -304,6 +305,27 @@ As built (D1, in two parts):
   `parity-classes.testkit.ts` needed one change (`runsOn`), because the kit's runner roster was
   static.
 
+As built (D2a to D2c), no test or lint list names the built-in runners by hand:
+
+- The lint rule's runner classes (`RUNNER_CLASSES`, `lint/owner-reader-rules.ts`), the
+  closure guard's adapter paths, the registry test's class check and the cross-runner fact rows
+  come from the runner folders. `runnerDataRows` (`core/runner-data-rows.testkit.ts`) imports
+  `runners/<id>/<file>` for each id in `runners/ids.ts`, in plain Node and in Vitest.
+- An owned-workflows parity file may load exactly one other runner for R14's mixed chain, not
+  the next runner in id order, so a new runner needs no neighbor's edit.
+- `PARITY_EXEMPTIONS` keeps the rows it selects by facts and the rows that span every runner but
+  one (S21, R44, R45, F11). A row for one runner is in that runner's `mock.parityExemptions`.
+  A9 must be declared exactly where `facts.nativeAsk` is not `answerable`. The wait kit's
+  `ACK_WIRES` comes from each runner's `inputDelivery.acknowledgement` fact.
+- Each runner's folder holds its test data: `session-wire.testkit.ts`,
+  `ui-mapper-row.testkit.ts` and `__fixtures__/golden.json` (`core/runner-golden.testkit.ts`). The
+  `automation-tools-<id>` and `runner-skill-trigger-<id>` parity files moved into it. The mocks'
+  skill captures are in `packages/cezar/scripts/mock-skill-data/<id>.mjs`, found by reading that
+  folder, because the mocks run as separate processes and the package does not ship `src`
+  fixtures.
+- A built-in runner's mock script must import `mock-scenario.mjs`
+  (`cez/mock-scenario-boundary`).
+
 ## Case tables
 
 ### State restore cases
@@ -341,6 +363,9 @@ Epic hearsay-tools/squawk#3824. Every slice merged as one squash commit on `main
 | C2. The cockpit reads the route | hearsay-tools/squawk#3898 | hearsay-tools/squawk#3967 | `a5bd6f5d6` |
 | C3. No closed runner list in the service; types-only `core/agent-runner.ts` | hearsay-tools/squawk#3936 | hearsay-tools/squawk#3978 | `18ea24e89` |
 | D1, part 2. Tests register their runners; fixture runner | hearsay-tools/squawk#3899 | hearsay-tools/squawk#3984 | `a7f6a2a08` |
+| D2a. Derive the built-in runner guard lists from the runner folders | hearsay-tools/squawk#3900 | hearsay-tools/squawk#3988 | `af4992f21` |
+| D2b. Read open-in-app CLIs and parity exemption reasons from the definitions | hearsay-tools/squawk#3900 | hearsay-tools/squawk#3991 | `47a6af77c` |
+| D2c. Read the runner roster from the registry or the runner folders in tests and mock data | hearsay-tools/squawk#3900 | hearsay-tools/squawk#3992 | `e9d059ab6` |
 | D2. ADR, docs, spec close-out | hearsay-tools/squawk#3900 | The pull request that set this spec to done | |
 
 After phase A, the `runner` entries of `layer-import.baseline.json` went from 13 to 7; after
@@ -359,7 +384,10 @@ runner does.
   read at each access. The contract enums in the service decode through the registry
   (`registeredRunnerIdSchema`, `core/runner-id-schema.ts`).
 - **D1 was split** (hearsay-tools/squawk#3899). Part 1 moved the parity kit onto the `mock` part.
-  Part 2 came after C3: it narrowed the tests that read every runner and added the fixture runner.
+  Part 2 came after C3: it narrowed the tests that read every runner (D1's third done-when
+  criterion, held until C3 removed `RUNNER_IDS`) and added the fixture runner.
+- **C2 and C3 ran in parallel.** C2 owned the field blocks of `core/runner-definition.ts` and
+  put the Agent config pane data in the `configFiles` part; this spec names the route's fields.
 - **Data files.** Each part's plain data is in `runners/<id>/<part>.ts`. The definition and the
   adapter both read it; the adapter never imports `definition.ts`. A definition imports only
   types and data, and code parts load through `load*()`. A module that reads the registry while
@@ -399,6 +427,18 @@ runner does.
   two runner-id lint rules. The dev scripts `packages/cezar/scripts/parity-rows.ts` and
   `.ai/scripts/mock-wire-evidence.ts` read the file and are outside the rule.
 - **Fixture runner** (D1 part 2). See [The parity kit](#the-parity-kit).
+- **The guard lists follow the folders** (D2a to D2c, after review round 1 of D2 found that a new
+  built-in runner still edited test and lint lists outside the four places). The planner chose
+  to derive the lists in code rather than to name them in §10. [The parity kit](#the-parity-kit)
+  says what changed. §10 and ADR 0067 say "its mock script and that script's data files"
+  (planner, 2026-11-20), because the mock skill captures sit beside the mock script.
+- **Open in app** (D2b). The `AGENT_CLIS` hand list in `server/open-in-targets.ts` is gone. The
+  menu reads the registered runners at call time: the binary from `detection.binary`, the
+  override from `detection.binOverride()`, read on each call, and the label and icon from
+  `cli.openTarget`. The order is the registration order.
+- **Criterion 7 of the epic** (a new runner needs no edit outside its own files) is proved by
+  `.ai/scripts/simulate-sixth-runner.mjs`, which adds a sixth built-in runner to a scratch clone
+  in the four places and fails when any other file changed. Exit run: CRITERION7_PLACEHOLDER.
 
 ### Test selection
 
@@ -422,10 +462,9 @@ static closure.
 These runner-named files stay outside `runners/` (hearsay-tools/squawk#3960). They are tests,
 testkits or shared code that a later change may move:
 
-- `core/runner-skill-trigger-<id>-parity.test.ts`, `core/skill-resume-*-parity.test.ts`,
-  `core/workflow-followup-codex-*-parity.test.ts`, `core/owned-input-delivery-opencode-*.test.ts`
-  and `core/mock-{omp,opencode}-*.test.ts`;
-- `workflows/automation-tools-<id>-parity.test.ts`, `workflows/codex-startup-cancel.test.ts`,
+- `core/skill-resume-*-parity.test.ts`, `core/workflow-followup-codex-*-parity.test.ts`,
+  `core/owned-input-delivery-opencode-*.test.ts` and `core/mock-{omp,opencode}-*.test.ts`;
+- `workflows/codex-startup-cancel.test.ts`,
   `workflows/pi-teardown.test.ts`, `workflows/__fixtures__/codex-no-turn.mjs`,
   `workflows/fixture-claude.testkit.ts` and `workflows/worker-wait-claude.testkit.ts`;
 - `delegation/provision-claude-layouts.test.ts`;

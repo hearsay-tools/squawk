@@ -19,7 +19,7 @@ by runner id.
 | Definition type | `core/runner-definition.ts` | `RunnerDefinition` and `defineRunner`. Plain data parts, and `load*()` functions for the code parts |
 | Registry | `core/runner-registry.ts` | `registerRunner`, `runnerDefinition`, `registeredRunners`, `isRegisteredRunner`, `knownRunnerIds` and async `createRunner` |
 | Default and legacy ids | `core/runner-ids.ts` | `DEFAULT_RUNNER_ID` (`claude`) and `LEGACY_RUNNER_IDS` (`claude-cli` → `claude`) |
-| A runner's folder | `runners/<id>/` | `definition.ts`, its data files, its adapter, mapper, catalogs, tests, parity files and fixtures |
+| A runner's folder | `runners/<id>/` | `definition.ts`, its data files, its adapter, mapper, catalogs, test data files, tests, parity files and fixtures |
 | Built-in list | `runners/built-in.ts` | `BUILT_IN_RUNNERS`, one line for each built-in runner, and `registerBuiltInRunners()` |
 | Built-in ids | `runners/ids.ts` | `BUILT_IN_RUNNER_IDS`, plain data for tests, testkits, `vitest.setup.ts` and dev scripts |
 
@@ -57,14 +57,23 @@ Rules:
 8. **A test registers only the runners it drives.** No setup file registers every runner. A test
    that needs every built-in runner imports `core/register-all-runners.testkit.ts`.
    `core/runner-closure.test.ts` fails a per-runner test whose import closure reaches another
-   runner's adapter (hearsay-tools/cezarion#2939).
+   runner's adapter (hearsay-tools/cezarion#2939). A test table that crosses runners reads each
+   runner folder's data files, never a hand list of runners.
 
 ## Consequences
 
-- A new built-in runner adds its folder, its mock script in `packages/cezar/scripts/`, one line
-  in `runners/built-in.ts` and its id in `runners/ids.ts`. `AGENT_PROTOCOL.md` §10 is the
-  checklist. A fixture runner (`runners/fixture/`, test files only) proves it: it registers in
-  its test, runs a task and passes the parity kit.
+- A new built-in runner needs only `runners/<id>/`, its mock script and that script's data files
+  in `packages/cezar/scripts/`, its line in `runners/built-in.ts` and its id in
+  `runners/ids.ts`. `AGENT_PROTOCOL.md` §10 is the checklist. The folder holds the definition
+  parts, the per-runner parity exemptions (`mock.parityExemptions`; A9 exactly where
+  `facts.nativeAsk` is not `answerable`), the "Open in" menu entry (`cli.openTarget`, label and
+  icon key), `session-wire.testkit.ts`, `__fixtures__/golden.json` and the other fixtures, and
+  the per-runner parity files. The guard tests read these from the folders and name a missing
+  piece.
+- Two proofs hold it. The fixture runner (`runners/fixture/`, test files only) registers in its
+  test, runs a task and passes the parity kit. `.ai/scripts/simulate-sixth-runner.mjs` adds a
+  sixth built-in runner to a scratch clone in those places only; the typecheck and the
+  roster-reading tests pass (the spec's implementation record has the run).
 - The compiler does not catch a misspelled runner id in core code. The registry check covers
   ids that arrive in a request. `cez/runner-id-branch` keeps code outside `core/` and `runners/`
   from comparing runner ids.
@@ -78,8 +87,8 @@ Rules:
   keep unknown ids.
 - Two lists of built-in runners remain: `runners/built-in.ts` and `runners/ids.ts`. The roadmap
   expects the step 4 loader, which finds runners by folder, to replace both.
-- About 35 runner-named files stay outside `runners/` (hearsay-tools/squawk#3960). The spec
-  lists them.
+- Some runner-named files stay outside `runners/` (hearsay-tools/squawk#3960). The spec lists
+  them.
 
 ## Considered Options
 
@@ -98,3 +107,5 @@ Coverage under `packages/cezar/src/`: `core/runner-registry.test.ts`,
 `server/runners-routes.test.ts`, `server/unknown-runner-refusals.test.ts`,
 `runs/unregistered-runner-saved-data.test.ts`, `index-runners.test.ts` and
 `lint/ast-rules.test.ts` (`cez/runner-ids-import`).
+The sixth-runner simulation: `.ai/scripts/simulate-sixth-runner.mjs`, tested by
+`scripts/simulate-sixth-runner.test.mjs` (repository root).

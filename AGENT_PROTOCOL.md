@@ -196,8 +196,11 @@ Owners. Paths are relative to `packages/cezar/src/`.
   `PARITY_FILES` in `core/parity-classes.testkit.ts` maps every parity test file to its
   family.
 - **Exemptions and their kinds:** `PARITY_EXEMPTIONS` and `ExemptionKind` in
-  `core/harness-parity-core.testkit.ts`. The wait rows use the same table, except the
-  subagent wait rows: `SUBAGENT_EXEMPTIONS` in `workflows/waits-subagents-rows.testkit.ts`.
+  `core/harness-parity-core.testkit.ts`. The table holds the rows it selects by facts and the
+  rows that span every runner but one. A row for one runner is that runner's
+  `mock.parityExemptions` (`runners/<id>/mock.ts`), which the table reads; A9 is declared there
+  exactly where `facts.nativeAsk` is not `answerable`. The wait rows use the same table, except
+  the subagent wait rows: `SUBAGENT_EXEMPTIONS` in `workflows/waits-subagents-rows.testkit.ts`.
 - **Tiers:** `driveSeam` (`core/harness-parity-core.testkit.ts`) drives a real runner class
   against its own offline mock. `driveRun` (`core/workflow-parity-core.testkit.ts`) drives a
   real `RunManager` run in a temp git repo.
@@ -316,20 +319,37 @@ A runner is one definition in its own folder, which one call registers
 ([ADR 0067](docs/adr/0067-register-each-runner-as-one-definition.md)). A new built-in runner
 changes these places and no other file:
 
-- **Its folder**, `packages/cezar/src/runners/<id>/`: the definition, its data files, the adapter,
-  the mapper, the catalogs, the golden fixtures and every test of the runner, parity files
-  included. No backend-specific type leaves it.
-- **Its mock script** in `packages/cezar/scripts/`. It stays there because the packaged CLI tests
-  start it by path; the definition's `mock` part names it.
+- **Its folder**, `packages/cezar/src/runners/<id>/`: the definition and its data files, the
+  adapter, the mapper, the catalogs, the test data files, the fixtures and every test of the
+  runner, parity files included. No backend-specific type leaves it.
+- **Its mock script and that script's data files** in `packages/cezar/scripts/`: the mock, and
+  its skill captures in `mock-skill-data/<id>.mjs` when it lists skills. They stay there because
+  the packaged CLI tests and the mocks start them by path; the definition's `mock` part names the
+  script.
 - **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
 - **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
   when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`;
   `cez/runner-ids-import` fails a production import of it.
 
-An outside runner (roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the
-smallest example: its test registers it, runs a task and runs the parity kit on it. The guard
-tests name most missing parts. The items below say what goes in the folder, and the rules that
-the guards do not force, or force only in part. The item numbers are stable.
+What a new runner's folder holds:
+
+- `definition.ts` and the data file of each definition part (`docs/areas/runners.md` lists
+  them), the `mock` part's `parityExemptions` and the `cli` part's `openTarget` included;
+- `session-wire.testkit.ts`, which says how the mock's recorded command lines show a session, a
+  turn and its effort, and `ui-mapper-row.testkit.ts`, the runner's row of the mapper
+  robustness test;
+- `__fixtures__/golden.json`, the runner's own expected values for tests outside its code, and
+  the golden wire fixtures;
+- the per-runner parity files (`harness-<id>-*`, `waits-<id>-*`, `automation-tools-<id>-*`,
+  `runner-skill-trigger-<id>-*`).
+
+The guard tests read these from the folder and fail with a message that names a missing piece.
+`.ai/scripts/simulate-sixth-runner.mjs` proves the list: it adds a sixth built-in runner to a
+scratch clone in these places only, and its header gives the exit check. An outside runner
+(roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the smallest example: its
+test registers it, runs a task and runs the parity kit on it. The items below say what goes in
+the folder, and the rules that the guards do not force, or force only in part. The item numbers
+are stable.
 
 1. **Runner** — `<id>-runner.ts` implements `AgentRunner` / `AgentSession`. Declare its spec
    support (`spec-support.ts`) and its facts (`facts.ts`) from what the wire does, not from a
@@ -350,12 +370,16 @@ the guards do not force, or force only in part. The item numbers are stable.
 4. **Mapper** — `<id>-ui-mapper.ts` emits the v2 stream (§4).
 5. **v1 alongside v2** — emit v2 through `SessionOptions.onUiEvent` and keep the v1 stream.
 6. **Golden fixtures** — `__fixtures__/` in the folder. Follow §8, and cover every §6 capability
-   that the wire supports.
-7. **Parity** — every §6 row passes or carries a named exemption.
+   that the wire supports. `__fixtures__/golden.json` holds the values that tests outside the
+   runner pin (`core/runner-golden.testkit.ts` lists them).
+7. **Parity** — every §6 row passes or carries a named exemption. A wire gap of this runner is an
+   entry in its `mock.parityExemptions`: the criterion, its kind and the wire reason, never "not
+   implemented yet".
 8. **Harness parity** — the `mock` part (`mock.ts`) names the mock script, its `*_BIN` variable,
    the prompt for each scenario it runs and its `askResumeCases`. Make the mock a wire encoder
-   over `packages/cezar/scripts/mock-scenario.mjs`. That module owns scenario selection and
-   scripts; the mock emits the backend's native frames. The per-runner parity files
+   over `packages/cezar/scripts/mock-scenario.mjs`; the lint rule `cez/mock-scenario-boundary` fails a
+   built-in mock that does not import it. That module owns scenario selection and scripts; the
+   mock emits the backend's native frames. The per-runner parity files
    (`harness-<id>-<part>-parity.test.ts`, `waits-<id>-<part>-parity.test.ts`) each register only
    this runner and pass its definition to the kit.
    Choose the ask path: `cezar_ask` alone, or also a native bridge onto `ask.requested`. A
@@ -367,7 +391,9 @@ the guards do not force, or force only in part. The item numbers are stable.
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.
 9. **Plumbing** — the `configFiles` part (`config-files.ts`) holds the native files that
-   Settings → Agent config shows and the runner's `agentConfig` pane. The `display` part
+   Settings → Agent config shows and the runner's `agentConfig` pane. The `cli` part's
+   `openTarget` is the runner's "Open in" menu entry (label and icon key); the menu takes the
+   binary and its `*_BIN` override from the `detection` part. The `display` part
    (`display.ts`) holds the names, the icon key, the install hint, the login command and the
    account folder example. `GET /api/v1/runners` sends both with the `models.suggested` presets,
    so the cockpit needs no edit. Keep every change additive, so that old run records still
@@ -386,9 +412,10 @@ the guards do not force, or force only in part. The item numbers are stable.
     that the runner's model ids can name. `buildChildEnv` reads it through the registry. Never
     widen another runner's entry.
 
-A wire gap is not a step of this list. §6 and §7 say how a gap gets a named exemption, which
-needs owner review. A fact value that no runner declared before needs unit tests for the shared
-code that reads it, as `docs/areas/runners.md` says.
+A wire gap needs owner review (§6). The shared exemption rows, which select runners by facts or
+span every runner but one, stay in the parity kit (§7); a new runner adds no row there. A fact
+value that no runner declared before needs unit tests for the shared code that reads it, as
+`docs/areas/runners.md` says.
 
 <a id="10a-removing-a-runner"></a>
 
