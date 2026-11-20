@@ -234,18 +234,26 @@ export interface AccountLayout {
   readonly stateFile: 'in-home' | 'beside-home';
 }
 
-/** Account relocation, profile markers and the home slot (the `accounts` part, spec
- *  2026-11-18-runner-definitions): the rows of `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS` and
- *  `AGENT_HOME_SLOT`, moved from `core/agent-profiles.ts` and `paths.ts`. */
-export interface RunnerAccounts {
+/** The data half of the `accounts` part (spec 2026-11-18-runner-definitions): account relocation,
+ *  profile markers and the home slot, plain data in `runners/<id>/accounts.ts`. */
+export interface RunnerAccountsData {
   /** How this runner lays out an account. */
   readonly layout: AccountLayout;
   /** What the agent drops into its home on first login. Any one is enough. */
   readonly dirMarkers: readonly string[];
-  /** The `AgentHomePaths` slot that holds this runner's account home. Typed `string` here because
-   *  core may not import the catalog's type; `runners/<id>/accounts.ts` checks the key against
-   *  `keyof AgentHomePaths`, and `agentHomeSlot` (paths.ts) returns that type. */
+  /** The key of this runner's home in `AgentHomePaths`, which `agentHomePaths()` (paths.ts) builds
+   *  from the registered runners. No two registered runners share one. */
   readonly homeSlot: string;
+}
+
+/** {@link RunnerAccountsData} plus the code half: where the runner's default home resolves. */
+export interface RunnerAccounts extends RunnerAccountsData {
+  /**
+   * The runner's default home under `env`, honoring the variables its vendor documents. `userHome`
+   * is `HOME`, else `USERPROFILE`, else the OS user home. Code, not data: it stays in the definition
+   * (`runners/<id>/definition.ts`), and `agentHomePaths()` calls it per read so env changes apply.
+   */
+  resolveHome(env: NodeJS.ProcessEnv, userHome: string): string;
 }
 
 /** The environment allow-list prefixes (the `env` part, spec 2026-11-18-runner-definitions): the

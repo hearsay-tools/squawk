@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { PI_FACTS } from './facts.ts';
@@ -30,7 +31,11 @@ export const piRunner = defineRunner({
   configFiles: { files: PI_CONFIG_FILES, agentConfig: PI_AGENT_CONFIG },
   extraTools: PI_EXTRA_TOOLS,
   login: { ...PI_LOGIN, executable: () => productEnv('PI_BIN') ?? 'pi' },
-  accounts: PI_ACCOUNTS,
+  accounts: {
+    ...PI_ACCOUNTS,
+    // `$PI_CODING_AGENT_DIR` relocates Pi's agent dir; a blank value is ignored.
+    resolveHome: (env, home) => env.PI_CODING_AGENT_DIR?.trim() || join(home, '.pi', 'agent'),
+  },
   env: PI_ENV,
   mock: PI_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parsePiStatus }),

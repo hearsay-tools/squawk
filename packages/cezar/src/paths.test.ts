@@ -2,9 +2,12 @@ import './core/register-all-runners.testkit.ts';
 import { resolveHome } from './home/resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 const env: NodeJS.ProcessEnv = {};
 const testHome = () => resolveHome({ purpose: 'cli', env, layout: 'legacy' }); // test-home-read: pure path resolution; result not written
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { RunnerDefinition } from './core/runner-definition.ts';
+import { fixtureRunner } from './runners/fixture/definition.testkit.ts';
 import {
   DEFAULT_SERVER_INSTANCE,
+  agentHomeDir,
   agentHomePaths,
   claudeStateFilePath,
   instanceSlug,
@@ -72,6 +75,26 @@ describe('agentHomePaths', () => {
     expect(paths.omp).toBe('/home/u/.omp/agent');
   });
 
+  // A fresh module graph holds its own registry, so these definitions reach no other test.
+  const freshPaths = async (definitions: readonly RunnerDefinition[]) => {
+    vi.resetModules();
+    const { registerRunner } = await import('./core/runner-registry.ts');
+    for (const definition of definitions) registerRunner(definition);
+    return import('./paths.ts');
+  };
+
+  it('throws naming the runner when its definition has no home resolver', async () => {
+    const broken = { ...fixtureRunner, accounts: { ...fixtureRunner.accounts, resolveHome: undefined } };
+    const paths = await freshPaths([broken as unknown as RunnerDefinition]);
+    expect(() => paths.agentHomePaths({ HOME: '/home/u' })).toThrow('Runner fixture declares no agent home');
+    expect(() => paths.agentHomeDir('fixture', { HOME: '/home/u' })).toThrow('Runner fixture declares no agent home');
+  });
+
+  it('throws naming both runners when two definitions declare one home slot', async () => {
+    const paths = await freshPaths([fixtureRunner, { ...fixtureRunner, id: 'fixture-two' }]);
+    expect(() => paths.agentHomePaths({ HOME: '/home/u' })).toThrow('Runners fixture and fixture-two both declare the agent home slot fixture.');
+  });
+
   it('resolves the OMP home from PI_CODING_AGENT_DIR, then PI_CONFIG_DIR, then ~/.omp/agent', () => {
     const home = { HOME: '/home/u' };
     expect(agentHomePaths({ ...home } as NodeJS.ProcessEnv).omp).toBe('/home/u/.omp/agent');
@@ -134,12 +157,12 @@ describe('agentHomePaths', () => {
 describe('claudeStateFilePath', () => {
   it('is a SIBLING of the default ~/.claude', () => {
     const env = { HOME: '/home/u' } as NodeJS.ProcessEnv;
-    expect(claudeStateFilePath(agentHomePaths(env).claude, env)).toBe('/home/u/.claude.json');
+    expect(claudeStateFilePath(agentHomeDir('claude', env), env)).toBe('/home/u/.claude.json');
   });
 
   it('moves INSIDE an overridden config dir', () => {
     const env = { HOME: '/home/u', CLAUDE_CONFIG_DIR: '/home/u/.claude-klaudiusz' } as NodeJS.ProcessEnv;
-    expect(claudeStateFilePath(agentHomePaths(env).claude, env)).toBe('/home/u/.claude-klaudiusz/.claude.json');
+    expect(claudeStateFilePath(agentHomeDir('claude', env), env)).toBe('/home/u/.claude-klaudiusz/.claude.json');
   });
 
   it('moves inside for a profile dir passed explicitly, with no env override', () => {

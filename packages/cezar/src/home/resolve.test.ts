@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOME_LOCATING_ENV } from '../core/agent-env.ts';

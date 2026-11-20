@@ -1,3 +1,4 @@
+import './core/register-all-runners.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';

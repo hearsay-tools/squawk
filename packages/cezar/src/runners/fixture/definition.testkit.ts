@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import {
   FIXTURE_ACCOUNTS, FIXTURE_CLI, FIXTURE_DETECTION, FIXTURE_DISPLAY, FIXTURE_ENV, FIXTURE_FACTS, FIXTURE_LOGIN, FIXTURE_MODELS,
@@ -23,7 +24,7 @@ export const fixtureRunner = defineRunner({
   extraTools: [],
   login: { ...FIXTURE_LOGIN, executable: () => 'fixture-runner' },
   loadLogin: async () => ({ parse: result => (result.exitCode === 0 ? 'connected' : null) }),
-  accounts: FIXTURE_ACCOUNTS,
+  accounts: { ...FIXTURE_ACCOUNTS, resolveHome: (_env, home) => join(home, '.fixture') },
   env: FIXTURE_ENV,
   mock: FIXTURE_MOCK,
   display: FIXTURE_DISPLAY,

@@ -1,8 +1,11 @@
 import { join } from 'node:path';
-import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type ConfigFileDef } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
+import { OPENCODE_ACCOUNTS } from './accounts.ts';
+
+const opencodeHome = (home: AgentHomePaths): string => agentHome(home, OPENCODE_ACCOUNTS.homeSlot);
 
 const OPENCODE_CONFIG_DOCS = 'https://opencode.ai/docs/config/';
 const OPENCODE_RULES_DOCS = 'https://opencode.ai/docs/rules/';
@@ -19,7 +22,7 @@ export const OPENCODE_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['opencode'],
     kind: 'settings',
     scope: 'user',
-    resolve: (_repo, home) => join(home.opencodeConfig, 'opencode.json'),
+    resolve: (_repo, home) => join(opencodeHome(home), 'opencode.json'),
     label: '~/.config/opencode/opencode.json',
     format: 'jsonc',
     tracked: 'outside-repo',
@@ -51,7 +54,7 @@ export const OPENCODE_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['opencode'],
     kind: 'memory',
     scope: 'user',
-    resolve: (_repo, home) => join(home.opencodeConfig, 'AGENTS.md'),
+    resolve: (_repo, home) => join(opencodeHome(home), 'AGENTS.md'),
     label: '~/.config/opencode/AGENTS.md',
     format: 'markdown',
     tracked: 'outside-repo',

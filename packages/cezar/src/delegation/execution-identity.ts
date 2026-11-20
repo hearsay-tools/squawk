@@ -8,7 +8,7 @@ import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-c
 import { accountLayout, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
 import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-import { agentHomePaths, agentHomeSlot, claudeStateFilePath } from '../paths.ts';
+import { agentHomeDir, claudeStateFilePath } from '../paths.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -91,7 +91,7 @@ export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.
   }
   // A home whose state file sits beside it binds the home the child env resolves, and records that
   // layout. Bind an existing symlink to its actual home. A native first-run home may not exist yet.
-  const childHome = agentHomePaths(env)[agentHomeSlot(profile.provider)];
+  const childHome = agentHomeDir(profile.provider, env);
   let homePath = layout.stateFile === 'beside-home' ? childHome : profile.path;
   try {
     homePath = realpathSync(homePath);
@@ -110,7 +110,7 @@ export function boundWorkerAccountEnv(binding: WorkerAccountBinding, env: NodeJS
     if (!statSync(binding.homePath).isDirectory() || realpathSync(binding.homePath) !== binding.homePath) throw new Error();
   } catch { throw new WorkerIdentityError('Accepted worker account identity is unavailable'); }
   if (binding.claudeLayout?.kind === 'native') {
-    const nativeHome = agentHomePaths(env).claude;
+    const nativeHome = agentHomeDir('claude', env);
     try {
       if (env.CLAUDE_CONFIG_DIR?.trim() || claudeStateFilePath(nativeHome, env) !== binding.claudeLayout.statePath ||
           realpathSync(nativeHome) !== binding.homePath) throw new Error();

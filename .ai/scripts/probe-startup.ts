@@ -13,7 +13,7 @@
 // home/.pi/agent or home/.omp/agent, and project/. The child env holds only PATH, LANG, TERM,
 // TMPDIR, the scratch HOME, PI_CODING_AGENT_DIR and PI_OFFLINE=1: no provider keys, no XDG_* and no
 // OMP_PROFILE, PI_PROFILE or PI_CONFIG_DIR. The probe refuses to start when Squawk's own
-// agentHomePaths() resolves the agent dir outside the scratch root. pi and omp also search every
+// agentHomeDir() resolves the agent dir outside the scratch root. pi and omp also search every
 // ancestor of project/ (pi for context files such as AGENTS.md, omp for .omp/agents,
 // .claude/agents and more), so the scratch root never sits under the real home: when TMPDIR does,
 // the probe uses /tmp. A run therefore reads and writes nothing under the real ~/.pi or ~/.omp.
@@ -50,7 +50,7 @@ import { createInterface } from 'node:readline';
 import type { AgentRunSpec } from '../../packages/cezar/src/core/agent-runner.ts';
 import { buildOmpArgs } from '../../packages/cezar/src/runners/omp/omp-runner.ts';
 import { buildPiArgs } from '../../packages/cezar/src/runners/pi/pi-runner.ts';
-import { agentHomePaths } from '../../packages/cezar/src/paths.ts';
+import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
 import { allowedToolsForStep } from '../../packages/cezar/src/workflows/types.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
@@ -240,7 +240,7 @@ mkdirSync(agentDir, { recursive: true });
 mkdirSync(project);
 prepareProject(project, fixture);
 const env = probeEnv(home, agentDir);
-const resolvedAgentDir = agentHomePaths(env)[name];
+const resolvedAgentDir = agentHomeDir(name, env);
 if (!isInside(scratch, resolvedAgentDir)) {
   console.error(`refusing to start: Squawk resolves the ${name} agent dir to ${resolvedAgentDir}, outside ${scratch}`);
   process.exit(1);

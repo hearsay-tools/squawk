@@ -1,8 +1,11 @@
 import { join } from 'node:path';
-import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type ConfigFileDef } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
+import { CODEX_ACCOUNTS } from './accounts.ts';
+
+const codexHome = (home: AgentHomePaths): string => agentHome(home, CODEX_ACCOUNTS.homeSlot);
 
 const CODEX_CONFIG_DOCS = 'https://developers.openai.com/codex/config-reference';
 const CODEX_AGENTS_DOCS = 'https://developers.openai.com/codex/guides/agents-md';
@@ -19,7 +22,7 @@ export const CODEX_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['codex'],
     kind: 'settings',
     scope: 'user',
-    resolve: (_repo, home) => join(home.codex, 'config.toml'),
+    resolve: (_repo, home) => join(codexHome(home), 'config.toml'),
     label: '~/.codex/config.toml',
     format: 'toml',
     tracked: 'outside-repo',
@@ -52,7 +55,7 @@ export const CODEX_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['codex'],
     kind: 'memory',
     scope: 'user',
-    resolve: (_repo, home) => join(home.codex, 'AGENTS.md'),
+    resolve: (_repo, home) => join(codexHome(home), 'AGENTS.md'),
     label: '~/.codex/AGENTS.md',
     format: 'markdown',
     tracked: 'outside-repo',

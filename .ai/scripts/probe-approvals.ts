@@ -40,7 +40,7 @@ import { CodexAppServerRunner } from '../../packages/cezar/src/runners/codex/cod
 import { resolveCodexExecutable } from '../../packages/cezar/src/runners/codex/codex-app-server-transport.ts';
 import type { UiEvent } from '../../packages/cezar/src/core/ui-events.ts';
 import { CiToolController, type SquawkToolHandlers, type WaitRegistration } from '../../packages/cezar/src/ci-wait/controller.ts';
-import { agentHomePaths } from '../../packages/cezar/src/paths.ts';
+import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
 // The Codex session's child env reads the runner registry; register the built-ins first.
@@ -237,7 +237,7 @@ function stubHandlers(calls: Frame[]): SquawkToolHandlers {
 }
 
 const { answer, model } = parseCli(process.argv.slice(2));
-const sourceConfigPath = join(agentHomePaths(process.env).codex, 'config.toml');
+const sourceConfigPath = join(agentHomeDir('codex', process.env), 'config.toml');
 scrubProbeSessionEnv();
 const codexBin = resolveCodexExecutable();
 const scratch = mkdtempSync(join(scratchBase(), 'probe-approvals-'));

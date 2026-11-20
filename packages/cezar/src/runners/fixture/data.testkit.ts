@@ -1,7 +1,7 @@
 import type { AgentRunSpecSupport } from '../../core/agent-runner.ts';
 import { SQUAWK_SIDE_SPEC_SUPPORT } from '../../core/agent-runner-values.ts';
 import type { RunnerFacts } from '../../core/runner-facts.ts';
-import type { RunnerAccounts, RunnerCli, RunnerDetection, RunnerDisplay, RunnerEnv, RunnerLoginData, RunnerModelData } from '../../core/runner-definition.ts';
+import type { RunnerAccountsData, RunnerCli, RunnerDetection, RunnerDisplay, RunnerEnv, RunnerLoginData, RunnerModelData } from '../../core/runner-definition.ts';
 
 /**
  * The data of the fixture runner: a registered runner that no built-in list names, used by the parity
@@ -83,7 +83,7 @@ export const FIXTURE_ACCOUNTS = {
   layout: { envVar: null, defaultBindsHome: false, stateFile: 'in-home' },
   dirMarkers: [],
   homeSlot: 'fixture',
-} as const satisfies RunnerAccounts;
+} as const satisfies RunnerAccountsData;
 
 export const FIXTURE_ENV = { allowPrefixes: ['FIXTURE_'] } as const satisfies RunnerEnv;
 

@@ -1,8 +1,11 @@
 import { join } from 'node:path';
-import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type ConfigFileDef } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
+import { OMP_ACCOUNTS } from './accounts.ts';
+
+const ompHome = (home: AgentHomePaths): string => agentHome(home, OMP_ACCOUNTS.homeSlot);
 
 const OMP_CONFIG_DOCS = 'https://github.com/can1357/oh-my-pi/blob/main/docs/config-usage.md';
 const OMP_MCP_DOCS = 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md';
@@ -27,7 +30,7 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['omp'],
     kind: 'settings',
     scope: 'user',
-    resolve: (_repo, home) => join(home.omp, 'config.yml'),
+    resolve: (_repo, home) => join(ompHome(home), 'config.yml'),
     label: '~/.omp/agent/config.yml',
     format: 'yaml',
     tracked: 'outside-repo',
@@ -54,7 +57,7 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['omp'],
     kind: 'mcp',
     scope: 'user',
-    resolve: (_repo, home) => join(home.omp, 'mcp.json'),
+    resolve: (_repo, home) => join(ompHome(home), 'mcp.json'),
     label: '~/.omp/agent/mcp.json',
     format: 'json',
     tracked: 'outside-repo',
@@ -82,7 +85,7 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
     runners: ['omp'],
     kind: 'memory',
     scope: 'user',
-    resolve: (_repo, home) => join(home.omp, 'AGENTS.md'),
+    resolve: (_repo, home) => join(ompHome(home), 'AGENTS.md'),
     label: '~/.omp/agent/AGENTS.md',
     format: 'markdown',
     tracked: 'outside-repo',

@@ -2,7 +2,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './core/runner-config-files.ts';
 import type { ProviderId } from './core/provider-auth.ts';
-import { runnerDefinition } from './core/runner-registry.ts';
+import type { RunnerAccounts } from './core/runner-definition.ts';
+import { registeredRunners, runnerDefinition } from './core/runner-registry.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';
 import type { Home } from './home/home.ts';
@@ -115,69 +116,45 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
 }
 
 /**
- * Where each coding agent keeps its per-user config, honouring the env vars the
- * vendors document: `$CLAUDE_CONFIG_DIR` relocates Claude Code's home;
- * `$CODEX_HOME` relocates Codex's; `$XDG_CONFIG_HOME` relocates OpenCode's config
- * dir (falling back to `~/.config`); `$PI_CODING_AGENT_DIR` relocates Pi's agent dir
- * (default `~/.pi/agent`); OMP reads that variable too unless `$OMP_PROFILE` selects a profile
- * (`ompAgentDir`). Read per call so tests and ops can set env live.
+ * Where each registered runner keeps its per-user config, keyed by its `accounts.homeSlot`, in
+ * registration order. Each definition's `accounts.resolveHome` honors the variables its vendor
+ * documents (`runners/<id>/definition.ts`). Read per call so tests and ops can set env live.
  *
  * These are the DEFAULT profile's dirs. A second login of the same CLI is an
  * agent profile (`src/core/agent-profiles.ts`) and resolves through
  * `agentHomePathsForProfiles` instead — what this function answers is what the
  * host is configured for when nothing overrides it.
  */
-/** The slot of `AgentHomePaths` that holds each provider's account home. Was the
- *  `AGENT_HOME_SLOT` table; the slot now lives in each definition's `accounts.homeSlot`
- *  (`runners/<id>/accounts.ts`), checked there against `keyof AgentHomePaths`. */
-export function agentHomeSlot(provider: ProviderId): keyof AgentHomePaths {
-  return runnerDefinition(provider).accounts.homeSlot as keyof AgentHomePaths;
-}
-
 export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomePaths {
-  const home = env.HOME || env.USERPROFILE || homedir();
-  const xdgConfig = env.XDG_CONFIG_HOME?.trim() || join(home, '.config');
-  return {
-    claude: env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude'),
-    codex: env.CODEX_HOME?.trim() || join(home, '.codex'),
-    opencodeConfig: join(xdgConfig, 'opencode'),
-    pi: env.PI_CODING_AGENT_DIR?.trim() || join(home, '.pi', 'agent'),
-    omp: ompAgentDir(env, home),
-  };
+  const userHome = agentUserHome(env);
+  const paths: Record<string, string> = {};
+  const owners = new Map<string, string>();
+  for (const { id, accounts } of registeredRunners()) {
+    const owner = owners.get(accounts.homeSlot);
+    if (owner !== undefined) throw new Error(`Runners ${owner} and ${id} both declare the agent home slot ${accounts.homeSlot}.`);
+    owners.set(accounts.homeSlot, id);
+    paths[accounts.homeSlot] = resolveRunnerHome(id, accounts, env, userHome);
+  }
+  return paths;
 }
 
-/**
- * OMP's (Oh My Pi's) agent dir under `env`, mirroring how omp 18.8.0 resolves it
- * (`packages/utils/src/dirs.ts`):
- *
- * - a profile — `OMP_PROFILE` when it is set at all, else `PI_PROFILE` — selects
- *   `<root>/profiles/<name>/agent`, and omp then ignores `PI_CODING_AGENT_DIR`;
- * - otherwise `PI_CODING_AGENT_DIR`, else `<root>/agent`;
- *
- * where `<root>` is `~/<PI_CONFIG_DIR or .omp>`. A host that exports a profile therefore moves the
- * DEFAULT account (see `profileEnvVar` in `core/agent-profiles.ts`). `default`, a blank value
- * and a name omp would refuse select no profile.
- */
-function ompAgentDir(env: NodeJS.ProcessEnv, home: string): string {
-  const root = ompRootDir(env, home);
-  const selected = (env.OMP_PROFILE !== undefined ? env.OMP_PROFILE : env.PI_PROFILE)?.trim();
-  if (selected && isOmpProfileName(selected)) return join(root, 'profiles', selected, 'agent');
-  return env.PI_CODING_AGENT_DIR?.trim() || join(root, 'agent');
+/** One provider's default home: the entry of `agentHomePaths()` in its definition's home slot. */
+export function agentHomeDir(provider: ProviderId, env: NodeJS.ProcessEnv = process.env): string {
+  const { accounts } = runnerDefinition(provider);
+  return resolveRunnerHome(provider, accounts, env, agentUserHome(env));
 }
 
-function ompRootDir(env: NodeJS.ProcessEnv, home: string): string {
-  return join(home, env.PI_CONFIG_DIR?.trim() || '.omp');
+function agentUserHome(env: NodeJS.ProcessEnv): string {
+  return env.HOME || env.USERPROFILE || homedir();
 }
 
-/** omp's own profile-name rule (omp 18.8.0, `packages/utils/src/dirs.ts`). */
-const OMP_PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-/** Windows device names omp refuses as a profile, with or without an extension. */
-const OMP_RESERVED_NAME_RE = /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i;
-
-/** Whether omp accepts `name` as a profile of its own; `default` is omp's "no profile". */
-function isOmpProfileName(name: string): boolean {
-  return OMP_PROFILE_NAME_RE.test(name) && !name.endsWith('.') && name !== 'default'
-    && !OMP_RESERVED_NAME_RE.test(name);
+/** Calls a definition's home resolver. A definition without one, or without a home slot, throws
+ *  naming the runner. */
+function resolveRunnerHome(id: string, accounts: RunnerAccounts, env: NodeJS.ProcessEnv, userHome: string): string {
+  if (!accounts.homeSlot || typeof accounts.resolveHome !== 'function') {
+    throw new Error(`Runner ${id} declares no agent home: set accounts.homeSlot and accounts.resolveHome in runners/${id}/definition.ts.`);
+  }
+  return accounts.resolveHome(env, userHome);
 }
 
 /**
