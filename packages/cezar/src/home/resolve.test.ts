@@ -1,4 +1,10 @@
-import '../core/register-all-runners.testkit.ts';
+// These tests pin the five built-in runners' agent homes, so they register only those five.
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOME_LOCATING_ENV } from '../core/agent-env.ts';
@@ -7,6 +13,7 @@ import { remoteSettingsPath } from '../remote-settings.ts';
 import { binDir, versionsDir } from '../managed-install/layout.ts';
 import { cezCacheDir, resolveChromium } from '../preview/chromium.ts';
 import { resolveHome } from './resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
+for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
 
 // Shared setup now loads the write guard before this file installs its OS-home mock.
 vi.hoisted(() => vi.resetModules());

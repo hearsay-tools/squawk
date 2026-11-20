@@ -1,4 +1,10 @@
-import '../core/register-all-runners.testkit.ts';
+// These tests pin the five built-in runners' config files, so they register only those five.
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { productIdentity } from '../home/identity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { createHash } from 'node:crypto';
@@ -12,8 +18,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
 
-// The agent-config routes list every runner's config files.
 
 /**
  * `GET/PUT /api/v1/agent-config` (spec #404). The contract under test: files are

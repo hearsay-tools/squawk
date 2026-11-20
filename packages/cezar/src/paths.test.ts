@@ -1,4 +1,10 @@
-import './core/register-all-runners.testkit.ts';
+// These tests pin the five built-in runners' agent homes, so they register only those five.
+import { registerRunner } from './core/runner-registry.ts';
+import { claudeRunner } from './runners/claude/definition.ts';
+import { codexRunner } from './runners/codex/definition.ts';
+import { opencodeRunner } from './runners/opencode/definition.ts';
+import { piRunner } from './runners/pi/definition.ts';
+import { ompRunner } from './runners/omp/definition.ts';
 import { resolveHome } from './home/resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 const env: NodeJS.ProcessEnv = {};
 const testHome = () => resolveHome({ purpose: 'cli', env, layout: 'legacy' }); // test-home-read: pure path resolution; result not written
@@ -14,6 +20,7 @@ import {
   serverLockPath,
   serverStatePath,
 } from './paths.ts';
+for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
 
 describe('paths', () => {
   const original = env.CEZ_HOME;
