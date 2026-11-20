@@ -21,7 +21,7 @@ by runner id.
 | Default and legacy ids | `core/runner-ids.ts` | `DEFAULT_RUNNER_ID` (`claude`) and `LEGACY_RUNNER_IDS` (`claude-cli` → `claude`) |
 | A runner's folder | `runners/<id>/` | `definition.ts`, its data files, its adapter, mapper, catalogs, tests, parity files and fixtures |
 | Built-in list | `runners/built-in.ts` | `BUILT_IN_RUNNERS`, one line for each built-in runner, and `registerBuiltInRunners()` |
-| Built-in ids | `runners/ids.ts` | `BUILT_IN_RUNNER_IDS`, plain data for tests, testkits, `vitest.setup.ts` and two lint rules |
+| Built-in ids | `runners/ids.ts` | `BUILT_IN_RUNNER_IDS`, plain data for tests, testkits, `vitest.setup.ts` and dev scripts |
 
 Rules:
 
@@ -46,9 +46,11 @@ Rules:
    only list of definitions. `runners/ids.ts` repeats the ids as plain data so that a test
    can name them without loading an adapter. `core/runner-registry.test.ts` holds the two lists
    equal. The lint rule `cez/runner-ids-import` (`lint/runner-ids-import.ts`) fails a non-test
-   file in `packages/cezar/src` that imports `runners/ids.ts`, except
-   `lint/runner-roster-literal.ts` and `lint/runner-id-branch.ts`. Production code reads the
-   registry. Without that rule the id list could grow back into a closed list.
+   file in `packages/cezar/src` that imports `runners/ids.ts`. It exempts the two runner-id lint
+   rules, `lint/runner-roster-literal.ts` and `lint/runner-id-branch.ts`, which read the ids
+   from `runners/built-in.ts`. Production code reads the registry. Without that rule the id list
+   could grow back into a closed list. The dev scripts `packages/cezar/scripts/parity-rows.ts`
+   and `.ai/scripts/mock-wire-evidence.ts` read `runners/ids.ts` and are outside the rule.
 7. **The cockpit reads `GET /api/v1/runners`.** The route sends each registered runner's
    `display` part, its `models.suggested` and `models.retired` ids and the `agentConfig` pane of
    its `configFiles` part. The cockpit holds no table keyed by runner id.

@@ -63,10 +63,10 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
   reads config or runs a task. `index-runners.test.ts` pins it. A script under
   `packages/cezar/scripts/` that reads runner data calls it too.
 - `BUILT_IN_RUNNERS` (`runners/built-in.ts`) is the only list of built-in definitions.
-  `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests,
-  `vitest.setup.ts` and the lint rules `cez/runner-roster-literal` and `cez/runner-id-branch`.
-  `core/runner-registry.test.ts` holds the two lists equal, and `cez/runner-ids-import` fails a
-  production import of `runners/ids.ts`.
+  `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests, testkits,
+  `vitest.setup.ts` and dev scripts. `core/runner-registry.test.ts` holds the two lists equal, and
+  `cez/runner-ids-import` fails a production import of `runners/ids.ts`. The lint rules
+  `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
 

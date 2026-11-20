@@ -323,7 +323,7 @@ changes these places and no other file:
   start it by path; the definition's `mock` part names it.
 - **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
 - **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
-  when the two lists differ. Only tests and two lint rules read `runners/ids.ts`;
+  when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`;
   `cez/runner-ids-import` fails a production import of it.
 
 An outside runner (roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the
