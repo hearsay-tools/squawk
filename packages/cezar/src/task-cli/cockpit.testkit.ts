@@ -9,31 +9,34 @@ import { AutomationStore } from '../automations/store.ts';
 import { RunStore } from '../runs/store.ts';
 import { connectedProviderAuth } from '../server/provider-auth.testkit.ts';
 import { createApp } from '../server/server.ts';
-import { FakeRunManager } from '../server/fake-run-manager.testkit.ts';
+import { createFakeRunManager } from '../server/fake-run-manager.testkit.ts';
+import type { ProjectRunManager, RunManagerFactory } from '../server/project-context.ts';
+import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { Cockpit } from './http.ts';
 import { createRunner } from '../core/runner-registry.ts';
 
 
 /**
- * A real cockpit app on a real loopback socket for `cez task` tests (#504), over `FakeRunManager`
- * (hearsay-tools/squawk#3937): every run stays `queued` and nothing spawns; tests move runs to
- * other states through the store, the way the engine would.
+ * A real cockpit app on a real loopback socket for `cez task` tests (#504). It runs on `FakeRunManager`
+ * (hearsay-tools/squawk#3937) unless a test passes the engine factory: every run stays `queued` and nothing
+ * spawns (the engine gets no free slot); tests move runs to other states through the store, the way the
+ * engine would.
  */
 export interface TestCockpit {
   repoRoot: string;
   store: RunStore;
   automationStore: AutomationStore;
-  manager: FakeRunManager;
+  manager: ProjectRunManager;
   cockpit: Cockpit;
   close(): Promise<void>;
 }
 
-export async function startTestCockpit(): Promise<TestCockpit> {
+export async function startTestCockpit(createManager: RunManagerFactory = createFakeRunManager): Promise<TestCockpit> {
   const savedDryRun = process.env.CEZ_DRY_RUN;
   process.env.CEZ_DRY_RUN = '1';
   const repoRoot = mkdtempSync(join(tmpdir(), 'cez-task-cli-'));
   const store = RunStore.open(join(repoRoot, '.ai/cezar'));
-  const manager = new FakeRunManager(store, repoRoot, { createRunner, home: testHome() });
+  const manager = createManager(store, repoRoot, { createRunner, home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
   const automationStore = AutomationStore.open(join(repoRoot, '.ai/cezar'));
   const app = createApp({ home: testHome(), repoRoot, store, manager, automationStore, version: '0.0.0-test', providerAuth: connectedProviderAuth() });
   const server = await new Promise<ServerType>((resolve) => {

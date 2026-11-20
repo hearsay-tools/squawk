@@ -81,15 +81,19 @@ export class FakeRunManager implements ProjectRunManager {
     if (atTaskHead.images(input)?.length) notFaked('startRun with attachments');
     const effective = atTaskHead.acceptInput(this.#root, input, this.#options.home);
     const run = this.#store.createRun(atTaskHead.acceptedRunFields(input, workflow, effective, clientRequest));
-    this.#store.updateRun(run.id, atTaskHead.acceptedWorkflowFields(workflow));
-    const refs = refineTaskRefs(extractTaskRefs(atTaskHead.task(input)), atTaskHead.skillHint(workflow));
-    if (refs.prNumber !== undefined || refs.issueNumber !== undefined) {
-      this.#store.updateRun(run.id, {
-        ...(refs.prNumber !== undefined ? { prNumber: refs.prNumber } : {}),
-        ...(refs.issueNumber !== undefined ? { issueNumber: refs.issueNumber } : {}),
-      });
+    // The row exists from here on: a later write that throws still leaves the run queued, as in the engine.
+    try {
+      this.#store.updateRun(run.id, atTaskHead.acceptedWorkflowFields(workflow));
+      const refs = refineTaskRefs(extractTaskRefs(atTaskHead.task(input)), atTaskHead.skillHint(workflow));
+      if (refs.prNumber !== undefined || refs.issueNumber !== undefined) {
+        this.#store.updateRun(run.id, {
+          ...(refs.prNumber !== undefined ? { prNumber: refs.prNumber } : {}),
+          ...(refs.issueNumber !== undefined ? { issueNumber: refs.issueNumber } : {}),
+        });
+      }
+    } finally {
+      this.#queued.add(run.id);
     }
-    this.#queued.add(run.id);
     return this.#store.getRun(run.id)!;
   }
 
@@ -173,7 +177,11 @@ export class FakeRunManager implements ProjectRunManager {
   sendMessage(): boolean { return false; }
   deferMessage(): boolean { return false; }
   cancelAutoResume(): boolean { return false; }
-  continueRun(): ReturnType<RunManager['continueRun']> { return { ok: true } as ReturnType<RunManager['continueRun']>; }
+  /** A missing run is refused as the engine refuses it; accepting a Continue needs the engine. */
+  continueRun(...[runId]: Method<'continueRun'>): ReturnType<RunManager['continueRun']> {
+    if (!this.#store.getRun(runId)) return { ok: false, error: 'not found' };
+    return notFaked('continueRun');
+  }
 
   /** A message stacked on a queued run, as the engine stores it while the run waits for a slot. */
   enqueueMessage(...[runId, content]: Method<'enqueueMessage'>): ReturnType<RunManager['enqueueMessage']> {

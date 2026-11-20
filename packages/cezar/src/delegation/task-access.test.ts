@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationSendRequest } from '@open-mercato/cezar-contract/conversations';
-import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '../runs/store.ts';
 import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -26,16 +26,6 @@ describe('task access', () => {
     const run = f.store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner: 'claude', steps: [], allowWorkers: true, allowMessaging: true });
     setRunStatus(f.store, run.id, RUN_STATUS.running, { delegation: { role: 'root', permissions: ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'], receipts: [] } });
     return { id: run.id, caller: f.credentials.authenticate(f.credentials.issue('project', run.id, randomUUID()))! };
-  }
-  async function completedWorker() {
-    const { workerId } = await f.service.spawn(f.caller, spawnInput());
-    f.manager.cancel(workerId);
-    await f.manager.awaitRunTermination(workerId, 5_000);
-    f.store.updateStep(workerId, 'task', { status: STEP_STATUS.done, sessionId: 'previous-session', backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(workerId);
-    setRunStatus(f.store, workerId, RUN_STATUS.done);
-    f.store.commitWorkerExecutionComplete(workerId, generation);
-    return workerId;
   }
 
   describe('workers', () => {
@@ -75,16 +65,6 @@ describe('task access', () => {
       const sent = await f.service.send(f.caller, message(workerId, 'progress'));
       expect(sent.delivery).not.toBe('not-delivered');
       await expect(f.service.destroy(f.caller, { workerId })).resolves.toMatchObject({ workerId });
-    });
-    it('refuses --resume of a settled worker once workers are off and accepts nothing', async () => {
-      const workerId = await completedWorker();
-      access(f.parent.id, { allowWorkers: false });
-      const request = { ...message(workerId), resume: true };
-      await expect(f.service.send(f.caller, request)).rejects.toMatchObject({ code: 'incompatible_state', message: WORKERS_OFF });
-      expect(f.store.getRun(workerId)).toMatchObject({ status: RUN_STATUS.done });
-      expect(f.store.getRun(f.parent.id)?.delegation).not.toHaveProperty('conversation.messages.0');
-      access(f.parent.id, { allowWorkers: true });
-      await expect(f.service.send(f.caller, request)).resolves.toMatchObject({ message: { resumed: true } });
     });
     it('refuses model and runner discovery once workers are off', async () => {
       access(f.parent.id, { allowWorkers: false });

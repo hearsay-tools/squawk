@@ -214,13 +214,6 @@ describe('durable conversations', () => {
     expect(sent.message.state).toBe('accepted');
     expect(Date.parse(sent.message.deadline!) - Date.parse(sent.message.createdAt)).toBe(7_200_000);
   });
-  it('allows a bounded day for resume requests but keeps ordinary requests bounded to two hours', async () => {
-    const w = await completedWorker();
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Fix review', timeoutSeconds: 86400 };
-    await expect(f.service.send(f.caller, request)).rejects.toThrow();
-    await expect(f.service.send(f.caller, { ...request, resume: true, timeoutSeconds: 86401 })).rejects.toThrow();
-    expect((await f.service.send(f.caller, { ...request, resume: true })).message.deadline).toBeDefined();
-  });
   it.each(['queued', 'running', 'waiting'] as const)('refuses an extended --resume deadline for a %s worker without accepting input', async status => {
     const w = await worker();
     setRunStatus(f.store, w.id, status);
@@ -262,16 +255,6 @@ describe('durable conversations', () => {
         expect(events.filter(event => event.type === 'request-outcome' && requestOutcomeSchema.safeParse(event.outcome).data?.status === 'replied-late')).toHaveLength(1);
       }
     } finally { vi.useRealTimers(); }
-  });
-  it('explains rejection with a parent-operated resume command and preserves that receipt on retry', async () => {
-    const w = await completedWorker();
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'progress' as const, text: 'Correct this', timeoutSeconds: 600 };
-    const rejected = await f.service.send(f.caller, request);
-    expect(rejected).toMatchObject({ delivery: 'not-delivered', effect: 'refused', message: { instruction: expect.stringContaining(`worker resume ${w.id}`) } });
-    expect(rejected.message.instruction).toMatch(/worker resume.*new.*ID/i);
-    await expect(f.service.send(f.caller, { ...request, resume: true })).rejects.toMatchObject({ code: 'invalid_input' });
-    await f.service.send(f.caller, { ...request, id: randomUUID(), resume: true });
-    expect(await f.service.send(f.caller, request)).toEqual({ ...rejected, effect: 'unchanged' });
   });
   it('atomically accepts one obligation and input across concurrent retries and restart', async () => {
     const w = await worker(); const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Which file?', timeoutSeconds: 600 };

@@ -9,7 +9,7 @@ import { runTaskCommand, taskHelp } from './cli.ts';
 import { taskCliFixture } from './cli.testkit.ts';
 describe('cez task', () => {
   const ctx = taskCliFixture();
-  const { io, run, last, start, withWebhook } = ctx;
+  const { io, run, last, start } = ctx;
   describe('command results (hearsay-tools/cezarion#2353)', () => {
 
 /** Replace only the response under test; other requests reach the real cockpit. */
@@ -124,24 +124,6 @@ describe('cez task', () => {
       try {
         expect(await run(['send', id, 'continue text', '--resume'])).toBe(2);
         expect(last()).toEqual({ code: 'refused', status: 409, error: 'cannot continue' });
-      } finally { spy.mockRestore(); }
-    });
-
-    it('sends the continuation text and omits a notification message', async () => {
-      await withWebhook();
-      const id = await start();
-      ctx.manager.cancel(id);
-      const spy = vi.spyOn(globalThis, 'fetch');
-      try {
-        expect(await run(['send', id, 'continue text', '--resume', '--notify'])).toBe(0);
-        expect(last()).toEqual({ id, delivery: 'resumed', notify: true });
-        const posts = spy.mock.calls.filter(([, init]) => init?.method === 'POST')
-          .map(([url, init]) => ({ url: String(url), body: JSON.parse(init!.body as string) as unknown }));
-        expect(posts).toEqual([
-          { url: `${ctx.cockpit.api}/runs/${id}/notify`, body: { notify: true } },
-          { url: `${ctx.cockpit.api}/runs/${id}/messages`, body: { text: 'continue text' } },
-          { url: `${ctx.cockpit.api}/runs/${id}/continue`, body: { text: 'continue text' } },
-        ]);
       } finally { spy.mockRestore(); }
     });
 

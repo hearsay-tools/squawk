@@ -3,24 +3,25 @@ import { randomUUID } from 'node:crypto';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import type { RunStore } from '../runs/store.ts';
-import type { FakeRunManager } from '../server/fake-run-manager.testkit.ts';
+import type { ProjectRunManager, RunManagerFactory } from '../server/project-context.ts';
 import { startTestCockpit, type TestCockpit } from './cockpit.testkit.ts';
 import { runTaskCommand, type TaskIo } from './cli.ts';
 import type { Cockpit } from './http.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
 
-/** Fresh real cockpit and output buffer for every case, including table rows. */
-export function taskCliFixture() {
+/** Fresh real cockpit and output buffer for every case, including table rows. A test that needs the
+ *  engine passes its manager factory; every other test runs on `FakeRunManager`. */
+export function taskCliFixture(createManager?: RunManagerFactory) {
   let harness: TestCockpit;
   let store: RunStore;
-  let manager: FakeRunManager;
+  let manager: ProjectRunManager;
   let cockpit: Cockpit;
   let out: string[];
   let discoveries: number;
 
   beforeEach(async () => {
-    harness = await startTestCockpit();
+    harness = await startTestCockpit(createManager);
     ({ store, manager, cockpit } = harness);
     out = [];
     discoveries = 0;
