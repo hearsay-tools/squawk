@@ -32,19 +32,19 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `detection` | `detection.ts` | The PATH name, the `*_BIN` override, the dry-run rule, the version banner and the hints. The "Open in" menu reads the binary and the override from here |
 | `cli` | `cli.ts` | How a terminal starts and resumes the CLI, the installer's source and `openTarget`, the "Open in" menu entry's label and icon key |
 | `login`, `loadLogin()` | `login.ts`, `login-probe.ts` | The status and login arguments, the install hint and the status parser |
-| `accounts` | `accounts.ts` | The account folder layout, the profile markers and the home slot |
+| `accounts` | `accounts.ts`; `homeDir()` in `definition.ts` | The account folder layout, the profile markers and the home slot (its key in `AgentHomePaths`, which `agentHomePaths()` in `paths.ts` builds from the registered runners). `homeDir(env, userHome)` resolves the runner's default home |
 | `env` | `env.ts` | The environment allow-list prefixes |
 | `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
 | `loadModelCatalog()` | `<id>-model-catalog.ts` | The host model discovery adapter |
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
-| `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane |
+| `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `runners/project-agents-file.ts`) names no runner |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
-| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases` and `parityExemptions`, the parity cells this runner's wire cannot carry (A9 exactly where `facts.nativeAsk` is not `answerable`) |
+| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
 | `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
 | `loadAdapter()` | `<id>-runner.ts` (or the adapter's own name) | The `AgentRunner` class |
 
 The folder also holds the runner's test data: `session-wire.testkit.ts` (how the mock's recorded
-command lines show a session), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
+wire shows a session, its prompts, steers, system prompt and skill triggers), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
 and `__fixtures__/golden.json` (values that tests outside the runner pin). `runnerDataRows`
 (`core/runner-data-rows.testkit.ts`) imports a per-runner data module, `runners/<id>/<file>`,
 for each id in `runners/ids.ts`: facts, extra tools, the mock part, the session wire and the
@@ -146,8 +146,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its mock script and that
-  script's data files, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
+- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its scripts in
+  `packages/cezar/scripts/`, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
   names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
   in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
   is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the

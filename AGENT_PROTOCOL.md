@@ -322,10 +322,10 @@ changes these places and no other file:
 - **Its folder**, `packages/cezar/src/runners/<id>/`: the definition and its data files, the
   adapter, the mapper, the catalogs, the test data files, the fixtures and every test of the
   runner, parity files included. No backend-specific type leaves it.
-- **Its mock script and that script's data files** in `packages/cezar/scripts/`: the mock, and
-  its skill captures in `mock-skill-data/<id>.mjs` when it lists skills. They stay there because
-  the packaged CLI tests and the mocks start them by path; the definition's `mock` part names the
-  script.
+- **Its scripts** in `packages/cezar/scripts/`: the mock script, its data files (the skill
+  captures in `mock-skill-data/<id>.mjs` when it lists skills) and any helper the runner ships.
+  They stay there because the packaged CLI tests and the mocks start them by path; the
+  definition's `mock` part names the mock script.
 - **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
 - **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
   when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`;
@@ -334,18 +334,25 @@ changes these places and no other file:
 What a new runner's folder holds:
 
 - `definition.ts` and the data file of each definition part (`docs/areas/runners.md` lists
-  them), the `mock` part's `parityExemptions` and the `cli` part's `openTarget` included;
-- `session-wire.testkit.ts`, which says how the mock's recorded command lines show a session, a
-  turn and its effort, and `ui-mapper-row.testkit.ts`, the runner's row of the mapper
-  robustness test;
-- `__fixtures__/golden.json`, the runner's own expected values for tests outside its code, and
-  the golden wire fixtures;
+  them). This includes the `accounts` part's home slot and `homeDir()`, the native files that
+  the `configFiles` part lists (a shared file such as the project `AGENTS.md` is read by every
+  runner that lists it), the `cli` part's `openTarget`, and the `mock` part's
+  `parityExemptions`, `scenarioEnv`, `sessionStore`, `selfSettledApprovalEcho` and
+  `missingSession`;
+- `session-wire.testkit.ts`, which says how the mock's recorded wire shows a session, a turn, its
+  effort, prompts, steers, the system prompt and skill triggers, and `ui-mapper-row.testkit.ts`,
+  the runner's row of the mapper robustness test;
+- `__fixtures__/golden.json`, the runner's own expected values for tests outside its code (the
+  keys are in `core/runner-golden.testkit.ts`), and the golden wire fixtures;
 - the per-runner parity files (`harness-<id>-*`, `waits-<id>-*`, `automation-tools-<id>-*`,
   `runner-skill-trigger-<id>-*`).
 
 The guard tests read these from the folder and fail with a message that names a missing piece.
-`.ai/scripts/simulate-sixth-runner.mjs` proves the list: it adds a sixth built-in runner to a
-scratch clone in these places only, and its header gives the exit check. An outside runner
+The parity test kits branch on a runner's declared facts and data, never on its id.
+`.ai/scripts/simulate-sixth-runner.mjs` proves the list in a scratch clone, and its header gives
+the exit check. Its default mode adds an incomplete runner in the four places; the guard tests
+must fail only by naming a missing piece. `--complete` copies a real runner's folder and scripts
+under a new id; every printed test passes. An outside runner
 (roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the smallest example: its
 test registers it, runs a task and runs the parity kit on it. The items below say what goes in
 the folder, and the rules that the guards do not force, or force only in part. The item numbers

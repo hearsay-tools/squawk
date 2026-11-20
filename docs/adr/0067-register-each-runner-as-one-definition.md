@@ -62,18 +62,28 @@ Rules:
 
 ## Consequences
 
-- A new built-in runner needs only `runners/<id>/`, its mock script and that script's data files
-  in `packages/cezar/scripts/`, its line in `runners/built-in.ts` and its id in
-  `runners/ids.ts`. `AGENT_PROTOCOL.md` §10 is the checklist. The folder holds the definition
-  parts, the per-runner parity exemptions (`mock.parityExemptions`; A9 exactly where
-  `facts.nativeAsk` is not `answerable`), the "Open in" menu entry (`cli.openTarget`, label and
-  icon key), `session-wire.testkit.ts`, `__fixtures__/golden.json` and the other fixtures, and
-  the per-runner parity files. The guard tests read these from the folders and name a missing
-  piece.
+- A new built-in runner needs only `runners/<id>/`, its scripts in `packages/cezar/scripts/`
+  (the mock script, its data files and any helper the runner ships), its line in
+  `runners/built-in.ts` and its id in `runners/ids.ts`. `AGENT_PROTOCOL.md` §10 is the
+  checklist. The folder holds the definition parts: the home slot and `accounts.homeDir()`, the
+  native files that `configFiles.files` lists (a file's readers are the runners that list it),
+  the "Open in" menu entry (`cli.openTarget`, label and icon key; the binary and its override
+  come from `detection`), and the mock data (`mock.parityExemptions`, with A9 exactly where
+  `facts.nativeAsk` is not `answerable`, and `scenarioEnv`, `sessionStore`,
+  `selfSettledApprovalEcho`, `missingSession`). It also holds `session-wire.testkit.ts`,
+  `__fixtures__/golden.json` and the other fixtures, and the per-runner parity files. The guard
+  tests and the parity test kits read these from the folders, branch on declared facts and data,
+  and name a missing piece.
+- A runner that declares a value of a turn-path fact that no runner declared before also adds a
+  shared-code unit test for that value to `FACT_VALUE_TESTS`. That table is keyed by value, not
+  by runner.
 - Two proofs hold it. The fixture runner (`runners/fixture/`, test files only) registers in its
   test, runs a task and passes the parity kit. `.ai/scripts/simulate-sixth-runner.mjs` adds a
-  sixth built-in runner to a scratch clone in those places only; the typecheck and the
-  roster-reading tests pass (the spec's implementation record has the run).
+  runner to a scratch clone: by default an incomplete one in the four places, whose tests may
+  fail only by naming a missing piece; with `--complete`, a copy of a real runner's folder and
+  scripts under a new id, whose tests pass. The spec's implementation record has the exit run.
+  Cells that a new runner skips because they still run on one named runner are
+  hearsay-tools/squawk#3998.
 - The compiler does not catch a misspelled runner id in core code. The registry check covers
   ids that arrive in a request. `cez/runner-id-branch` keeps code outside `core/` and `runners/`
   from comparing runner ids.

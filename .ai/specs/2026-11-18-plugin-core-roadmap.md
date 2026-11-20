@@ -69,8 +69,8 @@ needs no edit outside its own files. The [spec](2026-11-18-runner-definitions.md
 owner's decisions and the slices that did the work;
 [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) records the result.
 
-Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its mock script and that
-script's data files, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. `layer-import.baseline.json` holds no
+Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its scripts in
+`packages/cezar/scripts/`, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. `layer-import.baseline.json` holds no
 `runner` entry and `runner-roster-literal.baseline.json` holds no entry.
 
 ### Step 2: typed lifecycle and store ports
