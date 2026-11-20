@@ -36,3 +36,40 @@ One worktree per task at `.ai/cezar/worktrees/<runId>`, branch `cez/<id8>` off t
 **A worker's workspace is reached through its kind definition** (hearsay-tools/squawk#3819): `delegation/workspace-kinds.ts` holds one definition per `workspace.kind`. Delegation code calls `workspaceKind(workspace)` or `workspaceKindOf(run)` and then the definition; it does not call a kind's own functions (`workspace.ts`, `workspace-removal.ts`, `worktree-teardown.ts`, the context placement in `context.ts`) directly, and it does not compare `workspace.kind`. The run engine imports none of them: it asks the `WorkerWorkspacePort` (`workflows/run/worker-workspace-port.ts`) that `DelegationService.registerProject` registers with `RunManager.setWorkerWorkspaces`. A worker run on a manager with no port fails; it never gets an ordinary task worktree. Whether a worker owns the directory it works in is one fact per kind, `ownsDirectory` in `packages/contract/src/delegation.ts`: the run engine reads it through `runOwnsDirectory` (`workflows/run/run-workspace.ts`), the store, the run checkout module and the cockpit read it directly. A `shared` worker does not own its directory, so its run record never gets `worktreePath` or `branch`; code that needs the directory reads `delegation.workspace.path`.
 
 **Tools whose reports name a commit must resolve it once, then route every subsequent git call through one pinned helper**: pass `--attr-source=<sha>`, use a private index populated from that commit for index-based operations, and pass `--no-textconv` for raw-content reads. Require a PATH-shim call-log test that fails if any call after resolution bypasses the pin; see `.ai/skills/check-code-quality/scripts/changed-functions.mjs` (`pinnedGit`) and its test `every Git call after baseline resolution uses its pinned attribute source`.
+
+## Stacked and overlapping branches
+
+Read this before you start a branch on the head of an open pull request, or before two parallel
+workers or slices edit one file. Campaigns follow their own stricter rule instead:
+[campaign skill](../../.ai/skills/campaign/SKILL.md) and its
+[hot-file release](../../.ai/skills/campaign/references/hot-file-release.md#preserve-progress-when-patches-overlap).
+
+**After the base pull request is squash-merged, restack with one command**
+(hearsay-tools/squawk#3970):
+
+```sh
+npm run restack -- <base PR number>             # replay only this branch's own commits onto origin/main
+npm run restack -- <base PR number> --merge     # keep the history: merge commits only, no force-push
+npm run restack -- <base PR number> --dry-run   # list the commits it would replay; change nothing
+```
+
+Git reads the base's commits and the squash commit as different changes, so a plain
+`git merge origin/main` or `git rebase origin/main` conflicts in files this branch never changed.
+Merging the base's final head first does not help. `scripts/restack-after-squash.mjs` reads the
+base's final head from GitHub (`headRefOid`, fetched from `pull/<N>/head`, so a deleted branch
+works) and runs `git rebase --onto origin/main <final head>`. With `--merge` it merges the final
+head, then `origin/main` with the final head as the merge base, and writes nothing on a conflict.
+It refuses on an unmerged PR, a dirty tree, a detached HEAD or a branch that was not stacked on
+that PR. It never pushes: it prints the push command, with a lease on the old head after a rebase,
+and says whether the branch's own patch is unchanged, so that no new review round is needed.
+
+**Two slices that edit one file**, outside a campaign, in this order of preference:
+
+1. Cut the slices so that their file sets do not overlap.
+2. One slice owns every edit to the shared file.
+3. The second slice starts after the first merges.
+4. Last resort: the second slice starts on the first one's head and restacks with the command above
+   after the first is squash-merged.
+
+A rebase over a shared file sends a pull request through review and every check again. With 2, 3
+or 4, both pull request bodies name the shared file and the merge order.

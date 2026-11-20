@@ -79,7 +79,7 @@ holds that area's rules.
 | Real-time events (live UI signals, replacing polls) | [`docs/areas/realtime-events.md`](docs/areas/realtime-events.md) |
 | Workspace registry / per-user state | [`docs/areas/workspace-registry.md`](docs/areas/workspace-registry.md) |
 | Project-scoped routes & contexts (`/api/v1/p/:projectId`, `/p/:projectId`) | [`docs/areas/project-routes.md`](docs/areas/project-routes.md) |
-| Git / worktree logic | [`docs/areas/git-worktree.md`](docs/areas/git-worktree.md) |
+| Git / worktree logic, stacked/overlapping branches | [`docs/areas/git-worktree.md`](docs/areas/git-worktree.md) |
 | GitHub integration (issues/PRs tab, draft PRs) | [`docs/areas/github.md`](docs/areas/github.md) |
 | Automations (GitHub polls and schedules) | [`docs/areas/automations.md`](docs/areas/automations.md) |
 | Workflows (YAML chains, steps, retries) | [`docs/areas/workflows.md`](docs/areas/workflows.md) |
@@ -95,8 +95,7 @@ holds that area's rules.
 
 ## Validation
 
-In a fresh task worktree (`.ai/cezar/worktrees/<runId>`), run `pnpm install --frozen-lockfile`
-unless `worktreeSetup` already did.
+In a fresh task worktree, run `pnpm install --frozen-lockfile` unless `worktreeSetup` already did.
 
 - Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
   Read its verdicts. For a verdict now: `squeal run tests|run-loop <paths> --wait 60000`.

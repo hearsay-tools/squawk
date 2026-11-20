@@ -39,7 +39,9 @@ state and side-effect order determine
 whether work is independent. Every worker requests the release check before
 opening a PR, including when no hot file was predicted or an older brief says
 `none`; unexpected overlap still needs comparison and directed precedence. Plans that require stacked PRs or a shared
-integration branch return to planning for independently landable slices.
+integration branch return to planning for independently landable slices. A branch
+that is stacked anyway restacks after its base squash-merges as
+[Stacked and overlapping branches](../../../docs/areas/git-worktree.md#stacked-and-overlapping-branches) says.
 
 Keep `.ai/qa/campaign/state.json` in this worktree and link it from the handoff.
 Read [state](references/state.md) before inventory and on every resume. Record

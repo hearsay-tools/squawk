@@ -86,6 +86,8 @@ branches need no such edge. A missing or unfinished peer cannot be used to infer
 non-overlap or manufacture a new release; keep its unresolved hold and use the
 recorded schedule to identify the prerequisite owner. A semantic cycle returns
 to planning; never choose precedence that bypasses a semantic prerequisite.
+Outside a campaign, [Stacked and overlapping branches](../../../../docs/areas/git-worktree.md#stacked-and-overlapping-branches)
+states the order rule; a successor that started on its predecessor's head restacks with the command there.
 
 The coordinator owns releasing each predecessor, so the first overlapping PR
 can reach landing. Reconcile existing PRs and saved edges before resuming;
