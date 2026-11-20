@@ -16,7 +16,7 @@ import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -59,7 +59,7 @@ describe('usage SSE fan-out is scoped per project', () => {
       task: 'boot',
       steps: [],
     }).id;
-    contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
     await registerProject(repoRoot, undefined, testHome());
     app = createApp({ home: testHome(),
       repoRoot,

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts, ProjectContextsClosedError } from './project-context.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -36,7 +36,7 @@ describe('the branch sweep of a project context', () => {
   }
 
   function contexts(root: string, disposeWhileBuilding: boolean): ProjectContexts {
-    const made: ProjectContexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(),
+    const made: ProjectContexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(),
       listProjects: async () => [{ id: 'p', root, status: 'ok' as const }],
       // Runs before the build's awaits: disposal overtakes the build there.
       prepareManager: () => { if (disposeWhileBuilding) void made.disposeAll(); } });

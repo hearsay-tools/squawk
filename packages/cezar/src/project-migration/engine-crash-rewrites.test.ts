@@ -15,7 +15,7 @@ import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { Crash, crashAt, crashThenRecover, disposers, fence, beforeRepair, moved, owners, recordedMigration, rows, TIMEOUT } from './engine.testkit.ts';
 import { readProjectMigrationJournal } from './journal.ts';
 import { projectSnapshot, removeMigrationProject, TASK, type MigrationProject } from './project-migration.testkit.ts';
-import { createRunManager } from '../server/engine-run-manager.testkit.ts';
+import { createFakeRunManager } from '../server/fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -65,7 +65,7 @@ describe('crash recovery from the repair on', { timeout: TIMEOUT }, () => {
     crashed.release();
     const ownership = new CockpitOwnership();
     owners.push(ownership);
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), ownership,
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), ownership,
       listProjects: async () => [{ id: 'p', root: project.root, status: 'not-git' as const }] });
     disposers.push(() => contexts.disposeAll());
     await expect(ownership.acquire(project.newDir)).rejects.toBeInstanceOf(ProjectMigrationFencedError);

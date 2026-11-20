@@ -25,7 +25,7 @@ import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import {
   checkoutRepo,
   checkoutTarget,
@@ -646,7 +646,7 @@ describe('POST /api/v1/projects/checkout', () => {
     expect(body.error).toBeUndefined();
     expect(existsSync(join(target, '.git'))).toBe(true);
     expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
     try {
       expect((await apiRequest(makeApp({ contexts }), `/api/v1/p/${existing.id}/ui-state`)).status).toBe(200);
     } finally {

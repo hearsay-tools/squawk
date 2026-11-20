@@ -18,7 +18,7 @@ import { createApp, projectRouteManifest, type ProjectRouteInfo } from './server
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -79,7 +79,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       task: 'parity',
       steps: [],
     }).id;
-    contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
     bootId = (await registerProject(repoRoot, undefined, testHome())).id;
     app = createApp({ home: testHome(),
       repoRoot,

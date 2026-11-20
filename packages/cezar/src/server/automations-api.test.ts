@@ -26,13 +26,13 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { registerProject, listProjects} from '../workspace/projects.ts';
 import { ProjectContexts } from './project-context.ts';
-import { RunManager, type AutomationToolService, type StartRunInput } from '../workflows/run.ts';
+import type { RunManager, AutomationToolService, StartRunInput } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { startServer } from './start-server.ts';
 import { createApp, WorkspaceEventBus } from './server.ts';
 import { projectPaths } from '../project-paths.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 
 
 // Server prewarming outlives the HTTP response. Keep unrelated host discovery
@@ -916,7 +916,7 @@ describe('GitHub automation API', () => {
     writeFileSync(join(dataDir, 'automation-state.json'), JSON.stringify({ version: 1, states: { nightly: { revision: 1, nextRunAt: occurrenceAt } } }));
     const startRun = vi.fn();
     const fired = vi.spyOn(ScheduleRunner.prototype, 'fire');
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()),
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome()),
       prepareManager: ({ store: projectStore, manager }) => {
         const launch = vi.spyOn(manager, 'startRun').mockImplementation((workflow, input) => {
           startRun();

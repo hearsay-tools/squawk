@@ -15,12 +15,12 @@ import {
 } from '../core/provider-auth.ts';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
-import { RunManager } from '../workflows/run.ts';
+import type { RunManager } from '../workflows/run.ts';
 import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { WorkspaceEventBus, createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
@@ -444,7 +444,7 @@ describe('workspace provider API', () => {
     lazyStore.close();
     lazyStore.removeAllListeners();
 
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(),
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(),
       listProjects: async () => [{ id: 'lazy', root: lazyRoot, status: 'not-git' }],
       prepareManager: ({ store: recoveringStore, manager }) => {
         const recover = vi.spyOn(manager, 'recover').mockImplementationOnce(async () => {

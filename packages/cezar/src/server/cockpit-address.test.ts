@@ -15,7 +15,7 @@ import { clearProjectProbeCache, listProjects, registerProject } from '../worksp
 import { ProjectContexts } from './project-context.ts';
 import { startServer } from './start-server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './engine-run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 
 
 /**
@@ -53,7 +53,7 @@ describe('startServer cockpit address', () => {
     const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
     const otherId = (await registerProject(otherRoot, undefined, testHome())).id;
     const store = RunStore.open(join(bootRoot, '.ai/cezar'), { keepLive: true });
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
     const setCockpitAddress = vi.fn();
     const server = startServer({ home: testHome(),
       repoRoot: bootRoot,
@@ -81,7 +81,7 @@ describe('startServer cockpit address', () => {
     const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
     const otherId = (await registerProject(otherRoot, undefined, testHome())).id;
     const store = RunStore.open(join(bootRoot, '.ai/cezar'), { keepLive: true });
-    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
     const built = await contexts.context(otherId);
     const server = startServer({ home: testHome(), repoRoot: bootRoot, bootProjectId: bootId, store,
       manager: { isActive: () => false, setCockpitAddress: vi.fn() } as unknown as RunManager, version: '0.0.0-test', contexts }, 0);
@@ -98,7 +98,7 @@ describe('startServer cockpit address', () => {
   it('addresses the requested port when the supplied listener is bound to a socket path', async () => {
     const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
     const store = RunStore.open(join(bootRoot, '.ai/cezar'), { keepLive: true });
-    const manager = createRunManager(store, bootRoot, { home: testHome(), createRunner });
+    const manager = createFakeRunManager(store, bootRoot, { home: testHome(), createRunner });
     const socketDir = mkdtempSync(join(tmpdir(), 'cez-address-socket-'));
     const listener = createServer();
     listener.listen(join(socketDir, 'cockpit.sock'));
