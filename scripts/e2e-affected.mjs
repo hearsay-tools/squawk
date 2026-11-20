@@ -395,9 +395,10 @@ function ruleSpecs(file, { map, graph, changes, partial, boot }, readers) {
 }
 
 /**
- * The specs one changed file selects: a list, or null for every spec, with the reason. The
- * loaded-file rule only narrows an answer of every spec: a file no process the suite started
- * loaded selects the specs that load it now and the incomplete specs instead.
+ * The specs one changed file selects: a list, or null for every spec, with the reason. For a file
+ * no process the suite started loaded, the loaded-file rule narrows an answer of every spec to the
+ * specs that load it now and the incomplete specs, and adds the incomplete specs to a list; an
+ * answer of no spec (a unit test, a reviewed path) stays.
  */
 export function classify(file, context) {
   const { map, graph, atMap, setupChanged = false } = context;
@@ -407,9 +408,13 @@ export function classify(file, context) {
   if (graph.config?.has(file)) return every('the browser suite configuration imports it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
   const result = ruleSpecs(file, context, readers);
-  if (result.specs !== null || !unloaded(file, map, atMap)) return result;
+  if (!unloaded(file, map, atMap) || (result.specs !== null && result.specs.length === 0)) return result;
   // A setup main changed after the map may load what the map saw no process load.
-  return setupChanged && reaches(graph.setup, file) ? result : notLoaded(map, readers);
+  if (result.specs === null && setupChanged && reaches(graph.setup, file)) return result;
+  // The specs that load it now keep their answer; the evidence that it was unloaded is the map's,
+  // so the incomplete specs and main's later changes (drift) count as for mapped code.
+  const narrowed = notLoaded(map, readers);
+  return result.specs === null ? narrowed : { ...result, specs: [...new Set([...result.specs, ...narrowed.specs])], mapped: true };
 }
 
 /**

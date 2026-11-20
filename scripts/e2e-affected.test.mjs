@@ -310,6 +310,10 @@ test('a code file no process loaded selects no spec when the map lists every loa
   const unitAtMap = new Set(['packages/cezar/src/workflows/process-waits.test.ts', 'packages/cezar/src/lint/rule.ts']);
   assert.deepEqual(classify('packages/cezar/src/workflows/process-waits.test.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
   assert.deepEqual(classify('packages/cezar/src/lint/rule.ts', { map: withIncomplete, graph, atMap: unitAtMap }).specs, []);
+  // A helper a spec loads now keeps its readers, adds the incomplete specs and counts as mapped.
+  const helper = classify('packages/web/e2e/poll.ts', { map: withIncomplete, graph, atMap: new Set(['packages/web/e2e/poll.ts']) });
+  assert.deepEqual(helper.specs, [spec('artifact-project-links'), spec('smoke')]);
+  assert.equal(helper.mapped, true);
   assert.match(mapProblem(sampleMap({ nodeLoaded: [3] })), /loaded files/);
   assert.match(mapProblem(sampleMap({ nodeLoaded: 'x' })), /loaded files/);
 });
