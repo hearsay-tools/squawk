@@ -74,12 +74,16 @@ post-build package check.
 <a id="review-apps"></a>
 
 Two GitHub apps review pull requests into `main`. Neither is part of CI, and
-neither posts a commit status or a check run:
+neither check is required:
 
 - **CodeRabbit** (`coderabbitai`) reviews each new head, usually within 20 minutes of
-  the push, and sometimes much later or not at all.
+  the push. Its `CodeRabbit` check run on the head is in progress while it reviews and
+  completes when it is done, `neutral` when it skipped the review ("Review rate
+  limited").
 - **The Codex connector** (`chatgpt-codex-connector`) reviews once, a few minutes
-  after the PR opens, and not later heads.
+  after the PR opens, and not later heads. It posts no check run.
+
+The Macroscope app also posts a check run, which it skips; it opens no threads.
 
 Their threads block the merge like any other thread: the `Protect main` ruleset
 requires every review thread resolved. They often arrive after CI and the local review
