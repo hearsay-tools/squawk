@@ -1,4 +1,4 @@
-import { STEP_KIND } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -142,7 +142,39 @@ describe('railSteps — a finished run draws no live step (hearsay-tools/squawk#
     expect(railProgress(railSteps({ status, steps }))).toBe(1)
   })
 
-  it.each<RunStatus>(['queued', 'running', 'waiting', 'review'])('a %s run keeps its steps as stored', (status) => {
-    expect(railSteps({ status, steps })).toBe(steps)
+  it.each<RunStatus>(['queued', 'running', 'waiting', 'review'])('a %s run keeps one live step', (status) => {
+    expect(statuses({ status, steps })).toEqual(['done', 'done', 'running', 'review', 'pending'])
+  })
+
+  it('a live run with no parked earlier turn keeps its steps as stored', () => {
+    const live = [step('a', 'done'), step('b', 'running'), step('c', 'pending')]
+    expect(railSteps({ status: RUN_STATUS.running, steps: live })).toBe(live)
+  })
+})
+
+describe('railSteps — a live run draws only its current turn as running', () => {
+  const statuses = (run: RailRun) => railSteps(run).map((s) => s.status)
+  // The shape the server stores: each Continue leaves the turn it resumes `waiting`.
+  const parked = [step('task', 'waiting'), step('continue-1', 'waiting'), step('continue-2', 'waiting'), step('continue-3', 'running')]
+
+  it('draws the earlier parked turns as done and the current step as running', () => {
+    expect(statuses({ status: RUN_STATUS.running, currentStepId: 'continue-3', steps: parked })).toEqual(['done', 'done', 'done', 'running'])
+  })
+
+  it('a parked run keeps its current waiting step live', () => {
+    const waiting = parked.map((s) => s.id === 'continue-3' ? { ...s, status: STEP_STATUS.waiting } : s)
+    const drawn = railSteps({ status: RUN_STATUS.waiting, currentStepId: 'continue-3', steps: waiting })
+    expect(drawn.map((s) => railVisual(s.status))).toEqual(['done', 'done', 'done', 'active'])
+    render(<StepRail steps={drawn} />)
+    expect(screen.getAllByRole('status', { name: 'Step running' })).toHaveLength(1)
+  })
+
+  it('without currentStepId the last active step stays live', () => {
+    expect(statuses({ status: RUN_STATUS.waiting, steps: parked.slice(0, 3) })).toEqual(['done', 'done', 'waiting'])
+  })
+
+  it('a later workflow step still to run stays pending', () => {
+    const steps = [step('task', 'waiting'), step('continue-1', 'running'), step('verify', 'pending')]
+    expect(statuses({ status: RUN_STATUS.running, currentStepId: 'continue-1', steps })).toEqual(['done', 'running', 'pending'])
   })
 })
