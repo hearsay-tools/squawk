@@ -276,6 +276,12 @@ export const NO_SPEC = [
   [/^squeal\.config\.json$/, "Squeal's configuration, which no spec or server reads"],
 ];
 
+// Files the suite setup reads only to order and shard the specs: a change reorders the run, and
+// any spec order must pass (owner decision, 2026-11-20).
+export const ORDER_ONLY = [
+  [/^\.github\/(?:cockpit-)?test-durations\.json$/, 'measured durations, which only order and shard the specs'],
+];
+
 // Code that only a Node process can load, so the map's `nodeLoaded` list answers for it. Cockpit
 // and api-client sources are bundled: the browser evidence in `sources` answers for those.
 const NODE_CODE = /^(?:packages\/cezar\/(?:src|scripts)\/|packages\/contract\/src\/|packages\/web\/e2e\/|\.ai\/scripts\/|scripts\/).+\.(?:[cm]?[jt]s|tsx|jsx)$/;
@@ -380,8 +386,7 @@ export function changedLines(diff) {
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
 /** The specs one changed file selects by the static rules and the function evidence. */
-function ruleSpecs(file, { map, graph, changes, partial, boot }, readers) {
-  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
+function ruleSpecs(file, { map, changes, partial, boot }, readers) {
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
@@ -395,26 +400,46 @@ function ruleSpecs(file, { map, graph, changes, partial, boot }, readers) {
 }
 
 /**
- * The specs one changed file selects: a list, or null for every spec, with the reason. For a file
- * no process the suite started loaded, the loaded-file rule narrows an answer of every spec to the
- * specs that load it now and the incomplete specs, and adds the incomplete specs to a list; an
- * answer of no spec (a unit test, a reviewed path) stays.
+ * For a file no process the suite started loaded: an answer of every spec narrows to the specs that
+ * load it now and the incomplete specs, and a list adds the incomplete specs; an answer of no spec
+ * (a unit test, a reviewed path) stays. The evidence that it was unloaded is the map's, so the
+ * answer counts as mapped and main's later changes (drift) add their specs.
  */
+function narrowUnloaded(result, map, readers) {
+  if (result.specs !== null && result.specs.length === 0) return result;
+  const narrowed = notLoaded(map, readers);
+  return result.specs === null ? narrowed : { ...result, specs: [...new Set([...result.specs, ...narrowed.specs])], mapped: true };
+}
+
+/**
+ * Code the suite setup loads runs once before any spec, so a break fails every spec and any one
+ * spec shows it: the boot spec joins the file's own answer (owner decision, 2026-11-20).
+ */
+function withSetupBoot(result, boot) {
+  if (result.specs === null) return result;
+  if (!boot) return every('the browser suite setup loads it, and no spec has complete evidence to show setup still runs');
+  return { ...result, specs: [...new Set([...result.specs, boot])],
+    reason: `${result.reason}, and the boot spec: the browser suite setup loads it` };
+}
+
+/** The specs one changed file selects: a list, or null for every spec, with the reason. */
 export function classify(file, context) {
-  const { map, graph, atMap, setupChanged = false } = context;
+  const { map, graph, atMap, boot, setupChanged = false } = context;
   if (isDocsPath(file)) return none('documentation');
+  const order = ORDER_ONLY.find(([pattern]) => pattern.test(file));
+  if (order) return none(order[1]);
   // Vite bundles the Vitest config and what it imports into a temporary file, so no coverage
   // report names them.
   if (graph.config?.has(file)) return every('the browser suite configuration imports it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
   const result = ruleSpecs(file, context, readers);
-  if (!unloaded(file, map, atMap) || (result.specs !== null && result.specs.length === 0)) return result;
-  // A setup main changed after the map may load what the map saw no process load.
-  if (result.specs === null && setupChanged && reaches(graph.setup, file)) return result;
-  // The specs that load it now keep their answer; the evidence that it was unloaded is the map's,
-  // so the incomplete specs and main's later changes (drift) count as for mapped code.
-  const narrowed = notLoaded(map, readers);
-  return result.specs === null ? narrowed : { ...result, specs: [...new Set([...result.specs, ...narrowed.specs])], mapped: true };
+  const setup = reaches(graph.setup, file);
+  if (unloaded(file, map, atMap)) {
+    // A setup main changed after the map may load what the map saw no process load.
+    if (setup && setupChanged) return every('the browser suite setup loads it, and main changed the setup after the map');
+    return narrowUnloaded(result, map, readers);
+  }
+  return setup ? withSetupBoot(result, boot) : result;
 }
 
 /**

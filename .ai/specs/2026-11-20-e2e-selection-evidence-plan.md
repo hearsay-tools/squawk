@@ -12,9 +12,11 @@ reads, so that "every spec" is the answer only when the evidence really says so.
 
 - The PR policy for a full selection. A full selection still runs no spec on the PR, and the
   merge queue still runs every spec (owner decision, 2026-11-20).
-- Narrowing the static rules by hand: type-only imports in the setup scan, the duration JSON
-  files, extra `NO_SPEC` rows. Slice 3 makes most of these unnecessary for code files. Files
-  that are not code keep their current rules.
+- Narrowing the static rules by hand: type-only imports in the setup scan and extra `NO_SPEC`
+  rows. Slice 3 makes most of these unnecessary for code files. Files that are not code keep their
+  current rules, except the duration JSON files (below).
+- Function evidence for the contract: `inline-contract.mjs` bundles it without a source map, so
+  contract edits keep selecting every spec (owner chose option A over B, 2026-11-20).
 - Cockpit (`packages/web/src`) selection. It already works per file.
 
 ## Evidence
@@ -131,7 +133,8 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | The same, but some process left no coverage | Every spec | Every spec (no `nodeLoaded` in the map) |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
 | File the Vitest config imports | Every spec | Every spec (Vite bundles it) |
-| Code file the static setup scan reaches and a process loaded | Every spec | Every spec |
+| Code file the static setup scan reaches and a process loaded | Every spec | Boot spec + its own answer (function evidence, readers); every spec when its own answer is every spec (owner decision A, 2026-11-20) |
+| `.github/test-durations.json`, `.github/cockpit-test-durations.json` | Every spec (setup reads them) | No spec: they only order and shard the specs (owner decision, 2026-11-20) |
 | Code file the static setup scan reaches but no process loaded (a type-only import, say) | Every spec | Specs that load it now + incomplete specs |
 | The same, after `main` changed a file the setup scan reaches since the map (drift) | Every spec | Every spec |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |

@@ -285,7 +285,7 @@ test('a code file no process loaded selects no spec when the map lists every loa
   const setupDrift = selectSpecs({ files: [definition], map, graph: withSetup, specFiles: map.specs, atMap: both,
     drift: { files: ['packages/web/e2e/vitest.config.ts'], changes: new Map() } });
   assert.equal(setupDrift.all, true);
-  assert.match(setupDrift.reason, /runner-definition\.ts needs every spec \(the browser suite setup loads it\)/);
+  assert.match(setupDrift.reason, /runner-definition\.ts needs every spec \(the browser suite setup loads it, and main changed the setup after the map\)/);
   // A spec that loads the file now, and the specs with incomplete evidence, still run.
   assert.deepEqual(classify('packages/web/e2e/poll.ts', { map, graph, atMap: new Set(['packages/web/e2e/poll.ts']) }).specs,
     [spec('artifact-project-links')]);
@@ -316,6 +316,23 @@ test('a code file no process loaded selects no spec when the map lists every loa
   assert.equal(helper.mapped, true);
   assert.match(mapProblem(sampleMap({ nodeLoaded: [3] })), /loaded files/);
   assert.match(mapProblem(sampleMap({ nodeLoaded: 'x' })), /loaded files/);
+});
+
+test('code the suite setup loads selects the boot spec and its own answer; durations select none', () => {
+  // Owner decisions, 2026-11-20 (.ai/specs/2026-11-20-e2e-selection-evidence-plan.md).
+  const file = 'packages/cezar/src/core/runner-definition.ts';
+  const withSetup = { ...graph, setup: new Set([...graph.setup, file, '.github/test-durations.json', '.github/cockpit-test-durations.json']) };
+  const map = sampleMap({ functions: { [file]: [{ start: 1, end: 50, specs: [], startup: true }, { start: 10, end: 20, specs: [1] }] } });
+  const pick = (ranges, boot = spec('smoke')) => classify(file, { map, graph: withSetup, boot, changes: new Map([[file, ranges]]) });
+  assert.deepEqual(pick([{ start: 15, end: 15 }]).specs, [spec('chat-code-fence'), spec('smoke')]);
+  assert.match(pick([{ start: 15, end: 15 }]).reason, /and the boot spec: the browser suite setup loads it/);
+  // Code without its own answer (an e2e helper no spec names) still selects every spec.
+  assert.equal(classify('packages/web/e2e/agent-browser.ts', { map, graph: withSetup, boot: spec('smoke') }).specs, null);
+  // Without a boot spec, setup code selects every spec.
+  assert.equal(pick([{ start: 15, end: 15 }], null).specs, null);
+  for (const durations of ['.github/test-durations.json', '.github/cockpit-test-durations.json']) {
+    assert.deepEqual(classify(durations, { map, graph: withSetup, boot: spec('smoke') }).specs, [], durations);
+  }
 });
 
 test('a reviewed no-spec path still selects the specs that load it, and setup still selects every spec', () => {
