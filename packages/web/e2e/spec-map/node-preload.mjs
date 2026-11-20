@@ -33,6 +33,9 @@ if (isMainThread && !isServer && !owner && capturing) recordProcess(loaded);
  */
 function logLoads(directory) {
   const log = join(directory, `loads-${process.pid}-${threadId}.txt`);
+  // Written before anything loads: an empty log records a process that loaded no repository file,
+  // such as TypeScript 7's tsc.js, which execve()s the native compiler.
+  appendFileSync(log, '');
   const record = name => {
     if (typeof name !== 'string' || name.includes('/node_modules/')) return;
     if (name.startsWith('file:') || name.startsWith('/')) appendFileSync(log, `${name}\n`);

@@ -76,6 +76,24 @@ test('a process killed with SIGKILL leaves the modules it loaded, its worker thr
   expect(log(1)).toEqual(expect.arrayContaining([pathToFileURL(join(directory, 'inner.js')).href, pathToFileURL(join(directory, 'dep.js')).href]))
 })
 
+test('a process that loads no repository file before it ends leaves an empty load log', async () => {
+  // Measured in the spec-map run: TypeScript 7's tsc.js, under node_modules, execve()s the native compiler.
+  const directory = temp()
+  const loaded = join(directory, 'loaded')
+  mkdirSync(loaded)
+  writeFileSync(join(loaded, 'capture.json'), '{}')
+  mkdirSync(join(directory, 'node_modules', 'tool'), { recursive: true })
+  const script = join(directory, 'node_modules', 'tool', 'tool.js')
+  writeFileSync(script, "console.log('ready'); process.stdin.resume();")
+  const { child, said } = start(script, { NODE_V8_COVERAGE: loaded })
+  await said('ready')
+  const exited = once(child, 'exit')
+  child.kill('SIGKILL')
+  await exited
+  expect(existsSync(join(loaded, `started-${child.pid}.json`))).toBe(true)
+  expect(readFileSync(join(loaded, `loads-${child.pid}-0.txt`), 'utf8')).toBe('')
+})
+
 test('a process whose coverage directory has no marker records nothing', async () => {
   const directory = temp()
   const coverage = join(directory, 'coverage')
