@@ -15,7 +15,7 @@ import { RunDatabase, RUNS_DB_FILE } from '../runs/run-database.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, type ProjectContextSource } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -70,7 +70,7 @@ describe('ProjectContexts.withMaintenanceStore', () => {
   });
 
   function makeContexts(projects: ProjectContextSource[] = [{ id: 'p', root, status: 'not-git' }]): ProjectContexts {
-    return new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: async () => projects });
+    return new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: async () => projects });
   }
 
   it.each<[string, (root: string) => void, boolean]>([

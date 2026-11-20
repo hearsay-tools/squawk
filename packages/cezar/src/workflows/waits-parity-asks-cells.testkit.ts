@@ -6,7 +6,7 @@ import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { until, store, manager, root, toolGenerationOf, terminal, semaphore } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, workflowDefSchema } from './types.ts';
@@ -38,7 +38,7 @@ async function expectHumanWaitAnswered(id: string, via: Wait['via']) {
   return wait!;
 }
 
-export function asksCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function asksCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U7h cezar_ask, an open question included, opens a human wait in the same wait list`, async () => {
       nativeWire(runner);
@@ -76,7 +76,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
 
     it(`${runner} U7h a native ask opens a human wait in the same wait list`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.ask!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.ask!, runner });
       if (exemptionFor('U7h', runner)) {
         // capability-absent: this wire has no native ask; its ask scenario calls cezar_ask.
         expect(exemptionFor('U7h', runner)?.kind).toBe('capability-absent');
@@ -108,7 +108,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
 
     it(`${runner} U9h provider failure with a human wait open leaves the run recoverable`, async () => {
       const wire = gatedProviderFailure(root, runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
       await until(wire.held);
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const registered = await tools.ask({ context: ASK_CONTEXT, questions }, new AbortController().signal);
@@ -127,7 +127,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
 
     it(`${runner} U9h clean close with a human wait open leaves the run recoverable`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const registered = await tools.ask({ context: ASK_CONTEXT, questions }, new AbortController().signal);
@@ -148,7 +148,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
     it(`${runner} U5a a nudge the agent answers with cezar_ask parks on that question after one extra turn`, async () => {
       nativeWire(runner);
       delete process.env.CEZ_MOCK_NUDGE_REPLY;
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => pendingQuestion(run.id) && humanOpen(run.id)[0]?.askSeq !== undefined);
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(1);
       expect(turnEnds(run.id)).toBe(2);
@@ -169,14 +169,14 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
         store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts } }]);
         return run;
       };
-      const plain = asRoot(HARNESS_ADAPTERS[runner].scenarios.baseline!);
+      const plain = asRoot(HARNESS_ADAPTERS[runner]!.scenarios.baseline!);
       await until(() => gated(plain.id));
       expect(humanOpen(plain.id)).toMatchObject([{ via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar }]);
       expect(manager.finishBlockedReason(plain.id)).toBeUndefined();
       expect(manager.finish(plain.id)).toBe(true);
       await until(() => store.getRun(plain.id)?.status === 'done' && !manager.isActive(plain.id));
       delete process.env.CEZ_MOCK_NUDGE_REPLY;
-      const asked = asRoot(HARNESS_ADAPTERS[runner].scenarios.baseline!, true);
+      const asked = asRoot(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, true);
       await until(() => pendingQuestion(asked.id));
       expect(humanOpen(asked.id)).toMatchObject([{ via: WAIT_VIA.cezar_ask, source: WAIT_SOURCE.agent }]);
       expect(manager.finishBlockedReason(asked.id)).toBe('Answer the pending human question before finishing.');
@@ -189,7 +189,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
     // run takes what a plain park took before it, and a wait the agent registers replaces it.
     it(`${runner} U5d the no-wait human wait raises no question, and the agent's own wait replaces it`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => gated(run.id));
       const noWait = humanOpen(run.id)[0]!;
       expect(noWait).toMatchObject({ via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar });
@@ -218,7 +218,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
         { id: 'implement', prompt: '{{task}}' }, { id: 'verify', command: 'true' },
       ] });
       const finishParked = async (mode: 'live' | 'continued' | 'closed') => {
-        const run = manager.startRun(mode === 'closed' ? QUICK_TASK_WORKFLOW : chain, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+        const run = manager.startRun(mode === 'closed' ? QUICK_TASK_WORKFLOW : chain, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
         await until(() => pendingQuestion(run.id) && humanOpen(run.id)[0]?.askSeq !== undefined);
         if (mode !== 'live') {
           sessionOf(run.id).end();
@@ -276,7 +276,7 @@ export function asksCells(runners: RunnerId[], it: typeof registerTest = registe
 
     it(`${runner} U15 an autonomous run is nudged with the autonomous wording until the budget, then opens a budget human wait`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['autonomous-cap']!, autonomous: true });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['autonomous-cap']!, autonomous: true });
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES - 2 });
       await until(() => gated(run.id));
       expect(prompted(runner, AUTONOMOUS_NUDGE)).toHaveLength(2);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { AgentBackend, ToolGrant } from '../core/agent-runner.ts';
-import { runnerDefinition, runnerIdOf } from '../core/runner-registry.ts';
+import type { ToolGrant } from '../core/agent-runner.ts';
+import { runnerDefinition, resolveRunnerId } from '../core/runner-registry.ts';
 
 import { workflowStepDefSchema as workflowStepSchema, workflowDefSchema } from '@open-mercato/cezar-contract/workflows';
 import { workflowFileSchema } from '@open-mercato/cezar-contract/workflow-file';
@@ -114,7 +114,7 @@ export const DEFAULT_ALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'Grep', 'Glob', '
 
 export function allowedToolsForStep(
   step: { allowedTools?: string[] | undefined } | undefined,
-  backend: AgentBackend | undefined,
+  backend: string | undefined,
 ): string[] {
   if (step?.allowedTools) return [...step.allowedTools];
   const extras = extrasFor(backend);
@@ -123,8 +123,8 @@ export function allowedToolsForStep(
 
 /** Extra tools unioned onto the default when a step does not set allowedTools: the runner
  *  definition's `extraTools`. */
-function extrasFor(backend: AgentBackend | undefined): readonly string[] {
-  return runnerDefinition(runnerIdOf(backend)).extraTools;
+function extrasFor(backend: string | undefined): readonly string[] {
+  return runnerDefinition(resolveRunnerId(backend)).extraTools;
 }
 
 /** Tool lists as a workflow step and a worker identity store them. */
@@ -139,7 +139,7 @@ export type ToolGrantLists = { allowedTools?: string[] | undefined; bashAllowlis
 export function stepToolGrant(
   pinned: ToolGrantLists | undefined,
   step: ToolGrantLists | undefined,
-  backend: AgentBackend | undefined,
+  backend: string | undefined,
 ): ToolGrant {
   const source = pinned ?? step;
   const bash = source?.bashAllowlist === undefined ? {} : { bashAllowlist: [...source.bashAllowlist] };

@@ -5,7 +5,7 @@ import { expect, onTestFinished, it as registerTest } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, STEP_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { store, manager, until, toolGenerationOf, semaphore, terminal, root, parent, worker, waitOf } from './worker-wait-core.testkit.ts';
 import { timed } from './waits.testkit.ts';
@@ -37,9 +37,9 @@ function expectHeldAtTheBound(id: string, waitId: string, { error = /^continue f
 }
 
 /** A cezar_ask question parked, then a timer whose note carries a native mock's ACK marker. */
-async function timerBesideQuestion(runner: RunnerId, note: string) {
+async function timerBesideQuestion(runner: string, note: string) {
   nativeWire(runner);
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
   await until(() => store.getRun(run.id)?.status === 'waiting');
   expect(manager.sendMessage(run.id, [{ type: 'text', text: askPrompt() }])).toBe(true);
   await until(() => pendingQuestion(run.id) && asks(run.id).length === 1);
@@ -68,7 +68,7 @@ function publishedStatuses(id: string): RunRecord['status'][] {
 }
 
 // A failed run cannot wake itself. Its absence shows at once, and no admission retry or backoff is left to start one later.
-const expectNoWakeFor = async (runner: RunnerId, id: string) => {
+const expectNoWakeFor = async (runner: string, id: string) => {
   await semaphore.release();
   expect(store.getRun(id)?.status).toBe('failed');
   expect(manager.isActive(id)).toBe(false);
@@ -76,7 +76,7 @@ const expectNoWakeFor = async (runner: RunnerId, id: string) => {
   await expectAdmissionRetryCleared(runner, id);
 };
 /** Continue delivers every held result once, and the run parks and finishes as usual. */
-async function continueDelivers(runner: RunnerId, id: string, timer: Wait, later: Wait) {
+async function continueDelivers(runner: string, id: string, timer: Wait, later: Wait) {
   expect(manager.continueRun(id, { text: 'go on' })).toEqual({ ok: true });
   // The store marks a wake delivered before the mock records the prompt it read; wait for both.
   await until(() => settled(id, timer.id)?.phase === 'delivered' && settled(id, later.id)?.phase === 'delivered'
@@ -89,7 +89,7 @@ async function continueDelivers(runner: RunnerId, id: string, timer: Wait, later
   await until(() => terminal.includes(store.getRun(id)?.status ?? ''));
 }
 
-export function deliveryCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function deliveryCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U12 a wait result beside a pending portable question is checkpointed only on its delayed provider acknowledgement, and the question stays answerable`, async () => {
       if (exemptionFor('U12', runner)) {
@@ -239,7 +239,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
     // A held result wakes nothing: the wake is queued synchronously inside the resolution, so its
     it(`${runner} U9c with a delivery-failure count on the record and the store refusing writes, Finish still stops the run`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       store.updateRun(run.id, { waitDeliveryFailures: 2 });
       store.flush();
@@ -257,7 +257,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       nativeWire(runner);
       const failure = persistentWakeFailure(root, runner);
       retryAtOnce();
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const { timer, later } = await timerWaits(run.id);
       sessionOf(run.id).end();
@@ -279,7 +279,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       observeAdmissionRetries();
       nativeWire(runner);
       retryAtOnce();
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const { timer, later } = await timerWaits(run.id);
       // Every session closes cleanly at a turn end while the result is owed, before Squawk can
@@ -317,7 +317,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       nativeWire(runner);
       const failure = persistentWakeFailure(root, runner);
       retryAtOnce();
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const { timer, later } = await timerWaits(run.id);
       sessionOf(run.id).end();
@@ -354,8 +354,8 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
     it(`${runner} U11 a timer open at a blocked done keeps its deadline, the run parks on it with the refusal as a note and no nudge, and its result is delivered`, async () => {
       nativeWire(runner);
       // Workers run on the Claude wire whatever the parent's runner is.
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       await until(() => store.getRun(p.id)?.status === 'waiting');
       let turns = turnEnds(p.id);
       expect(manager.sendMessage(p.id, [{ type: 'text', text: toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 600, note: 'u11' }) }])).toBe(true);
@@ -387,7 +387,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       it(`${runner} U9 provider failure with a ${kind} wait open leaves the run recoverable and the next wake delivers`, async () => {
         const external = github();
         const wire = gatedProviderFailure(root, runner);
-        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']! });
+        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
         await until(wire.held);
         const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
         const request = kind === 'pr' ? { kind, pr, timeout_seconds: 30 } as const : { kind, seconds: 60, note: 'u9' } as const;
@@ -411,7 +411,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       it(`${runner} U9 clean close with a ${kind} wait open leaves the run recoverable and the next wake delivers`, async () => {
         const external = github();
         nativeWire(runner);
-        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
         await until(() => store.getRun(run.id)?.status === 'waiting');
         const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
         const request = kind === 'pr' ? { kind, pr, timeout_seconds: 30 } as const : { kind, seconds: 60, note: 'u9' } as const;

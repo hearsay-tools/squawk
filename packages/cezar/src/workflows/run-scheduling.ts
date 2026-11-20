@@ -1,10 +1,10 @@
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import type { RunRecord } from '../runs/store.ts';
 import type { AccountHolds } from '../workspace/semaphore.ts';
 import type { StartRunInput } from './run/types.ts';
 import type { WorkflowDef } from './types.ts';
-import { runnerIdOf } from '../core/runner-registry.ts';
+import { resolveRunnerId } from '../core/runner-registry.ts';
 
 /**
  * A deadline hold blocks all work on its account. An in-flight resume holds fresh work only;
@@ -13,7 +13,7 @@ import { runnerIdOf } from '../core/runner-registry.ts';
 export function accountHeldFor(
   run: Pick<RunRecord, 'runner' | 'agentProfile' | 'status' | 'autoResumeAttempts' | 'autoResumeReason'>,
   holds: AccountHolds,
-  fallbackRunner: RunnerId,
+  fallbackRunner: string,
 ): boolean {
   const key = runAccountKey(run, fallbackRunner);
   if (holds.deadline.has(key)) return true;
@@ -26,7 +26,7 @@ export function accountHeldFor(
  */
 export function runAccountKey(
   run: Pick<RunRecord, 'runner' | 'agentProfile'>,
-  fallbackRunner: RunnerId,
+  fallbackRunner: string,
 ): string {
   return `${run.runner ?? fallbackRunner}:${run.agentProfile ?? 'default'}`;
 }
@@ -67,7 +67,7 @@ export function queuedRecoveryInput(run: RunRecord): StartRunInput {
     systemPrompt: run.systemPrompt,
     model: run.model,
     effort: run.effort,
-    runner: run.runner === undefined ? undefined : runnerIdOf(run.runner),
+    runner: run.runner === undefined ? undefined : resolveRunnerId(run.runner),
     autonomous: run.autonomous,
     worktree: run.worktree,
   };
@@ -101,7 +101,7 @@ export function deriveAccountHolds(
     if (run.removedRunner !== undefined) continue;
     // A holding run always carries the runner it actually ran on, so the fallback is unused
     // here — it is spelled out rather than `!` so a future record shape degrades, not throws.
-    const key = () => runAccountKey(withExecutionAccount(run), runnerIdOf(run.runner));
+    const key = () => runAccountKey(withExecutionAccount(run), resolveRunnerId(run.runner));
     // A provider-error hold blocks no account (hearsay-tools/squawk#3337): its error may be one
     // model's, and a run that meets the same limit holds by itself.
     if (isUsageLimitHold(run) && run.autoResumeReason !== 'provider-error') {

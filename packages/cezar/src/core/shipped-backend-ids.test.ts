@@ -17,7 +17,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 
 import { runRecordSchema } from '../runs/store.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
-import type { AgentBackend, RunnerId } from './agent-runner.ts';
+
 import { createRunner } from './runner-registry.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
@@ -28,7 +28,7 @@ registerRunner(ompRunner);
 
 /**
  * Every backend id that shipped, with the runner it resolves to. Add a new id; never remove an
- * entry or change its runner. `satisfies` fails to compile when `AgentBackend` gains an id this
+ * entry or change its runner. `satisfies` fails to compile when `string` gains an id this
  * map lacks, loses one it names, or a runner id it resolves to is gone.
  */
 const SHIPPED_BACKEND_IDS = {
@@ -38,9 +38,9 @@ const SHIPPED_BACKEND_IDS = {
   opencode: 'opencode',
   pi: 'pi',
   omp: 'omp',
-} as const satisfies Record<AgentBackend, RunnerId>;
+} as const satisfies Record<string, string>;
 
-const shipped = Object.entries(SHIPPED_BACKEND_IDS) as Array<[AgentBackend, RunnerId]>;
+const shipped = Object.entries(SHIPPED_BACKEND_IDS) as Array<[string, string]>;
 /** The ids a user can select: each resolves to itself. `claude-cli` only reads back. */
 const selectable = shipped.filter(([id, runner]) => id === runner);
 

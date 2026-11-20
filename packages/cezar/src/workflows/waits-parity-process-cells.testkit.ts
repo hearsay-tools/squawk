@@ -5,7 +5,7 @@ import { onTestFinished, it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { manager, until, store, root, toolGenerationOf, restart } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -23,7 +23,7 @@ function sleeper(): number {
 }
 const processText = (wait: Wait, rest: string) => `Process wait ${wait.id} for PID ${(wait as { pid: number }).pid}${rest}`;
 
-export function processCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function processCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U1p a process wait registers through cezar_wait on the native wire, parks keeping its slot, and wakes with its exit code`, async () => {
       const external = processes();
@@ -92,7 +92,7 @@ export function processCells(runners: RunnerId[], it: typeof registerTest = regi
     it(`${runner} U9p provider failure with a process wait open leaves the run recoverable and the next result delivers`, async () => {
       const external = processes();
       const wire = gatedProviderFailure(root, runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
       await until(wire.held);
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const registered = await tools.registerWait({ kind: WAIT_KIND.process, pid: sleeper(), timeout_seconds: 60 }, 'cezar_wait', new AbortController().signal);
@@ -113,7 +113,7 @@ export function processCells(runners: RunnerId[], it: typeof registerTest = regi
     it(`${runner} U9p clean close with a process wait open leaves the run recoverable and the next result delivers`, async () => {
       const external = processes();
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const registered = await tools.registerWait({ kind: WAIT_KIND.process, pid: sleeper(), timeout_seconds: 60 }, 'cezar_wait', new AbortController().signal);

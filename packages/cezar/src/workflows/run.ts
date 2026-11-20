@@ -49,7 +49,7 @@ import type { WorkerAccountBinding } from '../delegation/execution-identity.ts';
 import type { DelegationProvisioner } from '../delegation/provision.ts';
 import type { WorkerWorkspacePort } from './run/worker-workspace-port.ts';
 import { onUsage, type ProcessUsage } from '../core/process-usage.ts';
-import type { RunnerFactory, RunnerId } from '../core/agent-runner.ts';
+import type { RunnerFactory } from '../core/agent-runner.ts';
 import { seedHandoffFile } from '../handoff.ts';
 // Contract VALUES, like `workspaceUiStateSchema` in workspace/migrations.ts: the attachment
 // vocabulary the routes validate with is the same one the engine stores and re-reads by, so the
@@ -318,7 +318,7 @@ export class RunManager {
 
   #agentEnvForStep(
     runId: string,
-    backend: RunnerId,
+    backend: string,
     options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' } = {},
   ): Promise<{ env: Record<string, string>; profileId: string; accountBinding?: WorkerAccountBinding | undefined }> {
     return launchContext.agentEnvForStep(this.#context, {
@@ -391,7 +391,7 @@ export class RunManager {
    * does not know is refused rather than degraded to the default, because a worker silently
    * running on another login is a billing boundary crossed without anyone choosing it.
    */
-  async selectDelegationExecutionSettings(runId: string, selection: { backend?: RunnerId | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string }, validateModel?: (settings: DelegationExecutionSettings) => Promise<void>): Promise<DelegationExecutionSettings> {
+  async selectDelegationExecutionSettings(runId: string, selection: { backend?: string | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string }, validateModel?: (settings: DelegationExecutionSettings) => Promise<void>): Promise<DelegationExecutionSettings> {
     return selectDelegationExecutionSettings(this.#repoRoot, this.delegationExecutionSettings(runId), selection, validateModel, this.#context.home);
   }
 
@@ -646,7 +646,7 @@ export class RunManager {
     runId: string,
     stepId: string,
     sessionId: string | undefined,
-    backend: RunnerId,
+    backend: string,
     prompt: string,
     /** Attachments pasted into the follow-up composer — delivered with the
      *  reopened session's opening message, exactly like a live-session

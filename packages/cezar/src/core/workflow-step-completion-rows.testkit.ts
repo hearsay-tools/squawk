@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { STEP_COMPLETION_CRITERIA } from './harness-parity-core.testkit.ts';
 
 // The workflow-step-completion cells and their partition, apart from the engine the cell bodies
@@ -29,14 +29,14 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   ]
 };
 
-export type WorkflowStepCompletionCell = (backend: RunnerId, row: (typeof STEP_COMPLETION_CRITERIA)[number]) => CellBody;
+export type WorkflowStepCompletionCell = (backend: string, row: (typeof STEP_COMPLETION_CRITERIA)[number]) => CellBody;
 
 /** The registrar over one cell body per runner and criterion. */
 export function workflowStepCompletionParity(cell: WorkflowStepCompletionCell) {
   return function describeWorkflowStepCompletionParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-step-completion');
     describe('explicit step completion parity — hearsay-tools/cezarion#1620', () => {
-      for (const backend of RUNNER_IDS) for (const row of STEP_COMPLETION_CRITERIA) it(`${backend} ${row.id} ${row.name}`, cell(backend, row), 60_000);
+      for (const backend of BUILT_IN_RUNNER_IDS) for (const row of STEP_COMPLETION_CRITERIA) it(`${backend} ${row.id} ${row.name}`, cell(backend, row), 60_000);
     });
   };
 }

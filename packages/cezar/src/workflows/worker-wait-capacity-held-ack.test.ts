@@ -13,8 +13,8 @@ it.each(['codex', 'opencode', 'pi', 'omp'].flatMap(backend => ['agent', 'check']
     '$backend keeps a completed wake and following $next held until its real transport ACK at cap one', async ({ backend, next }) => {
       await withHeldAck(backend, async release => {
         process.env.CEZ_DRY_RUN = '0';
-        process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-        process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+        process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+        process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
         const run = manager.startRun({ name: 'ACK held chain', source: 'built-in', steps: [
           { id: 'first', prompt: 'mock:hold' },
           next === 'agent' ? { id: 'next', prompt: 'mock:cezar-done' } : { id: 'next', command: 'echo checked' },
@@ -50,7 +50,7 @@ it.each(['codex', 'opencode', 'pi', 'omp'].flatMap(backend => ['agent', 'check']
           await until(() => !!store.getRun(run.id)?.agentInputs?.find(input => input.id === wake?.id)?.deliveredAt);
           expect(waitOf(store.getRun(run.id))).toBeUndefined();
           // The wake turn signals nothing; the earlier step completes only on a done (hearsay-tools/cezarion#1620).
-          expect(manager.sendMessage(run.id, [{ type: 'text', text: HARNESS_ADAPTERS[backend].scenarios['cezar-done']! }])).toBe(true);
+          expect(manager.sendMessage(run.id, [{ type: 'text', text: HARNESS_ADAPTERS[backend]!.scenarios['cezar-done']! }])).toBe(true);
           await until(() => store.getRun(run.id)?.steps.find(step => step.id === 'next')?.status !== 'pending');
           expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')?.status).toBe('done');
           await until(() => !manager.isActive(run.id));

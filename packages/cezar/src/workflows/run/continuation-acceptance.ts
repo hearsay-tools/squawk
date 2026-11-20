@@ -1,6 +1,6 @@
 import { withCutOff } from './cut-off-work.ts';
 import { atContinue, atTaskHead } from './launch-read-resolver.ts';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
@@ -32,7 +32,7 @@ interface ContinuationAcceptanceHost {
   clearWakeBackoff(runId: string): void;
   dropActive(runId: string): void;
   pump(): Promise<void>;
-  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: RunnerId, prompt: string, images: PastedContent[]): Promise<void>;
+  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: string, prompt: string, images: PastedContent[]): Promise<void>;
   workerStep(runId: string, stepId: string | undefined): WorkerStepIdentity | undefined;
   isUntouchedCancelledRun(run: RunRecord): boolean;
   isSyntheticContinuation(run: RunRecord, step: StepState): boolean;
@@ -181,7 +181,7 @@ export class ContinuationAcceptance {
   }
 
   private dispatchAcceptedContinuation(runId: string, toLine: boolean, stepId: string,
-    resumeSessionId: string | undefined, targetRunner: RunnerId, prompt: string, images: PastedContent[]): { ok: boolean } {
+    resumeSessionId: string | undefined, targetRunner: string, prompt: string, images: PastedContent[]): { ok: boolean } {
     if (toLine) {
       this.line.enqueueContinuation(runId, {
         stepId, sessionId: resumeSessionId, backend: targetRunner, prompt, images, lineJoinedAt: Date.now(),

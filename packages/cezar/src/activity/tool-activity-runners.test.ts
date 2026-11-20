@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ActivityTool } from '@open-mercato/cezar-contract';
 import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { z } from 'zod';
 import { createOpencodeUiState, mapOpencodeEvent, opencodeSessionStarted, opencodeTurnStarted, STATUS_MAP as OPENCODE_TOOL_STATUS_MAP, type OpencodeUiMapperState } from '../runners/opencode/opencode-ui-mapper.ts';
@@ -24,7 +24,7 @@ const WIRE_TOOL_STATUS = z.enum(Object.keys(OPENCODE_TOOL_STATUS_MAP)).enum;
  * test holds the replay equal to `<fixture>.expected.json`), and what the tracker must show after
  * them. The `Record` makes a new runner fail to compile until it has a row.
  */
-const CASES: Record<RunnerId, { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> }> = {
+const CASES: Record<string, { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> }> = {
   // The denied call is first seen at its completion.
   claude: { fixture: 'claude/__fixtures__/failed-and-denied', calls: 2, latest: { title: 'Ran rm -rf node_modules', toolKind: 'execute', status: TOOL_STATUS.declined } },
   codex: { fixture: 'codex/__fixtures__/command-lifecycle', calls: 2, latest: { title: 'Ran bash -lc npm run lint', toolKind: 'execute', status: TOOL_STATUS.failed } },
@@ -50,11 +50,11 @@ function track(fixture: string, runId = 'run-1'): ToolActivityTracker {
 
 describe('tool activity from each runner’s mapper output', () => {
   it('has a fixture for every runner', () => {
-    expect(Object.keys(CASES).sort()).toEqual([...RUNNER_IDS].sort());
+    expect(Object.keys(CASES).sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
   });
 
-  it.each(RUNNER_IDS)('%s: its tool items reach the tracker through the UI event sink', (runner) => {
-    const { fixture, calls, latest } = CASES[runner];
+  it.each(BUILT_IN_RUNNER_IDS)('%s: its tool items reach the tracker through the UI event sink', (runner) => {
+    const { fixture, calls, latest } = CASES[runner]!;
     const read = track(fixture).read('run-1', NOW);
     expect(read?.tool).toEqual({ ...latest, startedAt: AT, endedAt: AT });
     expect(read?.rate.at(-1)).toBe(calls);

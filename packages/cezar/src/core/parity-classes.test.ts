@@ -1,7 +1,7 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { HARNESS_PARITY_GROUPS, harnessGroupRows, parityRowScenarios } from './harness-parity-cells.testkit.ts';
 import { CI_FAILURE_GROUPS, ciFailureRowId } from '../workflows/ci-wait-failure-rows.testkit.ts';
 import { RESUME_DIAGNOSTICS_GROUPS, resumeDiagnosticsCells } from '../workflows/resume-diagnostics.testkit.ts';
@@ -25,7 +25,7 @@ const src = join(import.meta.dirname, '..');
 
 describe('the scenario runner and the fact-value unit tests (docs/adr/0063-one-scenario-runner.md)', () => {
   it('runs shared and no-session rows on the scenario runner alone', () => {
-    expect(RUNNER_IDS).toContain(SCENARIO_RUNNER);
+    expect(BUILT_IN_RUNNER_IDS).toContain(SCENARIO_RUNNER);
     expect(SHARED_RUNNERS).toEqual([SCENARIO_RUNNER]);
     expect(NO_SESSION_RUNNER).toBe(SCENARIO_RUNNER);
   });
@@ -90,14 +90,14 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
   });
 
   it('runs the per-runner smoke rows R1 and U1 on every runner', () => {
-    expect(parityRunners('harness:run', 'R1')).toEqual(RUNNER_IDS);
-    expect(parityRunners('waits', 'U1')).toEqual(RUNNER_IDS);
+    expect(parityRunners('harness:run', 'R1')).toEqual(BUILT_IN_RUNNER_IDS);
+    expect(parityRunners('waits', 'U1')).toEqual(BUILT_IN_RUNNER_IDS);
   });
 
   it('runs a row any runner is exempt from, and a cell with no row id, on every runner', () => {
-    expect(parityRunners('waits', 'U27')).toEqual(RUNNER_IDS);
-    expect(parityRunners('workflow-autonomous', 'A9')).toEqual(RUNNER_IDS);
-    expect(parityRunners('waits', undefined)).toEqual(RUNNER_IDS);
+    expect(parityRunners('waits', 'U27')).toEqual(BUILT_IN_RUNNER_IDS);
+    expect(parityRunners('workflow-autonomous', 'A9')).toEqual(BUILT_IN_RUNNER_IDS);
+    expect(parityRunners('waits', undefined)).toEqual(BUILT_IN_RUNNER_IDS);
     expect(parityRunners('waits', 'U2')).toEqual(SHARED_RUNNERS);
     expect(parityRunners('server-contract', 'R1')).toEqual([NO_SESSION_RUNNER]);
   });
@@ -108,7 +108,7 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
   it('runs every registered row whose scenario runs runner code on every runner', () => {
     const shared = [...familyRowScenarios()].flatMap(([family, rows]) => [...rows]
       .filter(([row, scenarios]) => [...scenarios].some(scenario => SCENARIO_CLASSES[scenario][0] === 'runner-code')
-        && parityRunners(family as ParityFamilyName, row).length !== RUNNER_IDS.length)
+        && parityRunners(family as ParityFamilyName, row).length !== BUILT_IN_RUNNER_IDS.length)
       .map(([row, scenarios]) => `${family} ${row} (${[...scenarios].join(', ')})`));
     expect(shared).toEqual([]);
     expect(familyRowCatalog().get('ci-wait-failure')).toEqual(new Set(['R72', 'R73', 'R74', 'R75', 'R76']));
@@ -116,14 +116,14 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
     const checked = familyRowScenarios();
     expect(Object.entries(PARITY_FAMILIES).filter(([family, entry]) => entry.class === 'shared' && !checked.has(family)).map(([family]) => family)).toEqual([]);
     expect([...checked].flatMap(([family, rows]) => [...rows]
-      .filter(([row, scenarios]) => scenarios.size === 0 && parityRunners(family as ParityFamilyName, row).length !== RUNNER_IDS.length)
+      .filter(([row, scenarios]) => scenarios.size === 0 && parityRunners(family as ParityFamilyName, row).length !== BUILT_IN_RUNNER_IDS.length)
       .map(([row]) => `${family} ${row}`))).toEqual([]);
     expect(familyRowCatalog().get('resume-diagnostics')).toEqual(new Set(['R85', 'R86', 'R87', 'R88', 'R89', 'R90', 'R91']));
   });
 
   it('classes every scenario a native mock declares, and every scenario a row drives', () => {
     // The adapters are the registered runners' `mock` parts: a test file that registered fewer would declare fewer scenarios.
-    expect(Object.keys(HARNESS_ADAPTERS)).toEqual([...RUNNER_IDS]);
+    expect(Object.keys(HARNESS_ADAPTERS)).toEqual([...BUILT_IN_RUNNER_IDS]);
     const declared = new Set(Object.values(HARNESS_ADAPTERS).flatMap(adapter => Object.keys(adapter.scenarios)));
     expect([...declared].filter(name => !Object.hasOwn(SCENARIO_CLASSES, name))).toEqual([]);
     expect(parityRowScenarios().filter(row => !Object.hasOwn(SCENARIO_CLASSES, row.scenario)).map(row => row.id)).toEqual([]);
@@ -236,7 +236,7 @@ function combinationRowProblems(exceptions: Readonly<Record<string, CombinationE
     const registered = catalog.get(family);
     if (!registered) return [`${site}: ${family} has no row catalog here; add one before naming its rows`];
     if (!registered.has(row)) return [`${site}: ${row} is not a registered row of ${family}`];
-    if (parityRunners(family as ParityFamilyName, row).length !== RUNNER_IDS.length) return [`${site}: ${entry} does not run on every runner`];
+    if (parityRunners(family as ParityFamilyName, row).length !== BUILT_IN_RUNNER_IDS.length) return [`${site}: ${entry} does not run on every runner`];
     return [];
   });
 }

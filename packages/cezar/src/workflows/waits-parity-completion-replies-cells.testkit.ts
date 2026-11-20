@@ -5,7 +5,7 @@ import { it as registerTest, expect, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { store, semaphore, manager, until, timeline, root } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -15,7 +15,7 @@ import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('completion-replies', completionRepliesCells);
 
-export function completionRepliesCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function completionRepliesCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U21h an ignored refusal with only uncollected results parks on Squawk's human wait`, async () => {
       const reply = repliesDoneAgain();
@@ -34,8 +34,8 @@ export function completionRepliesCells(runners: RunnerId[], it: typeof registerT
     it(`${runner} U21a an autonomous parent's ignored refusal is nudged again until the budget`, async () => {
       const reply = repliesDoneAgain();
       nativeWire(runner);
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['autonomous-cap']!, autonomous: true });
+      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['autonomous-cap']!, autonomous: true });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       // The opening turn spends what is left and parks on the budget; the workers come after it.
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });

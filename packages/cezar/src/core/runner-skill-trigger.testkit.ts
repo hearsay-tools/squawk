@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import type { AgentRunSpec, RunnerId } from './agent-runner.ts';
+import type { AgentRunSpec } from './agent-runner.ts';
 import { driveSeam, waitFor, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { parityRunners } from './parity-classes.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
@@ -13,7 +13,7 @@ const CONTEXT = 'opening context sentinel';
 const CONTINUE = 'Continue with the revised task.';
 export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'fallback-fresh', 'fallback-resume', 'fallback-bootstrap', 'unknown', 'position', 'plain'] as const;
 
-function assertTriggerWire(runner: RunnerId, wire: string, context = '', args = ARGS): void {
+function assertTriggerWire(runner: string, wire: string, context = '', args = ARGS): void {
   const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
   if (runner === 'claude') {
     const message = rows.find(row => row.blocks)?.blocks;
@@ -35,7 +35,7 @@ function assertTriggerWire(runner: RunnerId, wire: string, context = '', args = 
   }
 }
 
-function triggerCount(runner: RunnerId, wire: string): number {
+function triggerCount(runner: string, wire: string): number {
   const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
   if (runner === 'claude') return rows.filter(row => row.blocks?.some((block: { text?: string }) => block.text?.startsWith('/probe-project'))).length;
   if (runner === 'codex') return rows.filter(row => row.method === 'turn/start' && row.params.input.some((item: { type: string }) => item.type === 'skill')).length;
@@ -50,7 +50,7 @@ function assertSuccess(obs: SeamObservation): void {
   expect(obs.result.toolCalls).toEqual([]);
 }
 
-export function describeNativeSkillTriggers(runner: RunnerId): void {
+export function describeNativeSkillTriggers(runner: string): void {
   if (!parityRunners('runner-skill-trigger', 'native').includes(runner)) return;
   describe(`${runner}: native skill trigger`, () => {
     for (const row of SKILL_TRIGGER_ROWS.filter(row => row !== 'fallback-bootstrap' || runner === 'pi' || runner === 'omp' || runner === 'opencode')) it(row, async () => {
@@ -138,7 +138,7 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
         }
         const obs = await driveSeam(runner, 'baseline', { spec: { ...base, skill, userPrompt: row === 'context' ? CONTEXT : '' } });
         if (row === 'unknown') {
-          expect(obs.v1.some(event => event.type === 'error')).toBe(RUNNER_FACTS[runner].skillUnknownName === 'error');
+          expect(obs.v1.some(event => event.type === 'error')).toBe(RUNNER_FACTS[runner]!.skillUnknownName === 'error');
           expect(obs.v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
           return;
         }

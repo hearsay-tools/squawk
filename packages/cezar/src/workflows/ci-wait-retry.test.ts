@@ -1,8 +1,8 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 // Register the external CI mock before loading RunManager.
 import { ciWaitOf, lastCiWaitOf, githubByPr, registerPr, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 
@@ -14,12 +14,12 @@ describe('CI wait retry', { timeout: 30_000 }, () => {
   useWorkerWaitFixture({ acquireCiResources: acquireExternalCiResources });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(RUNNER_IDS)('%s retries a refused settled CI observation without human input', async runner => {
+  it.each(BUILT_IN_RUNNER_IDS)('%s retries a refused settled CI observation without human input', async runner => {
     const external = githubByPr();
     vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(1);
     process.env.CEZ_DRY_RUN = '0';
-    const adapter = HARNESS_ADAPTERS[runner];
-    process.env[adapter.binEnv] = adapter.mockBin;
+    const adapter = HARNESS_ADAPTERS[runner]!;
+    process.env[adapter.binEnv]! = adapter.mockBin;
     const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: adapter.scenarios.hold!, runner });
     await until(() => store.getRun(run.id)?.status === 'waiting');
     const receipt = await registerPr(run.id, 12);

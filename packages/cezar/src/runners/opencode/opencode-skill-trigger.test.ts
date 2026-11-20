@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
-import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { waitFor } from '../../core/harness-parity-core.testkit.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';

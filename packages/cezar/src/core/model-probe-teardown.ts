@@ -1,5 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { trackChildExit } from './agent-runner.ts';
+import { trackChildExit } from './agent-runner-values.ts';
 
 /** Send SIGTERM once, then SIGKILL after the grace period unless the process exits.
  * Track real exit: ChildProcess.killed only records signal delivery. */

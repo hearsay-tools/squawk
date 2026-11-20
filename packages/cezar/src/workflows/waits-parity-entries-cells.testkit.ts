@@ -3,7 +3,7 @@ import { NO_WAIT_NUDGE_NOTE, COMPLETION_WILL_WAIT } from './run.ts';
 import { onTestFinished, expect, vi, it as registerTest } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { exemptionFor, HARNESS_ADAPTERS, humanPromptReadReleases } from '../core/harness-parity-core.testkit.ts';
 import { store, semaphore, until, manager, timeline, collect, fixtureUpdateRun, terminal } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -69,7 +69,7 @@ function observeNudgeAcknowledgement(id: string, text: string): () => Promise<vo
   };
 }
 
-export function entriesCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function entriesCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     const noWaitNudges = (id: string) => store.readEvents(id).filter(event =>
       event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE));
@@ -103,7 +103,7 @@ export function entriesCells(runners: RunnerId[], it: typeof registerTest = regi
 
     it(`${runner} U27 U5 a fresh step's no-wait turn end gets the nudge, then the no-wait human wait`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       const firstOrder = noWaitOrder(run.id, 1);
       await until(() => gated(run.id));
       expect(humanOpen(run.id)).toEqual([expect.objectContaining({ via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar })]);
@@ -114,7 +114,7 @@ export function entriesCells(runners: RunnerId[], it: typeof registerTest = regi
 
     it(`${runner} U27 U5 a Continue's no-wait turn end gets the nudge, then the no-wait human wait`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       const firstOrder = noWaitOrder(run.id, 1);
       await until(() => gated(run.id));
       firstOrder();
@@ -134,7 +134,7 @@ export function entriesCells(runners: RunnerId[], it: typeof registerTest = regi
       // The nudge's acknowledgement is held, so the turn that answers it ends first.
       await lateAck(async release => {
         nativeWire(runner);
-        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+        const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
         const published = noWaitOrder(run.id, 1);
         const acknowledged = observeNudgeAcknowledgement(run.id, NO_WAIT_NUDGE);
         await until(() => prompted(runner, NO_WAIT_NUDGE).length === 1 && turnEnds(run.id) >= 1);

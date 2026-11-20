@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../automations/store.ts';
 import { AGENT_MODELS_LOCKED_ENV } from '../core/agent-model-policy.ts';
-import { PROVIDER_IDS, ProviderAuthService, type ProviderId, type ProviderStatusResponse } from '../core/provider-auth.ts';
+import { ProviderAuthService, type ProviderId, type ProviderStatusResponse } from '../core/provider-auth.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
+
+const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { RunStore } from '../runs/store.ts';
 import type { TaskWebhooks } from '../runs/webhook.ts';

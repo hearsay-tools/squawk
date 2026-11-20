@@ -1,3 +1,13 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+
+// The saved rows this file reads name claude, codex and pi. An id no runner registered (gemini)
+// stays a parse failure, and the retired cursor keeps its fold.
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(piRunner);
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -2729,7 +2739,7 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
   });
 
   it('persists and reloads a `pi` run, index and step alike (#387)', () => {
-    // `storedRunnerSchema` derives from `RUNNER_IDS` rather than re-listing the ids, so a new
+    // `storedRunnerSchema` derives from `BUILT_IN_RUNNER_IDS` rather than re-listing the ids, so a new
     // runner is readable the moment it is registered. Without this, a completed pi run would
     // fail the whole-array parse on the next boot and take every other run down with it.
     seedRuns(dataDir, [
@@ -2756,11 +2766,16 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
     expect(run?.steps[0]?.backend).toBe('pi');
   });
 
-  it('still rejects a runner id that is not a legacy spelling of a real backend', () => {
-    // Widening the READ side is not an invitation to accept anything: an unknown id is still
-    // a parse failure, which is what keeps the enum meaningful.
+  it('opens a run saved on an id no runner registered as a removed-runner run, keeping its row data', () => {
+    // A registered process folds an unknown id into `removedRunner` (the open runner id of spec
+    // 2026-11-18-runner-definitions): the row still opens and lists, and a process that registers
+    // its runner reads it whole. This file registers claude, codex and pi.
     seedRuns(dataDir, [{ ...LEGACY_RUN, runner: 'gemini' }]);
-    expect(RunStore.open(dataDir).getRun('legacy-1')).toBeUndefined();
+    const run = RunStore.open(dataDir).getRun('legacy-1');
+    expect(run?.removedRunner).toBe('gemini');
+    expect(run?.runner).toBeUndefined();
+    expect(run?.title).toBe(LEGACY_RUN.title);
+    expect(run?.task).toBe(LEGACY_RUN.task);
   });
 });
 

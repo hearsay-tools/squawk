@@ -176,7 +176,7 @@ describe('root request completion without a live session', () => {
     expect(store.getRun(run.id)?.delegation).not.toHaveProperty('finishRequestedAt');
   });
   it('bounds incoming refusal text and settles every request, including omitted names', async () => {
-    const recipient = await parent(HARNESS_ADAPTERS.claude.scenarios.baseline!);
+    const recipient = await parent(HARNESS_ADAPTERS.claude!.scenarios.baseline!);
     await until(() => store.getRun(recipient.id)?.status === 'waiting');
     const senders = [rootTask(), rootTask()];
     for (const [index, sender] of senders.entries()) store.commitConversation(sender.id, {

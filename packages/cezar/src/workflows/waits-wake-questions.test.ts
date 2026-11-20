@@ -112,7 +112,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     expect(semaphore.busy()).toBe(0); // the pool slot
     const second = await parkOn(13);
     expect(semaphore.busy()).toBe(1); // past the pool: its regular slot
-    const third = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios.baseline!, runner: 'claude' });
+    const third = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios.baseline!, runner: 'claude' });
     expect(store.getRun(third.id)?.status).toBe('queued');
     await Promise.all([...work.pending].filter(([, label]) => label === 'pump').map(([task]) => task));
     expect(manager.cancel(first.id)).toBe(true);

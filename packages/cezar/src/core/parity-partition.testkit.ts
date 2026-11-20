@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { registrationStrings } from './registration-coverage.testkit.ts';
 
@@ -25,8 +25,8 @@ export function parityCellKey(name: string): string {
 /** Whether a `<runner> <row> …` cell runs on its runner under the family's class (hearsay-tools/cezarion#2991). */
 function familyRuns(family: ParityFamilyName | undefined, name: string): boolean {
   const pair = /^(\w+) ([A-Z]\d+)\b/.exec(name);
-  if (!family || !pair || !(RUNNER_IDS as readonly string[]).includes(pair[1]!)) return true;
-  return runsOn(family, pair[2], pair[1] as RunnerId);
+  if (!family || !pair || !(BUILT_IN_RUNNER_IDS as readonly string[]).includes(pair[1]!)) return true;
+  return runsOn(family, pair[2], pair[1] as string);
 }
 
 /** Collect before opening a suite: a part must not register empty describes. A `family` drops each

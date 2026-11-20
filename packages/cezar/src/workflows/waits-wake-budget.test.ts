@@ -39,7 +39,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     nativeWire('claude');
     const release = join(root, 'turn-release');
     process.env.CEZ_MOCK_RELEASE_FILE = release;
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios['hold-gated']!, runner: 'claude' });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios['hold-gated']!, runner: 'claude' });
     await until(() => turnStarted(run.id));
     const first = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 60, note: 'first' });
     const second = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 60, note: 'second' });
@@ -99,7 +99,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     nativeWire('claude');
     const release = join(root, 'turn-release');
     process.env.CEZ_MOCK_RELEASE_FILE = release;
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios['hold-gated']!, runner: 'claude' });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios['hold-gated']!, runner: 'claude' });
     await until(() => turnStarted(run.id));
     const timer = await openWait(run.id, { kind: WAIT_KIND.timer, seconds: 60, note: 'owed' });
     const ci = await openWait(run.id, { kind: WAIT_KIND.pr, pr, timeout_seconds: 600 });

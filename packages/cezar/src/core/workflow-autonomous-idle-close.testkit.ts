@@ -20,7 +20,7 @@ import * as activeRuns from '../workflows/active-run.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import type { RunnerId } from './agent-runner.ts';
+
 import { promptFor, waitFor } from './harness-parity.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
@@ -36,7 +36,7 @@ const STEP_MS = 20_000;
 /** OMP admits a steer into its running turn and acknowledges it there. The deferred-start token
  *  keeps the follow-up out of that turn, so OMP queues it as its next prompt, whose acknowledgement
  *  the control holds (scripts/mock-omp-rpc.mjs). */
-const followUpText = (backend: RunnerId) => backend === 'omp' ? `${HELD_ACK} ${DEFERRED_TURN_START_TOKEN}` : HELD_ACK;
+const followUpText = (backend: string) => backend === 'omp' ? `${HELD_ACK} ${DEFERRED_TURN_START_TOKEN}` : HELD_ACK;
 
 type Fixture = { store: RunStore; manager: RunManager; runId: string };
 type Cell = { semaphore: WorkspaceSemaphore; clock: () => ReturnType<typeof observationClock>; state: () => activeRuns.ActiveRun };
@@ -49,7 +49,7 @@ type Start = { seq: number; armed: number };
 
 /** Open the held turn (fresh, or on a Continue after a parked first run), send the follow-up whose
  *  acknowledgement the mock withholds, and release the turn. */
-async function sendHeldFollowUp(backend: RunnerId, continuation: boolean, releaseFile: string, { store, manager, runId }: Fixture, cell: Cell): Promise<Start> {
+async function sendHeldFollowUp(backend: string, continuation: boolean, releaseFile: string, { store, manager, runId }: Fixture, cell: Cell): Promise<Start> {
   if (continuation) {
     await waitFor(() => store.getRun(runId)?.status === 'waiting', STEP_MS);
     manager.finish(runId);
@@ -67,7 +67,7 @@ async function sendHeldFollowUp(backend: RunnerId, continuation: boolean, releas
 
 /** The live row: the nudge is refused, the run keeps its slot until the real idle expiry closes
  *  the session, and it settles `waiting` with its step `waiting` once the process has exited. */
-async function assertRefusedUntilIdle(backend: RunnerId, { store, manager, runId }: Fixture, start: Start, cell: Cell): Promise<void> {
+async function assertRefusedUntilIdle(backend: string, { store, manager, runId }: Fixture, start: Start, cell: Cell): Promise<void> {
   // The refusal arms the idle bound; nothing else arms it while an autonomous run runs.
   await waitFor(() => cell.clock().captured > start.armed && cell.clock().pending > 0, STEP_MS);
   const state = cell.state();
@@ -102,7 +102,7 @@ async function assertNudgeAdmitted({ store, runId }: Fixture, start: Start, cell
 /** Drive A13 (fresh) or A14 (`continuation`) on `backend`. `refuses` is false on an exempt wire.
  *  `heldAck` is false on a wire whose held acknowledgement cannot leave a turn end behind it:
  *  Claude's stdin write is the acknowledgement, so holding it holds the turn itself. */
-export async function refusedNudgeIdleClose(backend: RunnerId, continuation: boolean, { refuses, heldAck }: { refuses: boolean; heldAck: boolean }): Promise<void> {
+export async function refusedNudgeIdleClose(backend: string, continuation: boolean, { refuses, heldAck }: { refuses: boolean; heldAck: boolean }): Promise<void> {
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   const releaseFile = join(tmpdir(), `cez-a13-release-${randomUUID()}`);
   const states: activeRuns.ActiveRun[] = [];

@@ -21,52 +21,16 @@ export function checkProgress(rows: readonly GithubCheck[]): ActivityPrProgress 
   return { checks, counts, ...(rows.length > checks.length ? { truncated: true as const } : {}) };
 }
 
-/** Who watches a project in the activity view. */
-export interface ProgressDemand {
-  has(projectId: string): boolean;
-}
-
-/**
- * The demand of the cockpit that reads the registry. A `RunManager` builds the CI watchers,
- * outside any cockpit and often before it, so the cockpit plugs its demand in later. With none
- * plugged in, nobody watches. The last demand plugged in wins.
- */
-export class DemandSlot implements ProgressDemand {
-  private current: ProgressDemand | undefined;
-
-  /** Returns the release; it clears the slot only while this demand still holds it. */
-  use(demand: ProgressDemand): () => void {
-    this.current = demand;
-    return () => { if (this.current === demand) this.current = undefined; };
-  }
-
-  has(projectId: string): boolean {
-    return this.current?.has(projectId) ?? false;
-  }
-}
-
 /**
  * The check progress of the open PR waits a workspace watches, in memory and keyed by wait id
  * (spec 2026-11-05-live-activity-view, CI check progress; D6: never written to a run, empty after
  * a restart). The shared CI resource (`acquireCiResources`) holds one next to its supervisor: the
  * supervisor publishes every checks read and removes the entry when the watch ends; the activity
  * read model reads it.
- *
- * A wait does not name its project, and one supervisor serves every project of the workspace. So
- * the registry learns a wait's project from the snapshot that reads it: the same project ids the
- * activity route marks as watched. A project is read before anyone can watch it, so every wait a
- * reader sees has its project by the time its demand matters.
  */
 export class CiProgressRegistry implements CiProgressSource {
-  private readonly entries = new Map<string, { progress: ActivityPrProgress; projectId?: string }>();
+  private readonly entries = new Map<string, { progress: ActivityPrProgress }>();
   private readonly listeners = new Set<() => void>();
-
-  constructor(private readonly demand: DemandSlot = new DemandSlot()) {}
-
-  /** Plug in the activity view's demand. Returns the release. */
-  useDemand(demand: ProgressDemand): () => void {
-    return this.demand.use(demand);
-  }
 
   /** Call `listener` after a wait's progress changes or its entry is removed. The activity topics
    *  listen while they have subscribers. Returns the release. */
@@ -94,17 +58,8 @@ export class CiProgressRegistry implements CiProgressSource {
     for (const listener of [...this.listeners]) listener();
   }
 
-  /** A snapshot of `projectId` reads the wait. A wait this process does not watch records nothing. */
-  read(waitId: string, projectId: string): ActivityPrProgress | undefined {
-    const entry = this.entries.get(waitId);
-    if (!entry) return undefined;
-    entry.projectId = projectId;
-    return entry.progress;
-  }
-
-  /** Someone watches the project of this wait: the `--watch` phase may read its checks once more. */
-  wanted(waitId: string): boolean {
-    const projectId = this.entries.get(waitId)?.projectId;
-    return projectId !== undefined && this.demand.has(projectId);
+  /** The progress of a wait this process watches. */
+  read(waitId: string): ActivityPrProgress | undefined {
+    return this.entries.get(waitId)?.progress;
   }
 }

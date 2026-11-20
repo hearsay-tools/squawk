@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { onTestFinished, it as registerTest, expect } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { SquawkWaitRequestInput, Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { manager, until, store, toolGenerationOf } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -19,7 +19,7 @@ function sleeper(): number {
   return child.pid!;
 }
 
-export function deadlineCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function deadlineCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     for (const [kind, row] of [['process', 'U29p'], ['peer', 'U29q']] as const) {
       for (const budget of [7, 40]) {
@@ -27,7 +27,7 @@ export function deadlineCells(runners: RunnerId[], it: typeof registerTest = reg
           const external = processes();
           const clock = observationClock(() => /\bWaitEngine.armDeadline\b/.test(new Error().stack ?? ''));
           nativeWire(runner);
-          const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+          const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
           await until(() => store.getRun(run.id)?.status === 'waiting');
           const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
           if (kind === 'peer') store.updateRun(run.id, { delegation: { role: 'root', permissions: ['wait', 'steer'], receipts: [] } });
@@ -65,7 +65,7 @@ export function deadlineCells(runners: RunnerId[], it: typeof registerTest = reg
     it(`${runner} U29m an empty process deadline batched with a process exit charges one wake`, async () => {
       const external = processes();
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const pid = sleeper();

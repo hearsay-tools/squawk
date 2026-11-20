@@ -27,8 +27,8 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
     const sessionOf = captureSessions();
     await withHeldAck('opencode', async release => {
       process.env.CEZ_DRY_RUN = '0';
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      process.env.CEZ_OPENCODE_BIN = HARNESS_ADAPTERS.opencode.mockBin;
+      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      process.env.CEZ_OPENCODE_BIN = HARNESS_ADAPTERS.opencode!.mockBin;
       const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: 'opencode' });
       store.commitDelegation([{ id: p.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       await until(() => store.getRun(p.id)?.status === 'waiting');

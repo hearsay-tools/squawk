@@ -1,11 +1,10 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { RunnerSkill, RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
-import type { RunnerId } from './agent-runner.ts';
 
 export type SkillReferenceResult = { skill: RunnerSkill; error?: never } | { skill?: never; error: string };
 
 /** Name-only references follow the runner's scope. A path selects exactly one listed copy. */
-export function resolveRunnerSkill(skills: readonly RunnerSkill[], reference: { id: string; path?: string | undefined }, context: { runner: RunnerId; account: string; cwd: string }): SkillReferenceResult {
+export function resolveRunnerSkill(skills: readonly RunnerSkill[], reference: { id: string; path?: string | undefined }, context: { runner: string; account: string; cwd: string }): SkillReferenceResult {
   const copies = skills.filter(skill => skill.id === reference.id);
   const identity = `${context.runner} account "${context.account}" skill "${reference.id}"`;
   const paths = copies.map(skill => skill.path ?? '(path not reported)').join(', ');

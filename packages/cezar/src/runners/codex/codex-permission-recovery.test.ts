@@ -1,17 +1,17 @@
+import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../../core/agent-runner.ts';
 import { exemptionFor, HARNESS_ADAPTERS, waitFor } from '../../core/harness-parity.testkit.ts';
 import { withOwnedInputRun } from '../../core/workflow-parity.testkit.ts';
 
 /** P1 restart extension: native permission waits are unfinished turns, including owned workers. */
 describe('native permission recovery (hearsay-tools/cezarion#1049)', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     const exemption = exemptionFor('P1', backend);
     if (exemption) {
       it(`${backend} P1 recovery exemption — ${exemption.reason}`, () => {
         expect(exemption.kind).toBe('scenario-unconstructible');
-        expect(HARNESS_ADAPTERS[backend].scenarios.approval).toBeUndefined();
+        expect(HARNESS_ADAPTERS[backend]!.scenarios.approval).toBeUndefined();
       });
       continue;
     }
@@ -34,7 +34,7 @@ describe('native permission recovery (hearsay-tools/cezarion#1049)', () => {
         const next = recovered.store.readEvents(fixture.runId).filter(event => event.type === 'permission.requested')[1]!;
         expect(next.requestId).not.toBe(original.requestId);
         expect(recovered.store.getRun(fixture.runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
-        const { pick } = HARNESS_ADAPTERS[backend].approvalDecisions![0]!;
+        const { pick } = HARNESS_ADAPTERS[backend]!.approvalDecisions![0]!;
         const decline = (next.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes(pick))!;
         expect(recovered.manager.respondPermission(fixture.runId, next.requestId as string, decline.id)).toBe(true);
         await waitFor(() => !recovered.manager.isActive(fixture.runId));

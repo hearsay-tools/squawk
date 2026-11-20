@@ -22,6 +22,7 @@ import { RunStore } from '../runs/store.ts';
 import { RunDatabase, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run-database.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunManager } from '../workflows/run.ts';
+import type { DelegationManager } from '../delegation/service.ts';
 import type { ToolActivityTracker } from '../activity/tool-activity.ts';
 import { getRepoInfo } from './git.ts';
 import { assertProjectAdmitted, ownedByAnotherCockpit, projectAdmissionRefusal, withProjectAdmission, CockpitOwnership } from './cockpit-ownership.ts';
@@ -45,9 +46,17 @@ export interface ProjectContext {
   /** `<root>/.ai/cezar` — all of this project's on-disk state. */
   dataDir: string;
   store: RunStore;
-  manager: RunManager;
+  manager: ProjectRunManager;
   automationStore: AutomationStore;
 }
+
+/** What a project's routes, delegation and automations call on its run engine: the port a test fake implements
+ *  without loading the engine (hearsay-tools/squawk#3937). */
+export type ProjectRunManager = DelegationManager & Pick<RunManager,
+  | 'adoptOrphanedRun' | 'cancel' | 'cancelAutoResume' | 'ciProgress' | 'claimForBranchCleanup' | 'claimForPublish' | 'claimWorktreeReclaim'
+  | 'cockpitAddress' | 'continueRun' | 'createRunner' | 'deferMessage' | 'dispose' | 'editQueuedMessage' | 'editTask' | 'enqueueMessage'
+  | 'finish' | 'finishBlockedReason' | 'isActive' | 'recover' | 'removeQueuedMessage' | 'respondPermission' | 'sendMessage'
+  | 'setAutomationTools' | 'setCockpitAddress' | 'setDelegationProvisioner' | 'setSkillCatalog' | 'startRun' | 'startRunIdempotent'>;
 
 /** Minimal registry shape the context map needs — matches
  *  `workspace/projects.ts` `ProjectListEntry` structurally, but injected so
@@ -75,7 +84,7 @@ export type RunManagerFactory = (
   store: ConstructorParameters<typeof RunManager>[0],
   repoRoot: ConstructorParameters<typeof RunManager>[1],
   options: Omit<ConstructorParameters<typeof RunManager>[2], 'acquireCiResources'>,
-) => RunManager;
+) => ProjectRunManager;
 
 export interface ProjectContextDeps {
   forgeFactory?: ForgeFactory | undefined;
@@ -198,7 +207,7 @@ export class ProjectContextError extends Error {
  */
 export class ProjectContexts {
   private readonly contexts = new Map<string, ProjectContext>();
-  private readonly managerCleanups = new WeakMap<RunManager, () => void>();
+  private readonly managerCleanups = new WeakMap<ProjectRunManager, () => void>();
   private readonly building = new Map<string, Promise<ProjectContext>>();
   private readonly maintenance = new Map<string, Promise<unknown>>();
   private readonly repoHandleControllers = new WeakMap<RunStore, AbortController>();
@@ -220,7 +229,7 @@ export class ProjectContexts {
   private readonly epochs = new Map<string, number>();
   /** Managers of builds still in flight. `dispose`/`disposeAll` stop them at once: `recover()`
    *  checks `disposed` between its steps, so a stale build never pumps a re-queued run. */
-  private readonly buildingManagers = new Map<string, RunManager>();
+  private readonly buildingManagers = new Map<string, ProjectRunManager>();
 
   constructor(private readonly deps: ProjectContextDeps) {
     this.semaphore = deps.semaphore ?? new WorkspaceSemaphore({ home: deps.home });
@@ -513,7 +522,7 @@ export class ProjectContexts {
     this.notifyStoreCreated(store);
     armPreview(store, dataDir, this.deps.preview);
     this.sweepControllers.set(store, new AbortController());
-    const manager: RunManager = createManager(store, project.root, {
+    const manager: ProjectRunManager = createManager(store, project.root, {
       home: this.deps.home,
       createRunner: this.deps.createRunner,
       semaphore: this.semaphore, preview: this.deps.preview, squawkPort: this.deps.squawkPort, toolActivity: this.deps.toolActivity,
@@ -571,7 +580,7 @@ export class ProjectContexts {
 
 /** Shared teardown for built and half-built contexts. Closing the store writes what is pending
  *  and releases its database connection; a late write to it afterwards saves nothing. */
-function teardown(ctx: { store: RunStore; manager: RunManager }): void {
+function teardown(ctx: { store: RunStore; manager: ProjectRunManager }): void {
   ctx.manager.dispose();
   ctx.store.close();
   ctx.store.removeAllListeners();

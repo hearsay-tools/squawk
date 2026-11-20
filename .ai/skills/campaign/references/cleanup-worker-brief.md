@@ -37,6 +37,11 @@ The issue and the facts above are the approved plan. Ask the coordinator, and
 wait for the answer, before you change anything the issue does not name. A
 behavior question goes to the coordinator; the PR keeps the old behavior.
 
+The issue's numbers (counts, sizes, costs) are a hint, not a target. Measure the
+acceptance target before you start and again after each rebase or merge of main,
+with the command the issue names, or node scripts/import-reach.mjs for an import
+count. Put the measured numbers, the command and the commit in the PR.
+
 Work in <2 or 3> committed steps: <step list>. After each commit, send the
 coordinator a progress message with the SHA and what it moved or changed.
 

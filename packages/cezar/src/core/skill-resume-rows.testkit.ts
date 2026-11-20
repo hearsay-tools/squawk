@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { expect } from 'vitest';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { SKILL_RESUME_CRITERIA } from './harness-parity-core.testkit.ts';
 import { factsWhere } from './runner-fact-rows.testkit.ts';
 
@@ -53,17 +53,19 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   "wire-and-fallback": [
     "claude R56",
     "codex R56",
-    "codex fresh-session continuation includes the skill",
     "every runner declares systemPromptOnResume",
     "omp R56",
     "opencode R56",
-    "opencode fresh-session continuation includes the skill",
-    "opens a fresh session with the skill, one note, and a new session id",
     "pi R56"
+  ],
+  "wire-and-fallback-engine": [
+    "codex fresh-session continuation includes the skill",
+    "opencode fresh-session continuation includes the skill",
+    "opens a fresh session with the skill, one note, and a new session id"
   ]
 };
 
-type RunnerCell = (backend: RunnerId) => CellBody;
+type RunnerCell = (backend: string) => CellBody;
 export type SkillResumeCells = {
   resumedContinue: RunnerCell; recoveredContinuation: RunnerCell; recordedSession: RunnerCell;
   interruptedContinue: RunnerCell; skillGone: RunnerCell; freshSession: RunnerCell;
@@ -76,7 +78,7 @@ export function skillResumeParity(cells: SkillResumeCells) {
     describe('harness parity — native skill on Continue (#790)', () => {
       expect(SKILL_RESUME_CRITERIA.map((row) => row.id)).toEqual(['R53', 'R54', 'R55', 'R56', 'R57', 'R59']);
 
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         it(`${backend} R53 does not retrigger a skill on a resumed Continue`, cells.resumedContinue(backend), 60_000);
         it(`${backend} R54 does not retrigger a skill when recover() resumes a persisted continuation`, cells.recoveredContinuation(backend), 60_000);
         it(`${backend} R57 reuses the recorded session id on Continue and recover`, cells.recordedSession(backend), 90_000);
@@ -92,7 +94,7 @@ export function skillResumeParity(cells: SkillResumeCells) {
     describe('harness parity — systemPromptOnResume declaration (#790)', () => {
       it('every runner declares systemPromptOnResume', cells.declaresResumeMode);
 
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         it(`${backend} R56 declaration matches the resume wire`, cells.declarationWire(backend), 45_000);
       }
     });

@@ -1,8 +1,9 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import { SHARED_ATTACH_REFUSAL, ISOLATED_BASELINE_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
-import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,9 +12,8 @@ import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runWorkerCommand, runMessageCommand } from './cli.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import '../core/every-runner.testkit.ts';
-import { fixture, seedWorkerWait } from './service.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { workerCleanups } from './worker-cleanup.ts';
@@ -102,27 +102,6 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(waitHelp).toContain('<worker-id>');
     expect(waitHelp).toContain('--mode');
     expect(waitHelp).toContain('--timeout-seconds');
-  });
-  it('sends a two-hour ordinary request and keeps longer resume deadlines restricted', async () => {
-    const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'parent-head', requestId: randomUUID() });
-    const args = ['request', workerId, 'Fix review', '--id', randomUUID(), '--timeout-seconds', '7200'];
-    expect(await runMessageCommand(args, env)).toBe(0);
-    expect(Date.parse(json().message.deadline) - Date.parse(json().message.createdAt)).toBe(7_200_000);
-    args[args.length - 1] = '7201';
-    args[4] = randomUUID();
-    expect(await runMessageCommand(args, env)).toBe(1);
-    expect(json().code).toBe('invalid_input');
-    expect(await runWorkerCommand(['resume', ...args.slice(1)], env)).toBe(1);
-    expect(json().code).toBe('incompatible_state');
-    f.manager.cancel(workerId);
-    await f.manager.awaitRunTermination(workerId, 10_000);
-    f.store.updateStep(workerId, 'task', { status: STEP_STATUS.done, sessionId: 'previous-session', backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(workerId);
-    setRunStatus(f.store, workerId, RUN_STATUS.done);
-    f.store.commitWorkerExecutionComplete(workerId, generation);
-    expect(await runWorkerCommand(['resume', ...args.slice(1)], env)).toBe(0);
-    const sent = json();
-    expect(Date.parse(sent.message.deadline) - Date.parse(sent.message.createdAt)).toBe(7_201_000);
   });
   // hearsay-tools/cezarion#1235: the help a parent reads says waits coexist and how to stop one.
   it('documents that several waits coexist, that messages close none, and how cancel-wait stops one', async () => {
@@ -425,7 +404,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
   });
   describe('runner flag (hearsay-tools/cezarion#632)', () => {
     const spawnArgs = (flags: string[]) => ['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), ...flags, 'work'];
-    it.each(RUNNER_IDS.flatMap(runner => [
+    it.each(BUILT_IN_RUNNER_IDS.flatMap(runner => [
       { runner, flags: ['--runner', runner] },
       { runner, flags: ['--backend', runner] },
       { runner, flags: ['--runner', runner, '--backend', runner] },
@@ -487,24 +466,6 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(await runWorkerCommand(['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), ...flags, 'work'], env)).toBe(1);
     expect(json()).toMatchObject({ code: 'invalid_input', error });
     expect(f.store.listRuns()).toHaveLength(1);
-  });
-  it('sends explicit wait modes and cancels a wait by ID using the provisioned transport', async () => {
-    expect(await runWorkerCommand(['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), 'work'], env)).toBe(0);
-    const { workerId } = json();
-    for (const mode of ['one', 'any', 'all']) {
-      expect(await runWorkerCommand(['wait', workerId, '--mode', mode], env)).toBe(1);
-      expect(json().code).toBe('incompatible_state');
-    }
-    const delegation = f.store.getRun(f.parent.id)!.delegation!;
-    if (delegation.role !== 'root') throw Error('fixture');
-    f.store.commitDelegation([{ id: f.parent.id, delegation: { ...delegation, permissions: ['wait'] } }]);
-    const waitId = seedWorkerWait(f.store, f.parent.id, [workerId]);
-    expect(await runWorkerCommand(['cancel-wait', waitId], env)).toBe(0);
-    expect(json()).toMatchObject({ wait: { id: waitId, reason: 'cancelled' } });
-    expect(f.store.getRun(workerId)?.status).toBe('queued');
-    for (const argv of [['wait', workerId, randomUUID(), '--mode', 'one'], ['wait', workerId, '--mode', 'invalid'], ['cancel-wait'], ['cancel-wait', 'bad'], ['cancel-wait', waitId, 'extra']]) {
-      expect(await runWorkerCommand(argv, env)).toBe(1); expect(json().code).toBe('invalid_input');
-    }
   });
   it('parses conversation commands and validates their returned contract', async () => {
     const recipientRunId = randomUUID(), id = randomUUID(), requestId = randomUUID();

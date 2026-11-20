@@ -1,17 +1,17 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { manager, semaphore, store, until, useWorkerWaitFixture, waitOf, lastWaitOf } from './worker-wait.testkit.ts';
 import { conversationPair } from './worker-wait-conversations.testkit.ts';
 
 describe('parent and worker conversation waits through RunManager', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
-  for (const runner of RUNNER_IDS) {
+  for (const runner of BUILT_IN_RUNNER_IDS) {
     it(`${runner} WP1 progress wakes the parent and preserves its worker wait until one terminal wake`, async () => {
       process.env.CEZ_DRY_RUN = '0';
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
       const f = await conversationPair(runner);
       try {
         const wait = manager.registerWorkerWait(f.p.id, { workerIds: [f.w.id], timeoutSeconds: 600 });

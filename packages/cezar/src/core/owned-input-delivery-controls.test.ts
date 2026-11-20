@@ -18,7 +18,7 @@ describe('delivery control wrappers', () => {
     withHeldResponse: (body: () => Promise<void>) => withHeldResponse('codex', body),
   };
   it.each(Object.keys(wrappers) as Array<keyof typeof wrappers>)('%s scopes the control to its body and restores the environment', async name => {
-    const bin = HARNESS_ADAPTERS.codex.binEnv;
+    const bin = HARNESS_ADAPTERS.codex!.binEnv;
     vi.stubEnv('CEZ_DRY_RUN', '1');
     vi.stubEnv(bin, '/prior/codex');
     delete process.env.CEZ_MOCK_DELIVERY_CONTROL;
@@ -30,7 +30,7 @@ describe('delivery control wrappers', () => {
     await wrappers[name](async () => {
       expect(existsSync(process.env.CEZ_MOCK_DELIVERY_CONTROL!)).toBe(true);
       expect(process.env.CEZ_DRY_RUN).toBe('0');
-      expect(process.env[bin]).toBe(HARNESS_ADAPTERS.codex.mockBin);
+      expect(process.env[bin]!).toBe(HARNESS_ADAPTERS.codex!.mockBin);
     });
     restored();
     await expect(wrappers[name](async () => { throw new Error('body failed'); })).rejects.toThrow('body failed');

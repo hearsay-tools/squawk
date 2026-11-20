@@ -28,7 +28,7 @@ import { clearProjectProbeCache, registerProject } from '../workspace/projects.t
 import { writeSettledJournal } from './project-migration.testkit.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import { prepareBeforeTicks, prepareProjects } from './auto.ts';
-import { createRunManager } from '../server/run-manager.testkit.ts';
+import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

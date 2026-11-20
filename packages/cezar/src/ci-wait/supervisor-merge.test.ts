@@ -40,9 +40,12 @@ class ScriptedGithub extends GithubCiClient {
     const step = this.states[Math.min(this.reads - 1, this.states.length - 1)]!;
     return {headSha: identity.headSha, mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', state: 'OPEN', ...step};
   }
-  override async metadata() { return {headSha: identity.headSha, mergeable: 'MERGEABLE' as const, mergeStateStatus: 'CLEAN'}; }
-  override async checks(): Promise<GithubCheck[]> { this.checksCalls++; return [{name: 'build', state: 'SUCCESS', bucket: 'pass', link: ''}]; }
-  override async hasActiveRuns(): Promise<boolean> { return false; }
+  override async observe() {
+    this.checksCalls++;
+    const checks: GithubCheck[] = [{name: 'build', state: 'SUCCESS', bucket: 'pass', link: ''}];
+    return {headSha: identity.headSha, mergeable: 'MERGEABLE' as const, mergeStateStatus: 'CLEAN', checks};
+  }
+  override async workflowRuns() { return {active: false, failures: []}; }
   override async watch(): Promise<void> { this.watchCalls++; }
 }
 

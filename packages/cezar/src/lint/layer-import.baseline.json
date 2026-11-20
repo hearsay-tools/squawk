@@ -220,7 +220,7 @@
     {
       "file": "packages/cezar/src/workflows/continuation-admission.ts",
       "target": "packages/cezar/src/delegation/execution-identity.ts",
-      "count": 2,
+      "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {

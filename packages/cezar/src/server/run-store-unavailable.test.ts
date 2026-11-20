@@ -18,7 +18,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -55,7 +55,7 @@ describe('a project whose run store cannot be opened', () => {
     process.env.CEZ_DRY_RUN = '1';
     for (const root of [bootRoot, otherRoot]) mkdirSync(join(root, '.ai/cezar'), { recursive: true });
     clearProjectProbeCache();
-    contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
   });
 
   afterEach(() => {

@@ -2,7 +2,7 @@ import { atTaskHead } from './launch-read-resolver.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import { extractTaskRefs, refineTaskRefs } from '../../runs/task-refs.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
-import type { RunnerId, ContentBlock } from '../../core/agent-runner.ts';
+import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { PastedContent, PersistedAttachment } from '../pasted-content.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
@@ -20,7 +20,7 @@ interface RunStartHost {
   active: Map<string, ActiveRun>;
   startRun(workflow: WorkflowDef, input: StartRunInput, request?: { id: string; hash: string }): RunRecord;
   execute(runId: string, workflow: WorkflowDef, input: StartRunInput, startAt?: number): Promise<void>;
-  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: RunnerId, prompt: string,
+  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: string, prompt: string,
     images?: PastedContent[], persistedImages?: ContentBlock[], persistedAttachments?: PersistedAttachment[]): Promise<void>;
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
   dropActive(runId: string): void;

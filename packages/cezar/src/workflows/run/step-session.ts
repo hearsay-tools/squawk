@@ -1,14 +1,14 @@
 import { cleanupTaskWorktreeSkills } from '../../worktree-skill-cleanup.ts';
 import { portableRunnerSkillList } from '../../core/runner-skill-reference.ts';
-import type { LaunchSource } from './launch-read-resolver.ts';
+import { type LaunchSource, atStepOpen } from './launch-read-resolver.ts';
 import { runDataDir } from '../../legacy-runs.ts';
-import { atStepOpen } from './launch-read-resolver.ts';
+
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, AgentSession, ContentBlock } from '../../core/agent-runner.ts';
 import type { SessionEventHandler } from './session-events.ts';
-import { inputDeliveryOf } from '../../core/agent-runner.ts';
+import { inputDeliveryOf } from '../../core/agent-runner-values.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunRecord } from '../../runs/store.ts';
@@ -63,7 +63,7 @@ export class StepSession {
     nextStep: WorkflowStepDef | undefined,
     emit: (event: { type: string; stepId?: string; [k: string]: unknown }) => void,
     images: ContentBlock[] | undefined,
-    taskBackend: RunnerId,
+    taskBackend: string,
     extraSystemPrompt: string | undefined,
     /** The chain-boundary note for this step (#410), or undefined when the
      *  workflow has a single agent step and there is no boundary to explain. */

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_PHASE, RUN_STATUS, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { manager, until, store, fixtureUpdateRun, semaphore } from './worker-wait-core.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 
@@ -12,7 +12,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('conversations', conversationsCells);
 
-export function conversationsCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function conversationsCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U19 a worker message beside a pending portable question is delivered and the question stays answerable`, async () => {
       const f = await conversingParent(runner);

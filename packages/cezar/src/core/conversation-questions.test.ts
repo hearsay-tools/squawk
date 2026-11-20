@@ -1,15 +1,15 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 // #505 on every real runner wire: the worker's ask (native or cezar_ask) travels to its
 // parent as a routed request, and the parent's reply answers it through the same seam a
 // human answer uses. The root here is a parked record, so the reply is committed directly.
-for (const backend of RUNNER_IDS) {
+for (const backend of BUILT_IN_RUNNER_IDS) {
   it(`${backend} worker question reaches the parent and the parent's reply answers it`, async () => {
     await withOwnedInputRun(backend, 'ask', async ({ runId, parentRunId, store, manager }) => {
       // The fixture's parent holds the steer grant, as provisioned roots do.

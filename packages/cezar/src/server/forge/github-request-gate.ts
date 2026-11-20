@@ -50,7 +50,7 @@ export class RequestPermits {
 
 export interface GithubAdmission {
   signal?: AbortSignal | undefined;
-  /** False: the request takes no permit (a long `--watch`, or a progress read its caller bounds). */
+  /** False: the request takes no permit (a long `--watch`). */
   permit?: boolean;
   /** `wait` sleeps until the pause ends; `throw` refuses at once with `GithubRateLimitedError`. */
   whenPaused?: 'wait' | 'throw';

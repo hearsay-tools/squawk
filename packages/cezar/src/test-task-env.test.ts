@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { RUNNER_IDS } from './core/agent-runner.ts';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os'; // test-home-read: import for the annotated sandbox and refusal probes
 import { basename, isAbsolute, join, sep } from 'node:path';
@@ -73,7 +73,7 @@ describe('test runs never read the host home (hearsay-tools/cezarion#1361)', () 
   // by its default name ran the real one (omp unpacked 120 MB into every sandbox home). CI has
   // none of them, so every host now resolves them as CI does: not found. No Windows job runs these
   // tests, and the setup keeps the Windows PATH.
-  it.skipIf(process.platform === 'win32').each([...RUNNER_IDS])('vitest.setup.ts hides the host %s from PATH', (command) => {
+  it.skipIf(process.platform === 'win32').each([...BUILT_IN_RUNNER_IDS])('vitest.setup.ts hides the host %s from PATH', (command) => {
     const run = spawnSync(command, ['--version'], { encoding: 'utf8', timeout: 10_000 }); // bound: a real CLI found by mistake must not hang the file
     expect((run.error as NodeJS.ErrnoException | undefined)?.code, run.stdout).toBe('ENOENT');
   });

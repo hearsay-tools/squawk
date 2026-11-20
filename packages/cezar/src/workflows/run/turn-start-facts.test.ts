@@ -1,7 +1,7 @@
+import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
 import '../../core/register-all-runners.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { MAX_AUTO_CONTINUES } from '../run.ts';
 import { boundaryInputFixture } from './boundary-input-order.testkit.ts';
@@ -24,10 +24,10 @@ afterEach(() => vi.restoreAllMocks());
 
 /** A live answer to a question parked at its turn boundary, on a wire that reports the answer's
  *  turn as `runner` declares. Returns what the answer's flush received. */
-function answerAtCap(runner: RunnerId) {
+function answerAtCap(runner: string) {
   const f = boundaryInputFixture();
   vi.mocked(f.wire.sendMessage).mockImplementation(() => {
-    if (RUNNER_FACTS[runner].turnStart === 'on-write') transitionTurnBoundary(f.state, { kind: 'turn-started', phase: 'clear-boundary', session: f.wire });
+    if (RUNNER_FACTS[runner]!.turnStart === 'on-write') transitionTurnBoundary(f.state, { kind: 'turn-started', phase: 'clear-boundary', session: f.wire });
     return true;
   });
   transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'ui-completed', session: f.wire });
@@ -39,10 +39,10 @@ function answerAtCap(runner: RunnerId) {
 
 describe('the answer flush follows no declared turn start', () => {
   it('reads the swapped declarations', () => {
-    expect(RUNNER_IDS.filter(id => RUNNER_FACTS[id].turnStart === 'on-write')).toEqual(['codex', 'pi', 'omp']);
+    expect(BUILT_IN_RUNNER_IDS.filter(id => RUNNER_FACTS[id]!.turnStart === 'on-write')).toEqual(['codex', 'pi', 'omp']);
   });
 
-  it.each(RUNNER_IDS)('%s: the flush decides the cap at the boundary before the answer was written', runner => {
+  it.each(BUILT_IN_RUNNER_IDS)('%s: the flush decides the cap at the boundary before the answer was written', runner => {
     expect(answerAtCap(runner)).toEqual([[expect.any(String), { spent: MAX_AUTO_CONTINUES, atTurnBoundary: true }]]);
   });
 });

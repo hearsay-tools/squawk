@@ -1,4 +1,3 @@
-import { RUNNER_IDS } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -7,8 +6,9 @@ import { withEnvPrefix } from './shell-env.ts';
 import type { RunnerLogin } from './runner-definition.ts';
 import { registeredRunners, runnerDefinition } from './runner-registry.ts';
 
-export const PROVIDER_IDS = RUNNER_IDS;
-export type ProviderId = (typeof PROVIDER_IDS)[number];
+/** A provider of agent sessions: a runner id. The registered runners (`core/runner-registry.ts`)
+ *  are the ones this process knows. */
+export type ProviderId = string;
 export type ProviderConnectionState =
   | 'connected'
   | 'disconnected'

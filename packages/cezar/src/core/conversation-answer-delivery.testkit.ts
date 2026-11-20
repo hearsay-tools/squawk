@@ -11,7 +11,7 @@ import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
-import { inputDeliveryOf, type RunnerId } from './agent-runner.ts';
+import { inputDeliveryOf } from './agent-runner-values.ts';
 import { createRunner } from './runner-registry.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { ANSWER_DELIVERY_GROUPS, answerDeliveryFamilies } from './conversation-answer-delivery-rows.testkit.ts';
@@ -36,7 +36,7 @@ interface AnswerFixture {
 
 /** A worker whose own question, routed to its parent, survives a closed session, ready for the
  *  parent's answer. */
-async function withAnsweredWorker(backend: RunnerId, env: Record<string, string>, body: (fixture: AnswerFixture) => Promise<void>): Promise<void> {
+async function withAnsweredWorker(backend: string, env: Record<string, string>, body: (fixture: AnswerFixture) => Promise<void>): Promise<void> {
   await withOwnedInputRun(backend, 'ask', async fixture => {
     const { repoRoot, runId, parentRunId } = fixture;
     fixture.manager.enqueueOwnedRun(runId);
@@ -79,7 +79,7 @@ const lastSeq = (store: RunStore, runId: string) => store.readEvents(runId).at(-
 export const answerDeliveryCells = answerDeliveryFamilies({
   steerExemption: (backend, steer, steerExemption) => async () => {
     expect(steerExemption.kind).toBe('scenario-unconstructible');
-    expect(HARNESS_ADAPTERS[backend].scenarios[steer.scenario]).toBeUndefined();
+    expect(HARNESS_ADAPTERS[backend]!.scenarios[steer.scenario]).toBeUndefined();
     expect(inputDeliveryOf(await createRunner(backend)).mode).toBe('boundary');
   },
   steering: (backend, steer) => async () => {

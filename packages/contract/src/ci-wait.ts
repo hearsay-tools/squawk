@@ -19,6 +19,8 @@ export const ciWaitRequestSchema = z.object({
   /** False keeps a conflicting PR from ending the wait: for a PR the agent does not own. */
   wake_on_conflict: z.boolean().default(true),
   timeout_seconds: z.number().int().min(1).max(7200).default(1800),
+  /** The commit the caller just pushed: the wait watches it while GitHub still shows the previous head. */
+  head_sha: z.string().regex(/^[0-9a-f]{40}$/i).optional(),
 }).strict();
 export type CiWaitRequest = z.infer<typeof ciWaitRequestSchema>;
 const sha = z.string().regex(/^[0-9a-f]{40}$/i);
@@ -29,7 +31,7 @@ export const ciPrIdentitySchema = z.object({
   headSha: sha,
 }).strict();
 export type CiPrIdentity = z.infer<typeof ciPrIdentitySchema>;
-export const ciWaitOutcomeSchema = z.enum(['passed', 'failed', 'cancelled', 'skipped', 'no_checks', 'stuck', 'head_changed', 'conflicting', 'deadline', 'error', 'merged', 'closed', 'blocked']);
+export const ciWaitOutcomeSchema = z.enum(['passed', 'failed', 'cancelled', 'skipped', 'no_checks', 'stuck', 'startup_failure', 'head_changed', 'conflicting', 'deadline', 'error', 'merged', 'closed', 'blocked']);
 export const ciWaitErrorCodeSchema = z.enum(['invalid_request', 'unsupported_host', 'gh_missing', 'authentication', 'inaccessible_pr', 'malformed_data', 'output_limit', 'query_timeout', 'command_failed', 'wait_conflict', 'capacity', 'unavailable', 'unauthorized', 'persistence',
   'manager_disposed', 'capability_revoked', 'run_missing', 'run_not_running', 'run_stopping',
   'session_replaced', 'session_closed', 'run_cancelled', 'finish_requested', 'generation_mismatch',
@@ -86,6 +88,8 @@ export const ciWaitSchema = ciPrIdentitySchema.extend({
   // Legacy `ciWait` rows predate the target (hearsay-tools/cezarion#1425): they waited for checks.
   until: prWaitUntilSchema.default('checks'),
   wakeOnConflict: z.boolean().default(true),
+  /** The caller named a head GitHub did not show yet at registration (hearsay-tools/squawk#3972). */
+  callerHead: z.literal(true).optional(),
   registeredAt: z.iso.datetime(),
   deadline: z.iso.datetime(),
   phase: z.enum(['registered', 'parked', 'wake-pending', 'delivered', 'withdrawn']),

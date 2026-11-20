@@ -201,6 +201,7 @@ describe('RunWaitDetails', () => {
     ['cancelled', 'CI wait cancelled'],
     ['skipped', 'CI checks skipped — inspect the PR checks'],
     ['no_checks', 'No CI checks found — inspect the PR workflows'],
+    ['startup_failure', 'CI workflow never started — inspect the PR workflows'],
     ['conflicting', 'PR has merge conflicts — inspect the PR; not merge approval'],
     ['deadline', 'CI wait timed out — inspect the PR checks'],
     ['error', 'CI wait unavailable — inspect access and the PR checks'],

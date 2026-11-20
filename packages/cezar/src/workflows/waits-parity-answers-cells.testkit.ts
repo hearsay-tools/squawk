@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { expect, it as registerTest, vi } from 'vitest';
 import { WAIT_PHASE, RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-contract';
-import type { RunnerId, AgentSession } from '../core/agent-runner.ts';
+import type { AgentSession } from '../core/agent-runner.ts';
 import { until, manager, store, root, terminal, toolGenerationOf } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { blockRunWrites } from '../runs/run-store.testkit.ts';
@@ -39,7 +39,7 @@ async function deferredAnswerAtStartup(id: string, text: string, spent: number, 
   return message;
 }
 
-export function answersCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function answersCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     const receivedAnswer = (text: string) => [...prompted(runner, text),
       ...ciNativeSteers(runner, root).filter(prompt => prompt.includes(text))];

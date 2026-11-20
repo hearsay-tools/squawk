@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { vi, expect, onTestFinished, describe, beforeEach, afterEach, it as registerTest } from 'vitest';
 import { WAIT_PHASE, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { CiWaitResult, ProcessWaitResult, Wait, HumanWaitEntry, WorkerWaitEntry, ConversationMessage, RunRecord } from '@open-mercato/cezar-contract';
-import type { RunnerId, RunnerFactory } from '../core/agent-runner.ts';
+import type { RunnerFactory } from '../core/agent-runner.ts';
 import { useRunners, runnersUnderTest } from '../core/runners-under-test.testkit.ts';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
@@ -55,9 +55,9 @@ export function processes() {
   };
 }
 
-export function nativeWire(runner: RunnerId) {
+export function nativeWire(runner: string) {
   process.env.CEZ_DRY_RUN = '0';
-  process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+  process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
   // The prompts each native mock admitted, read back by `ciNativeMessages`.
   process.env.CEZ_MOCK_ARGS_FILE = join(root, 'args');
   process.env.CEZ_MOCK_STDIN_FILE = join(root, 'stdin');
@@ -140,7 +140,7 @@ export const flushMicrotasks = async () => { for (let n = 0; n < 5; n++) await P
 export const turnEnds = (id: string) => store.readEvents(id).filter(event => event.type === 'turn-end').length;
 export const viaOf = (id: string, via: Wait['via']) => store.getRun(id)?.waits?.find((wait): wait is TimedWait => wait.via === via && wait.kind !== 'human');
 export const parkedOn = (id: string, wait: Wait | undefined) => wait?.phase === 'open' && store.getRun(id)?.status === 'waiting';
-export const prompted = (runner: RunnerId, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
+export const prompted = (runner: string, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
 export const asks = (id: string) => store.readEvents(id).filter(event => event.type === 'ask.requested');
 export const answered = (id: string, askSeq: number) => store.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
 export const pendingQuestion = (id: string) => hasPendingAsk(store, id) === true && store.getRun(id)?.status === 'waiting';
@@ -171,9 +171,9 @@ export const conversationOf = (id: string): ConversationMessage[] => {
 export const parkNotices = (parentId: string, workerId: string) => conversationOf(parentId).filter(message =>
   message.senderRunId === workerId && message.kind === 'progress' && message.text.startsWith(`Squawk notice: `));
 /** A root parent on `runner`'s native wire, parked after its opening turn. */
-export async function parentOn(runner: RunnerId) {
+export async function parentOn(runner: string) {
   nativeWire(runner);
-  const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+  const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
   await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
   return p;
 }
@@ -181,15 +181,15 @@ export async function parentOn(runner: RunnerId) {
 /** A root parent on `runner`'s native wire, parked after its opening turn, and one worker it owns
  *  that never starts: `fixtureUpdateRun` settles it. Workers run on the Claude wire. A restart
  *  starts the worker, so a cell that restarts gives it a `task` that settles on its own. */
-export async function parentWithWorker(runner: RunnerId, step?: string, task?: string) {
+export async function parentWithWorker(runner: string, step?: string, task?: string) {
   const p = await workerParent(runner, step);
   return { p, w: await worker(p.id, task) };
 }
 /** `parentWithWorker`'s parent, with no worker yet: a done the tool accepts (`blockedDone`). */
-export async function workerParent(runner: RunnerId, step?: string) {
+export async function workerParent(runner: string, step?: string) {
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-  const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => step ? `${step}: opening park\n${timeline(p.id)}` : timeline(p.id));
   return p;
@@ -275,7 +275,7 @@ export async function replyBlockedAgain<T>(id: string, reply: DoneReply, first: 
 /** The parent's done is refused at the turn end (`blockedDone`, worker `first`), and the nudge's
  *  reply turn ends on done again, which worker `second` blocks (`replyBlockedAgain`): one refusal
  *  prompt, then `parked`. Returns both workers and the parent's open worker entry, if any. */
-export async function ignoreRefusal(runner: RunnerId, id: string, reply: DoneReply, parked: () => boolean,
+export async function ignoreRefusal(runner: string, id: string, reply: DoneReply, parked: () => boolean,
   { uncollected = false, send, task }: { uncollected?: boolean; send?: (prompt: string) => unknown; task?: string } = {}) {
   const first = await blockedDone(id, () => blockingWorker(id, { uncollected }), send);
   const refusal = uncollected ? uncollectedRefusal(first) : liveRefusal(first);
@@ -301,7 +301,7 @@ export const noReplyNotes = (id: string) => store.readEvents(id).filter(event =>
 export function silenceRefusals() {
   const clock = observationClock(delay => delay === NO_WAIT_NUDGE_REPLY_MS && /\bat TurnNudges\./.test(new Error().stack ?? ''));
   process.env.CEZ_MOCK_COMPLETION_REPLY = 'mock:ack-only';
-  return Object.assign(async (runner: RunnerId, refusal: string, { after = 0 }: { after?: number } = {}) => {
+  return Object.assign(async (runner: string, refusal: string, { after = 0 }: { after?: number } = {}) => {
     // bound: until's 15 s guards a missing mock record or a reply timer that never arms.
     await until(() => prompted(runner, refusal).length > after && clock.pending > 0);
     // A native ACK may rearm the same reply bound after the mock recorded the prompt.
@@ -319,10 +319,10 @@ export function silenceRefusals() {
 
 /** A steering parent on `runner`'s native wire and a worker running on the Claude wire, parked,
  *  with each one's credential on a delegation service, as `cez worker send` reaches them. */
-export async function conversingParent(runner: RunnerId) {
+export async function conversingParent(runner: string) {
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-  const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
+  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
   const w = await worker(p.id);
@@ -349,7 +349,7 @@ export function messenger(service: DelegationFixture['service'], callerFor: Dele
 type DelegationFixture = Awaited<ReturnType<typeof delegatingParent>>;
 
 /** One competing monitor uses the exemption; membership of this park then costs a slot. */
-export async function expectPoolCapacity(runner: RunnerId, id: string, member: boolean) {
+export async function expectPoolCapacity(runner: string, id: string, member: boolean) {
   const limit = vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(1);
   const previousSessionsFile = process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
   let competitor: RunRecord | undefined;
@@ -381,7 +381,7 @@ export async function expectPoolCapacity(runner: RunnerId, id: string, member: b
 export const timerText = (wait: Wait, note: string) => `Timer ${wait.id} fired: ${note}. Continue toward the task goal; register another wait if you are still waiting.`;
 
 /** Cleanup cancels the admission timer, and crossing its deadline produces no wake effects. */
-export async function expectAdmissionRetryCleared(runner: RunnerId, id: string) {
+export async function expectAdmissionRetryCleared(runner: string, id: string) {
   expect(admissionClock.captured).toBeGreaterThan(0);
   expect(admissionClock.pending).toBe(0);
   const before = structuredClone({ inputs: store.getRun(id)?.agentInputs, events: store.readEvents(id),

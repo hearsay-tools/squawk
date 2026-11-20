@@ -68,7 +68,7 @@ export async function planChain(repoRoot: string, task: string, catalog: RunnerS
   // Claude alias, so only a runner that takes those gets it; another picks its
   // own default model instead.
   const runner = await createRunner(config.defaultRunner);
-  const plannerModel = RUNNER_FACTS[config.defaultRunner].claudeModelAliases ? config.plannerModel : undefined;
+  const plannerModel = RUNNER_FACTS[config.defaultRunner]!.claudeModelAliases ? config.plannerModel : undefined;
   // Plan under the SAME agent account this project's tasks run on (spec
   // 2026-07-29-agent-profiles). Without this the planner would quietly bill the personal
   // subscription for a project the user pointed at their work account.

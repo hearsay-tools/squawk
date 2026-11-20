@@ -1,6 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { z } from 'zod';
-import { trackChildExit } from '../../core/agent-runner.ts';
+import { trackChildExit } from '../../core/agent-runner-values.ts';
 import { buildChildEnv } from '../../core/agent-env.ts';
 import { readNdjson } from '../../core/ndjson.ts';
 import { resolveClaudeExecutable } from './claude-executable.ts';

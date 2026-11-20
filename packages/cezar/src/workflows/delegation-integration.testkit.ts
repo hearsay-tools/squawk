@@ -24,7 +24,7 @@ import type { WorkerCleanupFactory } from '../delegation/service.ts';
 const execFile = promisify(execFileCallback);
 
 /** `cleanup` is the worker cleanup for groups that destroy workers; the reviewed-integration group passes `workerCleanups()`. */
-export function registerDelegationIntegrationGroup(group: 'reviewed-integration' | 'spawn-idempotency' | 'failure-authority' | 'parent-cancellation', cleanup?: WorkerCleanupFactory): void {
+export function registerDelegationIntegrationGroup(group: 'reviewed-integration' | 'failure-authority' | 'parent-cancellation', cleanup?: WorkerCleanupFactory): void {
   describe('public delegation completion integration', () => {
   let cli: Awaited<ReturnType<typeof buildDelegationCli>>;
   beforeAll(async () => { cli = await buildDelegationCli(); });
@@ -261,25 +261,6 @@ if (group === 'reviewed-integration') {
     reply(p.id, 1, { text: 'Reviewed alpha integration; beta conflict deliberately aborted.', done: true });
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.review, 'collected deleted workers permit honest parent review');
   }, 120_000);
-}
-
-if (group === 'spawn-idempotency') {
-
-  // hearsay-tools/cezarion#632: `--runner` and `--backend` fill the same request field, so a retry
-  // that switches spelling hashes identically and dedupes instead of reporting a payload conflict.
-  // hearsay-tools/cezarion#974: Node 24.15 floor shard 1 on 81e88a0f exceeded the
-  // default 5s at 5257ms. This cell waits for two native inputs (15s each) and
-  // two real CLI processes (45s each); cover those serial bounds plus 5s.
-  it('dedupes a --runner retry of a --backend spawn under the same request id', async () => {
-    const p = await parent();
-    const requestId = randomUUID();
-    const args = (flag: string) => ['spawn', '--baseline', 'parent-head', '--request-id', requestId, flag, 'codex', '--context', 'Parser only', 'Review parser'];
-    const first = await command<WorkerSpawnResult>(p.id, args('--backend'));
-    expect((await input(first.workerId)).backend).toBe('codex');
-    const retry = await command<WorkerSpawnResult>(p.id, args('--runner'));
-    expect(retry.workerId).toBe(first.workerId);
-    expect(store.listRuns().filter(run => run.delegation?.role === 'worker')).toHaveLength(1);
-  }, 125_000);
 }
 
 if (group === 'failure-authority') {

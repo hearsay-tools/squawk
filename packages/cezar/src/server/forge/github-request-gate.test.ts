@@ -38,7 +38,7 @@ afterEach(() => { vi.useRealTimers(); gh.calls.length = 0; });
 describe('the three pollers share one gate', () => {
   it('queues automation and archive-on-merge requests behind PR-wait queries that hold every permit', async () => {
     const ci = new HeldCi();
-    const queries = Array.from({ length: GITHUB_REQUEST_LIMIT }, () => ci.hasActiveRuns(pr, signal()));
+    const queries = Array.from({ length: GITHUB_REQUEST_LIMIT }, () => ci.workflowRuns(pr, signal()));
     await settle();
     expect(ci.calls).toBe(GITHUB_REQUEST_LIMIT);
 
@@ -79,14 +79,14 @@ describe('the three pollers share one gate', () => {
     expect(automation).not.toHaveBeenCalled();
 
     const ci = new HeldCi();
-    const query = ci.hasActiveRuns(pr, signal());
+    const query = ci.workflowRuns(pr, signal());
     await vi.advanceTimersByTimeAsync(GITHUB_PAUSE_MIN_MS - 1);
     expect(ci.calls).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
     await settle();
     expect(ci.calls).toBe(1);
     ci.held.shift()!();
-    await expect(query).resolves.toBe(false);
+    await expect(query).resolves.toEqual({ active: false, failures: [] });
     expect(githubRequestGate.pausedUntil()).toBeUndefined();
   });
   it('sends automation repository-name discovery through the gate, so a pause refuses it', async () => {

@@ -16,7 +16,6 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentInput, ConversationMessage } from '../../packages/contract/src/index.ts';
-import type { RunnerId } from '../../packages/cezar/src/core/agent-runner.ts';
 import { planOwnedWorkspace } from '../../packages/cezar/src/delegation/workspace.ts';
 import { RunStore } from '../../packages/cezar/src/runs/store.ts';
 import { RunManager } from '../../packages/cezar/src/workflows/run.ts';
@@ -30,7 +29,7 @@ installWindowsIdentityStore();
 registerBuiltInRunners();
 
 const home = resolveHome({ purpose: 'cli' });
-const [backend, model] = process.argv.slice(2) as [RunnerId, string | undefined];
+const [backend, model] = process.argv.slice(2) as [string, string | undefined];
 if (!backend) { console.error('usage: probe-questions.ts <backend> [model]'); process.exit(2); }
 delete process.env.CEZ_DRY_RUN; delete process.env.HSQ_DRY_RUN;
 process.env.HSQ_AUTONAME = process.env.CEZ_AUTONAME = '0';

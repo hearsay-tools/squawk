@@ -4,10 +4,9 @@
  * hatches.
  */
 
-import type { AgentBackend } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
 import { SECRET_NAME_RE } from './secret-redaction.ts';
-import { runnerDefinition, runnerIdOf } from './runner-registry.ts';
+import { runnerDefinition, resolveRunnerId } from './runner-registry.ts';
 
 /**
  * Env var names are matched case-INSENSITIVELY (#427 review). Windows spells
@@ -269,7 +268,7 @@ function isTruthy(value: string | undefined): boolean {
 }
 
 export interface BuildChildEnvOptions {
-  backend: AgentBackend;
+  backend: string;
   /** Per-run env (CEZ_HANDOFF_FILE etc.) — always applied, wins over host. */
   extraEnv?: Record<string, string> | undefined;
   /** Source env; defaults to `process.env`. */
@@ -292,7 +291,7 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
   // A legacy id (`claude-cli`) and an unknown value resolve to the default runner, as the
   // `BACKEND_ALLOW_PREFIXES[backend] ?? BACKEND_ALLOW_PREFIXES.claude` lookup did.
   return curateEnv(opts.source ?? process.env, opts.extraEnv ?? {}, {
-    backendPrefixes: runnerDefinition(runnerIdOf(opts.backend)).env.allowPrefixes,
+    backendPrefixes: runnerDefinition(resolveRunnerId(opts.backend)).env.allowPrefixes,
     gh: true,
     secretCez: true,
   });

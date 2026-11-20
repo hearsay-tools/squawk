@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, it } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor, FOLLOWUP_CRITERIA } from './harness-parity-core.testkit.ts';
 import { collectedOnly, type CellBody } from './parity-partition.testkit.ts';
 
@@ -16,8 +16,8 @@ export const WORKFLOW_FOLLOWUP_GROUPS = {
 
 type FollowupRow = (typeof FOLLOWUP_CRITERIA)[number];
 export type WorkflowFollowupCells = {
-  exemption: (backend: RunnerId, row: FollowupRow) => CellBody;
-  row: (backend: RunnerId, row: FollowupRow, mode: 'fresh' | 'continuation', lateStart: boolean) => CellBody;
+  exemption: (backend: string, row: FollowupRow) => CellBody;
+  row: (backend: string, row: FollowupRow, mode: 'fresh' | 'continuation', lateStart: boolean) => CellBody;
 };
 
 /** The registrar over an exemption cell or one run cell per mode, per runner and row. */
@@ -29,7 +29,7 @@ export function workflowFollowup(cells: WorkflowFollowupCells) {
   ) {
     const { describe, it } = registration;
     describe('mid-turn human follow-up parity — #486', () => {
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         for (const row of FOLLOWUP_CRITERIA.filter(row => { return (WORKFLOW_FOLLOWUP_GROUPS[group].rows as readonly string[]).includes(row.id); })) {
           const exemption = resolveExemption(row.id, backend);
           if (exemption) {

@@ -72,7 +72,7 @@ for (const mode of ['fresh', 'continuation'] as const) {
       it(`completion nudge ${mode} is sent and charged once with delayed ACK=${delayedAck}`, async () => {
         const exercise = async (release: () => void) => {
           const backend = delayedAck ? 'opencode' : 'claude';
-          process.env.CEZ_DRY_RUN = '0'; process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+          process.env.CEZ_DRY_RUN = '0'; process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
           const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: backend });
           store.commitDelegation([{ id: p.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
           checkpoint('parent parked'); await until(() => store.getRun(p.id)?.status === 'waiting');

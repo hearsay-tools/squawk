@@ -1,4 +1,4 @@
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { runsOn } from '../core/parity-classes.testkit.ts';
 
 /** A file's monitoring cells: its modes and rows, on each runner its rows' class names
@@ -163,10 +163,10 @@ export const MONITORING_PARTITIONS = {
 export type MonitoringPartitionName = keyof typeof MONITORING_PARTITIONS;
 export const monitoringTurnFiles = Object.keys(MONITORING_PARTITIONS).map(name => `monitoring-turn-${name}.test.ts`);
 export function monitoringCells(partitions: readonly MonitoringPartition[]): string[] {
-  return partitions.flatMap(partition => RUNNER_IDS.flatMap(runner => partition.modes.flatMap(mode => partition.rows
+  return partitions.flatMap(partition => BUILT_IN_RUNNER_IDS.flatMap(runner => partition.modes.flatMap(mode => partition.rows
     .filter(row => runsOn('monitoring-turn', row, runner)).map(row => `${runner}/${mode}/${row}`))));
 }
-export const expectedMonitoringCells = RUNNER_IDS.flatMap(runner => [
+export const expectedMonitoringCells = BUILT_IN_RUNNER_IDS.flatMap(runner => [
   ...['fresh', 'continuation'].flatMap(mode => ['M1', 'M2', 'M3', 'M4', 'M5', 'M7', 'M18', 'M19', 'M21'].map(row => `${runner}/${mode}/${row}`)),
   `${runner}/fresh/M13`, `${runner}/continuation/M14`, `${runner}/fresh/M17`,
 ].filter(cell => runsOn('monitoring-turn', cell.split('/')[2], runner)));

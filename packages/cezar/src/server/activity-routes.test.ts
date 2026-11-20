@@ -183,7 +183,7 @@ describe('workspace activity API', () => {
     expect(demand.has('docs')).toBe(false);
   });
 
-  it('reads the check progress the boot manager’s CI watchers publish, and plugs in the demand it marks', async () => {
+  it('reads the check progress the boot manager’s CI watchers publish', async () => {
     const boot = await registerProject(repoRoot, undefined, testHome());
     const wait = makePrWait();
     const run = store.createRun({ title: 'Boot task', workflow: 'build', task: 't', steps: [] });
@@ -191,11 +191,9 @@ describe('workspace activity API', () => {
     setRunStatus(store, run.id, RUN_STATUS.waiting);
     ciProgress.publish(wait.id, [{ name: 'build', state: 'PENDING', link: '', bucket: 'pending' }]);
     try {
-      expect(ciProgress.wanted(wait.id)).toBe(false);
       const res = await get(`/api/v1/workspace/activity?project=${boot.id}`);
       const body = activitySnapshotSchema.parse(await res.json());
       expect(body.projects[0]!.tasks[0]!.wait).toMatchObject({ kind: WAIT_KIND.pr, detail: { checks: [{ name: 'build', bucket: 'pending' }], counts: { pending: 1 } } });
-      expect(ciProgress.wanted(wait.id)).toBe(true);
     } finally {
       ciProgress.remove(wait.id);
     }
@@ -203,7 +201,7 @@ describe('workspace activity API', () => {
 
   // Without a shared semaphore, each project's manager holds its own registry: its CI watchers
   // publish there, and the read of that project must read it there.
-  it('reads each project’s check progress from its own manager, and plugs the demand into every registry', async () => {
+  it('reads each project’s check progress from its own manager', async () => {
     const demand = new ActivityDemand();
     const otherStore = RunStore.open(join(otherRoot, '.ai/cezar'));
     try {
@@ -241,7 +239,6 @@ describe('workspace activity API', () => {
       for (const projectId of ['shop', 'docs']) {
         expect(waitOf(projectId), projectId).toMatchObject({ kind: WAIT_KIND.pr, detail: { checks: [{ name: 'build', bucket: 'pending' }], counts: { pending: 1 } } });
       }
-      expect([boot.registry.wanted(bootWait.id), other.registry.wanted(otherWait.id)]).toEqual([true, true]);
     } finally {
       otherStore.close();
     }

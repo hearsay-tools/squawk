@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { projectConversationEvents } from '../delegation/conversations.ts';
 import { WORKER_FALLBACK_HEADER } from '../workflows/run.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
@@ -15,7 +15,7 @@ import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 // answerable; a pending native question takes nothing until its answer's turn end, and a restart
 // does not reopen it for them (hearsay-tools/cezarion#1235 phase 3a, § Messages beside a pending
 // question).
-for (const backend of RUNNER_IDS) {
+for (const backend of BUILT_IN_RUNNER_IDS) {
   it(`${backend} conversation correlation survives ask recovery without projection-driven delivery`, async () => {
     await withOwnedInputRun(backend, 'ask', async fixture => {
       const { runId, parentRunId } = fixture;

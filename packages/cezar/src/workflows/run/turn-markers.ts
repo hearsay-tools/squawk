@@ -3,7 +3,7 @@ import type { HumanWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { defined } from '../../core/defined.ts';
 import { uiAskQuestions, type AskRequest } from '../../core/ask.ts';
 import type { AgentSession } from '../../core/agent-runner.ts';
-import type { AgentEvent, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
@@ -13,8 +13,8 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
  * v1 event protocol stays unchanged and other backends do not acquire semantics from a
  * coincidentally named tool (#46). Undefined: not the scheduler; null: the scheduler without a
  * usable `delaySeconds`; otherwise that delay (hearsay-tools/cezarion#1233). */
-export function nativeTimerDelay(event: AgentEvent, backend: RunnerId): number | null | undefined {
-  if (event.type !== 'tool-call' || event.tool !== RUNNER_FACTS[backend].nativeTimerTool) return undefined;
+export function nativeTimerDelay(event: AgentEvent, backend: string): number | null | undefined {
+  if (event.type !== 'tool-call' || event.tool !== RUNNER_FACTS[backend]!.nativeTimerTool) return undefined;
   const delay = (event.input as { delaySeconds?: unknown } | null | undefined)?.delaySeconds;
   return typeof delay === 'number' && Number.isFinite(delay) ? delay : null;
 }

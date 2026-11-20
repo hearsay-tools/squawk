@@ -42,7 +42,7 @@ import { extraToolRows } from '../../core/runner-fact-rows.testkit.ts';
 for (const definition of [piRunner, opencodeRunner, claudeRunner]) registerRunner(definition);
 
 /**
- * The `pi` runner (#387): a new AgentBackend slotted into the runner seam as
+ * The `pi` runner (#387): a new string slotted into the runner seam as
  * ONE class. These lock the three seam-level guarantees the issue asks for —
  * the factory hands back a pi runner, detection degrades gracefully when the
  * pi CLI is absent, and the documented RPC protocol emits the normalized
@@ -1037,7 +1037,7 @@ describe('pi RPC argv', () => {
 describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
   // The Claude step default a worker inherits from a Claude parent, from Claude's data file: this
   // test registers only pi.
-  const claudeStepDefault = [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows().claude];
+  const claudeStepDefault = [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows().claude!];
   const ci = { name: 'cezar_ci_test', command: 'node', args: ['/x.mjs'] };
   const base = { cwd: '/repo', userPrompt: 'task', toolGrant: UNSET_TOOL_GRANT };
   const stepDefault = allowedToolsForStep(undefined, 'pi');

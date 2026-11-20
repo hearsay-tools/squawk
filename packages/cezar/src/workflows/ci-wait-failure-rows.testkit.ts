@@ -1,12 +1,12 @@
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { parityRunners } from '../core/parity-classes.testkit.ts';
 
 /** The CI failure parity rows (hearsay-tools/cezarion#994): which runner and case each file group
  *  registers. Apart from the cells, so a guard can read it without the cells' module mocks. */
 export type CiFailureRow =
-  | { family: 'final'; runner: RunnerId; mode: 'fresh' | 'continued' }
-  | { family: 'nonfinal'; runner: RunnerId; outcome: 'passed' | 'failed' | 'restarted' | 'source-retry' }
-  | { family: 'restart'; runner: RunnerId; boundary: 'CI acknowledgement' | 'queued tail' };
+  | { family: 'final'; runner: string; mode: 'fresh' | 'continued' }
+  | { family: 'nonfinal'; runner: string; outcome: 'passed' | 'failed' | 'restarted' | 'source-retry' }
+  | { family: 'restart'; runner: string; boundary: 'CI acknowledgement' | 'queued tail' };
 function finalRow(mode: 'fresh' | 'continued'): string { return mode === 'fresh' ? 'R72' : 'R73'; }
 function nonfinalRow(outcome: 'passed' | 'failed' | 'restarted' | 'source-retry'): string { return outcome === 'source-retry' ? 'R76' : 'R74'; }
 const restartRows = (boundary: 'CI acknowledgement' | 'queued tail') =>

@@ -3,7 +3,7 @@ import { accessSync, constants, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { openInTerminal, runDetached } from './open-in-terminal.ts';
 import { isWsl, translateToWindowsPath } from './wsl.ts';
 
@@ -126,7 +126,7 @@ function editorAvailable(editor: EditorDef): boolean {
 /** Coding-agent CLIs a session can be handed off to (#cli-handoff). Selecting one opens a
  *  terminal that resumes THIS run's session when the runner matches, or launches a fresh CLI in
  *  the worktree otherwise. The actual command is built server-side (needs the run's session). */
-const AGENT_CLIS: Array<{ runner: RunnerId; label: string; icon: string; bin: string; envBin?: string | undefined }> = [
+const AGENT_CLIS: Array<{ runner: string; label: string; icon: string; bin: string; envBin?: string | undefined }> = [
   { runner: 'claude', label: 'Claude CLI', icon: 'claude', bin: 'claude', envBin: productEnv('CLAUDE_BIN') },
   { runner: 'codex', label: 'Codex CLI', icon: 'codex', bin: 'codex', envBin: productEnv('CODEX_BIN') },
   { runner: 'opencode', label: 'OpenCode', icon: 'opencode', bin: 'opencode', envBin: productEnv('OPENCODE_BIN') },
@@ -135,7 +135,7 @@ const AGENT_CLIS: Array<{ runner: RunnerId; label: string; icon: string; bin: st
 ];
 
 /** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. */
-export function agentCliRunner(targetId: string): RunnerId | null {
+export function agentCliRunner(targetId: string): string | null {
   const match = AGENT_CLIS.find((c) => `cli:${c.runner}` === targetId);
   return match ? match.runner : null;
 }

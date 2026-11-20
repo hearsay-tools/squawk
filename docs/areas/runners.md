@@ -105,11 +105,12 @@ runner that is not registered throws. A test file registers only the runners it 
 which makes `createRunner` the factory at the same point of the import order, so a
 `vi.spyOn(createRunner)` still reaches it. `createRunner` gives Claude to an id that no runner
 registered, so a test that starts a runner it did not register runs it on Claude without an error:
-register every runner a test starts. A file that enumerates runners (`runnersWhere`,
-`registeredRunners`, `RUNNER_IDS`), or that builds the server, whose readers walk every
-`RUNNER_IDS` id until the runner list reads the registry (`workspace/agent-profiles.ts`), imports
+register every runner a test starts. A file that needs every built-in runner registered (it
+enumerates `runnersWhere` or `registeredRunners` and expects all of them) imports
 `core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
-`core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. The
+`core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. A test that
+needs only the ids reads `BUILT_IN_RUNNER_IDS` from `runners/ids.ts`, which loads no definition;
+production code never imports it (`cez/runner-ids-import`). The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
@@ -128,7 +129,7 @@ runner, defined once in a `*-cells.testkit.ts`, and add a guard that every runne
 with rows has its file. Split a runner's file again by row group when one runner
 alone is too slow. A runner that runs no row of a part has no file for it, so the
 file guards compute the expected files from the class table, never from
-`RUNNER_IDS` alone. Fold files that were split only for the cap once fewer rows
+`BUILT_IN_RUNNER_IDS` alone. Fold files that were split only for the cap once fewer rows
 run, and measure each folded file against the CI cap first:
 `WAIT_FOLDS` in `workflows/waits-parity-catalog.testkit.ts` groups the parts of each runner
 other than the scenario runner into files of about 3–12 s locally.
