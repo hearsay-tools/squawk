@@ -3,6 +3,7 @@ import { once } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, expect, test } from 'vitest'
 import { flushProcesses, pending } from '../../e2e/spec-map/flush-processes.ts'
 
@@ -47,6 +48,29 @@ test('a process writing into a marked loaded directory records itself and writes
   expect(readdirSync(loaded).some(name => name.startsWith(`coverage-${child.pid}-`))).toBe(true)
 })
 
+test('a process killed with SIGKILL leaves the modules it loaded, its worker threads\' too', async () => {
+  // Measured in the spec-map run: skill and model-catalog probes end their mock with SIGKILL.
+  const directory = temp()
+  const loaded = join(directory, 'loaded')
+  mkdirSync(loaded)
+  writeFileSync(join(loaded, 'capture.json'), '{}')
+  writeFileSync(join(directory, 'dep.js'), 'exports.x = 1')
+  writeFileSync(join(directory, 'inner.js'), "require('./dep.js')")
+  const script = join(directory, 'killed.js')
+  writeFileSync(script, `require('./dep.js');
+    const { Worker } = require('node:worker_threads');
+    new Worker(${JSON.stringify(join(directory, 'inner.js'))}, { execArgv: [] }).on('exit', () => console.log('ready'));
+    process.stdin.resume();`)
+  const { child, said } = start(script, { NODE_V8_COVERAGE: loaded })
+  await said('ready')
+  const exited = once(child, 'exit')
+  child.kill('SIGKILL')
+  await exited
+  const log = (thread: number) => readFileSync(join(loaded, `loads-${child.pid}-${thread}.txt`), 'utf8').split('\n').filter(Boolean)
+  expect(log(0)).toEqual(expect.arrayContaining([pathToFileURL(script).href, pathToFileURL(join(directory, 'dep.js')).href]))
+  expect(log(1)).toEqual(expect.arrayContaining([pathToFileURL(join(directory, 'inner.js')).href, pathToFileURL(join(directory, 'dep.js')).href]))
+})
+
 test('a process whose coverage directory has no marker records nothing', async () => {
   const directory = temp()
   const coverage = join(directory, 'coverage')
@@ -55,7 +79,7 @@ test('a process whose coverage directory has no marker records nothing', async (
   writeFileSync(script, "console.log('ready')")
   const { child } = start(script, { NODE_V8_COVERAGE: coverage })
   await once(child, 'exit')
-  expect(readdirSync(coverage).filter(name => name.startsWith('started-'))).toEqual([])
+  expect(readdirSync(coverage).filter(name => name.startsWith('started-') || name.startsWith('loads-'))).toEqual([])
 })
 
 test('the shared server passes the loaded directory to the processes it starts', async () => {

@@ -159,5 +159,12 @@ it('lists the repository code files any process loaded, and the processes that l
     put('logs/loaded/started-7.json', JSON.stringify({ pid: 7, argv: ['vitest.mjs', 'run'] }))
     put('logs/loaded/started-10.json', JSON.stringify({ pid: 10, argv: ['index.js'] }))
     expect(unflushedProcesses(logs)).toEqual(['10 (index.js)'])
+    // A process killed before it wrote coverage still left the log of the modules it loaded.
+    put('logs/loaded/loads-10-0.txt', `${pathToFileURL(join(root, 'packages/cezar/scripts/mock-claude.mjs')).href}\n`)
+    put('packages/cezar/scripts/mock-claude.mjs')
+    expect(unflushedProcesses(logs)).toEqual([])
+    put('logs/loaded/loads-10-1.txt', `${pathToFileURL(join(root, 'scripts/worker-only.mjs')).href}\n`)
+    put('scripts/worker-only.mjs')
+    expect(nodeLoaded(logs, root).files).toEqual(expect.arrayContaining(['packages/cezar/scripts/mock-claude.mjs', 'scripts/worker-only.mjs']))
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

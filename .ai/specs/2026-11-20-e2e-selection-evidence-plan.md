@@ -86,7 +86,13 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
   passes it to the processes it starts. CLI children, agents and `tsx` workers inherit it.
   Mock processes keep their per-spec directory.
 - Each marked process records `started-<pid>.json`, and writes its coverage on SIGTERM as well as
-  on exit. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
+  on exit. Each of its threads also appends every module it loads through Node's loader to
+  `loads-<pid>-<thread>.txt` (`module.registerHooks`), so a record survives SIGKILL and
+  `process.execve`. Measured in the first slice 3 map run: 60 mock processes from skill and
+  model-catalog probes, which the probe ends with SIGKILL, and TypeScript 7's `tsc.js`, which
+  `execve`s the native compiler, left no coverage. A process counts as recorded when it left
+  coverage or a main-thread load log. Code evaluated outside Node's loader (Vitest's module
+  runner) appears only in coverage; Vitest stops its workers with SIGTERM, which writes it. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
 - The map gets `nodeLoaded`: every repository code file in any coverage report. A dist file
   counts as the sources in its source map. The contract bundle, which `inline-contract.mjs` builds
   without a map, counts as every contract source. A copy in the served test project counts as its

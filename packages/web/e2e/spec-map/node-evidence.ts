@@ -184,11 +184,12 @@ export function nodeLoaded(logs: string, root: string): { files: string[]; unatt
   const files = new Set<string>()
   const unattributed = new Set<string>()
   const cache = new Map<string, string[] | null>()
-  const reports = existsSync(logs) ? readdirSync(logs, { recursive: true, encoding: 'utf8' })
-    .filter((name) => /^(?:coverage-.*|server-.*|shared-startup-\d+)\.json$/.test(basename(name))) : []
-  for (const name of reports) {
-    const report = JSON.parse(readFileSync(join(logs, name), 'utf8')) as { result?: Array<{ url: string }> }
-    for (const { url } of report.result ?? []) {
+  const names = existsSync(logs) ? readdirSync(logs, { recursive: true, encoding: 'utf8' }) : []
+  const urls = (name: string): string[] => name.endsWith('.txt')
+    ? readFileSync(join(logs, name), 'utf8').split('\n').filter(Boolean)
+    : ((JSON.parse(readFileSync(join(logs, name), 'utf8')) as { result?: Array<{ url: string }> }).result ?? []).map(({ url }) => url)
+  for (const name of names.filter((name) => /^(?:(?:coverage-.*|server-.*|shared-startup-\d+)\.json|loads-\d+-\d+\.txt)$/.test(basename(name)))) {
+    for (const url of urls(name)) {
       const file = scriptPath(url)
       const path = file ? relative(root, file) : '..'
       if (!file || path.startsWith('..') || path.split('/').includes('node_modules') || !existsSync(file)) continue
@@ -201,9 +202,9 @@ export function nodeLoaded(logs: string, root: string): { files: string[]; unatt
 }
 
 /**
- * The processes that wrote no coverage into the loaded directory, by their `started-<pid>.json`;
- * null when the capture had no loaded directory at all. Either one means the loaded list misses
- * what those processes loaded.
+ * The processes that left neither coverage nor a load log in the loaded directory, by their
+ * `started-<pid>.json`; null when the capture had no loaded directory at all. Either one means the
+ * loaded list misses what those processes loaded.
  */
 export function unflushedProcesses(logs: string): string[] | null {
   const dir = join(logs, 'loaded')
@@ -211,7 +212,8 @@ export function unflushedProcesses(logs: string): string[] | null {
   const names = readdirSync(dir)
   return names.filter((name) => /^started-\d+\.json$/.test(name)).filter((name) => {
     const pid = name.slice('started-'.length, -'.json'.length)
-    return !names.some((candidate) => candidate.startsWith(`coverage-${pid}-`) && candidate.endsWith('.json'))
+    return !names.some((candidate) => (candidate.startsWith(`coverage-${pid}-`) && candidate.endsWith('.json'))
+      || candidate === `loads-${pid}-0.txt`)
   }).map((name) => {
     const record = JSON.parse(readFileSync(join(dir, name), 'utf8')) as { pid: number; argv?: string[] }
     return `${record.pid} (${(record.argv ?? []).join(' ')})`

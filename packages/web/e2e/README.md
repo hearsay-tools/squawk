@@ -401,8 +401,8 @@ marks each function the boot ran `startup` and credits it to no spec. Mock cover
 spec and task that started the process, even when that process survives into another spec.
 The source-map build must match the served browser JavaScript byte for byte.
 A task without a known creating spec makes Node evidence incomplete.
-Every other process writes `NODE_V8_COVERAGE` into `logs/loaded/`, and the map lists the code files
-they loaded as `nodeLoaded`, but only when every such process left its coverage and every generated
+Every other process writes `NODE_V8_COVERAGE` and a log of the modules it loads into `logs/loaded/`, and the map lists the code files
+they loaded as `nodeLoaded`, but only when every such process left its coverage or its load log and every generated
 file they loaded has a source map (the contract bundle counts as every contract source).
 Failed specs and specs without complete evidence stay incomplete and always run for mapped edits.
 

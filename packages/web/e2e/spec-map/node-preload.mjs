@@ -1,14 +1,14 @@
 // Loaded only by the spec-map workflow through NODE_OPTIONS. No application imports this hook.
 import childProcess from 'node:child_process';
-import { syncBuiltinESMExports } from 'node:module';
+import { registerHooks, syncBuiltinESMExports } from 'node:module';
 import { Session } from 'node:inspector';
 import { createServer } from 'node:net';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { flushCoverage as takeCoverage } from './node-coverage.mjs';
-import { isMainThread } from 'node:worker_threads';
+import { isMainThread, threadId } from 'node:worker_threads';
 
 const root = process.env.E2E_SPEC_MAP_NODE_DIR;
 const owner = process.env.E2E_SPEC_MAP_OWNER;
@@ -20,13 +20,30 @@ if (isMainThread && root && isServer && existsSync(join(root, 'loaded', LOADED_M
   process.env.NODE_V8_COVERAGE ??= join(root, 'loaded');
 }
 const loaded = process.env.NODE_V8_COVERAGE;
-if (isMainThread && !isServer && !owner && loaded && existsSync(join(loaded, LOADED_MARKER))) recordProcess(loaded);
+const capturing = Boolean(loaded && existsSync(join(loaded, LOADED_MARKER)));
+if (capturing) logLoads(loaded);
+if (isMainThread && !isServer && !owner && capturing) recordProcess(loaded);
+
+/**
+ * Appends each module this thread loads to `loads-<pid>-<thread>.txt` as it loads, so the record
+ * survives SIGKILL and `process.execve`, which write no coverage. Code evaluated outside Node's
+ * loader, such as Vitest's module runner, still needs the coverage.
+ */
+function logLoads(directory) {
+  const log = join(directory, `loads-${process.pid}-${threadId}.txt`);
+  registerHooks({
+    load(url, context, nextLoad) {
+      if (url.startsWith('file:') && !url.includes('/node_modules/')) appendFileSync(log, `${url}\n`);
+      return nextLoad(url, context);
+    },
+  });
+}
 if (isMainThread && root && (isServer || owner)) await install(root, owner);
 
 /**
  * A process that writes its coverage into the capture's loaded directory. `started-<pid>.json`
- * lets the merge refuse the loaded list when a process left no coverage, and SIGTERM writes the
- * coverage first: Node writes it only on a normal exit.
+ * lets the merge refuse the loaded list when a process left neither coverage nor a load log, and
+ * SIGTERM writes the coverage first: Node writes it only on a normal exit.
  */
 function recordProcess(directory) {
   writeRecord(join(directory, `started-${process.pid}.json`), { pid: process.pid, argv: process.argv.slice(1, 3).map(arg => basename(arg)) });
