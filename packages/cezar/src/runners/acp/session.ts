@@ -2,7 +2,7 @@ import type { Readable, Writable } from 'node:stream';
 import { z } from 'zod';
 import type { StopReason } from '../../core/ui-events.ts';
 import { AcpEvents, type AcpEventSink } from './events.ts';
-import { AcpRpcError, AcpTransport, type RpcId } from './transport.ts';
+import { AcpRpcError, AcpTransport } from './transport.ts';
 import { initializeSchema, permissionSchema, recordSchema, type AcpAsk, type AcpHooks, type AcpInitializeResult, type AcpPermissionRequest } from './protocol.ts';
 
 const updateSchema = z.object({ sessionId: z.string(), update: recordSchema });
@@ -33,13 +33,16 @@ export class AcpSession {
   private opening = false;
   private earlyUpdates: Array<z.infer<typeof updateSchema>> = [];
   private permissions = new Map<string, PendingPermission>();
+  private permissionSerial = 0;
+  private promptActive = false;
+  private turnCancelled = false;
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
     this.hooks = options.hooks ?? {};
     this.events = new AcpEvents(options, this.hooks);
     this.transport = new AcpTransport(streams, {
       notification: (method, params) => this.notification(method, params),
-      request: (method, params, id) => this.request(method, params, id),
+      request: (method, params) => this.request(method, params),
       notice: message => this.events.notice(message),
       ...(options.onActivity ? { activity: options.onActivity } : {}),
     });
@@ -96,8 +99,11 @@ export class AcpSession {
 
   async prompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
     const sessionId = this.requireSession();
-    this.events.begin();
+    if (this.promptActive) throw new Error('ACP prompt already active');
+    this.promptActive = true;
+    this.turnCancelled = false;
     try {
+      this.events.begin();
       const result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
       const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
       this.events.finish(reason);
@@ -105,12 +111,14 @@ export class AcpSession {
     } catch (error) {
       this.events.finish('error');
       throw error;
-    } finally { this.cancelPermissions(); }
+    } finally { this.cancelPermissions(); this.promptActive = false; }
   }
 
   cancel(): void {
-    this.transport.notify('session/cancel', { sessionId: this.requireSession() });
-    this.cancelPermissions();
+    const sessionId = this.requireSession();
+    this.turnCancelled = true;
+    try { this.transport.notify('session/cancel', { sessionId }); }
+    finally { this.cancelPermissions(); }
   }
 
   async setConfigOption(configId: string, value: string): Promise<unknown> {
@@ -151,14 +159,16 @@ export class AcpSession {
     else if (update.sessionId === this.sessionId) this.events.update(update.update);
   }
 
-  private request(method: string, params: unknown, id: RpcId): unknown | Promise<unknown> {
+  private request(method: string, params: unknown): unknown | Promise<unknown> {
     if (method === 'fs/read_text_file' && this.hooks.readTextFile) return this.hooks.readTextFile(params);
     if (method !== 'session/request_permission') throw new AcpRpcError(-32601, `Unsupported ACP client method: ${method}`);
     const request = permissionSchema.parse(params);
     if (request.sessionId !== this.sessionId) throw new AcpRpcError(-32602, 'Permission requested for another session');
+    if (!this.promptActive || this.turnCancelled) return { outcome: { outcome: 'cancelled' } };
     const policy = this.hooks.permissionPolicy?.(request);
     if (policy) return { outcome: policy };
-    const requestId = `acp-permission-${typeof id}-${id}`;
+    // Native JSON-RPC string IDs have no length bound; UI permission IDs do.
+    const requestId = `acp-permission-${++this.permissionSerial}`;
     const ask = this.hooks.permissionAsk?.(request);
     return new Promise(resolve => {
       this.permissions.set(requestId, { request, resolve, ...(ask ? { ask } : {}) });

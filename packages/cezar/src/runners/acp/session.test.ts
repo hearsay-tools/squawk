@@ -102,6 +102,30 @@ describe('shared ACP session over the native mock wire', () => {
     expect(await session.prompt([{ type: 'text', text: 'mock:agent-echo after cancel' }])).toMatchObject({ stopReason: 'end_turn' });
   });
 
+  it('cancels permission requests that arrive after cancel, and resets cancellation for a new prompt', async () => {
+    const { session, ui } = start({ uiEvent: event => {
+      if (event.type === 'permission.requested') session.respondPermission(event.requestId, 'allow-once');
+    } });
+    await session.initialize(); await session.open({ cwd: tmpdir() });
+    const prompt = session.prompt([{ type: 'text', text: 'mock:acp-permission' }]);
+    session.cancel();
+    await expect(prompt).resolves.toMatchObject({ stopReason: 'cancelled' });
+    expect(ui.filter(event => event.type === 'permission.requested')).toHaveLength(0);
+    await expect(session.prompt([{ type: 'text', text: 'mock:acp-permission' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(ui.filter(event => event.type === 'permission.requested')).toHaveLength(1);
+  });
+
+  it('keeps permission card IDs within the contract bound when native RPC IDs are long', async () => {
+    const { session, events } = start({ uiEvent: event => {
+      if (event.type !== 'permission.requested') return;
+      expect(event.requestId.length).toBeLessThanOrEqual(128);
+      expect(session.respondPermission(event.requestId, 'allow-once')).toBe(true);
+    } });
+    await session.initialize(); await session.open({ cwd: tmpdir() });
+    await expect(session.prompt([{ type: 'text', text: 'mock:acp-permission long-id' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"allow-once"}}' });
+  });
+
   it('uses runner hooks to expose a permission as a native ask and encode its answer', async () => {
     const { session, events, ui } = start({ hooks: { permissionAsk: () => ({
       questions: [{ header: 'Choice', question: 'Continue?' }],

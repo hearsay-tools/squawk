@@ -12,8 +12,8 @@ let serverId = 0;
 const pending = new Map();
 const update = value => write({ method: 'session/update', params: { sessionId, update: value } });
 const content = (sessionUpdate, text) => update({ sessionUpdate, content: { type: 'text', text } });
-const request = (method, params) => new Promise(resolve => {
-  const id = `agent-${++serverId}`;
+const request = (method, params, nativeId) => new Promise(resolve => {
+  const id = nativeId ?? `agent-${++serverId}`;
   pending.set(id, resolve);
   write({ id, method, params });
 });
@@ -53,7 +53,7 @@ async function prompt(frame) {
       const result = await request('session/request_permission', { sessionId,
         toolCall: { toolCallId: 'permission-tool', title: text.includes('mock:acp-ask') ? 'Question' : 'Execute command', rawInput: { command: 'pwd' } },
         options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }, { optionId: 'reject-once', name: 'Reject once', kind: 'reject_once' }],
-      });
+      }, text.includes('long-id') ? 'native-id-'.repeat(64) : undefined);
       if (!turn.cancelled) content('agent_message_chunk', JSON.stringify(result));
     } else {
       const scenario = scenarioFor(text, context);

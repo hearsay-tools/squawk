@@ -91,3 +91,18 @@ it('maps partial tool updates, reasoning, plans and USD usage without clearing a
   expect(events).toContainEqual({ type: 'cost', usd: 0.1 });
   expect(ui).toContainEqual({ type: 'usage.updated', usage: { input: 0, output: 0, total: 12, contextWindow: 1024 }, costUsd: 0.1 });
 });
+
+it.each(['completed', 'failed'])('completes a first terminal tool update and preserves its image: %s', status => {
+  const events: AgentEvent[] = []; const ui: UiEvent[] = [];
+  const mapper = new AcpEvents({ event: e => events.push(e), uiEvent: e => ui.push(e) }, {});
+  mapper.begin();
+  mapper.update({ sessionUpdate: 'tool_call_update', toolCallId: 'screenshot', status,
+    content: [{ type: 'content', content: { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' } },
+      { type: 'content', content: { type: 'text', text: 'Screenshot captured' } }],
+  });
+  expect(events).toContainEqual({ type: 'tool-result', toolCallId: 'screenshot', result: 'Screenshot captured', isError: status === 'failed' });
+  expect(ui).toContainEqual(expect.objectContaining({ type: 'item.completed', item: expect.objectContaining({ id: 'screenshot', status }) }));
+  expect(events).toContainEqual({ type: 'image', mediaType: 'image/png', data: 'aW1hZ2U=' });
+  expect(ui).toContainEqual({ type: 'image', itemId: 'screenshot', mediaType: 'image/png', data: 'aW1hZ2U=' });
+  mapper.finish('end_turn');
+});

@@ -8,7 +8,7 @@ const toolSchema = z.object({
   kind: z.enum(['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'switch_mode', 'other']).catch('other').nullish(),
   status: z.enum(['pending', 'in_progress', 'completed', 'failed']).nullish().catch(undefined),
   rawInput: z.unknown().optional(), rawOutput: z.unknown().optional(),
-  content: z.array(z.object({ type: z.string(), content: z.object({ type: z.string(), text: z.string().optional() }).optional(),
+  content: z.array(z.object({ type: z.string(), content: z.object({ type: z.string(), text: z.string().optional(), data: z.string().optional(), mimeType: z.string().optional() }).optional(),
     path: z.string().optional(), oldText: z.string().nullable().optional(), newText: z.string().optional(),
   }).passthrough()).nullish(),
   locations: z.array(z.object({ path: z.string(), line: z.number().optional() })).nullish(),
@@ -125,6 +125,16 @@ export class AcpEvents {
       this.sink.event?.({ type: 'tool-result', toolCallId: item.id, result: item.output ?? '', isError: item.status === 'failed' });
       this.sink.uiEvent?.({ type: 'item.completed', item: { ...item } });
     } else if (previous) this.sink.uiEvent?.({ type: 'item.updated', item: { ...item } });
+    this.toolImages(wire, item.id);
+  }
+
+  private toolImages(wire: AcpTool, itemId: string): void {
+    for (const entry of wire.content ?? []) {
+      const content = entry.content;
+      if (content?.type !== 'image' || !content.data || !content.mimeType) continue;
+      this.sink.event?.({ type: 'image', mediaType: content.mimeType, data: content.data });
+      this.sink.uiEvent?.({ type: 'image', itemId, mediaType: content.mimeType, data: content.data });
+    }
   }
 }
 
