@@ -19,8 +19,8 @@ function git(cwd, ...args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
 }
 
-/** A committed scratch repository with the simulation's inputs and two test files. */
-function scratch(t) {
+/** A committed scratch repository with the simulation's inputs and two test files; `edit` changes it before the commit. */
+function scratch(t, edit = () => {}) {
   const root = mkdtempSync(join(tmpdir(), 'simulate-sixth-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const path of INPUTS) {
@@ -30,6 +30,7 @@ function scratch(t) {
   mkdirSync(join(root, SRC, 'core'), { recursive: true });
   writeFileSync(join(root, ROSTER_TEST), "import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';\n");
   writeFileSync(join(root, OTHER_TEST), "import { x } from './ids.ts';\n");
+  edit(root);
   git(root, 'init', '-q');
   git(root, 'add', '-A');
   git(root, '-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'inputs');
@@ -69,4 +70,18 @@ test('reports a change outside the four places', (t) => {
   addSixthRunner(root);
   writeFileSync(join(root, OTHER_TEST), 'changed\n');
   assert.deepEqual(outsideFourPlaces(root), [OTHER_TEST]);
+});
+
+test('turns the fixture\'s mock.testkit.ts, when it has one, into mock.ts', (t) => {
+  const fixture = `${SRC}/runners/fixture`;
+  const root = scratch(t, (dir) => {
+    writeFileSync(join(dir, fixture, 'mock.testkit.ts'), "export const FIXTURE_MOCK_PART = 'fixture';\n");
+    writeFileSync(join(dir, fixture, 'definition.testkit.ts'),
+      `${readFileSync(join(dir, fixture, 'definition.testkit.ts'), 'utf8')}import { FIXTURE_MOCK_PART } from './mock.testkit.ts';\n`);
+  });
+  addSixthRunner(root);
+  assert.deepEqual(outsideFourPlaces(root), []);
+  const runner = join(root, SRC, 'runners/sixth');
+  assert.equal(readFileSync(join(runner, 'mock.ts'), 'utf8'), "export const SIXTH_MOCK_PART = 'sixth';\n");
+  assert.match(readFileSync(join(runner, 'definition.ts'), 'utf8'), /import \{ SIXTH_MOCK_PART \} from '\.\/mock\.ts';/);
 });

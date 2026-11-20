@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { relativeImports, runtimeImports } from './import-closure.testkit.ts';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { importClosure, relativeImports, runtimeImports } from './import-closure.testkit.ts';
 
 describe('runtimeImports', () => {
   it.each([
@@ -50,5 +53,42 @@ describe('runtimeImports', () => {
 
   it('keeps only relative specifiers in relativeImports', () => {
     expect(relativeImports("import { a } from './a.ts';\nimport { z } from 'zod';\nconst b = await import(`../b.ts`);")).toEqual(['./a.ts', '../b.ts']);
+  });
+});
+
+// Vitest compiles `import.meta.glob('<pattern>')` into one import per matched file
+// (hearsay-tools/squawk#3900), so a closure holds every file the pattern matches.
+describe('import.meta.glob', () => {
+  let root = '';
+  afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); });
+
+  function tree(files: Record<string, string>): string {
+    root = mkdtempSync(join(tmpdir(), 'import-closure-'));
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    return root;
+  }
+
+  it('reads each file a literal pattern matches beside the importing file', () => {
+    const dir = tree({ 'kit/rows.ts': '', 'runners/a/facts.ts': '', 'runners/b/facts.ts': '', 'runners/b/other.ts': '' });
+    const source = "const rows = import.meta.glob<Record<string, unknown>>('../runners/*/facts.ts', { eager: true });";
+    expect(runtimeImports(source, join(dir, 'kit/rows.ts'))).toEqual(['../runners/a/facts.ts', '../runners/b/facts.ts']);
+    expect(runtimeImports("const here = import.meta.glob('./*.ts');", join(dir, 'runners/b/facts.ts'))).toEqual(['./facts.ts', './other.ts']);
+  });
+
+  it('refuses a pattern it cannot read', () => {
+    expect(() => runtimeImports('const rows = import.meta.glob(pattern);')).toThrow('import.meta.glob(pattern)');
+  });
+
+  it('walks into what the glob loads', () => {
+    const dir = tree({
+      'kit/rows.ts': "export const rows = import.meta.glob('../runners/*/facts.ts', { eager: true });",
+      'runners/a/facts.ts': "import './adapter.ts';",
+      'runners/a/adapter.ts': '',
+    });
+    expect(importClosure(join(dir, 'kit/rows.ts')).map(path => path.slice(dir.length + 1)))
+      .toEqual(['kit/rows.ts', 'runners/a/adapter.ts', 'runners/a/facts.ts']);
   });
 });

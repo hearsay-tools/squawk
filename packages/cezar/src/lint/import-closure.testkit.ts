@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parse } from '@babel/parser';
 
@@ -37,12 +37,28 @@ function children(node: Node): Node[] {
     .filter((child): child is Node => Boolean(child) && typeof child === 'object' && typeof (child as Node).type === 'string');
 }
 
+/** The pattern argument of Vite's `import.meta.glob(…)`; undefined when `node` is no such call. */
+function globArgument(node: Node): Node | null | undefined {
+  if (node.type !== 'CallExpression') return undefined;
+  const callee = node.callee as Node;
+  if (callee.type !== 'MemberExpression' || (callee.object as Node).type !== 'MetaProperty') return undefined;
+  const property = callee.property as Node;
+  return property.type === 'Identifier' && property.name === 'glob' ? (node.arguments as Node[])[0] ?? null : undefined;
+}
+
+/** The files a literal `import.meta.glob` pattern written in `file` matches, as sorted relative specifiers. */
+export function globMatches(pattern: string, file: string): string[] {
+  return globSync(pattern, { cwd: dirname(file) }).map(match => (match.startsWith('.') ? match : `./${match}`)).sort();
+}
+
 /**
  * Every module specifier `source` loads at runtime, read from its syntax tree: value `import`,
  * `export … from` and `import x = require(…)` declarations, and `import(…)` and `require(…)`
  * calls. TypeScript erases type-only imports and `import('…').T` type queries, so they are not
- * counted. A load whose argument is not one literal throws: a closure pin that skipped it would
- * fail open. `file` picks the JSX grammar for a `.jsx` or `.tsx` source.
+ * counted. Vitest compiles Vite's `import.meta.glob('<pattern>')` into one import per matched
+ * file, so each file the pattern matches beside `file` counts. A load or a glob whose argument is
+ * not one literal throws: a closure pin that skipped it would fail open. `file` picks the JSX
+ * grammar for a `.jsx` or `.tsx` source.
  */
 export function runtimeImports(source: string, file = 'module.ts'): string[] {
   const ast = parse(source, {
@@ -54,8 +70,11 @@ export function runtimeImports(source: string, file = 'module.ts'): string[] {
     if (node.type === 'TSImportType') return;
     const declared = declaredModule(node);
     const argument = declared === undefined ? loadArgument(node) : undefined;
+    const glob = globArgument(node);
+    const call = () => source.slice(node.start ?? 0, node.end ?? 0);
     if (declared !== undefined) found.push(declared);
-    else if (argument !== undefined) found.push(literalOrThrow(argument ?? undefined, file, source.slice(node.start ?? 0, node.end ?? 0)));
+    else if (argument !== undefined) found.push(literalOrThrow(argument ?? undefined, file, call()));
+    else if (glob !== undefined) found.push(...globMatches(literalOrThrow(glob ?? undefined, file, call()), file));
     children(node).forEach(visit);
   };
   visit(ast);

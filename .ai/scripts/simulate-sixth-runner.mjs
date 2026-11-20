@@ -3,8 +3,8 @@
 // runner may touch (hearsay-tools/squawk#3900): its folder `packages/cezar/src/runners/sixth/`,
 // its mock script `packages/cezar/scripts/mock-sixth-runner.mjs`, one line in
 // `packages/cezar/src/runners/built-in.ts` and its id in `packages/cezar/src/runners/ids.ts`.
-// The runner is the test-only fixture runner (`runners/fixture/`) under production names. The
-// result is never committed.
+// The runner is the test-only fixture runner (`runners/fixture/`) under production names; its
+// `mock.testkit.ts`, when the fixture has one, becomes `mock.ts`. The result is never committed.
 //
 //   node .ai/scripts/simulate-sixth-runner.mjs <scratch clone>
 //
@@ -54,9 +54,11 @@ export function refusal(target, repo = REPO) {
   return undefined;
 }
 
+/** Production names: the fixture's `*.testkit.ts` data modules become plain modules. */
 function rename(text) {
   return text.replaceAll('FixtureAdapter', 'SixthRunner').replaceAll('FIXTURE', 'SIXTH')
-    .replaceAll('Fixture', 'Sixth').replaceAll('fixture', 'sixth');
+    .replaceAll('Fixture', 'Sixth').replaceAll('fixture', 'sixth')
+    .replaceAll("'./data.testkit.ts'", "'./data.ts'").replaceAll("'./mock.testkit.ts'", "'./mock.ts'");
 }
 
 function replaceOnce(text, find, replacement) {
@@ -79,7 +81,7 @@ function dataFiles(fixtureData) {
 }
 
 function definitionFile(fixtureDefinition) {
-  let text = rename(fixtureDefinition).replaceAll("'./data.testkit.ts'", "'./data.ts'");
+  let text = rename(fixtureDefinition);
   text = replaceOnce(text, "'./sixth-adapter.testkit.ts'", "'./sixth-runner.ts'");
   text = replaceOnce(text, '  extraTools: [],\n', '  extraTools: SIXTH_EXTRA_TOOLS,\n');
   return replaceOnce(text, "} from './data.ts';\n", "} from './data.ts';\nimport { SIXTH_EXTRA_TOOLS } from './extra-tools.ts';\n");
@@ -92,7 +94,7 @@ const UNUSED_TEST_LINES = [
   "import { harnessAdapter } from '../../core/harness-parity-core.testkit.ts';\n",
   "import { RUNNER_FACTS } from '../../core/runner-facts.ts';\n",
   "import { setupMonitoringFixture, waitForProduct } from '../../workflows/run-fixture.testkit.ts';\n",
-  "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n", "import { FIXTURE_BIN_ENV } from './data.testkit.ts';\n",
+  "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n",
 ];
 
 /** The per-runner parity file the closure guard requires: the fixture test's baseline seam rows. */
@@ -100,6 +102,7 @@ function parityTestFile(fixtureTest) {
   let text = fixtureTest.replace(/describe\('the fixture runner in the registry'.*?\n\}\);\n/s, '')
     .replace(/describe\('a task on the fixture runner'.*/s, '');
   for (const line of UNUSED_TEST_LINES) text = replaceOnce(text, line, '');
+  text = text.replace(/import \{ FIXTURE_BIN_ENV \} from '\.\/[a-z]+\.testkit\.ts';\n/, '');
   text = replaceOnce(text, "import { knownRunnerIds, registerRunner, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';\n",
     "import { registerRunner } from '../../core/runner-registry.ts';\n");
   return replaceOnce(rename(text), "'./definition.testkit.ts'", "'./definition.ts'");
@@ -113,9 +116,10 @@ export function addSixthRunner(target) {
   mkdirSync(folder);
   const files = {
     ...dataFiles(read(`${fixture}/data.testkit.ts`)),
-    'sixth-runner.ts': rename(read(`${fixture}/fixture-adapter.testkit.ts`)).replaceAll("'./data.testkit.ts'", "'./data.ts'"),
+    'sixth-runner.ts': rename(read(`${fixture}/fixture-adapter.testkit.ts`)),
     'definition.ts': definitionFile(read(`${fixture}/definition.testkit.ts`)),
     'harness-sixth-startup-parity.test.ts': parityTestFile(read(`${fixture}/fixture-runner.test.ts`)),
+    ...(existsSync(join(target, fixture, 'mock.testkit.ts')) ? { 'mock.ts': rename(read(`${fixture}/mock.testkit.ts`)) } : {}),
   };
   for (const [name, text] of Object.entries(files)) writeFileSync(join(folder, name), text);
   copyFileSync(join(target, SCRIPTS, 'mock-fixture-runner.mjs'), join(target, SCRIPTS, 'mock-sixth-runner.mjs'));
