@@ -53,6 +53,14 @@ npm run restack -- <base PR number> --merge     # keep the history: merge commit
 npm run restack -- <base PR number> --dry-run   # list the commits it would replay; change nothing
 ```
 
+A branch older than the command has no `restack` script. Run main's copy on it; the script imports
+nothing beside it:
+
+```sh
+git fetch origin main && git show origin/main:scripts/restack-after-squash.mjs > "${TMPDIR:-/tmp}/restack.mjs"
+node "${TMPDIR:-/tmp}/restack.mjs" <base PR number>
+```
+
 Git reads the base's commits and the squash commit as different changes, so a plain
 `git merge origin/main` or `git rebase origin/main` conflicts in files this branch never changed.
 Merging the base's final head first does not help. `scripts/restack-after-squash.mjs` reads the

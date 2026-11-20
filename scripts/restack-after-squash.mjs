@@ -23,9 +23,17 @@ function refuse(message) {
   throw new Refusal(message);
 }
 
+/** Inherited from a Git hook or a `rebase --exec` step, these would make Git ignore `cwd`. */
+const GIT_LOCATION_VARS = [
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR',
+  'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_PREFIX',
+];
+
 function makeRunner(cwd) {
+  const env = { ...process.env };
+  for (const name of GIT_LOCATION_VARS) delete env[name];
   return (command, args) => {
-    const result = spawnSync(command, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     if (result.error?.code === 'ENOENT') refuse(`${command} is not installed or not on PATH; this command needs it.`);
     if (result.error) throw result.error;
     return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
@@ -52,11 +60,11 @@ function originUrl(git) {
 }
 
 function readPullRequest(run, repo, pr) {
-  const result = run('gh', ['pr', 'view', pr, '--repo', repo, '--json', 'state,headRefOid,baseRefName']);
+  const result = run('gh', ['pr', 'view', pr, '--repo', repo, '--json', 'state,headRefOid,baseRefName,mergeCommit']);
   if (result.status !== 0) refuse(`gh pr view ${pr} failed: ${result.stderr || result.stdout}`);
-  const { state, headRefOid, baseRefName } = JSON.parse(result.stdout);
+  const { state, headRefOid, baseRefName, mergeCommit } = JSON.parse(result.stdout);
   if (state !== 'MERGED') refuse(`PR #${pr} is ${state}, not MERGED. Restack after it is squash-merged.`);
-  return { finalHead: headRefOid, base: baseRefName };
+  return { finalHead: headRefOid, base: baseRefName, squash: mergeCommit?.oid };
 }
 
 function checkWorktree(git, base) {
@@ -70,7 +78,10 @@ function checkWorktree(git, base) {
   return branch.stdout;
 }
 
-function checkStacked(git, finalHead, upstream, pr) {
+function checkStacked(git, { finalHead, upstream, squash, pr }) {
+  if (squash && git.isAncestor(squash, 'HEAD')) {
+    refuse(`This branch already contains PR #${pr}'s squash commit: it is restacked. Merge or rebase the base branch as usual from now on.`);
+  }
   const fork = git('merge-base', 'HEAD', finalHead);
   if (fork.status !== 0 || git.isAncestor(fork.stdout, upstream)) {
     refuse(`This branch shares no unmerged commit with PR #${pr}'s final head: it was not stacked on it, or it is already restacked.`);
@@ -120,8 +131,8 @@ function merge(git, ctx) {
     const tree = mergeTree(git, [head, ctx.finalHead], `Merging PR #${ctx.pr}'s final head`);
     head = git.ok('commit-tree', tree, '-p', head, '-p', ctx.finalHead, '-m', `Merge the final head of #${ctx.pr}`);
   }
-  const tree = mergeTree(git, [`--merge-base=${ctx.finalHead}`, head, ctx.upstream], `Merging ${ctx.upstream}`);
-  const merged = git.ok('commit-tree', tree, '-p', head, '-p', ctx.upstream, '-m', `Merge ${ctx.upstream} after #${ctx.pr} was squash-merged`);
+  const tree = mergeTree(git, [`--merge-base=${ctx.finalHead}`, head, ctx.upstream], `Merging ${ctx.upstreamRef}`);
+  const merged = git.ok('commit-tree', tree, '-p', head, '-p', ctx.upstream, '-m', `Merge ${ctx.upstreamRef} after #${ctx.pr} was squash-merged`);
   git.ok('merge', '--ff-only', '--quiet', merged);
 }
 
@@ -133,7 +144,7 @@ function report(git, ctx, mode) {
     : `Own patch changed. Compare: git range-diff ${ctx.finalHead}..${ctx.oldHead} ${ctx.upstream}..HEAD`];
   lines.push(mode === 'merge'
     ? `Push: git push origin ${shellWord(`HEAD:${ctx.branch}`)}`
-    : `Push: git push ${shellWord(`--force-with-lease=${ctx.branch}:${ctx.oldHead}`)} origin ${shellWord(`HEAD:${ctx.branch}`)}`);
+    : `Push: git push ${shellWord(`--force-with-lease=${ctx.branch}:${ctx.remoteHead}`)} origin ${shellWord(`HEAD:${ctx.branch}`)}`);
   return lines;
 }
 
@@ -141,18 +152,21 @@ function report(git, ctx, mode) {
 export function restack({ cwd, pr, mode, dryRun }) {
   const run = makeRunner(cwd);
   const git = gitWith(run);
-  const { finalHead, base } = readPullRequest(run, originUrl(git), pr);
+  const { finalHead, base, squash } = readPullRequest(run, originUrl(git), pr);
   const branch = checkWorktree(git, base);
   git.ok('fetch', '--quiet', 'origin', base, `pull/${pr}/head`);
   if (git('cat-file', '-e', `${finalHead}^{commit}`).status !== 0) refuse(`PR #${pr}'s final head ${finalHead} could not be fetched.`);
-  const upstream = `origin/${base}`;
-  const fork = checkStacked(git, finalHead, upstream, pr);
-  const ctx = { pr, branch, finalHead, upstream, fork, oldHead: git.ok('rev-parse', 'HEAD') };
+  const upstreamRef = `origin/${base}`;
+  const upstream = git.ok('rev-parse', '--verify', `${upstreamRef}^{commit}`);
+  const fork = checkStacked(git, { finalHead, upstream, squash, pr });
+  // The lease expects the remote branch as it is now; empty when the branch was never pushed.
+  const remoteHead = git.ok('ls-remote', '--heads', 'origin', `refs/heads/${branch}`).split('\t')[0];
+  const ctx = { pr, branch, finalHead, upstream, upstreamRef, fork, remoteHead, oldHead: git.ok('rev-parse', 'HEAD') };
   const own = git.ok('log', '--oneline', '--no-merges', `${finalHead}..HEAD`);
   const header = [`${branch}: own commits after PR #${pr}'s final head ${finalHead.slice(0, 12)}:`, own || '(none)'];
-  if (dryRun) return [...header, `Dry run: nothing changed. Without --dry-run this ${mode === 'merge' ? 'merges' : 'rebases onto'} ${upstream}.`];
+  if (dryRun) return [...header, `Dry run: nothing changed. Without --dry-run this ${mode === 'merge' ? 'merges' : 'rebases onto'} ${upstreamRef}.`];
   (mode === 'merge' ? merge : rebase)(git, ctx);
-  return [...header, `Restacked onto ${upstream} by ${mode}. Old head: ${ctx.oldHead}.`, ...report(git, ctx, mode)];
+  return [...header, `Restacked onto ${upstreamRef} by ${mode}. Old head: ${ctx.oldHead}.`, ...report(git, ctx, mode)];
 }
 
 function main(argv) {

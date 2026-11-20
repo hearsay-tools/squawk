@@ -62,15 +62,12 @@ function stackedRepo(t, { late = false, state = 'MERGED' } = {}) {
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   const ghJson = path.join(root, 'pr.json');
-  fs.writeFileSync(ghJson, JSON.stringify({ state, headRefOid: finalHead, baseRefName: 'main' }));
+  fs.writeFileSync(ghJson, JSON.stringify({ state, headRefOid: finalHead, baseRefName: 'main', mergeCommit: { oid: git('rev-parse', 'main') } }));
   const ghArgs = path.join(root, 'gh-args');
   fs.writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\nprintf '%s\\n' "$@" > ${shellWord(ghArgs)}\ncat ${shellWord(ghJson)}\n`, { mode: 0o755 });
-  const restack = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], {
-    cwd: w,
-    encoding: 'utf8',
-    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
-  });
-  return { w, git, finalHead, restack, origin, ghArgs, read: f => fs.readFileSync(path.join(w, f), 'utf8') };
+  const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` };
+  const restack = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { cwd: w, encoding: 'utf8', env });
+  return { w, git, finalHead, restack, env, root, origin, ghArgs, read: f => fs.readFileSync(path.join(w, f), 'utf8') };
 }
 
 test('a plain merge of origin/main conflicts on the stacked branch; the restack replays only its own commits', t => {
@@ -84,7 +81,7 @@ test('a plain merge of origin/main conflicts on the stacked branch; the restack 
   assert.equal(repo.read('a'), 'C0\nP1\n3\n4\n5\n');
   assert.equal(repo.read('c'), '1\n2\n3\n4\nM\n');
   assert.match(result.stdout, /Own patch unchanged/);
-  assert.match(result.stdout, /Push: git push --force-with-lease=child:[0-9a-f]{40} origin HEAD:child/);
+  assert.match(result.stdout, /Push: git push --force-with-lease=child: origin HEAD:child\n/, 'an unpushed branch must still be absent on origin');
   assert.equal(fs.readFileSync(repo.ghArgs, 'utf8').split('\n')[4], repo.origin, 'gh reads the repository that fetch uses, after the insteadOf rewrite');
 });
 
@@ -112,11 +109,14 @@ test('a rebase refuses own history with a merge commit, whose edits it would dro
 
 test('a branch forked before the base PR gained a commit keeps that commit after the rebase', t => {
   const repo = stackedRepo(t, { late: true });
+  repo.git('push', '-q', 'origin', 'child~1:refs/heads/child');
+  const pushed = repo.git('rev-parse', 'child~1');
   const result = repo.restack('1');
   assert.equal(result.status, 0, result.stderr);
   assert.equal(repo.git('log', '--format=%s', 'origin/main..HEAD'), 'c2\nc1');
   assert.equal(repo.read('a'), 'C0\nP1\n3\nP3\n5\n');
   assert.match(result.stdout, /Own patch unchanged/);
+  assert.ok(result.stdout.includes(`--force-with-lease=child:${pushed} `), 'the lease expects the remote tip, not the unpublished local head');
 });
 
 test('--merge keeps the old head, keeps the base PR\'s later commit and gives the rebase\'s tree', t => {
@@ -175,7 +175,7 @@ test('it refuses and changes nothing when the PR is not merged or the checkout i
     ['a dirty tree', {}, repo => write(repo.w, 'b', ['dirty']), /working tree has changes/],
     ['a detached HEAD', {}, repo => repo.git('switch', '-q', '--detach'), /HEAD is detached/],
     ['the base branch', {}, repo => repo.git('switch', '-q', 'main'), /HEAD is on main/],
-    ['a branch off main', {}, repo => repo.git('switch', '-q', '-c', 'plain', 'main'), /was not stacked on it, or it is already restacked/],
+    ['a branch off main before the squash', {}, repo => repo.git('switch', '-q', '-c', 'plain', 'main~2'), /was not stacked on it, or it is already restacked/],
   ];
   for (const [name, options, arrange, message] of cases) {
     await t.test(name, st => {
@@ -190,12 +190,28 @@ test('it refuses and changes nothing when the PR is not merged or the checkout i
   }
 });
 
-test('a second run on a restacked branch refuses', t => {
+test('a second run on a restacked branch refuses, after either mode', async t => {
+  for (const mode of [[], ['--merge']]) {
+    await t.test(mode.join(' ') || 'rebase', st => {
+      const repo = stackedRepo(st);
+      assert.equal(repo.restack('1', ...mode).status, 0);
+      const before = repo.git('rev-parse', 'HEAD');
+      const result = repo.restack('1', ...mode);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /restacked/);
+      assert.equal(repo.git('rev-parse', 'HEAD'), before);
+    });
+  }
+});
+
+test('inherited Git location variables do not redirect it from the working directory', t => {
   const repo = stackedRepo(t);
-  assert.equal(repo.restack('1').status, 0);
-  const result = repo.restack('1');
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /already restacked/);
+  const other = path.join(repo.root, 'other');
+  execFileSync('git', ['init', '-q', other]);
+  const env = { ...repo.env, GIT_DIR: path.join(other, '.git'), GIT_WORK_TREE: other, GIT_INDEX_FILE: path.join(other, '.git', 'index') };
+  const result = spawnSync(process.execPath, [SCRIPT, '1'], { cwd: repo.w, encoding: 'utf8', env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(repo.git('log', '--format=%s', 'origin/main..HEAD'), 'c2\nc1');
 });
 
 test('a missing or extra argument prints the usage and exits 2', () => {
