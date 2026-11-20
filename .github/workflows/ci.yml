@@ -1010,7 +1010,7 @@ jobs:
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
-        uses: hearsay-tools/squeal/ci@573cb70b9a7f640ea0332347aa8bf5c510ca2efe # v0.1.522
+        uses: hearsay-tools/squeal/ci@d65878a9f7036ff83f914aafe0a26f6cefa536e3 # v0.1.579
 
       - name: Run server and cockpit unit suites with Squeal recording
         id: record
@@ -1096,13 +1096,92 @@ jobs:
           echo "::warning title=Vitest coverage shard $SHARD/8 missing::No coverage report from shard $SHARD: $reason. The test verdict comes from the Vitest shard job."
           echo "Vitest coverage shard $SHARD/8: no report, $reason." >> "$GITHUB_STEP_SUMMARY"
 
+  # Squeal shared results for node:test, merge groups only: both unit suites run once more on
+  # the .node-version developers use, under `squeal ci record` with Squeal's node:test reporter
+  # added, and their parts join the export. unit-tests keeps the engines minimum. Outside
+  # verify.needs and every required check. See docs/sdlc/ci.md § Squeal shared results.
+  squeal-node-test:
+    name: Record node:test for Squeal
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the merge group commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.merge_group.head_sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: '12.11.2'
+
+      - name: Install Node.js from nodejs.org
+        uses: ./.github/actions/node-dist
+        with:
+          node-version-file: .node-version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          token: ''
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Squeal's action also sets SQUEAL_NODE_TEST_REPORTER for the steps below, also when
+      # Squeal cannot run; the reporter then writes nothing (hearsay-tools/squeal spec 018 D23).
+      - name: Set up Squeal
+        uses: hearsay-tools/squeal/ci@d65878a9f7036ff83f914aafe0a26f6cefa536e3 # v0.1.579
+
+      # The commands of test:unit:package and test:unit:scripts, whose flags squeal.config.json's
+      # nodeTest entries repeat, with Squeal's reporter beside the default one. The output and
+      # exit code are the suite's own.
+      - name: Record package unit tests
+        working-directory: packages/cezar
+        run: >-
+          squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/package" --
+          node --import ../../scripts/test-home-env.mjs --import tsx --test
+          --test-reporter=spec --test-reporter-destination=stdout
+          --test-reporter="$SQUEAL_NODE_TEST_REPORTER" --test-reporter-destination=stderr
+          test/unit/*.test.ts
+
+      - name: Record repository script tests
+        if: "!cancelled()"
+        run: >-
+          squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/scripts" --
+          node --import ./scripts/test-home-env.mjs --test
+          --test-reporter=spec --test-reporter-destination=stdout
+          --test-reporter="$SQUEAL_NODE_TEST_REPORTER" --test-reporter-destination=stderr
+          .github/scripts/*.test.cjs scripts/*.test.mjs .ai/skills/*/scripts/*.test.mjs
+
+      # A suite with failed tests still uploads its parts: `squeal ci export` leaves out failed files.
+      - name: Upload Squeal parts
+        if: "!cancelled()"
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: squeal-parts-node-test
+          path: ${{ runner.temp }}/squeal-parts-node-test/
+          if-no-files-found: error
+          retention-days: 3
+          overwrite: true
+
   # Squeal shared results, after passing merge-group shards: squeal-export keys the shard
   # parts in a read-only checkout, squeal-publish pushes them as refs/squeal/<sha> for
   # squeal.config.json `shared.ref`. Both stay outside verify.needs and every required
   # check: a failure never blocks a merge. See docs/sdlc/ci.md § Squeal shared results.
   squeal-export:
     name: Export Squeal shared results
-    needs: [vitest]
+    needs: [vitest, squeal-node-test]
     if: >-
       !cancelled() && github.event_name == 'merge_group' && needs.vitest.result == 'success'
     runs-on: ubuntu-24.04
@@ -1145,7 +1224,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@573cb70b9a7f640ea0332347aa8bf5c510ca2efe # v0.1.522
+        uses: hearsay-tools/squeal/ci@d65878a9f7036ff83f914aafe0a26f6cefa536e3 # v0.1.579
 
       - name: Download Squeal parts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1153,8 +1232,22 @@ jobs:
           pattern: squeal-parts-shard-*
           path: ${{ runner.temp }}/squeal-parts
 
+      # node:test parts join when squeal-node-test uploaded them; without them the export is the
+      # Vitest shards' alone.
+      - name: Download Squeal node:test parts
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: squeal-parts-node-test
+          path: ${{ runner.temp }}/squeal-parts-node-test
+
       - name: Export Squeal results
-        run: squeal ci export --parts "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-* --out "$RUNNER_TEMP/squeal-results.json.gz"
+        run: |
+          set -- "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-*
+          for suite in package scripts; do
+            if [ -d "$RUNNER_TEMP/squeal-parts-node-test/$suite" ]; then set -- "$@" "$RUNNER_TEMP/squeal-parts-node-test/$suite"; fi
+          done
+          squeal ci export --parts "$@" --out "$RUNNER_TEMP/squeal-results.json.gz"
 
       # An export that writes nothing warns and exits 0. The job then passes with no upload and
       # no publish, so its run stays successful (hearsay-tools/squawk#3701).
@@ -1210,7 +1303,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@573cb70b9a7f640ea0332347aa8bf5c510ca2efe # v0.1.522
+        uses: hearsay-tools/squeal/ci@d65878a9f7036ff83f914aafe0a26f6cefa536e3 # v0.1.579
 
       - name: Download Squeal results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
