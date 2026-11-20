@@ -312,44 +312,52 @@ it. A Squawk-owned event such as
 
 ## 10. Adding a new runner (the open-mercato/cezar#387 `pi` checklist)
 
-A new backend is one class behind the seam, its mapper, its fixtures and its rows in both
-parity matrices. No backend-specific type leaves `packages/cezar/src/runners/`.
+A runner is one definition in its own folder, which one call registers
+([ADR 0067](docs/adr/0067-register-each-runner-as-one-definition.md)). A new built-in runner
+changes these places and no other file:
 
-Add the runner's definition (`runners/<id>/definition.ts`) to `BUILT_IN_RUNNERS`
-(`runners/built-in.ts`) and its id to `runners/ids.ts` first; `core/runner-registry.test.ts`
-holds the two lists equal. The guard tests then name most of the missing pieces. The items
-below are the steps that they do not force, or force only in part. The item numbers are
-stable: code cites them.
+- **Its folder**, `packages/cezar/src/runners/<id>/`: the definition, its data files, the adapter,
+  the mapper, the catalogs, the golden fixtures and every test of the runner, parity files
+  included. No backend-specific type leaves it.
+- **Its mock script** in `packages/cezar/scripts/`. It stays there because the packaged CLI tests
+  start it by path; the definition's `mock` part names it.
+- **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
+- **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
+  when the two lists differ. Only tests and two lint rules read `runners/ids.ts`;
+  `cez/runner-ids-import` fails a production import of it.
 
-1. **Runner** — `runners/<id>/<id>-runner.ts` implements `AgentRunner` / `AgentSession`.
-   Declare `specSupport` (`runners/<id>/spec-support.ts`) and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a
-   similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
-   for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
+An outside runner (roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the
+smallest example: its test registers it, runs a task and runs the parity kit on it. The guard
+tests name most missing parts. The items below say what goes in the folder, and the rules that
+the guards do not force, or force only in part. The item numbers are stable.
+
+1. **Runner** — `<id>-runner.ts` implements `AgentRunner` / `AgentSession`. Declare its spec
+   support (`spec-support.ts`) and its facts (`facts.ts`) from what the wire does, not from a
+   similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session for
+   `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
    permission request after its turn ended declares `nativePermission: 'after-turn'` and
    implements `AgentSession.endWhenQuiet`; the late-permission parity cells check both. Use
    `prependSystemPrompt` when the backend has no system-prompt channel. For a fork of an
-   existing runner's wire, read the fork's own protocol documents for the turn boundary,
-   the session id and the tool flags before you copy code.
-2. **Definition** — `runners/<id>/definition.ts` with its facts, `specSupport`, `detection`, `cli` and `loadAdapter`,
-   and one line in `runners/built-in.ts`. Its `models` (`runners/<id>/models.ts`), `loadModelCatalog`,
-   `loadSkillCatalog`, `configFiles` (`runners/<id>/config-files.ts`) and `extraTools`
-   go in the same definition, and so does its `display` part (`runners/<id>/display.ts`). A
-   runner id is an open string in the contract (`runnerSchema`) and in `UiBackend`; the server
-   checks a request's runner id against the registry (`core/runner-fields.ts`).
-3. **Detection** — declare the runner's `detection` (`runners/<id>/detection.ts`): its PATH name,
-   its `*_BIN` override, what dry-run reports and its hints. `core/backend-detect.ts` runs the probe
-   from it. An absent CLI never fails the boot.
-4. **Mapper** — `runners/<id>/<id>-ui-mapper.ts` emits the v2 stream (§4).
-5. **v1 alongside v2** — emit v2 through `SessionOptions.onUiEvent` and keep the v1
-   stream.
-6. **Golden fixtures** — follow §8, and cover every §6 capability that the wire supports.
+   existing runner's wire, read the fork's own protocol documents for the turn boundary, the
+   session id and the tool flags before you copy code.
+2. **Definition** — `definition.ts` exports one `defineRunner` value. It imports only types and
+   data: the adapter, the catalogs, the login parser and the model settings reader load through
+   its `load*()` functions. The adapter imports the runner's data files, never `definition.ts`.
+   The parts are in `core/runner-definition.ts`; `docs/areas/runners.md` lists the file of each.
+   A runner id is an open string; the server checks a request's id against the registry.
+3. **Detection** — the `detection` part (`detection.ts`): the PATH name, the `*_BIN` override,
+   what dry-run reports and the hints. Core runs the probe. An absent CLI never fails the boot.
+4. **Mapper** — `<id>-ui-mapper.ts` emits the v2 stream (§4).
+5. **v1 alongside v2** — emit v2 through `SessionOptions.onUiEvent` and keep the v1 stream.
+6. **Golden fixtures** — `__fixtures__/` in the folder. Follow §8, and cover every §6 capability
+   that the wire supports.
 7. **Parity** — every §6 row passes or carries a named exemption.
-8. **Harness parity** — give the runner's definition a `mock` part (`runners/<id>/mock.ts`: the
-   mock script, its `*_BIN` variable and the prompt for each scenario it runs), and make its
-   offline mock a wire encoder over
-   `packages/cezar/scripts/mock-scenario.mjs`. That module owns scenario selection and scripts; the mock
-   emits the backend's native frames. A wire gap is a `PARITY_EXEMPTIONS` entry; the guard
-   tests of the matrix hold what an entry may say.
+8. **Harness parity** — the `mock` part (`mock.ts`) names the mock script, its `*_BIN` variable,
+   the prompt for each scenario it runs and its `askResumeCases`. Make the mock a wire encoder
+   over `packages/cezar/scripts/mock-scenario.mjs`. That module owns scenario selection and
+   scripts; the mock emits the backend's native frames. The per-runner parity files
+   (`harness-<id>-<part>-parity.test.ts`, `waits-<id>-<part>-parity.test.ts`) each register only
+   this runner and pass its definition to the kit.
    Choose the ask path: `cezar_ask` alone, or also a native bridge onto `ask.requested`. A
    native bridge keeps its pending request in the session and routes the next human answer
    back through it. A parked native ask idle-closes like a `cezar_ask` park; the close drops
@@ -358,24 +366,29 @@ stable: code cites them.
    the turn blocked. Each native ask kind that a human can answer needs an entry in
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.
-9. **Plumbing** — Settings → Agent config ships with the runner: the definition's `configFiles`
-   part holds its files and its `agentConfig` pane (`runners/<id>/config-files.ts`); the doc
-   comment of `packages/web/src/routes/settings/agent-descriptors.ts` holds the rules. The
-   composer presets are the `models.suggested` list and the Settings → Agents row comes from
-   the runners route, so the cockpit needs no edit. Keep every change additive, so that old run
-   records still parse.
-10. **Model selection** — the definition's `models.idMap` (`runners/<id>/models.ts`) and
-    `core/model-identity.test.ts` hold the rules.
-11. **Host model discovery** — ships in the runner's PR. `model-discovery-guard.test.ts`
-    forces the contract enum, the adapter module and the catalog registration, or a
-    `MODEL_DISCOVERY_EXEMPTIONS` entry with the wire reason. It does not force these
-    rules. The adapter calls the CLI's own model-listing surface under the runner's child
-    environment, with bounds, and throws when it cannot read the model list. It never
-    reads the CLI's config or cache files and never runs a model turn. Add the runner to
-    `models-api.test.ts`, which also holds what a failure may report.
-12. **Credentials** — the runner's `env` allow-list prefixes (`runners/<id>/env.ts`, read through
-    the registry by `buildChildEnv`) list a prefix for every provider that its model ids can name.
-    Never widen another backend's entry.
+9. **Plumbing** — the `configFiles` part (`config-files.ts`) holds the native files that
+   Settings → Agent config shows and the runner's `agentConfig` pane. The `display` part
+   (`display.ts`) holds the names, the icon key, the install hint, the login command and the
+   account folder example. `GET /api/v1/runners` sends both with the `models.suggested` presets,
+   so the cockpit needs no edit. Keep every change additive, so that old run records still
+   parse.
+10. **Model selection** — the `models` part (`models.ts`): `suggested`, `known`, `retired` and
+    the `idMap`, and `models.loadSettings()` for the native default model.
+    `core/model-identity.test.ts` holds the rules of the id map.
+11. **Host model discovery** — ships in the runner's PR: `<id>-model-catalog.ts` exports
+    `discover<Id>Models`, and `loadModelCatalog()` imports it. `model-discovery-guard.test.ts`
+    forces the module, the export and the catalog entry for every id in `runners/ids.ts`, or an
+    exemption with the wire reason. It does not force these rules. The adapter calls the CLI's own model-listing surface under the runner's child
+    environment, with bounds, and throws when it cannot read the model list. It never reads
+    the CLI's config or cache files and never runs a model turn. `server/models-api.test.ts`
+    holds what a failure may report.
+12. **Credentials** — the `env` part (`env.ts`) lists an allow-list prefix for every provider
+    that the runner's model ids can name. `buildChildEnv` reads it through the registry. Never
+    widen another runner's entry.
+
+A wire gap is not a step of this list. §6 and §7 say how a gap gets a named exemption, which
+needs owner review. A fact value that no runner declared before needs unit tests for the shared
+code that reads it, as `docs/areas/runners.md` says.
 
 <a id="10a-removing-a-runner"></a>
 

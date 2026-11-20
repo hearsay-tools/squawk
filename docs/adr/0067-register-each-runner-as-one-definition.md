@@ -89,7 +89,7 @@ Rules:
   reaches its adapter through `import()`.
 
 Implementation and reader rules: [runners area](../areas/runners.md),
-[AGENT_PROTOCOL.md §10](../../AGENT_PROTOCOL.md#10-adding-a-new-runner).
+[AGENT_PROTOCOL.md §10](../../AGENT_PROTOCOL.md#10-adding-a-new-runner-the-387-pi-checklist).
 Coverage under `packages/cezar/src/`: `core/runner-registry.test.ts`,
 `core/runner-closure.test.ts`, `runners/fixture/fixture-runner.test.ts`,
 `server/runners-routes.test.ts`, `server/unknown-runner-refusals.test.ts`,
