@@ -15,7 +15,7 @@ import type { AgentSession } from '../core/agent-runner.ts';
 
 import { gate, thenSay, toolCall } from './waits-parity.testkit.ts';
 
-import { manager, root, store, until } from './worker-wait.testkit.ts';
+import { manager, root, store, until } from './worker-wait-core.testkit.ts';
 
 let sessions: ReturnType<typeof captureSessions>;
 const answers = new Map<string, string>();

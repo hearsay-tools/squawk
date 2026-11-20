@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
-import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { setWorkflowTimeoutEngineCell } from './workflow-timeout-parity.testkit.ts';
 import type { WorkflowTimeoutCell } from './workflow-timeout-rows.testkit.ts';
 import { workflowDefSchema } from '../workflows/types.ts';

@@ -1,6 +1,6 @@
 import { workflowTimeoutParity, type WorkflowTimeoutCell } from './workflow-timeout-rows.testkit.ts';
 import { expect } from 'vitest';
-import { driveSeam } from './harness-parity.testkit.ts';
+import { driveSeam } from './harness-parity-core.testkit.ts';
 
 // Compress only the deadline, not the runner, manager, clock or native wire.
 // Every adapter's hold scenario lasts at least 500ms. The unfixed manager

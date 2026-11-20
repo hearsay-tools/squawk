@@ -1,3 +1,4 @@
+import '../../core/created-runners.testkit.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
@@ -21,7 +22,6 @@ import { completionRefusalQueueDecision } from './turn-nudges.ts';
 import * as activeRuns from '../active-run.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
-import '../../core/created-runners.testkit.ts';
 import { createFixtureManager as createRunnerFixtureManager } from '../fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../../core/agent-runner.ts';

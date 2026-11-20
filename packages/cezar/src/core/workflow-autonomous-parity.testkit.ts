@@ -1,10 +1,10 @@
 import { workflowAutonomousParity } from './workflow-autonomous-rows.testkit.ts';
-import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
+import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { expect, onTestFinished, vi } from 'vitest';
 import type { RunRecord } from '../runs/store.ts';
-import { driveSeam, promptFor, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { driveSeam, promptFor, waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { refusedNudgeIdleClose } from './workflow-autonomous-idle-close.testkit.ts';
 import { unacknowledgedNudgeBound } from './workflow-autonomous-ack-bound.testkit.ts';
 import { acknowledgedNudgeAnswerBound } from './workflow-autonomous-answer-bound.testkit.ts';

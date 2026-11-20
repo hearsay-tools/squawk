@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, expect, it, vi } from 'vitest';
 import { observationClock } from '../core/observation-clock.testkit.ts';

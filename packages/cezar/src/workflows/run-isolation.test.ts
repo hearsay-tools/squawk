@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
 import { shellQuote } from '../core/shell-env.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-claude.testkit.ts';

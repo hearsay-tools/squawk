@@ -1,10 +1,9 @@
-import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import type { Caller } from './credentials.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
-import { createFixtureManager, fixtureWork, managerDisposed } from '../workflows/fixture-cleanup.testkit.ts';
+import { createFixtureManager, fixtureWork, managerDisposed } from '../workflows/fixture-manager.testkit.ts';
 import { type WorkerSpawnRequest } from '@open-mercato/cezar-contract/delegation';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';

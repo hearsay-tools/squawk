@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

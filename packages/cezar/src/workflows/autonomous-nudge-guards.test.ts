@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -29,7 +30,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSession, AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
 import { ciWaitEntry, RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { AUTONOMOUS_NUDGE, COMPLETION_NO_REPLY_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE, IDLE_TIMEOUT_MS } from './run.ts';

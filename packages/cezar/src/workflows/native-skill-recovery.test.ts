@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { beforeEach, expect, it } from 'vitest';
@@ -6,7 +7,6 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { crashStore } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager, fixtureWork, fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import type { RunManager } from './run.ts';

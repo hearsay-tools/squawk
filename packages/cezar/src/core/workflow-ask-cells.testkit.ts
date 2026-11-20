@@ -6,11 +6,11 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { join } from 'node:path';
 import { expect, vi } from 'vitest';
 import { workflowAsk } from './workflow-ask-rows.testkit.ts';
-import { SQUAWK_ASK_QUESTION, promptFor, waitFor } from './harness-parity.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { SQUAWK_ASK_QUESTION, promptFor, waitFor } from './harness-parity-core.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { workflowDefSchema } from '../workflows/types.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { hasPendingAsk, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 
 const STEP_TIMEOUT_MS = 2_000;

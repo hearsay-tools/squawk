@@ -1,6 +1,6 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-runner.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';

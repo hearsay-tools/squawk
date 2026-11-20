@@ -17,7 +17,12 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { DelegationExecutionSettings } from './run/types.ts';
 import { unused } from './unused.testkit.ts';
-import '../core/every-runner.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import '../core/created-runners.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 // The worker CLI maps `--runner` and `--backend` to the request's `backend` (delegation/cli.ts), and
 // DelegationService.spawn dedupes a retry by request id and payload hash (delegation/service.ts).

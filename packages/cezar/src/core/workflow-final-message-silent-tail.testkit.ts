@@ -1,7 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it } from 'vitest';
 import type { UiEvent } from './ui-events.ts';
-import { driveSeam } from './harness-parity.testkit.ts';
+import { driveSeam } from './harness-parity-core.testkit.ts';
 
 // The silent-tail seam cells: the adapter tier only, apart from the no-wait nudge's engine cells.
 function lastTopLevelTail(events: readonly UiEvent[]): Extract<UiEvent, { type: 'item.completed' }>['item'] | undefined {

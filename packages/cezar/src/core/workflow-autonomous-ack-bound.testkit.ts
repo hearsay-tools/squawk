@@ -19,10 +19,10 @@ import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NUDGE } from '../workflows/turn-end.
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 
-import { waitFor } from './harness-parity.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 
 /** The step bound of each wait in the cell; the run's own signals end every wait. */
 const STEP_MS = 20_000;

@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useBoundaryRunner } from './boundary-runner.testkit.ts';

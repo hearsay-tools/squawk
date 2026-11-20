@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useBoundaryRunner } from './boundary-runner.testkit.ts';
 import { setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';

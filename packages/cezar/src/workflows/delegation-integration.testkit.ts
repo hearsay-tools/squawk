@@ -1,7 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { ownedWorkspace, workerCollectedResultSchema, workerInspectionSchema } from '@open-mercato/cezar-contract/delegation';
-import { createFixtureManager, fixtureWorkSettled, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager, fixtureWorkSettled, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { execFile as execFileCallback, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';

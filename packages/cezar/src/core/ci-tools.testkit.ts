@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ToolGrant } from './agent-runner.ts';
-import { driveSeam, seedOpencodeMockSession } from './harness-parity.testkit.ts';
+import { driveSeam, seedOpencodeMockSession } from './harness-parity-core.testkit.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { buildClaudeArgs } from '../runners/claude/claude-cli-runner.ts';
 import { buildPiArgs } from '../runners/pi/pi-runner.ts';

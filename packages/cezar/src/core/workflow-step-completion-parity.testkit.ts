@@ -5,13 +5,13 @@ import { join } from 'node:path';
 import { expect, vi } from 'vitest';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import type { RunManager } from '../workflows/run.ts';
-import { promptFor, waitFor } from './harness-parity.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS, NO_WAIT_NOTE, NO_WAIT_NUDGE_NOTE } from '../workflows/run.ts';
 import { AUTONOMOUS_NUDGE, NO_WAIT_NUDGE, STEP_NUDGE_SUFFIX } from '../workflows/turn-end.ts';
 import { workflowDefSchema } from '../workflows/types.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { execFileSync } from 'node:child_process';
 

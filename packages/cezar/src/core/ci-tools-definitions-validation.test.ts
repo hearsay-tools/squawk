@@ -1,3 +1,4 @@
+import './every-runner.testkit.ts';
 import { globSync, readFileSync } from 'node:fs';
 import { NATIVE_TOOL_REGISTRATION, registrationGroups } from './registration-coverage.testkit.ts';
 import { describe, expect, it } from 'vitest';

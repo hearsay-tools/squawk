@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
-import { PINNED_SESSION_ID, driveSeam } from './harness-parity.testkit.ts';
+import { PINNED_SESSION_ID, driveSeam } from './harness-parity-core.testkit.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { createRunner } from './runner-registry.ts';
 import { skillResumeParity, type SkillResumeCells } from './skill-resume-rows.testkit.ts';

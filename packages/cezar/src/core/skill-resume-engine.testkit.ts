@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { IN_THREAD } from './skill-resume-rows.testkit.ts';
 import { asRecord, opencodeSessionGets, parsedLines, readRecording, setSkillResumeEngineCells, type SkillResumeEngineCells } from './skill-resume-parity.testkit.ts';
@@ -21,10 +20,10 @@ import {
   HARNESS_ADAPTERS,
   promptFor,
   waitFor,
-} from './harness-parity.testkit.ts';
+} from './harness-parity-core.testkit.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 

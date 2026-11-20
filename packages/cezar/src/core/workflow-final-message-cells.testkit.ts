@@ -9,9 +9,9 @@ import { join } from 'node:path';
 import { setTimeout as realDelay } from 'node:timers/promises';
 import { expect, vi } from 'vitest';
 import type { CellBody } from './parity-partition.testkit.ts';
-import { HARNESS_ADAPTERS, driveSeam, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS, driveSeam, promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { workflowFinalMessage } from './workflow-final-message-rows.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE } from '../workflows/run.ts';
 
 function replyObservationClock() {

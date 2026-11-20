@@ -10,9 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import * as worktrees from '../autosave-commit.ts';
 import { RunStore } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS, RunManager } from '../workflows/run.ts';
-import { createFixtureManager } from '../workflows/fixture-cleanup.testkit.ts';
-import { HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
+import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
 
 // bound: native mock turns and real saves use the same 30 s per-step guard as R24/R25

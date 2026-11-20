@@ -1,8 +1,8 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

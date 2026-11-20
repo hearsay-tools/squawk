@@ -9,7 +9,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parityRunners } from '../core/parity-classes.testkit.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { groupHolder, orphanedGroupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
@@ -21,7 +21,7 @@ import { isLiveRecord } from '../runs/run-row.ts';
 import { historyPaths } from '../runs/history-file.ts';
 import { TranscriptFactsQueue } from '../runs/transcript-facts-queue.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
-import { manager, store, root, worker, until, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, store, root, worker, until, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { RESTART_GROUPS } from './worker-restart-rows.testkit.ts';
 

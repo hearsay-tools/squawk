@@ -1,4 +1,3 @@
-import './every-runner.testkit.ts';
 import { setSkillProvisionEngineCells, type SkillProvisionEngineCells } from './skill-provision-parity.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
