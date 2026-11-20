@@ -339,6 +339,8 @@ export interface HarnessAdapter {
   readonly sessionStore?: { readonly env: string; readonly argsFileSuffix: string };
   /** How a resume reaches a session the mock does not hold (`mock.missingSession`). */
   readonly missingSession?: RunnerMock['missingSession'];
+  /** The variables the mock reads for a scenario no prompt can drive (`mock.scenarioEnv`). */
+  readonly scenarioEnv?: RunnerMock['scenarioEnv'];
 }
 
 /** `mock:cezar-tool` (scripts/mock-ci-tool.mjs) calls one Squawk tool over the session's own wire,
@@ -405,6 +407,7 @@ export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
       ...(mock.selfSettledApprovalEcho !== undefined ? { selfSettledApprovalEcho: mock.selfSettledApprovalEcho } : {}),
       ...(mock.sessionStore ? { sessionStore: mock.sessionStore } : {}),
       ...(mock.missingSession ? { missingSession: mock.missingSession } : {}),
+      ...(mock.scenarioEnv ? { scenarioEnv: mock.scenarioEnv } : {}),
     };
     adapters.set(definition, adapter);
   }
@@ -672,11 +675,8 @@ export async function driveSeam(
         // The claude mock writes to these when set; empty keeps a row from
         // touching a handoff file it does not own.
         env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '',
-          ...(scenario === 'closed-input' && backend === 'omp' ? { CEZ_MOCK_OMP_CLOSED_INPUT: '1' } : {}),
-          ...(scenario === 'auto-resumed' ? { CEZ_MOCK_OMP_AUTO_RESUME: '1' } : {}),
-          ...(scenario === 'serve-start-exit' ? {
-            CEZ_MOCK_OPENCODE_SERVE_FAIL_STARTS: '1', CEZ_MOCK_OPENCODE_SERVE_FAIL_FILE: join(cwd, 'serve-starts'),
-          } : {}),
+          // The variables the mock reads for a scenario no prompt can drive (`mock.scenarioEnv`).
+          ...Object.fromEntries(Object.entries(adapter.scenarioEnv?.[scenario] ?? {}).map(([name, value]) => [name, value.replaceAll('{cwd}', cwd)])),
         },
         ...opts.spec,
       },

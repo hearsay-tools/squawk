@@ -15,6 +15,8 @@ export const OPENCODE_MOCK = {
   // scripts/mock-opencode-serve.mjs sessionStorePath(): GET /session/<id> finds only a stored session.
   sessionStore: { env: 'CEZ_MOCK_OPENCODE_SESSIONS_FILE', argsFileSuffix: '.opencode-sessions.json' },
   missingSession: { session: 'unknown-id' },
+  // scripts/mock-opencode-serve.mjs: the server exits before listening on its first start.
+  scenarioEnv: { 'serve-start-exit': { CEZ_MOCK_OPENCODE_SERVE_FAIL_STARTS: '1', CEZ_MOCK_OPENCODE_SERVE_FAIL_FILE: '{cwd}/serve-starts' } },
   scenarios: {
     ...COMMON_MOCK_SCENARIOS,
     ...PROVIDER_ERROR_MOCK_SCENARIOS,
@@ -25,7 +27,7 @@ export const OPENCODE_MOCK = {
     'permission-classify': 'mock:permission-classify',
     'permission-late': 'mock:permission-late',
     'skill-warning': 'mock:skill-warning mock:cezar-done',
-    // The failing start is set by driveSeam's env (no prompt exists before listening).
+    // The failing start is set by `scenarioEnv` (no prompt exists before listening).
     'serve-start-exit': MOCK_BASELINE_PROMPT,
     'silent-tail-ack-delay': 'mock:silent-tail f7-delay-ack',
     'provider-unavailable': 'mock:provider-unavailable',

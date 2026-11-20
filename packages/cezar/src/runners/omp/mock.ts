@@ -8,6 +8,8 @@ export const OMP_MOCK = {
   script: 'mock-omp-rpc.mjs',
   // scripts/mock-omp-rpc.mjs: CEZ_MOCK_OMP_RESUME_MOVED reports the session moved to a new id.
   missingSession: { session: 'empty-file', env: { CEZ_MOCK_OMP_RESUME_MOVED: '1' } },
+  // scripts/mock-omp-rpc.mjs reads these at start: a closed input pipe, and an implicit autoResume.
+  scenarioEnv: { 'closed-input': { CEZ_MOCK_OMP_CLOSED_INPUT: '1' }, 'auto-resumed': { CEZ_MOCK_OMP_AUTO_RESUME: '1' } },
   scenarios: {
     ...COMMON_MOCK_SCENARIOS,
     ...STDIO_ASK_MOCK_SCENARIOS,

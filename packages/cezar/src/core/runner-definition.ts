@@ -106,6 +106,12 @@ export interface RunnerMock {
    */
   readonly missingSession?: { readonly session: 'unknown-id' | 'empty-file'; readonly env?: Readonly<Record<string, string>> };
   /**
+   * Scenario name -> the variables the mock reads for a scenario that no prompt can drive (it acts
+   * before the first prompt, at start). The parity kit sets them on that scenario's launch;
+   * `{cwd}` in a value stands for the session's working directory.
+   */
+  readonly scenarioEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /**
    * Parity cells this runner's wire cannot carry, by criterion id: how the matrix pins each and
    * why. The parity kit's `PARITY_EXEMPTIONS` adds them to the rows it selects by facts. A row
    * the kit selects by facts with a runner-specific reason (A9) reads that reason here.
