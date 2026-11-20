@@ -93,6 +93,8 @@ describe('verified destruction retains results through explicit history deletion
   it.each(['queued', 'running'] as const)('does not revive a %s parent with interrupted deletion on restart', async status => {
     interruptedParentDeletion(); setRunStatus(f.store, f.parent.id, status); f.store.close();
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
+    // The fixture's drain flushes this store after the test, so it closes once the drain is done.
+    onTestFinished(() => reopened.close());
     const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } });
     const manager = createFixtureManager(reopened, f.root, { home: testHome(), semaphore });
     try {

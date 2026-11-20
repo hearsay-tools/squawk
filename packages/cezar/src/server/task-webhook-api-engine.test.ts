@@ -89,7 +89,9 @@ describe('task webhook API (run engine)', () => {
         const after = (await res.json()) as RunRecord;
         expect(after.status).not.toBe('running');
         await vi.waitFor(() => {
-          const events = RunStore.open(join(other, '.ai/cezar')).readEvents('live');
+          const reader = RunStore.open(join(other, '.ai/cezar'));
+          let events: ReturnType<RunStore['readEvents']>;
+          try { events = reader.readEvents('live'); } finally { reader.close(); }
           expect(events.find((event) => event.type === 'webhook.dry-run')).toMatchObject({
             event: 'task.status',
             payload: { previousStatus: 'running', status: after.status },
