@@ -33,7 +33,8 @@ import { applyTemplate, resolveExtraSystemPrompt, resumeNotice } from './prompts
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
 import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
-import { DEFAULT_RUNNER_ID, resolveRunnerId, savedRunnerId } from '../../core/runner-registry.ts';
+import { resolveRunnerId, savedRunnerId } from '../../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-ids.ts';
 
 // This view adds no promise continuation before the caller's original post-config gate.
 function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {

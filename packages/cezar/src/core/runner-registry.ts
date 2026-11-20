@@ -1,5 +1,6 @@
 import type { AgentRunner } from './agent-runner.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
+import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 
 /**
  * The registered runners, in registration order (spec 2026-11-18-runner-definitions). An entry
@@ -9,12 +10,6 @@ import type { RunnerDefinition } from './runner-definition.ts';
  * (hearsay-tools/cezarion#2939).
  */
 const registry = new Map<string, RunnerDefinition>();
-
-/** The runner that a task with no runner, a legacy id or an unknown id gets. */
-export const DEFAULT_RUNNER_ID = 'claude';
-
-/** Legacy ids that old records carry, each with the runner it now names. */
-export const LEGACY_RUNNER_IDS: ReadonlyMap<string, string> = new Map([['claude-cli', 'claude']]);
 
 /**
  * The runner a backend value names. A registered id resolves to its own runner (a non-built-in
@@ -28,9 +23,12 @@ export function resolveRunnerId(backend: string | undefined): string {
 }
 
 /** A runner id read back from saved data (a run, a workflow file), mapped as `resolveRunnerId`
- *  maps it. Undefined stays undefined. */
+ *  maps it, except that a process which registered no runner has no opinion: the saved id reads
+ *  as written (planner decision 2026-11-20, option a). Undefined stays undefined. */
 export function savedRunnerId(id: string | undefined): string | undefined {
-  return id === undefined ? undefined : resolveRunnerId(id);
+  if (id === undefined) return undefined;
+  if (LEGACY_RUNNER_IDS.has(id)) return LEGACY_RUNNER_IDS.get(id);
+  return knownRunnerIds().length === 0 || registry.has(id) ? id : DEFAULT_RUNNER_ID;
 }
 
 /**

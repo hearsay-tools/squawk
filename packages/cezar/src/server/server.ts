@@ -112,7 +112,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { registeredRunnerId, registeredRunners, resolveRunnerId } from '../core/runner-registry.ts';
+import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -1178,7 +1178,7 @@ export function createApp(deps: ServerDeps) {
     // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
     // authoritative host-local catalog (#794), so the client compiles against exactly what this
     // validates, including Claude stream-json discovery (#89).
-    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${registeredRunners().map(({ id }) => id).slice(0, -1).join(', ')}, or ${registeredRunners().map(({ id }) => id).at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
+    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
       const query = { data: c.req.valid('query') };
       const runner = registeredRunnerId(query.data.runner);
       return c.json(await modelCatalog.get(runner));
@@ -1316,7 +1316,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${registeredRunners().map(({ id }) => id).slice(0, -1).join(', ')}, or ${registeredRunners().map(({ id }) => id).at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;

@@ -8,7 +8,7 @@ import type { QueuedInput } from './queued-input.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { join } from 'node:path';
 import type { ContentBlock } from '../../core/agent-runner.ts';
-import { inputDeliveryOf } from '../../core/agent-runner.ts';
+import { inputDeliveryOf } from '../../core/agent-runner-values.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { AutosaveReason } from '../../autosave-commit.ts';

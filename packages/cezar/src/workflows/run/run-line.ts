@@ -6,12 +6,12 @@ import { getRepoInfo } from '../../server/git.ts';
 import type { AccountHolds } from '../../workspace/semaphore.ts';
 import { nextLineEntry } from '../line-order.ts';
 import { executionBlockedByRootFinish, historyDeletionPending } from './run-guards.ts';
-import type { RunModuleContext } from './types.ts';
+import { RunModuleContext, PendingContinuation, StartRunInput } from './types.ts';
 import type { WorkflowDef } from '../types.ts';
-import type { PendingContinuation, StartRunInput } from './types.ts';
+
 import { admissionRefusal } from '../../runs/worker-execution.ts';
 import type { RunMemory } from './run-memory.ts';
-import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-ids.ts';
 import { waitsForUnregisteredRunner } from '../../runs/legacy-run-rows.ts';
 
 export type PendingJob = { workflow: WorkflowDef; input: StartRunInput; startAt?: number | undefined };

@@ -1,7 +1,8 @@
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 
-import { LEGACY_RUNNER_IDS, registeredRunners } from './runner-registry.ts';
+import { registeredRunners } from './runner-registry.ts';
+import { LEGACY_RUNNER_IDS } from './runner-ids.ts';
 import {
   ModelIdentityError,
   formatModelIdentity,

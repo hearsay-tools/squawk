@@ -30,7 +30,7 @@ import type {
 } from '../../core/agent-runner.js';
 import { PI_FACTS } from './facts.js';
 import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
-import { SessionEndedBeforeAcknowledgement, unknownToolGrant } from '../../core/agent-runner.js';
+import { SessionEndedBeforeAcknowledgement, unknownToolGrant } from '../../core/agent-runner-values.ts';
 import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.js';
 import { buildChildEnv } from '../../core/agent-env.js';
 import { squawkToolNames } from '../../ci-wait/tool-catalog.js';

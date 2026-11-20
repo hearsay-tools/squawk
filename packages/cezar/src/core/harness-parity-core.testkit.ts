@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { registeredRunners, isRegisteredRunner, runnerDefinition } from './runner-registry.ts';
 /**
  * Shared fixtures for the harness parity matrix (`harness-parity.test.ts`,
  * spec `.ai/specs/2026-09-04-harness-parity-matrix.md`, #68).
@@ -33,8 +33,8 @@ import { type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSess
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
-import { isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
-import { factsWhere } from './runner-fact-rows.testkit.ts';
+
+import { factsWhere, factRows } from './runner-fact-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -616,9 +616,11 @@ export function humanPromptReadReleases(): string[] {
   return factsWhere(facts => facts.humanPromptHold === 'consumption');
 }
 
-/** Every runner but `live`: a protocol quirk that only one runner's wire carries. */
+/** Every runner but `live`: a protocol quirk that only one runner's wire carries. Read from the
+ *  fact rows, not the registry, so the static exemption table builds in a test that registers no
+ *  runner. */
 function exceptRunner(live: string): string[] {
-  return BUILT_IN_RUNNER_IDS.filter(backend => backend !== live);
+  return Object.keys(factRows()).filter(backend => backend !== live);
 }
 
 /** A runner-specific reason; a runner the facts select without one fails the table at load. */

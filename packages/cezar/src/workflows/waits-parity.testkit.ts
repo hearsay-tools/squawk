@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { join } from 'node:path';
 import { createFailureControl, type FailureControlOptions } from '../../scripts/mock-failure-control.mjs';
 import { expect } from 'vitest';

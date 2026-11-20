@@ -63,7 +63,7 @@ import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type 
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
 
-import { LEGACY_RUNNER_IDS } from '../core/runner-registry.ts';
+import { LEGACY_RUNNER_IDS } from '../core/runner-ids.ts';
 import {
   ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,

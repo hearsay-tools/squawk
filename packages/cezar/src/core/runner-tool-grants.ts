@@ -1,4 +1,5 @@
-import { unknownToolGrant, type ToolGrant } from './agent-runner.ts';
+import { type ToolGrant } from './agent-runner.ts';
+import { unknownToolGrant } from './agent-runner-values.ts';
 
 /**
  * How each runner without a tool-list builder of its own maps a `ToolGrant` onto its wire

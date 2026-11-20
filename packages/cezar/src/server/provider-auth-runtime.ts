@@ -11,7 +11,8 @@ import {
   resolveRuntimeAuthVerificationTarget,
   type RuntimeAuthVerificationTarget,
 } from '../workspace/agent-profiles.ts';
-import { DEFAULT_RUNNER_ID, resolveRunnerId } from '../core/runner-registry.ts';
+import { resolveRunnerId } from '../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
 
 const AUTH_ERROR_EVENT_TYPES = new Set(['error', 'session.error', 'note']);
 

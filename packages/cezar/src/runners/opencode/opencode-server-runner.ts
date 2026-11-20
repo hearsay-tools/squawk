@@ -1,7 +1,7 @@
 import { opencodeHttp } from './opencode-http.ts';
 import { openingInput, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
 import { productEnv } from '../../core/product-env.ts';
-import { uiAskQuestions } from '../../core/ask.ts';
+import { uiAskQuestions, AskQuestion } from '../../core/ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { finished } from 'node:stream/promises';
@@ -11,17 +11,14 @@ import { randomUUID } from 'node:crypto';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
-import {
-  type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentToolCallRecord,
-  type ContentBlock,
-  type InputDelivery, type AgentSession, type SessionOptions, isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit,
-} from '../../core/agent-runner.ts';
+import { type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentToolCallRecord, type ContentBlock, type InputDelivery, type AgentSession, type SessionOptions } from '../../core/agent-runner.ts';
+import { isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit } from '../../core/agent-runner-values.ts';
 import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 import { InputSubmissions } from '../../core/input-submissions.ts';
 import { signalSession, spawnSessionLeader } from '../../core/session-process.ts';
 import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
-import type { AskQuestion } from '../../core/ask.ts';
+
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
 import { formatModelIdentity, parseModelIdentity } from '../../core/model-identity.ts';

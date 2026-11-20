@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../../runners/built-in.ts';
 import { describeHarnessParity } from '../../core/harness-parity-owned-workflows.cells.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
 import { PiRunner } from '../pi/pi-runner.ts';

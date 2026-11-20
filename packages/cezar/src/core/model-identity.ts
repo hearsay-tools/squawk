@@ -2,7 +2,8 @@
  * Canonical provider/model identity and conversion to backend wire forms. Keep backend-specific
  * wire types behind the AgentRunner seam.
  */
-import { isRegisteredRunner, LEGACY_RUNNER_IDS, runnerDefinition } from './runner-registry.ts';
+import { isRegisteredRunner, runnerDefinition } from './runner-registry.ts';
+import { LEGACY_RUNNER_IDS } from './runner-ids.ts';
 
 /**
  * A backend-agnostic model identity. Serialized as `provider/model` (see

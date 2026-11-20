@@ -1,4 +1,4 @@
-import { registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { knownRunnerIds, runnerDefinition } from './runner-registry.ts';
 import type { RunnerSkillCatalogAdapter } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 
@@ -10,5 +10,5 @@ export function hostSkillCatalogAdapters(overrides: Partial<Record<string, Skill
   const adapter = (runner: string): RunnerSkillCatalogAdapter => ({
     discover: async (query, signal) => (await runnerDefinition(runner).loadSkillCatalog())({ ...query, bin: overrides[runner], signal }),
   });
-  return Object.fromEntries(registeredRunners().map(({ id }) => [id, adapter(id)]));
+  return Object.fromEntries(knownRunnerIds().map(id => [id, adapter(id)]));
 }

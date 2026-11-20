@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../../runners/built-in.ts';
 import { describeWaitParity } from '../../workflows/waits-parity-entries-cells.testkit.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';

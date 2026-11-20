@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { registeredRunners } from './runner-registry.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,8 @@ import { expect, vi } from 'vitest';
 import { testHome } from '../home/test-home.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
-import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf, type AgentEvent, type AgentRunSpec, type AgentRunSpecField, type ContentBlock, type ToolGrant } from './agent-runner.ts';
+import { type AgentEvent, type AgentRunSpec, type AgentRunSpecField, type ContentBlock, type ToolGrant } from './agent-runner.ts';
+import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedOpencodeMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
@@ -463,7 +464,7 @@ export const SESSION_GROUPS = {
     describeRunners('spec', 'harness parity — AgentRunSpec support declarations', () => {
       if (scope === 'once') {
         it('every runner id builds its own runner, declaring every AgentRunSpec field with a reason', async () => {
-          for (const backend of BUILT_IN_RUNNER_IDS) {
+          for (const backend of registeredRunners().map(({ id }) => id)) {
             const runner = await runnersUnderTest()(backend);
             // A new BUILT_IN_RUNNER_IDS member with no factory case falls through to claude; that is not a declaration.
             expect(runner.backend).toBe(backend);

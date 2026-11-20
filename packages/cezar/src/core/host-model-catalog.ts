@@ -1,5 +1,5 @@
 import type { ModelDiscoveryRunner } from '@open-mercato/cezar-contract';
-import { registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { knownRunnerIds, runnerDefinition } from './runner-registry.ts';
 import type { RunnerModelCatalogAdapter } from './runner-model-catalog.ts';
 
 /**
@@ -7,7 +7,7 @@ import type { RunnerModelCatalogAdapter } from './runner-model-catalog.ts';
  * catalog through the registered definition's `loadModelCatalog` when it first discovers.
  */
 export function hostModelCatalogAdapters(cwd: string): Record<ModelDiscoveryRunner, RunnerModelCatalogAdapter> {
-  return Object.fromEntries(registeredRunners().map(({ id }) => [id, {
+  return Object.fromEntries(knownRunnerIds().map(id => [id, {
     discover: async () => (await runnerDefinition(id).loadModelCatalog())({ cwd }),
   }])) as Record<ModelDiscoveryRunner, RunnerModelCatalogAdapter>;
 }

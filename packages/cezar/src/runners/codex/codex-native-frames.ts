@@ -1,4 +1,4 @@
-import { isSignalTerminationExit } from '../../core/agent-runner.ts';
+import { isSignalTerminationExit } from '../../core/agent-runner-values.ts';
 import type { CodexAppServerMessage } from './codex-app-server-transport.ts';
 
 /** Pure reads of native Codex app-server frames, for the session's stdout reader. */

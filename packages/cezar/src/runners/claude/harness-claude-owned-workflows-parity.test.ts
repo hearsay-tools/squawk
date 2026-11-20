@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../../runners/built-in.ts';
 import { describeHarnessParity } from '../../core/harness-parity-owned-workflows.cells.testkit.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { CodexAppServerRunner } from '../codex/codex-app-server-runner.ts';

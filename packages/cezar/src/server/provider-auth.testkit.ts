@@ -1,10 +1,10 @@
 import { ProviderAuthService, type ProviderStatusResponse } from '../core/provider-auth.ts';
-import { registeredRunners } from '../core/runner-registry.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 
 class ConnectedProviderAuthService extends ProviderAuthService {
   override status(): Promise<ProviderStatusResponse> {
     return Promise.resolve({
-      providers: registeredRunners().map(({ id: provider }) => ({ provider, status: 'connected' })),
+      providers: BUILT_IN_RUNNER_IDS.map(provider => ({ provider, status: 'connected' })),
     });
   }
 }

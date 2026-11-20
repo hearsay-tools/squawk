@@ -1,10 +1,10 @@
 import { commandText } from '../home/command.ts';
-import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 import { productEnv } from '../core/product-env.ts';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { runnerFieldIssues } from '../core/runner-fields.ts';
-import { knownRunnerIds } from '../core/runner-registry.ts';
+
 import { delegationErrorResponseSchema } from '@open-mercato/cezar-contract/delegation';
 import {
   discoveredRunnersSchema,
@@ -27,7 +27,7 @@ const HELP = commandText(`cez discover — inspect the host's default-account ca
 
 Usage:
   cez discover runners
-  cez discover models --runner <${BUILT_IN_RUNNERS.map(({ id }) => id).join('|')}>
+  cez discover models --runner <${knownRunnerIds().join('|')}>
 
 Options:
   --url <origin>  Cockpit to use (also CEZ_URL); operators only.

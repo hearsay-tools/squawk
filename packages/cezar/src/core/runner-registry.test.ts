@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS, BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
 import { describe, expect, it } from 'vitest';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { CodexAppServerRunner } from '../runners/codex/codex-app-server-runner.ts';
@@ -6,8 +6,9 @@ import { OmpRunner } from '../runners/omp/omp-runner.ts';
 import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
 import { PiRunner } from '../runners/pi/pi-runner.ts';
 import { defineRunner } from './runner-definition.ts';
-import { createRunner, DEFAULT_RUNNER_ID, isRegisteredRunner, LEGACY_RUNNER_IDS, registeredRunners, registerRunner, runnerDefinition } from './runner-registry.ts';
-import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
+import { createRunner, isRegisteredRunner, registeredRunners, registerRunner, runnerDefinition } from './runner-registry.ts';
+import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
+
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
@@ -33,13 +34,10 @@ describe('registerRunner', () => {
   });
 });
 
-describe('the built-in runners', () => {
-  registerBuiltInRunners();
-});
+registerBuiltInRunners();
 
 // The production factory the entry points inject (hearsay-tools/cezarion#2939).
 describe('createRunner', () => {
-  registerBuiltInRunners();
   const classes = { claude: ClaudeCliRunner, codex: CodexAppServerRunner, opencode: OpencodeServerRunner, pi: PiRunner, omp: OmpRunner } as Record<string, abstract new (...args: never[]) => object>;
 
   it.each(BUILT_IN_RUNNER_IDS)('builds the %s runner', async (id) => {

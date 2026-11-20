@@ -5,7 +5,8 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
-import { DEFAULT_RUNNER_ID, knownRunnerIds, registeredRunners } from './core/runner-registry.ts';
+import { knownRunnerIds, registeredRunners } from './core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from './core/runner-ids.ts';
 
 /**
  * Optional advanced config at `.ai/cezar/config.json`. Zero-config rule:

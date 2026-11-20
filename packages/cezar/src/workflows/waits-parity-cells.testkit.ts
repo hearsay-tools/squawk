@@ -30,7 +30,7 @@ import { processCells } from './waits-parity-process-cells.testkit.ts';
 import { recoveryCells } from './waits-parity-recovery-cells.testkit.ts';
 import { refusalCells } from './waits-parity-refusal-cells.testkit.ts';
 import { registrationCells } from './waits-parity-registration-cells.testkit.ts';
-import { type WaitParityPart, type WaitCells, type WaitFold, type FamilyPart, type RowFamily, foldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, foldedWaitFile, FOLDED_WAIT_RUNNERS, waitPartModule, waitFoldModule, fileFamilies, rowFamily, waitFamilyFile } from './waits-parity-catalog.testkit.ts';
+import { type WaitParityPart, type WaitCells, type WaitFold, type FamilyPart, type RowFamily, foldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, foldedWaitFile, foldedWaitRunners, waitPartModule, waitFoldModule, fileFamilies, rowFamily, waitFamilyFile } from './waits-parity-catalog.testkit.ts';
 
 // The full registry of the wait parity cells. Only `waits-parity.test.ts` imports it: it guards the
 // catalog and runs the single-runner cells. Each per-runner file imports its part's or fold's module
@@ -260,7 +260,7 @@ export function describeWaitParity(scope: 'once'): void {
           expect(existsSync(new URL(`../runners/${runner}/${familyFile}`, import.meta.url)), familyFile).toBe(!folded(runner) && familyRuns(runner, part, family));
         }
       }
-      for (const runner of FOLDED_WAIT_RUNNERS) {
+      for (const runner of foldedWaitRunners()) {
         // A folded runner's groups register each of its cells exactly once, and each group with
         // cells runs from its own file.
         const all: string[] = [];

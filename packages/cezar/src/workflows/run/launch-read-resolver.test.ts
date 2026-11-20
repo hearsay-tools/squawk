@@ -19,9 +19,11 @@ import { TrackedWork } from './tracked-work.ts';
 import type { RunModuleContext } from './types.ts';
 import { noRunners } from '../../core/runners-under-test.testkit.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from '../../runners/codex/definition.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 
 registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 let root: string;
 let store: RunStore;

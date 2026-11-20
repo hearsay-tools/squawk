@@ -11,7 +11,7 @@ import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
-import { inputDeliveryOf } from './agent-runner.ts';
+import { inputDeliveryOf } from './agent-runner-values.ts';
 import { createRunner } from './runner-registry.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { ANSWER_DELIVERY_GROUPS, answerDeliveryFamilies } from './conversation-answer-delivery-rows.testkit.ts';

@@ -1,7 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { inputDeliveryOf } from './agent-runner.ts';
+import { inputDeliveryOf } from './agent-runner-values.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner, runnerDefinition } from './runner-registry.ts';
 import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';

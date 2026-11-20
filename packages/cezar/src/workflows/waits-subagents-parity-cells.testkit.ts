@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -163,13 +163,13 @@ export function subagentCells(runners: readonly RunnerDefinition[]): void {
 export function subagentGuard(file: (runner: string) => string): void {
   describe('native subagent cells (hearsay-tools/cezarion#2431)', () => {
     it('runs the subagent cells of each runner with a live row from its own file', () => {
-      for (const runner of BUILT_IN_RUNNER_IDS) {
+      for (const runner of registeredRunners().map(({ id }) => id)) {
         const live = !SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
         expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(live);
       }
     });
     it('exempts a runner from every row exactly when its wire reports no subagents to wait on', () => {
-      for (const runner of BUILT_IN_RUNNER_IDS) {
+      for (const runner of registeredRunners().map(({ id }) => id)) {
         const exemptAll = SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
         expect({ runner, scenario: SCENARIO[runner] !== undefined, reports: reportsNativeSubagents(runner) })
           .toEqual({ runner, scenario: !exemptAll, reports: !exemptAll });

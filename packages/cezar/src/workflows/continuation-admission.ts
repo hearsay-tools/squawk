@@ -4,15 +4,16 @@ import type { Home } from '../home/home.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { SPAWN_NEXT } from '../runs/worker-execution.ts';
 import { modelConflictsWithRunner } from '../core/model-presets.ts';
-import type { WorkerStepIdentity } from '../delegation/execution-identity.ts';
+import { WorkerStepIdentity, WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../runs/store.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
-import { WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
+
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
-import { DEFAULT_RUNNER_ID, savedRunnerId } from '../core/runner-registry.ts';
+import { savedRunnerId } from '../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
 
 /** What a Continue may carry (`RunManager.continueRun`). */
 export type ContinueRunOptions = {

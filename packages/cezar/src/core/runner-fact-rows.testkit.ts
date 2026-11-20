@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import { CLAUDE_FACTS } from '../runners/claude/facts.ts';
 import { CODEX_FACTS } from '../runners/codex/facts.ts';
@@ -35,8 +34,10 @@ export function factRows(): Readonly<Record<string, RunnerFacts>> {
   return ROWS;
 }
 
-/** The built-in runners whose declared facts match, in `BUILT_IN_RUNNER_IDS` order. */
+/** The built-in runners whose declared facts match, in row order: the rows are the data files,
+ *  read without the registry so a static table sees every runner even in a test that registers
+ *  none. */
 export function factsWhere(matches: (facts: RunnerFacts) => boolean): string[] {
   const rows = factRows();
-  return BUILT_IN_RUNNER_IDS.filter(id => matches(rows[id]!));
+  return Object.keys(rows).filter(id => matches(rows[id]!));
 }

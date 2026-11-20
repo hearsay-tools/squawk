@@ -44,7 +44,7 @@ import {
   delegationErrorResponseSchema,
 } from '@open-mercato/cezar-contract/delegation';
 import { discoveryRequestSchema, discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
-import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
+
 import { runnerFlag, skillFlagIssue } from '../workflows/types.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { gitSync } from '../git-command.ts';
@@ -111,11 +111,11 @@ const WORKER_HELP: Record<string, { args: string; description: string }> = {
   'cancel-wait': { args: '<wait-id>', description: 'Stops one wait by its id; never cancels requests or workers, and your other waits stay open.' },
 
 };
-const WORKER_FLAG_HELP: Record<string, string> = {
+const workerFlagHelp = (): Record<string, string> => ({
   '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required for an isolated workspace. A shared workspace takes only parent-head, or none.',
   '--workspace': '<isolated|shared>    Default: the first kind you may start (a task: isolated; a worker: shared, its only kind). isolated: own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --attach; of --baseline only parent-head.',
   '--request-id': '<UUID>              Spawn retry ID, or request being followed up/replied to.',
-  '--runner': `<name>                  ${BUILT_IN_RUNNERS.map(({ id }) => id).join(' | ')}.`,
+  '--runner': `<name>                  ${knownRunnerIds().join(' | ')}.`,
   '--backend': '<name>                 Alias of --runner.',
   '--model': '<model>                  Model override.',
   '--effort': '<level>                 low | medium | high | xhigh | max | auto.',
@@ -131,7 +131,7 @@ const WORKER_FLAG_HELP: Record<string, string> = {
   '--kind': '<request|progress>        Whether the message requires an explicit reply.',
   '--discard-work': '                   Delete the uncommitted changes and unlanded commits a destroy refused to delete.',
   '--resume': '                         Resume an owned finished worker; request deadline defaults to 600 s, --timeout-seconds accepts up to 86400 s.',
-};
+});
 function workerHelp(operation?: string): string {
   const operations = WORKER_USAGE.operations.filter(entry => !(entry.name === 'wait' && entry.positionals === 0) && (operation === undefined || entry.name === operation));
   const names = [...new Set(operations.map(entry => entry.name))];
@@ -142,7 +142,7 @@ function workerHelp(operation?: string): string {
       const help = WORKER_HELP[name]!;
       return [commandText(`  cez worker ${name} ${help.args}`), `    ${help.description}`];
     }), '', 'Options:',
-    ...flags.map(flag => `  ${flag} ${WORKER_FLAG_HELP[flag]}`),
+    ...flags.map(flag => `  ${flag} ${workerFlagHelp()[flag]}`),
     '  -h, --help                       Show help without a delegation session.', '',
     'Required flags are shown in each synopsis. Other flags are optional.',
     commandText('Use cez worker <operation> --help for operation help.'),

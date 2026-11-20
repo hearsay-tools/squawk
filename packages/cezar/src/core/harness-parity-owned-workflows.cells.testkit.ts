@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
+import { registeredRunners } from './runner-registry.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
@@ -90,7 +90,8 @@ export const OWNED_WORKFLOWS_GROUPS = {
         }, 60_000);
 
         it(`${backend} R14 runs an accepted mixed-runner chain under per-step identity, each step on its own pinned account (#452)`, async () => {
-          const other = BUILT_IN_RUNNER_IDS[(BUILT_IN_RUNNER_IDS.indexOf(backend) + 1) % BUILT_IN_RUNNER_IDS.length]!;
+          const roster = registeredRunners().map(({ id }) => id);
+          const other = roster[(roster.indexOf(backend) + 1) % roster.length]!;
           const homes = realpathSync(mkdtempSync(join(tmpdir(), 'cez-parity-accounts-')));
           // What acceptance captures for a default account: a relocated home for the providers that
           // have one (never the developer's real login), a bare provider marker for the rest.

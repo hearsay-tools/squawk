@@ -1,7 +1,7 @@
 import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
 
 import type { RunRecord } from '../runs/store.ts';
-import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
 
 /**
  * Resolve the next turn’s account: live step, queued continuation, latest session-owning step,

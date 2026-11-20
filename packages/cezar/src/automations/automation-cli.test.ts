@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { automationCheckSchema } from '@open-mercato/cezar-contract/automations';
 import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -5,7 +6,7 @@ import { startTestCockpit, type TestCockpit } from '../task-cli/cockpit.testkit.
 import { EXIT } from '../task-cli/cli.ts';
 import { fetchJson, TaskCliError, type Cockpit, type HttpResult } from '../task-cli/http.ts';
 import { automationPageUrl, bodyFromAddFlags, parseEvery, runAutomationCommand, type AutomationIo } from './automation-cli.ts';
-import { AUTOMATION_SCHEMA_REFERENCE } from './prompts.ts';
+import { automationSchemaReference } from './prompts.ts';
 import { SCHEDULED_TASK_NOTE, resolveDelay } from '@open-mercato/cezar-contract/scheduled-tasks';
 
 /**
@@ -531,7 +532,7 @@ describe('cez automation', () => {
 
   it('schema prints the reference with no env at all', async () => {
     expect(await run(['schema'], {})).toBe(EXIT.ok);
-    expect(out).toEqual([AUTOMATION_SCHEMA_REFERENCE]);
+    expect(out).toEqual([automationSchemaReference()]);
   });
 
   it('help names both completion flags and their default', async () => {

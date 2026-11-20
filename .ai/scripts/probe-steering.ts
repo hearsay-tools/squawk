@@ -11,7 +11,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
-import { inputDeliveryOf, type AgentEvent } from '../../packages/cezar/src/core/agent-runner.ts';
+import { type AgentEvent } from '../../packages/cezar/src/core/agent-runner.ts';
+import { inputDeliveryOf } from '../../packages/cezar/src/core/agent-runner-values.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
 registerBuiltInRunners();
