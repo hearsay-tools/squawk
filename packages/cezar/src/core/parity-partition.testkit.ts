@@ -29,6 +29,25 @@ function familyRuns(family: ParityFamilyName | undefined, name: string): boolean
   return runsOn(family, pair[2], pair[1] as string);
 }
 
+/** The cell's name without its leading runner id: `R92` for `claude R92`. */
+const afterRunner = (key: string): string => key.slice(key.indexOf(' ') + 1);
+
+/**
+ * Whether `part` runs the cell `key`. A part lists the cells of the runners that shipped, because
+ * the parts split a family's cells across files. A cell of a runner that no part names follows the
+ * first part that lists the same row for another runner, so a new runner adds no entry here; a cell
+ * of a listed runner that no part lists still belongs to no part, and the registration guard fails.
+ */
+function inPart(part: ParityPart, parts: Readonly<Record<string, readonly string[]>>, key: string): boolean {
+  if (parts[part]?.includes(key)) return true;
+  const runner = key.slice(0, key.indexOf(' '));
+  if (!(BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner)) return false;
+  const named = Object.values(parts).some(entries => entries.some(entry => entry.startsWith(`${runner} `)));
+  if (named) return false;
+  const first = Object.entries(parts).find(([, entries]) => entries.some(entry => afterRunner(entry) === afterRunner(key)));
+  return first?.[0] === part;
+}
+
 /** Collect before opening a suite: a part must not register empty describes. A `family` drops each
  *  cell whose row does not run on its runner, before the part is chosen. */
 export function partitionParity(part: ParityPart, parts: Readonly<Record<string, readonly string[]>>, collect?: ParityCollector, family?: ParityFamilyName) {
@@ -36,7 +55,7 @@ export function partitionParity(part: ParityPart, parts: Readonly<Record<string,
   return {
     it(name: string, body: CellBody, timeout?: number): void {
       if (!familyRuns(family, name)) return;
-      if (part === 'all' || parts[part]?.includes(parityCellKey(name))) cells.push({ name, body, timeout });
+      if (part === 'all' || inPart(part, parts, parityCellKey(name))) cells.push({ name, body, timeout });
     },
     describe(name: string, body: () => void): void {
       cells = [];
@@ -60,7 +79,8 @@ export function checkParityRegistration(
 ): void {
   const expected: string[] = [];
   register('all', name => expected.push(name));
-  expect(expected).toHaveLength(count);
+  // `count` is a floor: the cells of the runners that shipped when it was set. A new runner adds cells.
+  expect(expected.length).toBeGreaterThanOrEqual(count);
   const registeredPairs = expected.flatMap(name => {
     const pair = /^(\w+) ([A-Z]\d+)\b/.exec(name);
     return pair ? [`${pair[1]} ${pair[2]}`] : [];

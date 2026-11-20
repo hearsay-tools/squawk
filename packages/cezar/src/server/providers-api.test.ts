@@ -264,7 +264,7 @@ describe('workspace provider API', () => {
 
   it('GET ?refresh=1 bypasses the completed provider cache', async () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
+      stdout: GOLDENS[providerForExecutable(executable)]!.connected.stdout,
       stderr: '',
       exitCode: 0,
     }));
@@ -278,7 +278,7 @@ describe('workspace provider API', () => {
 
   it('GET without refresh reuses the completed provider cache', async () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
+      stdout: GOLDENS[providerForExecutable(executable)]!.connected.stdout,
       stderr: '',
       exitCode: 0,
     }));
@@ -467,7 +467,7 @@ describe('workspace provider API', () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => {
       await waiting;
       return {
-        stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
+        stdout: GOLDENS[providerForExecutable(executable)]!.connected.stdout,
         stderr: '',
         exitCode: 0,
       };
