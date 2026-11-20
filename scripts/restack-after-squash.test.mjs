@@ -28,6 +28,8 @@ function stackedRepo(t, { late = false, state = 'MERGED' } = {}) {
   const git = (...args) => execFileSync('git', args, { cwd: w, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git('config', 'user.name', 'Test');
   git('config', 'user.email', 'test@example.com');
+  git('config', `url.${origin}.insteadOf`, 'https://github.com/acme/widget.git');
+  git('remote', 'set-url', 'origin', 'https://github.com/acme/widget.git');
   git('switch', '-q', '-c', 'main');
   for (const f of ['a', 'b', 'c']) write(w, f, ['1', '2', '3', '4', '5']);
   git('add', '.');
@@ -60,13 +62,14 @@ function stackedRepo(t, { late = false, state = 'MERGED' } = {}) {
   fs.mkdirSync(bin);
   const ghJson = path.join(root, 'pr.json');
   fs.writeFileSync(ghJson, JSON.stringify({ state, headRefOid: finalHead, baseRefName: 'main' }));
-  fs.writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\ncat ${shellWord(ghJson)}\n`, { mode: 0o755 });
+  const ghArgs = path.join(root, 'gh-args');
+  fs.writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\nprintf '%s\\n' "$@" > ${shellWord(ghArgs)}\ncat ${shellWord(ghJson)}\n`, { mode: 0o755 });
   const restack = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd: w,
     encoding: 'utf8',
     env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
   });
-  return { w, git, finalHead, restack, read: f => fs.readFileSync(path.join(w, f), 'utf8') };
+  return { w, git, finalHead, restack, origin, ghArgs, read: f => fs.readFileSync(path.join(w, f), 'utf8') };
 }
 
 test('a plain merge of origin/main conflicts on the stacked branch; the restack replays only its own commits', t => {
@@ -81,6 +84,38 @@ test('a plain merge of origin/main conflicts on the stacked branch; the restack 
   assert.equal(repo.read('c'), '1\n2\n3\n4\nM\n');
   assert.match(result.stdout, /Own patch unchanged/);
   assert.match(result.stdout, /Push: git push --force-with-lease=child:[0-9a-f]{40} origin HEAD:child/);
+  assert.match(fs.readFileSync(repo.ghArgs, 'utf8'), /^--repo\ngithub\.com\/acme\/widget$/m);
+});
+
+test('it refuses when origin is not a hosted repository URL, whatever gh would default to', t => {
+  const repo = stackedRepo(t);
+  repo.git('remote', 'set-url', 'origin', repo.origin);
+  const result = repo.restack('1');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /is not a hosted repository URL/);
+  assert.equal(fs.existsSync(repo.ghArgs), false);
+});
+
+test('a rebase refuses own history with a merge commit, whose edits it would drop; --merge keeps them', t => {
+  const repo = stackedRepo(t);
+  repo.git('switch', '-q', '-c', 'side', 'child~1');
+  write(repo.w, 'b', ['1', 'C', '3', 'S', '5']);
+  repo.git('commit', '-qam', 'side');
+  repo.git('switch', '-q', 'child');
+  repo.git('merge', '-q', '--no-ff', '--no-commit', 'side');
+  fs.chmodSync(path.join(repo.w, 'c'), 0o755);
+  repo.git('add', 'c');
+  repo.git('commit', '-qm', 'merge side; c becomes executable');
+  const before = repo.git('rev-parse', 'HEAD');
+  const refused = repo.restack('1');
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /merge commits .* Use --merge/);
+  assert.equal(repo.git('rev-parse', 'HEAD'), before);
+  const merged = repo.restack('1', '--merge');
+  assert.equal(merged.status, 0, merged.stderr);
+  assert.match(repo.git('ls-files', '-s', 'c'), /^100755 /);
+  assert.equal(repo.read('c'), '1\n2\n3\n4\nM\n');
+  assert.match(merged.stdout, /Own patch unchanged/);
 });
 
 test('a branch forked before the base PR gained a commit keeps that commit after the rebase', t => {

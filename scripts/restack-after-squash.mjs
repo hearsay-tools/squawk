@@ -43,8 +43,16 @@ function gitWith(run) {
   return git;
 }
 
-function readPullRequest(run, pr) {
-  const result = run('gh', ['pr', 'view', pr, '--json', 'state,headRefOid,baseRefName']);
+/** `[HOST/]OWNER/REPO` of `origin`, so `gh` reads the pull request from the repository the refs come from. */
+function originRepository(git) {
+  const url = git.ok('config', '--get', 'remote.origin.url');
+  const match = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?([^/:]+)[:/](?:\d+\/)?([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url);
+  if (!match) refuse(`origin (${url}) is not a hosted repository URL, so its pull requests cannot be read.`);
+  return `${match[1]}/${match[2]}/${match[3]}`;
+}
+
+function readPullRequest(run, repo, pr) {
+  const result = run('gh', ['pr', 'view', pr, '--repo', repo, '--json', 'state,headRefOid,baseRefName']);
   if (result.status !== 0) refuse(`gh pr view ${pr} failed: ${result.stderr || result.stdout}`);
   const { state, headRefOid, baseRefName } = JSON.parse(result.stdout);
   if (state !== 'MERGED') refuse(`PR #${pr} is ${state}, not MERGED. Restack after it is squash-merged.`);
@@ -70,11 +78,14 @@ function checkStacked(git, finalHead, upstream, pr) {
   return fork.stdout;
 }
 
-/** The sorted added and removed lines of a diff: equal for the same patch on a different base. */
+/**
+ * The sorted lines of a diff without context, hunk positions and blob ids: equal for the same patch
+ * on a different base. Mode changes and binary patches count, so a lost one reads as changed.
+ */
 function patchLines(git, from, to) {
-  return git.ok('diff', '-U0', '--no-color', '--no-ext-diff', from, to)
+  return git.ok('diff', '-U0', '--binary', '--no-color', '--no-ext-diff', from, to)
     .split('\n')
-    .filter(line => /^[+-]/.test(line) && !/^(?:\+\+\+|---) /.test(line))
+    .filter(line => !/^(?:@@|index )/.test(line))
     .sort()
     .join('\n');
 }
@@ -87,6 +98,9 @@ function conflictedFiles(output) {
 }
 
 function rebase(git, ctx) {
+  if (git.ok('rev-list', '--merges', `${ctx.finalHead}..HEAD`)) {
+    refuse('The branch has merge commits after the base PR\'s final head. A rebase drops them, with any edit made in them. Use --merge.');
+  }
   const result = git('rebase', '--onto', ctx.upstream, ctx.finalHead);
   if (result.status === 0) return;
   const files = git.ok('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean).join(', ');
@@ -127,7 +141,7 @@ function report(git, ctx, mode) {
 export function restack({ cwd, pr, mode, dryRun }) {
   const run = makeRunner(cwd);
   const git = gitWith(run);
-  const { finalHead, base } = readPullRequest(run, pr);
+  const { finalHead, base } = readPullRequest(run, originRepository(git), pr);
   const branch = checkWorktree(git, base);
   git.ok('fetch', '--quiet', 'origin', base, `pull/${pr}/head`);
   if (git('cat-file', '-e', `${finalHead}^{commit}`).status !== 0) refuse(`PR #${pr}'s final head ${finalHead} could not be fetched.`);
