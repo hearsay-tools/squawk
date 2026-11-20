@@ -34,7 +34,7 @@ export const codexRunner = defineRunner({
   accounts: {
     ...CODEX_ACCOUNTS,
     // `$CODEX_HOME` relocates Codex's home; a blank value is ignored.
-    resolveHome: (env, home) => env.CODEX_HOME?.trim() || join(home, '.codex'),
+    homeDir: (env, home) => env.CODEX_HOME?.trim() || join(home, '.codex'),
   },
   env: CODEX_ENV,
   mock: CODEX_MOCK,

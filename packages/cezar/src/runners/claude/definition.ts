@@ -34,7 +34,7 @@ export const claudeRunner = defineRunner({
   accounts: {
     ...CLAUDE_ACCOUNTS,
     // `$CLAUDE_CONFIG_DIR` relocates Claude Code's home; a blank value is ignored.
-    resolveHome: (env, home) => env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude'),
+    homeDir: (env, home) => env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude'),
   },
   env: CLAUDE_ENV,
   mock: CLAUDE_MOCK,

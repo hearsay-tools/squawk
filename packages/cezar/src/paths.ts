@@ -117,7 +117,7 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
 
 /**
  * Where each registered runner keeps its per-user config, keyed by its `accounts.homeSlot`, in
- * registration order. Each definition's `accounts.resolveHome` honors the variables its vendor
+ * registration order. Each definition's `accounts.homeDir` honors the variables its vendor
  * documents (`runners/<id>/definition.ts`). Read per call so tests and ops can set env live.
  *
  * These are the DEFAULT profile's dirs. A second login of the same CLI is an
@@ -151,10 +151,10 @@ function agentUserHome(env: NodeJS.ProcessEnv): string {
 /** Calls a definition's home resolver. A definition without one, or without a home slot, throws
  *  naming the runner. */
 function resolveRunnerHome(id: string, accounts: RunnerAccounts, env: NodeJS.ProcessEnv, userHome: string): string {
-  if (!accounts.homeSlot || typeof accounts.resolveHome !== 'function') {
-    throw new Error(`Runner ${id} declares no agent home: set accounts.homeSlot and accounts.resolveHome in runners/${id}/definition.ts.`);
+  if (!accounts.homeSlot || typeof accounts.homeDir !== 'function') {
+    throw new Error(`Runner ${id} declares no agent home: set accounts.homeSlot and accounts.homeDir in runners/${id}/definition.ts.`);
   }
-  return accounts.resolveHome(env, userHome);
+  return accounts.homeDir(env, userHome);
 }
 
 /**

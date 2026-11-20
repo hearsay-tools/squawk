@@ -34,7 +34,7 @@ export const ompRunner = defineRunner({
   configFiles: { files: OMP_CONFIG_FILES, agentConfig: OMP_AGENT_CONFIG },
   extraTools: OMP_EXTRA_TOOLS,
   login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },
-  accounts: { ...OMP_ACCOUNTS, resolveHome: resolveOmpAgentDir },
+  accounts: { ...OMP_ACCOUNTS, homeDir: resolveOmpAgentDir },
   env: OMP_ENV,
   mock: OMP_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),

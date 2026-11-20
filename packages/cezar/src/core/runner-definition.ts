@@ -255,7 +255,7 @@ export interface RunnerAccounts extends RunnerAccountsData {
    * is `HOME`, else `USERPROFILE`, else the OS user home. Code, not data: it stays in the definition
    * (`runners/<id>/definition.ts`), and `agentHomePaths()` calls it per read so env changes apply.
    */
-  resolveHome(env: NodeJS.ProcessEnv, userHome: string): string;
+  homeDir(env: NodeJS.ProcessEnv, userHome: string): string;
 }
 
 /** The environment allow-list prefixes (the `env` part, spec 2026-11-18-runner-definitions): the

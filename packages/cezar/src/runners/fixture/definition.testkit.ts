@@ -24,7 +24,7 @@ export const fixtureRunner = defineRunner({
   extraTools: [],
   login: { ...FIXTURE_LOGIN, executable: () => 'fixture-runner' },
   loadLogin: async () => ({ parse: result => (result.exitCode === 0 ? 'connected' : null) }),
-  accounts: { ...FIXTURE_ACCOUNTS, resolveHome: (_env, home) => join(home, '.fixture') },
+  accounts: { ...FIXTURE_ACCOUNTS, homeDir: (_env, home) => join(home, '.fixture') },
   env: FIXTURE_ENV,
   mock: FIXTURE_MOCK,
   display: FIXTURE_DISPLAY,

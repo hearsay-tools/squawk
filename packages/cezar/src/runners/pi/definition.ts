@@ -34,7 +34,7 @@ export const piRunner = defineRunner({
   accounts: {
     ...PI_ACCOUNTS,
     // `$PI_CODING_AGENT_DIR` relocates Pi's agent dir; a blank value is ignored.
-    resolveHome: (env, home) => env.PI_CODING_AGENT_DIR?.trim() || join(home, '.pi', 'agent'),
+    homeDir: (env, home) => env.PI_CODING_AGENT_DIR?.trim() || join(home, '.pi', 'agent'),
   },
   env: PI_ENV,
   mock: PI_MOCK,

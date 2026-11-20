@@ -84,7 +84,7 @@ describe('agentHomePaths', () => {
   };
 
   it('throws naming the runner when its definition has no home resolver', async () => {
-    const broken = { ...fixtureRunner, accounts: { ...fixtureRunner.accounts, resolveHome: undefined } };
+    const broken = { ...fixtureRunner, accounts: { ...fixtureRunner.accounts, homeDir: undefined } };
     const paths = await freshPaths([broken as unknown as RunnerDefinition]);
     expect(() => paths.agentHomePaths({ HOME: '/home/u' })).toThrow('Runner fixture declares no agent home');
     expect(() => paths.agentHomeDir('fixture', { HOME: '/home/u' })).toThrow('Runner fixture declares no agent home');

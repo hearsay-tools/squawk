@@ -34,7 +34,7 @@ export const opencodeRunner = defineRunner({
   accounts: {
     ...OPENCODE_ACCOUNTS,
     // OpenCode's config dir sits under `$XDG_CONFIG_HOME`, else `~/.config`.
-    resolveHome: (env, home) => join(env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'opencode'),
+    homeDir: (env, home) => join(env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'opencode'),
   },
   env: OPENCODE_ENV,
   mock: OPENCODE_MOCK,
