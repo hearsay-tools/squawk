@@ -98,8 +98,12 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
   commit and is absent from `nodeLoaded`, `sources` and `functions`: "no process the browser suite
   starts loads it". Such a file still selects the specs that load it now, by the static spec scan,
   and the incomplete specs. The rule counts as mapped, so drift adds its specs.
-- The static setup scan runs first and still selects every spec: Vite bundles the Vitest config and
-  its imports into a temporary file, so coverage cannot show that setup did not load a file.
+- What the Vitest config imports (its import closure) still selects every spec, before this rule:
+  Vite bundles it into a temporary file, so no coverage report names it. The rest of the static
+  setup scan (setup files, the reporter and what they reach) loads at run time with real paths, so
+  this rule runs before it, and a type-only import that only the scan reaches selects no spec.
+  Measured: a Vitest fork under the preload writes its coverage on SIGTERM, naming the test file
+  and its helper by `file://` path; the config file appears in no report.
 - Loaded code keeps today's rules.
   Files that are not code (JSON, shell, PowerShell) also keep today's rules.
 
@@ -118,7 +122,9 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Code file no process loaded, existed at the map commit, every process left coverage | Every spec | Specs that load it now + incomplete specs; none when both are empty |
 | The same, but some process left no coverage | Every spec | Every spec (no `nodeLoaded` in the map) |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
-| Code file the static setup scan reaches, loaded or not | Every spec | Every spec (Vite bundles the config) |
+| File the Vitest config imports | Every spec | Every spec (Vite bundles it) |
+| Code file the static setup scan reaches and a process loaded | Every spec | Every spec |
+| Code file the static setup scan reaches but no process loaded (a type-only import, say) | Every spec | Specs that load it now + incomplete specs |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |
 
 ### Map selection (slice 1)

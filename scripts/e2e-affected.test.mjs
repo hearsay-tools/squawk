@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import {
-  bootSpec, changedLines, classify, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
+  bootSpec, changedLines, classify, importSpecifiers, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
 } from './e2e-affected.mjs';
 
 // hearsay-tools/cezarion#1816: npm run test:e2e:affected chooses browser specs from the spec map.
@@ -128,6 +128,20 @@ test('the map comes from the newest run at or before the fork point, never from 
     /^no spec map: no successful e2e-spec-map\.yml run on main maps the fork point or an earlier commit$/);
 });
 
+test('import specifiers: static, re-exported, side-effect and literal dynamic imports, never comments', () => {
+  const text = [
+    "import { a } from './a.ts'",
+    "import type { B } from './b.ts'",
+    "export { c } from '../c.mjs'",
+    "import './side-effect.mjs'",
+    "const d = await import('./d.ts')",
+    "const e = require('./e.cjs')",
+    "// import { x } from './commented.ts'",
+    "const path = resolve(import.meta.dirname, 'environment.ts')",
+  ].join('\n');
+  assert.deepEqual(importSpecifiers(text).sort(), ['../c.mjs', './a.ts', './b.ts', './d.ts', './e.cjs', './side-effect.mjs']);
+});
+
 test('string literals: imports and spec-relative paths, never comments', () => {
   const text = [
     "import { browser } from './agent-browser' // the seam's 'helper'",
@@ -178,6 +192,8 @@ test('the reference graph splits what the suite setup loads from what each spec 
     '.github/scripts/seq.mjs', 'packages/web/e2e/agent-browser.ts', 'packages/web/e2e/environment.ts',
     'packages/web/e2e/failure-setup.ts', 'packages/web/e2e/vitest.config.ts',
   ]);
+  // Only what the config imports is bundled with it; setup files load at run time.
+  assert.deepEqual([...graph.config].sort(), ['.github/scripts/seq.mjs', 'packages/web/e2e/vitest.config.ts']);
   assert.deepEqual([...graph.specs.get(spec('a'))].sort(), [spec('a'), 'packages/web/e2e/fixtures/run.ndjson', 'packages/web/e2e/poll.ts']);
   assert.deepEqual([...graph.specs.get(spec('b'))].sort(), [spec('b'), 'packages/web/src/lib/cn.ts', 'packages/web/src/thing.ts']);
 });
@@ -255,11 +271,16 @@ test('a code file no process loaded selects no spec when the map lists every loa
   }
   // .github/ is outside the covered roots: the suite setup still selects every spec for it.
   assert.equal(pick('.github/scripts/cockpit-test-sequencer.mjs'), null);
-  // The suite setup still selects every spec: Vite bundles the Vitest config and its imports into a
-  // temporary file, so the processes' coverage cannot show that setup did not load a file.
-  assert.equal(classify('packages/cezar/src/core/runner-definition.ts', { map, graph: { ...graph,
-    setup: new Set([...graph.setup, 'packages/cezar/src/core/runner-definition.ts']) },
-  atMap: new Set(['packages/cezar/src/core/runner-definition.ts']) }).specs, null);
+  // A file the suite setup reaches by a literal but no process loaded (a type-only import, say)
+  // selects no spec. What the Vitest config imports still selects every spec: Vite bundles it into
+  // a temporary file, so no coverage report names it.
+  const definition = 'packages/cezar/src/core/runner-definition.ts';
+  const withSetup = { ...graph, setup: new Set([...graph.setup, definition, 'scripts/check-workspace-resolution.mjs']),
+    config: new Set(['packages/web/e2e/vitest.config.ts', 'scripts/check-workspace-resolution.mjs']) };
+  const both = new Set([definition, 'scripts/check-workspace-resolution.mjs']);
+  assert.deepEqual(classify(definition, { map, graph: withSetup, atMap: both }).specs, []);
+  assert.equal(classify('scripts/check-workspace-resolution.mjs', { map, graph: withSetup, atMap: both }).specs, null);
+  assert.equal(classify(definition, { map: sampleMap({ nodeLoaded: [definition] }), graph: withSetup, atMap: both }).specs, null);
   // A spec that loads the file now, and the specs with incomplete evidence, still run.
   assert.deepEqual(classify('packages/web/e2e/poll.ts', { map, graph, atMap: new Set(['packages/web/e2e/poll.ts']) }).specs,
     [spec('artifact-project-links')]);

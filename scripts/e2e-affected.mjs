@@ -205,14 +205,45 @@ function closure(root, start, cache) {
   return reached;
 }
 
+/** The module specifiers a code file imports statically or with a literal `import()` or `require()`. */
+export function importSpecifiers(text) {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+  const patterns = [
+    /\b(?:import|export)\s[^'"`;]*?\bfrom\s*(['"])([^'"\n]+)\1/g,
+    /\bimport\s*(['"])([^'"\n]+)\1/g,
+    /\b(?:import|require)\(\s*(['"])([^'"\n]+)\1\s*\)/g,
+  ];
+  return patterns.flatMap(pattern => [...code.matchAll(pattern)].map(match => match[2]));
+}
+
+/**
+ * The files Vite bundles into the configuration it loads: `start` and what it imports, transitively.
+ * Their code runs from a temporary bundle, so no coverage report names them.
+ */
+function importClosure(root, start) {
+  const reached = new Set();
+  const pending = [start];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (reached.has(file)) continue;
+    reached.add(file);
+    if (!CODE.test(file) || !existsSync(join(root, file))) continue;
+    const imports = importSpecifiers(readFileSync(join(root, file), 'utf8'));
+    pending.push(...imports.map(literal => resolveLiteral(root, file, literal)).filter(file => file && !file.endsWith('/')));
+  }
+  return reached;
+}
+
 /**
  * What the browser suite reads in Node: `setup` is what its configuration loads for every spec,
- * `specs` what each spec loads itself, the spec file included.
+ * `config` the part of it Vite bundles with the configuration file, and `specs` what each spec
+ * loads itself, the spec file included.
  */
 export function referenceGraph(root, specFiles) {
   const cache = new Map();
   return {
     setup: closure(root, `${SPEC_DIR}/vitest.config.ts`, cache),
+    config: importClosure(root, `${SPEC_DIR}/vitest.config.ts`),
     specs: new Map(specFiles.map(spec => [spec, closure(root, spec, cache)])),
   };
 }
@@ -352,9 +383,10 @@ export function classify(file, { map, graph, changes, partial, boot, atMap }) {
   if (isDocsPath(file)) return none('documentation');
   // Before the loaded-file rule: Vite bundles the Vitest config and what it imports into a
   // temporary file, so their coverage names no repository path.
-  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
+  if (graph.config?.has(file)) return every('the browser suite configuration imports it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
   if (unloaded(file, map, atMap)) return notLoaded(map, readers);
+  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);

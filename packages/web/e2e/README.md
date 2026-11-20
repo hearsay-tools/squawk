@@ -426,7 +426,7 @@ and every spec the map does not list runs. The log lists these files as `changed
 | Spec, helper or fixture | Specs that load it; every spec if suite setup loads it or no spec names the helper |
 | Documentation, unit tests, `spec-map/`, `.github/` outside suite setup | None |
 | A reviewed path no spec reads (`NO_SPEC` in the selector, each with its reason): lint rules and configs, `packages/cezar/src/lint/`, repository skills, benchmarks no spec imports, `AGENT_PROTOCOL.md`, `.env.example`, `squeal.config.json` | None, unless suite setup or a spec loads it |
-| Code under `packages/cezar/{src,scripts}`, `packages/contract/src`, `packages/web/e2e`, `.ai/scripts` or `scripts/` that existed at the map's commit and that no process the suite started loaded (the map's `nodeLoaded`), unless suite setup reaches it | Specs that load it now and incomplete specs; none when there are none |
+| Code under `packages/cezar/{src,scripts}`, `packages/contract/src`, `packages/web/e2e`, `.ai/scripts` or `scripts/` that existed at the map's commit and that no process the suite started loaded (the map's `nodeLoaded`), unless the Vitest config imports it (Vite bundles those) | Specs that load it now and incomplete specs; none when there are none |
 | Server/CLI paths without function evidence; the contract; styles; build configuration; test environment; dependencies; any other unknown path | Every spec |
 
 The boot spec is the shortest spec with complete evidence, by `.github/cockpit-test-durations.json`;
