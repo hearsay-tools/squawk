@@ -110,9 +110,13 @@ test('a test file loads the setup files of the nearest Vitest config that includ
     'packages/a/src/hub.ts': 'export const hub = () => 1;\n',
     'packages/a/src/plain.test.ts': "test('a', () => 1);\n",
     'packages/a/test/node.test.ts': "test('a', () => 1);\n",
+    'packages/a/src/e2e/vitest.config.ts': "export default { test: { setupFiles: ['./e2e-setup.ts'] } };\n",
+    'packages/a/src/e2e/e2e-setup.ts': 'export {};\n',
+    'packages/a/src/e2e/flow.test.ts': "test('a', () => 1);\n",
     'packages/b/src/other.test.ts': "test('a', () => 1);\n",
   });
   assert.deepEqual(loaders(root, 'packages/a/src/hub.ts'), ['packages/a/src/plain.test.ts']);
+  assert.deepEqual(loaders(root, 'packages/a/src/e2e/e2e-setup.ts'), ['packages/a/src/e2e/flow.test.ts']);
   assert.equal(main(['packages/a/src/hub.ts', '--files', 'packages/a/src/plain.test.ts'], root),
     'packages/a/src/plain.test.ts: packages/a/src/plain.test.ts → packages/a/vitest.setup.ts → packages/a/src/hub.ts');
 });
