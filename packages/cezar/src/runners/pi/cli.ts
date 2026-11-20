@@ -5,4 +5,5 @@ export const PI_CLI = {
   terminalExecutable: { kind: 'path-name', name: 'pi' },
   resumeArgs: id => `--session ${id}`,
   installSource: null,
+  openTarget: { label: 'pi CLI', icon: 'pi' },
 } as const satisfies RunnerCli;

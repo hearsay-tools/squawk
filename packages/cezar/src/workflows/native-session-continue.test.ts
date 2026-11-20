@@ -5,7 +5,7 @@ import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.te
 import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
@@ -13,6 +13,8 @@ import { HARNESS_ADAPTERS, promptFor, waitFor } from '../core/harness-parity.tes
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+import type { SessionWire, WireRow } from './native-session-wire.testkit.ts';
+import { runnerDataRows } from '../core/runner-data-rows.testkit.ts';
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -30,78 +32,24 @@ const CHAIN_DEF: WorkflowDef = {
   ],
 };
 
-type Row = Record<string, unknown> | unknown[];
-
-function rows(wire: string): Row[] {
+function rows(wire: string): WireRow[] {
   return wire.split('\n').filter(Boolean).flatMap((line) => {
-    try { return [JSON.parse(line) as Row]; } catch { return []; }
+    try { return [JSON.parse(line) as WireRow]; } catch { return []; }
   });
 }
 
-function record(row: Row): Record<string, unknown> | undefined {
-  return Array.isArray(row) ? undefined : row;
-}
+/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). A missing
+ *  reader fails with a message that names the file to add; any other load error surfaces as it is. */
+const SESSION_WIRES = await runnerDataRows<SessionWire>('session-wire.testkit.ts', id => {
+  if (!existsSync(new URL(`../runners/${id}/session-wire.testkit.ts`, import.meta.url))) {
+    throw new Error(`Runner ${id} has no runners/${id}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`);
+  }
+  return import(`../runners/${id}/session-wire.testkit.ts`);
+});
 
-function argv(row: Row): string[] | undefined {
-  return Array.isArray(row) ? row.map(String) : undefined;
+function wireOf(backend: string): SessionWire {
+  return SESSION_WIRES[backend]!;
 }
-
-/** Each value of `flag` across the recorded command lines. */
-function flagValues(wire: Row[], flag: string): string[] {
-  return wire.flatMap((row) => {
-    const args = argv(row);
-    const at = args?.indexOf(flag) ?? -1;
-    return at >= 0 ? [args![at + 1]!] : [];
-  });
-}
-
-/** How each native wire shows a resumed session, a fresh one, a started turn and its effort. */
-const WIRES: Record<string, {
-  resumed(wire: Row[]): string[];
-  freshSessions(wire: Row[]): number;
-  started(wire: Row[]): boolean;
-  effort(wire: Row[]): string | undefined;
-}> = {
-  claude: {
-    resumed: wire => flagValues(wire, '--resume'),
-    freshSessions: wire => flagValues(wire, '--session-id').length,
-    started: wire => wire.some(row => argv(row)?.includes('--output-format') === true),
-    effort: wire => flagValues(wire, '--effort').at(-1),
-  },
-  pi: {
-    resumed: wire => flagValues(wire, '--session'),
-    freshSessions: wire => flagValues(wire, '--session-id').length,
-    started: wire => wire.some(row => argv(row)?.includes('--mode') === true),
-    effort: wire => flagValues(wire, '--thinking').at(-1),
-  },
-  omp: {
-    resumed: wire => flagValues(wire, '--resume'),
-    freshSessions: wire => wire.filter(row => argv(row)?.includes('--mode') === true && !argv(row)!.includes('--resume')).length,
-    started: wire => wire.some(row => argv(row)?.includes('--mode') === true),
-    effort: wire => flagValues(wire, '--thinking').at(-1),
-  },
-  codex: {
-    resumed: wire => wire.flatMap(row => record(row)?.method === 'thread/resume'
-      ? [String((record(row)!.params as { threadId?: string }).threadId)] : []),
-    freshSessions: wire => wire.filter(row => record(row)?.method === 'thread/start').length,
-    started: wire => wire.some(row => record(row)?.method === 'turn/start'),
-    effort: wire => wire.flatMap(row => record(row)?.method === 'turn/start'
-      ? [(record(row)!.params as { effort?: string }).effort] : []).at(-1),
-  },
-  opencode: {
-    resumed: wire => wire.flatMap((row) => {
-      const rec = record(row);
-      const match = rec?.method === 'GET' && typeof rec.url === 'string' ? /^\/session\/([^/]+)$/.exec(rec.url) : null;
-      return match ? [match[1]!] : [];
-    }),
-    freshSessions: wire => wire.filter(row => record(row)?.method === 'POST' && record(row)?.url === '/session').length,
-    started: wire => wire.some(row => typeof record(row)?.url === 'string' && String(record(row)!.url).includes('prompt_async')),
-    effort: wire => wire.flatMap((row) => {
-      const rec = record(row);
-      return typeof rec?.url === 'string' && rec.url.includes('prompt_async') ? [(rec.body as { variant?: string }).variant] : [];
-    }).at(-1),
-  },
-};
 
 /**
  * Squawk saves a launch UUID on the step before the runner's `session` event. A runner that opens
@@ -170,11 +118,18 @@ describe('Continue after a crash before the native session event', () => {
     return created.id;
   }
 
-  async function continueWire(runId: string, backend: string): Promise<Row[]> {
+  async function continueWire(runId: string, backend: string): Promise<WireRow[]> {
     expect(manager!.continueRun(runId, { text: promptFor(backend, 'baseline') })).toEqual({ ok: true });
     const read = () => rows(existsSync(argsFile) ? readFileSync(argsFile, 'utf8') : '');
+    // A turn that ended or a run that settled has written whatever its mock records.
+    const settled = () => ['failed', 'review', 'done'].includes(store.getRun(runId)?.status ?? '')
+      || store.readEvents(runId).some(event => event.type === 'turn-end');
     // bound: hang guard; the turn's first request on the wire is the product signal.
-    await waitFor(() => WIRES[backend]!.started(read()) || store.getRun(runId)?.status === 'failed', 30_000);
+    await waitFor(() => wireOf(backend).started(read()) || settled(), 30_000);
+    if (!existsSync(argsFile)) {
+      throw new Error(`scripts/${basename(HARNESS_ADAPTERS[backend]!.mockBin)} recorded nothing to CEZ_MOCK_ARGS_FILE, so `
+        + `runners/${backend}/session-wire.testkit.ts has no wire to read: the mock must record its launch and requests there.`);
+    }
     expect(store.getRun(runId)?.error).toBeUndefined();
     return read();
   }
@@ -185,14 +140,14 @@ describe('Continue after a crash before the native session event', () => {
       const id = failedRun(backend, LAUNCH_SESSION_ID, { launched: true });
       const wire = await continueWire(id, backend);
       if (source === 'launch') {
-        expect(WIRES[backend]!.resumed(wire)).toEqual([LAUNCH_SESSION_ID]);
-        expect(WIRES[backend]!.freshSessions(wire)).toBe(0);
+        expect(wireOf(backend).resumed(wire)).toEqual([LAUNCH_SESSION_ID]);
+        expect(wireOf(backend).freshSessions(wire)).toBe(0);
       } else {
-        expect(WIRES[backend]!.resumed(wire)).toEqual([]);
-        expect(WIRES[backend]!.freshSessions(wire)).toBeGreaterThan(0);
+        expect(wireOf(backend).resumed(wire)).toEqual([]);
+        expect(wireOf(backend).freshSessions(wire)).toBeGreaterThan(0);
       }
       // The Continue runs as `implement`, the step whose session it continues.
-      expect(WIRES[backend]!.effort(wire)).toBe('high');
+      expect(wireOf(backend).effort(wire)).toBe('high');
       if (source === 'native') {
         // bound: hang guard; the runner reports its own id, which the Continue step records.
         await waitFor(() => store.readEvents(id).some(event => event.type === 'session' && event.stepId === 'continue-1'), 15_000);
@@ -206,8 +161,8 @@ describe('Continue after a crash before the native session event', () => {
     // then shows that the runner never reported the id, so the Continue keeps the conversation.
     const id = failedRun('codex', 'thread-from-salvaged-run', { launched: false });
     const wire = await continueWire(id, 'codex');
-    expect(WIRES.codex!.resumed(wire)).toEqual(['thread-from-salvaged-run']);
-    expect(WIRES.codex!.freshSessions(wire)).toBe(0);
-    expect(WIRES.codex!.effort(wire)).toBe('high');
+    expect(wireOf('codex').resumed(wire)).toEqual(['thread-from-salvaged-run']);
+    expect(wireOf('codex').freshSessions(wire)).toBe(0);
+    expect(wireOf('codex').effort(wire)).toBe('high');
   }, 60_000);
 });

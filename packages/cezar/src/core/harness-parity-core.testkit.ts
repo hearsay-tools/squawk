@@ -35,6 +35,7 @@ import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
 
 import { factsWhere, factRows } from './runner-fact-rows.testkit.ts';
+import { mockRows } from './runner-mock-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -454,16 +455,6 @@ export interface ParityExemption {
 export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   ...exemptWhere('P1', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
     `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card. This cell checks that native request/response protocol; ordinary human questions remain covered by R26.`),
-  ...([
-    ['claude', 'Claude print mode settles every tool permission inside Claude under its headless --permission-mode and sends Squawk no MCP tool approval request; Squawk\'s own tools are pre-authorized through generated --allowedTools entries (R35).'],
-    ['opencode', 'OpenCode sends no MCP-specific approval request: an ask before any tool call arrives as an ordinary permission.asked from a rule the user wrote, which P1 routes to the cockpit card (hearsay-tools/cezarion#1266).'],
-    ['pi', 'Pi\'s RPC wire carries no tool approval request for Squawk to answer; Squawk\'s tools reach Pi as an --extension admitted through --tools (R35), not as an MCP server.'],
-    ['omp', 'OMP\'s RPC wire carries no tool approval request for Squawk to answer: tool admission is its --tools list and --config overlay; Squawk\'s tools reach OMP as an --extension admitted through --tools (R35), not as an MCP server.'],
-  ] as const).map(([backend, reason]) => ({ criterion: 'P9', backend, kind: 'scenario-unconstructible' as const, reason })),
-  {
-    criterion: 'P2', backend: 'codex', kind: 'scenario-unconstructible',
-    reason: "every app-server approval request comes from Codex's own approval policy or MCP tool approval mode, which Squawk leaves to Codex and P1 and P9 route to the human; the wire has no built-in ask that Squawk answers.",
-  },
   ...exemptWhere('P2', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
     `${backend}'s native wire carries no permission request at all, so there is no built-in default ask for Squawk to answer.`),
   ...([
@@ -477,14 +468,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card, so there is no pending request ${situation}.`)),
   ...exemptWhere('P8', 'scenario-unconstructible', facts => facts.nativePermission === 'in-turn', () =>
     'This wire sends a permission request only inside the turn it names, so none can arrive after that turn completed.'),
-  {
-    criterion: 'P5', backend: 'codex', kind: 'scenario-unconstructible',
-    reason: 'Codex answers an approval with a JSON-RPC response written to app-server stdin. JSON-RPC sends no reply to a response, so the wire has no per-answer refusal: the write reaches the server, or the transport fails and the session ends.',
-  },
-  {
-    criterion: 'P7', backend: 'codex', kind: 'scenario-unconstructible',
-    reason: "A Codex approval request is already Codex's own decision to ask (its approval policy runs server-side), so Squawk shows the card on receipt with nothing to read first; there is no window between receipt and the card.",
-  },
   // S9/R12/R15: a child session's work exists only where the wire nests it under its parent call.
   ...exemptWhere('S9', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
     'This wire carries no child session: a native subagent is a plain tool call on the parent session, so no child terminal signal exists that could end the parent turn.'),
@@ -504,18 +487,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   })); }),
   ...exemptWhere('H2', 'capability-absent', facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held', () =>
     'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
-  // hearsay-tools/squawk#2452: the live rows run where a prompt acknowledgement can be outstanding
-  // at a turn end with no human input held (OpenCode, Pi, OMP). The cell drives the same turns here.
-  ...(['A13', 'A14'] as const).flatMap(criterion => ([
-    ['claude', 'Claude acknowledges input with its own stdin write, so no prompt acknowledgement is outstanding at a turn end, and it refuses agent input only while its own agent write is pending.'],
-    ['codex', 'Codex refuses agent input only while a human prompt is still on its way to the wire, and that prompt is held human input: the turn end takes it before any nudge.'],
-  ] as const).map(([backend, reason]) => ({ criterion, backend, kind: 'capability-absent' as const, reason }))),
-  // hearsay-tools/squawk#2443: the live row holds the nudge's acknowledgement on every wire that
-  // acknowledges apart from its own write.
-  {
-    criterion: 'A15', backend: 'claude', kind: 'capability-absent',
-    reason: 'Claude acknowledges input with its own stdin write, so a submitted nudge cannot wait for its acknowledgement. The cell pins the inverted assertion: every acknowledgement cancels its bound and the run continues to the cap.',
-  },
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
     'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
   // hearsay-tools/cezarion#961 wire survey 2026-10-15; each runner's hookEvents comment names its wire.
@@ -525,24 +496,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'F11', backend, kind: 'scenario-unconstructible' as const,
     reason: 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
   })),
-  // A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
-  ...exemptWhere('A9', 'capability-absent', facts => facts.nativeAsk !== 'answerable', backend => reasonFor('A9', backend, {
-    claude: 'Claude stream-json asks through cezar_ask; its wire emits no native mid-turn ask.requested (A3/A4 cover the cezar_ask policy).',
-    pi: 'Pi RPC asks through cezar_ask; its wire emits no native mid-turn ask.requested (A3/A4 cover the cezar_ask policy).',
-    omp: 'OMP v18.4.11 plain `--mode rpc` never constructs the ask tool: sessionOptions.hasUI is true only for interactive or rpc-ui (src/main.ts) and AskTool.createIf returns null without it, so the native ask path cannot exist on the wire Squawk uses. Asks go through cezar_ask (A3/A4 cover the cezar_ask policy).',
-  })),
-  {
-    criterion: 'I2', backend: 'claude', kind: 'capability-absent',
-    reason: 'Claude 2.1.280 runs a stdin line written after the last model call as its own following result (queued_turn_count), so accepted input is never left unread (#505).',
-  },
-  {
-    criterion: 'I2', backend: 'pi', kind: 'capability-absent',
-    reason: 'pi 0.87.0 delivers an acknowledged steer in the running turn or runs it as the next prompt (rpc.md steer; #505 repro), so accepted input is never left unread.',
-  },
-  {
-    criterion: 'I2', backend: 'omp', kind: 'capability-absent',
-    reason: 'OMP v18.4.11 session_settled requires queuedMessageCount === 0 (isRpcSessionSettled, modes/rpc/rpc-session-settle.ts), and agent_end is rewritten to isTerminal:false while agent.hasQueuedMessages() (session/agent-session.ts), so a steer accepted before settle is read in the same turn and accepted input is never left unread.',
-  },
   // S11 (hearsay-tools/cezarion#2397): these wires have no answerable native ask; the `ask`
   // scenario calls cezar_ask, whose human wait the workflow holds input behind (R6), not the runner.
   ...exemptWhere('S11', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>
@@ -559,47 +512,12 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   // human wait opens through cezar_ask rather than a native ask; the cell asserts that instead.
   ...exemptWhere('U7h', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>
     'this wire has no native ask; its ask scenario calls cezar_ask'),
-  // U12/U13: an agent-input acknowledgement the provider can delay or reject.
-  {
-    criterion: 'U12', backend: 'claude', kind: 'capability-absent',
-    reason: 'Claude acknowledges agent input with the local stdin pipe write, so the provider cannot delay the acknowledgement. U3b covers its delivery beside a pending question.',
-  },
-  {
-    criterion: 'U13', backend: 'claude', kind: 'capability-absent',
-    reason: 'Claude acknowledges agent input with the local stdin pipe write; a written line has no provider rejection.',
-  },
-  // U27 (hearsay-tools/cezarion#1525): the late-acknowledgement entry needs a turn that ends before
-  // its input is acknowledged. The fresh-step and Continue cells run on every wire.
-  {
-    criterion: 'U27', backend: 'claude', kind: 'capability-absent',
-    reason: 'Claude acknowledges agent input with the local stdin pipe write, so no turn can end before its input is acknowledged; its fresh-step and Continue cells still run.',
-  },
-  // U20h (hearsay-tools/cezarion#1301): a refusal the harness acknowledges and never answers.
-  {
-    criterion: 'U20h', backend: 'opencode', kind: 'capability-absent',
-    reason: 'OpenCode runs one prompt per turn: a human prompt waits for the busy turn to go idle, and a refusal acknowledged without a turn never goes idle, so the human message the cell sends after the bound is never posted.',
-  },
-  // D1 (hearsay-tools/cezarion#2279): a governed session keeps native subagents, and Squawk adds a
-  // control only where a runner's cross-session tool is separate from subagent messaging. Each
-  // reason was checked against the installed CLI on 2026-10-30.
-  ...([
-    ['claude', 'Claude Code 2.1.312 SendMessage and ListAgents also reach the session\'s own subagents, so no outbound tool is separate from subagent messaging; inbound messages from other sessions are refused on every launch (D3).'],
-    ['pi', 'pi 1.4.0 has no built-in cross-session tool; an extension may add one, and its name cannot be discovered as messaging.'],
-    ['omp', 'OMP 18.13.1 has no cross-session tool in its default set; its irc tool is an in-process bus that reaches only agents inside the same OMP process.'],
-  ] as const).map(([backend, reason]) => ({
-    criterion: 'D1', backend, kind: 'capability-absent' as const, reason,
-  })),
-  // D3 (hearsay-tools/cezarion#1994): no native cross-session messaging control at shipped
-  // defaults. Each reason was checked against the installed CLI on 2026-10-27.
-  ...([
-    ['codex', 'Codex 0.164.0 multi-agent tools reach only agents of the same session; the cross-thread agent_message_board feature is under development and off by default, so Squawk sends no flag for an unstable key.'],
-    ['opencode', 'OpenCode 1.19.4 has no messaging tool and no inbound channel. Its task tool resumes any session by task_id with no parent check, and the task permission pattern matches only subagent_type, so no session rule blocks a foreign task_id while subagents keep working. Only the shell finds another session\'s ID, and the shell reaches that session directly (opencode run --session); the same-user shell is outside hard isolation.'],
-    ['pi', 'pi 1.4.0 has no built-in messaging tool; an extension may add one, and its name cannot be discovered as messaging.'],
-    ['omp', 'OMP 18.13.1 get_state.dumpTools default set holds no messaging tool; vibe_* and irc are opt-in in the user\'s own config.'],
-  ] as const).map(([backend, reason]) => ({
-    criterion: 'D3', backend, kind: 'capability-absent' as const, reason,
-  })),
+  // The cells one runner's wire cannot carry, each declared in its runners/<id>/mock.ts.
+  ...declaredExemptions(),
 ];
+
+// A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
+requireDeclaredWhere('A9', facts => facts.nativeAsk !== 'answerable');
 
 /**
  * One exemption for each runner whose declared facts match (hearsay-tools/cezarion#2991), so a row
@@ -623,11 +541,25 @@ function exceptRunner(live: string): string[] {
   return Object.keys(factRows()).filter(backend => backend !== live);
 }
 
-/** A runner-specific reason; a runner the facts select without one fails the table at load. */
-function reasonFor(criterion: string, backend: string, reasons: Partial<Record<string, string>>): string {
-  const reason = reasons[backend];
-  if (reason === undefined) throw new Error(`${criterion} exempts ${backend} by its declared facts, but gives no reason`);
-  return reason;
+/** Every exemption a built-in runner's mock part declares (`mock.parityExemptions`), in runner
+ *  order. Read from the data files, as the fact rows are, so the table builds in a test that
+ *  registers no runner. */
+function declaredExemptions(): ParityExemption[] {
+  return Object.entries(mockRows()).flatMap(([backend, mock]) =>
+    Object.entries(mock.parityExemptions ?? {}).map(([criterion, { kind, reason }]) => ({ criterion, backend, kind, reason })));
+}
+
+/** A criterion each runner declares only when its facts match: a runner the facts select without a
+ *  declared reason, or a runner that declares one its facts do not select, fails the table at load. */
+function requireDeclaredWhere(criterion: string, matches: (facts: RunnerFacts) => boolean): void {
+  const selected = factsWhere(matches);
+  const declared = Object.keys(mockRows()).filter(backend => mockRows()[backend]!.parityExemptions?.[criterion] !== undefined);
+  for (const backend of selected.filter(id => !declared.includes(id))) {
+    throw new Error(`${criterion} exempts ${backend} by its declared facts, but runners/${backend}/mock.ts gives no reason`);
+  }
+  for (const backend of declared.filter(id => !selected.includes(id))) {
+    throw new Error(`runners/${backend}/mock.ts exempts ${backend} from ${criterion}, but its declared facts do not`);
+  }
 }
 
 export function exemptionFor(criterion: string, backend: string): ParityExemption | undefined {

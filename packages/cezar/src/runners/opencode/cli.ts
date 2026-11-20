@@ -5,4 +5,5 @@ export const OPENCODE_CLI = {
   terminalExecutable: { kind: 'path-name', name: 'opencode' },
   resumeArgs: id => `--session ${id}`,
   installSource: { site: 'https://opencode.ai', label: 'OpenCode' },
+  openTarget: { label: 'OpenCode', icon: 'opencode' },
 } as const satisfies RunnerCli;

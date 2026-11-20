@@ -5,4 +5,5 @@ export const CLAUDE_CLI = {
   terminalExecutable: { kind: 'path-name', name: 'claude' },
   resumeArgs: id => `--resume ${id}`,
   installSource: { npm: '@anthropic-ai/claude-code' },
+  openTarget: { label: 'Claude CLI', icon: 'claude' },
 } as const satisfies RunnerCli;

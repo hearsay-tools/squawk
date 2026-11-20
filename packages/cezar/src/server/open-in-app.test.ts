@@ -1,5 +1,7 @@
+import '../core/register-all-runners.testkit.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -248,6 +250,71 @@ describe('agentCliRunner', () => {
     expect(agentCliRunner('vscode')).toBeNull();
     expect(agentCliRunner('terminal')).toBeNull();
     expect(agentCliRunner('cli:bogus')).toBeNull();
+  });
+});
+
+describe('agent CLI open targets', () => {
+  let stubDir: string;
+
+  /** An executable marker file; nothing runs it, because `spawn` is mocked file-wide. */
+  function stub(path: string): string {
+    writeFileSync(path, '', 'utf8');
+    chmodSync(path, 0o755);
+    return path;
+  }
+
+  function cliTargets() {
+    return detectOpenTargets().filter((target) => target.id.startsWith('cli:'));
+  }
+
+  beforeEach(() => {
+    stubDir = mkdtempSync(join(tmpdir(), 'cez-open-in-cli-'));
+    vi.stubEnv('PATH', join(stubDir, 'bin'));
+    // No host override: each runner's `*_BIN` setting under both product prefixes.
+    for (const { mock } of registeredRunners()) {
+      vi.stubEnv(mock.binEnv, undefined);
+      vi.stubEnv(mock.binEnv.replace(/^CEZ_/, 'HSQ_'), undefined);
+    }
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(stubDir, { recursive: true, force: true });
+  });
+
+  function allOnPath(): void {
+    mkdirSync(join(stubDir, 'bin'));
+    for (const { detection } of registeredRunners()) stub(join(stubDir, 'bin', detection.binary));
+  }
+
+  it('offers every registered runner\'s CLI on PATH, in registration order, as its cli part names it', () => {
+    allOnPath();
+    expect(cliTargets()).toEqual(registeredRunners().map(({ id, cli }) => ({ id: `cli:${id}`, ...cli.openTarget })));
+  });
+
+  it('keeps the built-in CLI targets: ids, labels, icons and order', () => {
+    allOnPath();
+    const builtIn = ['cli:claude', 'cli:codex', 'cli:opencode', 'cli:pi', 'cli:omp'];
+    expect(cliTargets().filter((target) => builtIn.includes(target.id))).toEqual([
+      { id: 'cli:claude', label: 'Claude CLI', icon: 'claude' },
+      { id: 'cli:codex', label: 'Codex CLI', icon: 'codex' },
+      { id: 'cli:opencode', label: 'OpenCode', icon: 'opencode' },
+      { id: 'cli:pi', label: 'pi CLI', icon: 'pi' },
+      { id: 'cli:omp', label: 'OMP CLI', icon: 'omp' },
+    ]);
+  });
+
+  it.each([
+    ['claude', 'CLAUDE_BIN'], ['codex', 'CODEX_BIN'], ['opencode', 'OPENCODE_BIN'], ['pi', 'PI_BIN'], ['omp', 'OMP_BIN'],
+  ].flatMap(([runner, suffix]) => ['HSQ_', 'CEZ_'].map((prefix) => [runner!, `${prefix}${suffix}`] as const)))(
+    'finds the %s CLI off PATH through %s', (runner, name) => {
+      vi.stubEnv(name, stub(join(stubDir, 'elsewhere')));
+      expect(cliTargets().map((target) => target.id)).toEqual([`cli:${runner}`]);
+    });
+
+  it('leaves out a CLI that is not on PATH and whose override names a missing file', () => {
+    vi.stubEnv('CEZ_CODEX_BIN', join(stubDir, 'missing'));
+    expect(cliTargets()).toEqual([]);
   });
 });
 

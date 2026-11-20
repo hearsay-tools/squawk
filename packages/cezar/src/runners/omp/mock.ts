@@ -16,4 +16,31 @@ export const OMP_MOCK = {
     subagent: 'mock:subagent',
     'subagent-after-park': 'mock:subagent-after-park',
   },
+  // The parity cells this wire cannot carry (`PARITY_EXEMPTIONS`).
+  parityExemptions: {
+    P9: {
+      kind: 'scenario-unconstructible',
+      reason: 'OMP\'s RPC wire carries no tool approval request for Squawk to answer: tool admission is its --tools list and --config overlay; Squawk\'s tools reach OMP as an --extension admitted through --tools (R35), not as an MCP server.',
+    },
+    // A9: a native mid-turn ask.requested exists only where the declared native ask is answerable;
+    // the parity kit checks this reason against the facts.
+    A9: {
+      kind: 'capability-absent',
+      reason: 'OMP v18.4.11 plain `--mode rpc` never constructs the ask tool: sessionOptions.hasUI is true only for interactive or rpc-ui (src/main.ts) and AskTool.createIf returns null without it, so the native ask path cannot exist on the wire Squawk uses. Asks go through cezar_ask (A3/A4 cover the cezar_ask policy).',
+    },
+    I2: {
+      kind: 'capability-absent',
+      reason: 'OMP v18.4.11 session_settled requires queuedMessageCount === 0 (isRpcSessionSettled, modes/rpc/rpc-session-settle.ts), and agent_end is rewritten to isTerminal:false while agent.hasQueuedMessages() (session/agent-session.ts), so a steer accepted before settle is read in the same turn and accepted input is never left unread.',
+    },
+    // D1 (hearsay-tools/cezarion#2279), checked against the installed CLI on 2026-10-30.
+    D1: {
+      kind: 'capability-absent',
+      reason: 'OMP 18.13.1 has no cross-session tool in its default set; its irc tool is an in-process bus that reaches only agents inside the same OMP process.',
+    },
+    // D3 (hearsay-tools/cezarion#1994), checked against the installed CLI on 2026-10-27.
+    D3: {
+      kind: 'capability-absent',
+      reason: 'OMP 18.13.1 get_state.dumpTools default set holds no messaging tool; vibe_* and irc are opt-in in the user\'s own config.',
+    },
+  },
 } as const satisfies RunnerMock;

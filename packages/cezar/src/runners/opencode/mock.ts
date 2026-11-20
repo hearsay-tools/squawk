@@ -31,4 +31,21 @@ export const OPENCODE_MOCK = {
     subagent: 'mock:subagent',
     'subagent-after-park': 'mock:subagent-after-park',
   },
+  // The parity cells this wire cannot carry (`PARITY_EXEMPTIONS`).
+  parityExemptions: {
+    P9: {
+      kind: 'scenario-unconstructible',
+      reason: 'OpenCode sends no MCP-specific approval request: an ask before any tool call arrives as an ordinary permission.asked from a rule the user wrote, which P1 routes to the cockpit card (hearsay-tools/cezarion#1266).',
+    },
+    // U20h (hearsay-tools/cezarion#1301): a refusal the harness acknowledges and never answers.
+    U20h: {
+      kind: 'capability-absent',
+      reason: 'OpenCode runs one prompt per turn: a human prompt waits for the busy turn to go idle, and a refusal acknowledged without a turn never goes idle, so the human message the cell sends after the bound is never posted.',
+    },
+    // D3 (hearsay-tools/cezarion#1994), checked against the installed CLI on 2026-10-27.
+    D3: {
+      kind: 'capability-absent',
+      reason: 'OpenCode 1.19.4 has no messaging tool and no inbound channel. Its task tool resumes any session by task_id with no parent check, and the task permission pattern matches only subagent_type, so no session rule blocks a foreign task_id while subagents keep working. Only the shell finds another session\'s ID, and the shell reaches that session directly (opencode run --session); the same-user shell is outside hard isolation.',
+    },
+  },
 } as const satisfies RunnerMock;
