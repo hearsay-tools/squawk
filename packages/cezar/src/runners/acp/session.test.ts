@@ -33,6 +33,21 @@ function start(options: Partial<AcpSessionOptions> = {}, env: Record<string, str
 }
 
 describe('shared ACP session over the native mock wire', () => {
+  it('keeps a prompt alive across malformed and extended updates, with one diagnostic per update', async () => {
+    const { session, events, ui } = start();
+    await session.initialize(); await session.open({ cwd: tmpdir() });
+    await expect(session.prompt([{ type: 'text', text: 'mock:acp-extended-updates' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(events).toContainEqual({ type: 'text', text: 'before extensions' });
+    expect(events).toContainEqual({ type: 'tool-result', toolCallId: 'extended-tool', result: 'extension survived', isError: false });
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'item.updated', item: expect.objectContaining({ id: 'extended-tool', toolKind: 'other', status: 'running' }) }));
+    // oxlint-disable-next-line cez/test-enum-literal -- ACP plan status has its own vocabulary.
+    expect(ui).toContainEqual({ type: 'plan.updated', entries: [{ content: 'Vendor plan', status: 'pending', priority: 'high' }] });
+    expect(ui.filter(event => event.type === 'session.error' && !event.fatal)).toHaveLength(9);
+    expect(events.filter(event => event.type === 'note')).toHaveLength(9);
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'end_turn' }));
+    await expect(session.prompt([{ type: 'text', text: 'mock:agent-echo follow-up' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+  });
+
   it('initializes, authenticates and maps a full turn, including early usage, tools and follow-ups', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-')); dirs.push(dir);
     const wire = join(dir, 'wire.ndjson');

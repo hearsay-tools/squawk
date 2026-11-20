@@ -48,6 +48,7 @@ async function prompt(frame) {
   active = turn;
   const text = frame.params.prompt.filter(block => block.type === 'text').map(block => block.text).join('\n');
   try {
+    if (text.includes('mock:acp-extended-updates')) extendedUpdates();
     if (text.includes('mock:acp-permission') || text.includes('mock:acp-ask')) {
       const result = await request('session/request_permission', { sessionId,
         toolCall: { toolCallId: 'permission-tool', title: text.includes('mock:acp-ask') ? 'Question' : 'Execute command', rawInput: { command: 'pwd' } },
@@ -68,6 +69,20 @@ async function prompt(frame) {
     reply(frame.id, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn' });
   } catch (error) { write({ id: frame.id, error: { code: -32603, message: error.message } }); }
   finally { active = undefined; }
+}
+
+function extendedUpdates() {
+  content('agent_message_chunk', 'before extensions');
+  update({ sessionUpdate: 'tool_call', toolCallId: 'extended-tool', title: 'Vendor tool', kind: 'vendor_extension', status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', toolCallId: 'extended-tool', status: 'vendor_waiting' });
+  update({ sessionUpdate: 'plan', entries: [{ content: 'Vendor plan', status: 'cancelled', priority: 'high' }] });
+  update({ sessionUpdate: 'usage_update', used: 3 });
+  update({ sessionUpdate: 'agent_message_chunk', content: { type: 'resource_link', uri: 'file:///repo/a' } });
+  update({ sessionUpdate: 123 });
+  update({ sessionUpdate: 'vendor_update', value: {} });
+  update({ sessionUpdate: 'tool_call', toolCallId: 'bad-tool', title: 42 });
+  write({ method: 'session/update', params: { update: null } });
+  update({ sessionUpdate: 'tool_call_update', toolCallId: 'extended-tool', status: 'completed', rawOutput: 'extension survived' });
 }
 
 async function handle(frame) {

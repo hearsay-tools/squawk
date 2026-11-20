@@ -40,6 +40,7 @@ export class AcpSession {
     this.transport = new AcpTransport(streams, {
       notification: (method, params) => this.notification(method, params),
       request: (method, params, id) => this.request(method, params, id),
+      notice: message => this.events.notice(message),
       ...(options.onActivity ? { activity: options.onActivity } : {}),
     });
     void this.transport.completion.then(() => this.cancelPermissions());

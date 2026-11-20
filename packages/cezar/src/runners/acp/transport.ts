@@ -27,6 +27,7 @@ export class AcpTransport {
     notification: (method: string, params: unknown) => void;
     request: (method: string, params: unknown, id: RpcId) => unknown | Promise<unknown>;
     activity?: () => void;
+    notice?: (message: string) => void;
   }) {
     const fail = (error: Error) => this.close(error);
     streams.input.on('error', fail);
@@ -69,7 +70,7 @@ export class AcpTransport {
         const frame = frameSchema.parse(JSON.parse(line));
         this.handlers.activity?.();
         if (frame.method !== undefined) {
-          if (frame.id === undefined) this.handlers.notification(frame.method, frame.params);
+          if (frame.id === undefined) this.notification(frame.method, frame.params);
           else void this.answer(frame.method, frame.params, frame.id);
         } else {
           if (frame.id === undefined || (!('result' in frame) && !frame.error)) throw new Error('Invalid ACP response');
@@ -85,6 +86,16 @@ export class AcpTransport {
       const failure = asError(error);
       this.close(failure);
       return failure;
+    }
+  }
+
+  private notification(method: string, params: unknown): void {
+    try { this.handlers.notification(method, params); }
+    catch (error) {
+      // A well-framed notification is not a transport failure. Provider extensions and
+      // malformed update payloads must not reject an unrelated in-flight prompt.
+      try { this.handlers.notice?.(`ACP ignored ${method}: ${asError(error).message}`); }
+      catch { /* A diagnostic consumer cannot turn a dropped notification into a disconnect. */ }
     }
   }
 
