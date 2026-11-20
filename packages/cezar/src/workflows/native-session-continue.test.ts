@@ -38,11 +38,14 @@ function rows(wire: string): WireRow[] {
   });
 }
 
-/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). */
-const SESSION_WIRES = await runnerDataRows<SessionWire>('session-wire.testkit.ts', id => import(`../runners/${id}/session-wire.testkit.ts`)
-  .catch((error: unknown) => {
-    throw new Error(`Runner ${id} has no runners/${id}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`, { cause: error });
-  }));
+/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). A missing
+ *  reader fails with a message that names the file to add; any other load error surfaces as it is. */
+const SESSION_WIRES = await runnerDataRows<SessionWire>('session-wire.testkit.ts', id => {
+  if (!existsSync(new URL(`../runners/${id}/session-wire.testkit.ts`, import.meta.url))) {
+    throw new Error(`Runner ${id} has no runners/${id}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`);
+  }
+  return import(`../runners/${id}/session-wire.testkit.ts`);
+});
 
 function wireOf(backend: string): SessionWire {
   return SESSION_WIRES[backend]!;
