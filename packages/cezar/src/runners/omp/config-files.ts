@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { agentHome, type AgentHomePaths, type ConfigFileDef } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
@@ -15,7 +15,7 @@ const OMP_MCP_DOCS = 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-con
  * loads no adapter. Order is presentation order: user → project → local, so the scope ladder
  * reads top (broad) to bottom (specific).
  */
-export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
+export const OMP_CONFIG_FILES: readonly RunnerConfigFile[] = [
   // ---- OMP: verified 2026-10-02 against v18.4.11 ----
   // Oh My Pi (`can1357/oh-my-pi`, docs at main @ 7318a70cf4ed). The user layer lives in
   // `AgentHomePaths.omp` (`$PI_CODING_AGENT_DIR` or `~/${PI_CONFIG_DIR || '.omp'}/agent`, the default
@@ -27,7 +27,6 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   // `AGENTS.md` row) and the `.omp/.mcp.json` / user `.mcp.json` compatibility spellings.
   {
     id: 'omp.user.settings',
-    runners: ['omp'],
     kind: 'settings',
     scope: 'user',
     resolve: (_repo, home) => join(ompHome(home), 'config.yml'),
@@ -41,7 +40,6 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'omp.project.settings',
-    runners: ['omp'],
     kind: 'settings',
     scope: 'project',
     resolve: (repo) => join(repo, '.omp', 'config.yml'),
@@ -54,7 +52,6 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'omp.user.mcp',
-    runners: ['omp'],
     kind: 'mcp',
     scope: 'user',
     resolve: (_repo, home) => join(ompHome(home), 'mcp.json'),
@@ -68,7 +65,6 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'omp.project.mcp',
-    runners: ['omp'],
     kind: 'mcp',
     scope: 'project',
     resolve: (repo) => join(repo, '.omp', 'mcp.json'),
@@ -82,7 +78,6 @@ export const OMP_CONFIG_FILES: readonly ConfigFileDef[] = [
   },
   {
     id: 'omp.user.memory',
-    runners: ['omp'],
     kind: 'memory',
     scope: 'user',
     resolve: (_repo, home) => join(ompHome(home), 'AGENTS.md'),

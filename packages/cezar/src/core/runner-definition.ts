@@ -5,7 +5,7 @@ import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
 import type { ModelOption } from './runner-model-catalog.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
-import type { ConfigFileDef } from './runner-config-files.ts';
+import type { RunnerConfigFile } from './runner-config-files.ts';
 import type { ProviderCommandResult, ProviderConnectionState } from './provider-auth.ts';
 import type { RunnerAgentConfig, RunnerEntry, RunnerModelPreset } from '@open-mercato/cezar-contract/runners';
 
@@ -111,8 +111,10 @@ export type RunnerDisplay = Omit<RunnerEntry, 'id' | 'models' | 'agentConfig'>;
 
 /** A runner's `configFiles` part: its native files and the pane that groups them. Plain data. */
 export interface RunnerConfigFiles {
-  /** The native config files that Settings → Agent config shows, in presentation order. */
-  readonly files: readonly ConfigFileDef[];
+  /** The native config files that Settings → Agent config shows, in presentation order. A file
+   *  that several runners read is one shared object in each of their lists; the catalog lists it
+   *  once, with each runner that lists it as a reader. */
+  readonly files: readonly RunnerConfigFile[];
   /** The runner's tab in Settings → Agent config: its name, notes and groups. The cockpit filters
    *  the agent config route's files into the groups by each file's `runners`, `kind` and `holdsMcp`. */
   readonly agentConfig: RunnerAgentConfig;

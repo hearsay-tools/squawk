@@ -29,11 +29,13 @@ export function agentHome(home: AgentHomePaths, slot: string): string {
   return dir;
 }
 
-export interface ConfigFileDef {
+/**
+ * One native config file in a runner's `configFiles.files`. Its readers are not listed here: a
+ * file that several runners read (`<repo>/AGENTS.md`) is one object that each of them lists.
+ */
+export interface RunnerConfigFile {
   /** Stable, opaque, URL-safe. The ONLY thing a client may name (traversal-proof). */
   id: string;
-  /** Every runner that reads this file. `<repo>/AGENTS.md` is one file, two readers. */
-  runners: string[];
   kind: ConfigKind;
   scope: ConfigScope;
   /** Absolute path, resolved per request so `$CODEX_HOME`/`$XDG_CONFIG_HOME` are honoured. */
@@ -59,4 +61,10 @@ export interface ConfigFileDef {
   /** Documented mid-run reload behaviour, or undefined when the vendor is silent. */
   hotReload?: string;
   docsUrl: string;
+}
+
+/** A catalog entry (`agent-config/catalog.ts`): a {@link RunnerConfigFile} and its readers. */
+export interface ConfigFileDef extends RunnerConfigFile {
+  /** Every registered runner that lists this file in its `configFiles.files`, in registration order. */
+  runners: string[];
 }
