@@ -201,7 +201,7 @@ export class FakeRunManager implements ProjectRunManager {
     return delegationExecutionSettings(undefined);
   }
 
-  selectDelegationExecutionSettings(...[runId, selection, validateModel]: Method<'selectDelegationExecutionSettings'>): ReturnType<RunManager['selectDelegationExecutionSettings']> {
+  async selectDelegationExecutionSettings(...[runId, selection, validateModel]: Method<'selectDelegationExecutionSettings'>): ReturnType<RunManager['selectDelegationExecutionSettings']> {
     return selectDelegationExecutionSettings(this.#root, this.delegationExecutionSettings(runId), selection, validateModel, this.#options.home);
   }
 
