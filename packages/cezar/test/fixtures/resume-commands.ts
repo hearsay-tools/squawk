@@ -1,13 +1,5 @@
-/** Golden take-over commands for the server's resume-command tests. */
+/** The session id and hostile ids of the resume-command tests. Each runner's golden take-over command for `sessionId` is `runners/<id>/__fixtures__/resume-command.txt`. */
 export const sessionId = 's1';
-export const commands = {
-  claude: 'claude --resume s1',
-  codex: 'codex resume s1',
-  opencode: 'opencode --session s1',
-  pi: 'pi --session s1',
-  omp: 'omp --resume s1',
-};
-
 export const unsafeSessionIds = [
   '', 'a b', "a'b", 'a`id`', 'a && calc.exe', '$(id)', '-x', '--help', 'a'.repeat(201),
 ];

@@ -138,9 +138,10 @@ test('CLI exits nonzero when the full local suite skips for a missing browser', 
   writeFileSync(join(repo, '.ai/scripts/build-e2e.sh'), '#!/bin/sh\nexit 0\n');
   cpSync(new URL('../.ai/scripts/e2e-catalogs.mjs', import.meta.url), join(repo, '.ai/scripts/e2e-catalogs.mjs'));
   mkdirSync(join(repo, 'packages/cezar/scripts'), { recursive: true });
-  for (const file of ['mock-skill-fixtures.mjs', 'mock-skill-list-data.mjs']) {
+  for (const file of ['mock-skill-fixtures.mjs', 'mock-skill-list-data.mjs', 'mock-skill-data.mjs']) {
     cpSync(new URL(`../packages/cezar/scripts/${file}`, import.meta.url), join(repo, 'packages/cezar/scripts', file));
   }
+  cpSync(new URL('../packages/cezar/scripts/mock-skill-data', import.meta.url), join(repo, 'packages/cezar/scripts/mock-skill-data'), { recursive: true });
   mkdirSync(join(repo, 'packages/web/e2e/fixtures'), { recursive: true });
   cpSync(new URL('../packages/web/e2e/fixtures/catalogs', import.meta.url), join(repo, 'packages/web/e2e/fixtures/catalogs'), { recursive: true });
   writeFileSync(join(repo, '.ai/scripts/e2e-lanes.mjs'), readFileSync(new URL('../.ai/scripts/e2e-lanes.mjs', import.meta.url)));
