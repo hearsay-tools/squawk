@@ -321,7 +321,7 @@ describe('the agents form', () => {
     expect((screen.getByLabelText<HTMLButtonElement>('Live title updates')).disabled).toBe(false)
   })
 
-  // hearsay-tools/squawk#3897, #3898: the runner rows come from the runners query, so they wait for it.
+  // hearsay-tools/squawk#3897 and hearsay-tools/squawk#3898: the runner rows come from the runners query, so they wait for it.
   it('lists the model selectors only once the runners query answers', async () => {
     serve()
     const client = renderAt('/settings/agents', false)
