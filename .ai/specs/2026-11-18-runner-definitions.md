@@ -132,7 +132,7 @@ other runner's adapter, so `core/runner-closure.test.ts` passes. Some runner-nam
 | `id` | The runner id | The `RUNNER_IDS` entry |
 | `facts` | The wire and turn facts | The `RUNNER_FACTS` row |
 | `display` | Display name, model list name, model id scope, runner picker label and line, icon name, install hint, login command, account folder example | `RUNNER_COCKPIT_FACTS`, `PROVIDERS`, `PROVIDER_INSTALL`, `FOLDER_EXAMPLE`, the icon map, `RUNNER_NAMES`, the runner picker's labels |
-| `detection` | How to probe the CLI and read its version | The `RUNNER_PROBES` row; the binary and `*_BIN` override of the `AGENT_CLIS` row (`server/open-in-targets.ts`) |
+| `detection` | How to probe the CLI and read its version | The `RUNNER_PROBES` row; the binary and `*_BIN` override of the `AGENT_CLIS` row (`server/open-in-app.ts`) |
 | `cli` | The executable and how to open it; the server installer's source; `openTarget`, the "Open in" menu entry's label and icon key | `RUNNER_CLI`, `AGENT_CLI_SOURCE`, the label and icon of the `AGENT_CLIS` row |
 | `login` | Login and auth status arguments, install hint, executable | The `DESCRIPTORS` entry in `core/provider-auth.ts` |
 | `loadLogin()` | `import()` of the status parser (`runners/<id>/login-probe.ts`) | The parser in that entry |
@@ -432,7 +432,7 @@ runner does.
   to derive the lists in code rather than to name them in §10. [The parity kit](#the-parity-kit)
   says what changed. §10 and ADR 0067 say "its mock script and that script's data files"
   (planner, 2026-11-20), because the mock skill captures sit beside the mock script.
-- **Open in app** (D2b). The `AGENT_CLIS` hand list in `server/open-in-targets.ts` is gone. The
+- **Open in app** (D2b). The `AGENT_CLIS` hand list in `server/open-in-app.ts` is gone. The
   menu reads the registered runners at call time: the binary from `detection.binary`, the
   override from `detection.binOverride()`, read on each call, and the label and icon from
   `cli.openTarget`. The order is the registration order.
@@ -444,7 +444,8 @@ runner does.
   the complete run (a copy of a real runner's folder under a new id) has no B failure and the
   four-places run has only A failures. On `e9d059ab6` the four-places run gave 26 A, 1 B and 0 C.
   The B was `FACT_VALUE_TESTS`, which the planner ruled by design: it is keyed by fact value, not
-  by runner, and a new fact value needs a shared-code unit test (§10). Exit run:
+  by runner, and a new value of a turn-path fact (`TURN_PATH_FACTS`) needs a shared-code unit
+  test (§10). Exit run:
   CRITERION7_PLACEHOLDER.
 
 ### Test selection

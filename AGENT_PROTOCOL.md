@@ -414,9 +414,10 @@ are stable.
 
 A wire gap needs owner review (§6). The shared exemption rows, which select runners by facts or
 span every runner but one, stay in the parity kit (§7); a new runner adds no row there. A runner
-that declares a fact value no runner declared before also adds a unit test of the shared code for
-that value to `FACT_VALUE_TESTS` (`core/parity-classes.testkit.ts`); that table is keyed by
-value, not by runner, so it is no roster list.
+that declares a value of a turn-path fact (a key of `TURN_PATH_FACTS`) that no runner declared
+before also adds a unit test of the shared code for that value to `FACT_VALUE_TESTS`
+(`core/parity-classes.testkit.ts`); that table is keyed by value, not by runner, so it is no
+roster list.
 
 <a id="10a-removing-a-runner"></a>
 

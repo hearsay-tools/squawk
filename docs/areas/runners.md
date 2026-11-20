@@ -45,11 +45,12 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 
 The folder also holds the runner's test data: `session-wire.testkit.ts` (how the mock's recorded
 command lines show a session), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
-and `__fixtures__/golden.json` (values that tests outside the runner pin;
-`core/runner-golden.testkit.ts`). A test reads them through `runnerDataRows`
-(`core/runner-data-rows.testkit.ts`), which imports `runners/<id>/<file>` for each id in
-`runners/ids.ts`. The session-wire and golden readers name the missing file when a runner has
-none.
+and `__fixtures__/golden.json` (values that tests outside the runner pin). `runnerDataRows`
+(`core/runner-data-rows.testkit.ts`) imports a per-runner data module, `runners/<id>/<file>`,
+for each id in `runners/ids.ts`: facts, extra tools, the mock part, the session wire and the
+mapper rows. `runnerGolden` (`core/runner-golden.testkit.ts`) reads one runner's
+`__fixtures__/golden.json` as a file. The session-wire and golden readers name the missing file
+when a runner has none.
 
 The definition has no tool-injection part. OpenCode's tool server setup is OpenCode code
 (`ciOpenCodeEnv` in `runners/opencode/opencode-runtime-config.ts`).
@@ -150,8 +151,9 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
   in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
   is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the
-  accounts pane) are different strings. When it declares a fact value that no runner declared
-  before, it also adds that value's unit tests to `FACT_VALUE_TESTS`.
+  accounts pane) are different strings. When it declares a value of a turn-path fact (a key of
+  `TURN_PATH_FACTS`) that no runner declared before, it also adds that value's unit tests to
+  `FACT_VALUE_TESTS`.
 
 `core/parity-classes.testkit.ts` holds the one classification table. Each parity
 family is `every-runner`, `shared` or `no-session`, from a trace of its cells.
