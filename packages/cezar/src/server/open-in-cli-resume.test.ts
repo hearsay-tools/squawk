@@ -15,7 +15,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
-import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
@@ -205,7 +204,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       const response = await openInCli(run.id);
       expect(response.status).toBe(409);
       expect(await response.json()).toEqual({
-        error: `the configured ${runnerDisplayName(backend)} executable cannot be used in a terminal command`,
+        error: 'the configured OMP executable cannot be used in a terminal command',
       });
       expect(mockOpenInTerminal).not.toHaveBeenCalled();
     } finally {

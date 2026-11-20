@@ -11,6 +11,7 @@ import { CLAUDE_LOGIN } from './login.ts';
 import { CLAUDE_ACCOUNTS } from './accounts.ts';
 import { CLAUDE_ENV } from './env.ts';
 import { CLAUDE_MOCK } from './mock.ts';
+import { CLAUDE_DISPLAY } from './display.ts';
 
 /** The Claude runner. */
 export const claudeRunner = defineRunner({
@@ -33,4 +34,5 @@ export const claudeRunner = defineRunner({
   env: CLAUDE_ENV,
   mock: CLAUDE_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseClaudeStatus }),
+  display: CLAUDE_DISPLAY,
 });

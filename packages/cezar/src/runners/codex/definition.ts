@@ -11,6 +11,7 @@ import { CODEX_LOGIN } from './login.ts';
 import { CODEX_ACCOUNTS } from './accounts.ts';
 import { CODEX_ENV } from './env.ts';
 import { CODEX_MOCK } from './mock.ts';
+import { CODEX_DISPLAY } from './display.ts';
 
 /** The Codex runner. */
 export const codexRunner = defineRunner({
@@ -33,4 +34,5 @@ export const codexRunner = defineRunner({
   env: CODEX_ENV,
   mock: CODEX_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseCodexStatus }),
+  display: CODEX_DISPLAY,
 });
