@@ -1,6 +1,12 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parse } from '@babel/parser';
+import type { Node } from '@babel/types';
 import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { OWNER_POLICIES } from './owner-policies.ts';
 import { fragment, inside, key, member, objectProperty, ownerRule, unwrap, unwrapAccess, walk } from './owner-rule.ts';
+import { visit } from './babel-walk.ts';
+import { repoRoot } from './source-rule.ts';
 
 const equality = /^(===|!==|==|!=)$/;
 const literalString = (node: EsNode | undefined) => node?.type === 'Literal' ? stringOf(node) : undefined;
@@ -44,10 +50,40 @@ export const runSearchFields = ownerRule(OWNER_POLICIES['run-search-field-list-o
   },
 }));
 
-export const RUNNER_CLASSES = ['ClaudeCliRunner', 'CodexAppServerRunner', 'OmpRunner', 'OpencodeServerRunner', 'PiRunner'];
 export function concreteRunnerModule(specifier: string): boolean {
   return /(^|\/)(?:core|runners\/[a-z0-9-]+)\/[a-z0-9-]+-runner(\.ts|\.js)?$/.test(specifier) && !/\/agent-runner(\.ts|\.js)?$/.test(specifier);
 }
+/** Whether an `implements` entry names `AgentRunner` itself, or `<namespace>.AgentRunner` from a
+ *  namespace type import. A type argument such as `Provider<AgentRunner>` does not count. */
+function namesAgentRunner(entry: Node): boolean {
+  if (entry.type !== 'TSClassImplements') return false;
+  const name = entry.expression;
+  if (name.type === 'Identifier') return name.name === 'AgentRunner';
+  return name.type === 'MemberExpression' && !name.computed && name.property.type === 'Identifier' && name.property.name === 'AgentRunner';
+}
+/** The names of the classes `source` (TypeScript) declares with `AgentRunner` among their top-level
+ *  `implements` entries, with or without a base class: `class A extends Base implements Other, AgentRunner`.
+ *  An anonymous class reads as `default`. */
+export function runnerClassNames(source: string): string[] {
+  const names: string[] = [];
+  visit(parse(source, { sourceType: 'module', plugins: ['typescript'] }).program, node => {
+    if ((node.type === 'ClassDeclaration' || node.type === 'ClassExpression') && (node.implements ?? []).some(namesAgentRunner)) names.push(node.id?.name ?? 'default');
+  });
+  return names;
+}
+/** The classes that implement `AgentRunner` in the runner modules of the runner folders under
+ *  `runners` (`runners/<id>/<name>-runner.ts`), so a new runner folder needs no edit here. A runner
+ *  module that declares no such class throws: the rule would miss its class. */
+export function runnerFolderClasses(runners = join(repoRoot, 'packages/cezar/src/runners')): string[] {
+  return readdirSync(runners, { withFileTypes: true }).filter(entry => entry.isDirectory())
+    .flatMap(folder => readdirSync(join(runners, folder.name)).filter(file => concreteRunnerModule(`runners/${folder.name}/${file}`))
+      .flatMap(file => {
+        const names = runnerClassNames(readFileSync(join(runners, folder.name, file), 'utf8'));
+        if (names.length === 0) throw new Error(`runners/${folder.name}/${file} is a runner module, but no class in it implements AgentRunner.`);
+        return names;
+      }));
+}
+export const RUNNER_CLASSES: readonly string[] = runnerFolderClasses();
 const runnerSource = (node: EsNode | undefined) => concreteRunnerModule(literalString(node) ?? '');
 function allowedImportType(node: EsNode): boolean {
   return inside(node, at => at.type === 'TSTypeAliasDeclaration' || at.type === 'TSTypeAnnotation');

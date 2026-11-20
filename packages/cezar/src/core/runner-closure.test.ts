@@ -1,19 +1,27 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
+import { runnerClassNames } from '../lint/owner-reader-rules.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
-// closure is every module the file reaches through static and dynamic imports. The wait parity
+// closure is every module the file reaches through static and dynamic imports; esbuild reads a
+// folder template such as `../runners/${id}/facts.ts` as every file it matches. The wait parity
 // kit runs its workers on the Claude wire whatever the parent's runner is, so a `waits-*` file
 // also loads the Claude adapter; hearsay-tools/cezarion#2959 can replace those workers. R14 runs a
-// mixed-runner chain, so a `harness-<runner>-owned-workflows` file also loads the next runner.
+// mixed-runner chain, so a `harness-<runner>-owned-workflows` file also loads one other runner.
 const src = join(import.meta.dirname, '..');
-const ADAPTERS: Record<string, string> = {
-  claude: 'runners/claude/claude-cli-runner.ts', codex: 'runners/codex/codex-app-server-runner.ts', opencode: 'runners/opencode/opencode-server-runner.ts',
-  pi: 'runners/pi/pi-runner.ts', omp: 'runners/omp/omp-runner.ts',
-};
+
+/** A runner folder's adapter module: its `<name>-runner.ts` file with the class that implements
+ *  `AgentRunner`. A built-in runner without one throws, so the guard never checks a missing path. */
+function adapterModule(id: string): string {
+  const adapter = readdirSync(join(src, 'runners', id)).filter(file => /^[a-z0-9-]+-runner\.ts$/.test(file)).map(file => `runners/${id}/${file}`)
+    .find(file => runnerClassNames(readFileSync(join(src, file), 'utf8')).length > 0);
+  if (!adapter) throw new Error(`Built-in runner ${id} has no runners/${id}/<name>-runner.ts with a class that implements AgentRunner.`);
+  return adapter;
+}
+const ADAPTERS: Record<string, string> = Object.fromEntries(BUILT_IN_RUNNER_IDS.map(id => [id, adapterModule(id)]));
 const PER_RUNNER = new RegExp(`^(?:harness|waits)-(${BUILT_IN_RUNNER_IDS.join('|')})-.*-parity\\.test\\.ts$`);
 
 function perRunnerFiles(): Array<{ file: string; runner: string }> {
@@ -44,8 +52,10 @@ describe('per-runner test closures', () => {
     const byEntry = await closures(files.map(entry => entry.file));
     const loaded = files.map(({ file, runner }) => {
       const closure = byEntry.get(file) ?? new Set();
-      const allowed = new Set<string>([runner, ...(file.split('/').at(-1)?.startsWith('waits-') ? ['claude' as const] : []),
-        ...(file.endsWith('-owned-workflows-parity.test.ts') ? [BUILT_IN_RUNNER_IDS[(BUILT_IN_RUNNER_IDS.indexOf(runner) + 1) % BUILT_IN_RUNNER_IDS.length] ?? runner] : [])]);
+      const loads = (id: string) => closure.has(ADAPTERS[id]!) || closure.has(`runners/${id}/definition.ts`);
+      const base = new Set<string>([runner, ...(file.split('/').at(-1)?.startsWith('waits-') ? ['claude' as const] : [])]);
+      const partner = file.endsWith('-owned-workflows-parity.test.ts') ? BUILT_IN_RUNNER_IDS.find(id => !base.has(id) && loads(id)) : undefined;
+      const allowed = new Set<string>([...base, ...(partner ? [partner] : [])]);
       const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
       return { file, own: closure.has(ADAPTERS[runner]!), others: [...others.filter(id => closure.has(ADAPTERS[id]!)),
         ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
