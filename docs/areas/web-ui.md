@@ -34,6 +34,18 @@ Guard each rule at the cheapest layer that can see it. Tailwind compiles a `moti
 
 **Automations availability:** every Automations entry (the nav item, the ⌘K view, the sidebar tab, the Tasks-page origin chip, prompt templates, automation names and the Automations page) asks `packages/web/src/lib/capabilities.ts`. Only a health payload with `capabilities.automations: true` makes them available; no payload yet reads as unavailable, and each hook keeps the last payload it saw (hearsay-tools/squawk#1401). While automations are off, the sidebar has no Automations tab and its Active tab lists automation tasks too; a picked or linked Automations origin reads as All. The oxlint AST rule `cez/automations-capability-read-outside-owner` fails a new `capabilities.automations` read in `packages/web/src` outside the owner and tests.
 
+**Runner data comes from `GET /api/v1/runners`:** the cockpit holds no table keyed by runner id
+(hearsay-tools/squawk#3898). The runner list, each runner's name, picker label and line, model
+presets and retired ids, install hint, login command, account folder example, icon key and Agent
+config pane read the `useRunners()` query (`packages/web/src/api/runners.ts`; helpers there read one
+entry). A picker or list that needs the runners shows nothing, or stays disabled, until the query
+answers. A runner that registers appears with no cockpit edit; a runner the list does not name is not
+offered, and a saved id it does not name falls to `resolveRunner`'s pick
+(`routes/new-task-form.ts`; the six state restore cases of
+`.ai/specs/2026-11-18-runner-definitions.md`). An icon is code: a map keyed by icon key
+(`OPEN_IN_ICONS`) turns the route's `icon` into a component, and an unknown key shows the generic
+glyph. `useRunnerModelCatalogs(runnerIds)` makes one catalog query for each listed runner.
+
 ## Activity view
 
 The Activity tab shows live work: `/p/:projectId/activity` for one project and `/activity` for all projects. The spec is `.ai/specs/2026-11-05-live-activity-view.md`; the code is in `packages/web/src/routes/activity/`. Keep these rules when you change it:

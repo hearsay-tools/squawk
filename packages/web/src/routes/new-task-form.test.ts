@@ -26,6 +26,9 @@ import {
   startedRunPath,
   type TaskSource,
 } from './new-task-form'
+import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
+import { runnerPickerLabel } from '@/api/runners'
+import { usableRunners } from '@/lib/provider-status'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available })
@@ -526,3 +529,53 @@ it('reports discovery in progress without masking cached feedback', () => {
   expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, false, false)).toBeUndefined()
 })
 
+// Spec 2026-11-18-runner-definitions, "State restore cases", rows 1 to 5 (row 6, a run saved on an
+// unregistered runner, is `run-session-details.test.tsx`). The runner and model data come from the
+// runners list (hearsay-tools/squawk#3898), and a runner that list does not name is not restorable.
+describe('state restore cases of the runners list', () => {
+  const connected = (...providers: string[]): ProviderStatusResponse => ({
+    providers: providers.map((provider) => ({ provider, status: 'connected', enabled: true })),
+  })
+
+  it('row 1: reopening with no saved selection picks the preferred usable runner, shown by its picker label and first preset', () => {
+    const usable = usableRunners(connected('claude', 'codex'), RUNNERS_RESPONSE)
+    expect(usable).toEqual(['claude', 'codex'])
+    const runner = resolveRunner(null, usable, 'codex')
+    expect(runner).toBe('codex')
+    expect(runnerPickerLabel(RUNNERS_RESPONSE, runner)).toBe('codex')
+    expect(modelsForRunner(runner, RUNNERS_RESPONSE)[0]).toMatchObject({ id: '', label: 'auto' })
+    expect(resolveModel(null, runner, RUNNERS_RESPONSE)).toBe('')
+  })
+
+  it('row 2: a saved runner that is registered and usable keeps its saved model', () => {
+    const usable = usableRunners(connected('claude', 'codex'), RUNNERS_RESPONSE)
+    expect(resolveRunner('claude', usable, 'codex')).toBe('claude')
+    expect(resolveModel('opus', 'claude', RUNNERS_RESPONSE)).toBe('opus')
+    expect(runnerPickerLabel(RUNNERS_RESPONSE, 'claude')).toBe('claude')
+  })
+
+  it('row 3: a saved runner that is no longer registered falls to the resolved pick, and its id is not offered', () => {
+    const usable = usableRunners(connected('retired', 'codex'), RUNNERS_RESPONSE)
+    expect(usable).toEqual(['codex'])
+    expect(resolveRunner('retired', usable, 'claude')).toBe('codex')
+    expect(availableRunners([check('retired', true), check('claude', true)], RUNNERS_RESPONSE)).toEqual(['claude'])
+  })
+
+  it('row 4: a saved model that is a known or retired preset of another runner with its own id scope is discarded', () => {
+    // `opus` is a Claude preset and `claude-opus-4-8` a retired Claude id; Codex's ids are its own.
+    for (const saved of ['opus', 'claude-opus-4-8']) {
+      expect(modelConflictsWithRunner(saved, 'codex', RUNNERS_RESPONSE)).toBe(true)
+      expect(resolveModel(saved, 'codex', RUNNERS_RESPONSE)).toBe('')
+      expect(modelsForRunner('codex', RUNNERS_RESPONSE, undefined, [saved]).map((model) => model.id)).toEqual([''])
+    }
+    // A provider-spanning runner's presets and ids belong to no runner alone, so they never conflict.
+    expect(modelConflictsWithRunner('anthropic/claude-sonnet-5', 'claude', RUNNERS_RESPONSE)).toBe(false)
+  })
+
+  it('row 5: before the runners list answers there is no runner, preset or label to restore', () => {
+    expect(usableRunners(connected('claude'), undefined)).toEqual([])
+    expect(modelsForRunner('claude', undefined)).toEqual([])
+    expect(modelConflictsWithRunner('opus', 'codex', undefined)).toBe(false)
+    expect(runnerPickerLabel(undefined, 'claude')).toBe('claude')
+  })
+})

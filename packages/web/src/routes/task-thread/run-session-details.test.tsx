@@ -466,6 +466,13 @@ describe('Usage & agent — which agent ran (#416, #52, #411)', () => {
     expect(agentDetails()).toMatchObject({ Runner: 'Cursor (removed)' })
   })
 
+  // State restore row 6 (spec 2026-11-18-runner-definitions): any id no runner registered, not only cursor.
+  it('names a run saved on an unregistered runner by its own id, marked removed', () => {
+    stubFetch()
+    renderCard(run('done', { id: freshId(), runner: undefined, removedRunner: 'fixture', model: 'auto' }))
+    expect(agentDetails()).toMatchObject({ Runner: 'Fixture (removed)' })
+  })
+
   it('reads model and effort auto when the run pinned neither', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'opencode' }))
