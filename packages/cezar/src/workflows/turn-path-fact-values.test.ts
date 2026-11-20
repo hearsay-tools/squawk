@@ -1,17 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { beforeEach, expect, it, vi } from 'vitest';
-import type { AgentEvent, AgentRunResult, InputDelivery } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
+import { expect, it, vi } from 'vitest';
+import type { InputDelivery } from '../core/agent-runner.ts';
 import { createActiveRun } from './active-run.ts';
-import type { InputGroup } from './run/input-delivery.ts';
+import { inputDeliveryModule } from './run/input-delivery-module.testkit.ts';
 import { commitBundledDelivery } from './run/input-receipts.ts';
 import type { RunModuleContext } from './run/types.ts';
-import { runnerHook, setupMonitoringFixture } from './run-fixture.testkit.ts';
-
-vi.mock('./active-run.ts', async importOriginal => {
-  const actual = await importOriginal<typeof import('./active-run.ts')>();
-  return { ...actual, createActiveRun: vi.fn(actual.createActiveRun) };
-});
 
 // Shared parity rows run on one runner (docs/adr/0063-one-scenario-runner.md). These cells drive
 // Squawk's input delivery with every declared value of the delivery facts, so a value that runner
@@ -25,52 +17,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const f = setupMonitoringFixture();
-let policy: InputDelivery;
-let opened = deferred<InputGroup>();
-let sendAck: () => Promise<void>;
-let holdsInput: () => boolean;
-let emitAgentEvent: (event: AgentEvent) => void;
-let reportConsumed: (ids: readonly string[]) => void;
-
-beforeEach(() => {
-  vi.mocked(createActiveRun).mockClear();
-  opened = deferred<InputGroup>();
-  sendAck = () => Promise.resolve();
-  holdsInput = () => false;
-  runnerHook.runner = {
-    backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
-    get inputDelivery() { return policy; },
-    run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
-    startSession(_spec, onEvent, options) {
-      const last = vi.mocked(createActiveRun).mock.results.at(-1);
-      if (!last || last.type !== 'return') throw new Error('runner opened without the ActiveRun factory');
-      const group = last.value.inputState;
-      const result = deferred<AgentRunResult>();
-      let open = true;
-      const close = () => { open = false; result.resolve({ text: '', toolCalls: [], tokensUsed: 0 }); };
-      emitAgentEvent = event => onEvent?.(event);
-      reportConsumed = ids => options?.onAgentInputConsumed?.(ids);
-      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'fact-values-session', resumed: false }); opened.resolve(group); });
-      return { get open() { return open; }, result: result.promise, sendMessage: () => true,
-        sendAgentMessage: () => sendAck(), discardQueuedMessages: () => {}, holdsHumanInput: () => holdsInput(),
-        end: close, interrupt: close };
-    },
-  };
-});
-
-async function openRun(delivery: InputDelivery) {
-  policy = delivery;
-  const record = f.manager.startRun(f.SINGLE_STEP, { task: 'work', runner: 'claude', worktree: false });
-  f.currentId = record.id;
-  const group = await opened.promise;
-  f.store.commitDelegation([{ id: record.id, delegation: { role: 'root', permissions: [], receipts: [] } }]);
-  expect(group.inputDelivery).toEqual(delivery);
-  const input = (text: string) => ({ id: randomUUID(), parentRunId: record.id, source: 'lifecycle' as const, text, createdAt: new Date().toISOString() });
-  return { record, group, input };
+function openRun(delivery: InputDelivery) {
+  const f = inputDeliveryModule(delivery);
+  expect(f.group.inputDelivery).toEqual(delivery);
+  return f;
 }
-
-const receipt = (runId: string, id: string) => f.store.getRun(runId)?.agentInputs?.find(entry => entry.id === id);
 
 const STEER = { mode: 'steer', consumption: 'observable', acknowledgement: 'response', humanInputAtTurnEnd: 'held-when-late', via: 'fact-values fixture' } as const;
 
@@ -78,23 +29,23 @@ const STEER = { mode: 'steer', consumption: 'observable', acknowledgement: 'resp
 // unobservable one is done at the acknowledgement.
 for (const consumption of ['observable', 'unobservable'] as const) {
   it(`consumption '${consumption}' decides whether a delivered input still awaits its read`, async () => {
-    const { record, group, input } = await openRun({ ...STEER, consumption });
-    const message = input('read this');
+    const f = openRun({ ...STEER, consumption });
+    const message = f.input('read this');
     const ack = deferred<void>();
-    sendAck = () => ack.promise;
-    f.store.commitAgentInputs(record.id, [message]);
-    f.manager.deliverConversationInput(record.id);
-    const flight = group.agentInputFlight!;
-    reportConsumed([message.id]);
+    f.wire.ack = () => ack.promise;
+    f.store.commitAgentInputs(f.runId, [message]);
+    f.delivery.deliverConversationInput(f.runId);
+    const flight = f.group.agentInputFlight!;
+    f.consumed([message.id]);
     ack.resolve();
     await flight.settled;
-    expect(receipt(record.id, message.id)?.deliveredAt).toBeDefined();
+    expect(f.receipt(message.id)?.deliveredAt).toBeDefined();
     if (consumption === 'observable') {
-      expect(receipt(record.id, message.id)?.consumedAt).toBeDefined();
+      expect(f.receipt(message.id)?.consumedAt).toBeDefined();
     } else {
-      expect(receipt(record.id, message.id)?.awaitingRead).toBeUndefined();
-      expect(receipt(record.id, message.id)?.consumedAt).toBeUndefined();
-      expect(group.unreadInputIds?.size ?? 0).toBe(0);
+      expect(f.receipt(message.id)?.awaitingRead).toBeUndefined();
+      expect(f.receipt(message.id)?.consumedAt).toBeUndefined();
+      expect(f.group.unreadInputIds?.size ?? 0).toBe(0);
     }
   });
 }
@@ -105,7 +56,7 @@ for (const consumption of ['observable', 'unobservable'] as const) {
   it(`consumption '${consumption}' decides whether messages bundled with an answer await their read`, () => {
     const commitOutcome = vi.fn();
     const context = { store: { commitOutcome } } as unknown as RunModuleContext;
-    const state = createActiveRun({ cwd: f.repoRoot, pendingHumanAsk: false, autonomous: false });
+    const state = createActiveRun({ cwd: '/work', pendingHumanAsk: false, autonomous: false });
     state.inputState.declareDelivery({ ...STEER, consumption });
     expect(commitBundledDelivery(context, 'run-1', state, ['bundled-1'], [{ kind: 'answered' }])).toBeUndefined();
     const [, outcomes] = commitOutcome.mock.calls[0]!;
@@ -127,43 +78,46 @@ const ACKNOWLEDGEMENTS = [
 ] as const;
 for (const { mode, acknowledgement, humanInputAtTurnEnd, afterTurnEnd } of ACKNOWLEDGEMENTS) {
   it(`mode '${mode}' with acknowledgement '${acknowledgement}' delivers an input only at its acknowledgement${afterTurnEnd ? ', after the turn ends' : ''}`, async () => {
-    const { record, group, input } = await openRun({ mode, consumption: 'observable', acknowledgement, humanInputAtTurnEnd, via: 'fact-values fixture' });
-    const message = input('work for the next model call');
+    const f = openRun({ mode, consumption: 'observable', acknowledgement, humanInputAtTurnEnd, via: 'fact-values fixture' });
+    const message = f.input('work for the next model call');
     const ack = deferred<void>();
-    sendAck = () => ack.promise;
-    f.store.commitAgentInputs(record.id, [message]);
-    f.manager.deliverConversationInput(record.id);
-    const flight = group.agentInputFlight!;
+    f.wire.ack = () => ack.promise;
+    f.store.commitAgentInputs(f.runId, [message]);
+    f.delivery.deliverConversationInput(f.runId);
+    const flight = f.group.agentInputFlight!;
     expect(flight).toBeDefined();
-    if (afterTurnEnd) emitAgentEvent({ type: 'turn-end' });
-    expect(receipt(record.id, message.id)?.deliveredAt).toBeUndefined();
-    expect(group.agentInputFlight).toBe(flight);
+    if (afterTurnEnd) f.turnEnd();
+    expect(f.receipt(message.id)?.deliveredAt).toBeUndefined();
+    expect(f.group.agentInputFlight).toBe(flight);
     ack.resolve();
     await flight.settled;
-    expect(receipt(record.id, message.id)?.deliveredAt).toBeDefined();
+    expect(f.receipt(message.id)?.deliveredAt).toBeDefined();
     // The message's flight is over. A later flight carries no input: after a turn end with no
     // read owed, the run may send its own follow-up prompt.
-    expect(group.agentInputFlight === flight).toBe(false);
-    expect(group.agentInputFlight?.inputIds ?? []).not.toContain(message.id);
+    expect(f.group.agentInputFlight === flight).toBe(false);
+    expect(f.group.agentInputFlight?.inputIds ?? []).not.toContain(message.id);
   });
 }
 
 // inputDelivery.humanInputAtTurnEnd: Squawk asks the session at turn end whether it still holds a
 // human message. A 'never-held' harness never does; 'held-when-late' and 'always-held' can, and
 // then the run keeps its session for the turn that message opens, under the held-input timer.
+// The turn settler arms the timer at a turn end (`run/turn-settler.test.ts`); the timer asks the
+// session itself.
 for (const humanInputAtTurnEnd of ['never-held', 'held-when-late', 'always-held'] as const) {
-  it(`humanInputAtTurnEnd '${humanInputAtTurnEnd}' decides whether a turn end keeps a held human message`, async () => {
+  it(`humanInputAtTurnEnd '${humanInputAtTurnEnd}' decides whether a turn end keeps a held human message`, () => {
     const delivery: InputDelivery = { ...STEER, humanInputAtTurnEnd };
-    const { group } = await openRun(delivery);
-    holdsInput = () => humanInputAtTurnEnd !== 'never-held';
+    const f = openRun(delivery);
+    f.wire.holds = humanInputAtTurnEnd !== 'never-held';
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      emitAgentEvent({ type: 'turn-end' });
+      f.turnEnd();
+      f.delivery.armHeldHumanInputTimer(f.runId, f.state);
       if (humanInputAtTurnEnd === 'never-held') {
-        expect(group.heldHumanInputTimer).toBeUndefined();
+        expect(f.group.heldHumanInputTimer).toBeUndefined();
       } else {
-        expect(group.heldHumanInputTimer).toBeDefined();
-        expect(group.heldHumanInputSince).toBeDefined();
+        expect(f.group.heldHumanInputTimer).toBeDefined();
+        expect(f.group.heldHumanInputSince).toBeDefined();
       }
     } finally { vi.useRealTimers(); }
   });

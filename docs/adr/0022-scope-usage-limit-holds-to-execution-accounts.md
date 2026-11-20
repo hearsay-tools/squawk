@@ -18,4 +18,4 @@ capacity rules. It is a fallback for lost wakeups, not a second scheduler.
 
 Implementation: [execution-account.ts](../../packages/cezar/src/workflows/execution-account.ts), [run-scheduling.ts](../../packages/cezar/src/workflows/run-scheduling.ts), [run-line.ts](../../packages/cezar/src/workflows/run/run-line.ts), [auto-resume.ts](../../packages/cezar/src/workflows/run/auto-resume.ts), [run.ts](../../packages/cezar/src/workflows/run.ts), [semaphore.ts](../../packages/cezar/src/workspace/semaphore.ts).
 
-Coverage: [execution-account.test.ts](../../packages/cezar/src/workflows/execution-account.test.ts), [auto-resume.test.ts](../../packages/cezar/src/workflows/auto-resume.test.ts).
+Coverage: [execution-account.test.ts](../../packages/cezar/src/workflows/execution-account.test.ts), [execution-account-engine.test.ts](../../packages/cezar/src/workflows/execution-account-engine.test.ts), [auto-resume.test.ts](../../packages/cezar/src/workflows/auto-resume.test.ts).
