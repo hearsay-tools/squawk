@@ -107,7 +107,8 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Line inside a function that only startup ran | All 97 (startup credited to all) | Boot spec |
 | Line inside a function that ran at startup and in some specs | All 97 | Boot spec + those specs |
 | Line inside a function that no spec ran | No spec | No spec (no change) |
-| Import or top-level line outside every recorded range | Every spec | Boot spec + specs that ran any function of the file |
+| Line in the module's top-level code, an import above the first recorded line, or a range across two functions | Every spec, or all 97 through startup credit | Boot spec + specs that ran any function of the file |
+| Any startup edit when no spec has complete evidence | Every spec | Every spec (no boot spec) |
 | File no process loaded, existed at the map commit | Every spec | No spec |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
 | Vitest setup function that ran | Every spec (static scan) | Every spec |

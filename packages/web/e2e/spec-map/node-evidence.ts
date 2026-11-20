@@ -85,19 +85,31 @@ export function scriptFunctions(script: CoverageScript, root: string): FunctionE
   return result
 }
 
-/** Read both per-spec server snapshots and task-owned mock-process coverage. */
-export function nodeEvidence(logs: string, spec: string, root: string): FunctionEvidence[] {
-  const dir = join(logs, basename(spec, '.e2e.ts'), 'node')
-  const local = existsSync(dir) ? readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter((name) => name.endsWith('.json')).map((name) => join(dir, name)) : []
-  const shared = existsSync(logs) ? readdirSync(logs)
-    .filter((name) => /^shared-startup-\d+\.json$/.test(name)).map((name) => join(logs, name)) : []
+function coverageFunctions(files: string[], root: string): FunctionEvidence[] {
   const result: FunctionEvidence[] = []
-  for (const file of [...local, ...shared]) {
+  for (const file of files) {
     const report = JSON.parse(readFileSync(file, 'utf8')) as { result?: CoverageScript[] }
     for (const script of report.result ?? []) result.push(...scriptFunctions(script, root))
   }
   return result
+}
+
+/**
+ * One spec's own evidence: the shared server's snapshots while the spec ran and the coverage of the
+ * mock processes it started. The shared server's startup is not in it: see `startupEvidence`.
+ */
+export function nodeEvidence(logs: string, spec: string, root: string): FunctionEvidence[] {
+  const dir = join(logs, basename(spec, '.e2e.ts'), 'node')
+  const files = existsSync(dir) ? readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((name) => name.endsWith('.json')).map((name) => join(dir, name)) : []
+  return coverageFunctions(files, root)
+}
+
+/** The functions the shared server ran while it booted, before any spec began. */
+export function startupEvidence(logs: string, root: string): FunctionEvidence[] {
+  const files = existsSync(logs) ? readdirSync(logs)
+    .filter((name) => /^shared-startup-\d+\.json$/.test(name)).map((name) => join(logs, name)) : []
+  return coverageFunctions(files, root).filter((fn) => fn.executed)
 }
 
 /** A missing process report leaves its owner's evidence incomplete, including abrupt SIGKILL. */

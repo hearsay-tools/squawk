@@ -60,7 +60,8 @@ it('rebuilds browser and server evidence from an allowlisted raw archive in a fr
     const map = JSON.parse(readFileSync(out, 'utf8'))
     expect(map.specs).toEqual([spec])
     expect(map.incomplete).toEqual([])
-    expect(map.functions['packages/cezar/src/a.ts']).toEqual([{ start: 1, end: 1, specs: [0] }])
+    // The shared server's boot ran the function; no spec ran it after the boot.
+    expect(map.functions['packages/cezar/src/a.ts']).toEqual([{ start: 1, end: 1, specs: [], startup: true }])
     expect(map.sources['packages/web/src/routes/task-thread/markdown.tsx']).toEqual([0])
     await expect(rebuildCapture([archive], target, out)).rejects.toThrow('fresh generated path')
   } finally { rmSync(root, { recursive: true, force: true }) }

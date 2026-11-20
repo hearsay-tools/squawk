@@ -239,7 +239,7 @@ describe('spec reach', () => {
     }
     const map = buildMap(run, new Map([['app.tsx', plain]]), 'f'.repeat(40), '2026-10-26T00:00:00.000Z')
     expect(map).toEqual({
-      version: 1,
+      version: 2,
       commit: 'f'.repeat(40),
       createdAt: '2026-10-26T00:00:00.000Z',
       specs: ['a.e2e.ts', 'b.e2e.ts', 'c.e2e.ts'],
@@ -258,7 +258,7 @@ describe('spec reach', () => {
 
 describe('map validation', () => {
   const map = (incomplete: string[], sources: Record<string, number[]>): SpecMap => ({
-    version: 1, commit: 'f'.repeat(40), createdAt: '', specs: ['a.e2e.ts', 'b.e2e.ts'], incomplete, sources,
+    version: 2, commit: 'f'.repeat(40), createdAt: '', specs: ['a.e2e.ts', 'b.e2e.ts'], incomplete, sources,
   })
   const expectation = [{ source: 'markdown.tsx', spec: 'b.e2e.ts' }]
 
@@ -368,7 +368,7 @@ describe('build-map commands', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     run('--expect', 'packages/web/src/a.tsx=packages/web/e2e/a.e2e.ts')
     expect(readJson(join(root, 'map.json'))).toMatchObject({
-      version: 1, commit, specs: ['packages/web/e2e/a.e2e.ts', 'packages/web/e2e/b.e2e.ts'], incomplete: [],
+      version: 2, commit, specs: ['packages/web/e2e/a.e2e.ts', 'packages/web/e2e/b.e2e.ts'], incomplete: [],
       sources: { 'packages/web/src/a.tsx': [0], 'packages/web/src/b.ts': [1] },
     })
     expect(() => run('--expect', 'packages/web/src/a.tsx=packages/web/e2e/b.e2e.ts')).toThrow(

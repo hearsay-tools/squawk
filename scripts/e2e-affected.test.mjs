@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import {
-  changedLines, classify, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
+  bootSpec, changedLines, classify, latestMap, main, mapProblem, parseOptions, readMap, referenceGraph, resolveLiteral, selectSpecs, stringLiterals,
 } from './e2e-affected.mjs';
 
 // hearsay-tools/cezarion#1816: npm run test:e2e:affected chooses browser specs from the spec map.
@@ -29,7 +29,7 @@ function tempDir(t) {
 }
 
 const sampleMap = (overrides = {}) => ({
-  version: 1, commit: COMMIT, createdAt: '2026-10-26T00:00:00.000Z',
+  version: 2, commit: COMMIT, createdAt: '2026-10-26T00:00:00.000Z',
   specs: [spec('artifact-project-links'), spec('chat-code-fence'), spec('smoke')],
   incomplete: [],
   sources: {
@@ -51,7 +51,7 @@ test('options: --plan, --map and --base are the selector’s own; everything els
 
 test('a map is refused when its shape is not the one the refresh writes', () => {
   assert.equal(mapProblem(sampleMap()), null);
-  assert.match(mapProblem({ ...sampleMap(), version: 2 }), /version/);
+  assert.match(mapProblem({ ...sampleMap(), version: 1 }), /version is not 2/);
   assert.match(mapProblem({ ...sampleMap(), commit: 'main' }), /commit/);
   assert.match(mapProblem({ ...sampleMap(), specs: ['smoke.e2e.ts'] }), /spec paths/);
   assert.match(mapProblem({ ...sampleMap(), incomplete: [spec('gone')] }), /incomplete/);
@@ -293,8 +293,54 @@ test('a mapped caller main changed keeps its evidenced specs when other drift li
   const across = { files: [file], changes: new Map([[file, [{ start: 45, end: 60 }]]]) };
   assert.deepEqual(selectSpecs({ files: ['packages/cezar/src/core/helper.ts'], map, graph, specFiles: map.specs, drift: across,
     changes: new Map([['packages/cezar/src/core/helper.ts', [{ start: 5, end: 5 }]]]) }).specs, [spec('artifact-project-links'), spec('smoke')]);
-  // The branch's own lines keep the strict rule.
-  assert.equal(selectSpecs({ files: [file], map, graph, specFiles: map.specs, changes: drift.changes }).all, true);
+  // The branch's own lines in top-level code select the boot spec and the specs that ran the file.
+  const own = selectSpecs({ files: [file], map, graph, specFiles: map.specs, changes: drift.changes, boot: spec('chat-code-fence') });
+  assert.equal(own.all, false);
+  assert.deepEqual(own.specs, [spec('chat-code-fence'), spec('smoke')]);
+});
+
+test('startup and top-level edits select the boot spec, not every spec', () => {
+  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 2.
+  const file = 'packages/cezar/src/ci-wait/tool-catalog.ts';
+  const map = sampleMap({ functions: { [file]: [
+    { start: 3, end: 60, specs: [], startup: true }, // the module's top-level code
+    { start: 10, end: 20, specs: [0], startup: true }, // ran at boot and in one spec
+    { start: 25, end: 30, specs: [], startup: true }, // ran only at boot
+    { start: 40, end: 50, specs: [1] }, // ran in one spec only
+    { start: 52, end: 55, specs: [] }, // never ran
+  ] } });
+  const pick = (ranges, boot = spec('smoke')) => selectSpecs({ files: [file], map, graph, specFiles: map.specs,
+    changes: new Map([[file, ranges]]), boot });
+  const at = (...ranges) => pick(ranges.map(([start, end = start]) => ({ start, end }))).specs;
+  assert.deepEqual(at([45]), [spec('chat-code-fence')]);
+  assert.deepEqual(at([53]), []);
+  assert.deepEqual(at([27]), [spec('smoke')]);
+  assert.deepEqual(at([15]), [spec('artifact-project-links'), spec('smoke')]);
+  // Top-level code, an import above the first recorded line, and a line past the last one:
+  // the boot spec and every spec that ran a function of the file.
+  const fileSpecs = [spec('artifact-project-links'), spec('chat-code-fence'), spec('smoke')];
+  assert.deepEqual(at([35]), fileSpecs);
+  assert.deepEqual(at([1]), fileSpecs);
+  assert.deepEqual(at([70]), fileSpecs);
+  // A range across two functions counts as top-level code.
+  assert.deepEqual(at([28, 42]), fileSpecs);
+  assert.match(pick([{ start: 27, end: 27 }]).lines[0].reason, /boot spec/);
+  // Without a spec with complete evidence there is no boot spec: every spec runs.
+  assert.equal(pick([{ start: 27, end: 27 }], null).all, true);
+  assert.equal(pick([{ start: 45, end: 45 }], null).all, false);
+  // Drift on main's boot-only code adds only the boot spec.
+  const drift = { files: [file], changes: new Map([[file, [{ start: 27, end: 27 }]]]) };
+  const helper = 'packages/cezar/src/core/helper.ts';
+  const withHelper = { ...map, functions: { ...map.functions, [helper]: [{ start: 1, end: 9, specs: [1] }] } };
+  assert.deepEqual(selectSpecs({ files: [helper], map: withHelper, graph, specFiles: map.specs, drift, boot: spec('smoke'),
+    changes: new Map([[helper, [{ start: 5, end: 5 }]]]) }).specs, [spec('chat-code-fence'), spec('smoke')]);
+});
+
+test('the boot spec is the shortest spec with complete evidence', () => {
+  const map = sampleMap({ incomplete: [spec('chat-code-fence')] });
+  assert.equal(bootSpec(map, { 'chat-code-fence.e2e.ts': 1, 'smoke.e2e.ts': 5, 'artifact-project-links.e2e.ts': 9 }), spec('smoke'));
+  assert.equal(bootSpec(map), spec('artifact-project-links'));
+  assert.equal(bootSpec(sampleMap({ incomplete: sampleMap().specs })), null);
 });
 
 test('specs added or changed on main after the map run when the branch touches mapped code', () => {
@@ -569,6 +615,8 @@ test('mock function edits select only specs that executed that function, plus in
 
 test('function maps reject malformed ranges instead of silently omitting specs', () => {
   assert.match(mapProblem(sampleMap({ functions: { 'mock.mjs': [{ start: 4, end: 2, specs: [] }] } })), /function ranges/);
+  assert.match(mapProblem(sampleMap({ functions: { 'mock.mjs': [{ start: 1, end: 2, specs: [], startup: false }] } })), /function ranges/);
+  assert.equal(mapProblem(sampleMap({ functions: { 'mock.mjs': [{ start: 1, end: 2, specs: [], startup: true }] } })), null);
 });
 
 

@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import type { Bundle } from './bundle.ts'
 import type { ModuleFacts } from './module-graph.ts'
 import { compiledFunctions } from './v8-log.ts'
-import { nodeCaptureComplete, nodeEvidence, type FunctionEvidence } from './node-evidence.ts'
+import { nodeCaptureComplete, nodeEvidence, startupEvidence, type FunctionEvidence } from './node-evidence.ts'
 
 /**
  * The spec map: each cockpit source file and the browser specs that run it
@@ -32,10 +32,16 @@ export interface SpecEvidence {
 export interface PartialMap {
   version: 1
   specs: Record<string, SpecEvidence>
+  /** Functions the shard's shared server ran while it booted, before any spec began. */
+  startup?: FunctionEvidence[]
 }
 
+/** One recorded server or mock function: the specs that ran it, and whether the shared server's boot ran it. */
+export interface FunctionEntry { start: number; end: number; specs: number[]; startup?: true }
+
 export interface SpecMap {
-  version: 1
+  /** 2: function `specs` hold only what ran while a spec ran; the shared server's boot is `startup`. */
+  version: 2
   /** The commit the evidence describes. The selector diffs the working tree against it. */
   commit: string
   createdAt: string
@@ -45,7 +51,7 @@ export interface SpecMap {
   incomplete: string[]
   /** Each repository file in the bundle and the specs that reach it; `[]` when none does. */
   sources: Record<string, number[]>
-  functions?: Record<string, Array<{ start: number; end: number; specs: number[] }>>
+  functions?: Record<string, FunctionEntry[]>
 }
 
 /** Spec statuses from a Vitest JSON report, keyed by repository path. */
@@ -90,7 +96,7 @@ export function partialMap(logDir: string, statuses: Map<string, SpecStatus>, bu
       loaded: [...new Set([...browser.loaded, ...functions.map((fn) => fn.source)])],
     }
   }
-  return { version: 1, specs }
+  return { version: 1, specs, ...(nodeLogs && repoRoot ? { startup: startupEvidence(nodeLogs, repoRoot) } : {}) }
 }
 
 /** Joins shard maps; a spec in two shards or a spec no shard ran is an error. */
@@ -162,6 +168,7 @@ export function buildMap(
   graph: Map<string, ModuleFacts>,
   commit: string,
   createdAt: string,
+  startup: FunctionEvidence[] = [],
 ): SpecMap {
   const specs = Object.keys(evidence).sort()
   const sources: Record<string, number[]> = {}
@@ -170,15 +177,20 @@ export function buildMap(
   }
   const incomplete = specs.filter((spec) => evidence[spec]?.status !== 'passed' || evidence[spec]?.nodeComplete === false || evidence[spec]?.executed.filter((file) => !file.startsWith('packages/cezar/')).length === 0)
   const functions: NonNullable<SpecMap['functions']> = {}
+  const entryOf = (fn: FunctionEvidence) => {
+    const entries = functions[fn.source] ??= []
+    let entry = entries.find((entry) => entry.start === fn.start && entry.end === fn.end)
+    if (!entry) entries.push(entry = { start: fn.start, end: fn.end, specs: [] })
+    return entry
+  }
   specs.forEach((spec, index) => {
     for (const fn of evidence[spec]?.functions ?? []) {
-      const entries = functions[fn.source] ??= []
-      let entry = entries.find((entry) => entry.start === fn.start && entry.end === fn.end)
-      if (!entry) entries.push(entry = { start: fn.start, end: fn.end, specs: [] })
+      const entry = entryOf(fn)
       if (fn.executed && !entry.specs.includes(index)) entry.specs.push(index)
     }
   })
-  return { version: 1, commit, createdAt, specs, incomplete, sources, ...(Object.keys(functions).length ? { functions } : {}) }
+  for (const fn of startup) entryOf(fn).startup = true
+  return { version: 2, commit, createdAt, specs, incomplete, sources, ...(Object.keys(functions).length ? { functions } : {}) }
 }
 
 export interface Expectation {
