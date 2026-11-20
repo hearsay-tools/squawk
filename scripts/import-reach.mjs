@@ -11,14 +11,16 @@
 // is all `type`, `vi.mock`, and, outside packages/web, a value import whose names are used only
 // as types (TypeScript removes it). Workspace package names resolve through each package.json
 // `exports`, and `paths` in a package's tsconfig.json resolve too.
+// A test file also loads the `setupFiles` of the nearest vitest.config that includes it.
 //
-// Costs: `tests` counts the test() and it() call sites in each test file that loads the module,
-// at least one per file, so a split-out file that no longer loads it lowers the cost. `ci-ms`
-// sums the per-file medians in .github/test-durations.json; files CI has not timed are counted.
+// Costs: `tests` counts the test() and it() call sites (it.each, it.runIf and other modifiers
+// included; .skip and .todo left out) in each test file that loads the module, at least one per
+// file, so a split-out file that no longer loads it lowers the cost. `ci-ms` sums the per-file
+// medians in .github/test-durations.json; files CI has not timed are counted.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, posix, resolve } from 'node:path';
+import { join, matchesGlob, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const { parse } = createRequire(import.meta.url)('@babel/parser');
@@ -30,7 +32,10 @@ const TYPE_NODE = /^TS(?!AsExpression|SatisfiesExpression|NonNullExpression|Type
 const SKIPPED_KEYS = new Set(['loc', 'extra', 'typeAnnotation', 'typeParameters', 'typeArguments', 'returnType', 'superTypeParameters', 'implements']);
 const TEST_CALLEES = new Set(['test', 'it']);
 const TEST_MODIFIERS = new Set(['only', 'concurrent', 'fails', 'sequential']);
-const TEST_TABLES = new Set(['each', 'for']);
+// A curried modifier returns the function that registers the test: it.each(rows)('name', fn).
+const TEST_CURRIED = new Set(['each', 'for', 'runIf', 'skipIf']);
+const SKIPPED_TESTS = new Set(['skip', 'todo']);
+const VITEST_CONFIG = /(?:^|\/)vitest\.config\.[cm]?[jt]s$/;
 
 /** Removes comments and trailing commas from tsconfig-style JSON, leaving strings intact. */
 export function parseJsonc(text) {
@@ -185,14 +190,27 @@ function loadSpecifier(node) {
   return null;
 }
 
-/** The test() and it() call sites, `.skip` and `.todo` left out; a table call counts once. */
+/** `it.concurrent.each` as ['it', 'concurrent', 'each']; null for any other callee shape. */
+function calleeChain(node) {
+  const props = [];
+  let n = node;
+  while (n.type === 'MemberExpression' && !n.computed && n.property.type === 'Identifier') {
+    props.unshift(n.property.name);
+    n = n.object;
+  }
+  return n.type === 'Identifier' ? [n.name, ...props] : null;
+}
+
+/** test() and it() call sites, with modifier chains and curried forms such as it.runIf(c)(…);
+ *  `.skip` and `.todo` are left out, and a table call counts once. */
 function isTestCall(node) {
   if (node.type !== 'CallExpression') return false;
-  const callee = node.callee;
-  if (callee.type === 'Identifier') return TEST_CALLEES.has(callee.name);
-  if (callee.type === 'MemberExpression') return TEST_CALLEES.has(callee.object.name) && TEST_MODIFIERS.has(callee.property.name);
-  const table = callee.type === 'CallExpression' ? callee.callee : null;
-  return table?.type === 'MemberExpression' && TEST_CALLEES.has(table.object.name) && TEST_TABLES.has(table.property.name);
+  const curried = node.callee.type === 'CallExpression';
+  const chain = calleeChain(curried ? node.callee.callee : node.callee);
+  if (!chain || !TEST_CALLEES.has(chain[0]) || chain.some((p) => SKIPPED_TESTS.has(p))) return false;
+  const modifiers = curried ? chain.slice(1, -1) : chain.slice(1);
+  if (curried && !TEST_CURRIED.has(chain.at(-1))) return false;
+  return modifiers.every((p) => TEST_MODIFIERS.has(p));
 }
 
 /** The runtime import specifiers of one source file, and its test call sites. */
@@ -219,16 +237,43 @@ export function scanSource(source, file) {
   return { specifiers, tests };
 }
 
-/** Reads the checkout and builds import edges lazily, one file at a time. */
+const stringsIn = (list) => [...(list ?? '').matchAll(/(['"`])([^'"`]+)\1/g)].map((m) => m[2]);
+
+/** Each Vitest config's setup files and include globs, read from its literal `setupFiles` and
+ *  `include` arrays. A setup file runs before every test file the config includes. */
+function vitestSetups(root, files, resolveSpec) {
+  const configs = [];
+  for (const config of [...files].filter((f) => VITEST_CONFIG.test(f))) {
+    const text = readFileSync(join(root, config), 'utf8');
+    const setups = stringsIn(/setupFiles:\s*\[([^\]]*)\]/.exec(text)?.[1]).map((spec) => resolveSpec(config, spec.startsWith('.') ? spec : `./${spec}`)).filter(Boolean);
+    if (setups.length === 0) continue;
+    const include = stringsIn(/include:\s*\[([^\]]*)\]/.exec(text)?.[1]);
+    configs.push({ dir: posix.dirname(config), setups, include });
+  }
+  return configs.sort((a, b) => b.dir.length - a.dir.length);
+}
+
+/** The setup files of the nearest Vitest config that includes `test`. */
+function setupsFor(configs, test) {
+  const config = configs.find((c) => c.dir === '.' || test.startsWith(`${c.dir}/`));
+  if (!config) return [];
+  const rel = config.dir === '.' ? test : test.slice(config.dir.length + 1);
+  return config.include.length === 0 || config.include.some((glob) => matchesGlob(rel, glob)) ? config.setups : [];
+}
+
+/** Reads the checkout and builds import edges lazily, one file at a time. A test file also
+ *  has an edge to each setup file of its Vitest config. */
 export function createGraph(root) {
   const files = listFiles(root);
   const resolveSpec = createResolver(files, workspacePackages(root, files));
+  const setups = vitestSetups(root, files, resolveSpec);
   const scans = new Map();
   const scan = (file) => {
     if (!scans.has(file)) {
       const source = CODE.test(file) && !/\.d\.[cm]?ts$/.test(file) ? readFileSync(join(root, file), 'utf8') : '';
       const { specifiers, tests } = source ? scanSource(source, file) : { specifiers: [], tests: 0 };
-      const edges = [...new Set(specifiers.map((spec) => resolveSpec(file, spec)).filter(Boolean))];
+      const setupEdges = TEST_FILE.test(file) ? setupsFor(setups, file) : [];
+      const edges = [...new Set([...specifiers.map((spec) => resolveSpec(file, spec)).filter(Boolean), ...setupEdges])];
       scans.set(file, { edges, tests });
     }
     return scans.get(file);

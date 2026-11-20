@@ -73,8 +73,10 @@ and the direct importers, ranked by the test files that load the module through 
 
 - **Edges.** It follows value imports, `export … from`, `import()` and `require()`. It leaves out
   type-only imports and `vi.mock`. Outside `packages/web` it also leaves out a value import that
-  the file uses only as a type.
-- **Costs.** `tests` counts `test()` and `it()` call sites, at least one per file, so moving tests
+  the file uses only as a type. A test file also loads the `setupFiles` of the nearest
+  `vitest.config` that includes it.
+- **Costs.** `tests` counts `test()` and `it()` call sites, with modifiers such as `it.each`
+  and `it.runIf` (`.skip` and `.todo` left out), at least one per file, so moving tests
   to a split-out file that does not load the module lowers it. `ci-ms` adds the medians in
   `.github/test-durations.json` and reports the test files that have no duration.
 

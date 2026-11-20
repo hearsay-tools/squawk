@@ -103,6 +103,39 @@ test('moving tests to a split-out file that does not load the module lowers the 
   assert.deepEqual([a.testFiles, a.tests], [1, 1]);
 });
 
+test('a test file loads the setup files of the nearest Vitest config that includes it', (t) => {
+  const root = checkout(t, {
+    'packages/a/vitest.config.ts': "export default { test: { include: ['src/**/*.test.ts'], setupFiles: ['./vitest.setup.ts'] } };\n",
+    'packages/a/vitest.setup.ts': "import { hub } from './src/hub.js';\nhub();\n",
+    'packages/a/src/hub.ts': 'export const hub = () => 1;\n',
+    'packages/a/src/plain.test.ts': "test('a', () => 1);\n",
+    'packages/a/test/node.test.ts': "test('a', () => 1);\n",
+    'packages/b/src/other.test.ts': "test('a', () => 1);\n",
+  });
+  assert.deepEqual(loaders(root, 'packages/a/src/hub.ts'), ['packages/a/src/plain.test.ts']);
+  assert.equal(main(['packages/a/src/hub.ts', '--files', 'packages/a/src/plain.test.ts'], root),
+    'packages/a/src/plain.test.ts: packages/a/src/plain.test.ts → packages/a/vitest.setup.ts → packages/a/src/hub.ts');
+});
+
+test('the tests cost counts modifier chains and curried registrations, and leaves out skip and todo', (t) => {
+  const root = checkout(t, {
+    'src/hub.ts': 'export const hub = 1;\n',
+    'src/a.test.ts': [
+      "import { hub } from './hub.js';",
+      "it.runIf(true)('a', () => hub);",
+      "it.skipIf(false)('b', () => hub);",
+      "it.concurrent.each([1])('c', () => hub);",
+      "test.only('d', () => hub);",
+      "it.concurrent('e', () => hub);",
+      "it.skip('f', () => hub);",
+      "test.todo('g');",
+      "it.concurrent.skip('h', () => hub);",
+      "test.describe('i', () => hub);",
+    ].join('\n'),
+  });
+  assert.equal(reachJson(root, 'src/hub.ts').tests, 5);
+});
+
 test('--files prints the shortest import chain to the module, or OK', (t) => {
   const root = checkout(t, {
     'src/hub.ts': 'export const hub = 1;\n',
