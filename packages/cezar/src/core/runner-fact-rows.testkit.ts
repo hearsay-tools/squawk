@@ -1,14 +1,12 @@
 import type { RunnerFacts } from './runner-facts.ts';
-import { CLAUDE_FACTS } from '../runners/claude/facts.ts';
-import { CODEX_FACTS } from '../runners/codex/facts.ts';
-import { OPENCODE_FACTS } from '../runners/opencode/facts.ts';
-import { PI_FACTS } from '../runners/pi/facts.ts';
-import { OMP_FACTS } from '../runners/omp/facts.ts';
-import { CLAUDE_EXTRA_TOOLS } from '../runners/claude/extra-tools.ts';
-import { CODEX_EXTRA_TOOLS } from '../runners/codex/extra-tools.ts';
-import { OPENCODE_EXTRA_TOOLS } from '../runners/opencode/extra-tools.ts';
-import { PI_EXTRA_TOOLS } from '../runners/pi/extra-tools.ts';
-import { OMP_EXTRA_TOOLS } from '../runners/omp/extra-tools.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+
+declare global {
+  interface ImportMeta {
+    /** Vite's static glob import: Vitest compiles it into one import per matched file. */
+    glob<T>(pattern: string, options: { eager: true }): Record<string, T>;
+  }
+}
 
 // Every built-in runner's facts, read from the data-only `runners/<id>/facts.ts` files, for the
 // static test tables that span every runner: the parity exemptions and the rows they pick. A
@@ -16,13 +14,25 @@ import { OMP_EXTRA_TOOLS } from '../runners/omp/extra-tools.ts';
 // runner, or it would drop rows. Importing these files loads no adapter, so the closure guard
 // (`runner-closure.test.ts`) holds. Engine reads in tests go through the registry.
 // `runner-fact-rows.test.ts` holds these rows to the registered definitions.
-const ROWS: Readonly<Record<string, RunnerFacts>> = {
-  claude: CLAUDE_FACTS, codex: CODEX_FACTS, opencode: OPENCODE_FACTS, pi: PI_FACTS, omp: OMP_FACTS,
-};
+const FACT_MODULES = import.meta.glob<Readonly<Record<string, RunnerFacts>>>('../runners/*/facts.ts', { eager: true });
+const EXTRA_TOOL_MODULES = import.meta.glob<Readonly<Record<string, readonly string[]>>>('../runners/*/extra-tools.ts', { eager: true });
 
-const EXTRA_TOOL_ROWS: Readonly<Record<string, readonly string[]>> = {
-  claude: CLAUDE_EXTRA_TOOLS, codex: CODEX_EXTRA_TOOLS, opencode: OPENCODE_EXTRA_TOOLS, pi: PI_EXTRA_TOOLS, omp: OMP_EXTRA_TOOLS,
-};
+/** The one value each built-in runner's `runners/<id>/<file>` exports, by runner id, in
+ *  `BUILT_IN_RUNNER_IDS` order. */
+function rowsOf<T>(modules: Record<string, Readonly<Record<string, T>>>, file: string): Readonly<Record<string, T>> {
+  return Object.fromEntries(BUILT_IN_RUNNER_IDS.map(id => {
+    const path = `../runners/${id}/${file}`;
+    const module = modules[path];
+    if (!module) throw new Error(`Runner ${id} has no ${path}.`);
+    const values = Object.values(module);
+    if (values.length !== 1) throw new Error(`${path} must export one value; it exports ${values.length}.`);
+    return [id, values[0]!];
+  }));
+}
+
+const ROWS = rowsOf(FACT_MODULES, 'facts.ts');
+
+const EXTRA_TOOL_ROWS = rowsOf(EXTRA_TOOL_MODULES, 'extra-tools.ts');
 
 /** Every built-in runner's `extraTools`, by runner id, for a table that crosses runners. */
 export function extraToolRows(): Readonly<Record<string, readonly string[]>> {
