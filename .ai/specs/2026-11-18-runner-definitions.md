@@ -326,7 +326,8 @@ As built (D2a to D2f), no test or lint list names the built-in runners by hand:
   fixtures.
 - A built-in runner's mock script must import `mock-scenario.mjs`
   (`cez/mock-scenario-boundary`).
-- The parity test kits branch on a runner's declared facts and data, never on its id (D2f). The
+- The parity test kits branch on a runner's declared facts and data in the cells D2f migrated;
+  D1 and R35 still branch on a runner id (hearsay-tools/squawk#3998). The
   mock part gained `scenarioEnv` (the env of a scenario that acts before the first prompt),
   `sessionStore`, `selfSettledApprovalEcho` and `missingSession`; the golden gained `askKinds`
   (R26, D2d), `toolGrant`, `skillWarningNotes`, `postParkChildFrames`, `rejectedAgentInput`,
@@ -467,12 +468,17 @@ runner does.
   `runners/opencode/` with its mock scripts, shipped scripts and skill data under a new id. Test
   failures fall in three classes: A, the runner lacks a piece that a real runner adds in its own
   folder; B, a list outside the four places that the runner must edit; C, anything else.
-  Criterion 7 passes when the complete run has no B failure and the four-places run has only A
-  failures. On `e9d059ab6` the four-places run gave 26 A, 1 B and 0 C.
+  Criterion 7 passes when both runs pass the typecheck, every printed test file passes in the
+  complete run (the copy is complete, so no A; a C is a fault of the script), and the
+  four-places run fails only with A failures plus `FACT_VALUE_TESTS`. On `e9d059ab6` the four-places run gave 26 A, 1 B and 0 C.
   The B was `FACT_VALUE_TESTS`, which the planner ruled by design: it is keyed by fact value, not
   by runner, and a new value of a turn-path fact (`TURN_PATH_FACTS`) needs a shared-code unit
-  test (§10). Exit run:
-  CRITERION7_PLACEHOLDER.
+  test (§10). Exit run, on `main` at `b4820bb08` with
+  `.ai/scripts/simulate-sixth-runner.mjs`, both modes: criterion 7 passes. `--complete`
+  (`hexacode`, a copy of `runners/opencode/`): the typecheck passes and all 133 roster test files
+  pass; no B failure. Four places (`sixth`): the typecheck passes and 77 of 104 files pass; the 27
+  failures are 26 A failures, each naming a missing piece inside `runners/sixth/` or its scripts,
+  and `FACT_VALUE_TESTS` (`core/parity-classes.test.ts`), by design. No B and no C failure.
 
 ### Test selection
 

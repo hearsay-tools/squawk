@@ -72,16 +72,19 @@ Rules:
   `facts.nativeAsk` is not `answerable`, and `scenarioEnv`, `sessionStore`,
   `selfSettledApprovalEcho`, `missingSession`). It also holds `session-wire.testkit.ts`,
   `__fixtures__/golden.json` and the other fixtures, and the per-runner parity files. The guard
-  tests and the parity test kits read these from the folders, branch on declared facts and data,
-  and name a missing piece.
+  tests read these from the folders and name a missing piece. The parity test kits branch on
+  declared facts and data, except the cells that still branch on a runner id (D1, R35;
+  hearsay-tools/squawk#3998).
 - A runner that declares a value of a turn-path fact that no runner declared before also adds a
   shared-code unit test for that value to `FACT_VALUE_TESTS`. That table is keyed by value, not
   by runner.
 - Two proofs hold it. The fixture runner (`runners/fixture/`, test files only) registers in its
   test, runs a task and passes the parity kit. `.ai/scripts/simulate-sixth-runner.mjs` adds a
-  runner to a scratch clone: by default an incomplete one in the four places, whose tests may
-  fail only by naming a missing piece; with `--complete`, a copy of a real runner's folder and
-  scripts under a new id, whose tests pass. The spec's implementation record has the exit run.
+  runner to a scratch clone. By default it adds an incomplete one in the four places: the
+  typecheck passes, and the printed test files fail only by naming a missing piece in the
+  runner's folder, plus `FACT_VALUE_TESTS`. With `--complete` it copies a real runner's folder and
+  scripts under a new id: the typecheck passes and every printed test file passes. The spec's
+  implementation record has the exit run.
   Cells that a new runner skips because they still run on one named runner are
   hearsay-tools/squawk#3998.
 - The compiler does not catch a misspelled runner id in core code. The registry check covers

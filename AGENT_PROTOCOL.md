@@ -348,11 +348,14 @@ What a new runner's folder holds:
   `runner-skill-trigger-<id>-*`).
 
 The guard tests read these from the folder and fail with a message that names a missing piece.
-The parity test kits branch on a runner's declared facts and data, never on its id.
-`.ai/scripts/simulate-sixth-runner.mjs` proves the list in a scratch clone, and its header gives
-the exit check. Its default mode adds an incomplete runner in the four places; the guard tests
-must fail only by naming a missing piece. `--complete` copies a real runner's folder and scripts
-under a new id; every printed test passes. An outside runner
+The parity test kits branch on a runner's declared facts and data in the cells that
+hearsay-tools/squawk#3997 migrated; the cells that still branch on a runner id (D1, R35) are
+hearsay-tools/squawk#3998. `.ai/scripts/simulate-sixth-runner.mjs` proves the list in a scratch
+clone, and its header gives the exit check. Its default mode adds an incomplete runner in the four
+places: the typecheck passes, and the printed test files fail only by naming a missing piece in
+the runner's folder, plus `FACT_VALUE_TESTS` for a new turn-path fact value. `--complete` copies a
+real runner's folder and scripts under a new id: the typecheck passes and every printed test file
+passes. An outside runner
 (roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the smallest example: its
 test registers it, runs a task and runs the parity kit on it. The items below say what goes in
 the folder, and the rules that the guards do not force, or force only in part. The item numbers
