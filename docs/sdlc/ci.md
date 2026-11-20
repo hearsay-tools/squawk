@@ -810,9 +810,9 @@ To reproduce a report locally from a downloaded coverage artifact, see the skill
 `squeal-export`, `squeal-publish` and `squeal-ref-check` are normal, non-required
 shared-results jobs. They are not trials.
 
-Merge groups publish their Vitest and node:test results for Squeal, so a new worktree at a
-main commit can import those passes instead of running the same test files again
-(hearsay-tools/squeal spec 018, D8, D9, D13, D17 and, for node:test, D22 to D29).
+Merge groups publish their Vitest results for Squeal, so a new worktree at a main commit
+can import those passes instead of running the same test files again
+(hearsay-tools/squeal spec 018, D8, D9, D13 and D17).
 
 - Every job that runs Squeal sets it up with Squeal's GitHub Action after its Node setup:
   `uses: hearsay-tools/squeal/ci@<commit> # v<version>`, pinned to a full commit SHA like
@@ -826,27 +826,13 @@ main commit can import those passes instead of running the same test files again
   are the shard's own. The part files upload as `squeal-parts-shard-N`, kept 3 days. When
   Squeal cannot run, the shard runs the plain command with a warning and uploads no parts.
   Other events run the command exactly as before.
-- In a merge group, the `Record node:test for Squeal` job (`squeal-node-test`) runs the
-  package and script unit suites once more, on the `.node-version` developers use, each
-  under `squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/<suite>" --`. Each
-  command is its package script's command with Squeal's node:test reporter added beside the
-  default one: `--test-reporter=spec --test-reporter-destination=stdout
-  --test-reporter="$SQUEAL_NODE_TEST_REPORTER" --test-reporter-destination=stderr`. Squeal's
-  action sets `SQUEAL_NODE_TEST_REPORTER`, also when Squeal cannot run; the reporter then
-  writes nothing. The flags before `--test` must stay equal to the `nodeTest` entries'
-  `argv` in `squeal.config.json`, and neither this job nor the export job sets
-  `NODE_OPTIONS`: `squeal ci export` leaves out a suite whose Node, flags or `NODE_OPTIONS`
-  differ (spec 018 D26). The parts upload as `squeal-parts-node-test`, kept 3 days, also
-  when tests failed (the export leaves out failed files). The `unit-tests` job on Node
-  24.21.0 stays as it is; this job is not in `verify.needs` or the merge-queue roster.
 - A shard that reruns after a failed first run (§ Rerun of a failed queue shard) records
   the rerun into `$RUNNER_TEMP/squeal-parts-rerun`, and only those parts upload. Each shard
   so has one complete part, which `squeal ci export` needs: it refuses two parts for one
   shard or one file.
 - The `Export Squeal results` job (`squeal-export`) runs after all eight shards pass in a
   merge group, with `contents: read` and no stored credentials. It checks out
-  `merge_group.head_sha`, installs dependencies, downloads the shards' parts and, when
-  `squeal-node-test` uploaded them, the node:test parts, runs
+  `merge_group.head_sha`, installs dependencies, downloads the parts, runs
   `squeal ci export` and uploads `squeal-results.json.gz` as the `squeal-results` artifact,
   kept 3 days. It runs the queued code, so it never holds write access. An export that
   writes no file warns and exits 0; the `Check for the Squeal results file` step then
