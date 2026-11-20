@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
-import { RUNNER_IDS } from '@/test/runners.testkit'
+import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { applyProviderStatusRow } from '@/lib/provider-status'
 import { workspaceQueryKeys } from '@/api/queries'
@@ -87,7 +87,7 @@ function serve({
 }
 
 function renderSettings() {
-  const client = createQueryClient()
+  const client = seedRunners(createQueryClient())
   client.setDefaultOptions({
     queries: { ...client.getDefaultOptions().queries, retry: false },
   })
