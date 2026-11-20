@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { get } from 'node:http';
@@ -7,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { createRunner } from '../core/runner-registry.ts';
+import { createRunner, registerRunner } from '../core/runner-registry.ts';
 import type { DelegationController } from '../delegation/provision.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
@@ -18,6 +17,8 @@ import { clearProjectProbeCache, listProjects, registerProject } from '../worksp
 import { ProjectContexts } from './project-context.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { startServer } from './start-server.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 
 // bound: a hang guard only. Each awaited promise is the product's own signal and settles at once when it works.

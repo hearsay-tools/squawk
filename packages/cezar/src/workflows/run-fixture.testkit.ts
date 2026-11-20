@@ -1,5 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

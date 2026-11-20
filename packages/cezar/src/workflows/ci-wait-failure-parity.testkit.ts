@@ -8,11 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiWaitResult, Wait } from '@open-mercato/cezar-contract';
 
 import { CI_FAILURE_GROUPS, ciFailureRowId, type CiFailureGroup, type CiFailureRow } from './ci-wait-failure-rows.testkit.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
 import { acceptedWorkerIdentitySchema, workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { planOwnedWorkspace } from '../delegation/workspace.ts';
-import { eventCheckpoint, manager, restart, root, semaphore, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait.testkit.ts';
+import { eventCheckpoint, manager, restart, root, semaphore, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef } from './types.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';

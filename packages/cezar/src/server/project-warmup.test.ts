@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -11,8 +10,10 @@ import type { RunManager } from '../workflows/run.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { ProjectContexts, sweepRegisteredPreviewLeftovers } from './project-context.ts';
 import { startServer } from './start-server.ts';
-import { createRunner } from '../core/runner-registry.ts';
+import { createRunner, registerRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 
 // The post-listen chain reads the registry, then sweeps preview leftovers, then decides on the

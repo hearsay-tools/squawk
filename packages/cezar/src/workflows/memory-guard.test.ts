@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { AUTONOMOUS_NUDGE, NO_WAIT_NUDGE_NOTE } from './run.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

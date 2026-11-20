@@ -7,7 +7,16 @@ import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { factsAtDone } from './run/done-accepted.ts';
-import { fixtureWork } from './fixture-cleanup.testkit.ts';
+import { fixtureWork } from './fixture-manager.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
 
 const f = setupMonitoringFixture();
 let emit: (event: AgentEvent) => void;

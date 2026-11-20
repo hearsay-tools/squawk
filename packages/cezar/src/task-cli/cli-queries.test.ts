@@ -5,6 +5,9 @@ import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-
 import { apiRunSchema, runStatusSchema } from '@open-mercato/cezar-contract/runs';
 import { describe, expect, it, vi } from 'vitest';
 import { taskCliFixture } from './cli.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /** The agent's open timer: the monitoring park since hearsay-tools/cezarion#1301. */
 const openTimer = () => ({

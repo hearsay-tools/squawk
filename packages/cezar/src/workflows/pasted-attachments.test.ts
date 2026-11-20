@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';

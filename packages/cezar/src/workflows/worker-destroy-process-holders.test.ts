@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';

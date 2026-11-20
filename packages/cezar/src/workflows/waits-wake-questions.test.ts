@@ -1,9 +1,10 @@
+import '../core/created-runners.testkit.ts';
 import { WAIT_KIND, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
-import { manager, root, semaphore, store, until, work } from './worker-wait.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { manager, root, semaphore, store, until, work } from './worker-wait-core.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from './run/constants.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
@@ -27,6 +28,11 @@ import {
   questionBesideCi,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 // hearsay-tools/cezarion#1233: a resolved wait beside a pending question, and which parks hold a slot.
 // Shared setup: waits-wake.testkit.ts.

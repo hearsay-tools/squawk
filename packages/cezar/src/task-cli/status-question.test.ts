@@ -12,6 +12,9 @@ import type { RunStore } from '../runs/store.ts';
 import { startTestCockpit, type TestCockpit } from './cockpit.testkit.ts';
 import { runTaskCommand, type TaskIo } from './cli.ts';
 import type { Cockpit } from './http.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /**
  * What `cez task status` prints for a pending question (hearsay-tools/cezarion#1808). The

@@ -6,10 +6,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runsOn } from '../core/parity-classes.testkit.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { handoffPath } from '../handoff.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
-import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
+import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, type WorkflowDef } from './types.ts';
 
 // hearsay-tools/cezarion#1584: every cezar-managed launch opens with the run's own handoff and

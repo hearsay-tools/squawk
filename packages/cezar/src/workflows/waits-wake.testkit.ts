@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import type { SquawkWaitRequestInput, CiWait, CiWaitResult, Wait } from '@open-mercato/cezar-contract';
 
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
-import { manager, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait.testkit.ts';
+import { manager, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait-core.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { fireCapturedTimer, timed, type TimedWait } from './waits.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';

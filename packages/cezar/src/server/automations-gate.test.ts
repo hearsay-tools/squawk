@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -17,7 +16,6 @@ import { CompletionActionCoordinator } from './completion-actions.ts';
 import { startServer } from './start-server.ts';
 import { createApp, type ServerDeps } from './server.ts';
 
-// The server reads every registered runner (provider lists, login probes); register the built-ins.
 import * as git from './git.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 
@@ -28,6 +26,9 @@ vi.mock('./project-context.ts', async (original) => {
   return { ...actual, sweepRegisteredPreviewLeftovers: vi.fn(actual.sweepRegisteredPreviewLeftovers) };
 });
 import { apiRequest } from './loopback-request.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /**
  * Automations are on by default: only `CEZ_AUTOMATIONS=0` turns them off.

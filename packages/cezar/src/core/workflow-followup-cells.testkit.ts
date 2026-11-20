@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { promptFor, waitFor } from './harness-parity.testkit.ts';
+import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { workflowFollowup } from './workflow-followup-rows.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 
 const KEEP = 'followup-486-keep';

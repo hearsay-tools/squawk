@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -6,7 +7,6 @@ import { runnerHook, setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
 import { ToolActivityTracker } from '../activity/tool-activity.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 registerRunner(claudeRunner);
 

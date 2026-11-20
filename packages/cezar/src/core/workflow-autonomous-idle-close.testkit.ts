@@ -21,10 +21,10 @@ import { IDLE_TIMEOUT_MS } from '../workflows/run.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 
-import { promptFor, waitFor } from './harness-parity.testkit.ts';
+import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 
 /** The human follow-up whose prompt acknowledgement the mock withholds. */
 const HELD_ACK = 'a13-held-human-ack';

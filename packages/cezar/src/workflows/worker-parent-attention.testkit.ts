@@ -3,13 +3,13 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { withHeldAck, withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
 import { attentionFields } from '../task-cli/projections.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { monitoringWakeOf } from './waits.testkit.ts';
-import { delegatingParent, deliveredBesideWorkerMessages, fixtureUpdateRun, manager, parent, queuedWake, register, store, terminal, worker, until, semaphore, useWorkerWaitFixture, waitOf, workerEntryOf } from './worker-wait.testkit.ts';
+import { delegatingParent, deliveredBesideWorkerMessages, fixtureUpdateRun, manager, parent, queuedWake, register, store, terminal, worker, until, semaphore, useWorkerWaitFixture, waitOf, workerEntryOf } from './worker-wait-core.testkit.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { ATTENTION_GROUPS, type AttentionGroup, type AttentionRow } from './worker-parent-attention-rows.testkit.ts';
 

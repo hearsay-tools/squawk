@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GROUPS } from './ci-wait-rerun-rows.testkit.ts';
 import { GithubCiClient } from '../ci-wait/github.ts';
-import { manager, store, root, restart, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, store, root, restart, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 

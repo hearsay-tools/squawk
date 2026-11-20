@@ -1,3 +1,4 @@
+import '../runners/claude/claude-runner.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

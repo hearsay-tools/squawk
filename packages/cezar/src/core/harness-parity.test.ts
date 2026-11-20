@@ -1,3 +1,4 @@
+import './every-runner.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';

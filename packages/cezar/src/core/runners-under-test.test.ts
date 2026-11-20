@@ -86,6 +86,20 @@ describe('runner kit precedence', () => {
     for (const backend of ['claude', 'claude-cli', undefined] as const) expect((await factory(backend)).backend).toBe('claude');
   });
 
+  it('created-runners loaded after the runner hook fails at import instead of replacing the hook', async () => {
+    const kit = await freshRunnersKit();
+    kit.useRunnerHook(kit.noRunners);
+    await expect(import('./created-runners.testkit.ts')).rejects.toThrow('loaded after runner-hook.testkit.ts');
+    expect(await chosenKit(kit.runnersUnderTest())).toBe('no-runner');
+  });
+
+  it('created-runners loaded before the runner hook leaves the hook as the choice', async () => {
+    const kit = await freshRunnersKit();
+    await import('./created-runners.testkit.ts');
+    kit.useRunnerHook(kit.noRunners);
+    expect(await chosenKit(kit.runnersUnderTest())).toBe('no-runner');
+  });
+
   it('no kit leaves the test file without a factory', async () => {
     const kit = await freshRunnersKit();
     expect(() => kit.runnersUnderTest()).toThrow('No runner factory for this test file');

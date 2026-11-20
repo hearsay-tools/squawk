@@ -9,14 +9,14 @@ import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GROUPS } from './worker-reboot-rows.testkit.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { groupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
-import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 
 export function registerGroup(settleVia: keyof typeof GROUPS) {

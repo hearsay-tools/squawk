@@ -5,8 +5,8 @@ import { readPid, requirePid } from '../pid-file.testkit.ts';
 import { join } from 'node:path';
 import { afterEach, expect, vi } from 'vitest';
 import * as sessionProcess from './session-process.ts';
-import { driveSeam, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { workflowDefSchema } from '../workflows/types.ts';
 
 

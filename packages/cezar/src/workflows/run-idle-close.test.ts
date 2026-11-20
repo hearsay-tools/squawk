@@ -1,8 +1,8 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';

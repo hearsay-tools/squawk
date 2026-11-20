@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -8,7 +9,6 @@ import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-run
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 registerRunner(claudeRunner);
 

@@ -1,7 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { createFixtureManager, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager, fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { seedSettlementRun } from './run-settlement.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
