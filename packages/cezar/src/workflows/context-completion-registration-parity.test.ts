@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { runsOn, type ParityFamilyName } from '../core/parity-classes.testkit.ts';
 import { registrationGroups } from '../core/registration-coverage.testkit.ts';
 import { describeSessionContext, SESSION_CONTEXT_GROUPS } from './session-context-cells.testkit.ts';
@@ -25,7 +25,7 @@ function registeredGroups(callee: string, catalog: string, known: string[]): str
 
 function expectCells(names: string[], rows: string[], family: ParityFamilyName) {
   const actual = names.map(name => name.split(' ').slice(0, 2).join(' ')).sort();
-  const expected = RUNNER_IDS.flatMap(runner => rows.filter(row => runsOn(family, row, runner)).map(row => `${runner} ${row}`)).sort();
+  const expected = BUILT_IN_RUNNER_IDS.flatMap(runner => rows.filter(row => runsOn(family, row, runner)).map(row => `${runner} ${row}`)).sort();
   expect(actual).toEqual(expected);
 }
 

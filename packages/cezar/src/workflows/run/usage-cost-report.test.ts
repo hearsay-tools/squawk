@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import { RunStore } from '../../runs/store.ts';
 import { createActiveRun } from '../active-run.ts';
 import { beginUsageInvocation, recordReportedCost } from './usage-accounting.ts';
@@ -31,7 +31,7 @@ describe('reported cost follows the runner\'s declared cost report', () => {
   });
   afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
 
-  function report(runId: string, stepId: string, state: ReturnType<typeof createActiveRun>, backend: RunnerId, usd: number) {
+  function report(runId: string, stepId: string, state: ReturnType<typeof createActiveRun>, backend: string, usd: number) {
     store.appendEvent(runId, { type: 'cost', stepId, usd });
     recordReportedCost(store, runId, stepId, state, backend, usd);
   }

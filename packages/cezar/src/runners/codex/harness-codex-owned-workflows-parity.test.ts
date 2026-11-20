@@ -5,7 +5,7 @@ import { onlyRunners, useRunners } from '../../core/runners-under-test.testkit.t
 import { codexRunner } from './definition.ts';
 import { opencodeRunner } from '../opencode/definition.ts';
 
-// R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
+// R14 runs a mixed-runner chain: its second step is the next runner in BUILT_IN_RUNNER_IDS.
 useRunners(onlyRunners([[codexRunner, () => new CodexAppServerRunner()], [opencodeRunner, () => new OpencodeServerRunner()]]));
 
 describeHarnessParity({ runner: codexRunner, part: 'owned-workflows' });

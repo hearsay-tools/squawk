@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { TOOL_GRANT_KINDS, type AgentEvent, type RunnerId, type ToolGrant } from './agent-runner.ts';
+import type { AgentEvent, ToolGrant } from './agent-runner.ts';
+import { TOOL_GRANT_KINDS } from './agent-runner-values.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
 import { extraToolRows } from './runner-fact-rows.testkit.ts';
@@ -29,15 +30,15 @@ export type ToolGrantCaseId =
 export type ToolGrantCase = {
   readonly id: ToolGrantCaseId;
   readonly name: string;
-  readonly grant: (backend: RunnerId) => ToolGrant;
+  readonly grant: (backend: string) => ToolGrant;
   /** omp refuses an MCP name its settings do not register; the mock reads them from here. */
   readonly env?: Readonly<Record<string, string>>;
 };
 
-const stepDefault = (backend: RunnerId): string[] => allowedToolsForStep(undefined, backend);
+const stepDefault = (backend: string): string[] => allowedToolsForStep(undefined, backend);
 /** Another runner's step default, from its data file: a per-runner test registers only its own
  *  runner, so the registry cannot answer for the other one. */
-const otherStepDefault = (backend: RunnerId): string[] => [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows()[backend]];
+const otherStepDefault = (backend: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows()[backend]!];
 
 export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   { id: 'unset', name: 'TG1 an unset grant', grant: () => ({ kind: 'unset' }) },
@@ -71,7 +72,7 @@ const CLAUDE_SQUAWK = SQUAWK_TOOLS.map(tool => `mcp__${DESCRIPTOR.name}__${tool}
 const CEZAR = SQUAWK_TOOLS.join(',');
 
 /** The flags that carry tool access on each wire that has them; `--extension` keeps its basename. */
-const TOOL_FLAGS: Partial<Record<RunnerId, { readonly values: readonly string[]; readonly switches: readonly string[] }>> = {
+const TOOL_FLAGS: Partial<Record<string, { readonly values: readonly string[]; readonly switches: readonly string[] }>> = {
   claude: { values: ['--tools', '--allowedTools', '--disallowedTools'], switches: [] },
   pi: { values: ['--extension', '--tools', '--cezar-builtin-tools', '--exclude-tools'], switches: ['--no-tools', '--no-builtin-tools'] },
   omp: { values: ['--extension', '--tools'], switches: ['--no-tools'] },
@@ -90,7 +91,7 @@ type Expected = readonly string[] | typeof SAME_AS_UNSET;
 const IGNORED = Object.fromEntries(TOOL_GRANT_CASES.map(entry => [entry.id, SAME_AS_UNSET])) as Record<ToolGrantCaseId, Expected>;
 
 /** Today's flags. A gap a case shows stays pinned until its issue changes it. */
-const EXPECTED: Readonly<Record<RunnerId, Readonly<Record<ToolGrantCaseId, Expected>>>> = {
+const EXPECTED: Readonly<Record<string, Readonly<Record<ToolGrantCaseId, Expected>>>> = {
   claude: {
     'unset': [],
     'step-default': ['--allowedTools', `${CLAUDE_DEFAULT},${CLAUDE_SQUAWK}`],
@@ -135,7 +136,7 @@ const EXPECTED: Readonly<Record<RunnerId, Readonly<Record<ToolGrantCaseId, Expec
   opencode: IGNORED,
 };
 
-function toolFlags(backend: RunnerId, argv: readonly string[]): string[] {
+function toolFlags(backend: string, argv: readonly string[]): string[] {
   const flags = TOOL_FLAGS[backend];
   if (!flags) return [];
   return argv.flatMap((arg, index) => {
@@ -154,14 +155,14 @@ function readRecording(dir: string, name: string): string[] {
   });
 }
 
-export function describeToolGrantParity(scope: RunnerId | 'once'): void {
+export function describeToolGrantParity(scope: string | 'once'): void {
   if (scope === 'once') {
     describe('harness parity — tool-grant cases', () => {
       it('the cases cover every ToolGrant kind', () => {
         expect(new Set(TOOL_GRANT_CASES.map(entry => entry.grant('claude').kind))).toEqual(new Set(TOOL_GRANT_KINDS));
       });
       it('runs each expected case exactly once', () => {
-        expect(TOOL_GRANT_CASES.map(entry => entry.id).sort()).toEqual(Object.keys(EXPECTED.claude).sort());
+        expect(TOOL_GRANT_CASES.map(entry => entry.id).sort()).toEqual(Object.keys(EXPECTED.claude!).sort());
       });
     });
     return;
@@ -194,7 +195,7 @@ export function describeToolGrantParity(scope: RunnerId | 'once'): void {
         expect(errors.get(entry.id)).toEqual([]);
         const recording = recordings.get(entry.id) ?? [];
         expect(recording.length).toBeGreaterThan(0);
-        const expected = EXPECTED[backend][entry.id];
+        const expected = EXPECTED[backend]![entry.id];
         if (expected === SAME_AS_UNSET) {
           expect(recording).toEqual(recordings.get('unset'));
         } else {

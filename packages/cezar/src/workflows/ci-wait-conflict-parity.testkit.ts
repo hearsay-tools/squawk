@@ -69,7 +69,7 @@ describe('native conflict observation durability and wake parity', { timeout: 35
     const cell = CONFLICT_ROWS[mode];
     it(`${runner} ${cell} delivers one committed conflict observation in ${mode} mode`, async () => {
       process.env.CEZ_DRY_RUN = '0';
-      process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+      process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
       process.env.CEZ_MOCK_ARGS_FILE = join(root, 'args');
       process.env.CEZ_MOCK_STDIN_FILE = join(root, 'stdin');
       const gate = join(root, 'release-checks'), log = join(root, 'gh-queries.ndjson');
@@ -77,12 +77,12 @@ describe('native conflict observation durability and wake parity', { timeout: 35
         args: [fileURLToPath(new URL('./ci-conflict-gh.testkit.mjs', import.meta.url)), gate, log] } });
       const supervisor = new CiWatcherSupervisor({ github: resources.github });
       resources.supervisor = supervisor;
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       if (mode === 'continued') {
         [...work.liveSessions].find(session => session.open)!.end();
         await until(() => !manager.isActive(run.id));
-        expect(manager.continueRun(run.id, { text: HARNESS_ADAPTERS[runner].scenarios.baseline! }).ok).toBe(true);
+        expect(manager.continueRun(run.id, { text: HARNESS_ADAPTERS[runner]!.scenarios.baseline! }).ok).toBe(true);
         await until(() => store.getRun(run.id)?.status === 'waiting' && manager.isActive(run.id) && [...work.liveSessions].some(session => session.open));
       }
       const wait = await manager.registerWait(run.id, { kind: WAIT_KIND.pr, pr, timeout_seconds: 120 }, 'cezar_wait', toolGenerationOf(run.id));

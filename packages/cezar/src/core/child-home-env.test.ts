@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -5,11 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { driveSeam } from './harness-parity.testkit.ts';
 
 afterEach(() => vi.unstubAllEnvs());
-for (const backend of RUNNER_IDS) {
+for (const backend of BUILT_IN_RUNNER_IDS) {
   it.each(['0', '1'])(`${backend} native child omits the cockpit home with full-env=%s`, async (full) => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-child-home-'));
     try {

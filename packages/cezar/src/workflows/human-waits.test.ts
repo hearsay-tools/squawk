@@ -23,14 +23,14 @@ import { toolCall } from './waits-parity.testkit.ts';
 registerRunner(claudeRunner);
 
 // hearsay-tools/cezarion#1234: the human kind of the wait list on the Claude wire. The rules are
-// runner-neutral (RUNNER_IDS coverage is U7h and U9h in `waits-parity-asks-cells.testkit.ts`); the runner,
+// runner-neutral (BUILT_IN_RUNNER_IDS coverage is U7h and U9h in `waits-parity-asks-cells.testkit.ts`); the runner,
 // store, tool handlers and scheduler stay real.
 
 const card = (question: string) => [{ header: 'Choice', question, options: [{ label: 'Parser' }, { label: 'Runner' }] }];
 
 function claudeWire() {
   process.env.CEZ_DRY_RUN = '0';
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
+  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
 }
 
 /** A turn the mock holds until `release()`: registrations in it land mid-turn. */
@@ -38,7 +38,7 @@ async function heldTurn(options: { autonomous?: boolean } = {}) {
   claudeWire();
   const gate = join(root, 'release');
   process.env.CEZ_MOCK_RELEASE_FILE = gate;
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios['hold-gated']!, runner: 'claude', ...options });
+  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios['hold-gated']!, runner: 'claude', ...options });
   await until(() => manager.isActive(run.id) && turnStarted(run.id));
   return { run, release: () => writeFileSync(gate, '') };
 }
@@ -151,7 +151,7 @@ describe('human waits (hearsay-tools/cezarion#1234)', { timeout: 45_000 }, () =>
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const gate = join(root, 'release');
     process.env.CEZ_MOCK_RELEASE_FILE = gate;
-    const w = await worker(p.id, HARNESS_ADAPTERS.claude.scenarios['hold-gated']!);
+    const w = await worker(p.id, HARNESS_ADAPTERS.claude!.scenarios['hold-gated']!);
     manager.enqueueOwnedRun(w.id);
     await until(() => manager.isActive(w.id) && turnStarted(w.id));
     const registered = await ask(w.id, card('Which module?'));
@@ -225,7 +225,7 @@ describe('the lifecycle prompt teaches the Squawk tools', { timeout: 45_000 }, (
     process.env.CEZ_MOCK_ARGS_FILE = join(root, 'args');
   }
   const opened = async () => {
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude.scenarios.baseline!, runner: 'claude' });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS.claude!.scenarios.baseline!, runner: 'claude' });
     await until(() => store.getRun(run.id)?.status === 'waiting');
     return run;
   };

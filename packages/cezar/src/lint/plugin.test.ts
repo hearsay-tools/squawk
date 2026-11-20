@@ -121,6 +121,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
   'child-killed-read': ['packages/cezar/src/core/watchdog-killed.ts', "if (!child.killed) child.kill('SIGKILL');\n"],
   'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
+  'runner-ids-import': ['packages/cezar/src/runners/claude/ids-reader.ts', "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
 };
 
@@ -167,8 +168,8 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/runners/pi/definition.ts': "const load = () => import('./pi-runner.ts');\n",
   'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
   // runner-roster-literal: the definition, a subset and a derived list. No file keeps a listed roster.
-  'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,
-  'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...RUNNER_IDS, 'claude-cli'];\n",
+  'packages/cezar/src/runners/ids.ts': `export const BUILT_IN_RUNNER_IDS = [${ROSTER}] as const;\n`,
+  'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];\n",
   // undocumented-env-name: a documented name, a mock control, and a test.
   'packages/cezar/src/j.ts': "process.env.CEZ_DRY_RUN = '1'; env.CEZ_MOCK_ANYTHING = '1';\n",
   'packages/cezar/src/k.test.ts': 'const c = process.env.CEZ_NOT_DOCUMENTED_ANYWHERE;\n',

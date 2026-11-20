@@ -1,4 +1,4 @@
-import type { AgentRunner, RunnerFactory, RunnerId } from './agent-runner.ts';
+import type { AgentRunner, RunnerFactory } from './agent-runner.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
 import { registerRunner } from './runner-registry.ts';
 
@@ -48,7 +48,7 @@ type RunnerMaker = () => AgentRunner;
  *  nothing. */
 export function onlyRunners(runners: ReadonlyArray<readonly [RunnerDefinition, RunnerMaker]>): RunnerFactory {
   for (const [definition] of runners) registerRunner(definition);
-  const makers = new Map<RunnerId, RunnerMaker>(runners.map(([definition, make]) => [definition.id, make]));
+  const makers = new Map<string, RunnerMaker>(runners.map(([definition, make]) => [definition.id, make]));
   return async (backend) => {
     const requested = backend === undefined || backend === 'claude-cli' ? 'claude' : backend;
     const make = makers.get(requested);

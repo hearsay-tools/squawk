@@ -11,7 +11,7 @@ import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.t
 const MESSAGE =
   'ChildProcess.killed says a signal was delivered, not that the child ended, so a watchdog that ' +
   'gates its SIGKILL on it never escalates (open-mercato/cezar#844). Ask real termination: ' +
-  'trackChildExit(child) in packages/cezar/src/core/agent-runner.ts.';
+  'trackChildExit(child) in packages/cezar/src/core/agent-runner-values.ts.';
 
 const ERROR_NAME = /(err|error|failure)$/i;
 

@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { MONITORING_PARTITIONS, type MonitoringPartitionName } from './monitoring-turn-partitions.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -9,7 +10,6 @@ import { join } from 'node:path';
 import { expect, it, describe } from 'vitest';
 import { deriveAttention, WEBHOOK_TRIGGERS } from '@open-mercato/cezar-contract/attention';
 import type { ApiRun, TimerWaitEntry } from '@open-mercato/cezar-contract';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { runsOn } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { attentionFields, projectStatus } from '../task-cli/projections.ts';
@@ -24,7 +24,7 @@ import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 
 type MonitoringRun = NonNullable<ReturnType<typeof store.getRun>>;
 interface RowContext {
-  backend: RunnerId;
+  backend: string;
   runId: string;
   run(): MonitoringRun;
   attention(label: string, wants: boolean): void;
@@ -82,7 +82,7 @@ async function proseQuestionLeavesMonitoring({ runId, send, attention, run }: Ro
 }
 // Live workers alone keep a markerless turn monitoring: the `monitoring-line` timer.
 async function reviewRequestLeavesMonitoring({ runId, send, attention, run }: RowContext): Promise<void> {
-  await send(messagesPrompt(run().runner as RunnerId, ['Please review the changes before I continue.']));
+  await send(messagesPrompt(run().runner as string, ['Please review the changes before I continue.']));
   attention('monitoring', false);
   expect(monitoringWakeOf(run())).toBeDefined();
   expect(hasPendingAsk(store, runId)).toBe(false);
@@ -189,9 +189,9 @@ const ROW_SPECS: Record<RowId, RowSpec> = {
 };
 
 // The run start, the Continue path, `attention`, `send` and the webhook check are the same for every row.
-export async function runMonitoringRow(backend: RunnerId, mode: 'fresh' | 'continuation', row: { id: RowId }): Promise<void> {
+export async function runMonitoringRow(backend: string, mode: 'fresh' | 'continuation', row: { id: RowId }): Promise<void> {
   process.env.CEZ_DRY_RUN = '0';
-  process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+  process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
   const idleClock = observationClock(delay => delay === IDLE_TIMEOUT_MS &&
     /\bat (?:[^ (\n]+\.)?armIdleTimer \(/.test(new Error().stack ?? ''));
   const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: backend });
@@ -233,10 +233,10 @@ export async function runMonitoringRow(backend: RunnerId, mode: 'fresh' | 'conti
   } finally { hook.dispose(); }
 }
 
-export function registerAutonomousProse(backend: RunnerId, mode: 'fresh' | 'continuation'): void {
+export function registerAutonomousProse(backend: string, mode: 'fresh' | 'continuation'): void {
   it(`${mode} ${mode === 'fresh' ? 'M13' : 'M14'} ordinary markerless prose questions keep autonomous nudges`, async () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+    process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
     const prompt = messagesPrompt(backend, ['Should I merge this PR?']);
     const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: mode === 'fresh' ? prompt : 'mock:hold', runner: backend, autonomous: mode === 'fresh' });
     if (mode === 'continuation') {
@@ -252,10 +252,10 @@ export function registerAutonomousProse(backend: RunnerId, mode: 'fresh' | 'cont
   });
 
 }
-export function registerClose(backend: RunnerId): void {
+export function registerClose(backend: string): void {
   it('fresh M17 a clean session close with an accepted worker wait open parks the run on it', async () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+    process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
     const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: backend });
     await until(() => store.getRun(p.id)?.status === 'waiting');
     store.commitDelegation([{ id: p.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
@@ -278,7 +278,7 @@ export function registerClose(backend: RunnerId): void {
 }
 export function registerMonitoringPartition(name: MonitoringPartitionName): void {
   const partition = MONITORING_PARTITIONS[name];
-  for (const backend of RUNNER_IDS.filter(runner => partition.rows.some(row => runsOn('monitoring-turn', row, runner)))) describe(`${backend} monitoring turn`, { timeout: 30_000 }, () => {
+  for (const backend of BUILT_IN_RUNNER_IDS.filter(runner => partition.rows.some(row => runsOn('monitoring-turn', row, runner)))) describe(`${backend} monitoring turn`, { timeout: 30_000 }, () => {
     useWorkerWaitFixture();
     for (const mode of partition.modes) for (const id of partition.rows.filter(row => runsOn('monitoring-turn', row, backend))) {
       if (id === 'M13' || id === 'M14') registerAutonomousProse(backend, mode);

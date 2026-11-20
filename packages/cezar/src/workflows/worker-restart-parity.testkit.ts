@@ -42,7 +42,7 @@ export function registerRestartGroup(group: keyof typeof RESTART_GROUPS): void {
 it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repairs execution without a synchronous facts join', async runner => {
     // Explicit opt-in: this recovery fixture seeds an inactive parent and registers the rebuilt runtime.
     process.env.CEZ_DRY_RUN = '0';
-    const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+    const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
     const w = await worker(p.id, adapter.scenarios.baseline!);
@@ -89,7 +89,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
   if (group === 'starting-proof') {
     it.each(RESTART_RUNNERS.r47)('%s Continue after a controller crash stops the recorded processes the old generation left, then starts the next one', async runner => {
       process.env.CEZ_DRY_RUN = '0';
-      const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+      const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
       const w = await worker(p.id, adapter.scenarios.baseline!);
@@ -134,7 +134,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     });
     it.each(RESTART_RUNNERS.r47)('%s Continue after a crash that recovery already settled still stops what the crash left in the scope', async runner => {
       process.env.CEZ_DRY_RUN = '0';
-      const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+      const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
       const w = await worker(p.id, adapter.scenarios.baseline!);
@@ -173,7 +173,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
    const ledgerKind = group === 'destroy-absent-ledger' ? 'absent' : 'incomplete';
     it.each(RESTART_RUNNERS.r47)(`%s destroy ends the worker's scope and leaves outside holders running (${ledgerKind} ledger)`, async runner => {
       process.env.CEZ_DRY_RUN = '0';
-      const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+      const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
       const w = await worker(p.id, adapter.scenarios.baseline!);
@@ -225,7 +225,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
  if (group === 'same-boot-crash-lock') {
 it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded processes exit, whatever outside process runs, and keeps cleanup locks bounded', async runner => {
     process.env.CEZ_DRY_RUN = '0';
-    const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+    const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { currentStepId: 'task', delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
     const w = await worker(p.id, adapter.scenarios.baseline!);

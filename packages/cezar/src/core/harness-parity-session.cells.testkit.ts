@@ -1,3 +1,4 @@
+import { registeredRunners } from './runner-registry.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,8 @@ import { expect, vi } from 'vitest';
 import { testHome } from '../home/test-home.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
-import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf, RUNNER_IDS, type AgentEvent, type AgentRunSpec, type AgentRunSpecField, type ContentBlock, type RunnerId, type ToolGrant } from './agent-runner.ts';
+import type { AgentEvent, AgentRunSpec, AgentRunSpecField, ContentBlock, ToolGrant } from './agent-runner.ts';
+import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedOpencodeMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
@@ -27,7 +29,7 @@ interface InputObservation {
   readonly consumedBeforeTurnEnd: boolean;
   readonly unconsumed: readonly string[];
 }
-async function observeInput(backend: RunnerId, scenario: ScenarioName, id: string): Promise<InputObservation> {
+async function observeInput(backend: string, scenario: ScenarioName, id: string): Promise<InputObservation> {
   const consumed: string[] = [];
   let consumedBeforeTurnEnd = false;
   let seenTurnEnd = false;
@@ -83,7 +85,7 @@ const answeredInItsTurn = (v1: readonly AgentEvent[], id: string) => {
   const at = v1.findIndex(e => e.type === 'text' && e.text.includes(`parity ${id}`));
   return at >= 0 && v1.slice(at).some(e => e.type === 'turn-end');
 };
-async function observeFollowOn(backend: RunnerId): Promise<FollowOnObservation> {
+async function observeFollowOn(backend: string): Promise<FollowOnObservation> {
   const consumed: string[] = [];
   const obs = await driveSeam(backend, 'steer-tool', {
     // The OpenCode mock answers steers in a follow-on run 300 ms after the idle; other mocks ignore it.
@@ -462,9 +464,9 @@ export const SESSION_GROUPS = {
     describeRunners('spec', 'harness parity — AgentRunSpec support declarations', () => {
       if (scope === 'once') {
         it('every runner id builds its own runner, declaring every AgentRunSpec field with a reason', async () => {
-          for (const backend of RUNNER_IDS) {
+          for (const backend of registeredRunners().map(({ id }) => id)) {
             const runner = await runnersUnderTest()(backend);
-            // A new RUNNER_IDS member with no factory case falls through to claude; that is not a declaration.
+            // A new BUILT_IN_RUNNER_IDS member with no factory case falls through to claude; that is not a declaration.
             expect(runner.backend).toBe(backend);
             expect(Object.keys(runner.specSupport).sort()).toEqual([...AGENT_RUN_SPEC_FIELDS].sort());
             for (const field of AGENT_RUN_SPEC_FIELDS) {
@@ -574,7 +576,7 @@ export const SESSION_GROUPS = {
     describeRunners('tools', 'harness parity — squawkTools list behind CEZ_PREVIEW', () => {
       const wait = { id: '11111111-1111-4111-8111-111111111111', generation: 'gen', turnId: 'turn', timeoutSeconds: 1800, until: 'checks' as const, wakeOnConflict: true, prUrl: 'https://github.com/owner/repo/pull/1', repository: 'owner/repo', prNumber: 1, headSha: 'a'.repeat(40), registeredAt: '2026-09-22T00:00:00.000Z', deadline: '2026-09-22T00:30:00.000Z', phase: 'registered' as const };
       // hearsay-tools/cezarion#1305: pi also runs the default list, which admits the tools through no allowlist.
-      const lists = (backend: RunnerId) => [
+      const lists = (backend: string) => [
         { label: '', toolGrant: explicitToolGrant(['Read']) },
         ...(backend === 'pi' ? [{ label: ' on the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, 'pi') } as ToolGrant }] : []),
       ];

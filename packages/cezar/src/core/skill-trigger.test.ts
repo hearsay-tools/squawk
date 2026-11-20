@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 const { captures } = await import(/* @vite-ignore */ new URL('../../scripts/mock-skill-trigger-data.mjs', import.meta.url).href) as { captures: Record<string, unknown> };
@@ -6,11 +7,10 @@ import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex
 import { createOpencodeUiState, mapOpencodeEvent } from '../runners/opencode/opencode-ui-mapper.ts';
 import { createPiUiState, mapPiRpcMessage } from '../runners/pi/pi-ui-mapper.ts';
 import type { UiEvent } from './ui-events.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { matchesSkillPrompt } from '../runners/pi/pi-rpc-wire.ts';
 import { slashSkillPrompt, validSkillMessage } from './skill-trigger.ts';
 
-for (const runner of RUNNER_IDS) it(`${runner}: packaged mock capture equals its real CLI fixture`, () => {
+for (const runner of BUILT_IN_RUNNER_IDS) it(`${runner}: packaged mock capture equals its real CLI fixture`, () => {
   expect(captures[runner]).toEqual(JSON.parse(readFileSync(new URL(`../runners/${runner}/__fixtures__/skill-trigger.json`, import.meta.url), 'utf8')));
 });
 

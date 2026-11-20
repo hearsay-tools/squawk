@@ -35,7 +35,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { MAX_AUTO_CONTINUES, RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { CiResources } from '../ci-wait/resource-pool.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 
@@ -227,7 +227,7 @@ rl.on('close', () => process.exit(0));
     }).join('\n') : '  (no wire process started)' };
 }
 
-async function startParent(task: string, runner: RunnerId, permissions: WorkerOperation[]) {
+async function startParent(task: string, runner: string, permissions: WorkerOperation[]) {
   checkpoint('parent-start');
   const run = manager.startRun(QUICK_TASK_WORKFLOW, { task, runner });
   store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions, receipts: [] } }]);
@@ -244,13 +244,13 @@ export function grantSteer(rootId: string): void {
   if (!delegation.permissions.includes('steer')) store.commitDelegation([{ id: rootId, delegation: { ...delegation, permissions: [...delegation.permissions, 'steer'] } }]);
 }
 /** Low-level root builder. Use `delegatingParent` for service calls. Recovery and inactive-parent tests may keep explicit service setup. */
-export function parent(task = 'mock:hold', runner: RunnerId = 'claude') {
+export function parent(task = 'mock:hold', runner: string = 'claude') {
   return startParent(task, runner, ['spawn', 'wait']);
 }
 
 /** A service-ready root with exactly the test's permissions, scoped callers and automatic cleanup.
  *  A restart needs a new registration for its new store/manager, not this old service. */
-export async function delegatingParent(options: { permissions: WorkerOperation[]; task?: string; runner?: RunnerId }) {
+export async function delegatingParent(options: { permissions: WorkerOperation[]; task?: string; runner?: string }) {
   const p = await startParent(options.task ?? 'mock:hold', options.runner ?? 'claude', [...options.permissions]);
   const service = new DelegationService();
   const detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
@@ -277,7 +277,7 @@ export async function delegatingParent(options: { permissions: WorkerOperation[]
 
 /** A worker of `parentId`. When `parentId` is itself a worker, the new one is the shared worker
  *  that worker started: its receipt on the family's root, its supervisor and host `parentId`. */
-export async function worker(parentId: string, task = 'mock:hold', runner: RunnerId = 'claude') {
+export async function worker(parentId: string, task = 'mock:hold', runner: string = 'claude') {
   const supervisor = store.getRun(parentId);
   if (supervisor?.delegation?.role === 'worker') {
     const id = randomUUID();
@@ -361,7 +361,7 @@ export async function collect(id: string) {
   const evidence = await collectWorkerEvidence(root, store, run);
   return store.commitWorkerResult(run.delegation?.role === 'worker' ? run.delegation.parentRunId : '', evidence.result, evidence.diffSnapshot);
 }
-export async function queuedWake(runner: RunnerId = 'claude') {
+export async function queuedWake(runner: string = 'claude') {
   const p = await parent('mock:hold', runner); const w = await worker(p.id, 'mock:slow');
   const wait = register(p.id, [w.id]); checkpoint('queued-wake-registered');
   await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');

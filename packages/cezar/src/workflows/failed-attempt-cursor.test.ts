@@ -31,7 +31,7 @@ describe('a workflow step that fails while its run holds waits', { timeout: 45_0
   afterEach(() => vi.restoreAllMocks());
 
   it('persists the resume cursor before the final autosave, and the session recovered after a crash there runs the tail', async () => {
-    const adapter = HARNESS_ADAPTERS.claude;
+    const adapter = HARNESS_ADAPTERS.claude!;
     const wire = gatedProviderFailure(root, 'claude');
     const run = manager.startRun({ name: 'ci-capped-chain', source: 'built-in', steps: [
       { id: 'first', prompt: adapter.scenarios['provider-error-controlled']! },
@@ -75,7 +75,7 @@ describe('a workflow step that fails while its run holds waits', { timeout: 45_0
   it('keeps a run its turn parked waiting, for the same reason, when its session then fails', async () => {
     const run = manager.startRun({ name: 'parked-failure-chain', source: 'built-in', steps: [
       { id: 'first', prompt: promptFor('claude', 'cezar-wait') },
-      { id: 'later', prompt: HARNESS_ADAPTERS.claude.scenarios['cezar-done']! },
+      { id: 'later', prompt: HARNESS_ADAPTERS.claude!.scenarios['cezar-done']! },
     ] }, { runner: 'claude', task: 'Wait, then go on', worktree: false });
     await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting && [...work.liveSessions].some(session => session.open));
     expect(store.getRun(run.id)).toMatchObject({ parkReason: 'turn', steps: [expect.objectContaining({ id: 'first', status: STEP_STATUS.waiting }), expect.anything()] });

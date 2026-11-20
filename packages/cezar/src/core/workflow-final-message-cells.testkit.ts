@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as realDelay } from 'node:timers/promises';
 import { expect, vi } from 'vitest';
-import type { RunnerId } from './agent-runner.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { HARNESS_ADAPTERS, driveSeam, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { workflowFinalMessage } from './workflow-final-message-rows.testkit.ts';
@@ -52,12 +51,12 @@ const lateDoneContent = (events: readonly Record<string, unknown>[]) =>
   });
 
 // The exemption cell of each row a runner may exempt, by row id.
-const EXEMPTION_CELLS: Record<string, (backend: RunnerId) => CellBody> = {
+const EXEMPTION_CELLS: Record<string, (backend: string) => CellBody> = {
   F7: backend => async () => {
-    expect(HARNESS_ADAPTERS[backend].scenarios['silent-tail-ack-delay']).toBeUndefined();
+    expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-ack-delay']).toBeUndefined();
   },
   F8: backend => async () => {
-    expect(HARNESS_ADAPTERS[backend].scenarios['silent-tail-no-reply']).toBeUndefined();
+    expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-no-reply']).toBeUndefined();
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId }) => {
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
@@ -67,18 +66,18 @@ const EXEMPTION_CELLS: Record<string, (backend: RunnerId) => CellBody> = {
     });
   },
   F9: backend => async () => {
-    expect(HARNESS_ADAPTERS[backend].scenarios['silent-tail-late-reply']).toBeUndefined();
+    expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-late-reply']).toBeUndefined();
     const observed = await driveSeam(backend, 'silent-tail');
     expect(observed.v2.some(event => event.type === 'turn.started')).toBe(true);
     expect(observed.v1.some(event => event.type === 'turn-end')).toBe(true);
   },
   F11: backend => async () => {
-    expect(HARNESS_ADAPTERS[backend].scenarios['silent-tail-late-turn-start']).toBeUndefined();
+    expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-late-turn-start']).toBeUndefined();
   },
 };
 
 // The run cell of each row, by row id.
-const ROW_CELLS: Record<string, (backend: RunnerId) => CellBody> = {
+const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
   F7: backend => async () => {
     const semaphore = new WorkspaceSemaphore({ home: testHome() });
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {

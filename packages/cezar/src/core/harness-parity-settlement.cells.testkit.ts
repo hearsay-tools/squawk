@@ -302,7 +302,7 @@ export const SETTLEMENT_GROUPS = {
         // hearsay-tools/squawk#2701: an idle close drops the open native question; the answer
         // reopens the session as its first message and settles the question.
         if (!runnersWhere(facts => facts.nativeAsk === 'answerable').includes(backend)) continue;
-        const ask = HARNESS_ADAPTERS[backend].askResumeCases[0]!;
+        const ask = HARNESS_ADAPTERS[backend]!.askResumeCases[0]!;
         parityRow(backend, {
           id: 'R129', scenario: 'ask-resume', name: 'R129 idle-closes a parked native ask and reopens the session with its answer',
           assert(observation: IdleClosedAnswer) {
@@ -360,11 +360,11 @@ export const SETTLEMENT_GROUPS = {
         if (exemption) {
           it(`${backend} P1 exemption — ${exemption.reason}`, () => {
             expect(exemption.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].scenarios.approval).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.scenarios.approval).toBeUndefined();
           });
           continue;
         }
-        for (const { pick: decision, echo } of HARNESS_ADAPTERS[backend].approvalDecisions!) {
+        for (const { pick: decision, echo } of HARNESS_ADAPTERS[backend]!.approvalDecisions!) {
           it(`${backend} P1 ${decision} answers the native request through the cockpit API`, async () => {
             let repoRoot = '';
             const observation = await driveRun(backend, 'approval', run => !!run && ['done', 'review'].includes(run.status), 30_000, async ({ store, manager, runId }) => {
@@ -423,7 +423,7 @@ export const SETTLEMENT_GROUPS = {
         if (exemption) {
           it(`${backend} P2 exemption — ${exemption.reason}`, () => {
             expect(exemption.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].scenarios['permission-default']).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.scenarios['permission-default']!).toBeUndefined();
           });
           continue;
         }
@@ -448,7 +448,7 @@ export const SETTLEMENT_GROUPS = {
         if (exemption) {
           it(`${backend} P9 exemption — ${exemption.reason}`, () => {
             expect(exemption.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].scenarios['mcp-approval']).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.scenarios['mcp-approval']!).toBeUndefined();
           });
           continue;
         }

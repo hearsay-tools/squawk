@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { RunnerId } from './agent-runner.ts';
+
 import type { RunnerDefinition } from './runner-definition.ts';
 import { exemptionFor, HARNESS_ADAPTERS, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
@@ -48,7 +48,7 @@ export const vitestRegistration = (): HarnessRegistration => ({ describe, it, be
 /** What one registration of the groups shares: its scope, its runners and the cell helpers. */
 export interface HarnessRegistrar {
   readonly scope: HarnessParityScope;
-  readonly runners: readonly RunnerId[];
+  readonly runners: readonly string[];
   readonly registration: HarnessRegistration;
   readonly describe: HarnessRegistration['describe'];
   readonly it: HarnessRegistration['it'];
@@ -57,8 +57,8 @@ export interface HarnessRegistrar {
   /** Every group `describeRunners` was called for, in order; the once file's routing guard reads it. */
   readonly registeredGroups: string[];
   readonly describeRunners: (group: string, name: string, body: () => void, once?: boolean) => void;
-  readonly parityRow: <T = SeamObservation>(backend: RunnerId, criterion: SeamCriterion<T>, observe: () => Promise<T>) => void;
-  readonly permissionExemption: (id: string, backend: RunnerId, scenario: ScenarioName) => boolean;
+  readonly parityRow: <T = SeamObservation>(backend: string, criterion: SeamCriterion<T>, observe: () => Promise<T>) => void;
+  readonly permissionExemption: (id: string, backend: string, scenario: ScenarioName) => boolean;
 }
 
 /** One or more `describeRunners` groups, registered through the registrar it is given. */
@@ -95,7 +95,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
    * exemption instead.
    */
   function parityRow<T = SeamObservation>(
-    backend: RunnerId,
+    backend: string,
     criterion: SeamCriterion<T>,
     observe: () => Promise<T>,
   ): void {
@@ -114,7 +114,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
       it(`${backend} is exempt from ${criterion.id} — ${exempt.reason}`, () => {
         // The pin: no prompt is declared, so nothing can drive this row here. Add
         // one and this fails, which is the signal to make the row live.
-        expect(HARNESS_ADAPTERS[backend].scenarios[criterion.scenario]).toBeUndefined();
+        expect(HARNESS_ADAPTERS[backend]!.scenarios[criterion.scenario]!).toBeUndefined();
       });
       return;
     }
@@ -129,12 +129,12 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
   }
 
   /** Registers the exemption cell when there is one; P1's shape for every lifecycle criterion. */
-  function permissionExemption(id: string, backend: RunnerId, scenario: ScenarioName): boolean {
+  function permissionExemption(id: string, backend: string, scenario: ScenarioName): boolean {
     const exemption = exemptionFor(id, backend);
     if (!exemption) return false;
     it(`${backend} ${id} exemption — ${exemption.reason}`, () => {
       expect(exemption.kind).toBe('scenario-unconstructible');
-      expect(HARNESS_ADAPTERS[backend].scenarios[scenario]).toBeUndefined();
+      expect(HARNESS_ADAPTERS[backend]!.scenarios[scenario]!).toBeUndefined();
     });
     return true;
   }

@@ -2,7 +2,8 @@ import type { parseRunRecords } from './store.ts';
 import type { RunRowInput } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { upgradeLegacyWaits } from './legacy-waits.ts';
-import { LEGACY_RUNNER_IDS, knownRunnerIds, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { knownRunnerIds, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { LEGACY_RUNNER_IDS } from '../core/runner-ids.ts';
 
 /** The read-time upgrades of a stored record, in place, before the schema reads it. */
 export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
@@ -36,10 +37,14 @@ export function waitsForUnregisteredRunner(run: { removedRunner?: string | undef
   return run.removedRunner !== undefined && !REMOVED_RUNNER_IDS.includes(run.removedRunner);
 }
 
-/** Whether a saved runner id parses: a legacy id, a registered id, or, in a process that registered
- *  no runner, a built-in id. */
+/** Whether a saved runner id parses: a legacy id, or an id a runner registered. A process that
+ *  registered no runner has no opinion: every non-empty id parses, the row reads as written, and
+ *  the unregistered-runner fold is skipped (planner decision 2026-11-20, option a). Production
+ *  entries register the built-ins before they open a store, so this is the saved-run rule only. */
 export function readableSavedRunner(id: string): boolean {
-  return LEGACY_RUNNER_IDS.has(id) || knownRunnerIds().includes(id);
+  if (LEGACY_RUNNER_IDS.has(id)) return true;
+  const known = knownRunnerIds();
+  return known.length === 0 || known.includes(id);
 }
 
 /** A removed field of an unregistered runner and where it was. */

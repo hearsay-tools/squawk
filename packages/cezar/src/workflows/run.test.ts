@@ -19,7 +19,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, afterAll, beforeAll } from 'vitest';
-import { type AgentRunResult, type AgentRunSpec, type AgentSession, type ContentBlock } from '../core/agent-runner.ts';
+import type { AgentRunResult, AgentRunSpec, AgentSession, ContentBlock } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { type UiEvent } from '../core/ui-events.ts';
 import { RunStore, type StepState, type RunRecord } from '../runs/store.ts';

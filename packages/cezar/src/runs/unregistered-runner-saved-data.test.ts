@@ -133,11 +133,19 @@ describe('a run saved on an unregistered runner', () => {
     }
   });
 
-  it('stays unreadable, and untouched, in a process that registered no runner', async () => {
+  it('reads as written, and a write of an unrelated field keeps the runner id, in a process that registered no runner', async () => {
+    // The empty registry has no opinion (planner decision 2026-11-20, option a): no fold, no
+    // rejection, the row reads exactly as stored. Production entries register the built-ins
+    // before they open a store (index-runners.test.ts), so this is the saved-run rule only.
     const store = (await processWith('none')).open(dataDir);
-    expect(store.getRun('gem')).toBeUndefined();
+    const run = store.getRun('gem');
+    expect(run?.runner).toBe('gemini');
+    expect(run?.removedRunner).toBeUndefined();
+    expect(run?.steps[1]).toMatchObject({ backend: 'gemini', sessionId: 'gem-sess' });
+    store.updateRun('gem', { titleSummary: 'renamed' });
     store.close();
-    expect(readPersistedRuns(dataDir)[0]).toMatchObject({ runner: 'gemini', steps: [{ id: 'plan' }, { id: 'build', sessionId: 'gem-sess' }] });
+    expect(readPersistedRuns(dataDir)[0]).toMatchObject({ runner: 'gemini', titleSummary: 'renamed',
+      steps: [{ id: 'plan' }, { id: 'build', sessionId: 'gem-sess' }] });
   });
 });
 

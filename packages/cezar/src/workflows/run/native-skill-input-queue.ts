@@ -100,7 +100,7 @@ export class NativeSkillInputQueue {
 
   private holdsNativeSkill(state: ActiveRun, content: PastedContent[]): boolean {
     const query = state.skills.query;
-    if (!query || RUNNER_FACTS[query.runner].skillTriggerMidTurn) return false;
+    if (!query || RUNNER_FACTS[query.runner]!.skillTriggerMidTurn) return false;
     const first = content.find(block => block.type === 'text');
     const id = first?.type === 'text' ? leadingSlashSkillName(first.text) : undefined;
     return !!id && this.host.runSkills.enabledSkills(state).some(skill => skill.id === id) && state.boundary.atTurnBoundary !== state.liveSession.session;
@@ -165,6 +165,6 @@ export class NativeSkillInputQueue {
 
   private nativeTriggerBusy(state: ActiveRun): boolean {
     const runner = state.skills.query?.runner;
-    return !!runner && !RUNNER_FACTS[runner].skillTriggerMidTurn && state.boundary.atTurnBoundary !== state.liveSession.session;
+    return !!runner && !RUNNER_FACTS[runner]!.skillTriggerMidTurn && state.boundary.atTurnBoundary !== state.liveSession.session;
   }
 }

@@ -1,7 +1,7 @@
 import { skillOf } from '../../core/skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from '../../core/agent-runner.js';
-import { isSignalTerminationExit } from '../../core/agent-runner.js';
+import { isSignalTerminationExit } from '../../core/agent-runner-values.ts';
 import { InputSubmissions } from '../../core/input-submissions.ts';
 import { contentText, emitImages, isRecord, piMessageText, matchesSkillPrompt, ompSkillPrompt, string } from './pi-rpc-wire.ts';
 import { AUTO_END_DELAY_MS } from '../../core/runner-runtime.js';

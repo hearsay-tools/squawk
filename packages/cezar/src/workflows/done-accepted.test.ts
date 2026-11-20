@@ -27,7 +27,7 @@ const withdrawn = (id: string) => store.readEvents(id).filter(event => event.typ
 
 async function quietRun() {
   nativeWire(runner);
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
   await until(() => store.getRun(run.id)?.status === 'waiting');
   return run;
 }
@@ -115,7 +115,7 @@ describeWaitCells(() => {
 
   it('a completion refusal at the turn end withdraws the accepted done, and the worker still blocks it', async () => {
     nativeWire(runner);
-    const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+    const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
     await until(() => store.getRun(p.id)?.status === 'waiting');
     await blockedDone(p.id, () => blockingWorker(p.id));
     await until(() => withdrawn(p.id).length > 0, () => timeline(p.id));

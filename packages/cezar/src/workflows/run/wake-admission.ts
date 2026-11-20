@@ -29,7 +29,7 @@ import type { RunLine } from './run-line.ts';
 import type { InboxClaims } from './inbox-claims.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import type { HumanWaits } from './human-waits.ts';
-import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-ids.ts';
 
 type HumanAnswerBudget = { spent: number };
 interface WakeAdmissionHost {

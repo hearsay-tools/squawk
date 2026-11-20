@@ -1,8 +1,8 @@
+import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RUNNER_IDS } from '../../core/agent-runner.ts';
 import { HARNESS_ADAPTERS, exemptionFor, driveSeam, promptFor, waitFor } from '../../core/harness-parity.testkit.ts';
 
 describe('OMP native input pipe', () => {
@@ -23,12 +23,12 @@ describe('OMP native input pipe', () => {
 });
 
 describe('native live closed-input parity', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     const exemption = exemptionFor('S29', backend);
     if (exemption) {
       it(`${backend} S29 executable wire gap — ${exemption.reason}`, () => {
         expect(exemption.kind).toBe('scenario-unconstructible');
-        expect(HARNESS_ADAPTERS[backend].scenarios['input-closed-live']).toBeUndefined();
+        expect(HARNESS_ADAPTERS[backend]!.scenarios['input-closed-live']!).toBeUndefined();
       });
       continue;
     }

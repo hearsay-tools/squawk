@@ -13,7 +13,10 @@ import type { RunManager } from '../workflows/run.ts';
 import { loadAgentAccounts, mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-import { PROVIDER_IDS, ProviderAuthService } from '../core/provider-auth.ts';
+import { ProviderAuthService } from '../core/provider-auth.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
+
+const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 import { createApp, type ServerDeps } from './server.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.

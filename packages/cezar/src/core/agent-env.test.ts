@@ -1,17 +1,16 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv, withoutHomeEnv, looksSecret } from './agent-env.ts';
 
 // The cases build child envs for several runners and the legacy id; each reads its allow-list prefixes from the registry.
-import { RUNNER_IDS } from './agent-runner.ts';
-
 /**
  * #427: the spawned backend must NOT inherit the full host environment. It
  * gets a curated allowlist — safe shell/toolchain vars + the backend's own
  * auth + gh + Squawk's `CEZ_*` — and nothing else.
  */
 describe('buildChildEnv — delegation session isolation', () => {
-  for (const backend of [...RUNNER_IDS, 'claude-cli'] as const) {
+  for (const backend of [...BUILT_IN_RUNNER_IDS, 'claude-cli'] as const) {
     for (const full of ['0', '1']) {
       it(`${backend} strips inherited delegation authority with CEZ_AGENT_ENV_FULL=${full}, even when passed through`, () => {
         const source = {
@@ -455,7 +454,7 @@ describe('cockpit home isolation (hearsay-tools/cezarion#2779)', () => {
       CEZ_AGENT_ENV_FULL: full, CEZ_ENV_PASSTHROUGH: 'CEZ_HOME,CUSTOM_VALUE',
       CUSTOM_VALUE: 'preserved', PATH: '/bin', CEZ_TASK_ID: 'task',
     };
-    for (const backend of RUNNER_IDS) {
+    for (const backend of BUILT_IN_RUNNER_IDS) {
       it(`${backend} removes every home spelling in full-env=${full}, including per-run env`, () => {
         const env = buildChildEnv({ backend, source, extraEnv: { CEZ_HOME: '/extra/home', HSQ_HOME: '/extra/split', CEZ_PROJECT_ID: 'project' } });
         expect(Object.keys(env).filter(name => ['CEZ_HOME', 'HSQ_HOME'].includes(name.toUpperCase()))).toEqual([]);
@@ -479,7 +478,7 @@ describe('cockpit home isolation (hearsay-tools/cezarion#2779)', () => {
 });
 
 // Layout values belong to the operator's toolchain and must survive cockpit-home isolation.
-it.each(RUNNER_IDS)('%s preserves all layout env values while stripping explicit home passthrough', backend => {
+it.each(BUILT_IN_RUNNER_IDS)('%s preserves all layout env values while stripping explicit home passthrough', backend => {
   const layoutEnv = { XDG_CONFIG_HOME: '/config', XDG_STATE_HOME: '/state', XDG_DATA_HOME: '/data',
     XDG_CACHE_HOME: '/cache', XDG_RUNTIME_DIR: '/run', TMPDIR: '/tmp/operator', APPDATA: 'D:\\Roaming', LOCALAPPDATA: 'D:\\Local' };
   const source = { ...layoutEnv, CEZ_HOME: '/live', HSQ_HOME: '/split', CEZ_ENV_PASSTHROUGH: 'HSQ_HOME,CEZ_HOME' };

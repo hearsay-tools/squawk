@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { AUTONOMOUS_CRITERIA, exemptionFor, type ParityExemption } from './harness-parity-core.testkit.ts';
 
 // The workflow-autonomous cells and their partition, apart from the engine the cell bodies
@@ -75,11 +75,11 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
 
 type AutonomousRow = (typeof AUTONOMOUS_CRITERIA)[number];
 export type WorkflowAutonomousCells = {
-  idleClose: (backend: RunnerId, row: AutonomousRow, options: { refuses: boolean; heldAck: boolean }) => CellBody;
-  answerBound: (backend: RunnerId) => CellBody;
-  ackBound: (backend: RunnerId, exemption: ParityExemption | undefined) => CellBody;
-  exemption: (backend: RunnerId) => CellBody;
-  row: (backend: RunnerId, row: AutonomousRow, mode: string) => CellBody;
+  idleClose: (backend: string, row: AutonomousRow, options: { refuses: boolean; heldAck: boolean }) => CellBody;
+  answerBound: (backend: string) => CellBody;
+  ackBound: (backend: string, exemption: ParityExemption | undefined) => CellBody;
+  exemption: (backend: string) => CellBody;
+  row: (backend: string, row: AutonomousRow, mode: string) => CellBody;
   /** The cell timeout of the cap rows (A5, A11, A12). */
   capRowTimeoutMs: number;
 };
@@ -89,7 +89,7 @@ export function workflowAutonomousParity(cells: WorkflowAutonomousCells) {
   return function describeWorkflowAutonomousParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-autonomous');
     describe('autonomous turn-end parity — #426', () => {
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         for (const row of AUTONOMOUS_CRITERIA) {
           const exemption = exemptionFor(row.id, backend);
           if (row.id === 'A13' || row.id === 'A14') {

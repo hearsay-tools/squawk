@@ -1,8 +1,8 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it as registerTest, vi } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { familyCells } from '../core/parity-classes.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
@@ -13,8 +13,8 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 
 // hearsay-tools/cezarion#1380: losing the saved cause before Continue, or preferring a
 // saved message over the restart explanation, must fail on every native input wire.
-function native(runner: RunnerId) {
-  const adapter = HARNESS_ADAPTERS[runner];
+function native(runner: string) {
+  const adapter = HARNESS_ADAPTERS[runner]!;
   vi.stubEnv('CEZ_DRY_RUN', '0');
   vi.stubEnv(adapter.binEnv, adapter.mockBin);
   vi.stubEnv('CEZ_MOCK_ARGS_FILE', join(root, 'args'));
@@ -28,7 +28,7 @@ function native(runner: RunnerId) {
 }
 
 /** The native skill input, including its context; plain prompts cannot satisfy this read. */
-function skillOpening(runner: RunnerId): string | undefined {
+function skillOpening(runner: string): string | undefined {
   const file = join(root, runner === 'codex' || runner === 'opencode' ? 'args' : 'stdin');
   if (!existsSync(file)) return undefined;
   const rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as SkillOpeningRow);
@@ -39,7 +39,7 @@ type SkillOpeningRow = { userText?: string; blocks?: Array<{ text?: string }>; m
   params?: { input?: Array<{ type?: string; text?: string; name?: string }> };
   url?: string; body?: { command?: string; arguments?: string } };
 
-function skillOpeningRow(runner: RunnerId, row: SkillOpeningRow): string | undefined {
+function skillOpeningRow(runner: string, row: SkillOpeningRow): string | undefined {
   if (runner === 'claude' && row.blocks?.at(-1)?.text?.startsWith('/probe-project')) {
     return row.blocks.map(part => part.text ?? '').join('\n');
   }
@@ -51,19 +51,19 @@ function skillOpeningRow(runner: RunnerId, row: SkillOpeningRow): string | undef
   return undefined;
 }
 
-async function start(runner: RunnerId, scenario: 'provider-error' | 'cezar-done') {
+async function start(runner: string, scenario: 'provider-error' | 'cezar-done') {
   const run = manager.startRun(QUICK_TASK_WORKFLOW, {
-    task: HARNESS_ADAPTERS[runner].scenarios[scenario]!, runner, worktree: false,
+    task: HARNESS_ADAPTERS[runner]!.scenarios[scenario]!, runner, worktree: false,
   });
   await until(() => [RUN_STATUS.failed, RUN_STATUS.done, RUN_STATUS.review].some(status => status === store.getRun(run.id)?.status) && !manager.isActive(run.id));
   return run.id;
 }
-function failureContext(runner: RunnerId, it: typeof registerTest = registerTest): void {
+function failureContext(runner: string, it: typeof registerTest = registerTest): void {
 
     it(`${runner} R85 checkpoints and delivers the failed step and continuation causes before Continue text`, async () => {
       const messages = native(runner);
       const id = await start(runner, 'provider-error');
-      for (const text of [`${HARNESS_ADAPTERS[runner].scenarios['provider-error']}\nKeep this second line.`, '']) {
+      for (const text of [`${HARNESS_ADAPTERS[runner]!.scenarios['provider-error']!}\nKeep this second line.`, '']) {
         const failed = structuredClone(store.getRun(id)!.steps.at(-1)!);
         expect(failed.status).toBe(STEP_STATUS.failed);
         expect(failed.error).toBeTruthy();
@@ -112,7 +112,7 @@ function failureContext(runner: RunnerId, it: typeof registerTest = registerTest
     }, 30_000);
 }
 
-function humanText(runner: RunnerId, it: typeof registerTest = registerTest): void {
+function humanText(runner: string, it: typeof registerTest = registerTest): void {
 
     it(`${runner} R87 leaves a non-error Continue unchanged`, async () => {
       const messages = native(runner);
@@ -135,7 +135,7 @@ function humanText(runner: RunnerId, it: typeof registerTest = registerTest): vo
     }, 30_000);
 }
 
-function restartContext(runner: RunnerId, it: typeof registerTest = registerTest): void {
+function restartContext(runner: string, it: typeof registerTest = registerTest): void {
 
     it(`${runner} R88 keeps the accepted failure cause and attachment through a restart`, async () => {
       const messages = native(runner);
@@ -187,7 +187,7 @@ function restartContext(runner: RunnerId, it: typeof registerTest = registerTest
     }, 60_000);
 }
 
-function savedContinuation(runner: RunnerId, it: typeof registerTest = registerTest): void {
+function savedContinuation(runner: string, it: typeof registerTest = registerTest): void {
 
     for (const status of [RUN_STATUS.running, RUN_STATUS.queued] as const) {
       it(`${runner} R86 explains restart ahead of a saved ${status} continuation, without a live session`, async () => {
@@ -218,7 +218,7 @@ function savedContinuation(runner: RunnerId, it: typeof registerTest = registerT
 }
 
 export const resumeDiagnosticsCells = { 'failure-context': failureContext, 'human-text': humanText, 'restart-context': restartContext, 'saved-continuation': savedContinuation };
-export const RESUME_DIAGNOSTICS_GROUPS = Object.fromEntries(Object.keys(resumeDiagnosticsCells).map(family => [family, RUNNER_IDS.map(runner => ({ runner, family: family as keyof typeof resumeDiagnosticsCells }))]));
+export const RESUME_DIAGNOSTICS_GROUPS = Object.fromEntries(Object.keys(resumeDiagnosticsCells).map(family => [family, BUILT_IN_RUNNER_IDS.map(runner => ({ runner, family: family as keyof typeof resumeDiagnosticsCells }))]));
 
 export function registerResumeDiagnosticsGroup(group: keyof typeof resumeDiagnosticsCells): void {
   describe('resume diagnostics through every native wire (hearsay-tools/cezarion#1380)', () => {

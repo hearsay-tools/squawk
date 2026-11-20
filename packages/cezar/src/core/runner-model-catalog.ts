@@ -1,6 +1,5 @@
 import type { EffortLevel } from '@open-mercato/cezar-contract';
 import { runnerDefinition } from './runner-registry.ts';
-import type { RunnerId } from './agent-runner.ts';
 
 export interface ModelOption {
   id: string;
@@ -25,7 +24,7 @@ export interface RunnerModelCatalogAdapter {
 }
 
 export interface RunnerModelCatalogOptions {
-  adapters: Partial<Record<RunnerId, RunnerModelCatalogAdapter>>;
+  adapters: Partial<Record<string, RunnerModelCatalogAdapter>>;
   now?: () => number;
   ttlMs?: number;
 }
@@ -40,12 +39,12 @@ const DEFAULT_TTL_MS = 5 * 60 * 1_000;
 
 /** Host-level, in-memory model discovery cache shared by every workspace. */
 export class RunnerModelCatalog {
-  readonly #adapters: Partial<Record<RunnerId, RunnerModelCatalogAdapter>>;
+  readonly #adapters: Partial<Record<string, RunnerModelCatalogAdapter>>;
   readonly #now: () => number;
   readonly #ttlMs: number;
-  readonly #cache = new Map<RunnerId, CachedCatalog>();
-  readonly #inFlight = new Map<RunnerId, Promise<RunnerModelCatalogResult>>();
-  readonly #generation = new Map<RunnerId, number>();
+  readonly #cache = new Map<string, CachedCatalog>();
+  readonly #inFlight = new Map<string, Promise<RunnerModelCatalogResult>>();
+  readonly #generation = new Map<string, number>();
 
   constructor(options: RunnerModelCatalogOptions) {
     this.#adapters = options.adapters;
@@ -53,14 +52,14 @@ export class RunnerModelCatalog {
     this.#ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
   }
 
-  invalidate(runner: RunnerId): void {
+  invalidate(runner: string): void {
     const cached = this.#cache.get(runner);
     if (cached) cached.expiresAt = 0;
     this.#inFlight.delete(runner);
     this.#generation.set(runner, (this.#generation.get(runner) ?? 0) + 1);
   }
 
-  get(runner: RunnerId): Promise<RunnerModelCatalogResult> {
+  get(runner: string): Promise<RunnerModelCatalogResult> {
     const cached = this.#cache.get(runner);
     if (cached && this.#now() < cached.expiresAt) {
       if (cached.failureReason) {
@@ -87,7 +86,7 @@ export class RunnerModelCatalog {
   }
 
   async #refresh(
-    runner: RunnerId,
+    runner: string,
     cached: CachedCatalog | undefined,
     generation: number,
   ): Promise<RunnerModelCatalogResult> {
@@ -115,6 +114,6 @@ export class RunnerModelCatalog {
   }
 }
 
-function unavailableReason(runner: RunnerId): string {
+function unavailableReason(runner: string): string {
   return `${runnerDefinition(runner).display.modelListName} model discovery is temporarily unavailable`;
 }

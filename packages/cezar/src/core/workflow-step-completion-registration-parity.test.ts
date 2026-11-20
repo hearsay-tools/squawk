@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { STEP_COMPLETION_CRITERIA } from './harness-parity.testkit.ts';
 import { runsOn } from './parity-classes.testkit.ts';
 import { checkParityRegistration } from './parity-partition.testkit.ts';
@@ -7,5 +7,5 @@ import { workflowStepCompletionCellNames } from './workflow-step-completion-rows
 
 it('registers every workflow-step-completion case exactly once across its files', () => {
   checkParityRegistration('workflow-step-completion-parity', workflowStepCompletionCellNames,
-    RUNNER_IDS.flatMap(backend => STEP_COMPLETION_CRITERIA.filter(row => runsOn('workflow-step-completion', row.id, backend)).map(row => `${backend} ${row.id}`)), 6);
+    BUILT_IN_RUNNER_IDS.flatMap(backend => STEP_COMPLETION_CRITERIA.filter(row => runsOn('workflow-step-completion', row.id, backend)).map(row => `${backend} ${row.id}`)), 6);
 });

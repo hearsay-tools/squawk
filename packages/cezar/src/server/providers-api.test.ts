@@ -7,12 +7,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  PROVIDER_IDS,
   ProviderAuthService,
   type ProviderConnectionState,
   type ProviderId,
   type RunProviderCommand,
 } from '../core/provider-auth.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -25,6 +25,8 @@ import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;
+
+const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 
 const CONNECTED_OUTPUT: Record<ProviderId, string> = {
   claude: '{"loggedIn":true}',
@@ -111,7 +113,7 @@ describe('workspace provider API', () => {
         return { stdout: 'secret output', stderr: 'secret error', exitCode: 17 };
       }
       return {
-        stdout: state === 'connected' ? CONNECTED_OUTPUT[provider] : DISCONNECTED_OUTPUT[provider],
+        stdout: state === 'connected' ? CONNECTED_OUTPUT[provider]! : DISCONNECTED_OUTPUT[provider]!,
         stderr: '',
         exitCode: state === 'connected' || provider === 'opencode' || provider === 'omp' ? 0 : 1,
       };
@@ -292,7 +294,7 @@ describe('workspace provider API', () => {
 
   it('GET ?refresh=1 bypasses the completed provider cache', async () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)],
+      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
       stderr: '',
       exitCode: 0,
     }));
@@ -306,7 +308,7 @@ describe('workspace provider API', () => {
 
   it('GET without refresh reuses the completed provider cache', async () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => ({
-      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)],
+      stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
       stderr: '',
       exitCode: 0,
     }));
@@ -495,7 +497,7 @@ describe('workspace provider API', () => {
     const runCommand = vi.fn<RunProviderCommand>(async (executable) => {
       await waiting;
       return {
-        stdout: CONNECTED_OUTPUT[providerForExecutable(executable)],
+        stdout: CONNECTED_OUTPUT[providerForExecutable(executable)]!,
         stderr: '',
         exitCode: 0,
       };

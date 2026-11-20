@@ -1,3 +1,8 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from '../../runners/codex/definition.ts';
+
+// The skill catalog the fixture builds covers the registered runners; this test reads codex's.
+registerRunner(codexRunner);
 import { testHome } from '../../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

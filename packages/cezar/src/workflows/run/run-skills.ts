@@ -1,5 +1,5 @@
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
-import type { ContentBlock, RunnerId, SkillTrigger } from '../../core/agent-runner.ts';
+import type { ContentBlock, SkillTrigger } from '../../core/agent-runner.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from '../../core/runner-skill-catalog.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { resolveRunnerSkill } from '../../core/runner-skill-reference.ts';
@@ -38,7 +38,7 @@ export class RunSkills {
     return this.context.skillCatalog ??= new RunnerSkillCatalog({ adapters: {} });
   }
 
-  async loadRunSkills(state: ActiveRun, runner: RunnerId, profile: StepProfile): Promise<void> {
+  async loadRunSkills(state: ActiveRun, runner: string, profile: StepProfile): Promise<void> {
     const query = atStepOpen.skillQuery(state, runner, profile);
     const list = await this.catalog().get(query);
     skillsWrites.catalog(state.skills, list.skills, query, atStepOpen.skillAccount(profile), list.source === 'unavailable' ? list.reason ?? `${runner} skill discovery is temporarily unavailable` : undefined);
@@ -60,7 +60,7 @@ export class RunSkills {
   private async inputSkills(state: ActiveRun): Promise<readonly RunnerSkill[]> {
     const query = state.skills.query;
     if (!query) return this.enabledSkills(state);
-    if (RUNNER_FACTS[query.runner].skillsSeenBySession !== 'live') return this.enabledSkills(state);
+    if (RUNNER_FACTS[query.runner]!.skillsSeenBySession !== 'live') return this.enabledSkills(state);
     this.catalog().invalidate(query);
     return (await this.catalog().get(query)).skills;
   }
@@ -93,7 +93,7 @@ export class RunSkills {
 
   private async noteNewSkill(runId: string, state: ActiveRun, id: string): Promise<void> {
     const query = state.skills.query;
-    if (!query || RUNNER_FACTS[query.runner].skillsSeenBySession === 'live') return;
+    if (!query || RUNNER_FACTS[query.runner]!.skillsSeenBySession === 'live') return;
     this.catalog().invalidate(query);
     const fresh = await this.catalog().get(query);
     if (fresh.skills.some(skill => skill.id === id)) this.note(runId, `Skill "${id}" is available after the next Continue.`);

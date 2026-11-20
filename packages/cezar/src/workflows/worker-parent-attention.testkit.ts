@@ -1,8 +1,8 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { withHeldAck, withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
 import { attentionFields } from '../task-cli/projections.ts';
@@ -16,12 +16,12 @@ import { ATTENTION_GROUPS, type AttentionGroup, type AttentionRow } from './work
 const ASK_PROMPT = toolCall('cezar_ask', { context: 'A choice is needed.', questions: [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner' }] }] });
 
 export function registerAttentionGroup(group: AttentionGroup): void {
- for (const backend of RUNNER_IDS) describe(`${backend} worker parent attention`, { timeout: 30_000 }, () => {
+ for (const backend of BUILT_IN_RUNNER_IDS) describe(`${backend} worker parent attention`, { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
 const native = () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
-    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
+    process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
+    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
   };
 const capacity = (id: string) => {
     const run = store.getRun(id)!;
@@ -40,7 +40,7 @@ if(row.family === 'progress') {
 it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input ACK keeps monitoring with live workers (${transport === 'pipe-write' ? 'pipe-write ACK exemption: acceptance precedes provider response' : transport === 'protocol' ? 'delayed ACK' : 'ordinary ACK'})`, async () => {
         const exercise = async (release: () => void, responseHeld?: () => boolean) => {
           process.env.CEZ_DRY_RUN = '0';
-          process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+          process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
           const { p, service, callerFor, close } = await delegatingParent({ runner: backend, permissions: ['spawn', 'wait'] });
           await until(() => store.getRun(p.id)?.status === 'waiting');
           // No workers and no marker still means waiting (#119).
@@ -53,7 +53,7 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
           expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });
           expect(monitoringWakeOf(store.getRun(p.id))).toBeUndefined();
           const w = await worker(p.id);
-          process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
+          process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
           manager.enqueueOwnedRun(w.id);
           await until(() => store.getRun(w.id)?.status === 'waiting');
           try {
@@ -95,7 +95,7 @@ if(row.family === 'spawn-ask') {
  const {mode} = row;
 it(`${mode} spawn without wait parks as monitoring and a real ASK still wins`, async () => {
       process.env.CEZ_DRY_RUN = '0';
-      process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+      process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
       const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: backend });
       store.commitDelegation([{ id: p.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       await until(() => store.getRun(p.id)?.status === 'waiting');

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, it as registerTest, vi } from 'vitest';
 import { WAIT_PHASE, WAIT_KIND, WAIT_SOURCE, WAIT_VIA, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { delegatingParent, checkpoint, until, store, timeline, spendWorkerBudget, manager, fixtureUpdateRun, restart, root, worker } from './worker-wait-core.testkit.ts';
 import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
@@ -20,11 +20,11 @@ export const { describeWaitParity } = waitPartDescribers('completion', completio
  *  done its reply turn sends was accepted, then starts and plain-parks: an idle worker that only
  *  talks. Its park sends the parent one park notice (hearsay-tools/cezarion#1327), which wakes it
  *  once; the parent is parked on the completion wait again when this returns. */
-async function completionParkOnMessenger(runner: RunnerId) {
+async function completionParkOnMessenger(runner: string) {
   const reply = repliesDoneAgain();
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-  const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
+  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
   const { second: w, entry } = await ignoreRefusal(runner, p.id, reply, () => workerWaits(p.id)[0]?.phase === 'open');
@@ -38,7 +38,7 @@ async function completionParkOnMessenger(runner: RunnerId) {
   return { f: { p, w, ...messenger(service, callerFor, p, w) }, entry: workerWaits(p.id)[0]! };
 }
 
-export function completionCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function completionCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U21 an ignored refusal with live workers parks on a Squawk worker wait that settlement wakes`, async () => {
       const reply = repliesDoneAgain();
@@ -67,7 +67,7 @@ export function completionCells(runners: RunnerId[], it: typeof registerTest = r
       const reply = repliesDoneAgain();
       const r = await workerParent(runner);
       // W: a worker of the root with the grant to start workers, parked after its opening turn.
-      const w = await worker(r.id, HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      const w = await worker(r.id, HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       store.commitDelegation([{ id: w.id, delegation: { ...w.delegation!, permissions: [...workerOperationSchema.options], spawnGrant: { kinds: ['shared'], live: 2 } } as never }]);
       spendWorkerBudget(w.id);
       manager.enqueueOwnedRun(w.id);

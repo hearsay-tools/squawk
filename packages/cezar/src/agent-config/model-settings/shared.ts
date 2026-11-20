@@ -1,6 +1,5 @@
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
-import type { RunnerId } from '../../core/agent-runner.ts';
 import { listConfigFiles } from '../catalog.ts';
 import type { ConfigFileDef, ConfigFormat } from '../../core/runner-config-files.ts';
 import { readConfigFile } from '../files.ts';
@@ -63,7 +62,7 @@ function stringAtPath(content: string, format: ConfigFormat, path: string): stri
 }
 
 export async function readNativeSettingsFiles(
-  runner: RunnerId,
+  runner: string,
   repoRoot: string,
   env: NodeJS.ProcessEnv,
 ): Promise<NativeSettingsFile[]> {

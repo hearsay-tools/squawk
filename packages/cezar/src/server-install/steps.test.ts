@@ -1,9 +1,9 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoUi } from './ui.ts';
 import { aptInstallTool, brewInstallTool, brewRemoveHint, depCheckStep, generatePassword, sudoStep, StepAborted, StepSkipped, verifyCommand } from './steps.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { BackendCheck } from '../core/backend-detect.ts';
 import type { CommandResult, InstallContext, Runner, Ui } from './types.ts';
 
@@ -212,7 +212,7 @@ describe('sudoStep secret channel (stdin, never argv)', () => {
  * the non-agent tools (`gh`, `git`), so the gate must filter — and the literal `['claude',
  * 'codex', 'opencode']` it used to filter with was a runtime string array typecheck could not
  * guard, so a pi-only host reported "no agent CLI" while pi sat right there in the checks.
- * These cases pin the gate to RUNNER_IDS: every runner satisfies it alone, no non-runner does.
+ * These cases pin the gate to BUILT_IN_RUNNER_IDS: every runner satisfies it alone, no non-runner does.
  */
 describe('depCheckStep — the agent-CLI gate', () => {
   const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available });
@@ -220,13 +220,13 @@ describe('depCheckStep — the agent-CLI gate', () => {
   const runGate = (checks: BackendCheck[]) =>
     depCheckStep({ detect: async () => checks }).check!(makeCtx({}));
 
-  it.each(RUNNER_IDS)('is satisfied by %s alone — no runner is second-class', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('is satisfied by %s alone — no runner is second-class', async (runner) => {
     await expect(runGate([check(runner, true), check('gh', false), check('git', true)])).resolves.toBe(true);
   });
 
   it('is NOT satisfied when every agent CLI is missing, however many other tools are present', async () => {
     const checks: BackendCheck[] = [
-      ...RUNNER_IDS.map((r) => check(r, false)),
+      ...BUILT_IN_RUNNER_IDS.map((r) => check(r, false)),
       check('gh', true),
       check('git', true),
     ];
@@ -255,7 +255,7 @@ describe('agent CLI installers', () => {
     } };
   }
 
-  const EXPECTED: Record<(typeof RUNNER_IDS)[number], string> = {
+  const EXPECTED: Record<(typeof BUILT_IN_RUNNER_IDS)[number], string> = {
     claude: 'info: DRY RUN — would run: npm install -g @anthropic-ai/claude-code',
     codex: 'info: DRY RUN — would run: npm install -g @openai/codex',
     opencode: 'note opencode: Install OpenCode from https://opencode.ai, then re-run.',
@@ -263,17 +263,17 @@ describe('agent CLI installers', () => {
     omp: 'warn: no known installer for omp — install it manually',
   };
 
-  it.each(RUNNER_IDS)('brew installer handles %s', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('brew installer handles %s', async (runner) => {
     const { ui, lines } = recordingUi();
     await brewInstallTool(makeCtx({ ui, dryRun: true }), runner);
     expect(lines).toEqual([EXPECTED[runner]]);
   });
 
-  it.each(RUNNER_IDS)('apt installer handles %s', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('apt installer handles %s', async (runner) => {
     const { ui, lines } = recordingUi();
     const interactive = vi.fn(async () => 0);
     await aptInstallTool(makeCtx({ ui, dryRun: true, runner: { interactive } }), runner);
-    const npm = /npm install -g \S+$/.exec(EXPECTED[runner]);
+    const npm = /npm install -g \S+$/.exec(EXPECTED[runner]!);
     expect(lines).toEqual([npm ? `info: DRY RUN — would run: sudo bash -lc '${npm[0]}'` : EXPECTED[runner]]);
     expect(interactive).not.toHaveBeenCalled();
   });

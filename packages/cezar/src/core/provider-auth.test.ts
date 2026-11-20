@@ -4,17 +4,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  PROVIDER_IDS,
   ProviderAuthService,
   isRuntimeProviderAuthFailure,
   providerAuthChecksDisabled,
   type ProviderCommandResult,
   type RunProviderCommand,
 } from './provider-auth.ts';
+import { registeredRunners } from './runner-registry.ts';
 
 // The service reads every provider's login data from the registry; this file probes all five.
 
 /** One status probe runs one command per provider. */
+const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 const ROSTER = PROVIDER_IDS.length;
 
 const connectedResults: Record<string, ProviderCommandResult> = {

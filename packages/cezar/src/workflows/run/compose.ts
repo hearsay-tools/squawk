@@ -63,7 +63,7 @@ import type { DelegationProvisioner } from '../../delegation/provision.ts';
 import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import { replaceRunProcess } from '../../core/process-usage.ts';
 import { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import { type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import * as queuedRevival from './queued-revival.ts';
@@ -148,7 +148,7 @@ export interface FacadeHost {
   canProceedWithRun(runId: string, run: RunRecord | undefined): run is RunRecord;
   ciSupervisor: Pick<CiWatcherSupervisor, 'resolve' | 'watch' | 'close'>;
   executionBlockedByRootFinish(run: RunRecord): boolean;
-  agentEnvForStep(runId: string, backend: RunnerId, options?: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<{ env: Record<string, string>; profileId: string; accountBinding?: WorkerAccountBinding | undefined }>;
+  agentEnvForStep(runId: string, backend: string, options?: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<{ env: Record<string, string>; profileId: string; accountBinding?: WorkerAccountBinding | undefined }>;
   cockpit?: { origin: string; projectId: string } | undefined;
   settledTurnOutcome(runId: string, entry: 'turn-end' | 'ack' | 'ready' | 'gate' | 'reply-timer', outcome: TurnEndOutcome): TurnEndOutcome | undefined;
   settleOrphanedWorkerExecution(runId: string, opts?: { admitting?: boolean; fresh?: boolean }): boolean;
@@ -157,7 +157,7 @@ export interface FacadeHost {
   continueRun(runId: string, opts?: ContinueRunOptions, deferForCapacity?: boolean, conversation?: Parameters<RunStore['commitWorkerContinuation']>[4]): { ok: boolean; error?: string };
   recover(familyRootId?: string): Promise<void>;
   dropActive(runId: string): void;
-  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: RunnerId, prompt: string, images?: PastedContent[], persistedImages?: ContentBlock[], persistedAttachments?: PersistedAttachment[]): Promise<void>;
+  runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: string, prompt: string, images?: PastedContent[], persistedImages?: ContentBlock[], persistedAttachments?: PersistedAttachment[]): Promise<void>;
   startRun(workflow: WorkflowDef, input: StartRunInput, clientRequest?: { id: string; hash: string }): RunRecord;
   execute(runId: string, workflow: WorkflowDef, input: StartRunInput, startAt?: number): Promise<void>;
   historyDeletionPending(runId: string): boolean;

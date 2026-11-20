@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { it as registerTest, vi, expect } from 'vitest';
 import { RUN_STATUS, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { exemptionFor, HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { store, until, root, waitOf, manager, collect, restart, timeline } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -25,7 +25,7 @@ function seedCompletionRequest(senderRunId: string, recipientRunId: string) {
   return request;
 }
 
-export function refusalCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function refusalCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     for (const settledWorker of [false, true]) {
       it(`${runner} ${settledWorker ? 'U20u a done blocked by a settled, uncollected worker gets the uncollected refusal nudge without the will-wait sentence' : 'U20 a done blocked by live workers at the turn end gets one refusal nudge with the will-wait sentence and opens no wait'}`, async () => {
@@ -117,7 +117,7 @@ export function refusalCells(runners: RunnerId[], it: typeof registerTest = regi
     it(`${runner} R18 Finish followed by a provider error retires its intent before restart`, async () => {
       const peer = await parentOn(runner);
       const wire = gatedProviderFailure(root, runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['wait'], receipts: [] } }]);
       await until(wire.held);
       const request = seedCompletionRequest(run.id, peer.id);

@@ -5,7 +5,7 @@
  * (H1), must be dropped when the same turn parks on cezar_ask (H2), and must not
  * park or nudge between a done-less hold-style turn and the follow-up (H3), including
  * when the follow-up's native turn starts late (H4, hearsay-tools/cezarion#1112).
- * Each RUNNER_IDS backend is driven through its own HARNESS_ADAPTERS native mock.
+ * Each BUILT_IN_RUNNER_IDS backend is driven through its own HARNESS_ADAPTERS native mock.
  */
 import { randomUUID } from 'node:crypto';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';

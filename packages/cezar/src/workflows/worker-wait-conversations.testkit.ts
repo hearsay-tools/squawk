@@ -1,4 +1,4 @@
-import { type RunnerId } from '../core/agent-runner.ts';
+
 import { monitoringWakeOf } from './waits.testkit.ts';
 import { delegatingParent, manager, spendWorkerBudget, store, until, worker } from './worker-wait-claude.testkit.ts';
 
@@ -9,7 +9,7 @@ type ConversationPair = ConversationParent & {
   workerCaller: ReturnType<ConversationParent['callerFor']>;
 };
 
-export async function conversationPair(runner: RunnerId = 'claude'): Promise<ConversationPair> {
+export async function conversationPair(runner: string = 'claude'): Promise<ConversationPair> {
   const { p, service, callerFor, close } = await delegatingParent({ runner, permissions: ['spawn', 'wait', 'steer'] });
   await until(() => store.getRun(p.id)?.status === 'waiting');
   const w = await worker(p.id, 'mock:hold', runner);

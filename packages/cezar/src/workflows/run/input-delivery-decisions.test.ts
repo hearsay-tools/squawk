@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makePeerWait, makeProcessWait, makePrWait, makeRunRecord,
   makeSubagentWait, makeTimerWait, makeWorkerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
-import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { acknowledgedExit, cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
 
 const cap = 40;

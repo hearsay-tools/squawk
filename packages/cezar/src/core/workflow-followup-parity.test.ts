@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { exemptionFor, FOLLOWUP_CRITERIA } from './harness-parity.testkit.ts';
 import { workflowFollowupCellNames, WORKFLOW_FOLLOWUP_GROUPS } from './workflow-followup-rows.testkit.ts';
 
@@ -22,7 +22,7 @@ describe('workflow followup family registration', () => {
       expect(source.match(/describeWorkflowFollowup\(/g)).toHaveLength(1);
       workflowFollowupCellNames(group, registration);
     }
-    const expectedNames = RUNNER_IDS.flatMap(runner => FOLLOWUP_CRITERIA.flatMap(row => {
+    const expectedNames = BUILT_IN_RUNNER_IDS.flatMap(runner => FOLLOWUP_CRITERIA.flatMap(row => {
       const exemption = exemptionFor(row.id, runner);
       if (exemption) return [`${runner} ${row.id} exemption — ${exemption.reason}`];
       const modes = ['H3', 'H4', 'H5'].includes(row.id) ? ['fresh', 'continuation'] : ['fresh'];
@@ -48,7 +48,7 @@ describe('workflow followup family registration', () => {
         }) as typeof it,
       }, resolveExemption);
     }
-    const expected = RUNNER_IDS.flatMap(runner => [
+    const expected = BUILT_IN_RUNNER_IDS.flatMap(runner => [
       `late-start-fresh: ${runner} H4 exemption — ${syntheticReason}`,
       `late-ack-fresh: ${runner} H5 exemption — ${syntheticReason}`,
     ]);

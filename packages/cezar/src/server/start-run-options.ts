@@ -10,7 +10,7 @@ import type { Home } from '../home/home.ts';
  */
 import { controlLocation } from '@open-mercato/cezar-contract/control-locations';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import type { ProviderId } from '../core/provider-auth.ts';
 import { clientRequestHash, type ClientRequestPayload } from '../runs/client-request.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
@@ -107,7 +107,7 @@ export async function resolveStartWorkflow(
 export async function providerGateRefusal(
   providerActionError: ProviderActionError,
   workflow: WorkflowDef,
-  runner: RunnerId,
+  runner: string,
 ): Promise<StartRunRefusal | undefined> {
   const blocked = await providerActionError(providersRequiredByWorkflow(workflow, runner));
   return blocked ? { error: blocked, status: 409 } : undefined;
@@ -121,7 +121,7 @@ export async function providerGateRefusal(
  */
 export async function agentProfileRefusal(
   resolveProfile: ProfileResolver,
-  runner: RunnerId,
+  runner: string,
   agentProfile: string | undefined,
 ): Promise<StartRunRefusal | undefined> {
   if (agentProfile === undefined) return undefined;

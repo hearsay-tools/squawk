@@ -16,7 +16,7 @@ describe('native runner skills list parity', () => {
     it(`${runner}: lists project, user and plugin metadata through its native wire`, async () => {
       const cwd = await mkdtemp(join(tmpdir(), 'skills-parity-'));
       try {
-        const catalog = new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) });
+        const catalog = new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner]!.mockBin }) });
         const result = runnerSkillListSchema.parse(await catalog.get({ runner, cwd }));
         expect(result.source).toBe('live');
         expect(result.skills).toContainEqual(expect.objectContaining({ id: 'probe-project', scope: 'repo' }));

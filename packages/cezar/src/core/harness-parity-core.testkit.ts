@@ -1,3 +1,4 @@
+import { registeredRunners, isRegisteredRunner, runnerDefinition } from './runner-registry.ts';
 /**
  * Shared fixtures for the harness parity matrix (`harness-parity.test.ts`,
  * spec `.ai/specs/2026-09-04-harness-parity-matrix.md`, #68).
@@ -28,12 +29,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { RUNNER_IDS, type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSession, type RunnerId, type SessionOptions } from './agent-runner.ts';
+import type { AgentRunSpec, AgentEvent, AgentRunResult, AgentSession, SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
-import { isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
-import { factsWhere } from './runner-fact-rows.testkit.ts';
+
+import { factsWhere, factRows } from './runner-fact-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -312,7 +313,7 @@ export const PERMISSION_CRITERIA = [
 ] as const;
 
 export interface HarnessAdapter {
-  readonly backend: RunnerId;
+  readonly backend: string;
   /** Every human ask wire this runner exposes; cezar_ask when it has no native one. */
   readonly askResumeCases: readonly {
     kind: string;
@@ -379,7 +380,7 @@ const adapters = new WeakMap<RunnerDefinition, HarnessAdapter>();
  * `cezar-ask` and `cezar-wait` prompts, which every mock answers the same way.
  */
 export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
-  let adapter = adapters.get(definition);
+  let adapter = adapters.get(definition)!;
   if (!adapter) {
     const { mock } = definition;
     adapter = {
@@ -401,17 +402,17 @@ export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
  * runners it drives (`useRunners` and `onlyRunner`), and reading a runner that is not registered
  * throws, never returns undefined. `Object.values` lists the registered runners.
  */
-export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = new Proxy({} as Record<RunnerId, HarnessAdapter>, {
-  get: (_target, key) => typeof key === 'string' ? harnessAdapter(runnerDefinition(key as RunnerId)) : undefined,
+export const HARNESS_ADAPTERS: Readonly<Record<string, HarnessAdapter>> = new Proxy({} as Record<string, HarnessAdapter>, {
+  get: (_target, key) => typeof key === 'string' ? harnessAdapter(runnerDefinition(key as string)) : undefined,
   has: (_target, key) => typeof key === 'string' && isRegisteredRunner(key),
   ownKeys: () => registeredRunners().map(definition => definition.id),
   getOwnPropertyDescriptor: (_target, key) => typeof key === 'string' && isRegisteredRunner(key)
-    ? { enumerable: true, configurable: true, value: harnessAdapter(runnerDefinition(key as RunnerId)) } : undefined,
+    ? { enumerable: true, configurable: true, value: harnessAdapter(runnerDefinition(key as string)) } : undefined,
 });
 
 /** The prompt text that drives one backend's mock into one shared scenario. */
-export function promptFor(backend: RunnerId, scenario: ScenarioName): string {
-  const prompt = HARNESS_ADAPTERS[backend].scenarios[scenario];
+export function promptFor(backend: string, scenario: ScenarioName): string {
+  const prompt = HARNESS_ADAPTERS[backend]!.scenarios[scenario]!;
   if (prompt === undefined) {
     throw new Error(`${backend} declares no prompt for scenario "${scenario}"`);
   }
@@ -437,7 +438,7 @@ export type ExemptionKind = 'capability-absent' | 'scenario-unconstructible';
 export interface ParityExemption {
   /** The criterion's stable id — `S9`, `R3`. */
   readonly criterion: string;
-  readonly backend: RunnerId;
+  readonly backend: string;
   readonly kind: ExemptionKind;
   /** Why this backend's WIRE cannot carry it. Never "not implemented yet". */
   readonly reason: string;
@@ -605,29 +606,31 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
  * and the shared code that reads the same fact cannot disagree on which runners it covers.
  */
 function exemptWhere(criterion: string, kind: ExemptionKind, matches: (facts: RunnerFacts) => boolean,
-  reason: (backend: RunnerId) => string): ParityExemption[] {
+  reason: (backend: string) => string): ParityExemption[] {
   return factsWhere(matches).map(backend => ({ criterion, backend, kind, reason: reason(backend) }));
 }
 
 /** The runners whose human-prompt hold ends when the wire reports the prompt read, before the
  *  prompt's acknowledgement (`humanPromptHold`). */
-export function humanPromptReadReleases(): RunnerId[] {
+export function humanPromptReadReleases(): string[] {
   return factsWhere(facts => facts.humanPromptHold === 'consumption');
 }
 
-/** Every runner but `live`: a protocol quirk that only one runner's wire carries. */
-function exceptRunner(live: RunnerId): RunnerId[] {
-  return RUNNER_IDS.filter(backend => backend !== live);
+/** Every runner but `live`: a protocol quirk that only one runner's wire carries. Read from the
+ *  fact rows, not the registry, so the static exemption table builds in a test that registers no
+ *  runner. */
+function exceptRunner(live: string): string[] {
+  return Object.keys(factRows()).filter(backend => backend !== live);
 }
 
 /** A runner-specific reason; a runner the facts select without one fails the table at load. */
-function reasonFor(criterion: string, backend: RunnerId, reasons: Partial<Record<RunnerId, string>>): string {
+function reasonFor(criterion: string, backend: string, reasons: Partial<Record<string, string>>): string {
   const reason = reasons[backend];
   if (reason === undefined) throw new Error(`${criterion} exempts ${backend} by its declared facts, but gives no reason`);
   return reason;
 }
 
-export function exemptionFor(criterion: string, backend: RunnerId): ParityExemption | undefined {
+export function exemptionFor(criterion: string, backend: string): ParityExemption | undefined {
   return PARITY_EXEMPTIONS.find((e) => e.criterion === criterion && e.backend === backend);
 }
 
@@ -658,7 +661,7 @@ export function textEvents(v1: readonly AgentEvent[]): string[] {
 }
 
 export interface SeamObservation {
-  readonly backend: RunnerId;
+  readonly backend: string;
   readonly elapsedMs: number;
   readonly failure?: Error;
   readonly v1: readonly AgentEvent[];
@@ -693,20 +696,20 @@ export interface DriveSeamOptions {
  * transport in play.
  */
 export async function driveSeam(
-  backend: RunnerId,
+  backend: string,
   scenario: ScenarioName,
   opts: DriveSeamOptions = {},
 ): Promise<SeamObservation> {
   const started = Date.now();
-  const adapter = HARNESS_ADAPTERS[backend];
-  const savedBin = process.env[adapter.binEnv];
+  const adapter = HARNESS_ADAPTERS[backend]!;
+  const savedBin = process.env[adapter.binEnv]!;
   const savedDry = process.env.CEZ_DRY_RUN;
-  process.env[adapter.binEnv] = adapter.mockBin;
+  process.env[adapter.binEnv]! = adapter.mockBin;
   delete process.env.CEZ_DRY_RUN;
   const cwd = mkdtempSync(join(tmpdir(), `cez-parity-${backend}-`));
   // A failed spawn has no native wire. Exercise the real OS boundary through
   // the adapter's binary setting, leaving runtime scenarios on their own mocks.
-  if (scenario === 'missing-binary') process.env[adapter.binEnv] = join(cwd, 'missing-executable');
+  if (scenario === 'missing-binary') process.env[adapter.binEnv]! = join(cwd, 'missing-executable');
   const v1: AgentEvent[] = [];
   const v2: UiEvent[] = [];
   let session: AgentSession | undefined;
@@ -752,7 +755,7 @@ export async function driveSeam(
   } finally {
     session?.interrupt();
     if (savedBin === undefined) delete process.env[adapter.binEnv];
-    else process.env[adapter.binEnv] = savedBin;
+    else process.env[adapter.binEnv]! = savedBin;
     if (savedDry !== undefined) process.env.CEZ_DRY_RUN = savedDry;
     rmSync(cwd, { force: true, recursive: true });
   }

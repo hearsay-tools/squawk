@@ -62,8 +62,8 @@ import { ISSUE_URL_RE, namesForeignReference, originatingIssue, refUrlNumber, re
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
-import { LEGACY_RUNNER_IDS } from '../core/runner-registry.ts';
+
+import { LEGACY_RUNNER_IDS } from '../core/runner-ids.ts';
 import {
   ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
@@ -1492,7 +1492,7 @@ export class RunStore extends EventEmitter {
     model?: string | undefined;
     /** Reasoning-effort pin (#45). Absent = harness default. */
     effort?: string | undefined;
-    runner?: RunnerId | undefined;
+    runner?: string | undefined;
     /** Composer's per-task agent account (spec 2026-07-29-agent-profiles). */
     agentProfile?: string | undefined;
     autonomous?: boolean | undefined;

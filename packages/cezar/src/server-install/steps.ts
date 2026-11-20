@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
-import { isRunnerId } from '../core/agent-runner.ts';
+import { knownRunnerIds, runnerDefinition } from '../core/runner-registry.ts';
 import { detectEnvironment, type BackendCheck } from '../core/backend-detect.ts';
 import type { RunnerCli } from '../core/runner-definition.ts';
-import { runnerDefinition } from '../core/runner-registry.ts';
 import {
   CANCEL,
   type InstallContext,
@@ -311,11 +310,11 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
     async check(ctx) {
       if (ctx.dryRun) return false;
       const checks = await detect();
-      // Satisfied when at least one agent CLI is present and authed. Derived from RUNNER_IDS,
-      // never a literal list: `BackendCheck['name']` also carries the non-agent tools (`gh`,
+      // Satisfied when at least one agent CLI is present and authed. Derived from the registered
+      // runners, never a literal list: `BackendCheck['name']` also carries the non-agent tools (`gh`,
       // `git`), so the gate has to filter — and a hand-written array silently under-counts the
       // moment a runner is added (a pi-only host reporting "no agent CLI", #387 review).
-      return checks.some((c) => isRunnerId(c.name) && c.available);
+      return checks.some((c) => knownRunnerIds().includes(c.name) && c.available);
     },
     async run(ctx) {
       const checks = await detect();
@@ -354,7 +353,7 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
 
 /** Where the installer gets an agent CLI: its definition's install source, or null for a name no runner has. */
 function agentCliSource(name: string): RunnerCli['installSource'] {
-  return isRunnerId(name) ? runnerDefinition(name).cli.installSource : null;
+  return knownRunnerIds().includes(name) ? runnerDefinition(name).cli.installSource : null;
 }
 
 /** The npm package of an agent CLI, or undefined for a tool the installer gets no other way. */

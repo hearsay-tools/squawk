@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import * as childProcess from 'node:child_process';
 import { execFileSync, type ChildProcess } from 'node:child_process';
 import type { IncomingMessage } from 'node:http';
@@ -44,15 +45,15 @@ vi.mock('node:child_process', async (original) => {
   }) as typeof actual.spawn };
 });
 
-import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from './agent-runner.js';
+import type { AgentEvent, AgentSession } from './agent-runner.js';
 import { createRunner } from './runner-registry.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
 
 /** The runners whose EOF cleanup cells (the `eof-` families) run. */
-export const EOF_CLEANUP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi');
+export const EOF_CLEANUP_RUNNERS: readonly string[] = BUILT_IN_RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi');
 /** The runners whose cell reaps a live child after stdout ends cleanly. */
-export const CLEAN_EOF_REAP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'pi');
+export const CLEAN_EOF_REAP_RUNNERS: readonly string[] = BUILT_IN_RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'pi');
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
@@ -75,8 +76,8 @@ async function leftovers(cwd: string): Promise<{ group: number; session: number 
   }, { timeout: 10_000 });
 }
 
-async function withChild(backend: RunnerId, check: (session: AgentSession, child: ChildProcess, events: AgentEvent[], settled: Promise<unknown>, cwd: string) => Promise<void>, scenario: 'no-progress' | 'no-progress-leftover' | 'no-progress-ignore-term' = 'no-progress', eofTermGraceMs = 100) {
-  const adapter = HARNESS_ADAPTERS[backend];
+async function withChild(backend: string, check: (session: AgentSession, child: ChildProcess, events: AgentEvent[], settled: Promise<unknown>, cwd: string) => Promise<void>, scenario: 'no-progress' | 'no-progress-leftover' | 'no-progress-ignore-term' = 'no-progress', eofTermGraceMs = 100) {
+  const adapter = HARNESS_ADAPTERS[backend]!;
   const cwd = mkdtempSync(join(tmpdir(), `cez-shutdown-${backend}-`));
   vi.stubEnv('CEZ_DRY_RUN', '');
   vi.stubEnv(adapter.binEnv, adapter.mockBin);
@@ -144,7 +145,7 @@ function denyExitEvidence(child: ChildProcess, psFailure: 'unavailable' | 'timeo
 }
 const [outsideSignal, endEscalation, outputFailure, ownGroup, stopGroup, endGroup, /* S29: omp-input-pipe.test.ts */, ownExit, outsideKill, lateOutsideSignal, unknownOutsideSignal] = SHUTDOWN_CRITERIA;
 
-function outsideSignalCells(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function outsideSignalCells(backend: string, it: typeof registerTest = registerTest): void {
 
     it(`${backend} ${outsideSignal.id} ${outsideSignal.name}`, async () => {
       // Process exit must classify the failure even when HTTP stream closure
@@ -192,7 +193,7 @@ function outsideSignalCells(backend: RunnerId, it: typeof registerTest = registe
     }
 }
 
-function endEscalationCells(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function endEscalationCells(backend: string, it: typeof registerTest = registerTest): void {
 
     it(`${backend} ${endEscalation.id} ${endEscalation.name}`, async () => {
       await withChild(backend, async (session, child, events, settled) => {
@@ -232,7 +233,7 @@ function endEscalationCells(backend: RunnerId, it: typeof registerTest = registe
     }, 30_000);
 }
 
-function processGroups(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function processGroups(backend: string, it: typeof registerTest = registerTest): void {
 
     // hearsay-tools/cezarion#890: what the agent leaves in its process group ends with it.
     it.skipIf(process.platform === 'win32')(`${backend} ${ownGroup.id} ${ownGroup.name}`, async () => {
@@ -268,7 +269,7 @@ function processGroups(backend: RunnerId, it: typeof registerTest = registerTest
     }, 50_000);
 }
 
-function exitReaping(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function exitReaping(backend: string, it: typeof registerTest = registerTest): void {
 
     // hearsay-tools/cezarion#1286: Squawk signals nothing when the agent exits on EOF, so the stdio MCP
     // servers and background jobs it left in its group are ended by the reap after its exit.
@@ -304,7 +305,7 @@ function exitReaping(backend: RunnerId, it: typeof registerTest = registerTest):
     }, 40_000);
 }
 
-function signalReadiness(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function signalReadiness(backend: string, it: typeof registerTest = registerTest): void {
 
 
     it(`${backend} an ignore-term stall exits through its own backstop without SIGKILL`, async () => {
@@ -367,7 +368,7 @@ process.on = function(event, listener) {
     }, 15_000);
 }
 
-function eofEvidence(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function eofEvidence(backend: string, it: typeof registerTest = registerTest): void {
 
     if (CLEAN_EOF_REAP_RUNNERS.includes(backend)) {
       it(`${backend} reaps a live child after stdout ends cleanly`, async () => {
@@ -421,7 +422,7 @@ function eofEvidence(backend: RunnerId, it: typeof registerTest = registerTest):
   }, 15_000);
 }
 
-function eofIntent(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function eofIntent(backend: string, it: typeof registerTest = registerTest): void {
 
   for (const intent of ['end', 'interrupt'] as const) {
     for (const when of ['before EOF', 'during probe', 'after TERM'] as const) {
@@ -461,7 +462,7 @@ function eofIntent(backend: RunnerId, it: typeof registerTest = registerTest): v
   }
 }
 
-function eofDeadline(backend: RunnerId, it: typeof registerTest = registerTest): void {
+function eofDeadline(backend: string, it: typeof registerTest = registerTest): void {
 
   it(`${backend} interrupt during automatic cleanup keeps the earlier KILL deadline`, async () => {
     await withChild(backend, async (session, child, _events, settled) => {
@@ -489,7 +490,7 @@ function eofDeadline(backend: RunnerId, it: typeof registerTest = registerTest):
 }
 
 export const shutdownCells = { 'outside-signal': outsideSignalCells, 'end-escalation': endEscalationCells, 'process-groups': processGroups, 'exit-reaping': exitReaping, 'signal-readiness': signalReadiness, 'eof-evidence': eofEvidence, 'eof-intent': eofIntent, 'eof-deadline': eofDeadline };
-export const SHUTDOWN_GROUPS = Object.fromEntries(Object.keys(shutdownCells).map(family => [family, (family.startsWith('eof-') ? EOF_CLEANUP_RUNNERS : RUNNER_IDS).map(runner => ({ runner, family: family as keyof typeof shutdownCells }))]));
+export const SHUTDOWN_GROUPS = Object.fromEntries(Object.keys(shutdownCells).map(family => [family, (family.startsWith('eof-') ? EOF_CLEANUP_RUNNERS : BUILT_IN_RUNNER_IDS).map(runner => ({ runner, family: family as keyof typeof shutdownCells }))]));
 export function registerShutdownGroup(group: keyof typeof shutdownCells): void {
   describe('runner shutdown parity (hearsay-tools/cezarion#843)', () => {
     for (const row of SHUTDOWN_GROUPS[group]!) shutdownCells[row.family](row.runner);

@@ -1,5 +1,5 @@
 import type { Home } from '../home/home.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import type { ActiveRun } from '../workflows/active-run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -12,14 +12,14 @@ import { boundWorkerAccountEnv, captureWorkerAccount, type WorkerAccountBinding 
 import { parseDelegationEffort } from './effort.ts';
 import { DelegationPolicyError } from './policy.ts';
 
-type ExecutionSelection = { backend?: RunnerId | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string };
+type ExecutionSelection = { backend?: string | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string };
 
 export function delegationExecutionSettings(state: Pick<ActiveRun, 'liveSession'> | undefined): DelegationExecutionSettings {
   if (!state?.liveSession.session?.open || !state.liveSession.delegationSettings) throw new DelegationPolicyError('incompatible_state', 'Parent session settings unavailable');
   return structuredClone(state.liveSession.delegationSettings);
 }
 
-export async function selectDelegationExecutionSettings(repoRoot: string, parent: DelegationExecutionSettings, selection: { backend?: RunnerId | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string }, validateModel: ((settings: DelegationExecutionSettings) => Promise<void>) | undefined, home: Home): Promise<DelegationExecutionSettings> {
+export async function selectDelegationExecutionSettings(repoRoot: string, parent: DelegationExecutionSettings, selection: { backend?: string | undefined; model?: string | undefined; effort?: string | undefined; agentProfile?: string }, validateModel: ((settings: DelegationExecutionSettings) => Promise<void>) | undefined, home: Home): Promise<DelegationExecutionSettings> {
   const runner = selection.backend ?? parent.runner;
   const sameBackend = runner === parent.runner;
   try {
@@ -41,7 +41,7 @@ function refuseModelLock(repoRoot: string, parent: DelegationExecutionSettings, 
   return { effortPin, locked };
 }
 
-async function bindAccount(repoRoot: string, parent: DelegationExecutionSettings, selection: ExecutionSelection, runner: RunnerId, sameBackend: boolean, home: Home) {
+async function bindAccount(repoRoot: string, parent: DelegationExecutionSettings, selection: ExecutionSelection, runner: string, sameBackend: boolean, home: Home) {
   let accountBinding = parent.accountBinding;
   let env = buildChildEnv({ backend: runner });
   if (!sameBackend || selection.agentProfile !== undefined) {
@@ -57,7 +57,7 @@ async function bindAccount(repoRoot: string, parent: DelegationExecutionSettings
   return { accountBinding, env };
 }
 
-async function chooseModel(repoRoot: string, parent: DelegationExecutionSettings, selection: ExecutionSelection, runner: RunnerId, sameBackend: boolean, effortPin: string | undefined, locked: boolean, accountBinding: WorkerAccountBinding, env: NodeJS.ProcessEnv, validateModel?: (settings: DelegationExecutionSettings) => Promise<void>): Promise<DelegationExecutionSettings> {
+async function chooseModel(repoRoot: string, parent: DelegationExecutionSettings, selection: ExecutionSelection, runner: string, sameBackend: boolean, effortPin: string | undefined, locked: boolean, accountBinding: WorkerAccountBinding, env: NodeJS.ProcessEnv, validateModel?: (settings: DelegationExecutionSettings) => Promise<void>): Promise<DelegationExecutionSettings> {
   const native = await readAgentModelSettings(runner, repoRoot, env);
   const chosen = selection.model ?? (sameBackend ? parent.model : locked ? undefined : native.model);
   const normalized = normalizeModelForBackend(runner, chosen, { configuredProvider: native.provider });

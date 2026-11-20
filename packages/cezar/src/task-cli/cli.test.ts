@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { runTaskCommand, taskHelp, type TaskIo } from './cli.ts';
 import { discoverCockpit } from './discovery.ts';
 import { TaskCliError } from './http.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { taskCliFixture } from './cli.testkit.ts';
 
 describe('cez task', () => {
@@ -249,7 +249,7 @@ describe('cez task', () => {
 
 
     describe('runner flag (hearsay-tools/cezarion#632)', () => {
-      const cases = RUNNER_IDS.flatMap((runner) => [
+      const cases = BUILT_IN_RUNNER_IDS.flatMap((runner) => [
         { runner, flags: ['--runner', runner] },
         { runner, flags: ['--backend', runner] },
         { runner, flags: ['--runner', runner, '--backend', runner] },

@@ -5,5 +5,5 @@ import { claudeRunner } from './definition.ts';
 
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 
-// The wait list's RUNNER_IDS turn-end entry cells on the claude wire (hearsay-tools/cezarion#1525).
+// The wait list's BUILT_IN_RUNNER_IDS turn-end entry cells on the claude wire (hearsay-tools/cezarion#1525).
 describeWaitParity({ runner: claudeRunner, part: 'entries' });

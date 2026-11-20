@@ -1,5 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { isSignalTerminationExit } from './agent-runner.ts';
+import { isSignalTerminationExit } from './agent-runner-values.ts';
 
 /** Default wall-clock cap for a single run before SIGTERM → SIGKILL.
  *  Managed workflow sessions default to `timeoutMs: 0` to disable it entirely. */

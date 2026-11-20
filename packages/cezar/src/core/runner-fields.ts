@@ -49,7 +49,10 @@ function issuesAt(at: (string | number)[], schema: z.ZodType, value: unknown): z
 export function runnerFieldIssues(data: unknown, fields: RunnerFields, known: () => readonly string[] = registeredIds): z.core.$ZodIssue[] {
   const issues: z.core.$ZodIssue[] = [];
   for (const { path, value } of (fields.ids ?? []).flatMap(field => locate(data, field))) {
-    issues.push(...issuesAt(path, z.enum(known() as [string, ...string[]]), value));
+    // A process that registered no runner knows no id: every named id is unknown, so refuse it
+    // without building an empty enum.
+    const ids = known();
+    issues.push(...issuesAt(path, ids.length > 0 ? z.enum(ids as [string, ...string[]]) : z.never(), value));
   }
   for (const { value } of (fields.keys ?? []).flatMap(field => locate(data, field))) {
     if (typeof value !== 'object') continue;

@@ -28,7 +28,7 @@ import type {
   SessionOptions,
   ToolGrant,
 } from '../../core/agent-runner.js';
-import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { OMP_FACTS } from './facts.js';
 import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from './spec-support.js';
 import { ompRequestedTools } from '../../core/runner-tool-grants.ts';
