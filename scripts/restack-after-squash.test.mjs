@@ -14,9 +14,9 @@ function write(dir, file, lines) {
 }
 
 /**
- * A bare `origin`, a clone `w` and a fake `gh` that prints `pr.json`. `parent` is PR #1 with one
- * commit on `a`; `child` is stacked on it (`b`, then `a`). With `late`, PR #1 gains a commit after
- * `child` forked. Main moves `c`, then PR #1 is squash-merged into main, as GitHub does.
+ * A bare `origin`, a clone `w` and a fake `gh` that prints `pr.json`. `parent` is pull request 1 with one
+ * commit on `a`; `child` is stacked on it (`b`, then `a`). With `late`, pull request 1 gains a commit after
+ * `child` forked. Main moves `c`, then pull request 1 is squash-merged into main, as GitHub does.
  */
 function stackedRepo(t, { late = false, state = 'MERGED' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'restack-'));
