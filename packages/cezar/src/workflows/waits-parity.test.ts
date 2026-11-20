@@ -12,5 +12,5 @@ useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 // The wait list's criteria guard and single-runner cells; each runner's RUNNER_IDS cells run from
 // the semantic part files in `WAIT_PARITY_FILES` and the fold files in `WAIT_FOLDS` (hearsay-tools/cezarion#1301).
 describeWaitParity('once');
-// The native subagent cells run from `waits-<runner>-subagents-parity.test.ts` (hearsay-tools/cezarion#2431).
+// The native subagent cells of each runner with a live row run from `waits-<runner>-subagents-parity.test.ts` (hearsay-tools/cezarion#2431).
 subagentGuard(runner => `waits-${runner}-subagents-parity.test.ts`);
