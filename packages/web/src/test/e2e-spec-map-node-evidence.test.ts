@@ -94,7 +94,7 @@ it('refuses publication when a captured server function has invalid source bound
 })
 
 it('keeps the shared server boot apart from the specs that ran a function', () => {
-  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 2.
+  // packages/web/e2e/README.md § Choosing specs for a change.
   const source = 'packages/cezar/src/catalog.ts'
   const map = buildMap({
     'packages/web/e2e/a.e2e.ts': { status: 'passed', executed: ['packages/web/src/main.tsx'], loaded: [], functions: [
@@ -118,7 +118,7 @@ it('keeps the shared server boot apart from the specs that ran a function', () =
 })
 
 it('lists the repository code files any process loaded, and the processes that left no coverage', () => {
-  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+  // packages/web/e2e/README.md § Choosing specs for a change.
   const root = mkdtempSync(join(tmpdir(), 'cez-node-loaded-'))
   try {
     const put = (path: string, text = '') => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }

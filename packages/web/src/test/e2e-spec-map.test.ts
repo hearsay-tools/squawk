@@ -256,7 +256,7 @@ describe('spec reach', () => {
   })
 
   it('lists the loaded files only when every shard recorded them and every process left coverage', () => {
-    // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+    // packages/web/e2e/README.md § Choosing specs for a change.
     const shard = (nodeLoaded?: string[], unflushed?: string[] | null) => ({ version: 1 as const, specs: {},
       ...(nodeLoaded ? { nodeLoaded } : {}), ...(unflushed !== undefined ? { unflushed } : {}) })
     expect(joinLoaded([shard(['b.ts'], []), shard(['a.ts', 'b.ts'], [])])).toEqual({ files: ['b.ts', 'a.ts', 'b.ts'] })
