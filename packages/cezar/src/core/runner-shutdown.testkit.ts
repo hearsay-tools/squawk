@@ -47,6 +47,7 @@ vi.mock('node:child_process', async (original) => {
 
 import type { AgentEvent, AgentSession } from './agent-runner.js';
 import { createRunner } from './runner-registry.js';
+import { RUNNER_FACTS } from './runner-facts.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity-core.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
 
@@ -215,8 +216,8 @@ function endEscalationCells(backend: string, it: typeof registerTest = registerT
           exitedAtSettlement = child.exitCode !== null || child.signalCode !== null;
         });
         child.kill('SIGSTOP');
-        // OpenCode carries native output on HTTP/SSE, not subprocess stdout.
-        const output = backend === 'opencode' ? eventStreams.at(-1)! : child.stdout!;
+        // An HTTP wire (OpenCode) carries native output on HTTP/SSE, not subprocess stdout.
+        const output = RUNNER_FACTS[backend]!.transport === 'http' ? eventStreams.at(-1)! : child.stdout!;
         expect(output).toBeDefined();
         output.destroy(new Error('stdout broke'));
         // bound: wait for SIGKILL delivery and native process exit.
@@ -273,10 +274,10 @@ function exitReaping(backend: string, it: typeof registerTest = registerTest): v
 
     // hearsay-tools/cezarion#1286: Squawk signals nothing when the agent exits on EOF, so the stdio MCP
     // servers and background jobs it left in its group are ended by the reap after its exit.
-    // OpenCode's runner ends by a Squawk signal on end (S27/S28's path), so its cell does not
-    // reach the reap; S31 does.
+    // A server runner (OpenCode, `transport: 'http'`) ends its server by a Squawk signal on end
+    // (S27/S28's path), so its cell does not reach the reap; S31 does.
     it.skipIf(process.platform === 'win32')(`${backend} ${ownExit.id} ${ownExit.name}`, async () => {
-      const signalsOnEnd = backend === 'opencode';
+      const signalsOnEnd = RUNNER_FACTS[backend]!.transport === 'http';
       // Past any EOF exit and short of the test timeout: only the leader's own exit settles it.
       await withChild(backend, async (session, child, _events, settled, cwd) => {
         const { group, session: setsid } = await leftovers(cwd);
