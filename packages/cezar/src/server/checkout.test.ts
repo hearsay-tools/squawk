@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -42,7 +44,7 @@ import {
   type RegisterProjectResponse,
   type ServerDeps,
 } from './server.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /**

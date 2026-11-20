@@ -6,6 +6,12 @@
  * after an upgrade (AGENTS.md, Changing what already works). `claude-cli` is the legacy id of
  * `claude`.
  */
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
@@ -13,7 +19,11 @@ import { runRecordSchema } from '../runs/store.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
 import type { AgentBackend, RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 
 /**

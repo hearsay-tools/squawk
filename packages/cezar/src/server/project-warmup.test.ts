@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -12,7 +13,6 @@ import { ProjectContexts, sweepRegisteredPreviewLeftovers } from './project-cont
 import { startServer } from './start-server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 // The post-listen chain reads the registry, then sweeps preview leftovers, then decides on the

@@ -1,7 +1,13 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { existsSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { withHeldAck, withHeldResponse, withRejectedInput } from './owned-input-delivery.testkit.ts';
-import { HARNESS_ADAPTERS } from './harness-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 
 describe('delivery control wrappers', () => {

@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -23,7 +25,7 @@ import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { planProjectMigration } from './plan.ts';
 import { buildMigrationProject, git, projectSnapshot, removeMigrationProject, TASK, WORKER, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /**

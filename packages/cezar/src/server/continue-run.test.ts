@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -10,7 +14,9 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
 

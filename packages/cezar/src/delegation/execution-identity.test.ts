@@ -1,3 +1,8 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +13,10 @@ import {
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 // The cases bind accounts of several providers; the schema reads each one's account layout from the registry.
 

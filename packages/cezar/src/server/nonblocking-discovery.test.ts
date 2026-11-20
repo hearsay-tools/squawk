@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +10,6 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
 import * as git from './git.ts';

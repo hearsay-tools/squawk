@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { PROVIDER_IDS } from './provider-auth.ts';
 import {
@@ -7,7 +8,6 @@ import {
   profileEnvVar,
   supportsProfiles,
 } from './agent-profiles.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The account mappings are read from the registry; this file pins all five built-ins.
 

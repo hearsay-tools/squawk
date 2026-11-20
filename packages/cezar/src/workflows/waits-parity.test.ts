@@ -1,9 +1,9 @@
+import '../core/register-all-runners.testkit.ts';
 import { describeWaitParity } from './waits-parity-cells.testkit.ts';
 import { subagentGuard } from './waits-subagents-parity-cells.testkit.ts';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The single-runner cells drive the Claude wire.
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));

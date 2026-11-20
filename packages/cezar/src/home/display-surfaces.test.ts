@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { productIdentity } from './identity.ts';
 import { printServeBanner, warnServeBind } from '../serve-boot.ts';
@@ -7,7 +8,6 @@ import { taskHelp } from '../task-cli/cli.ts';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import { checkoutRoot, discoverCockpit } from '../task-cli/discovery.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // DetectEnvironment reports a row for every runner.
 

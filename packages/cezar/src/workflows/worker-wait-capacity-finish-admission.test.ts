@@ -1,9 +1,13 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { describe, expect, it, vi } from 'vitest';
 import * as profiles from '../workspace/agent-profiles.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { executions, manager, parent, restart, semaphore, store, until, worker, work } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { executions, manager, parent, restart, semaphore, store, until, worker, work } from './worker-wait-core.testkit.ts';
 import { sessionOf } from './worker-wait-readiness.testkit.ts';
 import { expectLegacyFinishRefused, useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+registerRunner(claudeRunner);
 
 async function pumps() {
   await Promise.all([...work.pending].filter(([, label]) => label === 'pump').map(([promise]) => promise));

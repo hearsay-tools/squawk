@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +13,7 @@ import type { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectWarmCandidate } from './project-context.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */

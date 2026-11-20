@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { runnerSchema } from '@open-mercato/cezar-contract/runner';
 import { RUNNER_COCKPIT_FACTS } from '@open-mercato/cezar-contract/runner-facts';
@@ -5,7 +6,6 @@ import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner, runnerDefinition } from './runner-registry.ts';
 import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {

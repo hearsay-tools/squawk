@@ -1,3 +1,5 @@
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../../runners/claude/definition.ts';
 import { Home } from '../../home/home.ts';
 import { useTestHome } from '../../home/test-home.testkit.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
@@ -11,7 +13,7 @@ import { runInstall, runUninstall } from '../engine.ts';
 import { loadServerState } from '../state.ts';
 import { createAutoUi } from '../ui.ts';
 import type { InstallContext, Runner, Ui } from '../types.ts';
-import '../../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 // The dry-run install walks the dependency step, which probes every runner.
 

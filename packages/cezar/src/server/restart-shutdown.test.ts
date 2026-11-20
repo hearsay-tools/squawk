@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { get } from 'node:http';
@@ -17,7 +18,6 @@ import { clearProjectProbeCache, listProjects, registerProject } from '../worksp
 import { ProjectContexts } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
 import { startServer } from './start-server.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 // bound: a hang guard only. Each awaited promise is the product's own signal and settles at once when it works.

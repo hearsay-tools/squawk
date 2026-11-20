@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { reportsIndex } from '../artifacts/reports-index.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -36,7 +37,6 @@ import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 /**

@@ -13,7 +13,8 @@ import { countTranscriptReads, restoreTranscriptReads } from '../runs/transcript
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { seedSettledFamily } from './delegation-reconcile.testkit.ts';
-import { delegatingParent, manager as liveManager, store as liveStore, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { delegatingParent, manager as liveManager, store as liveStore, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';

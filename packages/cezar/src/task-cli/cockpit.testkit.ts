@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
@@ -13,7 +14,6 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { Cockpit } from './http.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 /**

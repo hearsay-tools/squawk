@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -14,7 +16,7 @@ import { ProjectContexts } from './project-context.ts';
 import type { RepoHandleDiscovery } from './forge/github.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 const handle = { owner: 'acme', name: 'service' };

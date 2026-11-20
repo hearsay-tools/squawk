@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -17,7 +19,7 @@ import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 describe('task file links', () => {

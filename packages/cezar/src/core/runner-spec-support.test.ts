@@ -1,7 +1,7 @@
+import '../core/register-all-runners.testkit.ts';
 import { expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The test reads every runner definition.
 

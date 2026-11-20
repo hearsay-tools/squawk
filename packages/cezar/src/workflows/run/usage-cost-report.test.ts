@@ -1,3 +1,4 @@
+import '../../core/register-all-runners.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

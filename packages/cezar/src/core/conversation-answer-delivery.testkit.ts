@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +13,6 @@ import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 import { ANSWER_DELIVERY_CRITERIA, HARNESS_ADAPTERS, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 

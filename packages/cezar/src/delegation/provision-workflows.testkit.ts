@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { registrationGroups } from '../core/registration-coverage.testkit.ts';
 import type { Caller } from './credentials.ts';
@@ -12,7 +13,6 @@ import { onTestFinished, afterEach, beforeEach, expect, vi } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { AgentRunResult, AgentRunSpec, AgentSession, AgentEvent } from '../core/agent-runner.ts';
 import * as runners from '../core/runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';

@@ -1,3 +1,9 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -9,7 +15,6 @@ import {
   type ProviderId,
   type RunProviderCommand,
 } from '../core/provider-auth.ts';
-import '../core/register-all-runners.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RuntimeAuthProfileResolver } from './provider-auth-runtime.ts';
@@ -20,6 +25,11 @@ import {
   recoverWithProviderRuntimeAuthObservation,
   watchProviderRuntimeAuthFailures,
 } from './provider-auth-runtime.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
+registerRunner(piRunner);
+registerRunner(ompRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

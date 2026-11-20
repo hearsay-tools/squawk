@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -32,7 +33,6 @@ import { createApp, WorkspaceEventBus } from './server.ts';
 import { projectPaths } from '../project-paths.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
 
 
 // Server prewarming outlives the HTTP response. Keep unrelated host discovery

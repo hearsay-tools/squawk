@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +11,6 @@ import {
   type ProviderCommandResult,
   type RunProviderCommand,
 } from './provider-auth.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The service reads every provider's login data from the registry; this file probes all five.
 

@@ -1,7 +1,7 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { modelConflictsWithRunner } from './model-presets.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // A conflict compares the model with every registered runner's presets.
 

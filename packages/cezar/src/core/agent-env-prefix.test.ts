@@ -1,6 +1,6 @@
+import '../core/register-all-runners.testkit.ts';
 import { expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv } from './agent-env.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // Every case runs over each runner id; buildChildEnv reads each one's allow-list prefixes from the registry.
 import { RUNNER_IDS } from './agent-runner.ts';

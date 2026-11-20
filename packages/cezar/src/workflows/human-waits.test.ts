@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -9,14 +11,16 @@ import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { AskQuestion, HumanWaitEntry } from '@open-mercato/cezar-contract';
 import { questionMessage } from '../delegation/questions.ts';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { handoffInstructions } from '../handoff.ts';
 import { PROSE_HUMAN_GATE } from '../runs/transcript-facts.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { eventCheckpoint, manager, parent, restart, root, store, until, delegatingParent, useWorkerWaitFixture, worker, work, toolGenerationOf, fixtureUpdateRun } from './worker-wait.testkit.ts';
+import { eventCheckpoint, manager, parent, restart, root, store, until, delegatingParent, useWorkerWaitFixture, worker, work, toolGenerationOf, fixtureUpdateRun } from './worker-wait-core.testkit.ts';
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { toolCall } from './waits-parity.testkit.ts';
+registerRunner(claudeRunner);
 
 // hearsay-tools/cezarion#1234: the human kind of the wait list on the Claude wire. The rules are
 // runner-neutral (RUNNER_IDS coverage is U7h and U9h in `waits-parity-asks-cells.testkit.ts`); the runner,

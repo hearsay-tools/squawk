@@ -1,3 +1,4 @@
+import './core/register-all-runners.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome } from './home/test-home.testkit.ts';
 import { testHome } from './home/test-home.testkit.ts';
@@ -7,7 +8,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
-import './core/register-all-runners.testkit.ts';
 
 // `defaultModels` is a record keyed by registered id, and the cases use several runners' keys.
 

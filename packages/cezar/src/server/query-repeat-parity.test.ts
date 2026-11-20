@@ -1,10 +1,12 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
+registerRunner(claudeRunner);
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProviderAuthService } from '../core/provider-auth.ts'
-import '../core/register-all-runners.testkit.ts';
 import { RunStore } from '../runs/store.ts'
 import type { RunManager } from '../workflows/run.ts'
 import { createApp } from './server.ts'

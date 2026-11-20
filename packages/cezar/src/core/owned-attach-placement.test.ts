@@ -11,7 +11,7 @@ import type { WorkerSpawnRequest } from '@open-mercato/cezar-contract';
 import type { AgentRunResult, AgentRunSpec, AgentSession } from './agent-runner.ts';
 import * as runners from './runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
-import './every-runner.testkit.ts';
+import './created-runners.testkit.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { parentFileSnapshotPath, placeWorkerAttachments } from '../delegation/context.ts';
 import { ensureOwnedWorkspace, readOwnedDiff } from '../delegation/workspace.ts';

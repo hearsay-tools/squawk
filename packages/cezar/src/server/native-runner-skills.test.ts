@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +14,6 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
 

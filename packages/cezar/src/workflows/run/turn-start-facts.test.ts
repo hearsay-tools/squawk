@@ -1,3 +1,4 @@
+import '../../core/register-all-runners.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from '../../core/agent-runner.ts';

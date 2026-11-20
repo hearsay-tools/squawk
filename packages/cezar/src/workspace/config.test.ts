@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -16,7 +20,9 @@ import {
   workspaceConfigBackupPath,
   type WorkspaceConfig,
 } from './config.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(opencodeRunner);
 
 // `agentDefaults.models` is a record keyed by registered id, and the cases use several runners' keys.
 

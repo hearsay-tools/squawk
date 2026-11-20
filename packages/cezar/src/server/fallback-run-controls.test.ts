@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,7 +26,7 @@ import { sendAgentReport } from '../runs/webhook.ts';
 import { commitAccepted } from '../delegation/conversations.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { RunWriteRefusedError } from '../runs/store.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /** `requireRunControl` is the one explicit write that adopts a family read from `.ai/squawk/`. */

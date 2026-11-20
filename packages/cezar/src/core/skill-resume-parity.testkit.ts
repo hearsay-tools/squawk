@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -15,7 +16,6 @@ import { observationClock } from './observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 import { factsWhere } from './runner-fact-rows.testkit.ts';
 import {
   HARNESS_ADAPTERS,

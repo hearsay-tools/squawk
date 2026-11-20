@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoUi } from './ui.ts';
@@ -5,7 +6,6 @@ import { aptInstallTool, brewInstallTool, brewRemoveHint, depCheckStep, generate
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { BackendCheck } from '../core/backend-detect.ts';
 import type { CommandResult, InstallContext, Runner, Ui } from './types.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The installer table covers every runner.
 

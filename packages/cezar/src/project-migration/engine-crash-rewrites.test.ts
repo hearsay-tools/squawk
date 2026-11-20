@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { reportsIndex } from '../artifacts/reports-index.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +16,7 @@ import { Crash, crashAt, crashThenRecover, disposers, fence, beforeRepair, moved
 import { readProjectMigrationJournal } from './journal.ts';
 import { projectSnapshot, removeMigrationProject, TASK, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /** Crash recovery of the project migration engine from its repair on (hearsay-tools/cezarion#3088): a

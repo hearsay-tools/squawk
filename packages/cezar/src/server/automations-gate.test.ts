@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -15,7 +16,6 @@ import { ArchiveOnMergeCoordinator } from './archive-on-merge.ts';
 import { CompletionActionCoordinator } from './completion-actions.ts';
 import { startServer } from './start-server.ts';
 import { createApp, type ServerDeps } from './server.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The server reads every registered runner (provider lists, login probes); register the built-ins.
 import * as git from './git.ts';

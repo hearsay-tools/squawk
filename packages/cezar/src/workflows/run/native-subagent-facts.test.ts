@@ -1,3 +1,4 @@
+import '../../core/register-all-runners.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { reportsNativeSubagents } from './subagent-waits.ts';
 

@@ -1,3 +1,6 @@
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 
 import { randomUUID } from 'node:crypto';
@@ -5,8 +8,11 @@ import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
 
-import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import './created-runners.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+registerRunner(claudeRunner);
+registerRunner(opencodeRunner);
 
 
 it.each(['unresponsive', 'cancel', 'finish'] as const)('opencode provider failure with %s ACK terminates without inventing delivery', async stop => {

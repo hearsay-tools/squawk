@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +8,6 @@ import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
 import { parityRunners } from './parity-classes.testkit.ts';
 import { hostSkillCatalogAdapters } from './host-skill-catalog.ts';
 import { RunnerSkillCatalog } from './runner-skill-catalog.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The list parity runs on every runner.
 

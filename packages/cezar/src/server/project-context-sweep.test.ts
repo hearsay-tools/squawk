@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -7,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts, ProjectContextsClosedError } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 const sweeps = vi.hoisted(() => ({ started: 0 }));

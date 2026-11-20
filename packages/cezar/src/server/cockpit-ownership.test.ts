@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { projectPaths } from '../project-paths.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { spawnSync } from 'node:child_process';
@@ -12,7 +14,7 @@ import { processStartToken } from '../delegation/process-liveness.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 const roots: string[] = [];

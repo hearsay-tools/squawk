@@ -19,7 +19,8 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';

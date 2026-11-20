@@ -1,7 +1,7 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import type { AgentBackend } from './agent-runner.ts';
 import { LEGACY_RUNNER_IDS, registeredRunners } from './runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 import {
   ModelIdentityError,
   formatModelIdentity,

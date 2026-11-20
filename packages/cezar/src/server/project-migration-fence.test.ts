@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { spawn, spawnSync } from 'node:child_process';
@@ -42,7 +44,7 @@ import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } fr
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './run-manager.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
+registerRunner(claudeRunner);
 
 
 /**

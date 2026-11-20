@@ -1,3 +1,5 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -6,7 +8,9 @@ import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-run
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { createFixtureManager } from './fixture-cleanup.testkit.ts';
+import '../core/created-runners.testkit.ts';
+import { createFixtureManager } from './fixture-manager.testkit.ts';
+registerRunner(claudeRunner);
 
 describe('human permission lifecycle', () => {
   const f = setupMonitoringFixture();

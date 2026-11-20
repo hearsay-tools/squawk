@@ -1,3 +1,7 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 import { productIdentity } from '../home/identity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFile } from 'node:child_process';
@@ -8,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerType } from '@hono/node-server';
 import type { AddressInfo } from 'node:net';
 import { DelegationController } from '../delegation/provision.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -18,6 +22,9 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { connectedProviderAuth } from '../server/provider-auth.testkit.ts';
 import { createApp } from '../server/server.ts';
 import { runDiscoverCommand } from './cli.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
+registerRunner(piRunner);
 
 describe('cez discover', () => {
   let f: ReturnType<typeof fixture>;

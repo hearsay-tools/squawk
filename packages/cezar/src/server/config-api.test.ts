@@ -1,3 +1,4 @@
+import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -12,7 +13,6 @@ import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // GET /config reads every runner's native default model.
 

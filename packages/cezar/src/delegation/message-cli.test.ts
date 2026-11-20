@@ -1,3 +1,6 @@
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -5,12 +8,14 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSubcommand } from '../subcommands.ts';
 import { runWorkerCommand } from './cli.ts';
-import '../core/every-runner.testkit.ts';
+import '../core/created-runners.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { encodeConversationCursor } from '@open-mercato/cezar-contract/conversations';
 import { provisionDelegationSession } from './provision.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 describe('task message command family', () => {
   let f: ReturnType<typeof fixture>;

@@ -1,6 +1,6 @@
+import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv, withoutHomeEnv, looksSecret } from './agent-env.ts';
-import '../core/register-all-runners.testkit.ts';
 
 // The cases build child envs for several runners and the legacy id; each reads its allow-list prefixes from the registry.
 import { RUNNER_IDS } from './agent-runner.ts';
