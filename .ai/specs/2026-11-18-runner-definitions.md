@@ -88,8 +88,11 @@ moves, others are catalog options and partial maps that stay with their readers 
    condition, verbatim: "A, but I would add one condition: a check that no production file
    imports it. Without that, it can grow back into the closed list that decision 5 removed. If
    step 4 brings folder discovery, both lists go away then." `core/runner-registry.test.ts`
-   holds the ids of `runners/ids.ts` equal to `BUILT_IN_RUNNERS`, and the lint rule
-   `cez/runner-ids-import` fails a production import of `runners/ids.ts`. A new built-in runner
+   holds the ids of `runners/ids.ts` equal to `BUILT_IN_RUNNERS`. The lint rule
+   `cez/runner-ids-import` enforces the condition for static and literal imports: it fails a
+   production file that names `runners/ids.ts` with a literal path in a static import or export,
+   an `import()`, an `import x = require()`, a type import or any call. Its limit: a path built
+   from pieces, such as `` import(`../runners/${'ids'}.ts`) ``, is outside its static scope. A new built-in runner
    therefore also adds its id to `runners/ids.ts`.
 2. **The cockpit gets per-runner data from `GET /api/v1/runners`.** The route returns the
    registered runners in display order with their display data and model presets. The cockpit
@@ -438,7 +441,7 @@ runner does.
   (`completion-controls`); C2 fixed it.
 - **`runners/ids.ts`** (C3 review, then the owner on 2026-11-20). See decision 5 as amended. The
   lint rule `cez/runner-ids-import` covers non-test files in `packages/cezar/src`, except the
-  two runner-id lint rules. The dev scripts `packages/cezar/scripts/parity-rows.ts` and
+  two runner-id lint rules, and catches literal paths only (see decision 5). The dev scripts `packages/cezar/scripts/parity-rows.ts` and
   `.ai/scripts/mock-wire-evidence.ts` read the file and are outside the rule.
 - **Fixture runner** (D1 part 2). See [The parity kit](#the-parity-kit).
 - **The guard lists follow the folders** (D2a to D2c, after review round 1 of D2 found that a new

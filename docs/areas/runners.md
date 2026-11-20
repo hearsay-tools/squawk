@@ -74,7 +74,8 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 - `BUILT_IN_RUNNERS` (`runners/built-in.ts`) is the only list of built-in definitions.
   `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests, testkits,
   `vitest.setup.ts` and dev scripts. `core/runner-registry.test.ts` holds the two lists equal, and
-  `cez/runner-ids-import` fails a production import of `runners/ids.ts`. The lint rules
+  `cez/runner-ids-import` fails a production file that names `runners/ids.ts` with a literal path
+  (a static import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope. The lint rules
   `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
@@ -219,7 +220,7 @@ enumerates `runnersWhere` or `registeredRunners` and expects all of them) import
 `core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
 `core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. A test that
 needs only the ids reads `BUILT_IN_RUNNER_IDS` from `runners/ids.ts`, which loads no definition;
-production code never imports it (`cez/runner-ids-import`). The
+production code never imports it (`cez/runner-ids-import`, for literal paths). The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude

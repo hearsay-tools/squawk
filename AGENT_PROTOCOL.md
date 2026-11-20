@@ -317,7 +317,8 @@ it. A Squawk-owned event such as
 
 A runner is one definition in its own folder, which one call registers
 ([ADR 0067](docs/adr/0067-register-each-runner-as-one-definition.md)). A new built-in runner
-changes these places and no other file:
+changes these places and no other file, with one exception at the end of this section (a new
+turn-path fact value also adds a shared unit test):
 
 - **Its folder**, `packages/cezar/src/runners/<id>/`: the definition and its data files, the
   adapter, the mapper, the catalogs, the test data files, the fixtures and every test of the
@@ -328,8 +329,9 @@ changes these places and no other file:
   definition's `mock` part names the mock script.
 - **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
 - **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
-  when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`;
-  `cez/runner-ids-import` fails a production import of it.
+  when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`.
+  `cez/runner-ids-import` fails a production file that names it with a literal path (a static
+  import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope.
 
 What a new runner's folder holds:
 

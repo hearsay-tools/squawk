@@ -46,7 +46,10 @@ Rules:
    only list of definitions. `runners/ids.ts` repeats the ids as plain data so that a test
    can name them without loading an adapter. `core/runner-registry.test.ts` holds the two lists
    equal. The lint rule `cez/runner-ids-import` (`lint/runner-ids-import.ts`) fails a non-test
-   file in `packages/cezar/src` that imports `runners/ids.ts`. It exempts the two runner-id lint
+   file in `packages/cezar/src` that names `runners/ids.ts` with a literal path: a static import
+   or export, a literal `import()`, an `import x = require()`, a type import or any call with
+   that literal. A path built from pieces, such as a template literal with a substitution, is
+   outside its static scope. It exempts the two runner-id lint
    rules, `lint/runner-roster-literal.ts` and `lint/runner-id-branch.ts`, which read the ids
    from `runners/built-in.ts`. Production code reads the registry. Without that rule the id list
    could grow back into a closed list. The dev scripts `packages/cezar/scripts/parity-rows.ts`
