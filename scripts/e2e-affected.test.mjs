@@ -330,6 +330,11 @@ test('code the suite setup loads selects the boot spec and its own answer; durat
   assert.equal(classify('packages/web/e2e/agent-browser.ts', { map, graph: withSetup, boot: spec('smoke') }).specs, null);
   // Without a boot spec, setup code selects every spec.
   assert.equal(pick([{ start: 15, end: 15 }], null).specs, null);
+  // A data file the setup reads still selects every spec, even with a spec that reads it.
+  const fixture = 'packages/web/e2e/fixtures/setup.json';
+  const withFixture = { ...withSetup, setup: new Set([...withSetup.setup, fixture]),
+    specs: new Map([...withSetup.specs, [spec('smoke'), new Set([spec('smoke'), fixture])]]) };
+  assert.equal(classify(fixture, { map, graph: withFixture, boot: spec('smoke') }).specs, null);
   for (const durations of ['.github/test-durations.json', '.github/cockpit-test-durations.json']) {
     assert.deepEqual(classify(durations, { map, graph: withSetup, boot: spec('smoke') }).specs, [], durations);
   }

@@ -439,7 +439,9 @@ export function classify(file, context) {
     if (setup && setupChanged) return every('the browser suite setup loads it, and main changed the setup after the map');
     return narrowUnloaded(result, map, readers);
   }
-  return setup ? withSetupBoot(result, boot) : result;
+  if (!setup) return result;
+  // A data file the setup reads (a fixture, say) carries no evidence of what reads it.
+  return CODE.test(file) ? withSetupBoot(result, boot) : every('the browser suite setup loads it');
 }
 
 /**
