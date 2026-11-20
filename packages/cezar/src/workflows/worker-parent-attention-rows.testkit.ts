@@ -1,13 +1,21 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { factRows } from '../core/runner-fact-rows.testkit.ts';
 
 // The worker parent attention rows and their file groups. Apart from the cells, so the registration
 // guard reads them without loading the run engine.
 
-// Exhaustive transport classification: a new runner must provide either the real
-// delayed-ACK race or an executable wire limitation, never an omitted/skip row.
-const ACK_WIRES: Record<string, 'pipe-write' | 'protocol'> = {
-  claude: 'pipe-write', codex: 'protocol', opencode: 'protocol', pi: 'protocol', omp: 'protocol',
-};
+/** The delayed-ACK row each `inputDelivery.acknowledgement` fact selects: the real delayed-ACK race
+ *  (`protocol`) or the executable pipe-write limitation (`pipe-write`), never an omitted or skipped row. */
+const ACK_WIRE_OF = { write: 'pipe-write', response: 'protocol' } as const;
+
+/** Each built-in runner's delayed-ACK row, read from its declared facts. An acknowledgement this
+ *  table does not know fails at load. */
+const ACK_WIRES: Record<string, 'pipe-write' | 'protocol'> = Object.fromEntries(Object.entries(factRows()).map(([backend, facts]) => {
+  const { acknowledgement } = facts.inputDelivery;
+  const wire = (ACK_WIRE_OF as Partial<Record<string, 'pipe-write' | 'protocol'>>)[acknowledgement];
+  if (wire === undefined) throw new Error(`${backend} declares input acknowledgement ${String(acknowledgement)}, which has no delayed-ACK row`);
+  return [backend, wire];
+}));
 
 export { ACK_WIRES };
 
