@@ -3,6 +3,7 @@ import type { AgentEvent } from './agent-runner.ts';
 import { driveSeam, lastIndexWhere } from './harness-parity-core.testkit.ts';
 import type { Cells, HarnessRegistrar, SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { SEAM_ROWS } from './harness-parity-rows.testkit.ts';
+import { RUNNER_FACTS } from './runner-facts.ts';
 
 /** The seam tier's row cells (S1–S25), shared by the startup and session parts. */
 
@@ -51,7 +52,8 @@ const SEAM_CELLS: Cells<typeof SEAM_ROWS, SeamCriterion> = {
       expect(pid).toBeUndefined();
       const errors = v1.filter(event => event.type === 'error');
       expect(errors.length).toBeLessThanOrEqual(1);
-      if (backend === 'opencode') {
+      // A server runner waits for its listen URL; the spawn error must end that wait at once.
+      if (RUNNER_FACTS[backend]!.transport === 'http') {
         expect(errors).toHaveLength(1);
         expect(failure).toBeDefined();
         expect(errors[0]!.message).toBe(failure!.message);

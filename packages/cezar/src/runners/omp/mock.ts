@@ -6,6 +6,8 @@ export const OMP_MOCK = {
   askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
   binEnv: 'CEZ_OMP_BIN',
   script: 'mock-omp-rpc.mjs',
+  // scripts/mock-omp-rpc.mjs: CEZ_MOCK_OMP_RESUME_MOVED reports the session moved to a new id.
+  missingSession: { session: 'empty-file', env: { CEZ_MOCK_OMP_RESUME_MOVED: '1' } },
   scenarios: {
     ...COMMON_MOCK_SCENARIOS,
     ...STDIO_ASK_MOCK_SCENARIOS,

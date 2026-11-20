@@ -8,12 +8,14 @@ import { TOOL_GRANT_KINDS } from './agent-runner-values.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
 import { extraToolRows } from './runner-fact-rows.testkit.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 /**
  * The Tool-list kinds case table (.ai/specs/TEMPLATE.md § Case tables) as cells on every runner's native
  * mock wire (hearsay-tools/cezarion#1810). Each case is one input kind the table requires, as the
- * `ToolGrant` Squawk resolves for it. Claude, pi and omp pin the tool flags their mock records;
- * the runners that cannot restrict tools must record exactly what the unset case records.
+ * `ToolGrant` Squawk resolves for it. Each runner's golden (`toolGrant`) pins the tool flags its
+ * mock records; a runner that cannot restrict tools must record exactly what the unset case records.
  */
 export type ToolGrantCaseId =
   | 'unset'
@@ -68,76 +70,24 @@ export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
 
 const SQUAWK_TOOLS = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks'];
 const DESCRIPTOR = { name: 'cezar_ci_probe', command: 'node', args: ['/installed/ci-wait/mcp.js'] };
-const CLAUDE_SQUAWK = SQUAWK_TOOLS.map(tool => `mcp__${DESCRIPTOR.name}__${tool}`).join(',');
-const CEZAR = SQUAWK_TOOLS.join(',');
-
-/** The flags that carry tool access on each wire that has them; `--extension` keeps its basename. */
-const TOOL_FLAGS: Partial<Record<string, { readonly values: readonly string[]; readonly switches: readonly string[] }>> = {
-  claude: { values: ['--tools', '--allowedTools', '--disallowedTools'], switches: [] },
-  pi: { values: ['--extension', '--tools', '--cezar-builtin-tools', '--exclude-tools'], switches: ['--no-tools', '--no-builtin-tools'] },
-  omp: { values: ['--extension', '--tools'], switches: ['--no-tools'] },
-};
-
-const PI_EXTENSIONS = ['--extension', 'pi-retry-degraded-service.mjs', '--extension', 'pi-project-skills.mjs', '--extension', 'pi-ci-wait.mjs'];
-const piDefault = (builtins: string) => [...PI_EXTENSIONS, '--no-builtin-tools', '--extension', 'pi-default-tools.mjs', '--cezar-builtin-tools', builtins];
-const PI_DEFAULT = 'read,edit,write,grep,find,bash,subagent,subagent_supervisor,subagent_wait';
-const OMP_EXTENSIONS = ['--extension', 'omp-ci-wait.mjs'];
-const OMP_DEFAULT = 'read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait';
-const CLAUDE_DEFAULT = 'Read,Edit,Write,Grep,Glob,Bash';
+/** The golden's `{squawk-mcp}` and `{squawk}`: the Squawk tool names as MCP names, and plain. */
+const SQUAWK_NAMES = { '{squawk-mcp}': SQUAWK_TOOLS.map(tool => `mcp__${DESCRIPTOR.name}__${tool}`).join(','), '{squawk}': SQUAWK_TOOLS.join(',') };
 
 /** A runner that cannot restrict tools sends each case exactly as it sends the unset one. */
 const SAME_AS_UNSET = 'same as unset';
 type Expected = readonly string[] | typeof SAME_AS_UNSET;
-const IGNORED = Object.fromEntries(TOOL_GRANT_CASES.map(entry => [entry.id, SAME_AS_UNSET])) as Record<ToolGrantCaseId, Expected>;
+type ToolFlags = { readonly values: readonly string[]; readonly switches: readonly string[] };
 
-/** Today's flags. A gap a case shows stays pinned until its issue changes it. */
-const EXPECTED: Readonly<Record<string, Readonly<Record<ToolGrantCaseId, Expected>>>> = {
-  claude: {
-    'unset': [],
-    'step-default': ['--allowedTools', `${CLAUDE_DEFAULT},${CLAUDE_SQUAWK}`],
-    'inherited': ['--allowedTools', `${CLAUDE_DEFAULT},Subagent,SubagentSupervisor,SubagentWait,${CLAUDE_SQUAWK}`],
-    'explicit-copy': ['--allowedTools', `${CLAUDE_DEFAULT},${CLAUDE_SQUAWK}`],
-    'extra-built-in': ['--allowedTools', `${CLAUDE_DEFAULT},WebFetch,${CLAUDE_SQUAWK}`],
-    'extra-mcp': ['--allowedTools', `${CLAUDE_DEFAULT},mcp__docs__search,${CLAUDE_SQUAWK}`],
-    'narrowed': ['--allowedTools', `Read,Grep,${CLAUDE_SQUAWK}`],
-    // An empty list removes every built-in tool and keeps the Squawk tools (hearsay-tools/squawk#1849).
-    'empty': ['--tools', '', '--allowedTools', CLAUDE_SQUAWK],
-    'bash-allowlist': ['--allowedTools', `Read,Edit,Write,Grep,Glob,Bash(git status:*),${CLAUDE_SQUAWK}`],
-    'unset-bash-allowlist': [],
-  },
-  pi: {
-    'unset': PI_EXTENSIONS,
-    'step-default': piDefault(PI_DEFAULT),
-    'inherited': piDefault('read,edit,write,grep,find,bash'),
-    // The copy takes the default path, which leaves every MCP and extension tool on (hearsay-tools/cezarion#1417).
-    'explicit-copy': piDefault(PI_DEFAULT),
-    'extra-built-in': [...PI_EXTENSIONS, '--tools', `${PI_DEFAULT},webfetch,${CEZAR}`],
-    'extra-mcp': [...PI_EXTENSIONS, '--tools', `${PI_DEFAULT},mcp__docs__search,${CEZAR}`],
-    'narrowed': [...PI_EXTENSIONS, '--tools', `read,grep,${CEZAR}`],
-    'empty': [...PI_EXTENSIONS, '--tools', CEZAR],
-    'bash-allowlist': [...PI_EXTENSIONS, '--tools', `read,edit,write,grep,find,subagent,subagent_supervisor,subagent_wait,${CEZAR}`],
-    'unset-bash-allowlist': PI_EXTENSIONS,
-  },
-  // `--tools` filters OMP's built-ins only: MCP and extension tools stay callable (hearsay-tools/cezarion#1357).
-  omp: {
-    'unset': OMP_EXTENSIONS,
-    'step-default': [...OMP_EXTENSIONS, '--tools', `${OMP_DEFAULT},${CEZAR}`],
-    'inherited': [...OMP_EXTENSIONS, '--tools', `read,edit,write,grep,glob,bash,${CEZAR}`],
-    'explicit-copy': [...OMP_EXTENSIONS, '--tools', `${OMP_DEFAULT},${CEZAR}`],
-    // OMP has no WebFetch; the runner drops it with a note.
-    'extra-built-in': [...OMP_EXTENSIONS, '--tools', `${OMP_DEFAULT},${CEZAR}`],
-    'extra-mcp': [...OMP_EXTENSIONS, '--tools', `${OMP_DEFAULT},mcp__docs_search,${CEZAR}`],
-    'narrowed': [...OMP_EXTENSIONS, '--tools', `read,grep,${CEZAR}`],
-    'empty': [...OMP_EXTENSIONS, '--no-tools'],
-    'bash-allowlist': [...OMP_EXTENSIONS, '--tools', `read,edit,write,grep,glob,todo,lsp,ast_edit,task,wait,${CEZAR}`],
-    'unset-bash-allowlist': [...OMP_EXTENSIONS, '--tools', `read,edit,eval,glob,grep,find,task,wait,todo,web_search,write,${CEZAR}`],
-  },
-  codex: IGNORED,
-  opencode: IGNORED,
-};
+/** Today's flags, from the runner's own golden. A gap a case shows stays pinned until its issue changes it. */
+function expectedGrants(backend: string): { flags?: ToolFlags; cases: Readonly<Record<ToolGrantCaseId, Expected>> } {
+  const golden = runnerGolden(backend, 'toolGrant');
+  if (golden === SAME_AS_UNSET) return { cases: Object.fromEntries(TOOL_GRANT_CASES.map(entry => [entry.id, SAME_AS_UNSET])) as Record<ToolGrantCaseId, Expected> };
+  const expand = (flag: string) => flag.replace(/\{squawk(?:-mcp)?\}/g, name => SQUAWK_NAMES[name as keyof typeof SQUAWK_NAMES]);
+  const cases = Object.fromEntries(Object.entries(golden.cases).map(([id, flags]) => [id, flags === SAME_AS_UNSET ? flags : flags.map(expand)]));
+  return { flags: golden.flags, cases: cases as Record<ToolGrantCaseId, Expected> };
+}
 
-function toolFlags(backend: string, argv: readonly string[]): string[] {
-  const flags = TOOL_FLAGS[backend];
+function toolFlags(flags: ToolFlags | undefined, argv: readonly string[]): string[] {
   if (!flags) return [];
   return argv.flatMap((arg, index) => {
     if (flags.switches.includes(arg)) return [arg];
@@ -161,8 +111,12 @@ export function describeToolGrantParity(scope: string | 'once'): void {
       it('the cases cover every ToolGrant kind', () => {
         expect(new Set(TOOL_GRANT_CASES.map(entry => entry.grant('claude').kind))).toEqual(new Set(TOOL_GRANT_KINDS));
       });
-      it('runs each expected case exactly once', () => {
-        expect(TOOL_GRANT_CASES.map(entry => entry.id).sort()).toEqual(Object.keys(EXPECTED.claude!).sort());
+      it('runs each case exactly once, and each restricting runner pins every case', () => {
+        const ids = TOOL_GRANT_CASES.map(entry => entry.id);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const backend of BUILT_IN_RUNNER_IDS) {
+          expect(Object.keys(expectedGrants(backend).cases).sort(), backend).toEqual([...ids].sort());
+        }
       });
     });
     return;
@@ -195,11 +149,12 @@ export function describeToolGrantParity(scope: string | 'once'): void {
         expect(errors.get(entry.id)).toEqual([]);
         const recording = recordings.get(entry.id) ?? [];
         expect(recording.length).toBeGreaterThan(0);
-        const expected = EXPECTED[backend]![entry.id];
+        const { flags, cases } = expectedGrants(backend);
+        const expected = cases[entry.id];
         if (expected === SAME_AS_UNSET) {
           expect(recording).toEqual(recordings.get('unset'));
         } else {
-          expect(toolFlags(backend, JSON.parse(recording[0]!) as string[])).toEqual(expected);
+          expect(toolFlags(flags, JSON.parse(recording[0]!) as string[])).toEqual(expected);
         }
       });
     }

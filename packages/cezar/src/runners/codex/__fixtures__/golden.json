@@ -56,5 +56,8 @@
   },
   "askKinds": [
     "item/tool/requestUserInput"
-  ]
+  ],
+  "toolGrant": "same as unset",
+  "postParkChildFrames": "shown",
+  "rejectedAgentInput": "keeps-session"
 }

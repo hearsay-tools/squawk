@@ -32,7 +32,7 @@ import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunSpec, AgentEvent, AgentRunResult, AgentSession, SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
-import type { RunnerDefinition } from './runner-definition.ts';
+import type { RunnerDefinition, RunnerMock } from './runner-definition.ts';
 
 import { factsWhere, factRows } from './runner-fact-rows.testkit.ts';
 import { mockRows } from './runner-mock-rows.testkit.ts';
@@ -333,6 +333,12 @@ export interface HarnessAdapter {
   /** P6: the text the mock echoes once Squawk refuses its malformed request. Required with
    *  `scenarios['approval-malformed']`. */
   readonly malformedApprovalEcho?: string;
+  /** P7: the text the mock sends once it settled its own early approval request (`mock.selfSettledApprovalEcho`). */
+  readonly selfSettledApprovalEcho?: string;
+  /** Where the mock keeps the sessions it resumes (`mock.sessionStore`); absent when it resumes any id. */
+  readonly sessionStore?: { readonly env: string; readonly argsFileSuffix: string };
+  /** How a resume reaches a session the mock does not hold (`mock.missingSession`). */
+  readonly missingSession?: RunnerMock['missingSession'];
 }
 
 /** `mock:cezar-tool` (scripts/mock-ci-tool.mjs) calls one Squawk tool over the session's own wire,
@@ -353,14 +359,18 @@ const SQUAWK_TOOL_SCENARIOS = { 'cezar-ask': SQUAWK_ASK_PROMPT, 'cezar-wait': SQ
 /** The id Squawk pins on every session, mirroring `RunManager`. */
 export const PINNED_SESSION_ID = '0e5f1a7c-1c3e-4d2a-9b64-2f7a5c8d1e90';
 
-/** Pre-create a session the OpenCode mock will GET on resume, so a Continue cell
- *  exercises GET+PATCH instead of the 404 fallback that POSTs a fresh session. */
-export function seedOpencodeMockSession(
+/** Pre-create a session `backend`'s mock will find on resume, when its mock resumes only a session
+ *  it knows (`mock.sessionStore`), so a Continue cell resumes it instead of taking the 404 fallback
+ *  that starts a fresh session. A mock that resumes any id needs no seed: this does nothing. */
+export function seedMockSession(
+  backend: string,
   argsFile: string,
   session: { id?: string; title?: string; permission?: unknown[] } = {},
 ): void {
+  const store = HARNESS_ADAPTERS[backend]!.sessionStore;
+  if (!store) return;
   const id = session.id ?? PINNED_SESSION_ID;
-  writeFileSync(`${argsFile}.opencode-sessions.json`, JSON.stringify({
+  writeFileSync(`${argsFile}${store.argsFileSuffix}`, JSON.stringify({
     seq: 1,
     sessions: {
       [id]: {
@@ -392,6 +402,9 @@ export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
       scenarios: { ...SQUAWK_TOOL_SCENARIOS, ...mock.scenarios },
       ...(mock.approvalDecisions ? { approvalDecisions: mock.approvalDecisions } : {}),
       ...(mock.malformedApprovalEcho !== undefined ? { malformedApprovalEcho: mock.malformedApprovalEcho } : {}),
+      ...(mock.selfSettledApprovalEcho !== undefined ? { selfSettledApprovalEcho: mock.selfSettledApprovalEcho } : {}),
+      ...(mock.sessionStore ? { sessionStore: mock.sessionStore } : {}),
+      ...(mock.missingSession ? { missingSession: mock.missingSession } : {}),
     };
     adapters.set(definition, adapter);
   }
@@ -481,10 +494,9 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'S21', backend, kind: 'scenario-unconstructible' as const,
     reason: 'This native wire has no OMP get_state.messageCount response for an implicit autoResume. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
   })),
-  ...(['R44', 'R45'] as const).flatMap(criterion => { return exceptRunner('opencode').map(backend => ({
-    criterion, backend, kind: 'scenario-unconstructible' as const,
-    reason: 'The OpenCode server-wide unscoped session.error UnknownError skill diagnostics (an unreadable skill file, or a skill with malformed YAML frontmatter) have no equivalent on this native wire. R2/R46 retain native provider failure coverage.',
-  })); }),
+  // R44/R45: a recoverable skill diagnostic is a server-wide session.error that names no session.
+  ...(['R44', 'R45'] as const).flatMap(criterion => exemptWhere(criterion, 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
+    'This wire speaks over the spawned process\'s stdio, so it has no server-wide unscoped session.error: the UnknownError skill diagnostics of a server wire (an unreadable skill file, or a skill with malformed YAML frontmatter) have no equivalent on it. R2/R46 retain native provider failure coverage.')),
   ...exemptWhere('H2', 'capability-absent', facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held', () =>
     'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>

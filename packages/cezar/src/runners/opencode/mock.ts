@@ -11,6 +11,10 @@ export const OPENCODE_MOCK = {
     { pick: 'allow once', echo: 'Approval response: {"reply":"once"}' },
   ],
   malformedApprovalEcho: 'Approval response: {"reply":"reject"}',
+  selfSettledApprovalEcho: 'OpenCode settled the ask itself.',
+  // scripts/mock-opencode-serve.mjs sessionStorePath(): GET /session/<id> finds only a stored session.
+  sessionStore: { env: 'CEZ_MOCK_OPENCODE_SESSIONS_FILE', argsFileSuffix: '.opencode-sessions.json' },
+  missingSession: { session: 'unknown-id' },
   scenarios: {
     ...COMMON_MOCK_SCENARIOS,
     ...PROVIDER_ERROR_MOCK_SCENARIOS,

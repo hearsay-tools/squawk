@@ -56,5 +56,81 @@
   },
   "askKinds": [
     "cezar_ask"
-  ]
+  ],
+  "toolGrant": {
+    "flags": {
+      "values": [
+        "--extension",
+        "--tools"
+      ],
+      "switches": [
+        "--no-tools"
+      ]
+    },
+    "cases": {
+      "unset": [
+        "--extension",
+        "omp-ci-wait.mjs"
+      ],
+      "step-default": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait,{squawk}"
+      ],
+      "inherited": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,bash,{squawk}"
+      ],
+      "explicit-copy": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait,{squawk}"
+      ],
+      "extra-built-in": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait,{squawk}"
+      ],
+      "extra-mcp": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait,mcp__docs_search,{squawk}"
+      ],
+      "narrowed": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,grep,{squawk}"
+      ],
+      "empty": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--no-tools"
+      ],
+      "bash-allowlist": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,glob,todo,lsp,ast_edit,task,wait,{squawk}"
+      ],
+      "unset-bash-allowlist": [
+        "--extension",
+        "omp-ci-wait.mjs",
+        "--tools",
+        "read,edit,eval,glob,grep,find,task,wait,todo,web_search,write,{squawk}"
+      ]
+    },
+    "notes": {
+      "*": "--tools filters OMP's built-ins only: MCP and extension tools stay callable (hearsay-tools/cezarion#1357).",
+      "extra-built-in": "OMP has no WebFetch; the runner drops it with a note."
+    }
+  },
+  "postParkChildFrames": "shown",
+  "rejectedAgentInput": "keeps-session"
 }

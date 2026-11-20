@@ -71,5 +71,57 @@
   },
   "askKinds": [
     "cezar_ask"
-  ]
+  ],
+  "toolGrant": {
+    "flags": {
+      "values": [
+        "--tools",
+        "--allowedTools",
+        "--disallowedTools"
+      ],
+      "switches": []
+    },
+    "cases": {
+      "unset": [],
+      "step-default": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash,{squawk-mcp}"
+      ],
+      "inherited": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash,Subagent,SubagentSupervisor,SubagentWait,{squawk-mcp}"
+      ],
+      "explicit-copy": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash,{squawk-mcp}"
+      ],
+      "extra-built-in": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash,WebFetch,{squawk-mcp}"
+      ],
+      "extra-mcp": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash,mcp__docs__search,{squawk-mcp}"
+      ],
+      "narrowed": [
+        "--allowedTools",
+        "Read,Grep,{squawk-mcp}"
+      ],
+      "empty": [
+        "--tools",
+        "",
+        "--allowedTools",
+        "{squawk-mcp}"
+      ],
+      "bash-allowlist": [
+        "--allowedTools",
+        "Read,Edit,Write,Grep,Glob,Bash(git status:*),{squawk-mcp}"
+      ],
+      "unset-bash-allowlist": []
+    },
+    "notes": {
+      "empty": "An empty list removes every built-in tool and keeps the Squawk tools (hearsay-tools/squawk#1849)."
+    }
+  },
+  "postParkChildFrames": "shown"
 }

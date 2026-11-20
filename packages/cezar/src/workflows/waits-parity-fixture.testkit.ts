@@ -94,25 +94,33 @@ function boundaryRunners(inner: RunnerFactory): RunnerFactory {
     const start = runner.startSession.bind(runner);
     runner.startSession = (spec, ...rest) => {
       const runId = spec.env!.CEZ_TASK_ID!;
-      const sessionsFile = runner.backend === 'opencode' ? runnerBoundary.sessionFiles.get(runId) : undefined;
-      const previousSessionsFile = process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
+      const sessionsFile = runnerBoundary.sessionFiles.get(runId);
+      const restore = sessionsFile ? useSessionStore(runner.backend, sessionsFile) : undefined;
       try {
-        if (sessionsFile) process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = sessionsFile;
         const session = start(spec, ...rest);
         runnerBoundary.sessions.set(runId, session);
         runnerBoundary.beforeReturn?.(runId);
         return session;
       } finally {
-        if (sessionsFile) {
-          if (previousSessionsFile === undefined) delete process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
-          else process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = previousSessionsFile;
-        }
+        restore?.();
       }
     };
     return runner;
   };
 }
 export const sessionOf = (id: string) => runnerBoundary.sessions.get(id)!;
+/** The env var that points `runner`'s mock at its own session store file (`mock.sessionStore`);
+ *  undefined when its mock keeps none. Two live mock servers must not share one store. */
+export const sessionStoreEnv = (runner: string): string | undefined => HARNESS_ADAPTERS[runner]!.sessionStore?.env;
+/** Point the next mock `runner` spawns at the session store `file`, when its mock keeps one.
+ *  Returns the function that restores the previous value, absence included. */
+export function useSessionStore(runner: string, file: string): () => void {
+  const env = sessionStoreEnv(runner);
+  if (!env) return () => {};
+  const previous = process.env[env];
+  process.env[env] = file;
+  return () => { if (previous === undefined) delete process.env[env]; else process.env[env] = previous; };
+}
 export let idleClock: ReturnType<typeof observationClock>;
 export let retryClock: ReturnType<typeof observationClock>;
 let admissionClock: ReturnType<typeof observationClock>;
@@ -351,11 +359,11 @@ type DelegationFixture = Awaited<ReturnType<typeof delegatingParent>>;
 /** One competing monitor uses the exemption; membership of this park then costs a slot. */
 export async function expectPoolCapacity(runner: string, id: string, member: boolean) {
   const limit = vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(1);
-  const previousSessionsFile = process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
   let competitor: RunRecord | undefined;
+  let restoreSessionStore = () => {};
   try {
     // Each mock server inherits its own environment; the parked server keeps its original file.
-    if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, `pool-competitor-${randomUUID()}.json`);
+    restoreSessionStore = useSessionStore(runner, join(root, `pool-competitor-${randomUUID()}.json`));
     competitor = manager.startRun(QUICK_TASK_WORKFLOW, { runner,
       task: toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 7200, note: 'pool capacity competitor' }) });
     const competitorId = competitor.id;
@@ -369,10 +377,7 @@ export async function expectPoolCapacity(runner: string, id: string, member: boo
         await until(() => !manager.isActive(competitorId));
       }
     } finally {
-      if (runner === 'opencode') {
-        if (previousSessionsFile === undefined) delete process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
-        else process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = previousSessionsFile;
-      }
+      restoreSessionStore();
       limit.mockRestore();
     }
   }

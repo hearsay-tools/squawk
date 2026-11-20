@@ -88,6 +88,23 @@ export interface RunnerMock {
   /** P6: the text the mock echoes once Squawk refuses its malformed request. Required with
    *  `scenarios['approval-malformed']`. */
   readonly malformedApprovalEcho?: string;
+  /** P7: the text the mock sends once it settled its own early approval request. Required with
+   *  `scenarios['permission-classify']`. */
+  readonly selfSettledApprovalEcho?: string;
+  /**
+   * Where the mock keeps the sessions it resumes, for a mock that resumes only a session it knows
+   * (a GET of an unknown id answers 404). `env` points the mock at a store file; without it the
+   * mock uses `CEZ_MOCK_ARGS_FILE` plus `argsFileSuffix`. The file holds
+   * `{ seq, sessions: { [id]: { id, title, prompts, permission? } } }`. Absent: the mock resumes any id.
+   */
+  readonly sessionStore?: { readonly env: string; readonly argsFileSuffix: string };
+  /**
+   * How a resume reaches a session this mock does not hold, so the runner opens a fresh one
+   * (`fallback-bootstrap` in `core/runner-skill-trigger.testkit.ts`). `unknown-id`: an id the
+   * mock's store lacks. `empty-file`: an empty session file. `env` is set on that launch. Absent:
+   * the mock resumes any id, so no resume opens a fresh session and the row does not apply.
+   */
+  readonly missingSession?: { readonly session: 'unknown-id' | 'empty-file'; readonly env?: Readonly<Record<string, string>> };
   /**
    * Parity cells this runner's wire cannot carry, by criterion id: how the matrix pins each and
    * why. The parity kit's `PARITY_EXEMPTIONS` adds them to the rows it selects by facts. A row

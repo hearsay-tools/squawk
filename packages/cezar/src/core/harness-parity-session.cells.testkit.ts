@@ -10,7 +10,8 @@ import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
 import type { AgentEvent, AgentRunSpec, AgentRunSpecField, ContentBlock, ToolGrant } from './agent-runner.ts';
 import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
-import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedOpencodeMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { runnerGolden, shippedScriptPath } from './runner-golden.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
 import { SEAM_CRITERIA, seamRows } from './harness-parity-seam-tier.testkit.ts';
@@ -378,7 +379,7 @@ export const SESSION_GROUPS = {
               const launches = [];
               for (const governed of [false, true]) {
                 const path = join(dir, `${governed}.ndjson`);
-                if (backend === 'opencode' && resume) seedOpencodeMockSession(path);
+                if (resume) seedMockSession(backend, path);
                 const obs = await driveSeam(backend, 'baseline', { spec: {
                   cwd: dir, resume, toolGrant: explicitToolGrant(['Read', 'Bash'], ['git status']),
                   systemPrompt: 'Use native subagents for research; use Squawk workers for work that needs a worktree.',
@@ -403,9 +404,9 @@ export const SESSION_GROUPS = {
                 expect(rest).toEqual(normal.params);
                 expect(normal.params).not.toHaveProperty('config');
               } else {
-                // OpenCode: the task-scope plugin rides the runtime config; no session rule is sent.
+                // A runtime plugin (OpenCode's task scope) rides the runtime config; no session rule is sent.
                 const config = governed!.find(row => row.type === 'runtime-config')?.config;
-                expect(config?.plugin).toEqual([expect.stringMatching(/scripts\/opencode-task-scope\.mjs$/)]);
+                expect(config?.plugin).toEqual(runnerGolden(backend, 'runtimePlugins').map(shippedScriptPath));
                 expect(ordinary!.some(row => row.type === 'runtime-config')).toBe(false);
                 const requests = (rows: any[]) => rows.filter(row => row.type !== 'runtime-config');
                 expect(requests(governed!)).toEqual(requests(ordinary!));
@@ -434,7 +435,7 @@ export const SESSION_GROUPS = {
             const dir = mkdtempSync(join(tmpdir(), 'cez-cross-session-'));
             const path = join(dir, 'wire.ndjson');
             try {
-              if (backend === 'opencode' && resume) seedOpencodeMockSession(path);
+              if (resume) seedMockSession(backend, path);
               const obs = await driveSeam(backend, 'baseline', { spec: {
                 cwd: dir, resume,
                 env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },

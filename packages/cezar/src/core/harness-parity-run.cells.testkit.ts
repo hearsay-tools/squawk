@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, vi } from 'vitest';
-import { readMockRecords } from '../mock-records.testkit.ts';
+import { nativeRecording, sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import { hasPendingAsk, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run.ts';
@@ -14,6 +14,7 @@ import { PROVIDER_HOLD_ROW_IDS } from './harness-parity-rows.testkit.ts';
 import { driveObservedRun, openTimerWait, RUN_CRITERIA, runRows, TERMINAL, timerWakeOf } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
 // #723: use the real RunManager on both event-handler construction paths.
@@ -40,14 +41,9 @@ export const RUN_GROUPS = {
               expect(['review', 'done']).toContain(obs.record?.status);
               expect(obs.record?.error).toBeFalsy();
               expect(obs.events.filter(e => e.type === 'error')).toEqual([]);
-              for (const root of ['.claude', '.agents']) {
-                expect(obs.events).toContainEqual(expect.objectContaining({ type: 'note',
-                  message: `opencode: optional skill skipped: Failed to parse skill /home/agent/${root}/skills/pen-design/SKILL.md. Check that the skill file and any symlink target are readable; repair or reinstall the skill.`,
-                }));
-              }
-              expect(obs.events).toContainEqual(expect.objectContaining({ type: 'note',
-                message: 'opencode: optional skill skipped: /home/agent/.agents/skills/bad4/SKILL.md has invalid YAML frontmatter (unexpected end of the stream within a double quoted scalar at line 6, column 1: ^). Fix the frontmatter between the --- lines, for example by quoting values that contain a colon or a quote, or remove the skill.',
-              }));
+              const notes = runnerGolden(backend, 'skillWarningNotes');
+              expect(notes.length).toBeGreaterThan(0);
+              for (const message of notes) expect(obs.events).toContainEqual(expect.objectContaining({ type: 'note', message }));
               expect(obs.events.filter(e => e.type === 'turn.completed').every(e => e.stopReason === 'end_turn')).toBe(true);
               expect(obs.events.some(e => e.type === 'turn.completed')).toBe(true);
             },
@@ -88,8 +84,9 @@ export const RUN_GROUPS = {
 
   // #121/#401: release native child frames only AFTER the manager has parked.
   // Waiting for the final wire-derived event prevents a green test that returned
-  // before the late frames were read. OpenCode discards closed child scopes;
-  // its passive usage barrier proves those frames crossed the SSE transport.
+  // before the late frames were read. A runner whose golden says `postParkChildFrames:
+  // "discarded"` (OpenCode) drops closed child scopes; its mock's passive usage barrier
+  // (total 424242) proves those frames crossed the transport.
   child(r: HarnessRegistrar) {
     const { describeRunners, runners, it } = r;
     describeRunners('child', 'harness parity — late child attention', () => {
@@ -120,18 +117,19 @@ export const RUN_GROUPS = {
                 store.on('run', recordChange);
                 try {
                   writeFileSync(release, 'go');
+                  const discarded = runnerGolden(backend, 'postParkChildFrames') === 'discarded';
                   await waitFor(() => store.readEvents(runId).slice(before).some(event =>
-                    backend === 'opencode'
+                    discarded
                       ? event.type === 'usage.updated' && (event.usage as { total?: number } | undefined)?.total === 424242
                       : JSON.stringify(event).includes('Post-park child update processed.')));
                   expect({ ...store.getRun(runId), monitoringWakeAt: timerWakeOf(store.getRun(runId)) }).toMatchObject({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
                   for (const change of changes) expect(change).toEqual({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
                   const after = store.readEvents(runId).slice(before);
                   expect(after.some(event => event.type === 'turn.started')).toBe(false);
-                  const childItems = (backend === 'opencode' ? store.readEvents(runId).slice(0, before) : after)
+                  const childItems = (discarded ? store.readEvents(runId).slice(0, before) : after)
                     .filter(event => event.type.startsWith('item.') && event.item && (event.item as { parentItemId?: string }).parentItemId);
                   expect(childItems.length).toBeGreaterThan(0);
-                  if (backend === 'opencode') expect(after.some(event => event.type.startsWith('item.'))).toBe(false);
+                  if (discarded) expect(after.some(event => event.type.startsWith('item.'))).toBe(false);
                 } finally { store.off('run', recordChange); }
               });
           } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -287,36 +285,13 @@ export const RUN_GROUPS = {
         'When the goal is fully achieved and verified and you have no question for the user, call cezar_done, then end your turn.',
         'call cezar_wait with kind "pr" for a pull request\'s checks or its merge, or kind "timer" to re-check later, then end your turn.',
       ];
-      type Wire = {
-        userText?: string; method?: string; url?: string;
-        params?: { input?: { text?: string }[] };
-        body?: { parts?: { text?: string }[] };
-      };
-      const records = (path: string) => readMockRecords<Wire | string[]>(path);
-      // Claude/Pi/OMP carry the prompt on stdin and keep the system prompt in argv.
-      const stdinWire = (backend: string) => backend === 'claude' || backend === 'pi' || backend === 'omp';
-      const stdinRowText = (row: Wire): string[] => row.userText === undefined ? [] : [row.userText];
-      // The per-backend prompt carrier: Codex turn input, OpenCode body parts.
-      const providerRowParts = (backend: string, row: Wire) =>
-        backend === 'codex' && row.method === 'turn/start' ? row.params?.input
-          : backend === 'opencode' && /\/(message|prompt_async)$/.test(row.url ?? '') ? row.body?.parts : undefined;
-      const joinRowParts = (parts: { text?: string }[]): string => parts.map(part => part.text ?? '').join('\n');
-      const messages = (backend: string, dir: string): string[] => {
-        const channel = stdinWire(backend) ? 'stdin' : 'args';
-        const wire = records(join(dir, channel));
-        return wire.flatMap(row => {
-          if (Array.isArray(row)) return [];
-          if (stdinWire(backend)) return stdinRowText(row);
-          const parts = providerRowParts(backend, row);
-          return parts ? [joinRowParts(parts)] : [];
-        });
-      };
+      // Each runner's reader says where its wire carries the prompts and the system prompt.
+      const recordingIn = (dir: string) => nativeRecording(join(dir, 'args'), join(dir, 'stdin'));
+      const messages = (backend: string, dir: string): string[] => sessionWire(backend).prompts(recordingIn(dir));
       const systemPrompt = (backend: string, dir: string): string => {
-        if (!stdinWire(backend)) return messages(backend, dir)[0] ?? '';
-        const argv = records(join(dir, 'args')).find(Array.isArray) ?? [];
-        const index = argv.indexOf('--append-system-prompt');
-        expect(index).toBeGreaterThanOrEqual(0);
-        return argv[index + 1] ?? '';
+        const text = sessionWire(backend).systemPrompt(recordingIn(dir));
+        expect(text).toBeDefined();
+        return text!;
       };
       const assertRules = (text: string, rules: readonly string[]) => {
         for (const rule of rules) expect(text).toContain(rule);
