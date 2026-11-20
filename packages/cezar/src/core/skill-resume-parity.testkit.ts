@@ -6,6 +6,10 @@ import { expect } from 'vitest';
 import { PINNED_SESSION_ID, driveSeam } from './harness-parity-core.testkit.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { createRunner } from './runner-registry.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
+import { readMockRecords } from '../mock-records.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import { skillResumeParity, type SkillResumeCells } from './skill-resume-rows.testkit.ts';
 
 // R56 and the systemPromptOnResume declaration drive each runner at its seam and load no engine.
@@ -69,15 +73,8 @@ export const describeSkillResumeParity = skillResumeParity({
   skillGone: engineRunnerCell('skillGone'),
   freshSession: engineRunnerCell('freshSession'),
   declaresResumeMode: async () => {
-    const expected: Record<string, 'resent' | 'in-thread'> = {
-      claude: 'resent',
-      pi: 'resent',
-      omp: 'resent',
-      opencode: 'in-thread',
-      codex: 'in-thread',
-    };
     for (const backend of BUILT_IN_RUNNER_IDS) {
-      expect((await createRunner(backend)).systemPromptOnResume).toBe(expected[backend]);
+      expect((await createRunner(backend)).systemPromptOnResume, backend).toBe(runnerGolden(backend, 'systemPromptOnResume'));
     }
   },
   declarationWire: backend => async () => {
@@ -119,14 +116,10 @@ export const describeSkillResumeParity = skillResumeParity({
         expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/load/);
       } else {
         expect(freshWire).toContain('SENTINEL-790-SYSTEM');
-        if (backend === 'opencode') {
-          expect(opencodeSessionGets(resumeWire)).toEqual([PINNED_SESSION_ID]);
-          expect(opencodeSessionGets(freshWire)).toEqual([]);
-          expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
-        } else {
-          expect(resumeWire).toMatch(/thread\/resume|session\/load/);
-          expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
-        }
+        // The runner's reader shows which session each launch resumed: the pinned one, and none fresh.
+        const resumedIn = (name: string) => sessionWire(backend).resumed(readMockRecords<WireRow>(join(dir, `${name}.args.ndjson`)));
+        expect(resumedIn(resumeName)).toEqual([PINNED_SESSION_ID]);
+        expect(resumedIn(freshName)).toEqual([]);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });

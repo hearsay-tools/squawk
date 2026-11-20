@@ -110,7 +110,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         // An acknowledgement after the wake turn ended still leaves the run in the question's park.
         await answerQuestion(run.id, askSeq);
       };
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', exercise);
+      await withHeldAck(runner, exercise);
     });
 
     // hearsay-tools/squawk#1239: the acknowledgement of a wake whose turn already ended
@@ -120,7 +120,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', async release => {
+      await withHeldAck(runner, async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         const ends = turnEnds(run.id);
         fireTimer(timer.id);
@@ -164,7 +164,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', async release => {
+      await withHeldAck(runner, async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES - 1 });
         fireTimer(timer.id);
@@ -195,9 +195,9 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U13', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withRejectedInput(runner as 'codex' | 'opencode' | 'pi' | 'omp', async () => {
+      await withRejectedInput(runner, async () => {
         retryAtOnce();
-        const { run, timer, askSeq } = await timerBesideQuestion(runner, `reject-owned-turn${runner === 'opencode' ? ' mock:reject-agent-post' : ''}`);
+        const { run, timer, askSeq } = await timerBesideQuestion(runner, 'reject-owned-turn');
         fireTimer(timer.id);
         await until(() => settled(run.id, timer.id)?.phase === 'delivered');
         // The acknowledged delivery ends the run of failed attempts.
@@ -216,9 +216,9 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U13', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withRejectedInput(runner as 'codex' | 'opencode' | 'pi' | 'omp', async lift => {
+      await withRejectedInput(runner, async lift => {
         retryAtOnce();
-        const { run, timer, askSeq } = await timerBesideQuestion(runner, `reject-owned-turn${runner === 'opencode' ? ' mock:reject-agent-post' : ''}`);
+        const { run, timer, askSeq } = await timerBesideQuestion(runner, 'reject-owned-turn');
         fireTimer(timer.id);
         // The failure is recorded before the failing session is dropped.
         await until(() => store.getRun(run.id)?.status === 'failed' && !manager.isActive(run.id));

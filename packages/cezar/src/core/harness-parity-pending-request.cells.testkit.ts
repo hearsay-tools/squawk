@@ -167,6 +167,8 @@ export const PENDING_REQUEST_GROUPS = {
         if (permissionExemption('P7', backend, 'permission-classify')) continue;
         // Agent input reaches a session only through `sendAgentMessage`, so the cell drives the seam.
         it(`${backend} P7 refuses agent input before the card and drops the request settled meanwhile`, async () => {
+          const settledEcho = HARNESS_ADAPTERS[backend]!.selfSettledApprovalEcho;
+          if (settledEcho === undefined) throw new Error(`runners/${backend}/mock.ts declares scenarios['permission-classify'] but no selfSettledApprovalEcho`);
           await withRelease(async (release) => {
             const argsFile = `${release}.args.ndjson`;
             let inputReady = 0;
@@ -179,7 +181,7 @@ export const PENDING_REQUEST_GROUPS = {
                 const before = inputReady;
                 writeFileSync(`${release}.settle`, 'go');
                 // SSE frames are handled in order: the text after the native reply proves it was read.
-                await waitFor(() => observed.v2.some(event => JSON.stringify(event).includes('OpenCode settled the ask itself.')));
+                await waitFor(() => observed.v2.some(event => JSON.stringify(event).includes(settledEcho)));
                 await waitFor(() => inputReady > before);
                 writeFileSync(release, 'go');
                 await waitFor(() => observed.v2.some(event => event.type === 'permission.requested'));

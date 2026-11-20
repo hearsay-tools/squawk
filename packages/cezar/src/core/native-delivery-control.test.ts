@@ -8,6 +8,7 @@ import { createDeliveryControl, readDeliveryControl, type DeliveryControlOptions
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
+import { runnerGolden } from './runner-golden.testkit.ts';
 
 // These tests exercise the native mocks as test infrastructure: ignoring a configured
 // control would make delivery tests silently run the ordinary scenario.
@@ -121,11 +122,10 @@ describe('native delivery control module', () => {
   });
 });
 
-// What each native wire can carry. Claude acknowledges agent input with its local stdin
-// write, never by a provider refusal, so those kinds are named exemptions.
-const EXEMPT: Partial<Record<string, Partial<Record<DeliveryKind, string>>>> = {
-  claude: { reject: 'U13', 'hold-ack': 'U12' },
-};
+// What each native wire can carry. A runner that acknowledges agent input with its local write
+// never sees a provider refusal or a held acknowledgement; its runners/<id>/mock.ts declares those
+// kinds as the named exemptions U13 and U12.
+const KIND_CRITERION: Partial<Record<DeliveryKind, string>> = { reject: 'U13', 'hold-ack': 'U12' };
 const ENV_BASE = { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' };
 type Wire = { v1: readonly AgentEvent[]; v2: readonly UiEvent[] };
 /** A baseline turn on a fresh native subprocess, then `exercise` once it has ended. */
@@ -150,7 +150,7 @@ const echoed = (wire: Wire, marker: string) => wire.v1.some(event => event.type 
 const turnEnds = (wire: Wire) => wire.v1.filter(event => event.type === 'turn-end').length;
 
 describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
-  const exempt = (kind: DeliveryKind) => EXEMPT[runner]?.[kind];
+  const exempt = (kind: DeliveryKind) => KIND_CRITERION[kind] !== undefined && exemptionFor(KIND_CRITERION[kind], runner) !== undefined;
   const control = (options: DeliveryControlOptions) => createDeliveryControl(tempRoot(), options);
 
   it('rejects one matching input, and a reopened process accepts it', async () => {
@@ -199,9 +199,9 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
       await rejected.done;
       expect(rejected.state.rejected).toBe(true);
       persistent.lift();
-      // The OpenCode runner fails its session on a rejected prompt POST, so the retry needs a
-      // reopened process (the cell above); the other protocol runners keep the session open.
-      if (runner === 'opencode') { expect(session.sendAgentMessage([{ type: 'text', text: 'retry' }])).toBe(false); return; }
+      // A runner that fails its session on a rejected input (OpenCode's rejected prompt POST) needs a
+      // reopened process for the retry (the cell above); the others keep the session open.
+      if (runnerGolden(runner, 'rejectedAgentInput') === 'ends-session') { expect(session.sendAgentMessage([{ type: 'text', text: 'retry' }])).toBe(false); return; }
       const accepted = send(session, 'mock:agent-echo reject-owned-turn second');
       await accepted.done;
       expect(accepted.state.rejected).toBe(false);
@@ -260,8 +260,8 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
   }, 60_000);
 
   for (const kind of ['reject', 'hold-ack'] as const) {
-    const criterion = EXEMPT[runner]?.[kind];
-    if (criterion) it(`${kind} is the named exemption ${criterion}, and the mock fails closed`, async () => {
+    const criterion = KIND_CRITERION[kind]!;
+    if (exempt(kind)) it(`${kind} is the named exemption ${criterion}, and the mock fails closed`, async () => {
       expect(exemptionFor(criterion, runner)?.kind).toBe('capability-absent');
       const unsupported = control({ kind, match: 'unsupported-control' });
       // Unmatched inputs run as if unconfigured: a mixed-runner fixture reaches this mock too.

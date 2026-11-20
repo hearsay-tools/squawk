@@ -35,7 +35,7 @@ import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 import type { AgentEvent, AgentSession, InputDelivery } from './agent-runner.ts';
 import { inputDeliveryOf } from './agent-runner-values.ts';
-import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { driveSeam, PINNED_SESSION_ID, promptFor, seedMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
@@ -571,8 +571,8 @@ async function observeSystemPrompt(backend: string, resume: boolean): Promise<Co
   const dir = mkdtempSync(join(tmpdir(), `cez-contract-${backend}-prompt-`));
   const files = [join(dir, 'args.ndjson'), join(dir, 'stdin.ndjson')] as const;
   try {
-    // OpenCode resumes a session its server already holds; without one it takes the 404 fallback.
-    if (resume && backend === 'opencode') seedOpencodeMockSession(files[0]);
+    // A mock with a session store (OpenCode) resumes only a session it holds; without one it takes the 404 fallback.
+    if (resume) seedMockSession(backend, files[0]);
     const observed = await driveContract(backend, {
       scenario: 'baseline', variant: resume ? 'resume' : 'fresh',
       env: { CEZ_MOCK_ARGS_FILE: files[0], CEZ_MOCK_STDIN_FILE: files[1] },
@@ -659,7 +659,7 @@ async function observeProviderFailure(backend: string, variant: typeof FAILURE_V
   // failing turn runs until the test releases it, as `gatedProviderFailure` does.
   const control = createFailureControl(dir, variant === 'wake' ? { mode: 'persistent', opening: WAKE_OPENING, failure: 'provider' } : { mode: 'gated-once' });
   try {
-    if (variant === 'wake' && backend === 'opencode') seedOpencodeMockSession(files[0]);
+    if (variant === 'wake') seedMockSession(backend, files[0]);
     return await driveContract(backend, {
       scenario: variant === 'wake' ? 'baseline' : 'provider-error-controlled', variant,
       env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_MOCK_ARGS_FILE: files[0], CEZ_MOCK_STDIN_FILE: files[1] },

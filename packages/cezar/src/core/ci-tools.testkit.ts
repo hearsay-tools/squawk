@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ToolGrant } from './agent-runner.ts';
-import { driveSeam, seedOpencodeMockSession } from './harness-parity-core.testkit.ts';
+import { driveSeam, seedMockSession } from './harness-parity-core.testkit.ts';
+import { runnerGolden, shippedScriptPath } from './runner-golden.testkit.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { buildClaudeArgs } from '../runners/claude/claude-cli-runner.ts';
 import { buildPiArgs } from '../runners/pi/pi-runner.ts';
@@ -127,7 +128,7 @@ describe('CI tool injection', () => {
       const dir = mkdtempSync(join(tmpdir(), 'cez-ci-wire-'));
       try {
         const file = join(dir, 'wire');
-        if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
+        if (resume) seedMockSession(backend, file);
         const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: descriptor, resume, restrictCrossSessionMessaging: true, env: { CEZ_MOCK_ARGS_FILE: file, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -145,7 +146,7 @@ describe('CI tool injection', () => {
         if (backend === 'opencode') {
           const config = rows.find(row => row.type === 'runtime-config').config;
           expect(config.mcp[descriptor.name].command).toEqual([descriptor.command, ...descriptor.args]);
-          expect(config.plugin).toEqual([expect.stringMatching(/scripts\/opencode-task-scope\.mjs$/)]);
+          expect(config.plugin).toEqual(runnerGolden(backend, 'runtimePlugins').map(shippedScriptPath));
         }
       } finally { rmSync(dir, { recursive: true, force: true }); }
     }, 20_000);
@@ -174,7 +175,7 @@ describe('CI H1 executable harness parity', () => {
       try {
         const resultFile = join(dir, 'result');
         const file = join(dir, 'wire');
-        if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
+        if (resume) seedMockSession(backend, file);
         const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, userPrompt: `mock:ci-wait ${valid ? wait.prUrl : 'https://github.com/owner/repo/issues/1'}`, env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         expect(registrations).toBe(valid ? 1 : 0);
@@ -253,7 +254,7 @@ describe('U0 wait tools on every native wire', () => {
       try {
         const resultFile = join(dir, 'result');
         const file = join(dir, 'wire');
-        if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
+        if (resume) seedMockSession(backend, file);
         const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, toolGrant, restrictCrossSessionMessaging: true, userPrompt: call(tool, args), env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         const result = JSON.parse(readFileSync(resultFile, 'utf8'));

@@ -57,5 +57,131 @@
   },
   "askKinds": [
     "cezar_ask"
-  ]
+  ],
+  "toolGrant": {
+    "flags": {
+      "values": [
+        "--extension",
+        "--tools",
+        "--cezar-builtin-tools",
+        "--exclude-tools"
+      ],
+      "switches": [
+        "--no-tools",
+        "--no-builtin-tools"
+      ]
+    },
+    "cases": {
+      "unset": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs"
+      ],
+      "step-default": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--no-builtin-tools",
+        "--extension",
+        "pi-default-tools.mjs",
+        "--cezar-builtin-tools",
+        "read,edit,write,grep,find,bash,subagent,subagent_supervisor,subagent_wait"
+      ],
+      "inherited": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--no-builtin-tools",
+        "--extension",
+        "pi-default-tools.mjs",
+        "--cezar-builtin-tools",
+        "read,edit,write,grep,find,bash"
+      ],
+      "explicit-copy": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--no-builtin-tools",
+        "--extension",
+        "pi-default-tools.mjs",
+        "--cezar-builtin-tools",
+        "read,edit,write,grep,find,bash,subagent,subagent_supervisor,subagent_wait"
+      ],
+      "extra-built-in": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,find,bash,subagent,subagent_supervisor,subagent_wait,webfetch,{squawk}"
+      ],
+      "extra-mcp": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,find,bash,subagent,subagent_supervisor,subagent_wait,mcp__docs__search,{squawk}"
+      ],
+      "narrowed": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--tools",
+        "read,grep,{squawk}"
+      ],
+      "empty": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--tools",
+        "{squawk}"
+      ],
+      "bash-allowlist": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs",
+        "--tools",
+        "read,edit,write,grep,find,subagent,subagent_supervisor,subagent_wait,{squawk}"
+      ],
+      "unset-bash-allowlist": [
+        "--extension",
+        "pi-retry-degraded-service.mjs",
+        "--extension",
+        "pi-project-skills.mjs",
+        "--extension",
+        "pi-ci-wait.mjs"
+      ]
+    },
+    "notes": {
+      "explicit-copy": "The copy takes the default path, which leaves every MCP and extension tool on (hearsay-tools/cezarion#1417)."
+    }
+  },
+  "rejectedAgentInput": "keeps-session",
+  "systemPromptOnResume": "resent"
 }

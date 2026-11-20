@@ -92,7 +92,7 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
         expect(exemptionFor('U27', runner)?.kind).toBe('capability-absent');
         return Promise.resolve();
       }
-      return withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', body, match);
+      return withHeldAck(runner, body, match);
     };
     /** The acknowledgement is held: the turn ended, and nothing settled it yet. */
     const heldAfterTurnEnd = async (id: string, turns: number, unsettled: () => boolean) => {

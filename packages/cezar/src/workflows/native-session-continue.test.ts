@@ -14,7 +14,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
 import type { SessionWire, WireRow } from './native-session-wire.testkit.ts';
-import { runnerDataRows } from '../core/runner-data-rows.testkit.ts';
+import { sessionWire } from './runner-session-wires.testkit.ts';
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -38,17 +38,10 @@ function rows(wire: string): WireRow[] {
   });
 }
 
-/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). A missing
- *  reader fails with a message that names the file to add; any other load error surfaces as it is. */
-const SESSION_WIRES = await runnerDataRows<SessionWire>('session-wire.testkit.ts', id => {
-  if (!existsSync(new URL(`../runners/${id}/session-wire.testkit.ts`, import.meta.url))) {
-    throw new Error(`Runner ${id} has no runners/${id}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`);
-  }
-  return import(`../runners/${id}/session-wire.testkit.ts`);
-});
-
+/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`); a missing
+ *  reader fails naming the file to add. */
 function wireOf(backend: string): SessionWire {
-  return SESSION_WIRES[backend]!;
+  return sessionWire(backend);
 }
 
 /**

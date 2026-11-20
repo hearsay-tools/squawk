@@ -1,4 +1,4 @@
-import { waitPartDescribers, github, nativeWire, pr, parkedOn, waitOfKind, turnEnds, fireTimer, settled, prompted, timerText, agentWaits, inputsFor, viaOf, sessionOf, runnerBoundary, expectPoolCapacity } from './waits-parity-fixture.testkit.ts';
+import { waitPartDescribers, github, nativeWire, pr, parkedOn, waitOfKind, turnEnds, fireTimer, settled, prompted, timerText, agentWaits, inputsFor, viaOf, sessionOf, runnerBoundary, expectPoolCapacity, sessionStoreEnv, useSessionStore } from './waits-parity-fixture.testkit.ts';
 import { nativeTimerDelay } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -91,7 +91,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
         const request = kind === 'pr' ? { kind, pr } : { kind, seconds: 60, note: 'u8' };
         // These live mock servers must not overwrite each other's session JSON. U8 never
         // restarts either server; keep their shared args file for native prompt assertions.
-        if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8-parked-sessions.json');
+        useSessionStore(runner, join(root, 'u8-parked-sessions.json'));
         const task = toolCall('cezar_wait', request);
         const parked = manager.startRun(QUICK_TASK_WORKFLOW, { task, runner });
         // bound: Keep the fixture's 15s native-wire hang guard per stage. The six-burner
@@ -106,7 +106,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
         const release = join(root, 'u8-release');
         process.env.CEZ_MOCK_RELEASE_FILE = release;
         // parkedOn above proves the first child already inherited its own store path.
-        if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8-blocker-sessions.json');
+        useSessionStore(runner, join(root, 'u8-blocker-sessions.json'));
         const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
         try {
           checkpoint(`u8-blocker-started:${blocker.id}`);
@@ -129,7 +129,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
     it(`${runner} U8l a wake of a started run takes the slot before an unstarted task that queued earlier, at maxParallel 1`, async () => {
       nativeWire(runner);
       expect(semaphore.maxParallel()).toBe(1);
-      if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8l-parked-sessions.json');
+      useSessionStore(runner, join(root, 'u8l-parked-sessions.json'));
       const parked = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 60, note: 'u8l' }), runner });
       await until(() => parkedOn(parked.id, waitOfKind(parked.id, 'timer')));
       const wait = waitOfKind(parked.id, 'timer')!;
@@ -140,21 +140,17 @@ export function inputCells(runners: string[], it: typeof registerTest = register
       process.env.CEZ_MOCK_RELEASE_FILE = release;
       let task: { id: string } | undefined;
       try {
-        const previousSessionsFile = process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
+        const restoreSessionStore = useSessionStore(runner, join(root, 'u8l-blocker-sessions.json'));
         try {
-          if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8l-blocker-sessions.json');
           const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
           await until(() => store.readEvents(blocker.id).some(event => event.type === 'turn.started'));
         } finally {
-          if (runner === 'opencode') {
-            if (previousSessionsFile === undefined) delete process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
-            else process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = previousSessionsFile;
-          }
+          restoreSessionStore();
         }
         // Queued before the wake joins the line.
         task = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
         expect(store.getRun(task.id)?.status).toBe('queued');
-        if (runner === 'opencode') {
+        if (sessionStoreEnv(runner)) {
           const taskId = task.id;
           runnerBoundary.sessionFiles.set(taskId, join(root, `u8l-task-${randomUUID()}.json`));
           onTestFinished(() => { runnerBoundary.sessionFiles.delete(taskId); });
@@ -167,7 +163,8 @@ export function inputCells(runners: string[], it: typeof registerTest = register
       await until(() => settled(parked.id, wait.id)?.phase === 'delivered');
       const deliveredAt = Date.parse(settled(parked.id, wait.id)!.deliveredAt!);
       await until(() => store.readEvents(task!.id).some(event => event.type === 'turn.started'));
-      if (runner === 'opencode') expect(sessionOf(parked.id).open).toBe(true);
+      // A mock with a session store: the task's own store left the parked session open.
+      if (sessionStoreEnv(runner)) expect(sessionOf(parked.id).open).toBe(true);
       const taskStarted = Date.parse(store.readEvents(task.id).find(event => event.type === 'turn.started')!.ts);
       expect(taskStarted).toBeGreaterThanOrEqual(deliveredAt);
       await until(() => terminal.includes(store.getRun(task!.id)?.status ?? '') || store.getRun(task!.id)?.status === 'waiting');
@@ -177,7 +174,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
       it(`${runner} U8h a ci result for a park on a held account waits in the line and is delivered once the hold lifts (${hold})`, async () => {
         const external = github();
         nativeWire(runner);
-        if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8h-sessions.json');
+        useSessionStore(runner, join(root, 'u8h-sessions.json'));
         const parked = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), runner });
         await until(() => parkedOn(parked.id, waitOfKind(parked.id, 'pr')));
         const wait = waitOfKind(parked.id, 'pr')!;

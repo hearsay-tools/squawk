@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { expect } from 'vitest';
 import type { ActivityTool } from '@open-mercato/cezar-contract';
 import type { ProviderCommandResult } from './provider-auth.ts';
 
@@ -26,6 +27,38 @@ export interface RunnerGolden {
    *  order (`core/harness-parity-cells.testkit.ts`, R26). It is written apart from the mock, so a
    *  deleted ask variant fails the guard. */
   askKinds: string[];
+  /**
+   * The tool flags the runner's mock records for each Tool-list case (`core/tool-grant-parity-cells.testkit.ts`).
+   * `same as unset`: the runner cannot restrict tools, so every case records what the unset case
+   * records. Otherwise `flags` names the argv flags that carry tool access (`--extension` keeps its
+   * basename), and `cases` gives each case's flags; `{squawk}` stands for the Squawk tool names
+   * and `{squawk-mcp}` for them as MCP names. `notes` says why a case records what it does.
+   */
+  toolGrant: 'same as unset' | {
+    flags: { values: string[]; switches: string[] };
+    cases: Record<string, string[] | 'same as unset'>;
+    notes?: Record<string, string>;
+  };
+  /** The notes a run shows for the mock's recoverable skill diagnostics (R44/R45,
+   *  `core/harness-parity-run.cells.testkit.ts`); only a runner those rows select writes it. */
+  skillWarningNotes: string[];
+  /** R15 (`core/harness-parity-run.cells.testkit.ts`): what the runner does with a child's frames
+   *  that arrive after the parent parked. `shown`: they become child items after the park.
+   *  `discarded`: the runner drops a closed child scope, so its child items all predate the park
+   *  and only the mock's usage barrier shows the late frames crossed the transport. */
+  postParkChildFrames: 'shown' | 'discarded';
+  /** What a provider refusal of agent input does to the session (`core/native-delivery-control.test.ts`).
+   *  `keeps-session`: the session stays open and takes the next input. `ends-session`: the runner
+   *  fails the session, so a retry needs a reopened process. Not written by a runner that is exempt
+   *  from U13 (no provider refusal on its wire). */
+  rejectedAgentInput: 'keeps-session' | 'ends-session';
+  /** The shipped plugin scripts (file names in `packages/cezar/scripts/`) a governed session's runtime
+   *  config loads, in order (D1, `core/harness-parity-session.cells.testkit.ts`). Only a runner that
+   *  governs a session through a runtime plugin writes it. */
+  runtimePlugins: string[];
+  /** How the runner carries a system prompt onto a resumed session, as its built runner reports it
+   *  (`core/skill-resume-parity.testkit.ts`). */
+  systemPromptOnResume: 'resent' | 'in-thread';
   /** What `GET /api/v1/runners` sends for this runner, and its Agent config pane. */
   runnerEntry: {
     displayName: string; modelListName: string; modelIdScope: string;
@@ -34,6 +67,11 @@ export interface RunnerGolden {
     suggested: string[]; retired: string[];
     paneLabel: string; paneNote?: string; showsUserMcp: boolean; emptyGroups: string[];
   };
+}
+
+/** Matches a path to the shipped script `name` (`packages/cezar/scripts/<name>`). */
+export function shippedScriptPath(name: string): unknown {
+  return expect.stringMatching(new RegExp(`scripts/${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
 }
 
 /** The value `key` of runner `runner`'s golden. */

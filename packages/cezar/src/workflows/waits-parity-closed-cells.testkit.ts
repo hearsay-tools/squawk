@@ -12,6 +12,7 @@ import { until, timeline, store, manager, semaphore, eventCheckpoint, root, rest
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
+import { factRows } from '../core/runner-fact-rows.testkit.ts';
 import { MESSAGE_WAKE_OPENING, toolCall, thenSay } from './waits-parity.testkit.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
 
@@ -87,6 +88,9 @@ const parkedOnWorkersTimer = (id: string) => workerWaits(id).length === 0 && (pa
 
 export function closedCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
+    // The wire acknowledges an input with an HTTP reply apart from its turn frames, so a held
+    // acknowledgement outlives the turn (F7 reads the same fact).
+    const httpAck = factRows()[runner]!.transport === 'http';
     for (const legacy of [false, true]) {
       it(`${runner} U22c a refusal whose reopened sessions keep closing cleanly is queued once, stops at the delivery bound, and Continue delivers it once${legacy ? ' (legacy Finish)' : ''}`, async () => {
         retryAtOnce();
@@ -173,10 +177,11 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
     for (const variant of ['silent', 'closing'] as const) {
       const how = variant === 'silent' ? 'as the nudge: a harness that never answers parks at the reply bound'
         : 'with the delivery retry: a session that closes before it counts a failure, and one copy is delivered';
-      // On OpenCode the silent variant opens as in the merge-group failure of
-      // hearsay-tools/squawk#3508: the opening no-wait nudge's HTTP acknowledgement is held, its
-      // reply bound expires and parks the parent, and the session closes at that park.
-      const heldOpening = runner === 'opencode' && variant === 'silent';
+      // On a wire that acknowledges an input apart from its turn frames (OpenCode's HTTP reply), the
+      // silent variant opens as in the merge-group failure of hearsay-tools/squawk#3508: the opening
+      // no-wait nudge's HTTP acknowledgement is held, its reply bound expires and parks the parent,
+      // and the session closes at that park.
+      const heldOpening = httpAck && variant === 'silent';
       const cell = async (release: () => void) => {
         if (variant === 'silent' && exemptionFor('U22s', runner)) {
           expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
@@ -276,11 +281,11 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           if (variant === 'silent') {
             await silence!(runner, refusal, { after: before });
             await until(() => noReplyNotes(p.id).length === 1 && gated(p.id));
-            if (runner === 'opencode') expect(refusals()[0]!.deliveredAt).toBeUndefined();
+            if (httpAck) expect(refusals()[0]!.deliveredAt).toBeUndefined();
             expect(humanOpen(p.id)).toEqual([expect.objectContaining({ source: WAIT_SOURCE.cezar, via: WAIT_VIA['no-wait'] })]);
             expect(semaphore.busy()).toBe(0);
             releaseAck();
-            if (runner === 'opencode') {
+            if (httpAck) {
               await until(() => refusals().some(input => !!input.deliveredAt));
               await silence!(runner, refusal, { after: before });
             }
@@ -299,8 +304,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           expect(refusals()).toEqual([expect.objectContaining({ deliveredAt: expect.any(String) })]);
           expect(nudgeNotes(p.id)).toHaveLength(1);
         };
-        if (runner === 'opencode' && variant === 'silent') {
-          await withHeldAck('opencode', exercise, 'mock:ack-only');
+        if (httpAck && variant === 'silent') {
+          await withHeldAck(runner, exercise, 'mock:ack-only');
         } else await exercise(() => {});
       });
     }

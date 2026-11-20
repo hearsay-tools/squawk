@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { createFailureControl, type FailureControlOptions } from '../../scripts/mock-failure-control.mjs';
 import { expect } from 'vitest';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { readMockRecords } from '../mock-records.testkit.ts';
+import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 
 // hearsay-tools/cezarion#1233: the wait list's BUILT_IN_RUNNER_IDS cells. U0 (tool admission) lives in
 // `core/ci-tools-wait-cancel.test.ts` and `core/ci-tools-ask-done.test.ts`.
@@ -158,38 +158,14 @@ function nativeFailureControl(root: string, runner: string, options: FailureCont
   return control;
 }
 
-type NativeInput = {
-  userText?: string; method?: string; url?: string;
-  params?: { input?: Array<{ text?: string }> };
-  body?: { parts?: Array<{ text?: string }> };
-};
-
-/** A stdin-wire row is one prompt, or nothing when the mock recorded no user text. */
-const stdinRowText = (row: NativeInput): string[] => row.userText === undefined ? [] : [row.userText];
-/** The per-backend prompt carrier: Codex turn input, OpenCode body parts. */
-const providerRowParts = (runner: string, row: NativeInput) =>
-  runner === 'codex' && row.method === 'turn/start' ? row.params?.input
-    : runner === 'opencode' && /\/(message|prompt_async)$/.test(row.url ?? '') ? row.body?.parts : undefined;
-const joinRowParts = (parts: Array<{ text?: string }>): string =>
-  parts.map((part: { text?: string }) => part.text ?? '').join('\n');
-
-/** Read the prompts admitted by each runner's native mock, not normalized events. */
+/** Read the prompts admitted by each runner's native mock, not normalized events: each runner's
+ *  reader (`runners/<id>/session-wire.testkit.ts`) says where its wire carries them. */
 export function ciNativeMessages(runner: string, dir: string): string[] {
-  const records = (name: string) => readMockRecords<NativeInput | string[]>(join(dir, name));
-  const stdin = runner === 'claude' || runner === 'pi' || runner === 'omp';
-  const rows = records(stdin ? 'stdin' : 'args');
-  return rows.flatMap(row => {
-    if (Array.isArray(row)) return [];
-    if (stdin) return stdinRowText(row);
-    const parts = providerRowParts(runner, row);
-    return parts ? [joinRowParts(parts)] : [];
-  });
+  return sessionWire(runner).prompts(nativeRecording(join(dir, 'args'), join(dir, 'stdin')));
 }
 
-/** Input the Codex mock took into an open turn through `turn/steer`, which `ciNativeMessages`
- *  leaves out. Every other runner returns none. */
+/** Input the mock took into an open turn apart from its prompts (Codex `turn/steer`), which
+ *  `ciNativeMessages` leaves out. A wire that steers through its prompts returns none. */
 export function ciNativeSteers(runner: string, dir: string): string[] {
-  if (runner !== 'codex') return [];
-  return readMockRecords<NativeInput>(join(dir, 'args')).flatMap(row =>
-    row.method === 'turn/steer' && row.params?.input ? [row.params.input.map(part => part.text ?? '').join('\n')] : []);
+  return sessionWire(runner).steers(nativeRecording(join(dir, 'args'), join(dir, 'stdin')));
 }
