@@ -1,5 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
+import { fakeRunManager } from '../server/fake-run-manager.testkit.ts';
 
 import { existsSync } from 'node:fs';
 import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
@@ -33,7 +33,7 @@ describe('destroy backoff recovery', { timeout: 90_000 }, () => {
     // The explicit attempt waits at the termination gate, after its worktree teardown.
     // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
     await vi.waitFor(() => expect(terminating).toHaveBeenCalled(), { timeout: 30_000 });
-    const replacementManager = createFixtureManager(f.store, f.root);
+    const replacementManager = fakeRunManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     const armed = () => [...workerCleanupInternals(f.service)].some(cleanup => cleanup.destroyRetryTimers.get('project')?.has(workerId));
     try {
@@ -119,7 +119,7 @@ describe('destroy backoff recovery', { timeout: 90_000 }, () => {
     // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
     await vi.waitFor(() => expect(termination).toHaveBeenCalled(), { timeout: 30_000 });
     const before = structuredClone(destroyOf(workerId));
-    const replacementManager = createFixtureManager(f.store, f.root);
+    const replacementManager = fakeRunManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     const writes = vi.spyOn(f.store, 'commitDelegation'), retries = vi.spyOn(f.store, 'commitDestroyRetry');
     try {

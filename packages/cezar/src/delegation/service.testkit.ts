@@ -9,30 +9,18 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { defaultWorkspaceConfig } from '../workspace/config.ts';
-import { createFixtureManager, drainFixtureManagers, managerDisposed } from '../workflows/fixture-claude.testkit.ts';
+import { fakeRunManager, type FakeRunManager } from '../server/fake-run-manager.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, expect, vi } from 'vitest';
-import { RunStore, type RunRecord } from '../runs/store.ts';
-import type { RunManager } from '../workflows/run.ts';
+import { afterAll, vi } from 'vitest';
+import type { RunStore, RunRecord } from '../runs/store.ts';
 import { CredentialRegistry, type Caller } from './credentials.ts';
 import { DelegationService, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
-
-export async function waitForOwnedWork(manager: RunManager, store: RunStore): Promise<void> {
-  // A manager a restart disposed owns nothing any more: the recovered one does (#779).
-  if (managerDisposed(manager)) return;
-  // Root runs have no worker execution proof; fixture tracking drains those.
-  // Every worker id: a manager may still hold a worker whose record already settled (#779).
-  for (const id of store.listWorkerIds().filter(id => manager.isActive(id))) {
-    manager.cancel(id);
-    if (!await manager.awaitRunTermination(id, 8_000)) throw new Error(`Worker did not terminate: ${id}`);
-  }
-}
 
 export async function removeAfterOwnedWork(root: string, ownedWork: Promise<void>): Promise<void> {
   await ownedWork;
@@ -83,7 +71,7 @@ export function scheduledDestroyAttempts(service: DelegationService): Array<Prom
 let repositoryTemplate: { root: string; sha: string } | undefined;
 
 /** Copy only the empty base repository; stores and worktrees always belong to each fixture. */
-function copyServiceRepository(destination: string): string {
+export function copyServiceRepository(destination: string): string {
   if (!repositoryTemplate) {
     const root = mkdtempSync(join(tmpdir(), 'cez-service-template-'));
     try {
@@ -107,15 +95,19 @@ afterAll(() => {
   if (repositoryTemplate) rmSync(repositoryTemplate.root, { recursive: true, force: true });
 });
 
-export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome()): { root: string; sha: string; store: RunStore; manager: RunManager; parent: RunRecord; credentials: CredentialRegistry; caller: Caller; token: string; service: DelegationService; holdAdmission(): Promise<void>; releaseAdmission(): Promise<void>; close(): Promise<void> } {
+// The fixture's parent and workers name Claude, as the engine fixture's Claude runner kit registers it.
+registerRunner(claudeRunner);
+
+/**
+ * A delegation service over one project on `FakeRunManager` (hearsay-tools/squawk#3937): spawn, inspect,
+ * steer, stop, destroy and conversations work on the store, and every worker stays queued. A test whose
+ * assertions need a session to run uses `service-engine.testkit.ts`.
+ */
+export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome()): { root: string; sha: string; store: RunStore; manager: FakeRunManager; parent: RunRecord; credentials: CredentialRegistry; caller: Caller; token: string; service: DelegationService; close(): Promise<void> } {
   const root = mkdtempSync(join(tmpdir(), 'cez-delegation-service-'));
   const sha = copyServiceRepository(root);
   const store = openTestRunStore(join(root, '.ai/cezar'), { keepLive: true });
-  // Scheduler admission is held so acceptance is durable before execution starts.
-  let admissionHeld = true;
-  const semaphore = new WorkspaceSemaphore({ home, initial: { maxParallel: 0 }, load: async () => ({ ...defaultWorkspaceConfig().resources, ...(admissionHeld ? { maxParallel: 0 } : {}) }) });
-  const manager = createFixtureManager(store, root, { home, semaphore });
-  const admissionReads = vi.spyOn(semaphore, 'maxParallel');
+  const manager = fakeRunManager(store, root, home);
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', runner: 'claude', model: 'opus', effort: 'high', steps: [] });
   setRunStatus(store, parent.id, RUN_STATUS.running, { worktreePath: root, delegation: { role: 'root', permissions: ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'], receipts: [] } });
   const credentials = new CredentialRegistry();
@@ -123,25 +115,13 @@ export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome())
   const caller = credentials.authenticate(token)!;
   vi.spyOn(manager, 'delegationExecutionSettings').mockReturnValue({ cwd: root, runner: 'claude', model: 'opus', effort: 'high', agentProfile: 'default', accountBinding: { provider: 'claude', profileId: 'default', homePath: root, claudeLayout: { kind: 'relocated' } } });
   const service = new DelegationService(cleanup);
-  const spawn = service.spawn.bind(service);
-  vi.spyOn(service, 'spawn').mockImplementation(async (...args) => {
-    const existingWorkers = new Set(store.listWorkerIds());
-    const readsBefore = admissionReads.mock.calls.length;
-    const result = await spawn(...args);
-    if (admissionHeld && store.getRun(result.workerId)?.status === 'queued') {
-      // bound: the requested pump awaits repository discovery before reading capacity.
-      await vi.waitFor(() => expect(admissionReads.mock.calls.length).toBeGreaterThan(existingWorkers.has(result.workerId) ? 0 : readsBefore), { timeout: 10_000 });
-      expect(semaphore.busy()).toBe(0);
-    }
-    return result;
-  });
   const unregister = service.registerProject({ home, id: 'project', root, store, manager });
   return { root, sha, store, manager, parent, credentials, caller, token, service,
-    async holdAdmission() { admissionHeld = true; await semaphore.refresh(); },
-    async releaseAdmission() { admissionHeld = false; await semaphore.refresh(); await semaphore.release(); },
     async close() {
       unregister();
       credentials.close();
-      await removeAfterOwnedWork(root, waitForOwnedWork(manager, store).then(() => drainFixtureManagers(root)).then(() => store.close()));
+      for (const id of store.listWorkerIds()) if (manager.isActive(id)) manager.cancel(id);
+      store.close();
+      rmSync(root, { recursive: true, force: true });
     } };
 }

@@ -15,7 +15,7 @@ const forgeFactory = (root: string) => ({ ...resolveForgeRoot(root), discoverRep
 import { ProjectContexts } from './project-context.ts';
 import type { RepoHandleDiscovery } from './forge/github.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
@@ -39,7 +39,7 @@ describe('project repository discovery lifetime', () => {
       let release!: (value: RepoHandleDiscovery) => void;
       discoverRepoHandle.mockReturnValueOnce(new Promise<RepoHandleDiscovery>((resolve) => { release = resolve; }));
       discoverRepoHandle.mockResolvedValue({ status: 'resolved', handle });
-      contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(),
+      contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(),
         forgeFactory,
         listProjects: async () => [{ id: 'project', root, status: 'not-git' }],
       });

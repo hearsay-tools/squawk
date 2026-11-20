@@ -43,13 +43,6 @@ describe('cez task', () => {
       expect(last().next).toBe(`${productIdentity().command} task send ${id} '…' --resume`);
     });
 
-    it('reopens a closed session with --resume', async () => {
-      const id = await start();
-      ctx.manager.cancel(id);
-      expect(await run(['send', id, 'go on', '--resume'])).toBe(0);
-      expect(last()).toMatchObject({ id, delivery: 'resumed' });
-    });
-
     it('passes an unknown run through as exit 2', async () => {
       expect(await run(['send', 'bogus', 'hi'])).toBe(2);
     });

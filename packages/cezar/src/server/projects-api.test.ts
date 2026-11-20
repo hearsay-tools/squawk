@@ -38,7 +38,7 @@ import {
 } from './server.ts';
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

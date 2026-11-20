@@ -12,7 +12,7 @@ import { seedRuns } from '../runs/run-store.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectContextDeps } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 
