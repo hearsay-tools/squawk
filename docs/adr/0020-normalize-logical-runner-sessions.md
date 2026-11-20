@@ -1,8 +1,9 @@
 # Normalize logical sessions behind one runner seam
 
-Each backend implements AgentRunner and AgentSession. The factory and RUNNER_IDS own the
-runner set. A logical session supports follow-up input, interruption and resume even when its
-adapter replaces the native process between turns. Backend wire types stay behind this seam.
+Each backend implements AgentRunner and AgentSession. The runner registry owns the runner set
+([ADR 0067](0067-register-each-runner-as-one-definition.md)). A logical session supports
+follow-up input, interruption and resume even when its adapter replaces the native process
+between turns. Backend wire types stay behind this seam.
 
 Runners emit the legacy event stream alongside the normalized item-lifecycle vocabulary.
 Pure mappers translate native events; display code consumes the common item identity and

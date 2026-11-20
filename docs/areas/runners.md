@@ -10,6 +10,124 @@
 
 Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/` reads a runner's declared facts (`RUNNER_FACTS`, `inputDelivery`, `systemPromptOnResume`; `AGENT_PROTOCOL.md` §1) to decide what a runner can do, never a runner id. Every backend implements `AgentRunner`/`AgentSession` and must pass both parity matrices: `ui-parity.test.ts` (mappers) and `harness-parity.test.ts` (runners, including each runner's `specSupport`). Runner prose never counts runners. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) must keep working. The zero-config default includes unrestricted `Bash`, and each runner's `specSupport.toolGrant` says whether its wire honors the list (open-mercato/cezar#430).
 
+## Runner definitions
+
+Each runner is one definition, registered with one call
+([ADR 0067](../adr/0067-register-each-runner-as-one-definition.md); design in the
+[runner definitions spec](../../.ai/specs/2026-11-18-runner-definitions.md)). Paths below are
+relative to `packages/cezar/src/`.
+
+### The definition
+
+`core/runner-definition.ts` declares `RunnerDefinition`. Each runner's `runners/<id>/definition.ts`
+exports one value made with `defineRunner`. A definition module imports only types and data; each
+code part loads through a `load*()` function. A data file is read by both the definition and the
+adapter; the adapter never imports `definition.ts`, because the definition imports the adapter.
+
+| Part | File in `runners/<id>/` | What it holds |
+| --- | --- | --- |
+| `id` | `definition.ts` | The runner id, an open string |
+| `facts` | `facts.ts` | The wire and turn facts that `RUNNER_FACTS` (`core/runner-facts.ts`) reads |
+| `specSupport` | `spec-support.ts` | Which `AgentRunSpec` fields the wire honors |
+| `detection` | `detection.ts` | The PATH name, the `*_BIN` override, the dry-run rule, the version banner and the hints. The "Open in" menu reads the binary and the override from here |
+| `cli` | `cli.ts` | How a terminal starts and resumes the CLI, the installer's source and `openTarget`, the "Open in" menu entry's label and icon key |
+| `login`, `loadLogin()` | `login.ts`, `login-probe.ts` | The status and login arguments, the install hint and the status parser |
+| `accounts` | `accounts.ts`; `homeDir()` in `definition.ts` | The account folder layout, the profile markers and the home slot (its key in `AgentHomePaths`, which `agentHomePaths()` in `paths.ts` builds from the registered runners). `homeDir(env, userHome)` resolves the runner's default home |
+| `env` | `env.ts` | The environment allow-list prefixes |
+| `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
+| `loadModelCatalog()` | `<id>-model-catalog.ts` | The host model discovery adapter |
+| `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
+| `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `runners/project-agents-file.ts`) names no runner |
+| `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
+| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
+| `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
+| `loadAdapter()` | `<id>-runner.ts` (or the adapter's own name) | The `AgentRunner` class |
+
+The folder also holds the runner's test data: `session-wire.testkit.ts` (how the mock's recorded
+wire shows a session, its prompts, steers, system prompt and skill triggers), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
+and `__fixtures__/golden.json` (values that tests outside the runner pin). `runnerDataRows`
+(`core/runner-data-rows.testkit.ts`) imports a per-runner data module, `runners/<id>/<file>`,
+for each id in `runners/ids.ts`: facts, extra tools, the mock part, the session wire and the
+mapper rows. `runnerGolden` (`core/runner-golden.testkit.ts`) reads one runner's
+`__fixtures__/golden.json` as a file. The session-wire and golden readers name the missing file
+when a runner has none.
+
+The definition has no tool-injection part. OpenCode's tool server setup is OpenCode code
+(`ciOpenCodeEnv` in `runners/opencode/opencode-runtime-config.ts`).
+
+### The registry
+
+`core/runner-registry.ts` holds the registered definitions in registration order.
+
+- `registerRunner(definition)` adds one. A different definition with a registered id is an error,
+  and so is a legacy id (`claude-cli`, in `core/runner-ids.ts`). The same object registered twice
+  is a no-op.
+- `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` throw on an empty
+  registry, so a process entry that registered nothing fails at once. `knownRunnerIds()` and
+  `savedRunnerRegistration(id)` never throw: config decoders and the read of saved runs use them.
+- `createRunner(id)` is async. It maps a legacy id, gives the default runner (`claude`) to an id
+  that no runner registered, and awaits the definition's `loadAdapter()`. After the await, a
+  caller checks stop and cancel again before it changes state.
+- `src/index.ts` calls `registerBuiltInRunners()` (`runners/built-in.ts`) before any command
+  reads config or runs a task. `index-runners.test.ts` pins it. A script under
+  `packages/cezar/scripts/` that reads runner data calls it too.
+- `BUILT_IN_RUNNERS` (`runners/built-in.ts`) is the only list of built-in definitions.
+  `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests, testkits,
+  `vitest.setup.ts` and dev scripts. `core/runner-registry.test.ts` holds the two lists equal, and
+  `cez/runner-ids-import` fails a production file that names `runners/ids.ts` with a literal path
+  (a static import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope. The lint rules
+  `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
+- No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
+  own folder (`runner-class-outside-factory`).
+
+### The runners route
+
+`GET /api/v1/runners` (`server/runners-routes.ts`, schema `runnersResponseSchema` in
+`packages/contract/src/runners.ts`) sends the registered runners in registration order: each
+`display` part, the `suggested` and `retired` lists of `models` and the `agentConfig` of
+`configFiles`. It reads the registry and never probes a CLI; `GET /api/v1/health` still says which
+CLIs are installed. The cockpit reads it through `useRunners()` (`packages/web/src/api/runners.ts`)
+and holds no table keyed by runner id. The new-task composer and the runner pickers wait for this
+query as they wait for the provider status. A failed query reads as "Provider authentication could
+not be verified."
+
+A request's runner id is checked against the registry when it arrives: run requests, automation
+definitions, provider requests and workspace config (`core/runner-fields.ts`,
+`core/runner-id-schema.ts`). An unknown id gets the refusal that the closed enum gave
+(`server/unknown-runner-refusals.test.ts`).
+
+### Saved runs and stored config
+
+- A saved run reads its runner id through `runs/legacy-run-rows.ts` before the schema parse. A
+  legacy id maps to its runner. An id in `REMOVED_RUNNER_IDS` is a retired runner; the next write
+  stores the fold. Any other id that this process did not register folds to a removed-runner run
+  for the read only: the next write puts the runner, sessions and step settings back, and a
+  process that registers the runner reads the run as before. A queued run on such a runner stays
+  queued. `runs/unregistered-runner-saved-data.test.ts` pins it. AGENT_PROTOCOL.md §10a lists the
+  readers.
+- A process that registered no runner still maps a legacy id and folds a retired id. It reads
+  any other saved id as written, with no fold.
+- The stored-config decoders (`config.ts`, `workspace/config.ts`,
+  `workspace/agent-accounts.ts`) check ids against the registry. A per-runner record keeps its own
+  handling of a key that no runner registered: `defaultModels` in `config.ts` drops it;
+  `agentDefaults.models` and the account selections (`registeredRunnerRecord`) keep it and ignore
+  it. A single id drops it: `agentDefaults.runner`, `disabledProviders` and an account row's
+  `provider`. The next write stores what the decoder read, so a runner that did not register
+  loses those settings.
+
+### How tests register runners
+
+No setup file registers every runner. A test registers the runners it drives with
+`registerRunner(definition)`. A test that needs every built-in runner (it enumerates
+`runnersWhere` or `registeredRunners`) imports `core/register-all-runners.testkit.ts`. A test that
+needs only the ids reads `runners/ids.ts`, which loads no definition. A static test table that
+crosses runners reads the runner folders' data files, never a hand list:
+`core/runner-fact-rows.testkit.ts` for facts and extra tools, `runnerDataRows` for the others.
+The lint rule's runner classes and the closure guard's adapter paths come from the folders too. `runners/fixture/` is a runner that
+exists only in tests: `runners/fixture/fixture-runner.test.ts` registers it, runs a task and runs
+the parity kit on it. The per-runner parity files are in
+[Runner regressions ship with shared coverage](#runner-regressions-ship-with-shared-coverage).
+
 ## Runner regressions ship with shared coverage
 
 A lifecycle, input delivery, Needs You, monitoring, ASK or completion fix ships
@@ -29,21 +147,13 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** declares its facts in `runners/<id>/facts.ts`, its spec support in
-  `runners/<id>/spec-support.ts`, its host probe in `runners/<id>/detection.ts`, its terminal
-  command and install source in `runners/<id>/cli.ts`, its model data in
-  `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
-  native mock script and scenario prompts in `runners/<id>/mock.ts` (the `mock` part), its
-  definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its display
-  facts in `runners/<id>/display.ts`, which `GET /api/v1/runners` sends with the `models.suggested`
-  and `models.retired` ids and the `agentConfig` pane of its `configFiles` part. The cockpit holds
-  no table keyed by runner id: the runner picker's label and line, the model presets, the install
-  hint, the login command, the account folder example, the icon key and the Agent config pane are
-  all in the definition (hearsay-tools/squawk#3898). `display.icon` is a key of the cockpit's icon
-  set (`OPEN_IN_ICONS` in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the
-  generic runner icon is `bot`. A runner's `login.installHint` (the server's message) and
-  `display.installHint` (the accounts pane) are different strings. When it adds a value
-  that no runner declared before, it also adds that value's unit tests to
+- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its scripts in
+  `packages/cezar/scripts/`, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
+  names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
+  in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
+  is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the
+  accounts pane) are different strings. When it declares a value of a turn-path fact (a key of
+  `TURN_PATH_FACTS`) that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 
 `core/parity-classes.testkit.ts` holds the one classification table. Each parity
@@ -110,11 +220,12 @@ enumerates `runnersWhere` or `registeredRunners` and expects all of them) import
 `core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
 `core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. A test that
 needs only the ids reads `BUILT_IN_RUNNER_IDS` from `runners/ids.ts`, which loads no definition;
-production code never imports it (`cez/runner-ids-import`). The
+production code never imports it (`cez/runner-ids-import`, for literal paths). The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
-adapter for its workers, and an owned-workflows file the next runner for R14's mixed chain. `core/runner-closure.test.ts` enforces this
+adapter for its workers, and an owned-workflows file exactly one other runner for R14's mixed
+chain. `core/runner-closure.test.ts` enforces this
 (hearsay-tools/cezarion#2939).
 
 The binding limit on a parity test file is CI's per-file cap: `FILE_DURATION_LIMIT_MS`
