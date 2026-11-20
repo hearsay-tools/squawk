@@ -48,7 +48,22 @@ const SPEC_PATH = /^packages\/web\/e2e\/[^/]+\.e2e\.ts$/;
 const isIndexList = (value, size) => Array.isArray(value)
   && value.every(index => Number.isInteger(index) && index >= 0 && index < size);
 
-/** Why `value` is not a version 1 spec map, or null when it is one. */
+const badEntry = (entry, size) => !Number.isInteger(entry.start) || entry.start < 1 || !Number.isInteger(entry.end)
+  || entry.end < entry.start || !isIndexList(entry.specs, size) || (entry.startup !== undefined && entry.startup !== true);
+
+/** Why the map's optional `functions` and `nodeLoaded` are invalid, or null when they are valid. */
+function nodeProblem(value) {
+  if (value.nodeLoaded !== undefined && (!Array.isArray(value.nodeLoaded) || value.nodeLoaded.some(file => typeof file !== 'string'))) {
+    return 'its loaded files are not a list of paths';
+  }
+  if (value.functions === undefined) return null;
+  if (!value.functions || typeof value.functions !== 'object') return 'its functions are not an object';
+  const bad = Object.entries(value.functions).find(([, entries]) => !Array.isArray(entries)
+    || entries.some(entry => badEntry(entry, value.specs.length)));
+  return bad ? `its function ranges for ${bad[0]} are invalid` : null;
+}
+
+/** Why `value` is not a version 2 spec map, or null when it is one. */
 export function mapProblem(value) {
   if (value?.version !== 2) return 'its version is not 2';
   if (typeof value.commit !== 'string' || !/^[0-9a-f]{40}$/.test(value.commit)) return 'it names no full commit id';
@@ -59,17 +74,7 @@ export function mapProblem(value) {
   if (typeof value.sources !== 'object' || value.sources === null) return 'it has no sources';
   const bad = Object.entries(value.sources).find(([, indexes]) => !isIndexList(indexes, value.specs.length));
   if (bad) return `its entry for ${bad[0]} is not a list of spec indexes`;
-  if (value.functions !== undefined) {
-    if (!value.functions || typeof value.functions !== 'object') return 'its functions are not an object';
-    for (const [file, entries] of Object.entries(value.functions)) {
-      if (!Array.isArray(entries) || entries.some(entry => !Number.isInteger(entry.start) || entry.start < 1
-        || !Number.isInteger(entry.end) || entry.end < entry.start || !isIndexList(entry.specs, value.specs.length)
-        || (entry.startup !== undefined && entry.startup !== true))) {
-        return `its function ranges for ${file} are invalid`;
-      }
-    }
-  }
-  return null;
+  return nodeProblem(value);
 }
 
 export function readMap(file) {
@@ -240,6 +245,19 @@ export const NO_SPEC = [
   [/^squeal\.config\.json$/, "Squeal's configuration, which no spec or server reads"],
 ];
 
+// Code that only a Node process can load, so the map's `nodeLoaded` list answers for it. Cockpit
+// and api-client sources are bundled: the browser evidence in `sources` answers for those.
+const NODE_CODE = /^(?:packages\/cezar\/(?:src|scripts)\/|packages\/contract\/src\/|packages\/web\/e2e\/|\.ai\/scripts\/|scripts\/).+\.(?:[cm]?[jt]s|tsx|jsx)$/;
+
+/**
+ * True when the map shows that no process the suite started loaded `file`. Only a file that
+ * existed at the map's commit counts: a new file has no evidence either way.
+ */
+export function unloaded(file, map, atMap) {
+  return Array.isArray(map.nodeLoaded) && NODE_CODE.test(file) && atMap?.has(file) === true
+    && !map.nodeLoaded.includes(file) && map.sources[file] === undefined && map.functions?.[file] === undefined;
+}
+
 const none = reason => ({ specs: [], reason });
 const every = reason => ({ specs: null, reason });
 
@@ -318,8 +336,9 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes, partial, boot }) {
+export function classify(file, { map, graph, changes, partial, boot, atMap }) {
   if (isDocsPath(file)) return none('documentation');
+  if (unloaded(file, map, atMap)) return none('no process the browser suite starts loads it');
   if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
@@ -346,13 +365,13 @@ export function classify(file, { map, graph, changes, partial, boot }) {
  * that would need every spec: that code is new since the map, and a path from a spec into it
  * passes through an edit the map does answer.
  */
-export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles) }) {
-  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot }) }));
+export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles), atMap }) {
+  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot, atMap }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
-    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot }) }))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot, atMap }) }))
     .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
   if (mapped) {
@@ -481,8 +500,9 @@ function chooseSpecs(root, run, loaded, specFiles, fork, base) {
   };
   const driftFiles = run('git', ['diff', '--no-renames', '--name-only', '-z', map.commit, fork, '--']).split('\0').filter(Boolean);
   const drift = { files: driftFiles, changes: lineChanges(driftFiles, [fork]) };
+  const atMap = new Set(run('git', ['ls-tree', '-r', '--name-only', '-z', map.commit]).split('\0').filter(Boolean));
   return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift,
-    boot: bootSpec(map, specFiles, durations(root) ?? {}) });
+    boot: bootSpec(map, specFiles, durations(root) ?? {}), atMap });
 }
 
 export function main(argv) {

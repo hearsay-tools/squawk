@@ -75,9 +75,13 @@ jobs:
 
       # The same bootstrap `npm run test:e2e` runs: install, the VITE_CEZ_E2E=1 build, the
       # server and the browser provider. A capture without a browser is no evidence.
+      # `loaded/capture.json` marks the directory every other process writes NODE_V8_COVERAGE into:
+      # the map lists the files no process loaded only when each of them left its coverage.
       - name: Enable harness-only Node coverage
         run: |
           echo "E2E_SPEC_MAP_NODE_DIR=$RUNNER_TEMP/spec-map/logs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/spec-map/logs/loaded"
+          echo '{}' > "$RUNNER_TEMP/spec-map/logs/loaded/capture.json"
 
       - name: Boot the test environment
         env:
@@ -92,11 +96,17 @@ jobs:
         env:
           NODE_OPTIONS: --import=${{ github.workspace }}/packages/web/e2e/spec-map/node-preload.mjs
           E2E_SPEC_MAP_LOG_DIR: ${{ runner.temp }}/spec-map/logs
+          NODE_V8_COVERAGE: ${{ runner.temp }}/spec-map/logs/loaded
         run: |
           set +e
           npm exec -- vitest run --config packages/web/e2e/spec-map/vitest.config.ts --shard="$SHARD/2" \
             --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/spec-map/results.json"
           echo "The browser suite exited $?."
+
+      # A process still running writes its coverage on SIGTERM (node-preload.mjs); one that does
+      # not keeps the loaded list out of the map.
+      - name: Stop the processes that are still running
+        run: node packages/web/e2e/spec-map/flush-processes.ts "$RUNNER_TEMP/spec-map/logs/loaded"
 
       - name: Report served-server peak memory
         run: |

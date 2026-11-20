@@ -131,3 +131,62 @@ export function nodeCaptureComplete(logs: string, spec: string): boolean {
     return names.some((candidate) => dirname(candidate) === directory && basename(candidate).startsWith('coverage-'))
   })
 }
+
+const CODE_FILE = /\.(?:[cm]?[jt]s|tsx|jsx)$/
+
+function scriptPath(url: string): string | null {
+  const bare = url.replace(/[?#].*$/, '')
+  if (bare.startsWith('file:')) return fileURLToPath(bare)
+  return bare.startsWith('/') ? bare : null
+}
+
+/** The repository code files one loaded script stands for: its source-map sources, or itself. */
+function repositoryFiles(file: string, root: string, cache: Map<string, string[]>): string[] {
+  const known = cache.get(file)
+  if (known) return known
+  let files: string[]
+  if (existsSync(`${file}.map`)) {
+    const map = JSON.parse(readFileSync(`${file}.map`, 'utf8')) as { sources?: string[]; sourceRoot?: string }
+    files = (map.sources ?? []).map((source) => relative(root, resolve(dirname(file), map.sourceRoot ?? '', source)))
+  } else files = [relative(root, file)]
+  files = files.filter((path) => !path.startsWith('..') && !path.split('/').includes('node_modules') && CODE_FILE.test(path))
+  cache.set(file, files)
+  return files
+}
+
+/**
+ * Every repository code file a process the suite started loaded: the shared server's snapshots,
+ * the mocks' coverage and the coverage every other process wrote into the loaded directory.
+ */
+export function nodeLoaded(logs: string, root: string): string[] {
+  const files = new Set<string>()
+  const cache = new Map<string, string[]>()
+  const reports = existsSync(logs) ? readdirSync(logs, { recursive: true, encoding: 'utf8' })
+    .filter((name) => /^(?:coverage-.*|server-.*|shared-startup-\d+)\.json$/.test(basename(name))) : []
+  for (const name of reports) {
+    const report = JSON.parse(readFileSync(join(logs, name), 'utf8')) as { result?: Array<{ url: string }> }
+    for (const { url } of report.result ?? []) {
+      const file = scriptPath(url)
+      if (file && existsSync(file)) for (const source of repositoryFiles(file, root, cache)) files.add(source)
+    }
+  }
+  return [...files].sort()
+}
+
+/**
+ * The processes that wrote no coverage into the loaded directory, by their `started-<pid>.json`;
+ * null when the capture had no loaded directory at all. Either one means the loaded list misses
+ * what those processes loaded.
+ */
+export function unflushedProcesses(logs: string): string[] | null {
+  const dir = join(logs, 'loaded')
+  if (!existsSync(join(dir, 'capture.json'))) return null
+  const names = readdirSync(dir)
+  return names.filter((name) => /^started-\d+\.json$/.test(name)).filter((name) => {
+    const pid = name.slice('started-'.length, -'.json'.length)
+    return !names.some((candidate) => candidate.startsWith(`coverage-${pid}-`) && candidate.endsWith('.json'))
+  }).map((name) => {
+    const record = JSON.parse(readFileSync(join(dir, name), 'utf8')) as { pid: number; argv?: string[] }
+    return `${record.pid} (${(record.argv ?? []).join(' ')})`
+  }).sort()
+}

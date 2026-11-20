@@ -240,6 +240,38 @@ test('each kind of changed file selects its specs, none, or every spec', () => {
   }
 });
 
+test('a code file no process loaded selects no spec when the map lists every loaded file', () => {
+  // .ai/specs/2026-11-20-e2e-selection-evidence-plan.md, slice 3.
+  const map = sampleMap({ nodeLoaded: ['packages/cezar/src/server/server.ts', 'packages/web/e2e/agent-browser.ts'] });
+  const atMap = new Set(['packages/cezar/src/server/server.ts', 'packages/cezar/src/delegation/owned-workspace-release.ts',
+    'packages/web/e2e/agent-browser.ts', '.github/scripts/cockpit-test-sequencer.mjs', 'packages/contract/src/runs.ts',
+    '.ai/scripts/probe-startup.ts', 'scripts/readers.mjs', '.ai/scripts/test-env-up.sh', 'packages/cezar/src/file-length.baseline.json',
+    'packages/web/src/lib/unused.ts']);
+  const pick = (file, chosenMap = map) => classify(file, { map: chosenMap, graph, atMap }).specs;
+  for (const file of ['packages/cezar/src/delegation/owned-workspace-release.ts', 'packages/contract/src/runs.ts',
+    '.ai/scripts/probe-startup.ts', 'scripts/readers.mjs']) {
+    assert.deepEqual(pick(file), [], file);
+    assert.match(classify(file, { map, graph, atMap }).reason, /no process the browser suite starts loads it/);
+  }
+  // .github/ is outside the covered roots: the suite setup still selects every spec for it.
+  assert.equal(pick('.github/scripts/cockpit-test-sequencer.mjs'), null);
+  // A static setup reference a process never loaded (a type-only import, say) selects no spec.
+  assert.deepEqual(classify('packages/cezar/src/core/runner-definition.ts', { map, graph: { ...graph,
+    setup: new Set([...graph.setup, 'packages/cezar/src/core/runner-definition.ts']) },
+  atMap: new Set(['packages/cezar/src/core/runner-definition.ts']) }).specs, []);
+  // Loaded files, new files, files that are not code and maps without the list keep the other rules.
+  assert.equal(pick('packages/cezar/src/server/server.ts'), null);
+  assert.equal(pick('packages/web/e2e/agent-browser.ts'), null);
+  assert.equal(pick('packages/cezar/src/delegation/new-file.ts'), null);
+  assert.equal(pick('.ai/scripts/test-env-up.sh'), null);
+  assert.equal(pick('packages/cezar/src/file-length.baseline.json'), null);
+  assert.equal(pick('packages/cezar/src/delegation/owned-workspace-release.ts', sampleMap()), null);
+  // Cockpit sources keep their browser evidence.
+  assert.deepEqual(pick('packages/web/src/lib/unused.ts'), []);
+  assert.match(mapProblem(sampleMap({ nodeLoaded: [3] })), /loaded files/);
+  assert.match(mapProblem(sampleMap({ nodeLoaded: 'x' })), /loaded files/);
+});
+
 test('a reviewed no-spec path still selects the specs that load it, and setup still selects every spec', () => {
   const readsSkill = { setup: new Set([...graph.setup, '.ai/skills/setup-loaded.md']), specs: new Map([
     ...graph.specs, [spec('smoke'), new Set([spec('smoke'), '.ai/skills/fixture/SKILL.md'])],
@@ -442,6 +474,20 @@ test('--plan diffs the working tree against the map’s commit, untracked files 
   assert.match(result.stdout, /→ packages\/web\/e2e\/artifact-project-links\.e2e\.ts\n {2}→ packages\/web\/e2e\/chat-code-fence\.e2e\.ts\n/);
   assert.match(result.stdout, /Selected 2 of 3 specs, about 3 min\./);
   assert.doesNotMatch(result.stdout, /TEST_E2E_STATUS/);
+});
+
+test('--plan reads the files that existed at the map\'s commit for the loaded-file rule', t => {
+  const { dir, put, map } = repository(t);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  put('packages/cezar/src/cli/unused.ts', 'export const a = 1;\n');
+  git('add', '.'); git('commit', '-qm', 'cli');
+  const mapFlag = map({ nodeLoaded: ['packages/cezar/src/server.ts'] });
+  put('packages/cezar/src/cli/unused.ts', 'export const a = 2;\n');
+  put('packages/cezar/src/cli/added.ts', 'export const b = 1;\n');
+  const result = affected(dir, '--plan', mapFlag);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /unused\.ts: 0 specs \(no process the browser suite starts loads it\)/);
+  assert.match(result.stdout, /added\.ts needs every spec \(server or CLI code without function evidence\)/);
 });
 
 test('a change no spec reaches runs nothing and exits 0', t => {

@@ -80,23 +80,22 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 
 ### Slice 3: coverage of every process the suite starts (capture, map, selector)
 
-- The capture records coverage, with its owning spec, for every Node process and worker thread
-  the suite starts:
-  - CLI and other children the shared server or a mock starts, not only `mock-*.mjs` children;
-  - worker threads, such as the transcript-facts worker, including source `.ts` entries run
-    through `tsx`;
-  - the Vitest process: setup files and the spec files' Node helpers, with setup evidence kept
-    apart from per-spec evidence.
-- `scriptFunctions` keeps every repository code file, not only `dist/` server files and mocks.
-- The map lists every repository code file that any process loaded (`loaded`), and the roots
-  whose processes the capture covers (`covered`).
-- The selector gets a new rule. A code file under a covered root that exists at the map's commit
-  and that no process loaded selects **no spec**: "no process the suite starts loads it". Today
-  it selects every spec.
-- Vitest-side setup code follows the slice 2 rules. Setup functions that ran select every spec,
-  and top-level setup code selects the boot spec.
-- The static setup scan and the `.ai/scripts/` and root `scripts/` rules remain only for files
-  that are not code (JSON, shell, PowerShell).
+- Every Node process the suite starts, and its worker threads, writes `NODE_V8_COVERAGE` into
+  `logs/loaded/`, a directory marked by `capture.json`. The Vitest step sets it. The shared server
+  passes it to the processes it starts. CLI children, agents and `tsx` workers inherit it.
+  Mock processes keep their per-spec directory.
+- Each marked process records `started-<pid>.json`, and writes its coverage on SIGTERM as well as
+  on exit. After the suite, `flush-processes.ts` sends SIGTERM to the processes that are still running.
+- The map gets `nodeLoaded`: every repository code file in any coverage report, with dist files
+  resolved through their source maps. The map includes it only when every started process left
+  coverage. Otherwise the merge log names the processes, and the selector keeps today's rules.
+- The selector gets a new rule. A code file under `packages/cezar/{src,scripts}`, `packages/contract/src`,
+  `packages/web/e2e`, `.ai/scripts` or `scripts/` selects **no spec** when it existed at the map's
+  commit and is absent from `nodeLoaded`, `sources` and `functions`: "no process the browser suite
+  starts loads it". This rule runs before the static setup scan, so a type-only import that the scan
+  reaches selects no spec.
+- Loaded code keeps today's rules: function evidence, or the static setup scan, which selects every spec.
+  Files that are not code (JSON, shell, PowerShell) also keep today's rules.
 
 ## Case tables
 
@@ -110,9 +109,10 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Line inside a function that no spec ran | No spec | No spec (no change) |
 | Line in the module's top-level code, an import above the first recorded line, or a range across two functions | Every spec, or all 97 through startup credit | Boot spec + specs that ran any function of the file |
 | Any startup edit when no spec has complete evidence | Every spec | Every spec (no boot spec) |
-| File no process loaded, existed at the map commit | Every spec | No spec |
+| Code file no process loaded, existed at the map commit, every process left coverage | Every spec | No spec |
+| The same, but some process left no coverage | Every spec | Every spec (no `nodeLoaded` in the map) |
 | New code file, absent at the map commit | Every spec | Every spec (no evidence; the file may be loaded through a computed path) |
-| Vitest setup function that ran | Every spec (static scan) | Every spec |
+| Code file the suite setup loaded | Every spec (static scan) | Every spec |
 | Vitest setup module that the static scan reaches but no process loaded (for example a type-only import) | Every spec | No spec |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |
 

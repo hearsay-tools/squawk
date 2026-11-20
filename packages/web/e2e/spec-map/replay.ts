@@ -23,7 +23,7 @@ function allowed(path: string): boolean {
   if (path === 'results.json') return true
   if (/^(?:server|served|sourcemaps)\//.test(path)) return /\.(?:js|map)$/.test(path)
   if (!path.startsWith('logs/') || /\/(?:processes|servers)\//.test(path)) return false
-  return path.endsWith('.log') || /\/(?:coverage-.*|server-.*|shared-startup-.*|expected|expected-server-\d+|ambiguous-task-.*)\.json$/.test(path)
+  return path.endsWith('.log') || /\/(?:coverage-.*|server-.*|shared-startup-.*|expected|expected-server-\d+|ambiguous-task-.*|started-\d+|capture)\.json$/.test(path)
 }
 
 function roots(repo: string, capture: string) {

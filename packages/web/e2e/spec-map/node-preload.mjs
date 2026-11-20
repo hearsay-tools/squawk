@@ -3,7 +3,7 @@ import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { Session } from 'node:inspector';
 import { createServer } from 'node:net';
-import { mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
@@ -13,7 +13,32 @@ import { isMainThread } from 'node:worker_threads';
 const root = process.env.E2E_SPEC_MAP_NODE_DIR;
 const owner = process.env.E2E_SPEC_MAP_OWNER;
 const isServer = /[/\\]dist[/\\]index\.js$/.test(process.argv[1] ?? '');
+// Every process the suite starts writes NODE_V8_COVERAGE into a directory marked by `capture.json`,
+// so the map can show which files no process loaded. The shared server's descendants inherit it.
+export const LOADED_MARKER = 'capture.json';
+if (isMainThread && root && isServer && existsSync(join(root, 'loaded', LOADED_MARKER))) {
+  process.env.NODE_V8_COVERAGE ??= join(root, 'loaded');
+}
+const loaded = process.env.NODE_V8_COVERAGE;
+if (isMainThread && !isServer && !owner && loaded && existsSync(join(loaded, LOADED_MARKER))) recordProcess(loaded);
 if (isMainThread && root && (isServer || owner)) await install(root, owner);
+
+/**
+ * A process that writes its coverage into the capture's loaded directory. `started-<pid>.json`
+ * lets the merge refuse the loaded list when a process left no coverage, and SIGTERM writes the
+ * coverage first: Node writes it only on a normal exit.
+ */
+function recordProcess(directory) {
+  writeRecord(join(directory, `started-${process.pid}.json`), { pid: process.pid, argv: process.argv.slice(1, 3).map(arg => basename(arg)) });
+  function flushSignal() {
+    takeCoverage();
+    if (process.listenerCount('SIGTERM') === 1) {
+      process.removeListener('SIGTERM', flushSignal);
+      process.kill(process.pid, 'SIGTERM');
+    }
+  }
+  process.prependListener('SIGTERM', flushSignal);
+}
 
 async function install(root, owner) {
   mkdirSync(join(root, 'processes'), { recursive: true });
