@@ -70,7 +70,8 @@ Rules:
   from comparing runner ids.
 - A run saved on an id that no runner registered opens as a removed-runner run. For an id that
   only this process does not know, the fold is undone on the next write. A process that
-  registered no runner reads a saved id as written.
+  registered no runner still maps a legacy id and folds a retired id; it reads any other saved id
+  as written.
 - The stored-config decoders check ids against the registry. A runner that did not register
   loses its stored settings on the next write. A loader that registers runners later (roadmap
   step 4) must register every runner before it reads or writes config, or the decoders must

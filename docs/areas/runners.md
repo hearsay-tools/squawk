@@ -95,7 +95,8 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
   process that registers the runner reads the run as before. A queued run on such a runner stays
   queued. `runs/unregistered-runner-saved-data.test.ts` pins it. AGENT_PROTOCOL.md §10a lists the
   readers.
-- A process that registered no runner reads a saved id as written, with no fold.
+- A process that registered no runner still maps a legacy id and folds a retired id. It reads
+  any other saved id as written, with no fold.
 - The stored-config decoders (`config.ts`, `workspace/config.ts`,
   `workspace/agent-accounts.ts`) check ids against the registry. A per-runner record keeps its own
   handling of a key that no runner registered: `defaultModels` in `config.ts` drops it;
