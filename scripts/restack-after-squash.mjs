@@ -43,12 +43,12 @@ function gitWith(run) {
   return git;
 }
 
-/** `[HOST/]OWNER/REPO` of `origin`, so `gh` reads the pull request from the repository the refs come from. */
-function originRepository(git) {
-  const url = git.ok('config', '--get', 'remote.origin.url');
-  const match = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?([^/:]+)[:/](?:\d+\/)?([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url);
-  if (!match) refuse(`origin (${url}) is not a hosted repository URL, so its pull requests cannot be read.`);
-  return `${match[1]}/${match[2]}/${match[3]}`;
+/**
+ * The URL `git fetch origin` uses, after `url.<base>.insteadOf` rewrites. `gh --repo` accepts it in
+ * every form Git does (HTTPS, SSH, scp-like), so the pull request and its refs come from one place.
+ */
+function originUrl(git) {
+  return git.ok('remote', 'get-url', 'origin');
 }
 
 function readPullRequest(run, repo, pr) {
@@ -141,7 +141,7 @@ function report(git, ctx, mode) {
 export function restack({ cwd, pr, mode, dryRun }) {
   const run = makeRunner(cwd);
   const git = gitWith(run);
-  const { finalHead, base } = readPullRequest(run, originRepository(git), pr);
+  const { finalHead, base } = readPullRequest(run, originUrl(git), pr);
   const branch = checkWorktree(git, base);
   git.ok('fetch', '--quiet', 'origin', base, `pull/${pr}/head`);
   if (git('cat-file', '-e', `${finalHead}^{commit}`).status !== 0) refuse(`PR #${pr}'s final head ${finalHead} could not be fetched.`);

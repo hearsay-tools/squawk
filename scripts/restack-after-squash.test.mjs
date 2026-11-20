@@ -21,15 +21,16 @@ function write(dir, file, lines) {
 function stackedRepo(t, { late = false, state = 'MERGED' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'restack-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const origin = path.join(root, 'origin.git');
+  const origin = path.join(root, 'acme', 'widget.git');
   const w = path.join(root, 'w');
+  fs.mkdirSync(path.dirname(origin));
   execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin]);
   execFileSync('git', ['clone', '-q', origin, w], { stdio: 'ignore' });
   const git = (...args) => execFileSync('git', args, { cwd: w, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git('config', 'user.name', 'Test');
   git('config', 'user.email', 'test@example.com');
-  git('config', `url.${origin}.insteadOf`, 'https://github.com/acme/widget.git');
-  git('remote', 'set-url', 'origin', 'https://github.com/acme/widget.git');
+  git('config', `url.${root}/.insteadOf`, 'hub:');
+  git('remote', 'set-url', 'origin', 'hub:acme/widget.git');
   git('switch', '-q', '-c', 'main');
   for (const f of ['a', 'b', 'c']) write(w, f, ['1', '2', '3', '4', '5']);
   git('add', '.');
@@ -84,16 +85,7 @@ test('a plain merge of origin/main conflicts on the stacked branch; the restack 
   assert.equal(repo.read('c'), '1\n2\n3\n4\nM\n');
   assert.match(result.stdout, /Own patch unchanged/);
   assert.match(result.stdout, /Push: git push --force-with-lease=child:[0-9a-f]{40} origin HEAD:child/);
-  assert.match(fs.readFileSync(repo.ghArgs, 'utf8'), /^--repo\ngithub\.com\/acme\/widget$/m);
-});
-
-test('it refuses when origin is not a hosted repository URL, whatever gh would default to', t => {
-  const repo = stackedRepo(t);
-  repo.git('remote', 'set-url', 'origin', repo.origin);
-  const result = repo.restack('1');
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /is not a hosted repository URL/);
-  assert.equal(fs.existsSync(repo.ghArgs), false);
+  assert.equal(fs.readFileSync(repo.ghArgs, 'utf8').split('\n')[4], repo.origin, 'gh reads the repository that fetch uses, after the insteadOf rewrite');
 });
 
 test('a rebase refuses own history with a merge commit, whose edits it would drop; --merge keeps them', t => {
