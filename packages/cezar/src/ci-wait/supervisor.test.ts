@@ -94,11 +94,11 @@ it('reports a conflict from real gh metadata with unchanged canonical identity',
  expect(result).toMatchObject({outcome:'conflicting',mergeable:'CONFLICTING',mergeStateStatus:'DIRTY',headSha:'a'.repeat(40)});
 });
 
-it('keeps the baseline four reads in one outcome snapshot, with no new queue-time query', async () => {
+it('settles in two reads: the head with its checks, then the workflow runs of the settled head', async () => {
  const dir=await mkdtemp(join(tmpdir(),'ci-budget-'));dirs.push(dir);const log=join(dir,'calls');
  expect((await supervisor('passed',{CI_FIXTURE_LOG:log}).watch(wait(),new AbortController().signal)).outcome).toBe('passed');
  const calls=(await readFile(log,'utf8')).trim().split('\n').map(line=>JSON.parse(line) as {args:string[]});
- expect(calls.map(call=>call.args.slice(0,2))).toEqual([['pr','view'],['api','--hostname'],['pr','checks'],['pr','view']]);
+ expect(calls.map(call=>call.args.slice(0,2))).toEqual([['api','graphql'],['api','--hostname']]);
+ expect(calls[0]!.args).toContain('sha='+'a'.repeat(40));
  expect(calls[1]!.args).toContain('repos/org/repo/actions/runs?head_sha='+ 'a'.repeat(40)+'&per_page=100');
- expect(calls[2]!.args).toEqual(['pr','checks','12','--repo','github.com/org/repo','--json','name,state,link,bucket']);
 });

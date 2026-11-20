@@ -153,18 +153,6 @@ describe('activity route wiring', () => {
     stop();
   });
 
-  it("lets a topic subscriber's demand reach a secondary project's CI registry", async () => {
-    const wait = makePrWait();
-    const root = makeRoot({ status: RUN_STATUS.waiting, waits: [wait] });
-    const { registries, subscribe } = wire({ boot: [], docs: [root] });
-    registries.docs.publish(wait.id, [{ name: 'build', state: 'PENDING', link: '', bucket: 'pending' }]);
-
-    const { stop } = await subscribe('docs');
-    expect(registries.docs.wanted(wait.id)).toBe(true);
-    stop();
-    expect(registries.docs.wanted(wait.id)).toBe(false);
-  });
-
   it('releases every CI registry plug when the server closes', async () => {
     const bootWait = makePrWait();
     const docsWait = makePrWait();
@@ -176,11 +164,8 @@ describe('activity route wiring', () => {
     registries.docs.publish(docsWait.id, [{ name: 'build', state: 'PENDING', link: '', bucket: 'pending' }]);
     const boot = await subscribe('boot');
     const docs = await subscribe('docs');
-    expect([registries.boot.wanted(bootWait.id), registries.docs.wanted(docsWait.id)]).toEqual([true, true]);
 
     hub.close();
-    // The subscribers still hold their demand, but no registry reads it any more.
-    expect([registries.boot.wanted(bootWait.id), registries.docs.wanted(docsWait.id)]).toEqual([false, false]);
     registries.boot.publish(bootWait.id, [{ name: 'build', state: 'SUCCESS', link: '', bucket: 'pass' }]);
     await vi.advanceTimersByTimeAsync(ACTIVITY_COALESCE_MS);
     expect(boot.frames).toEqual([]); // nor wakes a publisher
@@ -201,8 +186,7 @@ describe('activity route wiring', () => {
     hub.close();
     release();
     await reading;
-    // The subscriber holds demand for the project, but the registry never got it.
-    expect(registries.boot.wanted(wait.id)).toBe(false);
+    // The registry never got a listener: its change wakes no publisher.
     registries.boot.publish(wait.id, [{ name: 'build', state: 'SUCCESS', link: '', bucket: 'pass' }]);
     await vi.advanceTimersByTimeAsync(ACTIVITY_COALESCE_MS);
     expect(frames).toEqual([]);

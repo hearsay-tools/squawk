@@ -28,7 +28,7 @@ describe('wait tool definitions', () => {
     for (const key of ['oneOf', 'anyOf', 'allOf']) expect(schema).not.toHaveProperty(key);
     // hearsay-tools/cezarion#1425: kind "pr" replaced kind "ci" and takes a target and a conflict switch.
     expect(schema.properties).toMatchObject({ kind: { enum: ['pr', 'worker', 'request', 'peer', 'timer', 'process'] }, until: { enum: ['checks', 'merge', 'merge_or_blocked'], default: 'checks' }, wake_on_conflict: { type: 'boolean', default: true } });
-    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(['exit_file', 'kind', 'mode', 'note', 'operation_id', 'peer_ids', 'pid', 'pr', 'request_ids', 'seconds', 'timeout_seconds', 'until', 'wake_on_conflict', 'worker_ids']);
+    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(['exit_file', 'head_sha', 'kind', 'mode', 'note', 'operation_id', 'peer_ids', 'pid', 'pr', 'request_ids', 'seconds', 'timeout_seconds', 'until', 'wake_on_conflict', 'worker_ids']);
     expect((schema.properties as Record<string, { description: string }>).wake_on_conflict!.description).toContain('your work depends on another PR merging');
     expect((schema.properties as Record<string, { description: string }>).until!.description).toContain('"merge"');
     expect(waitToolDefinition.description).toContain('kind "pr"');

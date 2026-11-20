@@ -18,7 +18,7 @@ automations (`automations/github-poller.ts`) and archive-on-merge
 one gate, `githubRequestGate` in `server/forge/github-request-gate.ts`. It needs no setting.
 
 - At most `GITHUB_REQUEST_LIMIT` (4) requests run at once across the three pollers. The
-  PR wait's long `gh pr checks --watch` and its progress reads take no permit.
+  PR wait's long `gh pr checks --watch` takes no permit.
 - A rate-limit reply (HTTP 429, or the `rate limit` text of gh's 403) pauses all three
   pollers. The pause is 60 s, doubles for each further rate limit up to 15 min, and goes
   back to 60 s after any other reply. A plain 403 is an access error.

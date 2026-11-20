@@ -214,8 +214,7 @@ describe('tool activity and check progress providers', () => {
     const read = vi.fn((id: string) => (id === wait.id ? progress : undefined));
     expect(card([root], root.id, { deps: { ci: { read } } }).wait)
       .toEqual({ kind: WAIT_KIND.pr, since: wait.registeredAt, deadline: wait.deadline, detail: { number: 12, target: 'checks', ...progress } });
-    // The registry learns the wait's project from the snapshot that reads it.
-    expect(read).toHaveBeenCalledWith(wait.id, 'shop');
+    expect(read).toHaveBeenCalledWith(wait.id);
   });
 });
 

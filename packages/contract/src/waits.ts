@@ -115,6 +115,8 @@ export const prWaitEntrySchema = z.object({
   timeoutSeconds: z.number().int().min(1).max(7200),
   until: prWaitUntilSchema,
   wakeOnConflict: z.boolean(),
+  /** The caller named a head GitHub did not show yet at registration (hearsay-tools/squawk#3972). */
+  callerHead: z.literal(true).optional(),
   result: ciWaitResultSchema.optional(),
 }).strict();
 export type PrWaitEntry = z.infer<typeof prWaitEntrySchema>;

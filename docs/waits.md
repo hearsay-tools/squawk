@@ -84,11 +84,28 @@ before the agent starts. The error names the cause and the fix: free space or fi
 permissions, then Continue the task. A task woken by a wait retries with the usual backoff.
 The cockpit and other tasks keep working, and the next launch tries again.
 
-Squawk reports passed, failed, cancelled or skipped checks, no checks, changed head,
-timeout or an operational error. It watches the registered commit: a new PR head
-is reported separately, and the agent decides whether to wait again. The first
-observation runs immediately. Later check-status and PR-head polls run every 30
-seconds, and no setting changes that interval. Four watchers run concurrently;
+Squawk reports passed, failed, cancelled or skipped checks, no checks, a workflow
+that never started (`startup_failure`), changed head, timeout or an operational
+error. It watches the registered commit: a new PR head is reported separately, and
+the agent decides whether to wait again. Right after a push, the agent passes the
+pushed commit as `head_sha`; for up to 60 seconds, a different head then means that
+GitHub has not caught up yet, and the wait keeps watching the pushed commit. The
+first observation runs immediately. Later polls read the PR head and the checks
+together every 30 seconds, and no setting changes that interval.
+
+The checks decide the outcome as follows (hearsay-tools/squawk#3972):
+
+- Only the newest run of each check counts. A check that has a conclusion is
+  settled, even when GitHub still shows it as running; a timeout names such stale
+  records.
+- Required checks decide a cancellation and an early failure. A failed required
+  check ends the wait at once. A cancelled check that is not required, such as a
+  superseded review signal, never makes the outcome `cancelled`. When no check of
+  the head is required, every check counts as required.
+- When the checks have settled, Squawk reads the head's workflow runs once. A
+  workflow whose newest run ended `startup_failure` created no job and no check: the
+  wait reports `startup_failure` and names the run. A newest run that concluded
+  `failure` makes the outcome `failed`, even when every check passed. Four watchers run concurrently;
 queued waits retain their original deadline. Results are bounded
 observations, not merge approval or evidence that every expected workflow appeared.
 The agent still decides its next action; CI success never completes the task or

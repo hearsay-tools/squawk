@@ -28,7 +28,7 @@ beforeEach(() => {
     headRefName: 'cez/task', baseRefName: 'main', headRefOid: sha, mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN', reviewDecision: '', statusCheckRollup: [{ name: 'test', conclusion: 'SUCCESS' }],
   };
-  calls = []; onCall = () => {}; failure = undefined; workflowPage = { total_count: 1, workflow_runs: [[1, "completed", true]] };
+  calls = []; onCall = () => {}; failure = undefined; workflowPage = { total_count: 1, workflow_runs: [[1, "completed", true, 1, "success", "CI"]] };
   execFileMock.mockReset().mockImplementation((_file, args: string[], opts, reply) => {
     calls.push(args);
     expect(opts.timeout).toBeLessThanOrEqual(15_000);
@@ -65,9 +65,9 @@ describe('strict completion merge preflight through gh', () => {
   });
 
   it.each([
-    { total_count: 1, workflow_runs: [[1, 'in_progress', true]] },
-    { total_count: 2, workflow_runs: [[1, 'completed', true]] },
-    { total_count: 1, workflow_runs: [[1, 'completed', null]] },
+    { total_count: 1, workflow_runs: [[1, 'in_progress', true, 1, null, 'CI']] },
+    { total_count: 2, workflow_runs: [[1, 'completed', true, 1, 'success', 'CI']] },
+    { total_count: 1, workflow_runs: [[1, 'completed', null, 1, 'success', 'CI']] },
   ])('blocks hidden reruns or incomplete workflow data %j', async page => {
     workflowPage = page;
     expect(await driver.mergePR!(42, input)).toMatchObject({ merged: false });

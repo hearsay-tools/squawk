@@ -47,7 +47,7 @@ it('limits short queries to four and removes an aborted queued query',async()=>{
 it('uses the same structured commands in dry run without gh or credentials',async()=>{
  const client=new GithubCiClient({env:{CEZ_DRY_RUN:'1'}});const signal=new AbortController().signal;
  const pr=await client.resolve('https://github.com/org/repo/pull/12',signal);expect(pr).toMatchObject({repository:'org/repo',prNumber:12});
- expect(await client.checks(pr,signal)).toEqual([{name:'Dry-run checks',state:'SUCCESS',bucket:'pass',link:''}]);
+ expect((await client.observe(pr,signal)).checks).toEqual([{name:'Dry-run checks',state:'SUCCESS',bucket:'pass',link:'',workflow:'CI',startedAt:'2026-01-01T00:00:00Z',required:false}]);
  await expect(client.watch(pr,signal)).resolves.toBeUndefined();
 });
 
@@ -56,9 +56,9 @@ it('bounds a hanging registration metadata query to ten seconds and releases its
  await expect(client.resolve('https://github.com/org/repo/pull/12',new AbortController().signal)).rejects.toMatchObject({code:'query_timeout'});
 },15000);
 
-it('recognizes gh 2.100.0 empty-check output without treating it as success',async()=>{
+it('reads a commit without checks as an empty check list',async()=>{
  const client=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_MODE:'no_checks'}});
- const signal=new AbortController().signal;const pr=await client.resolve('https://github.com/org/repo/pull/12',signal);expect(await client.checks(pr,signal)).toEqual([]);
+ const signal=new AbortController().signal;const pr=await client.resolve('https://github.com/org/repo/pull/12',signal);expect((await client.observe(pr,signal)).checks).toEqual([]);
 });
 
 it('reports a missing gh binary as actionable gh_missing',async()=>{
