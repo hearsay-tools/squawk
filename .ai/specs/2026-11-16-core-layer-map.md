@@ -36,8 +36,8 @@ relative to `packages/cezar/src`. The longest matching path wins.
 
 | Layer | Paths |
 | --- | --- |
-| `core` | `core/` (except the runner files and the accounts file), `runs/` (except `runs/webhook.ts`), `workflows/`, `home/` and `workspace/` (except the accounts files below), `process-wait/`, `ci-wait/` (except the forge files below), and the root files `config.ts`, `data-gitignore.ts`, `detached-process.ts`, `git-*.ts`, `handoff.ts`, `legacy-runs.ts`, `merged-streams.ts`, `paths.ts`, `project-fence.ts`, `project-paths.ts`, `session-context.ts`, `task-branch-head.ts`, `ui-state.ts`, `worktree-manifest.ts`, `worktree-setup.ts` |
-| `runner` | `core/claude-*`, `core/codex-*`, `core/cursor-*`, `core/omp-*`, `core/opencode-*`, `core/pi-*` |
+| `core` | `core/` (except the accounts file), `runs/` (except `runs/webhook.ts`), `workflows/`, `home/` and `workspace/` (except the accounts files below), `process-wait/`, `ci-wait/` (except the forge files below), and the root files `config.ts`, `data-gitignore.ts`, `detached-process.ts`, `git-*.ts`, `handoff.ts`, `legacy-runs.ts`, `merged-streams.ts`, `paths.ts`, `project-fence.ts`, `project-paths.ts`, `session-context.ts`, `task-branch-head.ts`, `ui-state.ts`, `worktree-manifest.ts`, `worktree-setup.ts` |
+| `runner` | `runners/` (each runner's folder, since hearsay-tools/squawk#3960; [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md)) |
 | `shell` | `server/` (except `server/forge/`), `cez.ts`, `cezarion.ts`, `cli-dispatch.ts`, `headless-run.ts`, `hsq.ts`, `index.ts`, `project-commands.ts`, `serve-*.ts`, `server-command.ts`, `subcommands.ts`, `use-command-notice.ts` |
 | `tooling` | `lint/` |
 | `feature:workers` | `delegation/`, `worker-scope/` |
