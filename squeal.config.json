@@ -93,6 +93,12 @@
     "packages/cezar/src/core/runner-closure.test.ts": [
       "packages/cezar/src/**/*.ts"
     ],
+    "packages/cezar/src/core/mock-skill-list.test.ts": [
+      "packages/cezar/scripts/mock-skill-data/*.mjs"
+    ],
+    "packages/cezar/src/core/skill-trigger.test.ts": [
+      "packages/cezar/scripts/mock-skill-data/*.mjs"
+    ],
     "packages/cezar/src/contract-import-boundaries.test.ts": [
       "packages/contract/src/**/*.ts",
       "packages/api-client/src/contract/**/*.ts"

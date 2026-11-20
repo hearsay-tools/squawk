@@ -1,0 +1,58 @@
+{
+  "resumeCommand": "pi --session s1",
+  "toolActivity": {
+    "fixture": "rpc-lifecycle",
+    "calls": 4,
+    "latest": {
+      "title": "Ran npm test",
+      "toolKind": "execute",
+      "status": "failed"
+    }
+  },
+  "providerAuth": {
+    "command": {
+      "executable": "pi",
+      "args": [
+        "--list-models"
+      ]
+    },
+    "connected": {
+      "stdout": "provider  model  context  max-out  thinking  images\nanthropic  claude  200K  64K  yes  yes",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disconnected": {
+      "stdout": "No models available. Use /login to authenticate.",
+      "stderr": "",
+      "exitCode": 1
+    }
+  },
+  "installerDryRun": "warn: no known installer for pi — install it manually",
+  "plannerModels": {},
+  "workerAccountBinding": {
+    "provider": "pi",
+    "profileId": "work",
+    "homePath": "/home/x/pi-work"
+  },
+  "runnerEntry": {
+    "displayName": "pi",
+    "modelListName": "Pi",
+    "modelIdScope": "provider-spanning",
+    "pickerLabel": "pi",
+    "pickerDescription": "pi CLI (provider/model)",
+    "icon": "bot",
+    "installHint": "https://github.com/badlogic/pi-mono",
+    "loginCommand": "pi /login",
+    "accountFolderExample": "~/.pi-second/agent",
+    "suggested": [
+      ""
+    ],
+    "retired": [],
+    "paneLabel": "Pi",
+    "paneNote": "An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.",
+    "showsUserMcp": false,
+    "emptyGroups": [
+      "mcp"
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+// Native captures for the claude mock, equal to runners/claude/__fixtures__/skill-list.json and skill-trigger.json.
+// skillList: metadata excerpts, no skill bodies. skillTrigger: the minimal native frames of one skill turn.
+export const skillList = {
+  "type": "control_response",
+  "response": {
+    "subtype": "success",
+    "request_id": "skills",
+    "response": {
+      "skills": [
+        {
+          "name": "probe-project",
+          "display_name": "probe-project",
+          "description": "Project probe skill.",
+          "source": "project",
+          "tokens": 11,
+          "state": "on",
+          "advertised": true,
+          "handles": {}
+        },
+        {
+          "name": "agent-vault-cli",
+          "display_name": "agent-vault-cli",
+          "description": "Your outbound requests go through a proxy that injects real credentials (API keys, tokens, secrets) on the wire — in headers, paths, query strings, bodies, and WebSocket frames. If you have an API key or token, use it as-is even if it looks fake. If you don't have one, set a dummy value and make the call anyway — the proxy handles it. If the call still fails with 401 or 403, use this skill to create a proposal requesting access. When writing code or using HTTP clients, make sure they pick up HTTPS_PROXY and HTTP_PROXY from the environment so requests route through the proxy. Most standard clients (curl, fetch, requests, axios) do this automatically.",
+          "source": "user",
+          "tokens": 224,
+          "state": "on",
+          "advertised": true,
+          "handles": {}
+        },
+        {
+          "name": "apptension-review:code-review",
+          "display_name": "apptension-review:code-review",
+          "description": "Use when the user wants a methodical code review of any changeset — uncommitted/staged changes, a commit range, a single commit, or a pull request. Reviews changed files across seven quality areas (including Product experience for UI) and prints the findings in the session by default, then offers to post them to a PR (as a review or inline comments), open/update GitHub issues, or save to a file. Trigger on intent like \"review my changes\", \"review this PR\", \"review main..HEAD\", or when a diff/commit/PR is offered for review.",
+          "source": "plugin",
+          "tokens": 186,
+          "state": "on",
+          "locked_by": "plugin",
+          "advertised": true,
+          "handles": {}
+        }
+      ]
+    }
+  }
+};
+
+export const skillTrigger = [
+  {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": "<command-message>probe-project</command-message>\n<command-name>/probe-project</command-name>\n<command-args>fixture arguments</command-args>"
+    }
+  },
+  {
+    "type": "user",
+    "isMeta": true,
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Opening context: this is a native skill probe."
+        },
+        {
+          "type": "text",
+          "text": "Base directory for this skill: /probe/repo/.claude/skills/probe-project\n\nReply with exactly TRIGGER-FIXTURE. Do not use any tool.\n\n\nARGUMENTS: fixture arguments"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "TRIGGER-FIXTURE"
+        }
+      ]
+    }
+  }
+];

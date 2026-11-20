@@ -1,0 +1,57 @@
+{
+  "resumeCommand": "omp --resume s1",
+  "toolActivity": {
+    "note": "Two edits take their final title only at completion.",
+    "fixture": "rpc-edit-todo",
+    "calls": 7,
+    "latest": {
+      "title": "Update plan",
+      "toolKind": "plan",
+      "status": "completed"
+    }
+  },
+  "providerAuth": {
+    "note": "`connected` was recorded from the real OMP v18.4.11 binary (`omp models --json`, ANTHROPIC_API_KEY set), trimmed to two entries: an object wrapping the array, not a bare array.",
+    "command": {
+      "executable": "omp",
+      "args": [
+        "models",
+        "--json"
+      ]
+    },
+    "connected": {
+      "stdout": "{\"models\":[{\"provider\":\"anthropic\",\"kind\":\"chat\",\"id\":\"claude-3-5-sonnet-20240620\",\"selector\":\"anthropic/claude-3-5-sonnet-20240620\",\"name\":\"Claude Sonnet 3.5\",\"contextWindow\":200000,\"maxTokens\":8192,\"reasoning\":false,\"thinking\":null,\"input\":[\"text\",\"image\"],\"cost\":{\"input\":3,\"output\":15,\"cacheRead\":0.3,\"cacheWrite\":3.75},\"pricingStatus\":\"fixed\"},{\"provider\":\"anthropic\",\"kind\":\"chat\",\"id\":\"claude-opus-4-1\",\"selector\":\"anthropic/claude-opus-4-1\",\"name\":\"Claude Opus 4.1\",\"contextWindow\":200000,\"maxTokens\":32000,\"reasoning\":true,\"thinking\":[\"low\",\"medium\",\"high\",\"xhigh\",\"max\"],\"input\":[\"text\",\"image\"],\"cost\":{\"input\":15,\"output\":75,\"cacheRead\":1.5,\"cacheWrite\":18.75},\"pricingStatus\":\"fixed\"}]}",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disconnected": {
+      "stdout": "{\"models\":[]}",
+      "stderr": "",
+      "exitCode": 0
+    }
+  },
+  "installerDryRun": "warn: no known installer for omp — install it manually",
+  "plannerModels": {},
+  "workerAccountBinding": {
+    "provider": "omp",
+    "profileId": "default"
+  },
+  "runnerEntry": {
+    "displayName": "OMP",
+    "modelListName": "OMP",
+    "modelIdScope": "provider-spanning",
+    "pickerLabel": "OMP",
+    "pickerDescription": "Oh My Pi CLI (provider/model)",
+    "icon": "bot",
+    "installHint": "https://omp.sh",
+    "loginCommand": "omp login",
+    "suggested": [
+      ""
+    ],
+    "retired": [],
+    "paneLabel": "OMP",
+    "paneNote": "An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.",
+    "showsUserMcp": false,
+    "emptyGroups": []
+  }
+}

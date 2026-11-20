@@ -19,7 +19,7 @@ function scratchGuard(extra: string, check: (run: () => void) => void, reformatt
     writeFileSync(join(directory, 'first.test.ts'), firstSource ?? `${entry}describeFixtureParity('first');`);
     writeFileSync(join(directory, 'second.test.ts'), `${entry}describeFixtureParity('second');`);
     writeFileSync(join(directory, 'extra.test.ts'), extra);
-    check(() => checkParityRegistration('fixture', describeFixtureParity, ['runner A1', 'runner A2'], 2, pathToFileURL(`${directory}/`)));
+    check(() => checkParityRegistration('fixture', describeFixtureParity, ['runner A1', 'runner A2'], 2, {}, pathToFileURL(`${directory}/`)));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 

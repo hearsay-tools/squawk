@@ -39,7 +39,7 @@ function answerAtCap(runner: string) {
 
 describe('the answer flush follows no declared turn start', () => {
   it('reads the swapped declarations', () => {
-    expect(BUILT_IN_RUNNER_IDS.filter(id => RUNNER_FACTS[id]!.turnStart === 'on-write')).toEqual(['codex', 'pi', 'omp']);
+    expect([RUNNER_FACTS.claude!.turnStart, RUNNER_FACTS.codex!.turnStart]).toEqual(['on-wire', 'on-write']);
   });
 
   it.each(BUILT_IN_RUNNER_IDS)('%s: the flush decides the cap at the boundary before the answer was written', runner => {

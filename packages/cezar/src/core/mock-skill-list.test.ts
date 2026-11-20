@@ -1,10 +1,11 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { skillMockRunners } from './mock-skill-runners.testkit.ts';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os'; // test-home-read: compare mock metadata paths only; no home file is read or written.
 import { describe, expect, it } from 'vitest';
 import { mockSkillList } from '../../scripts/mock-skill-list.mjs';
 import { captures } from '../../scripts/mock-skill-list-data.mjs';
 import { skillListFixtures } from '../../scripts/mock-skill-fixtures.mjs';
-it('replaces the recorded skill lists for all five runner fixtures', () => {
+it('replaces the recorded skill lists in each native reply shape', () => {
   const replies = skillListFixtures([{ id: 'only-check', name: 'Check', path: '/p/SKILL.md' }]);
   expect(replies.claude).toMatchObject({ response: { response: { skills: [{ name: 'only-check' }] } } });
   expect(replies.codex).toMatchObject({ result: { data: [{ skills: [{ name: 'only-check', path: '/p/SKILL.md' }] }] } });
@@ -15,21 +16,20 @@ it('replaces the recorded skill lists for all five runner fixtures', () => {
 });
 
 describe('native mock skill paths', () => {
-  for (const runner of BUILT_IN_RUNNER_IDS) it(`${runner}: substitutes string values before wire serialization`, () => {
+  it('ships a capture for every runner whose mock serves skills, and none for another', () => {
+    expect(Object.keys(captures).sort()).toEqual(skillMockRunners().sort());
+  });
+  for (const runner of skillMockRunners()) it(`${runner}: packaged mock capture equals its real CLI fixture`, () => {
+    expect(captures[runner]).toEqual(JSON.parse(readFileSync(new URL(`../runners/${runner}/__fixtures__/skill-list.json`, import.meta.url), 'utf8')));
+  });
+  for (const runner of skillMockRunners()) it(`${runner}: substitutes string values before wire serialization`, () => {
     const cwd = 'C:\\Users\\probe\\repo "quoted" $&\nfolder';
     const original = structuredClone(captures[runner]);
     const result = mockSkillList(runner, cwd);
-    const strings: string[] = [];
-    JSON.parse(JSON.stringify(result), (_key, value) => {
-      if (typeof value === 'string') strings.push(value);
-      return value;
-    });
-    if (runner === 'claude') expect(result).toEqual(original); // Claude's list has no paths.
-    else {
-      const folder = runner === 'pi' ? '.pi' : runner === 'omp' ? '.omp' : '.agents';
-      expect(strings).toContain(`${cwd}/${folder}/skills/probe-project/SKILL.md`);
-      expect(strings).toContain(`${homedir()}/.agents/skills/capture/SKILL.md`); // test-home-read: compare mock metadata only.
-    }
+    // The expected reply: the capture with each probe path swapped by plain split and join.
+    const expected = JSON.parse(JSON.stringify(original), (_key, value) => typeof value === 'string'
+      ? value.split('/tmp/skill-list-probe/repo').join(cwd).split('/home/probe').join(homedir()) : value); // test-home-read: compare mock metadata only.
+    expect(result).toEqual(expected);
     expect(captures[runner]).toEqual(original);
   });
 });

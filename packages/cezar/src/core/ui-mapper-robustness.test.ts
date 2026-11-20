@@ -23,43 +23,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage } from '../runners/claude/claude-ui-mapper.ts';
-import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex-ui-mapper.ts';
-import { createOmpUiState, mapOmpRpcMessage, ompTurnStarted } from '../runners/omp/omp-ui-mapper.ts';
-import {
-  createOpencodeUiState,
-  mapOpencodeEvent,
-  opencodeSessionStarted,
-  opencodeTurnStarted,
-} from '../runners/opencode/opencode-ui-mapper.ts';
-import { createPiUiState, mapPiRpcMessage, piTurnStarted } from '../runners/pi/pi-ui-mapper.ts';
-import type { UiEvent } from './ui-events.ts';
+import { type Mapper } from './ui-mapper-row.testkit.ts';
 
-/** One runner's mapper with its state type erased, so one loop can drive all of them. */
-interface Mapper {
-  /** The state the runner holds when the first wire frame arrives. */
-  seed(): object;
-  map(frame: unknown, state: object): unknown;
-}
-
-function mapper<S extends object>(
-  seed: () => S,
-  map: (frame: unknown, state: S) => { events: UiEvent[]; state: S },
-): Mapper {
-  return { seed, map: (frame, state) => map(frame, state as S) };
-}
-
-/** A new runner id fails typecheck here until its mapper has a row. */
-const MAPPERS: Record<string, Mapper> = {
-  claude: mapper(() => claudeTurnStarted(createClaudeUiState()).state, mapClaudeMessage),
-  codex: mapper(createCodexUiState, mapCodexNotification),
-  opencode: mapper(
-    () => opencodeTurnStarted(opencodeSessionStarted('ses_01J8ZE00MAIN', createOpencodeUiState()).state).state,
-    mapOpencodeEvent,
-  ),
-  pi: mapper(() => piTurnStarted(createPiUiState()).state, mapPiRpcMessage),
-  omp: mapper(() => ompTurnStarted(createOmpUiState(), 'p').state, mapOmpRpcMessage),
-};
+/** Each runner's row: the state it holds when its first wire frame arrives, and its mapper. It is the
+ *  `uiMapperRow` of `runners/<id>/ui-mapper-row.testkit.ts`, which a new runner writes; a missing file
+ *  fails the import naming it. */
+const MAPPERS: Record<string, Mapper> = Object.fromEntries(await Promise.all(BUILT_IN_RUNNER_IDS.map(async runner =>
+  [runner, ((await import(/* @vite-ignore */ `../runners/${runner}/ui-mapper-row.testkit.ts`)) as { uiMapperRow: Mapper }).uiMapperRow] as const)));
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'runners');
 

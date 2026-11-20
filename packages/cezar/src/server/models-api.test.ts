@@ -1,9 +1,5 @@
-import { registerRunner } from '../core/runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
-import { piRunner } from '../runners/pi/definition.ts';
-import { ompRunner } from '../runners/omp/definition.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,11 +13,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+registerBuiltInRunners();
 
 describe('workspace model catalog API', () => {
   let root: string;
@@ -188,7 +180,7 @@ describe('workspace model catalog API', () => {
   it.each(['/api/v1/models', '/api/v1/models?runner=unknown'])('rejects invalid query %s', async (path) => {
     const response = await apiRequest(app(async () => []), path);
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'runner must be claude, codex, opencode, pi, or omp' });
+    expect(await response.json()).toEqual({ error: `runner must be ${BUILT_IN_RUNNER_IDS.slice(0, -1).join(', ')}, or ${BUILT_IN_RUNNER_IDS.at(-1)}` });
   });
 
   it('is workspace-level rather than project-scoped', async () => {
