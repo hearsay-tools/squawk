@@ -13,6 +13,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { assertProjectAdmitted } from './cockpit-ownership.ts';
 import { projectPaths } from '../project-paths.ts';
 import type { ProjectRunManager, RunManagerFactory } from './project-context.ts';
+import type { Home } from '../home/home.ts';
+import { testHome } from '../home/test-home.testkit.ts';
 
 type Options = Parameters<RunManagerFactory>[2];
 type Method<K extends keyof RunManager> = RunManager[K] extends (...args: infer A) => unknown ? A : never;
@@ -269,6 +271,14 @@ export class FakeRunManager implements ProjectRunManager {
     if (this.#disposed) throw new Error('inbox manager disposed');
     return this.#store.releaseInboxInputs(runId, receiptId, generation);
   }
+}
+
+/** The fake starts no session, so it never builds a runner. */
+const noRunner = (): never => { throw new Error('FakeRunManager starts no runner'); };
+
+/** A fake for a test that builds a manager by hand, as `createFixtureManager` does for the engine. */
+export function fakeRunManager(store: RunStore, root: string, home: Home = testHome()): FakeRunManager {
+  return new FakeRunManager(store, root, { home, createRunner: noRunner });
 }
 
 /** The manager factory `serve` passes, with the fake in place of the engine. */

@@ -12,6 +12,7 @@ import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { runWorktreeTeardown } from './worktree-teardown.ts';
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 
 /** A process in its own group with its cwd in `root`, as a test server or file watcher a worktree
  * started for itself. */
@@ -41,7 +42,7 @@ function useTeardown(...commands: string[]): void {
 const stop = (pid: number) => `kill ${pid}; while kill -0 ${pid} 2>/dev/null; do sleep 0.05; done`;
 
 describe('destroy backoff holder', { timeout: 30_000 }, () => {
-  useDestroyBackoffFixture();
+  useDestroyBackoffFixture(fixture);
 
   // hearsay-tools/squawk#914, hearsay-tools/squawk#1926: the worktree's own service holds it; the
   // project's teardown stops it before the holder scan, in the worktree.

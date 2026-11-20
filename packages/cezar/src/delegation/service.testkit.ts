@@ -9,7 +9,7 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
-import { FakeRunManager } from '../server/fake-run-manager.testkit.ts';
+import { fakeRunManager, type FakeRunManager } from '../server/fake-run-manager.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { randomUUID } from 'node:crypto';
@@ -98,9 +98,6 @@ afterAll(() => {
 // The fixture's parent and workers name Claude, as the engine fixture's Claude runner kit registers it.
 registerRunner(claudeRunner);
 
-/** The fake starts no session, so no runner is ever built. */
-const noRunner = (): never => { throw new Error('FakeRunManager starts no runner'); };
-
 /**
  * A delegation service over one project on `FakeRunManager` (hearsay-tools/squawk#3937): spawn, inspect,
  * steer, stop, destroy and conversations work on the store, and every worker stays queued. A test whose
@@ -110,7 +107,7 @@ export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome())
   const root = mkdtempSync(join(tmpdir(), 'cez-delegation-service-'));
   const sha = copyServiceRepository(root);
   const store = openTestRunStore(join(root, '.ai/cezar'), { keepLive: true });
-  const manager = new FakeRunManager(store, root, { home, createRunner: noRunner });
+  const manager = fakeRunManager(store, root, home);
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', runner: 'claude', model: 'opus', effort: 'high', steps: [] });
   setRunStatus(store, parent.id, RUN_STATUS.running, { worktreePath: root, delegation: { role: 'root', permissions: ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'], receipts: [] } });
   const credentials = new CredentialRegistry();

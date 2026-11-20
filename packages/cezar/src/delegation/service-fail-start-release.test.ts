@@ -14,6 +14,7 @@ import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { workerCapacity } from './capacity.ts';
 import { cadence, destroyOf, f, input, linux, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
@@ -33,7 +34,8 @@ async function failStart(options: { reservedDirectory?: boolean } = {}) {
 }
 
 describe('a worker that failed before its first step (hearsay-tools/squawk#3817)', { timeout: 60_000 }, () => {
-  useDestroyBackoffFixture();
+  let engine: ReturnType<typeof fixture>;
+  useDestroyBackoffFixture(cleanup => (engine = fixture(cleanup)));
 
   it.runIf(linux)('is destroyed without being asked, frees its slot and keeps its failure readable', async context => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
@@ -49,7 +51,7 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
     let writable = false;
     try { mkdirSync(join(worktrees, 'probe')); rmdirSync(join(worktrees, 'probe')); writable = true; } catch { /* read-only: the launch fails */ }
     if (writable) context.skip();
-    await f.releaseAdmission();
+    await engine.releaseAdmission();
     await vi.waitFor(() => expect(f.store.getRun(workerId)).toMatchObject({ status: RUN_STATUS.failed, error: expect.stringContaining('worktree creation failed') }), { timeout: 15_000 });
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 15_000 });
     expect(workerCapacity(f.store.getRun(f.parent.id)!, id => f.store.getRun(id)).outstanding).toBe(0);

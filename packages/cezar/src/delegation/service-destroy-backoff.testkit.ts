@@ -9,14 +9,20 @@ import { randomUUID } from 'node:crypto';
 
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
+import type { fixture as engineFixture } from './service-engine.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 
 import { workerDestroyView } from '../runs/delegation-state.ts';
 import { workerCleanups } from './worker-cleanup.ts';
-import type { DelegationService } from './service.ts';
+import type { DelegationService, WorkerCleanupFactory } from './service.ts';
 
-export let f: ReturnType<typeof fixture>;
+/** The fixture a backoff test builds: `FakeRunManager` by default, the engine's when a test passes it. */
+type BackoffFixture = ReturnType<typeof fixture> | ReturnType<typeof engineFixture>;
+type BuildFixture = (cleanup?: WorkerCleanupFactory) => BackoffFixture;
+
+export let f: BackoffFixture;
+let build: BuildFixture = fixture;
 
 export const linux = process.platform === 'linux';
 
@@ -25,7 +31,7 @@ export const input = () => ({ task: 'do work', baseline: 'parent-head', requestI
 /** Each fixture receives its test cadence at construction; an explicit destroy waits `manualLockWaitMs` for the lock. */
 export const cadence = async (backoff = { fastMs: 40, fastCount: 3, capMs: 300 }, attention = 5, manualLockWaitMs = 500) => {
     await f.close();
-    f = fixture(workerCleanups({ backoff, attentionAttempts: attention, manualLockWaitMs }));
+    f = build(workerCleanups({ backoff, attentionAttempts: attention, manualLockWaitMs }));
   };
 
 /** A settled worker with a real worktree and complete execution, optionally blocked by a Git worktree
@@ -52,7 +58,8 @@ export function betweenAttempts<T>(workerId: string, read: () => T, service: Del
   return serialized.call(service, `worker:project:${workerId}`, async () => read());
 }
 
-export function useDestroyBackoffFixture() {
-  beforeEach(() => { scopeFixtureProcesses(); f = fixture(); });
+/** Builds `f` before each test, on `FakeRunManager` unless the test file passes the engine fixture. */
+export function useDestroyBackoffFixture(builder: BuildFixture = fixture) {
+  beforeEach(() => { build = builder; scopeFixtureProcesses(); f = build(); });
   afterEach(async () => { await f?.close(); vi.restoreAllMocks(); syncBuiltinESMExports(); vi.unstubAllEnvs(); });
 }
