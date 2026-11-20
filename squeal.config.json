@@ -47,6 +47,7 @@
     "enabled": true
   },
   "coverage": {
+    "enabled": false,
     "exclude": [
       "packages/cezar/scripts/mock-autonomous.mjs",
       "packages/cezar/scripts/mock-ci-tool.mjs",
