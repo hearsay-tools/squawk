@@ -84,7 +84,7 @@ export const runnerRosterLiteral: AstRule = {
     return {
       ArrayExpression(node) {
         const named = new Set(children(node, 'elements').map(element => literal(element)));
-        if (ids.every(id => named.has(id)) && remaining-- <= 0) report(node, "This array lists every runner id by hand, so a new runner would be missing here. Use BUILT_IN_RUNNERS or BUILT_IN_RUNNER_IDS from packages/cezar/src/runners/built-in.ts; a Node-free package reads the runners from GET /api/v1/runners (open-mercato/cezar#387).");
+        if (ids.every(id => named.has(id)) && remaining-- <= 0) report(node, "This array lists every runner id by hand, so a new runner would be missing here. Use BUILT_IN_RUNNERS from packages/cezar/src/runners/built-in.ts, or BUILT_IN_RUNNER_IDS from packages/cezar/src/runners/ids.ts; a Node-free package reads the runners from GET /api/v1/runners (open-mercato/cezar#387).");
       },
     };
   },

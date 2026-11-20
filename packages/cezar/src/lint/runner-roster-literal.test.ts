@@ -28,7 +28,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   ])('refuses %s', (_case, source) => {
     expect(runnerRosters(file, `\n${source}`)).toHaveLength(1);
     expect(checkRule(runnerRosterLiteral, file, `\n${source}`)).toEqual([
-      { line: 2, message: expect.stringMatching(/Use BUILT_IN_RUNNERS or BUILT_IN_RUNNER_IDS from packages\/cezar\/src\/runners\/built-in\.ts.+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
+      { line: 2, message: expect.stringMatching(/Use BUILT_IN_RUNNERS from packages\/cezar\/src\/runners\/built-in\.ts, or BUILT_IN_RUNNER_IDS from packages\/cezar\/src\/runners\/ids\.ts;.+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
     ]);
   });
 
