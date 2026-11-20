@@ -4,31 +4,18 @@ import { workerCollectedResultSchema } from '@open-mercato/cezar-contract/delega
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runPersistence } from '../runs/run-store-open.testkit.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
-import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { onTestFinished, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fixture } from './service-engine.testkit.ts';
-import { scheduledDestroyAttempts } from './service.testkit.ts';
-import {
-  RUN_STATUS,
-  STEP_KIND,
-  STEP_STATUS,
-  WAIT_KIND,
-  WAIT_PHASE,
-  WAIT_SOURCE,
-  WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
-import { ensureOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
+import { fixture, scheduledDestroyAttempts } from './service.testkit.ts';
+import { completedWorker, DISCARD, interruptParentDeletion } from './destruction-results.testkit.ts';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { planOwnedWorkspace } from './workspace.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunDatabase, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run-database.ts';
 import { encodeRunRow } from '../runs/run-row.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-
-import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { readPersistedRuns, seedRuns, runIds } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 
@@ -41,11 +28,7 @@ vi.mock('node:fs', async original => {
   };
 });
 
-// Git worktree teardown + a live RunManager contend under full-suite workers; cancel/dispose
-// without polling. Timeout matches the suite's 15s git/manager waits rather than the 5s default.
-// Each worker here holds an uncommitted `result.txt` whose evidence these tests follow, so every
-// destroy allows its discard (hearsay-tools/squawk#3553).
-const DISCARD = { discardWork: true };
+// Git worktree teardown contends under full-suite workers. Timeout matches the suite's 15s git waits rather than the 5s default.
 describe('verified destruction retains results through explicit history deletion', { timeout: 15_000 }, () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { onTestFinished(scopeFixtureProcesses()); f = fixture(workerCleanups()); });
@@ -53,23 +36,8 @@ describe('verified destruction retains results through explicit history deletion
     for (const run of f.store.listRuns()) f.manager.cancel(run.id);
     vi.restoreAllMocks(); await f.close(); vi.unstubAllEnvs();
   });
-  async function completed() {
-    const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
-    const run = f.store.getRun(workerId)!;
-    f.manager.requestWorkerStop(workerId); // remove held scheduler admission before simulating a completed execution
-    const generation = f.store.commitWorkerExecutionStart(workerId);
-    const workspace = await ensureOwnedWorkspace(f.root, run);
-    writeFileSync(join(workspace.path, 'result.txt'), 'retained patch');
-    f.store.appendEvent(workerId, { type: 'text', text: 'Completed implementation' });
-    setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
-    const files = join(f.root, '.ai/cezar/runs');
-    mkdirSync(join(files, `${workerId}-images`));
-    writeFileSync(join(files, `${workerId}-images/worker-context-0.input`), 'copied input');
-    writeFileSync(join(files, `${workerId}.handoff.md`), 'handoff');
-    f.store.appendEvent(workerId, { type: 'image', url: `/api/v1/runs/${workerId}/images/worker-context-0.input` });
-    return { workerId, workspace, generation, files };
-  }
+  const completed = () => completedWorker(f);
+  const interruptedParentDeletion = () => interruptParentDeletion(f);
   it('destroys legacy resources while keeping a duplicate fallback record untouched', async () => {
     const { workerId, workspace } = await completed();
     const directory = join(f.root, '.ai/squawk');
@@ -283,83 +251,11 @@ describe('verified destruction retains results through explicit history deletion
     expect(reopened.deleteRun(f.parent.id)).toBe(false); reopened.flush();
   });
 
-  it('keeps an all-wait outcome and its revision after safe child deletion until the other worker settles', async () => {
-    const { workerId } = await completed();
-    f.store.commitWorkerContinuation(workerId, 'succeed-review');
-    const generation = f.store.commitWorkerExecutionStart(workerId); f.store.commitWorkerExecutionComplete(workerId, generation);
-    const other = await f.service.spawn(f.caller, { task: 'other', baseline: 'HEAD', requestId: randomUUID() });
-    const parent = f.store.getRun(f.parent.id)!;
-    // A worker wait in the list (hearsay-tools/cezarion#1235, #1301).
-    const waitId = randomUUID();
-    f.store.commitWait(parent.id, { kind: WAIT_KIND.worker, id: waitId, source: WAIT_SOURCE.agent, via: WAIT_VIA['cez-worker-wait'], registeredAt: new Date().toISOString(),
-      deadline: new Date(Date.now() + 600_000).toISOString(), timeoutSeconds: 600, phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all',
-      workerIds: [workerId, other.workerId], revisions: [{ workerId, revision: 1 }, { workerId: other.workerId, revision: 0 }], outcomes: [] });
-    // Parked on the wait with no session, as the product holds it: a running run always has one.
-    setRunStatus(f.store, parent.id, RUN_STATUS.waiting);
-    const entry = () => f.store.getRun(parent.id)?.waits?.find(wait => wait.id === waitId);
-    await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
-    f.manager.reconcileWorkerWaits();
-    expect(entry()).toMatchObject({ phase: WAIT_PHASE.open, outcomes: [{ workerId, revision: 1, status: WORKER_OUTCOME_STATUS.review }] });
-    const retained = f.store.readWorkerResult(f.parent.id, workerId)!;
-    if (retained.diff.state !== 'available') throw Error('fixture diff');
-    const bytes = readFileSync(retained.diff.path, 'utf8');
-    writeFileSync(retained.diff.path, '{}');
-    f.manager.reconcileWorkerWaits();
-    expect(entry()).toMatchObject({ phase: WAIT_PHASE.open, outcomes: [] });
-    writeFileSync(retained.diff.path, bytes);
-    f.manager.requestWorkerStop(other.workerId);
-    f.manager.reconcileWorkerWaits();
-    expect(entry()).toMatchObject({ phase: WAIT_PHASE.resolved, result: { reason: 'outcome' },
-      outcomes: expect.arrayContaining([{ workerId, revision: 1, status: WORKER_OUTCOME_STATUS.review, observedAt: expect.any(String) },
-        { workerId: other.workerId, revision: 0, status: WORKER_OUTCOME_STATUS.cancelled, observedAt: expect.any(String) }]),
-    });
-  });
-
-  it('denies replacement evidence whose retained workspace names a different owner', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
-    const result = f.store.readWorkerResult(f.parent.id, workerId)!;
-    if (result.diff.state !== 'available') throw Error('fixture diff');
-    const file = JSON.parse(readFileSync(result.diff.path, 'utf8'));
-    file.result.workspace.ownerRunId = randomUUID();
-    writeFileSync(result.diff.path, JSON.stringify(file));
-    expect(f.store.canDeleteRun(f.parent.id)).toBe(false);
-    expect(f.manager.finishBlockedReason(f.parent.id)).toContain(workerId);
-    await expect(f.service.collect(f.caller, { workerId })).rejects.toMatchObject({ code: 'denied_scope' });
-  });
-
-  function interruptedParentDeletion() {
-    vi.stubEnv('CEZ_DRY_RUN', '1'); vi.stubEnv('CEZ_AUTONAME', '0');
-    f.store.addStep(f.parent.id, { id: 'task', name: 'Task', kind: STEP_KIND.agent });
-    f.store.updateStep(f.parent.id, 'task', { status: STEP_STATUS.done, sessionId: 'mock-prior', backend: 'claude' });
-    setRunStatus(f.store, f.parent.id, RUN_STATUS.done, { workflowDef: QUICK_TASK_WORKFLOW, task: 'mock:cezar-done', worktreePath: undefined });
-    vi.mocked(rmSync).mockImplementationOnce(() => { throw Error('history temporarily busy'); });
-    expect(f.store.deleteRun(f.parent.id)).toBe(false);
-    expect(f.store.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
-  }
-  it('refuses Continue after interrupted parent deletion without resetting its retry marker', () => {
-    interruptedParentDeletion();
-    expect(f.manager.continueRun(f.parent.id, { text: 'mock:cezar-done' }, true)).toMatchObject({ ok: false, error: expect.stringContaining('deletion') });
-    expect(f.manager.isActive(f.parent.id)).toBe(false);
-    expect(f.store.deleteRun(f.parent.id)).toBe(true);
-  });
   it('refuses spawn under a deleting parent even when its persisted public status is active', async () => {
     interruptedParentDeletion(); setRunStatus(f.store, f.parent.id, RUN_STATUS.running);
     await expect(f.service.spawn(f.caller, { task: 'child', baseline: 'HEAD', requestId: randomUUID() })).rejects.toMatchObject({ code: 'incompatible_state' });
     expect(f.store.listRuns()).toHaveLength(1);
     expect(f.store.deleteRun(f.parent.id)).toBe(true);
-  });
-  it.each(['queued', 'running'] as const)('does not revive a %s parent with interrupted deletion on restart', async status => {
-    interruptedParentDeletion(); setRunStatus(f.store, f.parent.id, status); f.store.close();
-    const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } });
-    const manager = createFixtureManager(reopened, f.root, { home: testHome(), semaphore });
-    try {
-      await manager.recover();
-      await semaphore.release();
-      expect(manager.isActive(f.parent.id)).toBe(false);
-      expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
-      expect(reopened.deleteRun(f.parent.id)).toBe(true);
-    } finally { manager.dispose(); reopened.flush(); }
   });
   it('refuses construction from a deleting parent without recreating its resources', () => {
     interruptedParentDeletion();
@@ -378,8 +274,7 @@ describe('verified destruction retains results through explicit history deletion
     const workspace = await planOwnedWorkspace(f.root, randomUUID(), f.sha);
     interruptedParentDeletion();
     expect(() => f.store.createOwnedRun({ title: 'child', task: 'child', workflow: 'quick-task', steps: [] }, f.parent.id, randomUUID(), {
-      role: 'worker', permissions: [], parentRunId: f.parent.id, workspace,
-    }, 'a'.repeat(64))).toThrow('invalid delegation parent');
+      role: 'worker', permissions: [], parentRunId: f.parent.id, workspace }, 'a'.repeat(64))).toThrow('invalid delegation parent');
     expect(runIds(f.store)).toHaveLength(1);
     expect(f.store.deleteRun(f.parent.id)).toBe(true);
   });

@@ -13,7 +13,7 @@ import { serve, type ServerType } from '@hono/node-server';
 import type { AddressInfo } from 'node:net';
 import { DelegationController } from '../delegation/provision.ts';
 import '../core/created-runners.testkit.ts';
-import { fixture } from '../delegation/service-engine.testkit.ts';
+import { fixture } from '../delegation/service.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { createDelegationRoutes } from '../delegation/routes.ts';

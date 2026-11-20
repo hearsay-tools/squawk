@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { workspaceKindOf } from './workspace-kinds.ts';
 
 describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
