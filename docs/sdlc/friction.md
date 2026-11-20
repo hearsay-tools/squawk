@@ -115,6 +115,11 @@ files one issue per approved group:
 | `squeal` | `hearsay-tools/squeal`, written to its friction template | `friction` |
 | `sdlc` | The `SDLC feedback` binding's repository, with no project detail | `friction-log`, `dev-flow` |
 
+A number that the digest copies from a report into an issue body, such as a count, a
+limit or an estimate, is marked as an estimate and links its source report. The other
+choice is to measure the number on current `main` before filing, and to name the
+command and the commit.
+
 It then adds `friction-inbox-reviewed` to the issues it reviewed and closes
 them. The digest never implements a fix. `node .github/scripts/friction-policy.cjs`
 emits its definition, with its prompt, after the three handling polls.

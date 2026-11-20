@@ -62,3 +62,23 @@ Some guards key on a directory, not a file, so `--moved` does not find them:
   runner modules.
 
 A move into or out of those directories changes what these rules allow.
+
+## Measuring import reach
+
+To count the test files that load a module at runtime, run `node scripts/import-reach.mjs <module>`.
+It reads the checkout only and needs no Squeal daemon or stored data. It prints the count, two costs
+and the direct importers, ranked by the test files that load the module through each one.
+`--files <test>…` prints the shortest import chain from each test file to the module, or OK.
+`--json` prints the same data as JSON.
+
+- **Edges.** It follows value imports, `export … from`, `import()` and `require()`. It leaves out
+  type-only imports and `vi.mock`. Outside `packages/web` it also leaves out a value import that
+  the file uses only as a type. A test file also loads the `setupFiles` of the nearest
+  `vitest.config` that includes it.
+- **Costs.** `tests` counts `test()` and `it()` call sites, with modifiers such as `it.each`
+  and `it.runIf` (`.skip` and `.todo` left out), at least one per file, so moving tests
+  to a split-out file that does not load the module lowers it. `ci-ms` adds the medians in
+  `.github/test-durations.json` and reports the test files that have no duration.
+
+A count or cost that an issue, a plan or a brief quotes names this command and the commit it ran on.
+Run the command again before you act on such a number.

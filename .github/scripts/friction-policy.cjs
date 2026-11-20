@@ -135,6 +135,7 @@ Read docs/sdlc/friction.md § Friction inbox on current origin/main first. The S
    - project: ${repo}, written to .github/ISSUE_TEMPLATE/task.yml, labels friction, friction-log and one area-* label.
    - squeal: hearsay-tools/squeal, each field label of its .github/ISSUE_TEMPLATE/friction.yml as a ### heading, label friction.
    - sdlc: the SDLC repository, repo-neutral (no project name, path, URL, issue number or person), labels friction-log and dev-flow.
+   In each issue body, mark a number copied from a report (a count, a limit or an estimate) as an estimate and link its source report, or measure it on current main before filing and name the command and the commit.
    Add a "Decisions" section to the digest comment, with the decisions and the filed URLs. That section marks the digest finalized. Add ${reviewedLabel} to every issue in the set (create the label when it is missing), the newest issue first because it holds the digest comment, and close them.
 
 Do not implement fixes, edit repository files, open pull requests or enable automations. File issues only for the groups the owner approved. The digest comment, the report and the comments of step 8 need no approval.`,
