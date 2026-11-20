@@ -15,7 +15,7 @@ import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { Crash, crashAt, crashThenRecover, disposers, fence, beforeRepair, moved, owners, recordedMigration, rows, TIMEOUT } from './engine.testkit.ts';
 import { readProjectMigrationJournal } from './journal.ts';
 import { projectSnapshot, removeMigrationProject, TASK, type MigrationProject } from './project-migration.testkit.ts';
-import { createRunManager } from '../server/run-manager.testkit.ts';
+import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

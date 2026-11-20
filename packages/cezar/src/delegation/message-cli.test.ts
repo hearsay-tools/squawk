@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSubcommand } from '../subcommands.ts';
 import { runWorkerCommand } from './cli.ts';
 import '../core/created-runners.testkit.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { encodeConversationCursor } from '@open-mercato/cezar-contract/conversations';

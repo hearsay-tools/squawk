@@ -16,7 +16,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { FRESH_SESSION_NOTICE } from './service.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { projectConversationEvents } from './conversations.ts';

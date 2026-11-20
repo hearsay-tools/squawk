@@ -24,7 +24,7 @@ import { crashAt, fence, migrate, moved, TIMEOUT } from './engine.testkit.ts';
 import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { planProjectMigration } from './plan.ts';
 import { buildMigrationProject, git, projectSnapshot, removeMigrationProject, TASK, WORKER, type MigrationProject } from './project-migration.testkit.ts';
-import { createRunManager } from '../server/run-manager.testkit.ts';
+import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

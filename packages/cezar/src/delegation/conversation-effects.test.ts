@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runPersistence } from '../runs/run-store-open.testkit.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 
 describe('committed message effects', () => {
   let f: ReturnType<typeof fixture>;

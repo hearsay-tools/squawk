@@ -25,7 +25,7 @@ import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 import {
   checkoutRepo,
   checkoutTarget,

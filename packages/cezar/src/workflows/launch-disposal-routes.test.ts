@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
-import { fixture } from '../delegation/service.testkit.ts';
+import { fixture } from '../delegation/service-engine.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';

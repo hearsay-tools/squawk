@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { processStartToken } from '../core/process-stat.ts';
 

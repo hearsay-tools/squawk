@@ -43,7 +43,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } from './project-context.ts';
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

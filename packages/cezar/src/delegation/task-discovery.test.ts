@@ -3,7 +3,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
 
 describe('peer discovery lifecycle', () => {

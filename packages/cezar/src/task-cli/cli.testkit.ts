@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import type { RunStore } from '../runs/store.ts';
-import type { RunManager } from '../workflows/run.ts';
+import type { FakeRunManager } from '../server/fake-run-manager.testkit.ts';
 import { startTestCockpit, type TestCockpit } from './cockpit.testkit.ts';
 import { runTaskCommand, type TaskIo } from './cli.ts';
 import type { Cockpit } from './http.ts';
@@ -14,7 +14,7 @@ import { registerProject } from '../workspace/projects.ts';
 export function taskCliFixture() {
   let harness: TestCockpit;
   let store: RunStore;
-  let manager: RunManager;
+  let manager: FakeRunManager;
   let cockpit: Cockpit;
   let out: string[];
   let discoveries: number;

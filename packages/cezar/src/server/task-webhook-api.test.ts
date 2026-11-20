@@ -23,7 +23,7 @@ import { taskWebhooks } from '../workspace/webhooks.ts';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

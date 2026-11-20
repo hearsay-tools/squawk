@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-registry.ts';
 import { ProjectContexts, ProjectContextsClosedError } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync, fsyncSync, fstatSync, readdirSync, openSync, closeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { onTestFinished, beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { removeWorktree } from '../git-worktree.ts';
 import { RunStore } from '../runs/store.ts';

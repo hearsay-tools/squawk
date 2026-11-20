@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fixture, removeAfterOwnedWork, waitForOwnedWork } from './service.testkit.ts';
+import { fixture, waitForOwnedWork } from './service-engine.testkit.ts';
+import { removeAfterOwnedWork } from './service.testkit.ts';
 
 describe('delegation fixture cleanup', () => {
   const leftovers: string[] = [];

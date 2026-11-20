@@ -175,7 +175,6 @@ import { resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { artifactParamsSchema, fileLinkQuerySchema } from '@open-mercato/cezar-contract/artifacts';
 import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/store.ts';
 import { artifactPreview, loadFileLink, rasterMime } from '../artifacts/resolve.ts';
-import type { RunManager } from '../workflows/run.ts';
 import { toPastedContent, type PastedContent } from '../workflows/pasted-content.ts';
 import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { worktreeDiff, worktreeSizeBytes } from '../git-worktree.ts';
@@ -246,7 +245,7 @@ import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/u
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { createProject, listGithubOwners, type CommandRunner } from './create-project.ts';
 import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
-import { ProjectContexts, type ProjectContext, type RunManagerFactory } from './project-context.ts';
+import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
 import { expandTilde } from '../paths.ts';
@@ -310,7 +309,7 @@ export interface ServerDeps extends ActivityServerDeps {
   delegation?: DelegationController; workerCleanup?: WorkerCleanupFactory;
   repoRoot: string;
   store: RunStore;
-  manager: RunManager;
+  manager: ProjectRunManager;
   version: string;
   /** Mutable holder for the async npm-registry update check (#368) —
    *  `latest` appears once the registry answers with a newer version. */

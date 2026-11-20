@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 
 import { workerDestroyView } from '../runs/delegation-state.ts';

@@ -5,7 +5,7 @@ import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-fac
 import { discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
 import { RunDatabase } from '../runs/run-database.ts';
 import { encodeRunRow } from '../runs/run-row.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 
 describe('bounded peer discovery pages', () => {
   let f: ReturnType<typeof fixture>;

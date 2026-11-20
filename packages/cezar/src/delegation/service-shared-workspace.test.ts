@@ -19,7 +19,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { workerCapacity } from './capacity.ts';
 import { releaseEndedWorkerBranches } from './family-end.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 registerRunner(claudeRunner);

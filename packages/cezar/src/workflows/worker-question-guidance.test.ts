@@ -6,7 +6,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fixture } from '../delegation/service.testkit.ts';
+import { fixture } from '../delegation/service-engine.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
 function unused<T extends object>(name: string, values: Partial<T> = {}): T {

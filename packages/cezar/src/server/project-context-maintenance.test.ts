@@ -15,7 +15,7 @@ import { RunDatabase, RUNS_DB_FILE } from '../runs/run-database.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, type ProjectContextSource } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 registerRunner(claudeRunner);
 
 

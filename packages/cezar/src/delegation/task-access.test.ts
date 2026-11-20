@@ -6,7 +6,7 @@ import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-facto
 import type { RunRecord } from '../runs/store.ts';
 import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { MESSAGING_OFF, WORKERS_OFF } from './policy.ts';
 import { workerCleanups } from './worker-cleanup.ts';

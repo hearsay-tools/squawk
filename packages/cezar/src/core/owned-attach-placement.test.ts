@@ -12,7 +12,7 @@ import type { AgentRunResult, AgentRunSpec, AgentSession } from './agent-runner.
 import * as runners from './runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import './created-runners.testkit.ts';
-import { fixture } from '../delegation/service.testkit.ts';
+import { fixture } from '../delegation/service-engine.testkit.ts';
 import { parentFileSnapshotPath, placeWorkerAttachments } from '../delegation/context.ts';
 import { ensureOwnedWorkspace, readOwnedDiff } from '../delegation/workspace.ts';
 import { autosaveCommit } from '../autosave-commit.ts';

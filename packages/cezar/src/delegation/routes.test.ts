@@ -11,7 +11,8 @@ import { Hono } from 'hono';
 import { WaitDeadlineConflict } from '../ci-wait/errors.ts';
 import { WORKERS_OFF } from './policy.ts';
 import { createDelegationRoutes } from './routes.ts';
-import { fixture, seedWorkerWait } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
+import { seedWorkerWait } from './service.testkit.ts';
 import { conversationSendResultSchema, conversationInspectResultSchema, inboxReserveResultSchema, inboxReceiptResultSchema, requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import {
   workerListResultSchema,

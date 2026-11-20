@@ -25,7 +25,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { Caller } from './credentials.ts';
 
-import { fixture, scheduledDestroyAttempts, seedWorkerWait, workerCleanupInternals } from "./service.testkit.ts";
+import { fixture } from "./service-engine.testkit.ts";
+import { scheduledDestroyAttempts, seedWorkerWait, workerCleanupInternals } from "./service.testkit.ts";
 import { ensureOwnedWorkspace } from "./workspace.ts";
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';

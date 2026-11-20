@@ -12,11 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../automations/store.ts';
 import { emitUsageForTest } from '../core/process-usage.ts';
-import type { RunManager } from '../workflows/run.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContextSource, type RunManagerFactory } from './project-context.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 import { seedRuns, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 registerRunner(claudeRunner);
@@ -27,7 +26,7 @@ const observed = vi.hoisted(() => ({
   subscriptions: [] as Array<{ listener: ReturnType<typeof vi.fn>; unsubscribe: ReturnType<typeof vi.fn> }>,
 }));
 /** The real factory, recording each manager's constructor options. */
-function createManager(...args: Parameters<RunManagerFactory>): RunManager {
+function createManager(...args: Parameters<RunManagerFactory>): ReturnType<RunManagerFactory> {
   const manager = createRunManager(...args);
   observed.options.set(manager, args[2]);
   return manager;

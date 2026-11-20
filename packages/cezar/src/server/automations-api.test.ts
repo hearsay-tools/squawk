@@ -32,7 +32,7 @@ import { startServer } from './start-server.ts';
 import { createApp, WorkspaceEventBus } from './server.ts';
 import { projectPaths } from '../project-paths.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { createRunManager } from './run-manager.testkit.ts';
+import { createRunManager } from './engine-run-manager.testkit.ts';
 
 
 // Server prewarming outlives the HTTP response. Keep unrelated host discovery

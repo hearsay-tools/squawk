@@ -13,7 +13,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '../runs/store.ts';
 import { RunStore, RunWriteRefusedError } from '../runs/store.ts';
-import { fixture } from './service.testkit.ts';
+import { fixture } from './service-engine.testkit.ts';
 import { projectConversationEvents } from './conversations.ts';
 
 // Messages between root tasks (hearsay-tools/cezarion#1990): spec

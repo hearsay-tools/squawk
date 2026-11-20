@@ -1,6 +1,6 @@
 import { ABSENT_PROCESS_PID, OTHER_ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { fixture as ownedFixture } from '../delegation/service.testkit.ts';
+import { fixture as ownedFixture } from '../delegation/service-engine.testkit.ts';
 import { createActiveRun } from './active-run.ts';
 import { sessionResultWithReceipts, type InputReceiptsHost, type InputReceiptSteps } from './run/input-receipts.ts';
 import type { RunModuleContext } from './run/types.ts';

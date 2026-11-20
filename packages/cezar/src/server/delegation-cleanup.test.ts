@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { onTestFinished, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './server.ts';
-import { fixture } from '../delegation/service.testkit.ts';
+import { fixture } from '../delegation/service-engine.testkit.ts';
 import { ownedWorkspace, workerDestroyResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 
