@@ -4,7 +4,7 @@ import type { Home } from '../home/home.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { SPAWN_NEXT } from '../runs/worker-execution.ts';
 import { modelConflictsWithRunner } from '../core/model-presets.ts';
-import { WorkerStepIdentity, WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
+import { type WorkerStepIdentity, WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../runs/store.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';

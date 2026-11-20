@@ -1,6 +1,6 @@
 import { cleanupTaskWorktreeSkills } from '../../worktree-skill-cleanup.ts';
 import { portableRunnerSkillList } from '../../core/runner-skill-reference.ts';
-import { LaunchSource, atStepOpen } from './launch-read-resolver.ts';
+import { type LaunchSource, atStepOpen } from './launch-read-resolver.ts';
 import { runDataDir } from '../../legacy-runs.ts';
 
 import { transitionTurnBoundary } from './turn-boundary.ts';

@@ -1,7 +1,7 @@
 import { opencodeHttp } from './opencode-http.ts';
 import { openingInput, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
 import { productEnv } from '../../core/product-env.ts';
-import { uiAskQuestions, AskQuestion } from '../../core/ask.ts';
+import { uiAskQuestions, type AskQuestion } from '../../core/ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { finished } from 'node:stream/promises';

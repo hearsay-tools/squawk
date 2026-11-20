@@ -6,7 +6,7 @@ import { getRepoInfo } from '../../server/git.ts';
 import type { AccountHolds } from '../../workspace/semaphore.ts';
 import { nextLineEntry } from '../line-order.ts';
 import { executionBlockedByRootFinish, historyDeletionPending } from './run-guards.ts';
-import { RunModuleContext, PendingContinuation, StartRunInput } from './types.ts';
+import { type RunModuleContext, type PendingContinuation, type StartRunInput } from './types.ts';
 import type { WorkflowDef } from '../types.ts';
 
 import { admissionRefusal } from '../../runs/worker-execution.ts';
