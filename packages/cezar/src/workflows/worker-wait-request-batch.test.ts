@@ -1,7 +1,11 @@
+import '../core/created-runners.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { manager, semaphore, store, useWorkerWaitFixture, waitOf, lastWaitOf } from './worker-wait.testkit.ts';
+import { manager, semaphore, store, useWorkerWaitFixture, waitOf, lastWaitOf } from './worker-wait-core.testkit.ts';
 import { conversationPair } from './worker-wait-conversations.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 const runnerSessions = vi.hoisted(() => new Map<string, import('../core/agent-runner.ts').AgentSession>());
 vi.mock('../core/runner-registry.ts', async importOriginal => {

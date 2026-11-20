@@ -1,3 +1,4 @@
+import '../core/created-runners.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import * as runners from '../core/runner-registry.ts';
 import type { AgentSession, SessionOptions } from '../core/agent-runner.ts';
@@ -13,7 +14,7 @@ import type { ToolStatus, UiEvent, UiToolItem } from '../core/ui-events.ts';
 import { IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES } from './run.ts';
 import { stateOf } from './run-states.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
-import { controlledWire, manager, parent, restart, root, store, semaphore, work, toolGenerationOf, worker, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { controlledWire, manager, parent, restart, root, store, semaphore, work, toolGenerationOf, worker, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 

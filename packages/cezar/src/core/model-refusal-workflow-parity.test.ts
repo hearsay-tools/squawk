@@ -1,6 +1,10 @@
+import './created-runners.testkit.ts';
 import { expect, it } from 'vitest';
-import { waitFor } from './harness-parity.testkit.ts';
-import { driveRun } from './workflow-parity.testkit.ts';
+import { waitFor } from './harness-parity-core.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 // The workflow must remain active through the native error turn, rather than
 // failing or parking on the intermediate v2 turn.completed(error).
