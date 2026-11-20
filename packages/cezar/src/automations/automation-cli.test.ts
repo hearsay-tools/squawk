@@ -8,6 +8,9 @@ import { fetchJson, TaskCliError, type Cockpit, type HttpResult } from '../task-
 import { automationPageUrl, bodyFromAddFlags, parseEvery, runAutomationCommand, type AutomationIo } from './automation-cli.ts';
 import { automationSchemaReference } from './prompts.ts';
 import { SCHEDULED_TASK_NOTE, resolveDelay } from '@open-mercato/cezar-contract/scheduled-tasks';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /**
  * `cez automation` (#774, port of upstream #985) against a real cockpit app on a real loopback

@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -16,11 +15,13 @@ import { projectPaths } from '../project-paths.ts';
 import { registerProject, listProjects } from '../workspace/projects.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunner } from '../core/runner-registry.ts';
+import { createRunner, registerRunner } from '../core/runner-registry.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { startServer } from './start-server.ts';
 import { WorkspaceEventBus } from './server.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 
 const temporary: string[] = [];

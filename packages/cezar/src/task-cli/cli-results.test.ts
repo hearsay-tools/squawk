@@ -7,6 +7,11 @@ import { makeHumanWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-fac
 import { describe, expect, it, vi } from 'vitest';
 import { runTaskCommand, taskHelp } from './cli.ts';
 import { taskCliFixture } from './cli.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 describe('cez task', () => {
   const ctx = taskCliFixture();
   const { io, run, last, start } = ctx;

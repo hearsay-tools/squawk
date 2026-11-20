@@ -6,6 +6,9 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { describe, expect, it, vi } from 'vitest';
 
 import { taskCliArgumentRun, taskCliFixture } from './cli.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 describe('cez task', () => {
   const ctx = taskCliFixture();

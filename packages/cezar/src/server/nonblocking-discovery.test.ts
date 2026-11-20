@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,9 +10,11 @@ import type { RunManager } from '../workflows/run.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
 
-// The server reads every registered runner (provider lists, login probes); register the built-ins.
 import * as git from './git.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+registerRunner(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

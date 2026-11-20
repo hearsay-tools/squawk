@@ -1,4 +1,3 @@
-import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +9,11 @@ import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
 import type { SocketHub, TopicPublisher } from './ws.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 // The health payload holds a probe row for every runner.
 
