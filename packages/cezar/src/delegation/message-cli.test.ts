@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSubcommand } from '../subcommands.ts';
 import { runWorkerCommand } from './cli.ts';
 import '../core/created-runners.testkit.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { encodeConversationCursor } from '@open-mercato/cezar-contract/conversations';
@@ -88,7 +88,9 @@ describe('task message command family', () => {
     const workers = await f.service.spawn(f.caller, { task: 'worker', baseline: 'parent-head', requestId: randomUUID() });
     const archived = peer(); f.store.updateRun(archived.id, { archived: true });
     const review = peer(); setRunStatus(f.store, review.id, RUN_STATUS.review);
-    for (let index = 0; index < 32; index++) peer();
+    // Discovery lists newest first and breaks a createdAt tie oldest first: the 32 later peers need a later millisecond.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 1 });
+    try { for (let index = 0; index < 32; index++) peer(); } finally { vi.useRealTimers(); }
     expect(await message(['tasks'])).toBe(0);
     expect(json().tasks).toHaveLength(32); expect(json().nextOffset).toBe(32);
     expect(json().tasks.map((task: { id: string }) => task.id)).not.toContain(f.parent.id);

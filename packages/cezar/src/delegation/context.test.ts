@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { parentFileSnapshotPath, prepareWorkerContext, verifyWorkerContext } from './context.ts';
 import { ensureOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
 import type { WorkerSpawnRequest } from '@open-mercato/cezar-contract';

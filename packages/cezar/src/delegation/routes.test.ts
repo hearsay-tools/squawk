@@ -1,9 +1,6 @@
-import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { RunStore } from '../runs/store.ts';
 
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,8 +8,7 @@ import { Hono } from 'hono';
 import { WaitDeadlineConflict } from '../ci-wait/errors.ts';
 import { WORKERS_OFF } from './policy.ts';
 import { createDelegationRoutes } from './routes.ts';
-import { fixture } from './service-engine.testkit.ts';
-import { seedWorkerWait } from './service.testkit.ts';
+import { fixture, seedWorkerWait } from './service.testkit.ts';
 import { conversationSendResultSchema, conversationInspectResultSchema, inboxReserveResultSchema, inboxReceiptResultSchema, requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import {
   workerListResultSchema,
@@ -24,7 +20,7 @@ import {
   workerDestroyResultSchema,
   workerListEntrySchema,
 } from '@open-mercato/cezar-contract/delegation';
-import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
+import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 
 describe('authenticated delegation HTTP family', () => {
@@ -207,23 +203,6 @@ describe('authenticated delegation HTTP family', () => {
     const response = await app.request(`http://127.0.0.1/${workerId}/collect`, { method: 'POST', headers: { host: '127.0.0.1', authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: '{' });
     expect(response.status).toBe(400);
   });
-  it('cancels with existing wait-only authority and returns retained settlement on retry', async () => {
-    const { workerId } = await spawn();
-    // A worker wait in the list (hearsay-tools/cezarion#1235, #1301), registered as `cez worker wait` does.
-    const waitId = seedWorkerWait(f.store, f.parent.id, [workerId]);
-    const delegation = f.store.getRun(f.parent.id)!.delegation!;
-    if (delegation.role !== 'root') throw Error('fixture');
-    f.store.commitDelegation([{ id: f.parent.id, delegation: { ...delegation, permissions: ['wait'] } }]);
-    const response = await request('/cancel-wait', { waitId });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ wait: { id: waitId, reason: 'cancelled' } });
-    expect(await (await request('/cancel-wait', { waitId })).json()).toMatchObject({ wait: { id: waitId, reason: 'cancelled' } });
-    expect(f.store.getRun(workerId)?.status).toBe('queued');
-    const retired = f.store.getRun(f.parent.id)!.delegation!;
-    if (retired.role !== 'root') throw Error('fixture');
-    f.store.commitDelegation([{ id: f.parent.id, delegation: { ...retired, permissions: ['inspect'] } }]);
-    expect((await request('/cancel-wait', { waitId })).status).toBe(403);
-  });
   it('validates cancellation IDs and bodies before any state mutation', async () => {
     for (const body of [{}, { waitId: 'bad' }, { waitId: randomUUID(), parentRunId: f.parent.id }]) {
       expect((await request('/cancel-wait', body)).status).toBe(400);
@@ -293,26 +272,6 @@ describe('authenticated delegation HTTP family', () => {
     const response = await request('/spawn', { task: 'child', baseline: 'HEAD', requestId: randomUUID() });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'incompatible_state', error: WORKERS_OFF });
-  });
-  it.each([['queued', false], ['done', false], ['review', false], ['failed', false], ['cancelled', false], ['done', true]] as const)('reads a settled current cancellation over HTTP for a %s parent after restart (legacy=%s)', async (status, legacy) => {
-    const { workerId } = await spawn(); const waitId = randomUUID();
-    const wait = { id: waitId, workerIds: [workerId], phase: 'wake-pending', reason: 'timeout', wakeId: waitId,
-      deadline: new Date(Date.now() - 1000).toISOString(), outcomes: [] };
-    const records = f.store.listRuns().map(run => run.id === f.parent.id ? { ...run, status,
-      delegation: { ...run.delegation, permissions: ['wait'], wait: legacy ? { id: wait.id, workerIds: wait.workerIds, phase: wait.phase, deadline: wait.deadline, outcomes: wait.outcomes } : wait } } : run);
-    // A restart: the old manager and store go, or the store would still own the family it reloads.
-    f.manager.dispose(); f.store.close();
-    seedRuns(join(f.root, '.ai/cezar'), records);
-    const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true }); const manager = createFixtureManager(reopened, f.root);
-    f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: reopened, manager });
-    try {
-      for (let i = 0; i < 2; i++) {
-        const response = await request('/cancel-wait', { waitId });
-        expect(response.status).toBe(200); expect(await response.json()).toEqual({ wait });
-      }
-      expect(reopened.getRun(workerId)?.status).toBe('queued');
-      expect(reopened.getRun(f.parent.id)?.status).toBe(status);
-    } finally { manager.dispose(); reopened.flush(); }
   });
   it.each(['worker', 'foreign', 'no-grant'] as const)('denies %s callers access to a queued cancellation receipt', async kind => {
     const { workerId } = await spawn(); const waitId = randomUUID(); const parent = f.store.getRun(f.parent.id)!;

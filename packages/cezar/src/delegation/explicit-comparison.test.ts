@@ -6,7 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 

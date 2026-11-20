@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import '../core/created-runners.testkit.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);

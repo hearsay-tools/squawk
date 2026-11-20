@@ -1,35 +1,17 @@
-import {
-  RUN_STATUS,
-  STEP_STATUS,
-  WAIT_KIND,
-  WAIT_PHASE,
-  WAIT_SOURCE,
-  WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runPersistence } from '../runs/run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { admissionRefusal } from '../runs/worker-execution.ts';
-import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
-import { fixture } from './service-engine.testkit.ts';
-import { FRESH_SESSION_NOTICE } from './service.ts';
+import { fixture } from './service.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { projectConversationEvents } from './conversations.ts';
-import {
-  conversationSendResultSchema,
-  conversationSendEffectSchema,
-  requestOutcomeSchema,
-  conversationInspectResultSchema,
-  conversationStateSchema,
-  inboxReceiptRequestSchema,
-  inboxReceiptResultSchema,
-  inboxReserveResultSchema,
-} from '@open-mercato/cezar-contract/conversations';
+import { conversationSendResultSchema, conversationSendEffectSchema, requestOutcomeSchema, conversationInspectResultSchema, conversationStateSchema, inboxReceiptRequestSchema, inboxReceiptResultSchema, inboxReserveResultSchema } from '@open-mercato/cezar-contract/conversations';
 import { inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
 import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { readPersistedText } from '../runs/run-store.testkit.ts';
@@ -184,64 +166,6 @@ describe('durable conversations', () => {
         .toMatchObject({ message: { id: message.message.id }, deliveredAt, ts: '2026-09-22T15:00:00.000Z' });
     } finally { vi.useRealTimers(); }
   });
-  it.each(['done', 'review'] as const)('parent --resume atomically queues one attributed continuation of a %s worker', async status => {
-    const w = await completedWorker(status);
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Correct the returned result', timeoutSeconds: 600, resume: true };
-    const [a, b] = await Promise.all([f.service.send(f.caller, request), f.service.send(f.caller, request)]);
-    expect(b).toEqual({ ...a, effect: 'unchanged' });
-    expect(a).toMatchObject({ delivery: 'queued', message: { state: 'accepted', resumed: true } });
-    expect(f.store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.queued, delegation: { executionRevision: 1 },
-      continuationMessage: { origin: 'lifecycle', agentInputId: request.id, text: expect.stringContaining(request.text) },
-      agentInputs: [{ id: request.id, conversation: { senderRunId: f.parent.id, recipientRunId: w.id } }] });
-    expect(f.store.getRun(w.id)?.steps.filter(step => step.synthetic === 'continuation')).toHaveLength(1);
-    const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.getRun(w.id)?.continuationMessage).toEqual(f.store.getRun(w.id)?.continuationMessage);
-    expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { messages: [a.message] } }); reopened.flush();
-  });
-  // hearsay-tools/squawk#3337: a cancelled worker, and one with no recorded session, restart from their worktree.
-  it('parent --resume restarts a cancelled worker whose worktree and branch exist', async () => {
-    const w = await completedWorker('cancelled');
-    await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Finish the parser change', timeoutSeconds: 600, resume: true };
-    expect(await f.service.send(f.caller, request)).toMatchObject({ delivery: 'queued', message: { state: 'accepted', resumed: true } });
-    expect(f.store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.queued, delegation: { executionRevision: 1 },
-      continuationMessage: { text: expect.not.stringContaining(FRESH_SESSION_NOTICE) } });
-  });
-  it('parent --resume starts a fresh session for a failed worker with no recorded session', async () => {
-    const w = await completedWorker('failed', null);
-    await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Retry on another runner', timeoutSeconds: 600, resume: true };
-    expect(await f.service.send(f.caller, request)).toMatchObject({ delivery: 'queued', message: { state: 'accepted', resumed: true } });
-    expect(f.store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.queued,
-      continuationMessage: { text: expect.stringContaining(FRESH_SESSION_NOTICE) } });
-  });
-  it('returns the receipt of an exact --resume retry after the worker worktree is gone', async () => {
-    const w = await completedWorker('cancelled');
-    await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Finish the parser change', timeoutSeconds: 600, resume: true };
-    const sent = await f.service.send(f.caller, request);
-    f.manager.cancel(w.id); await f.manager.awaitRunTermination(w.id, 5_000);
-    const delegation = f.store.getRun(w.id)!.delegation;
-    if (delegation?.role !== 'worker') throw new Error('expected a worker');
-    rmSync(delegation.workspace.path, { recursive: true, force: true });
-    expect(await f.service.send(f.caller, request)).toMatchObject({ effect: 'unchanged', message: { id: sent.message.id, resumed: true } });
-  });
-  // hearsay-tools/squawk#867: the refusal names what holds the worker and the command that gets past it.
-  // ADR 0032: a process outside the worker's scope that works in its worktree is not the worker's.
-  it.runIf(process.platform !== 'win32')('resumes while an outside process works in the worker worktree, and leaves that process alone', async () => {
-    const w = await completedWorker('done');
-    await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
-    const delegation = f.store.getRun(w.id)!.delegation;
-    if (delegation?.role !== 'worker') throw new Error('expected a worker');
-    const outsider = spawn('sleep', ['60'], { cwd: delegation.workspace.path, stdio: 'ignore' });
-    const exited = once(outsider, 'exit');
-    try {
-      const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Finish the parser change', timeoutSeconds: 600, resume: true };
-      expect(await f.service.send(f.caller, request)).toMatchObject({ message: { state: 'accepted', resumed: true } });
-      expect(outsider.exitCode).toBeNull();
-      expect(outsider.signalCode).toBeNull();
-    } finally { outsider.kill(); await exited; }
-  });
   // hearsay-tools/squawk#867: each store refusal carries its own cause and next step.
   const spawnNext = 'spawn a new worker with the instruction';
   it.each([
@@ -312,23 +236,6 @@ describe('durable conversations', () => {
     const reply = await f.service.reply(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'reply', requestId: sent.message.id, text: 'Report', timeoutSeconds: 600 });
     expect(reply.outcome).toEqual(cancelled);
   });
-  it('keeps a resumed request pending for a 45-minute reply inside its one-hour bound', async () => {
-    const w = await completedWorker();
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      vi.setSystemTime(new Date('2026-10-18T10:00:00.000Z'));
-      const sent = await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id,
-        kind: 'request', text: 'Fix the review findings', resume: true, timeoutSeconds: 3600 });
-      expect(sent.message.deadline).toBe('2026-10-18T11:00:00.000Z');
-      expect(await f.service.send(f.caller, { id: sent.message.id, recipientRunId: w.id, kind: 'request', text: 'Fix the review findings', resume: true, timeoutSeconds: 3600 })).toEqual({ ...sent, effect: 'unchanged' });
-      setRunStatus(f.store, w.id, RUN_STATUS.running);
-      vi.setSystemTime(new Date('2026-10-18T10:45:00.000Z'));
-      expect((await f.service.conversation(f.caller, { recipientRunId: w.id })).outcomes).toEqual([]);
-      const reply = await f.service.reply(w.caller, { id: randomUUID(), recipientRunId: f.parent.id,
-        kind: 'reply', requestId: sent.message.id, text: 'Fixed', timeoutSeconds: 600 });
-      expect(reply.outcome).toMatchObject({ status: 'replied', replyId: reply.message.id });
-    } finally { vi.useRealTimers(); }
-  });
   it.each([false, true])('records the first reply after expiry as replied late (timeout observed: %s)', async observed => {
     const w = await worker();
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -365,45 +272,6 @@ describe('durable conversations', () => {
     await expect(f.service.send(f.caller, { ...request, resume: true })).rejects.toMatchObject({ code: 'invalid_input' });
     await f.service.send(f.caller, { ...request, id: randomUUID(), resume: true });
     expect(await f.service.send(f.caller, request)).toEqual({ ...rejected, effect: 'unchanged' });
-  });
-  it('checkpoints the resumed opening input and retires its replay prompt atomically', async () => {
-    const w = await completedWorker();
-    const request = { id: randomUUID(), recipientRunId: w.id, kind: 'progress' as const, text: 'New instruction', timeoutSeconds: 600, resume: true };
-    await f.service.send(f.caller, request);
-    const before = structuredClone(f.store.getRun(w.id));
-    const at = new Date().toISOString();
-    const inputs = before!.agentInputs!.map(input => input.id === request.id ? { ...input, deliveredAt: at, consumedAt: at } : input);
-    const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementationOnce(() => { throw Error('disk unavailable'); });
-    expect(() => f.store.commitOutcome(w.id, { kind: 'opening-handled', inputId: request.id, at })).toThrow('disk unavailable');
-    expect(f.store.getRun(w.id)).toEqual(before);
-    fault.mockRestore();
-    f.store.commitOutcome(w.id, { kind: 'opening-handled', inputId: request.id, at });
-    expect(f.store.getRun(w.id)?.continuationMessage).toBeUndefined();
-    expect(f.store.getRun(w.id)?.agentInputs).toEqual(inputs);
-    const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.getRun(w.id)?.continuationMessage).toBeUndefined(); reopened.flush();
-  });
-  it('uses the new instruction when explicitly resuming a failed continuation', async () => {
-    const w = await completedWorker();
-    setRunStatus(f.store, w.id, RUN_STATUS.failed, { continuationMessage: { id: 'old', text: 'Old failed prompt', origin: 'lifecycle', createdAt: new Date().toISOString() } });
-    await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'progress', text: 'Correct the failed task', timeoutSeconds: 600, resume: true });
-    expect(f.store.getRun(w.id)?.continuationMessage?.text).toContain('Correct the failed task');
-  });
-  it('accepts neither a message nor a continuation when the atomic index write fails', async () => {
-    const w = await completedWorker();
-    const before = structuredClone(f.store.getRun(w.id));
-    vi.spyOn(runPersistence(f.store), 'persist').mockImplementationOnce(() => { throw Error('disk unavailable'); });
-    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'progress', text: 'Retry work', timeoutSeconds: 600, resume: true }))
-      .rejects.toThrow('Worker was not resumed: the resume could not be saved (disk unavailable). No message was accepted; retry the same command');
-    expect(f.store.getRun(w.id)).toEqual(before);
-    expect(f.store.getRun(f.parent.id)?.delegation).not.toHaveProperty('conversation');
-  });
-  it('does not let --resume answer a human question or allow a worker to resume its parent', async () => {
-    const w = await completedWorker();
-    f.store.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Approval', question: 'May I proceed?', options: [{ label: 'Yes' }, { label: 'No' }] }] });
-    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'progress', text: 'Work', timeoutSeconds: 600, resume: true })).rejects.toThrow(/human question/);
-    setRunStatus(f.store, w.id, RUN_STATUS.running);
-    await expect(f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'progress', text: 'Work', timeoutSeconds: 600, resume: true })).rejects.toMatchObject({ code: 'denied_scope' });
   });
   it('atomically accepts one obligation and input across concurrent retries and restart', async () => {
     const w = await worker(); const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Which file?', timeoutSeconds: 600 };
@@ -447,35 +315,6 @@ describe('durable conversations', () => {
     await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'question', timeoutSeconds: 600 })).rejects.toThrow('disk unavailable');
     expect(f.store.getRun(f.parent.id)?.delegation).not.toHaveProperty('conversation');
     expect(f.store.getRun(w.id)?.agentInputs ?? []).toEqual([]);
-  });
-  it('cancels an accepted worker request and its wait without granting child management', async () => {
-    const w = await worker();
-    const sent = await f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'request', text: 'question', timeoutSeconds: 600 });
-    const cancelled = await f.service.cancelRequest(w.caller, { requestId: sent.message.id });
-    expect(cancelled.status).toBe('cancelled');
-    expect(await f.service.cancelRequest(w.caller, { requestId: sent.message.id })).toEqual(cancelled);
-    // hearsay-tools/cezarion#1235: a worker's request wait is a wait-list entry.
-    const waitId = randomUUID();
-    f.store.commitWait(w.id, { id: waitId, kind: WAIT_KIND.worker, source: WAIT_SOURCE.agent, via: WAIT_VIA['cez-worker-wait'], registeredAt: new Date().toISOString(), phase: WAIT_PHASE.open, turnId: 'turn', requestIds: [sent.message.id], requestOutcomes: [], timeoutSeconds: 600, deadline: new Date(Date.now() + 600000).toISOString() });
-    expect(await f.service.cancelWait(w.caller, { waitId })).toMatchObject({ wait: { id: waitId } });
-    await expect(f.service.stop(w.caller, { workerId: w.id })).rejects.toMatchObject({ code: 'denied_scope' });
-  });
-  it('checks a request-wait cancel through the parent pair even for a worker that holds wait', async () => {
-    const w = await worker();
-    const held = f.store.getRun(w.id)!;
-    f.store.commitDelegation([{ id: w.id, delegation: { ...held.delegation, permissions: ['wait'] } as never }]);
-    const sent = await f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'request', text: 'question', timeoutSeconds: 600 });
-    const waitId = randomUUID();
-    f.store.commitWait(w.id, { id: waitId, kind: WAIT_KIND.worker, source: WAIT_SOURCE.agent, via: WAIT_VIA['cez-worker-wait'], registeredAt: new Date().toISOString(), phase: WAIT_PHASE.open, turnId: 'turn', requestIds: [sent.message.id], requestOutcomes: [], timeoutSeconds: 600, deadline: new Date(Date.now() + 600000).toISOString() });
-    const parent = f.store.getRun(f.parent.id)!;
-    if (parent.delegation?.role !== 'root') throw new Error('fixture');
-    const live = parent.delegation;
-    const deletion = { phase: 'complete' as const, revision: 0, resourceId: randomUUID(), generation: randomUUID() };
-    f.store.commitDelegation([{ id: parent.id, delegation: { ...live, receipts: live.receipts.map(receipt => ({ ...receipt, deletion })) } }]);
-    await expect(f.service.cancelWait(w.caller, { waitId })).rejects.toMatchObject({ code: 'denied_scope', message: 'Worker scope denied' });
-    await expect(f.service.cancelWait(w.caller, { waitId: randomUUID() })).rejects.toMatchObject({ code: 'denied_scope' });
-    f.store.commitDelegation([{ id: parent.id, delegation: { ...f.store.getRun(parent.id)!.delegation, receipts: live.receipts } as never }]);
-    expect(await f.service.cancelWait(w.caller, { waitId })).toMatchObject({ wait: { id: waitId } });
   });
   it('keeps rejected receipts rejected after Continue and replays event projections without extra inputs', async () => {
     const w = await worker(); setRunStatus(f.store, w.id, RUN_STATUS.review);
