@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import type { AstRule } from './ast-rule.ts';
+import { stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { insideLoader } from './run-store-testkit-import.ts';
 
 /**
@@ -10,9 +10,9 @@ import { insideLoader } from './run-store-testkit-import.ts';
  *
  * Static scope: non-test `.ts` files in `packages/cezar/src`, except the two lint rules that read
  * the ids (`lint/runner-roster-literal.ts`, `lint/runner-id-branch.ts`). The rule reports a
- * relative string literal that resolves to `runners/ids` (with or without `.ts`/`.js`) inside an
- * import, an export, an `import()`, an `import x = require()` or any call. A template literal and
- * a path assembled from pieces are out of scope.
+ * relative string literal, or template literal with no substitution, that resolves to `runners/ids`
+ * (with or without `.ts`/`.js`) inside an import, an export, an `import()`, an `import x = require()`,
+ * a type import (`import('…').T`, `typeof import('…')`) or any call. A path assembled from pieces is out of scope.
  */
 
 const MESSAGE =
@@ -26,6 +26,12 @@ const ID_READERS = new Set([
   'packages/cezar/src/lint/runner-id-branch.ts',
 ]);
 
+/** Whether `node` sits in a type import, `import('…').T` or `typeof import('…')`. */
+function insideTypeImport(node: EsNode): boolean {
+  for (let at = node.parent; at; at = at.parent) if (at.type === 'TSImportType') return true;
+  return false;
+}
+
 /** Whether `specifier`, written in `file`, names `runners/ids.ts`. */
 export function namesRunnerIds(file: string, specifier: string): boolean {
   if (!specifier.startsWith('.')) return false;
@@ -38,9 +44,11 @@ export const runnerIdsImport: AstRule = {
   applies: (file) =>
     file.startsWith('packages/cezar/src/') && file.endsWith('.ts') && !file.endsWith('.test.ts')
     && !file.endsWith('.testkit.ts') && !ID_READERS.has(file),
-  create: (report, { file }) => ({
-    Literal(node) {
-      if (typeof node.value === 'string' && namesRunnerIds(file, node.value) && insideLoader(node)) report(node, MESSAGE);
-    },
-  }),
+  create: (report, { file }) => {
+    const check = (node: EsNode) => {
+      const specifier = stringOf(node);
+      if (specifier !== undefined && namesRunnerIds(file, specifier) && (insideLoader(node) || insideTypeImport(node))) report(node, MESSAGE);
+    };
+    return { Literal: check, TemplateLiteral: check };
+  },
 };
