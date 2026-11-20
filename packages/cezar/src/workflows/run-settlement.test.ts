@@ -40,7 +40,7 @@ describe('successful run settlement (#473)', () => {
 
   afterEach(() => {
     vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks();
-    store.flush();
+    store.close();
     rmSync(root, { recursive: true, force: true });
   });
 

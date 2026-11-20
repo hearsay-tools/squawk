@@ -14,9 +14,10 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 registerRunner(claudeRunner);
 
 const roots: string[] = [];
+const stores: RunStore[] = [];
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'cez-unarchive-')); roots.push(root);
-  const store = RunStore.open(join(root, '.ai/cezar'));
+  const store = RunStore.open(join(root, '.ai/cezar')); stores.push(store);
   const manager = acceptanceOver(store, root);
   return { store, manager };
 }
@@ -33,6 +34,7 @@ function archivedFinished(store: RunStore) {
 }
 
 afterEach(() => {
+  for (const store of stores.splice(0)) store.close();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
