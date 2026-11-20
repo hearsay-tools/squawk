@@ -438,7 +438,14 @@ runner does.
   `cli.openTarget`. The order is the registration order.
 - **Criterion 7 of the epic** (a new runner needs no edit outside its own files) is proved by
   `.ai/scripts/simulate-sixth-runner.mjs`, which adds a sixth built-in runner to a scratch clone
-  in the four places and fails when any other file changed. Exit run: CRITERION7_PLACEHOLDER.
+  in the four places and fails when any other file changed. Its failures fall in three classes:
+  A, the copied fixture runner lacks a piece that a real runner adds in its own folder; B, a list
+  outside the four places that the runner must edit; C, anything else. Criterion 7 passes when
+  the complete run (a copy of a real runner's folder under a new id) has no B failure and the
+  four-places run has only A failures. On `e9d059ab6` the four-places run gave 26 A, 1 B and 0 C.
+  The B was `FACT_VALUE_TESTS`, which the planner ruled by design: it is keyed by fact value, not
+  by runner, and a new fact value needs a shared-code unit test (§10). Exit run:
+  CRITERION7_PLACEHOLDER.
 
 ### Test selection
 
