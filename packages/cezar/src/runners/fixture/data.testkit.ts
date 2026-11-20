@@ -112,4 +112,11 @@ export const FIXTURE_MOCK = {
     hold: 'mock:hold',
     'provider-error': 'mock:provider-error',
   },
+  // The parity kit requires an A9 reason from every runner whose facts declare no answerable native ask.
+  parityExemptions: {
+    A9: {
+      kind: 'scenario-unconstructible',
+      reason: 'The fixture mock answers no ask scenario and its wire has no native ask, so no native mid-turn ask.requested can arise.',
+    },
+  },
 } as const satisfies RunnerMock;

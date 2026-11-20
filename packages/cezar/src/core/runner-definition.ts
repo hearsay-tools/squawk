@@ -88,6 +88,19 @@ export interface RunnerMock {
   /** P6: the text the mock echoes once Squawk refuses its malformed request. Required with
    *  `scenarios['approval-malformed']`. */
   readonly malformedApprovalEcho?: string;
+  /**
+   * Parity cells this runner's wire cannot carry, by criterion id: how the matrix pins each and
+   * why. The parity kit's `PARITY_EXEMPTIONS` adds them to the rows it selects by facts. A row
+   * the kit selects by facts with a runner-specific reason (A9) reads that reason here.
+   */
+  readonly parityExemptions?: Readonly<Record<string, RunnerParityExemption>>;
+}
+
+/** One parity cell a runner's wire cannot carry; the parity kit's `ExemptionKind` says how each kind is pinned. */
+export interface RunnerParityExemption {
+  readonly kind: 'capability-absent' | 'scenario-unconstructible';
+  /** Why this runner's wire cannot carry the cell. Never "not implemented yet". */
+  readonly reason: string;
 }
 
 /**
