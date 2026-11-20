@@ -13,7 +13,7 @@ import { registeredRunners } from '../core/runner-registry.ts';
  * every runner's own files.
  */
 export function listConfigFiles(): ConfigFileDef[] {
-  const files = registeredRunners().flatMap((definition) => definition.configFiles);
+  const files = registeredRunners().flatMap((definition) => definition.configFiles.files);
   return files.filter((file, index) => files.lastIndexOf(file) === index);
 }
 

@@ -14,13 +14,11 @@ import {
   availableRunners,
   buildCreateRunBody,
   effortOptionsForModel,
-  MODELS_BY_RUNNER,
   modelConflictsWithRunner,
   modelsForRunner,
   modelCatalogStatus,
   pushRecentSource,
   resolveEffort,
-  RUNNERS,
   resolveModel,
   resolveRunner,
   resolveSource,
@@ -65,18 +63,18 @@ describe('task access in create bodies (hearsay-tools/cezarion#2784)', () => {
 
 describe('availableRunners (legacy renderChrome rule)', () => {
   it('offers OMP only when detected, after the other backends', () => {
-    expect(availableRunners([check('omp', true), check('claude', true)])).toEqual(['claude', 'omp'])
-    expect(availableRunners([check('claude', true), check('omp', false)])).toEqual(['claude'])
-    expect(RUNNERS.find((runner) => runner.id === 'omp')).toMatchObject({ label: 'OMP' })
+    expect(availableRunners([check('omp', true), check('claude', true)], RUNNERS_RESPONSE)).toEqual(['claude', 'omp'])
+    expect(availableRunners([check('claude', true), check('omp', false)], RUNNERS_RESPONSE)).toEqual(['claude'])
+    expect(RUNNERS_RESPONSE.runners.find((runner) => runner.id === 'omp')).toMatchObject({ pickerLabel: 'OMP' })
   })
-  it('offers exactly the detected backends, in RUNNERS order', () => {
+  it('offers exactly the detected backends, in the order of the runners list', () => {
     const checks = [check('opencode', true), check('git', true), check('claude', true), check('codex', false)]
-    expect(availableRunners(checks)).toEqual(['claude', 'opencode'])
+    expect(availableRunners(checks, RUNNERS_RESPONSE)).toEqual(['claude', 'opencode'])
   })
 
   it('falls back to claude when nothing is detected — the form always has a runner', () => {
-    expect(availableRunners([])).toEqual(['claude'])
-    expect(availableRunners([check('git', true), check('gh', true)])).toEqual(['claude'])
+    expect(availableRunners([], RUNNERS_RESPONSE)).toEqual(['claude'])
+    expect(availableRunners([check('git', true), check('gh', true)], RUNNERS_RESPONSE)).toEqual(['claude'])
   })
 })
 
@@ -96,8 +94,8 @@ describe('resolveRunner (legacy preselection order)', () => {
 
 describe('model option resolution', () => {
   it('every runner leads with auto (empty id — no model flag sent)', () => {
-    for (const models of Object.values(MODELS_BY_RUNNER)) {
-      expect(models[0]).toMatchObject({ id: '', label: 'auto' })
+    for (const { models } of RUNNERS_RESPONSE.runners) {
+      expect(models.suggested[0]).toMatchObject({ id: '', label: 'auto' })
     }
   })
 

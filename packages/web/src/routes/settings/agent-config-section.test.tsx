@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '@/api/queries'
+import { seedRunners } from '@/test/runners.testkit'
 import { createQueryClient } from '@/api/query-client'
 import type { AgentConfigFile, AgentConfigListing } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
@@ -102,7 +103,7 @@ function serveLive(server: LiveServer) {
 const READ_ONLY_REMOTE = { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false }
 const SETTINGS_FILE = fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })
 
-function renderSection(client = createQueryClient()) {
+function renderSection(client = seedRunners(createQueryClient())) {
   return render(
     <QueryClientProvider client={client}>
       <AgentConfigSection />
@@ -337,7 +338,7 @@ describe('AgentConfigSection', () => {
   // hearsay-tools/cezarion#2428: the host grants and withdraws outside the cockpit, and a remote
   // cockpit gets no live health push, so the section must not trust a cached capability.
   it('opening the section re-reads a grant the host made after the cached read', async () => {
-    const client = createQueryClient()
+    const client = seedRunners(createQueryClient())
     client.setQueryData(queryKeys.health, { ...HEALTH, capabilities: READ_ONLY_REMOTE })
     client.setQueryData(queryKeys.agentConfig, { editable: false, files: [{ ...SETTINGS_FILE, writable: false }], userMcp: null })
     serveLive({ capabilities: REMOTE_ADMIN, listing: { editable: true, files: [SETTINGS_FILE], userMcp: null }, putStatus: 200 })

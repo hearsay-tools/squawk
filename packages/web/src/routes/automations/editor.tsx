@@ -3,7 +3,7 @@ import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
 import { useConfig, useProviderStatus, useRunnerModels, useWorkflows } from '@/api/queries'
-import { useRunners } from '@/api/runners'
+import { runnerPickerLabel, useRunners } from '@/api/runners'
 import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from '@/lib/project-router'
 import { usableRunners } from '@/lib/provider-status'
-import { RUNNERS, modelsForRunner } from '../new-task-form'
+import { modelsForRunner } from '../new-task-form'
 import { CopyAsCliCard } from './copy-as-cli-card'
 import { fromDefinition, toCreateBody, toUpdateBody, type AutomationDraft } from './editor-draft'
 import { GithubFields, historySentence, pollSentence } from './editor-github-fields'
@@ -328,7 +328,7 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
           label={draft.runner ?? 'default'}
           value={draft.runner ?? ''}
           disabled={!registered.data}
-          options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: RUNNERS.find((runner) => runner.id === id)?.label ?? id }))]}
+          options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: runnerPickerLabel(registered.data, id) }))]}
           onPick={(runner) => {
             // A model id belongs to its runner, so picking another runner clears it.
             patch({ runner: runner ? (runner as Runner) : undefined, model: undefined })

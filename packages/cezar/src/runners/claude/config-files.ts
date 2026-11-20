@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 
 const CLAUDE_SETTINGS_DOCS = 'https://code.claude.com/docs/en/settings';
 const CLAUDE_MEMORY_DOCS = 'https://code.claude.com/docs/en/memory';
@@ -118,3 +119,18 @@ export const CLAUDE_CONFIG_FILES: readonly ConfigFileDef[] = [
     docsUrl: CLAUDE_MEMORY_DOCS,
   },
 ];
+
+/** The Claude tab of Settings → Agent config (the `agentConfig` of its `configFiles` part). Data only. */
+export const CLAUDE_AGENT_CONFIG: RunnerAgentConfig = {
+  label: 'Claude',
+  groups: [
+    { id: 'settings', label: 'Settings' },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      note: 'A dedicated .mcp.json (key: mcpServers), shared via version control.',
+      showsUserMcp: true,
+    },
+    { id: 'memory', label: 'Memory & instructions' },
+  ],
+};

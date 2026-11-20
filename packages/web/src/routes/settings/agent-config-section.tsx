@@ -2,6 +2,7 @@ import { FileCogIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { ApiError } from '@/api/client'
+import { runnerIds, useRunners } from '@/api/runners'
 import { queryKeys, useAgentConfig, useAgentConfigFile, useHealth, usePutAgentConfigFile } from '@/api/queries'
 import type { AgentConfigFile, AgentConfigListing, HealthResponse, Runner } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
@@ -11,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { availableRunners } from '@/routes/new-task-form'
 import { cn } from '@/lib/utils'
-import { AGENT_DESCRIPTORS, descriptorFor, type AgentDescriptor } from './agent-descriptors'
+import { agentDescriptors, type AgentDescriptor } from './agent-descriptors'
 import { useQueryClient } from '@tanstack/react-query'
 import { REMOTE_SETTINGS_ENABLE_COMMAND, RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
 
@@ -40,12 +41,14 @@ export function AgentConfigSection() {
   const listing = useAgentConfig()
   useSettingsAdminRefresh()
   const health = useHealth()
+  const registered = useRunners().data
+  const descriptors = useMemo(() => agentDescriptors(registered), [registered])
   const installed = useMemo<Runner[]>(
-    () => (health.data ? availableRunners(health.data.checks) : AGENT_DESCRIPTORS.map((d) => d.id)),
-    [health.data],
+    () => (health.data ? availableRunners(health.data.checks, registered) : runnerIds(registered)),
+    [health.data, registered],
   )
 
-  if (listing.isPending) {
+  if (listing.isPending || registered === undefined) {
     return (
       <p data-slot="agent-config-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading agent config…
@@ -63,13 +66,23 @@ export function AgentConfigSection() {
       />
     )
   }
-  return <AgentConfigView listing={listing.data} installed={installed} />
+  return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} />
 }
 
-function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; installed: Runner[] }) {
+function AgentConfigView({
+  listing,
+  descriptors,
+  installed,
+}: {
+  listing: AgentConfigListing
+  descriptors: readonly AgentDescriptor[]
+  installed: Runner[]
+}) {
   const [agentId, setAgentId] = useState<Runner>('claude')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const agent = descriptorFor(agentId)
+  // A saved or default agent id that no runner registered falls back to the first pane.
+  const agent = descriptors.find((d) => d.id === agentId) ?? descriptors[0]
+  if (agent === undefined) return null
   const selected = listing.files.find((f) => f.id === selectedId) ?? null
 
   const pickAgent = (id: Runner) => {
@@ -92,7 +105,7 @@ function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; 
       <RemoteSettingsNotice risk={`Agent config can define hooks and MCP servers that run commands on the machine running Squawk`} />
 
       <div data-slot="agent-config-agents" role="tablist" className="flex flex-wrap gap-1">
-        {AGENT_DESCRIPTORS.map((d) => (
+        {descriptors.map((d) => (
           <button
             key={d.id}
             type="button"

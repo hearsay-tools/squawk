@@ -2,7 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { OMP_FACTS } from './facts.ts';
 import { OMP_MODELS } from './models.ts';
-import { OMP_CONFIG_FILES } from './config-files.ts';
+import { OMP_AGENT_CONFIG, OMP_CONFIG_FILES } from './config-files.ts';
 import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
 import { OMP_SPEC_SUPPORT } from './spec-support.ts';
 import { OMP_DETECTION } from './detection.ts';
@@ -30,7 +30,7 @@ export const ompRunner = defineRunner({
   },
   loadModelCatalog: async () => (await import('./omp-model-catalog.ts')).discoverOmpModels,
   loadSkillCatalog: async () => (await import('./omp-skill-catalog.ts')).discoverOmpSkills,
-  configFiles: OMP_CONFIG_FILES,
+  configFiles: { files: OMP_CONFIG_FILES, agentConfig: OMP_AGENT_CONFIG },
   extraTools: OMP_EXTRA_TOOLS,
   login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },
   accounts: OMP_ACCOUNTS,
