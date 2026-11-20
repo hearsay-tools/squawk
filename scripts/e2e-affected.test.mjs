@@ -281,6 +281,11 @@ test('a code file no process loaded selects no spec when the map lists every loa
   assert.deepEqual(classify(definition, { map, graph: withSetup, atMap: both }).specs, []);
   assert.equal(classify('scripts/check-workspace-resolution.mjs', { map, graph: withSetup, atMap: both }).specs, null);
   assert.equal(classify(definition, { map: sampleMap({ nodeLoaded: [definition] }), graph: withSetup, atMap: both }).specs, null);
+  // When main changed the suite setup after the map, the setup may load it now: every spec.
+  const setupDrift = selectSpecs({ files: [definition], map, graph: withSetup, specFiles: map.specs, atMap: both,
+    drift: { files: ['packages/web/e2e/vitest.config.ts'], changes: new Map() } });
+  assert.equal(setupDrift.all, true);
+  assert.match(setupDrift.reason, /runner-definition\.ts needs every spec \(the browser suite setup loads it\)/);
   // A spec that loads the file now, and the specs with incomplete evidence, still run.
   assert.deepEqual(classify('packages/web/e2e/poll.ts', { map, graph, atMap: new Set(['packages/web/e2e/poll.ts']) }).specs,
     [spec('artifact-project-links')]);

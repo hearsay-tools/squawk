@@ -125,6 +125,7 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | File the Vitest config imports | Every spec | Every spec (Vite bundles it) |
 | Code file the static setup scan reaches and a process loaded | Every spec | Every spec |
 | Code file the static setup scan reaches but no process loaded (a type-only import, say) | Every spec | Specs that load it now + incomplete specs |
+| The same, after `main` changed a file the setup scan reaches since the map (drift) | Every spec | Every spec |
 | Non-code file that the setup scan reaches (JSON, shell) | Every spec | Every spec (no change) |
 
 ### Map selection (slice 1)

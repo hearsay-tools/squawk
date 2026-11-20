@@ -379,14 +379,16 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes, partial, boot, atMap }) {
+export function classify(file, { map, graph, changes, partial, boot, atMap, setupChanged = false }) {
   if (isDocsPath(file)) return none('documentation');
   // Before the loaded-file rule: Vite bundles the Vitest config and what it imports into a
   // temporary file, so their coverage names no repository path.
   if (graph.config?.has(file)) return every('the browser suite configuration imports it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
-  if (unloaded(file, map, atMap)) return notLoaded(map, readers);
-  if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
+  const setup = reaches(graph.setup, file);
+  // A setup main changed after the map may load what the map saw no process load.
+  if (unloaded(file, map, atMap) && !(setup && setupChanged)) return notLoaded(map, readers);
+  if (setup) return every('the browser suite setup loads it');
   if (file.startsWith(`${SPEC_DIR}/`)) return e2eFileSpecs(file, readers);
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
@@ -412,12 +414,13 @@ export function classify(file, { map, graph, changes, partial, boot, atMap }) {
  * passes through an edit the map does answer.
  */
 export function selectSpecs({ files, map, graph, specFiles, changes, drift, boot = bootSpec(map, specFiles), atMap }) {
-  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot, atMap }) }));
+  const setupChanged = (drift?.files ?? []).some(file => reaches(graph.setup, file));
+  const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes, boot, atMap, setupChanged }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
-    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot, atMap }) }))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true, boot, atMap, setupChanged }) }))
     .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
   if (mapped) {
