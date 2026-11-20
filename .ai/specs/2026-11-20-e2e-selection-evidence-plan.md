@@ -68,14 +68,15 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 - The map version becomes 2. The selector reads only version 2. A version 1 map counts as no
   map: every spec runs until the first version 2 map is built on `main`.
 - The selector takes the innermost recorded range that encloses each changed line, as today.
-  - An entry with `startup: true` adds the **boot spec** to its own specs.
+  - An entry with `startup: true` selects the **boot spec** plus every spec that ran any function of the
+    file (owner decision, 2026-11-20): boot code sets up what the file's other functions serve.
   - A changed line in a file with function evidence, but outside every recorded range (imports
     above the first mapped line, lines after the last one), counts as top-level code. It selects
     the boot spec plus every spec that ran any function of that file.
 - The **boot spec** is the shortest passing spec with complete evidence, by
   `.github/cockpit-test-durations.json`. Every spec boots the shared server, so the shortest one
   is enough to show that the server still starts.
-- Drift uses the same rules. A startup-only drift edit adds only the boot spec.
+- Drift uses the same rules.
 
 ### Slice 3: coverage of every process the suite starts (capture, map, selector)
 
@@ -104,8 +105,8 @@ reports `main`'s later changes as drift, and the map's line numbers do not match
 | Case | Today | After |
 | --- | --- | --- |
 | Line inside a function that some specs ran | Those specs | Those specs (no change) |
-| Line inside a function that only startup ran | All 97 (startup credited to all) | Boot spec |
-| Line inside a function that ran at startup and in some specs | All 97 | Boot spec + those specs |
+| Line inside a function that only startup ran | All 97 (startup credited to all) | Boot spec + specs that ran any function of the file |
+| Line inside a function that ran at startup and in some specs | All 97 | Boot spec + specs that ran any function of the file |
 | Line inside a function that no spec ran | No spec | No spec (no change) |
 | Line in the module's top-level code, an import above the first recorded line, or a range across two functions | Every spec, or all 97 through startup credit | Boot spec + specs that ran any function of the file |
 | Any startup edit when no spec has complete evidence | Every spec | Every spec (no boot spec) |

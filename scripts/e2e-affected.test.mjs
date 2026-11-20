@@ -314,11 +314,11 @@ test('startup and top-level edits select the boot spec, not every spec', () => {
   const at = (...ranges) => pick(ranges.map(([start, end = start]) => ({ start, end }))).specs;
   assert.deepEqual(at([45]), [spec('chat-code-fence')]);
   assert.deepEqual(at([53]), []);
-  assert.deepEqual(at([27]), [spec('smoke')]);
-  assert.deepEqual(at([15]), [spec('artifact-project-links'), spec('smoke')]);
-  // Top-level code, an import above the first recorded line, and a line past the last one:
-  // the boot spec and every spec that ran a function of the file.
+  // Code the boot ran, top-level code, an import above the first recorded line, and a line past
+  // the last one: the boot spec and every spec that ran a function of the file.
   const fileSpecs = [spec('artifact-project-links'), spec('chat-code-fence'), spec('smoke')];
+  assert.deepEqual(at([27]), fileSpecs);
+  assert.deepEqual(at([15]), fileSpecs);
   assert.deepEqual(at([35]), fileSpecs);
   assert.deepEqual(at([1]), fileSpecs);
   assert.deepEqual(at([70]), fileSpecs);
@@ -328,12 +328,26 @@ test('startup and top-level edits select the boot spec, not every spec', () => {
   // Without a spec with complete evidence there is no boot spec: every spec runs.
   assert.equal(pick([{ start: 27, end: 27 }], null).all, true);
   assert.equal(pick([{ start: 45, end: 45 }], null).all, false);
-  // Drift on main's boot-only code adds only the boot spec.
+  // Drift on main's boot code adds the boot spec and the file's specs.
   const drift = { files: [file], changes: new Map([[file, [{ start: 27, end: 27 }]]]) };
   const helper = 'packages/cezar/src/core/helper.ts';
   const withHelper = { ...map, functions: { ...map.functions, [helper]: [{ start: 1, end: 9, specs: [1] }] } };
   assert.deepEqual(selectSpecs({ files: [helper], map: withHelper, graph, specFiles: map.specs, drift, boot: spec('smoke'),
-    changes: new Map([[helper, [{ start: 5, end: 5 }]]]) }).specs, [spec('chat-code-fence'), spec('smoke')]);
+    changes: new Map([[helper, [{ start: 5, end: 5 }]]]) }).specs, fileSpecs);
+});
+
+test('one hunk across two handlers a boot-time factory registers keeps both handlers\' specs', () => {
+  // PR review (hearsay-tools/squawk#3986): route handlers nested in createApp.
+  const file = 'packages/cezar/src/server/server.ts';
+  const map = sampleMap({ functions: { [file]: [
+    { start: 1, end: 100, specs: [], startup: true },
+    { start: 10, end: 60, specs: [], startup: true }, // createApp
+    { start: 20, end: 30, specs: [0] },
+    { start: 35, end: 45, specs: [1] },
+  ] } });
+  const result = selectSpecs({ files: [file], map, graph, specFiles: map.specs, boot: spec('smoke'),
+    changes: new Map([[file, [{ start: 25, end: 40 }]]]) });
+  assert.deepEqual(result.specs, [spec('artifact-project-links'), spec('chat-code-fence'), spec('smoke')]);
 });
 
 test('the boot spec is the shortest spec with complete evidence', () => {

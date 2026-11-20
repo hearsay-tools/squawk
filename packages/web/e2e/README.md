@@ -419,7 +419,7 @@ and every spec the map does not list runs. The log lists these files as `changed
 | Change | Specs |
 | --- | --- |
 | Cockpit or api-client source | Specs that ran the file, loaded its top-level effects, or reached its exported values, plus incomplete specs |
-| Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs. The boot spec as well when the shared server's boot ran such a function. A line in the module's top-level code or outside every recorded function: the boot spec and every spec that ran a function of the file |
+| Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs. A line in a function the shared server's boot ran, in the module's top-level code or outside every recorded function: the boot spec and every spec that ran a function of the file |
 | Spec, helper or fixture | Specs that load it; every spec if suite setup loads it or no spec names the helper |
 | Documentation, unit tests, `spec-map/`, `.github/` outside suite setup | None |
 | A reviewed path no spec reads (`NO_SPEC` in the selector, each with its reason): lint rules and configs, `packages/cezar/src/lint/`, repository skills, benchmarks no spec imports, `AGENT_PROTOCOL.md`, `.env.example`, `squeal.config.json` | None, unless suite setup or a spec loads it |

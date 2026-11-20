@@ -265,22 +265,23 @@ function moduleEntry(entries) {
 }
 
 /**
- * What one changed old-source range of a mapped file selects. The innermost recorded functions
- * that enclose it add the specs that ran them, and the boot spec when the shared server's boot ran
- * them. A range in the module's top-level code, or outside every recorded function (an import
- * above the first mapped line, say), adds the boot spec and every spec that ran any function of
- * the file: a top-level value is read by the file's functions.
+ * What one changed old-source range of a mapped file selects; true when it needs the boot spec.
+ * The innermost recorded functions that enclose it add the specs that ran them. A range in code
+ * the shared server's boot ran, in the module's top-level code, or outside every recorded function
+ * (an import above the first mapped line, say) adds the boot spec and every spec that ran any
+ * function of the file: such code sets up what the file's other functions read and serve, such as
+ * the route handlers a factory registers.
  */
 function rangeSpecs(entries, start, end, top, indexes) {
   const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
   const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
   const innermost = enclosing.filter(fn => fn.end - fn.start === width);
-  if (innermost.length === 0 || innermost.includes(top)) {
+  if (innermost.length === 0 || innermost.includes(top) || innermost.some(fn => fn.startup)) {
     for (const fn of entries) for (const index of fn.specs) indexes.add(index);
     return true;
   }
   for (const fn of innermost) for (const index of fn.specs) indexes.add(index);
-  return innermost.some(fn => fn.startup);
+  return false;
 }
 
 /**
@@ -303,7 +304,7 @@ export function functionSpecs(file, map, readers, ranges, partial = false, boot 
   }
   if (booted && !boot) return every('the changed lines run while the server boots, and no spec has complete evidence to show it boots');
   const specs = [...new Set([...[...indexes].map(index => map.specs[index]), ...readers, ...(booted ? [boot] : [])])];
-  return { specs, reason: booted ? 'the specs that ran the changed functions, and the boot spec for code the server runs while it boots'
+  return { specs, reason: booted ? 'the specs that ran a function of the file, and the boot spec, for code the server runs while it boots or top-level code'
     : 'the specs that ran the changed functions', mapped: true };
 }
 
