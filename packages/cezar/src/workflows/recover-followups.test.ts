@@ -1,43 +1,26 @@
-import { testHome } from '../home/test-home.testkit.ts';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager, drainFixtureManagers } from './fixture-no-runner.testkit.ts';
-import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-
-const run = promisify(execFile);
-const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
+import { recoveryOver } from './run-recovery-fakes.testkit.ts';
 
 /** Legacy true/false/absent fields never prevent queue recovery, even without a live session. */
 describe('recover() reads legacy generated-inbox records — hearsay-tools/cezarion#1543', () => {
-  let repoRoot: string;
+  let root: string;
+  let dataDir: string;
   let store: RunStore;
 
-  beforeEach(async () => {
-    repoRoot = mkdtempSync(join(tmpdir(), 'cez-recover-'));
-    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
-    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
-    await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
-    await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
-    writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
-    await run('git', ['add', '-A'], { cwd: repoRoot });
-    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'cez-recover-'));
+    dataDir = join(root, '.ai/cezar');
+    store = RunStore.open(dataDir);
   });
 
-  // Capped at 0 — recover() re-queues, the queue never drains, no agent is spawned.
-  const frozen = () =>
-    new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } });
-
-  afterEach(async () => {
-    await drainFixtureManagers(repoRoot);
-    store.flush();
-    rmSync(repoRoot, { recursive: true, force: true });
+  afterEach(() => {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
   });
 
   const WORKFLOW_DEF = {
@@ -48,7 +31,7 @@ describe('recover() reads legacy generated-inbox records — hearsay-tools/cezar
   };
 
   /** A run left `queued` by a crash. `workflowDef` is persisted by a follow-up updateRun, the
-   *  way startRun does it (run.ts:254) — recover() revives the workflow from it. */
+   *  way startRun does it — recover() revives the workflow from it. */
   const queuedRun = (generateFollowups: boolean | undefined): string => {
     const { id } = store.createRun({
       title: 't',
@@ -57,17 +40,22 @@ describe('recover() reads legacy generated-inbox records — hearsay-tools/cezar
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }],
     });
     store.updateRun(id, { workflowDef: WORKFLOW_DEF, generateFollowups });
+    store.flush();
     return id;
   };
 
-
   it.each([true, false, undefined])('recovers the legacy %s preference', async (preference) => {
     const id = queuedRun(preference);
+    // The restart reads the saved row; recovery hands the queued run to the line unchanged.
+    store.close();
+    store = RunStore.open(dataDir, { keepLive: true });
+    const { recovery, host } = recoveryOver(store);
 
-    await createFixtureManager(store, repoRoot, { home: testHome(), semaphore: frozen() }).recover();
+    await recovery.recover();
 
+    expect(host.reviveQueuedRun).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id }), 'cezar restarted');
+    expect(vi.mocked(host.reviveQueuedRun).mock.calls[0]![0].generateFollowups).toBe(preference);
     expect(store.getRun(id)?.generateFollowups).toBe(preference);
     expect(store.getRun(id)?.status).toBe('queued');
   });
-
 });

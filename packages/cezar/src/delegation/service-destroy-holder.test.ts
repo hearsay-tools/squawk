@@ -8,11 +8,9 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { runWorktreeTeardown } from './worktree-teardown.ts';
-import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
-import { fixture } from './service-engine.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, fakeManager, useHolderFixture } from './service-destroy-holder.testkit.ts';
 
 /** A process in its own group with its cwd in `root`, as a test server or file watcher a worktree
  * started for itself. */
@@ -42,7 +40,7 @@ function useTeardown(...commands: string[]): void {
 const stop = (pid: number) => `kill ${pid}; while kill -0 ${pid} 2>/dev/null; do sleep 0.05; done`;
 
 describe('destroy backoff holder', { timeout: 30_000 }, () => {
-  useDestroyBackoffFixture(fixture);
+  useHolderFixture();
 
   // hearsay-tools/squawk#914, hearsay-tools/squawk#1926: the worktree's own service holds it; the
   // project's teardown stops it before the holder scan, in the worktree.
@@ -94,13 +92,13 @@ describe('destroy backoff holder', { timeout: 30_000 }, () => {
     const termination = vi.spyOn(f.manager, 'awaitRunTermination');
     const explicit = f.service.destroy(f.caller, { workerId });
     await vi.waitFor(() => expect(existsSync(started)).toBe(true), { timeout: 10_000 });
-    const replacementManager = createFixtureManager(f.store, f.root);
+    const replacementManager = fakeManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     try {
       writeFileSync(gate, '');
       await expect(explicit).rejects.toThrow();
       expect(termination).not.toHaveBeenCalled();
-    } finally { detachReplacement(); replacementManager.dispose(); }
+    } finally { detachReplacement(); }
   });
 
   // A destroy runs the teardown only in the worktree it owns: never in another checkout, even through a

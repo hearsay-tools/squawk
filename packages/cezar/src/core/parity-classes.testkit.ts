@@ -217,7 +217,7 @@ export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamily
   [/^core\/skill-resume-.*parity\.test\.ts$/, ['skill-resume']],
   [/^core\/skill-provision-.*parity\.test\.ts$/, ['skill-provision']],
   [/^core\/worktree-setup-parity\.test\.ts$/, ['worktree-setup']],
-  [/^core\/model-refusal-parity\.test\.ts$/, ['model-refusal']],
+  [/^core\/model-refusal-(?:workflow-)?parity\.test\.ts$/, ['model-refusal']],
   [/^core\/runner-shutdown-.*parity\.test\.ts$/, ['runner-shutdown']],
   [/^workflows\/monitoring-turn-[a-z-]+\.test\.ts$/, ['monitoring-turn']],
   [/^core\/ui-parity\.test\.ts$/, ['ui-parity']],
