@@ -92,6 +92,7 @@ const NOT_A_GATE = [
   { glob: 'packages/cezar/scripts/record-mock-wires.mjs', reason: 'records mock wire files by hand' },
   { glob: 'scripts/dev.mjs', reason: 'local development server' },
   { glob: 'scripts/setup-merge-drivers.mjs', reason: 'local git configuration' },
+  { glob: 'scripts/restack-after-squash.mjs', reason: 'restacks a local branch by hand; no workflow or check runs it' },
   { glob: 'scripts/test-parity.mjs', reason: 'local parity runner; CI runs the parity tests through Vitest' },
   { glob: 'vitest.stryker.config.ts', reason: 'Vitest config for mutation runs, which only report' },
   { glob: '.github/{test-durations,cockpit-test-durations}.json', reason: 'shard timings; the sequencers balance shards with them and select no test by them' },
