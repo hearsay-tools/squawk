@@ -23,7 +23,6 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createApp, projectRouteManifest } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import '../core/register-all-runners.testkit.ts';
 registerRunner(claudeRunner);
 
 

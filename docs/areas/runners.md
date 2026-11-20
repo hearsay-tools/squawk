@@ -91,11 +91,18 @@ A per-runner parity file loads only its own adapter. It picks its runner with
 passes the definition to the kit: `describeHarnessParity({ runner: piRunner, part })`,
 `describeWaitParity({ runner: piRunner, ... })`, `subagentCells([piRunner])`. `HARNESS_ADAPTERS`
 (`core/harness-parity-core.testkit.ts`) reads each registered runner's `mock` part, and reading a
-runner that is not registered throws. A test file registers only the runners it drives. A file
-that enumerates runners (`runnersWhere`, `registeredRunners`, `RUNNER_IDS`), reads every runner's
-data, or exercises the server's registry readers (config, health, providers, catalogs) imports
+runner that is not registered throws. A test file registers only the runners it drives
+(`registerRunner(definition)`), and where it would import a plain kit (`harness-parity.testkit`,
+`fixture-cleanup.testkit`, `worker-wait.testkit`, `workflow-parity.testkit`,
+`every-runner.testkit`) it imports the kit's `-core` file and `core/created-runners.testkit.ts`,
+which makes `createRunner` the factory at the same point of the import order, so a
+`vi.spyOn(createRunner)` still reaches it. `createRunner` gives Claude to an id that no runner
+registered, so a test that starts a runner it did not register runs it on Claude without an error:
+register every runner a test starts. A file that enumerates runners (`runnersWhere`,
+`registeredRunners`, `RUNNER_IDS`), or that builds the server, whose readers walk every
+`RUNNER_IDS` id until the runner list reads the registry (`workspace/agent-profiles.ts`), imports
 `core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
-`core/every-runner.testkit.ts` imports it and adds the production factory. The
+`core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
