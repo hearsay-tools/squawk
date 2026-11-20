@@ -39,6 +39,7 @@ describe('shared ACP session over the native mock wire', () => {
     await expect(session.prompt([{ type: 'text', text: 'mock:acp-extended-updates' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
     expect(events).toContainEqual({ type: 'text', text: 'before extensions' });
     expect(events).toContainEqual({ type: 'tool-result', toolCallId: 'extended-tool', result: 'extension survived', isError: false });
+    // oxlint-disable-next-line cez/test-enum-literal -- UI tool status has its own vocabulary.
     expect(ui).toContainEqual(expect.objectContaining({ type: 'item.updated', item: expect.objectContaining({ id: 'extended-tool', toolKind: 'other', status: 'running' }) }));
     // oxlint-disable-next-line cez/test-enum-literal -- ACP plan status has its own vocabulary.
     expect(ui).toContainEqual({ type: 'plan.updated', entries: [{ content: 'Vendor plan', status: 'pending', priority: 'high' }] });
