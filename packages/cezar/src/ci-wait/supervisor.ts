@@ -55,13 +55,16 @@ function runsOutcome(runs: GithubWorkflowRuns): { outcome: 'startup_failure' | '
     ? { outcome: 'startup_failure', diagnostic: `${workflow} ended in startup_failure and created no job, so its checks never appeared. Inspect the workflow file and its trigger.` }
     : { outcome: 'failed', diagnostic: `${workflow} concluded failure on this head.` };
 }
-/** A check record that has a conclusion while its status still reads as running. */
-function staleDiagnostic(checks: GithubCheck[]): string | undefined {
+/**
+ * Check records that have a conclusion while their status still reads as running, within `budget`
+ * UTF-8 bytes, so the diagnostic beside them stays under the result's 4096-byte limit.
+ */
+function staleDiagnostic(checks: GithubCheck[], budget: number): string | undefined {
   const stale = checks.filter(c => c.stale).map(c => clean(c.name, 256));
   if (!stale.length) return undefined;
   let text = 'Stale check records (a conclusion, but a status other than completed): ';
   for (const [index, name] of stale.entries()) {
-    if (Buffer.byteLength(text + name) > 4000) return `${text}; ${stale.length - index} more.`;
+    if (Buffer.byteLength(text + name) > budget) return `${text}; ${stale.length - index} more.`;
     text += (index ? '; ' : '') + name;
   }
   return text + '.';
@@ -235,7 +238,9 @@ export class CiWatcherSupervisor {
     const stopped = () => {
       const cancelled = caller.aborted || this.lifetime.signal.aborted;
       if (cancelled) return observe('cancelled');
-      const diagnostic = [lastQueryError && `${lastQueryError.code}: ${lastQueryError.message}`, staleDiagnostic(rows)].filter(Boolean).join(' ');
+      const queryError = lastQueryError ? `${lastQueryError.code}: ${lastQueryError.message}` : '';
+      // 4000 leaves room for the "N more." tail and the joining space under 4096 bytes.
+      const diagnostic = [queryError, staleDiagnostic(rows, 4000 - Buffer.byteLength(queryError))].filter(Boolean).join(' ');
       return observe('deadline', diagnostic ? { diagnostic } : {});
     };
     // A head the caller pushed may reach GitHub after the registration (hearsay-tools/squawk#3972).

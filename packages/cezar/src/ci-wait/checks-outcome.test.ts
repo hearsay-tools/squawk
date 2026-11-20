@@ -134,6 +134,26 @@ it('a deadline after failed reads names both the last query error and the stale 
     diagnostic: 'command_failed: GitHub query failed. Stale check records (a conclusion, but a status other than completed): verify.'});
 });
 
+it('keeps a deadline with a query error and many stale records within the diagnostic limit', async () => {
+  vi.useFakeTimers();
+  const deadline = new AbortController();
+  vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal);
+  const github = new Github();
+  github.rows = [...Array.from({length: 20}, (_, i) => check(`${'x'.repeat(226)}${String(i).padStart(3, '0')}`, 'pass', {stale: true})), check('e2e', 'pending')];
+  const read = github.observe.bind(github);
+  let failing = false;
+  github.observe = async () => { if (failing) throw new CiGithubError('command_failed', 'GitHub query failed; check connectivity and GitHub availability, then retry.', true); return read(); };
+  const {result} = start(github);
+  await vi.advanceTimersByTimeAsync(1);
+  failing = true;
+  await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+  deadline.abort();
+  const observed = await result;
+  expect(observed.outcome).toBe('deadline');
+  expect(observed.diagnostic).toMatch(/^command_failed: .* Stale check records .* more\.$/);
+  expect(Buffer.byteLength(observed.diagnostic!)).toBeLessThanOrEqual(4096);
+});
+
 it('a pushed head GitHub does not show yet keeps the wait open, then settles on that head', async () => {
   vi.useFakeTimers();
   const github = new Github(); github.heads = [head, head, pushed]; github.rows = [check('build', 'pass')];
