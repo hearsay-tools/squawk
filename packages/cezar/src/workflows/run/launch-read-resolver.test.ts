@@ -19,6 +19,7 @@ import { TrackedWork } from './tracked-work.ts';
 import type { RunModuleContext } from './types.ts';
 import { noRunners } from '../../core/runners-under-test.testkit.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
+import { defineRunner } from '../../core/runner-definition.ts';
 import { codexRunner } from '../../runners/codex/definition.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 
@@ -266,4 +267,18 @@ it('keeps a queued provider retry on the held step\'s runner across a restart', 
   expect(atTaskHead.queuedResumeSession(context, host, { ...retry, agentProfile: 'personal' }, step)).toMatchObject({ backend: 'claude', sameAccount: true, recoveredSessionId: 'claude-session' });
   // Any other queued Continue keeps the run's runner, as before.
   expect(atTaskHead.queuedResumeSession(context, host, { ...retry, autoResumeReason: undefined }, step)).toMatchObject({ backend: 'codex', recoveredSessionId: undefined });
+});
+
+// C1 review B1/B2 (hearsay-tools/squawk#3936): a registered runner that is no built-in keeps its own
+// id and its own facts on Continue. Its facts say the native wire reports the session id, so a
+// shown launch with no `session` event does not resume; Claude's facts would resume it.
+it('resolves a registered custom runner to itself on Continue', () => {
+  registerRunner(defineRunner({ ...codexRunner, id: 'custom-runner' }));
+  store.updateRun(id, { runner: 'custom-runner' });
+  store.updateStep(id, 'first', { backend: 'custom-runner', sessionId: 'custom-session' });
+  store.appendEvent(id, { type: 'step-start', stepId: 'first', name: 'First', kind: STEP_KIND.agent, iteration: 1 });
+  const step = store.getRun(id)!.steps[0]!;
+  expect(atContinue.resumableSessionId(store, id, step)).toBeUndefined();
+  const host = { workerStep: () => undefined, resumableSessionId: () => undefined } as unknown as Parameters<typeof atTaskHead.queuedResumeSession>[1];
+  expect(atTaskHead.queuedResumeSession(context, host, store.getRun(id)!, step)).toMatchObject({ backend: 'custom-runner' });
 });
