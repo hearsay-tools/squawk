@@ -2,12 +2,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import type { AgentSession } from './agent-runner.ts';
-import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
-import { PiRunner } from '../runners/pi/pi-runner.ts';
-import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
-import { describeNativeSkillTriggers } from './runner-skill-trigger.testkit.ts';
-import { piRunner } from '../runners/pi/definition.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
+import { driveSeam, waitFor } from '../../core/harness-parity-core.testkit.ts';
+import { PiRunner } from './pi-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { describeNativeSkillTriggers } from '../../core/runner-skill-trigger.testkit.ts';
+import { piRunner } from './definition.ts';
 
 useRunners(onlyRunner(piRunner, () => new PiRunner()));
 describeNativeSkillTriggers('pi');

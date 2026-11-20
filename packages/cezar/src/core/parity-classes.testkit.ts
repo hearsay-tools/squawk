@@ -192,9 +192,9 @@ export type ParityFamilyName = keyof typeof PARITY_FAMILIES;
 
 /** Parity test files by family; a file may hold several harness groups. */
 export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamilyName[]]> = [
-  [/^core\/runner-skill-trigger-(?:claude|codex|opencode|pi|omp)-parity\.test\.ts$/, ['runner-skill-trigger']],
+  [/^runners\/[a-z]+\/runner-skill-trigger-[a-z]+-parity\.test\.ts$/, ['runner-skill-trigger']],
   [/^core\/runner-skills-parity\.test\.ts$/, ['runner-skills']],
-  [/^workflows\/automation-tools-[a-z]+-parity\.test\.ts$/, ['automation-tools']],
+  [/^runners\/[a-z]+\/automation-tools-[a-z]+-parity\.test\.ts$/, ['automation-tools']],
   [/^core\/harness-(?:[a-z]+-[a-z-]+-)?parity(?:-closure)?\.test\.ts$/, Object.keys(PARITY_FAMILIES).filter(name => name.startsWith('harness:')) as ParityFamilyName[]],
   [/^runners\/[a-z]+\/harness-(?:[a-z]+-[a-z-]+-)?parity\.test\.ts$/, Object.keys(PARITY_FAMILIES).filter(name => name.startsWith('harness:')) as ParityFamilyName[]],
   [/^workflows\/waits-(?:[a-z]+-subagents-)parity\.test\.ts$/, ['waits-subagents']],
