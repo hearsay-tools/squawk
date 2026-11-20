@@ -49,7 +49,7 @@ const args = process.argv.slice(1);
 if (args[1] === 'view') {
  const url = args[2].startsWith('https:') ? args[2] : 'https://' + args[args.indexOf('--repo')+1] + '/pull/' + args[2];
  console.log(JSON.stringify({url, number:Number(url.split('/').pop()), headRefOid:'a'.repeat(40),mergeable:'MERGEABLE',mergeStateStatus:'CLEAN',state:'MERGED',mergedAt:'2026-01-01T00:00:00Z',mergeCommit:{oid:'b'.repeat(40)}}));
-} else if (args[0] === 'api' && args[1] === 'graphql') console.log(JSON.stringify({head:'a'.repeat(40),mergeable:'MERGEABLE',mergeStateStatus:'CLEAN',contexts:[['c',1,'Dry-run checks','CI','COMPLETED','SUCCESS','2026-01-01T00:00:00Z','',false]]}));
+} else if (args[0] === 'api' && args[1] === 'graphql') console.log(JSON.stringify({head:'a'.repeat(40),mergeable:'MERGEABLE',mergeStateStatus:'CLEAN',contexts:[['c',1,'Dry-run checks','CI','COMPLETED','SUCCESS','2026-01-01T00:00:00Z','',false,'pull_request']]}));
 else if (args[0] === 'api') console.log(JSON.stringify({total_count:0,workflow_runs:[]}));
 else if (!args.includes('--watch')) console.log(JSON.stringify([{name:'Dry-run checks',state:'SUCCESS',bucket:'pass',link:''}]));
 `;
@@ -115,13 +115,13 @@ const checksPageSchema = z.object({
   head: z.string().regex(/^[0-9a-f]{40}$/i),
   mergeable: metadataSchema.shape.mergeable,
   mergeStateStatus: metadataSchema.shape.mergeStateStatus,
-  // [type, id, name, workflow, status, conclusion, startedAt, link, required]
-  contexts: z.array(z.tuple([z.enum(['c', 's']), z.number().int().nonnegative(), z.string(), z.string(), z.string(), z.string(), z.string(), z.string(), z.boolean()])),
+  // [type, id, name, workflow, status, conclusion, startedAt, link, required, event]
+  contexts: z.array(z.tuple([z.enum(['c', 's']), z.number().int().nonnegative(), z.string(), z.string(), z.string(), z.string(), z.string(), z.string(), z.boolean(), z.string()])),
 });
 const workflowPagesSchema = z.array(z.object({
   total_count: z.number().int().nonnegative(),
-  // [id, status, head matches, workflow id, conclusion, workflow name]
-  workflow_runs: z.array(z.tuple([z.number().int().positive(), z.string().min(1), z.boolean(), z.number().int().nonnegative(), z.string().nullable(), z.string()])),
+  // [id, status, head matches, workflow id, conclusion, workflow name, event]
+  workflow_runs: z.array(z.tuple([z.number().int().positive(), z.string().min(1), z.boolean(), z.number().int().nonnegative(), z.string().nullable(), z.string(), z.string()])),
 })).min(1);
 function parseJson<T>(text: string, schema: z.ZodType<T>): T {
   try { return schema.parse(JSON.parse(text)); } catch { throw new CiGithubError('malformed_data', 'GitHub returned malformed structured data; update gh and retry.'); }
@@ -139,7 +139,7 @@ function commandError(result: CiCommandResult): CiGithubError {
 export function activeWorkflowRunsArgs(pr: Pick<CiPrIdentity, 'repository' | 'headSha'>): string[] {
   return ['api', '--hostname', 'github.com',
       `repos/${pr.repository}/actions/runs?head_sha=${pr.headSha}&per_page=100`, '--paginate',
-      '--jq', `{total_count, workflow_runs: [.workflow_runs[] | [.id, .status, (.head_sha | if type == "string" and test("^[0-9a-fA-F]{40}$") then ascii_downcase == ${JSON.stringify(pr.headSha.toLowerCase())} else null end), .workflow_id, .conclusion, .name]]} | @json`];
+      '--jq', `{total_count, workflow_runs: [.workflow_runs[] | [.id, .status, (.head_sha | if type == "string" and test("^[0-9a-fA-F]{40}$") then ascii_downcase == ${JSON.stringify(pr.headSha.toLowerCase())} else null end), .workflow_id, .conclusion, .name, .event]]} | @json`];
 }
 
 /** A workflow whose newest run on the head ended without success: no job (`startup_failure`) or `failure`. */
@@ -157,9 +157,13 @@ export function parseWorkflowRuns(text: string): GithubWorkflowRuns {
     throw new CiGithubError('malformed_data', 'GitHub returned an incomplete workflow run list; retry the CI wait.');
   }
   const head = runs.filter(([, , headMatches]) => headMatches);
-  // A rerun keeps its run id and a newer trigger gets a higher one: the highest id is the newest run.
-  const newest = new Map<number, (typeof head)[number]>();
-  for (const run of head) if ((newest.get(run[3])?.[0] ?? 0) < run[0]) newest.set(run[3], run);
+  // A rerun keeps its run id and a newer trigger gets a higher one: the highest id is the newest run
+  // of a workflow for one event. A push run and a pull_request run of one workflow both count.
+  const newest = new Map<string, (typeof head)[number]>();
+  for (const run of head) {
+    const key = JSON.stringify([run[3], run[6]]);
+    if ((newest.get(key)?.[0] ?? 0) < run[0]) newest.set(key, run);
+  }
   const failures = [...newest.values()].flatMap(([id, , , , conclusion, workflow]): GithubRunFailure[] =>
     conclusion === 'startup_failure' || conclusion === 'failure' ? [{ id, workflow, conclusion }] : []);
   return { active: head.some(([, status]) => status !== 'completed'), failures };
@@ -172,12 +176,12 @@ export function parseActiveWorkflowRuns(text: string): boolean {
 const CHECKS_QUERY = `query($owner:String!,$repo:String!,$number:Int!,$sha:GitObjectID!,$endCursor:String){repository(owner:$owner,name:$repo){
 pullRequest(number:$number){headRefOid mergeable mergeStateStatus}
 object(oid:$sha){...on Commit{statusCheckRollup{contexts(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{__typename
-...on CheckRun{databaseId name status conclusion startedAt detailsUrl isRequired(pullRequestNumber:$number) checkSuite{workflowRun{workflow{name}}}}
+...on CheckRun{databaseId name status conclusion startedAt detailsUrl isRequired(pullRequestNumber:$number) checkSuite{workflowRun{event workflow{name}}}}
 ...on StatusContext{context state targetUrl createdAt isRequired(pullRequestNumber:$number)}}}}}}}}`;
 const CHECKS_JQ = '{head: .data.repository.pullRequest.headRefOid, mergeable: .data.repository.pullRequest.mergeable, '
   + 'mergeStateStatus: .data.repository.pullRequest.mergeStateStatus, contexts: [.data.repository.object.statusCheckRollup.contexts.nodes[]? | '
-  + 'if .__typename == "CheckRun" then ["c", (.databaseId // 0), .name, (.checkSuite.workflowRun.workflow.name // ""), .status, (.conclusion // ""), (.startedAt // ""), (.detailsUrl // ""), (.isRequired == true)] '
-  + 'else ["s", 0, .context, "", .state, "", (.createdAt // ""), (.targetUrl // ""), (.isRequired == true)] end]} | @json';
+  + 'if .__typename == "CheckRun" then ["c", (.databaseId // 0), .name, (.checkSuite.workflowRun.workflow.name // ""), .status, (.conclusion // ""), (.startedAt // ""), (.detailsUrl // ""), (.isRequired == true), (.checkSuite.workflowRun.event // "")] '
+  + 'else ["s", 0, .context, "", .state, "", (.createdAt // ""), (.targetUrl // ""), (.isRequired == true), ""] end]} | @json';
 /** The PR's head and mergeability with every check of the watched commit, in one paginated query. */
 export function checksQueryArgs(pr: Pick<CiPrIdentity, 'repository' | 'prNumber' | 'headSha'>): string[] {
   const [owner, repo] = pr.repository.split('/');
@@ -201,11 +205,12 @@ export function parseChecksObservation(text: string): GithubChecksObservation {
   const pages = parseJson('[' + text.trim().split(/\r?\n/).filter(Boolean).join(',') + ']', z.array(checksPageSchema).min(1));
   // Check run ids only grow, so the highest id is the newest run of a name, queued runs included.
   const newest = new Map<string, { row: GithubCheck; id: number }>();
-  for (const [type, id, name, workflow, status, conclusion, startedAt, link, required] of pages.flatMap(page => page.contexts)) {
+  for (const [type, id, name, workflow, status, conclusion, startedAt, link, required, event] of pages.flatMap(page => page.contexts)) {
     const state = type === 'c' && conclusion ? conclusion : status;
     const row: GithubCheck = { name, state, link, bucket: bucketOf(state), workflow, startedAt, required,
       ...(type === 'c' && conclusion && status !== 'COMPLETED' ? { stale: true } : {}) };
-    const key = JSON.stringify([type, workflow, name]);
+    // gh's grouping (pkg/cmd/pr/checks/aggregate.go): a push run and a pull_request run stay apart.
+    const key = JSON.stringify([type, workflow, event, name]);
     if ((newest.get(key)?.id ?? -1) < id) newest.set(key, { row, id });
   }
   const { head, mergeable, mergeStateStatus } = pages[0]!;

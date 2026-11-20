@@ -39,7 +39,7 @@ it('queries the captured head with bounded paginated structured output',async()=
  const dir=await mkdtemp(join(tmpdir(),'ci-runs-'));dirs.push(dir);const log=join(dir,'calls');
  await client([{total_count:0,workflow_runs:[]}],{CI_FIXTURE_LOG:log}).workflowRuns(identity,signal());
  const {args}=JSON.parse((await readFile(log,'utf8')).trim()) as {args:string[]};
- expect(args).toEqual(['api','--hostname','github.com','repos/org/repo/actions/runs?head_sha='+identity.headSha+'&per_page=100','--paginate','--jq','{total_count, workflow_runs: [.workflow_runs[] | [.id, .status, (.head_sha | if type == "string" and test("^[0-9a-fA-F]{40}$") then ascii_downcase == '+JSON.stringify(identity.headSha)+' else null end), .workflow_id, .conclusion, .name]]} | @json']);
+ expect(args).toEqual(['api','--hostname','github.com','repos/org/repo/actions/runs?head_sha='+identity.headSha+'&per_page=100','--paginate','--jq','{total_count, workflow_runs: [.workflow_runs[] | [.id, .status, (.head_sha | if type == "string" and test("^[0-9a-fA-F]{40}$") then ascii_downcase == '+JSON.stringify(identity.headSha)+' else null end), .workflow_id, .conclusion, .name, .event]]} | @json']);
 });
 it('supports workflow queries in the bundled dry-run command',async()=>{
  expect(await new GithubCiClient({env:{...process.env,CEZ_DRY_RUN:'1'}}).workflowRuns(identity,signal())).toMatchObject({active:false});
@@ -63,7 +63,11 @@ it('observes a complete 1000-run Actions history within the existing output cap'
  expect(await client(pages).workflowRuns(identity,signal())).toMatchObject({active:true});
 });
 
-const failed = (id: number, workflow_id: number, conclusion: string | null, name = 'CI') => ({...run(id),workflow_id,conclusion,name});
+const failed = (id: number, workflow_id: number, conclusion: string | null, name = 'CI', event = 'pull_request') => ({...run(id),workflow_id,conclusion,name,event});
+it('judges a push run and a pull_request run of one workflow apart',async()=>{
+ const pages=[{total_count:2,workflow_runs:[failed(10,7,'failure','CI','push'),failed(20,7,'success')]}];
+ expect(await client(pages).workflowRuns(identity,signal())).toEqual({active:false,failures:[{id:10,workflow:'CI',conclusion:'failure'}]});
+});
 it('reports each workflow whose newest run on the head created no job or failed',async()=>{
  const pages=[{total_count:4,workflow_runs:[failed(1,7,'startup_failure'),failed(2,8,'failure','Lint'),failed(3,9,'cancelled','Review signal'),failed(4,10,'success','Docs')]}];
  expect(await client(pages).workflowRuns(identity,signal())).toEqual({active:false,failures:[{id:1,workflow:'CI',conclusion:'startup_failure'},{id:2,workflow:'Lint',conclusion:'failure'}]});

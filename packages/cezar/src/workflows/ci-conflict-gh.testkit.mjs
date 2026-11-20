@@ -12,7 +12,7 @@ if (args[1] === 'view') {
   // The checks query answers only once the test opens the gate.
   while (!existsSync(gate)) await setTimeout(5);
   console.log(JSON.stringify({ head: 'a'.repeat(40), mergeable: mergeable(), mergeStateStatus: mergeStateStatus(),
-    contexts: [['c', 1, 'build', 'CI', 'COMPLETED', 'SUCCESS', '', '', false]] }));
+    contexts: [['c', 1, 'build', 'CI', 'COMPLETED', 'SUCCESS', '', '', false, 'pull_request']] }));
 } else if (args[0] === 'api') {
   console.log(JSON.stringify({ total_count: 0, workflow_runs: [] }));
 }

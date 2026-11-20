@@ -1,6 +1,6 @@
 // Wire fixture: gh pr view --json url,number,headRefOid,mergeable,mergeStateStatus, gh pr checks --watch,
 // the Actions runs query and the checks GraphQL query, each answered as its --jq program prints it.
-// CI_FIXTURE_CHECKS (JSON) replaces the scripted check tuples: [type,id,name,workflow,status,conclusion,startedAt,link,required].
+// CI_FIXTURE_CHECKS (JSON) replaces the scripted check tuples: [type,id,name,workflow,status,conclusion,startedAt,link,required,event].
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { ignoreTermUntilOwnerExits } from '../../stubborn-child.testkit.ts';
 const args = process.argv.slice(2);
@@ -17,13 +17,13 @@ if (mode === 'malformed') { console.log('{bad'); process.exit(0); }
 const mergeable = conflicting || phase === 'conflicting' ? 'CONFLICTING' : 'MERGEABLE';
 if (args[0] === 'api' && args[1] === 'graphql') {
  if (process.env.CI_FIXTURE_API_ERROR) { console.error(process.env.CI_FIXTURE_API_ERROR); process.exit(1); }
- const tuple = (row, index) => { const done = row.bucket !== 'pending'; return ['c', index + 1, row.name, 'CI', done ? 'COMPLETED' : row.state === 'QUEUED' ? 'QUEUED' : 'IN_PROGRESS', done ? row.state : '', '', row.link, false]; };
+ const tuple = (row, index) => { const done = row.bucket !== 'pending'; return ['c', index + 1, row.name, 'CI', done ? 'COMPLETED' : row.state === 'QUEUED' ? 'QUEUED' : 'IN_PROGRESS', done ? row.state : '', '', row.link, false, 'pull_request']; };
  const contexts = process.env.CI_FIXTURE_CHECKS ? JSON.parse(process.env.CI_FIXTURE_CHECKS) : checkRows().map(tuple);
  console.log(JSON.stringify({head: phase === 'head_changed' ? 'b'.repeat(40) : head, mergeable, mergeStateStatus: mergeable === 'CONFLICTING' ? 'DIRTY' : 'CLEAN', contexts}));
 } else if (args[0] === 'api') {
  if (process.env.CI_FIXTURE_API_ERROR) { console.error(process.env.CI_FIXTURE_API_ERROR); process.exit(1); }
  const pages = rerun ? [{total_count:1,workflow_runs:[{id:1,head_sha:head,status:rerun==='complete'?'completed':rerun==='hidden'?'queued':'in_progress'}]}] : JSON.parse(process.env.CI_FIXTURE_RUN_PAGES || '[{"total_count":0,"workflow_runs":[]}]');
- for (const page of pages) console.log(JSON.stringify({...page,workflow_runs:page.workflow_runs?.map(run=>[run.id,run.status,typeof run.head_sha==='string' && /^[0-9a-f]{40}$/i.test(run.head_sha) ? run.head_sha.toLowerCase()===head : null,run.workflow_id ?? run.id,run.conclusion ?? null,run.name ?? 'CI'])}));
+ for (const page of pages) console.log(JSON.stringify({...page,workflow_runs:page.workflow_runs?.map(run=>[run.id,run.status,typeof run.head_sha==='string' && /^[0-9a-f]{40}$/i.test(run.head_sha) ? run.head_sha.toLowerCase()===head : null,run.workflow_id ?? run.id,run.conclusion ?? null,run.name ?? 'CI',run.event ?? 'pull_request'])}));
 } else if (args[1] === 'view') {
  console.log(JSON.stringify({url:'https://github.com/org/repo/pull/12',number:12,headRefOid: phase === 'head_changed' ? 'b'.repeat(40) : head, mergeable, mergeStateStatus: mergeable === 'CONFLICTING' ? 'DIRTY' : 'CLEAN'}));
 } else if (args.includes('--watch')) {

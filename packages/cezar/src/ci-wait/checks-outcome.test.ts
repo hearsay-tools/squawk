@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { CiPrIdentity, CiWait } from '@open-mercato/cezar-contract';
-import { GithubCiClient, type GithubCheck, type GithubChecksObservation, type GithubWorkflowRuns } from './github.ts';
+import { CiGithubError, GithubCiClient, type GithubCheck, type GithubChecksObservation, type GithubWorkflowRuns } from './github.ts';
 import { CI_DISCOVERY_MS, CI_PROBE_MS, CiWatcherSupervisor } from './supervisor.ts';
 
 /**
@@ -115,6 +115,23 @@ it('a deadline observation names each stale check record', async () => {
   deadline.abort();
   expect(await result).toMatchObject({outcome: 'deadline',
     diagnostic: 'Stale check records (a conclusion, but a status other than completed): Verify exact queue CI evidence.'});
+});
+
+it('a deadline after failed reads names both the last query error and the stale records', async () => {
+  vi.useFakeTimers();
+  const deadline = new AbortController();
+  vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal);
+  const github = new Github(); github.rows = [check('verify', 'pass', {stale: true}), check('e2e', 'pending')];
+  const read = github.observe.bind(github);
+  let failing = false;
+  github.observe = async () => { if (failing) throw new CiGithubError('command_failed', 'GitHub query failed.', true); return read(); };
+  const {result} = start(github);
+  await vi.advanceTimersByTimeAsync(1);
+  failing = true;
+  await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+  deadline.abort();
+  expect(await result).toMatchObject({outcome: 'deadline',
+    diagnostic: 'command_failed: GitHub query failed. Stale check records (a conclusion, but a status other than completed): verify.'});
 });
 
 it('a pushed head GitHub does not show yet keeps the wait open, then settles on that head', async () => {

@@ -235,7 +235,7 @@ export class CiWatcherSupervisor {
     const stopped = () => {
       const cancelled = caller.aborted || this.lifetime.signal.aborted;
       if (cancelled) return observe('cancelled');
-      const diagnostic = lastQueryError ? `${lastQueryError.code}: ${lastQueryError.message}` : staleDiagnostic(rows);
+      const diagnostic = [lastQueryError && `${lastQueryError.code}: ${lastQueryError.message}`, staleDiagnostic(rows)].filter(Boolean).join(' ');
       return observe('deadline', diagnostic ? { diagnostic } : {});
     };
     // A head the caller pushed may reach GitHub after the registration (hearsay-tools/squawk#3972).
