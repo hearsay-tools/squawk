@@ -1,6 +1,9 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { OWNER_POLICIES } from './owner-policies.ts';
 import { fragment, inside, key, member, objectProperty, ownerRule, unwrap, unwrapAccess, walk } from './owner-rule.ts';
+import { repoRoot } from './source-rule.ts';
 
 const equality = /^(===|!==|==|!=)$/;
 const literalString = (node: EsNode | undefined) => node?.type === 'Literal' ? stringOf(node) : undefined;
@@ -44,10 +47,19 @@ export const runSearchFields = ownerRule(OWNER_POLICIES['run-search-field-list-o
   },
 }));
 
-export const RUNNER_CLASSES = ['ClaudeCliRunner', 'CodexAppServerRunner', 'OmpRunner', 'OpencodeServerRunner', 'PiRunner'];
 export function concreteRunnerModule(specifier: string): boolean {
   return /(^|\/)(?:core|runners\/[a-z0-9-]+)\/[a-z0-9-]+-runner(\.ts|\.js)?$/.test(specifier) && !/\/agent-runner(\.ts|\.js)?$/.test(specifier);
 }
+/** The classes that implement `AgentRunner` in the runner modules of the runner folders
+ *  (`runners/<id>/<name>-runner.ts`), so a new runner folder needs no edit here. */
+function runnerFolderClasses(): string[] {
+  const runners = join(repoRoot, 'packages/cezar/src/runners');
+  return readdirSync(runners, { withFileTypes: true }).filter(entry => entry.isDirectory())
+    .flatMap(folder => readdirSync(join(runners, folder.name)).filter(file => concreteRunnerModule(`runners/${folder.name}/${file}`))
+      .flatMap(file => [...readFileSync(join(runners, folder.name, file), 'utf8').matchAll(/\bclass\s+(\w+)\s+implements\s+AgentRunner\b/g)])
+      .map(match => match[1]!));
+}
+export const RUNNER_CLASSES: readonly string[] = runnerFolderClasses();
 const runnerSource = (node: EsNode | undefined) => concreteRunnerModule(literalString(node) ?? '');
 function allowedImportType(node: EsNode): boolean {
   return inside(node, at => at.type === 'TSTypeAliasDeclaration' || at.type === 'TSTypeAnnotation');
