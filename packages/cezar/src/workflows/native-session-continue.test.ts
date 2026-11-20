@@ -14,6 +14,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
 import type { SessionWire, WireRow } from './native-session-wire.testkit.ts';
+import { runnerDataRows } from '../core/runner-data-rows.testkit.ts';
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -37,17 +38,14 @@ function rows(wire: string): WireRow[] {
   });
 }
 
-// `import.meta.glob`: typed in core/runner-mock-rows.testkit.ts.
-const SESSION_WIRES = import.meta.glob<Readonly<Record<string, SessionWire>>>('../runners/*/session-wire.testkit.ts', { eager: true });
+/** How each runner's mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). */
+const SESSION_WIRES = await runnerDataRows<SessionWire>('session-wire.testkit.ts', id => import(`../runners/${id}/session-wire.testkit.ts`)
+  .catch((error: unknown) => {
+    throw new Error(`Runner ${id} has no runners/${id}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`, { cause: error });
+  }));
 
-/** How `backend`'s mock wire shows a session (`runners/<id>/session-wire.testkit.ts`). */
 function wireOf(backend: string): SessionWire {
-  const path = `../runners/${backend}/session-wire.testkit.ts`;
-  const module = SESSION_WIRES[path];
-  if (!module) throw new Error(`Runner ${backend} has no runners/${backend}/session-wire.testkit.ts: add one that reads how its mock records a session, a turn and its effort.`);
-  const values = Object.values(module);
-  if (values.length !== 1) throw new Error(`runners/${backend}/session-wire.testkit.ts must export one value; it exports ${values.length}.`);
-  return values[0]!;
+  return SESSION_WIRES[backend]!;
 }
 
 /**
