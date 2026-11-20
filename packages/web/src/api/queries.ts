@@ -309,30 +309,27 @@ export function invalidateRunnerModels(
  * cannot be called conditionally) skip the fetch when it definitely won't.
  */
 export function useRunnerModels(runner: Runner, enabled = true) {
-  return useQuery({
-    queryKey: workspaceQueryKeys.models(runner),
-    queryFn: ({ signal }) => getRunnerModels(runner, { signal }),
-    staleTime: 5 * 60 * 1_000,
-    enabled,
-  })
+  return useQuery({ ...runnerModelsQuery(runner), enabled })
 }
 
+const runnerModelsQuery = (runner: string) => ({
+  queryKey: workspaceQueryKeys.models(runner),
+  queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels(runner, { signal }),
+  staleTime: 5 * 60 * 1_000,
+})
+
 /**
- * Every runner's catalog at once, keyed by runner — for the screens that render a row PER runner
- * (the Settings default-model selects) rather than one for the runner the user picked.
- *
- * One `useRunnerModels` call per runner in a fixed order, so the hook count never varies and
- * each catalog keeps its own cache entry, `enabled` state and error state.
+ * Every listed runner's catalog at once, keyed by runner — for the screens that render a row PER
+ * runner (the Settings default-model selects) rather than one for the runner the user picked.
+ * One query per runner with its own cache entry, `enabled` state and error state; none until the
+ * runners list answers.
  */
 export function useRunnerModelCatalogs(
+  runners: readonly string[],
   enabled = true,
-): Record<Runner, ReturnType<typeof useRunnerModels>> {
-  const claude = useRunnerModels('claude', enabled)
-  const codex = useRunnerModels('codex', enabled)
-  const opencode = useRunnerModels('opencode', enabled)
-  const pi = useRunnerModels('pi', enabled)
-  const omp = useRunnerModels('omp', enabled)
-  return { claude, codex, opencode, pi, omp }
+): Record<string, ReturnType<typeof useRunnerModels>> {
+  const results = useQueries({ queries: runners.map((runner) => ({ ...runnerModelsQuery(runner), enabled })) })
+  return Object.fromEntries(runners.map((runner, index) => [runner, results[index] as (typeof results)[number]]))
 }
 
 export function useProviderStatus() {

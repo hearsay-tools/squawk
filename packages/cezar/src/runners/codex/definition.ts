@@ -2,7 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_MODELS } from './models.ts';
-import { CODEX_CONFIG_FILES } from './config-files.ts';
+import { CODEX_AGENT_CONFIG, CODEX_CONFIG_FILES } from './config-files.ts';
 import { CODEX_EXTRA_TOOLS } from './extra-tools.ts';
 import { CODEX_SPEC_SUPPORT } from './spec-support.ts';
 import { CODEX_DETECTION } from './detection.ts';
@@ -27,7 +27,7 @@ export const codexRunner = defineRunner({
   },
   loadModelCatalog: async () => (await import('./codex-model-catalog.ts')).discoverCodexModels,
   loadSkillCatalog: async () => (await import('./codex-skill-catalog.ts')).discoverCodexSkills,
-  configFiles: CODEX_CONFIG_FILES,
+  configFiles: { files: CODEX_CONFIG_FILES, agentConfig: CODEX_AGENT_CONFIG },
   extraTools: CODEX_EXTRA_TOOLS,
   login: { ...CODEX_LOGIN, executable: () => productEnv('CODEX_BIN') ?? 'codex' },
   accounts: CODEX_ACCOUNTS,

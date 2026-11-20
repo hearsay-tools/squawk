@@ -12,7 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { RUNNERS } from '@/routes/new-task-form'
+import { runnerEntries, useRunners } from '@/api/runners'
 
 /**
  * The composer's single-choice pill, factored out of new-task.tsx (#401) so the follow-up
@@ -450,11 +450,12 @@ export function RunnerPill({
   /** What the repo's setting resolves to per runner — the row that is selected until overridden. */
   repoAccount?: Partial<Record<Runner, string>> | undefined
 }) {
-  const available = RUNNERS.filter((r) => runners.includes(r.id))
+  const registered = useRunners().data
+  const available = runnerEntries(registered).filter((r) => runners.includes(r.id))
   const options = available.flatMap((runner) => {
     const logins = accounts.filter((entry) => entry.provider === runner.id)
     // One login is not a choice, so it does not become a row of its own — the agent is the row.
-    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.desc }]
+    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.pickerDescription }]
     return logins.map((login) => ({
       value: choiceValue(runner.id, login.id),
       label: `${runner.id} · ${login.label}`,

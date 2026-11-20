@@ -33,9 +33,14 @@ export function useRunners() {
   return useQuery(runnersQuery)
 }
 
+/** The registered runners, in display order. Empty until the runners query answers. */
+export function runnerEntries(runners: RunnersResponse | undefined): RunnerEntry[] {
+  return runners?.runners ?? []
+}
+
 /** The registered runners' ids, in display order. Empty until the runners query answers. */
 export function runnerIds(runners: RunnersResponse | undefined): string[] {
-  return runners?.runners.map((entry) => entry.id) ?? []
+  return runnerEntries(runners).map((entry) => entry.id)
 }
 
 /** The registered runner `id`, or undefined when no registered runner has that id. */
@@ -47,6 +52,11 @@ export function runnerEntry(runners: RunnersResponse | undefined, id: string): R
  *  runners list does not name it. */
 export function runnerDisplayName(runners: RunnersResponse | undefined, id: string): string {
   return runnerEntry(runners, id)?.displayName ?? id
+}
+
+/** The runner's name in the runner picker; the id itself when the runners list does not name it. */
+export function runnerPickerLabel(runners: RunnersResponse | undefined, id: string): string {
+  return runnerEntry(runners, id)?.pickerLabel ?? id
 }
 
 /** The runner's name in model discovery messages, or undefined when the runners list does not

@@ -2,7 +2,7 @@
 
 [AGENTS.md § Task routing](../../AGENTS.md#task-routing) points here. Read this page before you change or review this area.
 
-The settings page groups files by agent, with MCP as a per-agent subsection (spec 2026-07-17-agent-config-by-agent). Its descriptor table is `packages/web/src/routes/settings/agent-descriptors.ts`.
+The settings page groups files by agent, with MCP as a per-agent subsection (spec 2026-07-17-agent-config-by-agent). Each runner's pane (label, notes, groups) is the `agentConfig` of its definition's `configFiles` part, which `GET /api/v1/runners` sends; `packages/web/src/routes/settings/agent-descriptors.ts` adds each group's file filter.
 
 ## Read first
 

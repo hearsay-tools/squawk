@@ -2,7 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_MODELS } from './models.ts';
-import { OPENCODE_CONFIG_FILES } from './config-files.ts';
+import { OPENCODE_AGENT_CONFIG, OPENCODE_CONFIG_FILES } from './config-files.ts';
 import { OPENCODE_EXTRA_TOOLS } from './extra-tools.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 import { OPENCODE_DETECTION } from './detection.ts';
@@ -27,7 +27,7 @@ export const opencodeRunner = defineRunner({
   },
   loadModelCatalog: async () => (await import('./opencode-model-catalog.ts')).discoverOpencodeModels,
   loadSkillCatalog: async () => (await import('./opencode-skill-catalog.ts')).discoverOpencodeSkills,
-  configFiles: OPENCODE_CONFIG_FILES,
+  configFiles: { files: OPENCODE_CONFIG_FILES, agentConfig: OPENCODE_AGENT_CONFIG },
   extraTools: OPENCODE_EXTRA_TOOLS,
   login: { ...OPENCODE_LOGIN, executable: () => productEnv('OPENCODE_BIN') ?? 'opencode' },
   accounts: OPENCODE_ACCOUNTS,

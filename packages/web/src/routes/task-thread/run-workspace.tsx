@@ -101,7 +101,8 @@ function useOpenInChoices(run: ApiRun, canResume: boolean) {
     ? (targets.data?.targets ?? [])
         .filter((target) => {
           const runner = cliTargetRunner(target.id)
-          return runner === undefined || agentAvailable(runner)
+          // An agent CLI target waits for the runners list, which names the runners at all.
+          return runner === undefined || (registered.isSuccess && agentAvailable(runner))
         })
         // Agent-CLI targets (#402): the one matching this run's own runner resumes THIS run's
         // session when one exists — label that explicitly so it reads as different from just
@@ -128,6 +129,7 @@ export function useHasOpenInTargets(run: ApiRun, canResume: boolean): boolean {
  *  when the session cannot be resumed and the machine offers no targets (hosted mode). */
 export function OpenInTargets({ run, canResume, onResume }: { run: ApiRun; canResume: boolean; onResume: () => void }) {
   const { canResumeHere, choices, open } = useOpenInChoices(run, canResume)
+  const registered = useRunners().data
   const hint = resumeHint(run)
   if (!canResumeHere && choices.length === 0 && !hint) return null
   const copyPath = () => {
@@ -144,7 +146,7 @@ export function OpenInTargets({ run, canResume, onResume }: { run: ApiRun; canRe
         <div className="task-open-targets flex flex-wrap gap-3">
           {canResumeHere ? <Button variant="outline" data-target="terminal-resume" onClick={onResume}><SquareTerminalIcon />Terminal (resume session)</Button> : null}
           {choices.map(({ target, suffix, title }) => {
-            const Icon = openInIcon(target)
+            const Icon = openInIcon(target, registered)
             return <Button variant="outline" key={target.id} data-target={target.id} title={title} disabled={open.isPending} onClick={() => open.mutate(target.id)}><Icon aria-hidden="true" />{target.label}{suffix ?? ''}</Button>
           })}
           {run.worktreePath ? <Button variant="outline" onClick={copyPath}><CopyIcon />Copy worktree path</Button> : null}

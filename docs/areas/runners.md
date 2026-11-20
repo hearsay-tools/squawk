@@ -35,7 +35,14 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
   native mock script and scenario prompts in `runners/<id>/mock.ts` (the `mock` part), its
   definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its display
-  facts in `runners/<id>/display.ts`, which `GET /api/v1/runners` sends. When it adds a value
+  facts in `runners/<id>/display.ts`, which `GET /api/v1/runners` sends with the `models.suggested`
+  and `models.retired` ids and the `agentConfig` pane of its `configFiles` part. The cockpit holds
+  no table keyed by runner id: the runner picker's label and line, the model presets, the install
+  hint, the login command, the account folder example, the icon key and the Agent config pane are
+  all in the definition (hearsay-tools/squawk#3898). `display.icon` is a key of the cockpit's icon
+  set (`OPEN_IN_ICONS` in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the
+  generic runner icon is `bot`. A runner's `login.installHint` (the server's message) and
+  `display.installHint` (the accounts pane) are different strings. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 

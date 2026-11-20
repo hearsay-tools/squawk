@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import type { ConfigFileDef } from '../../core/runner-config-files.ts';
+import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
 import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
 
 const PI_SETTINGS_DOCS = 'https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md';
@@ -63,3 +65,19 @@ export const PI_CONFIG_FILES: readonly ConfigFileDef[] = [
   // <repo>/AGENTS.md, shared with Codex, OpenCode, Pi and OMP: the catalog lists it once.
   PROJECT_AGENTS_FILE,
 ];
+
+/** The Pi tab of Settings → Agent config (the `agentConfig` of its `configFiles` part). Data only. */
+export const PI_AGENT_CONFIG: RunnerAgentConfig = {
+  label: 'Pi',
+  note: EDITOR_PLUS_COMMIT_NOTE,
+  groups: [
+    { id: 'settings', label: 'Settings' },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      note: 'Pi ships no MCP client, so it has no MCP file to edit.',
+      empty: 'Nothing to list: Pi’s README says "No MCP." Give Pi tools as CLI programs with a README (Pi skills), or install a Pi extension that adds MCP support and configure servers there.',
+    },
+    { id: 'memory', label: 'Memory & instructions' },
+  ],
+};

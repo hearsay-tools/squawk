@@ -2,11 +2,19 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { RUNNER_IDS } from '@/test/runners.testkit'
+import { RUNNER_IDS, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 import type { AgentConfigFile } from '@open-mercato/cezar-api-client'
-import { AGENT_DESCRIPTORS, descriptorFor } from './agent-descriptors'
+import { agentDescriptors } from './agent-descriptors'
 
-/** The descriptor table driving Settings → Agent config (spec 2026-07-17-agent-config-by-agent). */
+/** The panes driving Settings → Agent config (spec 2026-07-17-agent-config-by-agent), built from the
+ *  runners list's `agentConfig` (hearsay-tools/squawk#3898). */
+
+const AGENT_DESCRIPTORS = agentDescriptors(RUNNERS_RESPONSE)
+function descriptorFor(id: string) {
+  const found = AGENT_DESCRIPTORS.find((descriptor) => descriptor.id === id)
+  if (!found) throw new Error(`no agent descriptor for ${id}`)
+  return found
+}
 
 function fileOf(over: Partial<AgentConfigFile> & Pick<AgentConfigFile, 'id'>): AgentConfigFile {
   return {
@@ -29,11 +37,15 @@ function fileOf(over: Partial<AgentConfigFile> & Pick<AgentConfigFile, 'id'>): A
   }
 }
 
-describe('AGENT_DESCRIPTORS', () => {
+describe('agentDescriptors', () => {
+  it('is empty until the runners list answers', () => {
+    expect(agentDescriptors(undefined)).toEqual([])
+  })
+
   // The guard #322 asked for: a runner shipped without a Settings → Agent config pane fails here,
   // the way a runner without a catalog adapter fails #321's. `RUNNER_IDS` is the fixture of the
   // server's `GET /api/v1/runners` answer.
-  it('has exactly one entry per runner id, in runner order — a new runner must ship a descriptor', () => {
+  it('has exactly one entry per runner id, in runner order — a new runner must ship a pane', () => {
     expect(AGENT_DESCRIPTORS.map((d) => d.id)).toEqual(RUNNER_IDS)
   })
 

@@ -1,5 +1,5 @@
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
-import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import type { RunnerModelPreset, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import type {
   BackendCheck,
   CreateRunInput,
@@ -10,11 +10,11 @@ import type {
   UiState,
   WorkflowDef,
 } from '@open-mercato/cezar-api-client'
-import { runnerModelIdScope, runnerModelListName } from '@/api/runners'
+import { runnerEntry, runnerIds, runnerModelListName } from '@/api/runners'
 
 /**
  * The new-task form's picker rules and its POST body, as pure functions — the exact semantics
- * of the legacy form (web/app.js: `RUNNERS`, `MODELS_BY_RUNNER`, `renderChrome`,
+ * of the legacy form (web/app.js: `renderChrome`,
  * `defaultTaskSource`, the submit handler), kept apart from the component so every rule is
  * table-testable and so drift from legacy is a diff in ONE file, not a scavenger hunt.
  */
@@ -44,51 +44,14 @@ export function pushRecentSource(
   return [source, ...rest].slice(0, cap)
 }
 
-export interface RunnerOption {
-  id: Runner
-  label: string
-  desc: string
-}
+/** One model the picker suggests: the shape of `models.suggested` in `GET /api/v1/runners`. */
+export type ModelPreset = RunnerModelPreset
 
-/** The agent-backend catalog (legacy `RUNNERS`). Installation-only compatibility surfaces use
- *  `availableRunners`; the new-task composer filters this catalog by connected provider status. */
-export const RUNNERS: readonly RunnerOption[] = [
-  { id: 'claude', label: 'claude', desc: 'Claude Code CLI' },
-  { id: 'codex', label: 'codex', desc: 'OpenAI Codex (app-server)' },
-  { id: 'opencode', label: 'opencode', desc: 'OpenCode (serve)' },
-  { id: 'pi', label: 'pi', desc: 'pi CLI (provider/model)' },
-  { id: 'omp', label: 'OMP', desc: 'Oh My Pi CLI (provider/model)' },
-]
-
-export interface ModelPreset {
-  id: string
-  label: string
-  desc: string
-}
-
-/** Fallback suggestions when host discovery is unavailable. Auto omits the model flag;
- * Claude tier aliases are resolved by the CLI. Explicit pins are appended separately. */
-export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
-  claude: [
-    { id: '', label: 'auto', desc: 'Pick the best model per step' },
-    { id: 'opus', label: 'opus', desc: 'Deep reasoning for hard tasks' },
-    { id: 'sonnet', label: 'sonnet', desc: 'Fast and cheap' },
-    { id: 'haiku', label: 'haiku', desc: 'Fastest — simple, scoped tasks' },
-  ],
-  codex: [
-    { id: '', label: 'auto', desc: 'Use your Codex default model' },
-  ],
-  opencode: [
-    { id: '', label: 'auto', desc: 'Use your OpenCode default model' },
-  ],
-  // pi selects a model with the same `provider/model` convention as opencode, and its
-  // entries come from discovery (`pi --list-models`) for the same reason OpenCode's do.
-  pi: [
-    { id: '', label: 'auto', desc: 'Use your pi default model' },
-  ],
-  omp: [
-    { id: '', label: 'auto', desc: 'Use your OMP default model' },
-  ],
+/** A runner's fallback model suggestions, when host discovery is unavailable. Auto omits the model
+ *  flag; Claude tier aliases are resolved by the CLI. Explicit pins are appended separately. The
+ *  runner's own `models.suggested` from the runners list; none until that list names it. */
+function suggestedModels(runners: RunnersResponse | undefined, runner: string): readonly ModelPreset[] | undefined {
+  return runnerEntry(runners, runner)?.models.suggested
 }
 
 /** Shared effort catalog (#45). `value: ''` is auto — omitted on the wire, harness default.
@@ -134,12 +97,6 @@ export function resolveEffort(
   return options.some((option) => option.value === value) ? value : ''
 }
 
-/** Retired dated model suggestions, by the runner that served them. They are no presets any
- *  more, but another runner still refuses them as known foreign ids. */
-const RETIRED_MODEL_IDS: Readonly<Record<Runner, readonly string[]>> = {
-  claude: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
-}
-
 /** Keep recognized presets from another backend out of a runner's custom-model escape hatch
  * (#480).
  * Unknown ids remain valid custom models; only a known cross-runner mismatch is discarded.
@@ -154,14 +111,13 @@ export function modelConflictsWithRunner(
   runner: Runner,
   runners: RunnersResponse | undefined,
 ): boolean {
-  if (!model || MODELS_BY_RUNNER[runner]?.some((preset) => preset.id === model)) return false
-  const foreign = (other: string) => other !== runner
-  if (Object.entries(RETIRED_MODEL_IDS).some(([other, ids]) => foreign(other) && ids.includes(model))) return true
-  return Object.entries(MODELS_BY_RUNNER).some(
-    ([other, presets]) =>
-      foreign(other) &&
-      runnerModelIdScope(runners, other) !== 'provider-spanning' &&
-      presets.some((preset) => preset.id !== '' && preset.id === model),
+  if (!model || suggestedModels(runners, runner)?.some((preset) => preset.id === model)) return false
+  const others = (runners?.runners ?? []).filter((other) => other.id !== runner)
+  if (others.some((other) => other.models.retired.includes(model))) return true
+  return others.some(
+    (other) =>
+      other.modelIdScope !== 'provider-spanning' &&
+      other.models.suggested.some((preset) => preset.id !== '' && preset.id === model),
   )
 }
 
@@ -172,7 +128,7 @@ export function modelsForRunner(
   customIds: readonly (string | null | undefined)[] = [],
 ): readonly ModelPreset[] {
   const discovered = catalog?.runner === runner ? catalog.models : []
-  const presets = MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude ?? []
+  const presets = suggestedModels(runners, runner) ?? suggestedModels(runners, 'claude') ?? []
   const base = [...(discovered.length ? presets.slice(0, 1) : presets)]
   const seen = new Set(base.map((model) => model.id))
   for (const model of discovered) {
@@ -219,8 +175,8 @@ export function catalogQueryStatus(
 /** Which runners the pill offers, from the health checks (legacy `renderChrome`). The `claude`
  *  fallback when nothing is detected is deliberate legacy behavior: the form must always have
  *  a runner, and claude is the default engine. */
-export function availableRunners(checks: readonly BackendCheck[]): Runner[] {
-  const available = RUNNERS.map((r) => r.id).filter((id) =>
+export function availableRunners(checks: readonly BackendCheck[], runners: RunnersResponse | undefined): Runner[] {
+  const available = runnerIds(runners).filter((id) =>
     checks.some((c) => c.name === id && c.available),
   )
   return available.length > 0 ? available : ['claude']

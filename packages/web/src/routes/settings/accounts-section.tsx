@@ -24,7 +24,7 @@ import {
   type AgentProfilesResponse,
 } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
-import { runnerDisplayName, useRunners } from '@/api/runners'
+import { runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
 import type {
   BackendCheck,
   ProviderId,
@@ -48,7 +48,7 @@ import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { agentPickerRows } from '@/components/default-agent-picker'
-import { catalogQueryStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -77,15 +77,6 @@ import { SettingsAgentPicker } from './settings-agent-picker'
  * 3. **Remove only ever DEREGISTERS.** No directory is touched, no session deleted. The confirm
  *    says so out loud, because "Remove" next to a path reads as "delete my folder".
  */
-
-/** The vendor's own install/login instruction, shown when the CLI is not on this machine. */
-const PROVIDER_INSTALL: Record<ProviderId, string> = {
-  claude: 'npm i -g @anthropic-ai/claude-code',
-  codex: 'npm i -g @openai/codex',
-  opencode: 'https://opencode.ai',
-  pi: 'https://github.com/badlogic/pi-mono',
-  omp: 'https://omp.sh',
-}
 
 /** Same vocabulary the Providers card uses — one wording for "is this logged in?". */
 const STATUS_PRESENTATION = {
@@ -278,7 +269,7 @@ function AgentTab({
         {check === undefined ? <span>Checking…</span> : installed ? (
           <span data-slot="agent-installed">Installed</span>
         ) : (
-          <span data-slot="agent-installed">Not installed — <code>{PROVIDER_INSTALL[provider]}</code></span>
+          <span data-slot="agent-installed">Not installed — <code>{runnerEntry(runners, provider)?.installHint}</code></span>
         )}
         {installed && check?.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
         <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
@@ -318,7 +309,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
   const config = useWorkspaceConfig()
   const providerStatus = useProviderStatus()
   // Keep each host catalog available while the model-agent chooser switches (#794).
-  const catalogs = useRunnerModelCatalogs()
+  const catalogs = useRunnerModelCatalogs(runnerIds(runners))
   const save = useMutation({
     mutationFn: (patch: SetWorkspaceConfigInput) => putWorkspaceConfig(patch),
     onSuccess: (result) => queryClient.setQueryData(workspaceQueryKeys.config, result),
@@ -328,7 +319,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
   if (config.data === undefined) return null
 
   // One row per agent: an account is a project's choice, never a machine-wide one.
-  const rows = agentPickerRows([])
+  const rows = agentPickerRows([], runners)
   // Absent means "no opinion", and the built-in fallback is claude — the same answer a project with
   // no config gets today. Showing it checked is honest: it IS what an unconfigured project runs.
   const runner = config.data.agentDefaults.runner ?? 'claude'
@@ -359,15 +350,15 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
           <select aria-label="Model agent" value={modelRunner ?? runner} onChange={(event) => setModelRunner(event.target.value as Runner)}>
-            {RUNNERS.map((entry) => <option key={entry.id} value={entry.id}>{runnerDisplayName(runners, entry.id)}</option>)}
+            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
           </select>
         </label>
-        {RUNNERS.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
+        {runners.runners.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
           <label key={entry.id} className="settings-account-model flex items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{runnerDisplayName(runners, entry.id)}</span>
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
             <select
-              aria-label={`Default model for ${entry.label}`}
+              aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
               data-runner={entry.id}
               value={models[entry.id] ?? ''}
@@ -403,7 +394,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
 function CatalogStatusOption({ runner, runners, catalog }: {
   runner: Runner
   runners: RunnersResponse
-  catalog: ReturnType<typeof useRunnerModelCatalogs>[Runner] | undefined
+  catalog: ReturnType<typeof useRunnerModelCatalogs>[string] | undefined
 }) {
   const status = catalogQueryStatus(runner, runners, catalog)
   return status ? <option disabled>{status}</option> : null

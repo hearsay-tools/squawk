@@ -2,7 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { CLAUDE_FACTS } from './facts.ts';
 import { CLAUDE_MODELS } from './models.ts';
-import { CLAUDE_CONFIG_FILES } from './config-files.ts';
+import { CLAUDE_AGENT_CONFIG, CLAUDE_CONFIG_FILES } from './config-files.ts';
 import { CLAUDE_EXTRA_TOOLS } from './extra-tools.ts';
 import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 import { CLAUDE_DETECTION } from './detection.ts';
@@ -27,7 +27,7 @@ export const claudeRunner = defineRunner({
   },
   loadModelCatalog: async () => (await import('./claude-model-catalog.ts')).discoverClaudeModels,
   loadSkillCatalog: async () => (await import('./claude-skill-catalog.ts')).discoverClaudeSkills,
-  configFiles: CLAUDE_CONFIG_FILES,
+  configFiles: { files: CLAUDE_CONFIG_FILES, agentConfig: CLAUDE_AGENT_CONFIG },
   extraTools: CLAUDE_EXTRA_TOOLS,
   login: { ...CLAUDE_LOGIN, executable: () => productEnv('CLAUDE_BIN') ?? 'claude' },
   accounts: CLAUDE_ACCOUNTS,

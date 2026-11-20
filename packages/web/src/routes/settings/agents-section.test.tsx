@@ -321,14 +321,14 @@ describe('the agents form', () => {
     expect((screen.getByLabelText<HTMLButtonElement>('Live title updates')).disabled).toBe(false)
   })
 
-  // hearsay-tools/squawk#3897: the runner pickers wait for the runners query, as they wait for health.
-  it('disables the model selectors until the runners query answers', async () => {
+  // hearsay-tools/squawk#3897 and hearsay-tools/squawk#3898: the runner rows come from the runners query, so they wait for it.
+  it('lists the model selectors only once the runners query answers', async () => {
     serve()
     const client = renderAt('/settings/agents', false)
-    const select = await screen.findByLabelText<HTMLSelectElement>('Default model for claude')
     await waitFor(() => expect(client.getQueryState(workspaceQueryKeys.providerStatus)?.status).toBe('success'))
-    expect(select.disabled).toBe(true)
+    expect(screen.queryByLabelText('Default model for claude')).toBeNull()
     seedRunners(client)
+    const select = await screen.findByLabelText<HTMLSelectElement>('Default model for claude')
     await waitFor(() => expect(select.disabled).toBe(false))
   })
 
