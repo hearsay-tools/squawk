@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { spawnSessionLeader } from './session-process.ts';
 import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { profileEnv } from './agent-profiles.ts';
 import { discoverClaudeSkills } from '../runners/claude/claude-skill-catalog.ts';
 import { discoverCodexSkills } from '../runners/codex/codex-skill-catalog.ts';
@@ -16,14 +16,14 @@ import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
 // Every case runs over each runner id; the probe builds each one's child env through the registry.
-const discovers = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
+const discovers: Record<string, (options: SkillDiscoveryOptions) => Promise<import('./runner-skill-catalog.ts').SkillCatalog>> = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
 // The member reports readiness after installing its handlers; only then does its leader crash.
 const leaderFirst = `const { spawn } = require('node:child_process');
 const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSource()} setInterval(() => {}, 1000); process.send('ready')`)}],
   { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 member.once('message', () => process.exit(1));`;
 
-for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
+for (const runner of BUILT_IN_RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
   // Windows uses taskkill trees; leaderless POSIX process groups do not exist there.
   for (const failure of ['hung', 'crashed', 'leader-first'] as const) it.runIf(failure !== 'leader-first' || process.platform !== 'win32')(`${failure}: unavailable with a reason and no child left`, async () => {
     let child!: ChildProcessWithoutNullStreams;
@@ -44,7 +44,7 @@ for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup
       return child;
     };
     const catalog = new RunnerSkillCatalog({ timeoutMs: failure === 'hung' ? 200 : 4000, adapters: { [runner]: {
-      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discovers[runner]({ ...q, spawn: launch, timeoutMs: 3000, signal }),
+      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discovers[runner]!({ ...q, spawn: launch, timeoutMs: 3000, signal }),
     } } });
     // Real child exit and OS process-group reaping require the product's exit signal.
     const result = await catalog.get({ runner, cwd: tmpdir(), accountHome: '/profiles/probe' });

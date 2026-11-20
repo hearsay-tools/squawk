@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import {
   RUN_STATUS,
@@ -7,7 +8,6 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { workerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { createDeliveryControl } from '../../scripts/mock-delivery-control.mjs';
 import { DelegationService } from '../delegation/service.ts';
@@ -22,11 +22,11 @@ import { workerCleanups } from '../delegation/worker-cleanup.ts';
 // Hold only native turn content: the mock admits the hold scenario (ACK and turn start where the
 // wire has them) and sends nothing more until release. The runner, lifecycle, IPC and persistence
 // stay real. The fixture root and environment are reset by `useWorkerWaitFixture`.
-function holdNativeTurn(runner: RunnerId) {
-  const adapter = HARNESS_ADAPTERS[runner];
+function holdNativeTurn(runner: string) {
+  const adapter = HARNESS_ADAPTERS[runner]!;
   const control = createDeliveryControl(root, { kind: 'hold-response', match: adapter.scenarios.hold! });
   process.env.CEZ_DRY_RUN = '0';
-  process.env[adapter.binEnv] = adapter.mockBin;
+  process.env[adapter.binEnv]! = adapter.mockBin;
   process.env.CEZ_MOCK_DELIVERY_CONTROL = control.path;
   return { received: control.held, release: control.release };
 }
@@ -42,12 +42,12 @@ describe('CI registration beside worker waits — hearsay-tools/cezarion#1235', 
   useWorkerWaitFixture({ acquireCiResources });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(RUNNER_IDS)('%s registers CI beside a pending and a settled worker wait, and delivers the worker result once', async runner => {
+  it.each(BUILT_IN_RUNNER_IDS)('%s registers CI beside a pending and a settled worker wait, and delivers the worker result once', async runner => {
     const wire = holdNativeTurn(runner);
     vi.spyOn(CiWatcherSupervisor.prototype, 'resolve').mockResolvedValue(identity);
     vi.spyOn(CiWatcherSupervisor.prototype, 'watch').mockReturnValue(new Promise(() => {}));
     const controller = await CiToolController.start();
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.hold!, runner });
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.hold!, runner });
     store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
     try {
       await until(wire.received);
@@ -73,12 +73,12 @@ describe('CI registration beside worker waits — hearsay-tools/cezarion#1235', 
     } finally { wire.release(); await controller.close(); }
   });
   for (const action of ['cancel', 'destroy'] as const) {
-    it.each(RUNNER_IDS)(`%s R80 ${action} of a settled wait during the same native turn leaves CI registration open`, async runner => {
+    it.each(BUILT_IN_RUNNER_IDS)(`%s R80 ${action} of a settled wait during the same native turn leaves CI registration open`, async runner => {
       const wire = holdNativeTurn(runner);
       vi.spyOn(CiWatcherSupervisor.prototype, 'resolve').mockResolvedValue(identity);
       vi.spyOn(CiWatcherSupervisor.prototype, 'watch').mockReturnValue(new Promise(() => {}));
       const controller = await CiToolController.start();
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.hold!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.hold!, runner });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       try {
         await until(wire.received);

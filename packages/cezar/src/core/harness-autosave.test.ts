@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import childProcess, { type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import * as worktrees from '../autosave-commit.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
@@ -17,7 +17,7 @@ const FIXTURE_STEP_MS = 30_000;
 // Real native frames on every HARNESS_ADAPTERS runner. Registered as R24/R25
 // in the parity guard; no wire exemption exists for filesystem cleanup.
 describe('harness parity — autosave cleanup (#495)', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     for (const continuation of [false, true]) {
       it(`${backend} ${continuation ? 'R25 continuation' : 'R24 initial'} retains reuse guard until Git termination`, async () => {
 

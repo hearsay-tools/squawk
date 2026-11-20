@@ -1,5 +1,5 @@
 import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import type { RunRecord } from '../runs/store.ts';
 import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
 
@@ -9,8 +9,8 @@ import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
  */
 export function executionAccount(
   run: Pick<RunRecord, 'runner' | 'agentProfile' | 'steps'>,
-  continuation?: { backend: RunnerId; sessionId?: string | undefined },
-  live?: { runner: RunnerId; agentProfile?: string },
+  continuation?: { backend: string; sessionId?: string | undefined },
+  live?: { runner: string; agentProfile?: string },
 ): Pick<RunRecord, 'runner' | 'agentProfile'> {
   if (live) return { runner: live.runner, agentProfile: live.agentProfile };
   if (continuation) {

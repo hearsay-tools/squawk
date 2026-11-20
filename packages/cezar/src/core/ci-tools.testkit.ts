@@ -1,9 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS, type ToolGrant } from './agent-runner.ts';
+import { type ToolGrant } from './agent-runner.ts';
 import { driveSeam, seedOpencodeMockSession } from './harness-parity.testkit.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { buildClaudeArgs } from '../runners/claude/claude-cli-runner.ts';
@@ -67,7 +68,7 @@ describe('wait tool definitions', () => {
 
 describe('CI tool injection', () => {
   it('never inherits another session authority, including full-env mode', () => {
-    for (const backend of RUNNER_IDS) for (const full of ['0', '1']) {
+    for (const backend of BUILT_IN_RUNNER_IDS) for (const full of ['0', '1']) {
       const source = { CEZ_TOOL_TOKEN: 'parent', CEZ_TOOL_SOCKET: 'parent.sock', CEZ_AGENT_ENV_FULL: full };
       const clean = buildChildEnv({ backend, source });
       expect(clean.CEZ_TOOL_TOKEN).toBeUndefined();
@@ -121,7 +122,7 @@ describe('CI tool injection', () => {
     expect(merged.mcp.existing).toEqual({ type: 'remote', url: 'https://example.org/mcp' });
     expect(merged.mcp[descriptor.name].command).toEqual([descriptor.command, ...descriptor.args]);
   });
-  for (const backend of RUNNER_IDS) for (const resume of [false, true]) {
+  for (const backend of BUILT_IN_RUNNER_IDS) for (const resume of [false, true]) {
     it(`${backend} exposes CI on ${resume ? 'resume' : 'fresh'} wire with delegation controls preserved`, async () => {
       const dir = mkdtempSync(join(tmpdir(), 'cez-ci-wire-'));
       try {
@@ -157,7 +158,7 @@ export function registerCiValidation() {
 // H1: every offline wire must actually discover AND call the shipped adapter,
 // including resumed sessions. A recorded descriptor alone is insufficient.
 describe('CI H1 executable harness parity', () => {
-  for (const backend of RUNNER_IDS) for (const resume of [false, true]) for (const valid of [true, false]) {
+  for (const backend of BUILT_IN_RUNNER_IDS) for (const resume of [false, true]) for (const valid of [true, false]) {
     it(`${backend} ${valid ? 'registers valid' : 'rejects invalid'} CI calls on ${resume ? 'resume' : 'fresh'}`, async () => {
       const { CiToolController } = await import('../ci-wait/controller.ts');
       const controller = await CiToolController.start();
@@ -231,7 +232,7 @@ describe('U0 wait tools on every native wire', () => {
     { label: 'an empty tool list', toolGrant: { kind: 'explicit', tools: [] } as ToolGrant },
   ];
   const drives = [
-    ...RUNNER_IDS.flatMap(backend => cases.map(entry => ({ backend, ...entry, label: '', toolGrant: { kind: 'explicit', tools: ['Read'] } as ToolGrant }))),
+    ...BUILT_IN_RUNNER_IDS.flatMap(backend => cases.map(entry => ({ backend, ...entry, label: '', toolGrant: { kind: 'explicit', tools: ['Read'] } as ToolGrant }))),
     ...piLists.flatMap(list => [false, true].map(resume => ({ backend: 'pi' as const, ...cases[0]!, resume, ...list, label: ` with ${list.label}` }))),
   ];
   for (const { backend, tool, args, resume, label, toolGrant } of drives.filter(entry => tools.includes(entry.tool))) {

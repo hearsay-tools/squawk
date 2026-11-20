@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { RunnerSkillList, runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { registeredRunnerId } from '../core/runner-registry.ts';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
 import { portableRunnerSkillList } from '../core/runner-skill-reference.ts';
@@ -13,7 +13,7 @@ export async function readRunnerSkills(
   cwd: string,
   home: Home,
   catalog: RunnerSkillCatalog,
-  resolveAccount: (runner: RunnerId, account: string) => Promise<{ profile: ResolvedAgentProfile } | { error: string }>,
+  resolveAccount: (runner: string, account: string) => Promise<{ profile: ResolvedAgentProfile } | { error: string }>,
 ): Promise<RunnerSkillList | { error: string }> {
   const { account, refresh } = input;
   const runner = registeredRunnerId(input.runner);

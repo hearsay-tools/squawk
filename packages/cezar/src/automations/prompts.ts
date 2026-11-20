@@ -4,7 +4,7 @@
  * mechanism.
  */
 import { fileURLToPath } from 'node:url';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
 
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -78,7 +78,7 @@ Top-level keys:
 "task" keys:
 - "prompt": required, the prompt template.
 - "workflow": a workflow name. OR "steps", never both. To run a skill, use one agent step naming it: "steps": [{ "id": "task", "skill": "some-skill", "prompt": "{{task}}" }].
-- "runner": ${RUNNER_IDS.join(' | ')}. "model" and "effort": optional overrides.
+- "runner": ${BUILT_IN_RUNNERS.map(({ id }) => id).join(' | ')}. "model" and "effort": optional overrides.
 - "worktree": isolate each run in its own git worktree (recommended: true).
 - "autonomous": never park to ask; an automation has no one watching (recommended: true).
 - "archiveWhenDone": boolean (default false). Archive each launched task after Done. Without a PR, archive on Done even when autoMergePr is true.

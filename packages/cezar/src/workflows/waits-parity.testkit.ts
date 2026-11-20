@@ -1,11 +1,11 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { join } from 'node:path';
 import { createFailureControl, type FailureControlOptions } from '../../scripts/mock-failure-control.mjs';
 import { expect } from 'vitest';
-import type { RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 
-// hearsay-tools/cezarion#1233: the wait list's RUNNER_IDS cells. U0 (tool admission) lives in
+// hearsay-tools/cezarion#1233: the wait list's BUILT_IN_RUNNER_IDS cells. U0 (tool admission) lives in
 // `core/ci-tools-wait-cancel.test.ts` and `core/ci-tools-ask-done.test.ts`.
 export const WAIT_CRITERIA = [
   { id: 'U29p', scenario: 'baseline', name: 'empty process deadlines cost no budget, even at the cap without a session' },
@@ -127,7 +127,7 @@ export function thenSay(text: string): string {
 // Hold the existing native provider-error fixture until CI intent is durable.
 // A scheduler-owned opening prompt fails once; the next process/turn uses the
 // unchanged success fixture. No runner methods or normalized events are mocked.
-export function gatedProviderFailure(root: string, runner: RunnerId) {
+export function gatedProviderFailure(root: string, runner: string) {
   const { held, release } = nativeFailureControl(root, runner, { mode: 'gated-once' });
   return { held, release };
 }
@@ -143,18 +143,18 @@ export const MESSAGE_WAKE_OPENING = 'Resume to receive queued messages.';
 // continuation's prompt instead. Claude's mock reads every line it is sent after a failed turn, so
 // a message steered behind the opening would be read; `unread` makes Claude's failure end the
 // process instead, as a crash would, before it reads one. Every other prompt is unchanged.
-export function persistentWakeFailure(root: string, runner: RunnerId, { usageLimit = false, opening = TIMER_WAKE_OPENING, unread = false } = {}) {
+export function persistentWakeFailure(root: string, runner: string, { usageLimit = false, opening = TIMER_WAKE_OPENING, unread = false } = {}) {
   if (usageLimit) expect(runner).toBe('claude');
   const { lift } = nativeFailureControl(root, runner, { mode: 'persistent', opening,
     failure: unread && runner === 'claude' ? 'unread' : usageLimit ? 'usage-limit' : 'provider' });
   return { lift };
 }
 
-function nativeFailureControl(root: string, runner: RunnerId, options: FailureControlOptions) {
+function nativeFailureControl(root: string, runner: string, options: FailureControlOptions) {
   const control = createFailureControl(root, options);
-  const adapter = HARNESS_ADAPTERS[runner];
+  const adapter = HARNESS_ADAPTERS[runner]!;
   process.env.CEZ_DRY_RUN = '0';
-  process.env[adapter.binEnv] = adapter.mockBin;
+  process.env[adapter.binEnv]! = adapter.mockBin;
   process.env.CEZ_MOCK_FAILURE_CONTROL = control.path;
   return control;
 }
@@ -168,14 +168,14 @@ type NativeInput = {
 /** A stdin-wire row is one prompt, or nothing when the mock recorded no user text. */
 const stdinRowText = (row: NativeInput): string[] => row.userText === undefined ? [] : [row.userText];
 /** The per-backend prompt carrier: Codex turn input, OpenCode body parts. */
-const providerRowParts = (runner: RunnerId, row: NativeInput) =>
+const providerRowParts = (runner: string, row: NativeInput) =>
   runner === 'codex' && row.method === 'turn/start' ? row.params?.input
     : runner === 'opencode' && /\/(message|prompt_async)$/.test(row.url ?? '') ? row.body?.parts : undefined;
 const joinRowParts = (parts: Array<{ text?: string }>): string =>
   parts.map((part: { text?: string }) => part.text ?? '').join('\n');
 
 /** Read the prompts admitted by each runner's native mock, not normalized events. */
-export function ciNativeMessages(runner: RunnerId, dir: string): string[] {
+export function ciNativeMessages(runner: string, dir: string): string[] {
   const records = (name: string) => readMockRecords<NativeInput | string[]>(join(dir, name));
   const stdin = runner === 'claude' || runner === 'pi' || runner === 'omp';
   const rows = records(stdin ? 'stdin' : 'args');
@@ -189,7 +189,7 @@ export function ciNativeMessages(runner: RunnerId, dir: string): string[] {
 
 /** Input the Codex mock took into an open turn through `turn/steer`, which `ciNativeMessages`
  *  leaves out. Every other runner returns none. */
-export function ciNativeSteers(runner: RunnerId, dir: string): string[] {
+export function ciNativeSteers(runner: string, dir: string): string[] {
   if (runner !== 'codex') return [];
   return readMockRecords<NativeInput>(join(dir, 'args')).flatMap(row =>
     row.method === 'turn/steer' && row.params?.input ? [row.params.input.map(part => part.text ?? '').join('\n')] : []);

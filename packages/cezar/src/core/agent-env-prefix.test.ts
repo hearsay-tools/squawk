@@ -1,13 +1,12 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv } from './agent-env.ts';
 
 // Every case runs over each runner id; buildChildEnv reads each one's allow-list prefixes from the registry.
-import { RUNNER_IDS } from './agent-runner.ts';
-
 const authority = ['TOOL_TOKEN', 'TOOL_SOCKET', 'DELEGATION_TOKEN', 'DELEGATION_URL', 'COCKPIT_URL', 'PROJECT_ID', 'PREVIEW_CDP_URL'];
 const builders = [
-  ...RUNNER_IDS.map(backend => ({ name: backend, build: (source: NodeJS.ProcessEnv, extraEnv?: Record<string, string>) => buildChildEnv({ backend, source, extraEnv }) })),
+  ...BUILT_IN_RUNNER_IDS.map(backend => ({ name: backend, build: (source: NodeJS.ProcessEnv, extraEnv?: Record<string, string>) => buildChildEnv({ backend, source, extraEnv }) })),
   { name: 'command', build: (source: NodeJS.ProcessEnv, extraEnv?: Record<string, string>) => buildCommandEnv({ source, ...(extraEnv ? { extraEnv } : {}) }) },
 ];
 

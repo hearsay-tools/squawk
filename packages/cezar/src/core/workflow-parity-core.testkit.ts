@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 /**
  * The run tier of the harness parity matrix: fixtures that drive each backend's offline mock
  * through a real `RunManager`, owned workers and skill parents.
@@ -27,7 +28,6 @@ import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../work
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps, stepKind, type WorkflowDef } from '../workflows/types.ts';
 import type { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import type { RunnerId } from './agent-runner.ts';
 import { profileEnv } from './agent-profiles.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor, type ScenarioName } from './harness-parity-core.testkit.ts';
@@ -71,7 +71,7 @@ function optionalSemaphore(semaphore: WorkspaceSemaphore | undefined): { semapho
  * store, a manager, and the built-in single-step workflow with `worktree: false`.
  */
 export async function driveRun(
-  backend: RunnerId,
+  backend: string,
   scenario: ScenarioName | { prompt: string },
   settled: (record: RunRecord | undefined) => boolean,
   timeoutMs = 30_000,
@@ -98,8 +98,8 @@ export async function driveRun(
   } = {},
 ): Promise<RunObservation> {
   const { beforeStart, beforeCleanup, during, env: extraEnv, mockBin, worktree, semaphore, ...runOptions } = options;
-  const adapter = HARNESS_ADAPTERS[backend];
-  const savedBin = process.env[adapter.binEnv];
+  const adapter = HARNESS_ADAPTERS[backend]!;
+  const savedBin = process.env[adapter.binEnv]!;
   const savedDry = process.env.CEZ_DRY_RUN;
   const savedAutoName = process.env.CEZ_AUTONAME;
   // The mock answers Squawk's no-wait nudge in plain text (hearsay-tools/cezarion#1234), so a row
@@ -109,7 +109,7 @@ export async function driveRun(
   const savedEnv = Object.keys(env).map(name => [name, process.env[name]] as const);
   const restoreEnvironment = () => {
     if (savedBin === undefined) delete process.env[adapter.binEnv];
-    else process.env[adapter.binEnv] = savedBin;
+    else process.env[adapter.binEnv]! = savedBin;
     if (savedDry !== undefined) process.env.CEZ_DRY_RUN = savedDry;
     if (savedAutoName === undefined) delete process.env.CEZ_AUTONAME;
     else process.env.CEZ_AUTONAME = savedAutoName;
@@ -119,7 +119,7 @@ export async function driveRun(
   };
   Object.assign(process.env, env);
   process.env.CEZ_AUTONAME = '0';
-  process.env[adapter.binEnv] = mockBin ?? adapter.mockBin;
+  process.env[adapter.binEnv]! = mockBin ?? adapter.mockBin;
   delete process.env.CEZ_DRY_RUN;
   const repoRoot = mkdtempSync(join(tmpdir(), `cez-parity-run-${backend}-`));
   let store: RunStore | undefined;
@@ -211,7 +211,7 @@ function trackTurnBookkeeping(manager: RunManager): () => Promise<void> {
   };
 }
 
-/** An owned worker, using real disk/Git state and the native wire mocks for `RUNNER_IDS`. */
+/** An owned worker, using real disk/Git state and the native wire mocks for `BUILT_IN_RUNNER_IDS`. */
 /**
  * The owning parent answers the worker's pending question (hearsay-tools/cezarion#2410): the reply is
  * committed with its outcome as `service.send` does, and goes to the worker through the answer seam a
@@ -240,11 +240,11 @@ function readOptional(path: string): string | undefined {
 
 type OwnedInputOptions = NonNullable<Parameters<typeof withOwnedInputRun>[3]>;
 
-function prepareOwnedInputEnvironment(backend: RunnerId, options: OwnedInputOptions): () => void {
-  const adapter = HARNESS_ADAPTERS[backend];
-  const savedBin = process.env[adapter.binEnv];
-  const savedExtraBins = (options.extraBackends ?? []).map(extra => [HARNESS_ADAPTERS[extra].binEnv, process.env[HARNESS_ADAPTERS[extra].binEnv]] as const);
-  for (const extra of options.extraBackends ?? []) process.env[HARNESS_ADAPTERS[extra].binEnv] = HARNESS_ADAPTERS[extra].mockBin;
+function prepareOwnedInputEnvironment(backend: string, options: OwnedInputOptions): () => void {
+  const adapter = HARNESS_ADAPTERS[backend]!;
+  const savedBin = process.env[adapter.binEnv]!;
+  const savedExtraBins = (options.extraBackends ?? []).map(extra => [HARNESS_ADAPTERS[extra]!.binEnv, process.env[HARNESS_ADAPTERS[extra]!.binEnv]] as const);
+  for (const extra of options.extraBackends ?? []) process.env[HARNESS_ADAPTERS[extra]!.binEnv] = HARNESS_ADAPTERS[extra]!.mockBin;
   const savedDry = process.env.CEZ_DRY_RUN;
   const savedAutoName = process.env.CEZ_AUTONAME;
   // The worker ignores Squawk's no-wait nudge (hearsay-tools/cezarion#1234) and reaches its plain
@@ -254,11 +254,11 @@ function prepareOwnedInputEnvironment(backend: RunnerId, options: OwnedInputOpti
   Object.assign(process.env, env);
   // Naming is a separate auxiliary invocation, not part of input delivery.
   process.env.CEZ_AUTONAME = '0';
-  process.env[adapter.binEnv] = options.mockBin ?? adapter.mockBin;
+  process.env[adapter.binEnv]! = options.mockBin ?? adapter.mockBin;
   delete process.env.CEZ_DRY_RUN;
   return () => {
     if (savedBin === undefined) delete process.env[adapter.binEnv];
-    else process.env[adapter.binEnv] = savedBin;
+    else process.env[adapter.binEnv]! = savedBin;
     for (const [name, saved] of savedExtraBins) {
       if (saved === undefined) delete process.env[name]; else process.env[name] = saved;
     }
@@ -301,7 +301,7 @@ function createOwnedInputParent(store: RunStore): RunRecord {
 
 async function createOwnedInputWorker(
   store: RunStore, repoRoot: string, runId: string, parentRunId: string, sha: string,
-  backend: RunnerId, scenario: ScenarioName, options: OwnedInputOptions,
+  backend: string, scenario: ScenarioName, options: OwnedInputOptions,
 ): Promise<void> {
   const workspace = await planOwnedWorkspace(repoRoot, runId, sha);
   const workflowDef = options.workflowDef;
@@ -373,7 +373,7 @@ async function teardownOwnedInputRun(
 }
 
 export async function withOwnedInputRun(
-  backend: RunnerId,
+  backend: string,
   scenario: ScenarioName,
   body: (fixture: {
     repoRoot: string; runId: string; parentRunId: string;
@@ -394,7 +394,7 @@ export async function withOwnedInputRun(
     identity?: WorkerExecutionIdentity;
     agentProfile?: string;
     /** Further runners a mixed chain launches; their mocks are wired for the fixture's lifetime. */
-    extraBackends?: readonly RunnerId[];
+    extraBackends?: readonly string[];
     /** Environment overrides restored after the native mock worker settles. */
     env?: Record<string, string>;
     /** Preserve a legacy native-wire fixture while the backend default changes. */
@@ -434,11 +434,11 @@ export async function withOwnedInputRun(
 /** Launch a skill-driven parent and accept its child through the real session settings/service.
  * Native mock recordings stay in each run's cwd; no worker prompt is supplied by the fixture. */
 export async function withSkillParentRun(
-  backend: RunnerId,
+  backend: string,
   env: Record<string, string>,
   body: (fixture: { repoRoot: string; parentRunId: string; runId: string; store: RunStore; manager: RunManager }) => Promise<void>,
 ): Promise<void> {
-  const adapter = HARNESS_ADAPTERS[backend];
+  const adapter = HARNESS_ADAPTERS[backend]!;
   const repoRoot = mkdtempSync(join(tmpdir(), `cez-skill-parent-${backend}-`));
   // Acceptance binds the live parent's account, and spawn requires that directory to exist.
   // Supply an empty test-owned home rather than relying on an installed host login.
@@ -494,7 +494,7 @@ export async function withSkillParentRun(
 }
 
 /** R17 keeps the shipped retry budget, but observes it after the latest native retry. */
-export async function driveUnavailableProvider(backend: RunnerId, scenario: ScenarioName | { prompt: string },
+export async function driveUnavailableProvider(backend: string, scenario: ScenarioName | { prompt: string },
   settled: (record: RunRecord | undefined) => boolean, timeoutMs?: number): ReturnType<typeof driveRun> {
   if (backend !== 'codex') return driveRun(backend, scenario, settled, timeoutMs);
   let clock: ReturnType<typeof observationClock> | undefined;

@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from './runners/built-in.ts';
 import './core/register-all-runners.testkit.ts';
 import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
@@ -6,7 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS, type AgentRunner, type RunnerId } from './core/agent-runner.ts';
+import { type AgentRunner } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
 import { generateRunName } from './runs/auto-name.ts';
 
@@ -15,7 +16,7 @@ const run = vi.fn(async () => ({ text: '' }));
 const runners = async (): Promise<AgentRunner> => ({ run }) as unknown as AgentRunner;
 
 /** `plannerModel` and `namerModel` are Claude model aliases: only the Claude runner gets them. */
-const EXPECTED: Record<RunnerId, { planner: string | undefined; namer: string | undefined }> = {
+const EXPECTED: Record<string, { planner: string | undefined; namer: string | undefined }> = {
   claude: { planner: 'sonnet', namer: 'haiku' },
   codex: { planner: undefined, namer: undefined },
   opencode: { planner: undefined, namer: undefined },
@@ -42,22 +43,22 @@ describe('planner and namer model presets per default runner', () => {
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
   });
 
-  function useDefaultRunner(runner: RunnerId): void {
+  function useDefaultRunner(runner: string): void {
     mkdirSync(join(repoRoot, '.ai', 'cezar'), { recursive: true });
     writeFileSync(join(repoRoot, '.ai', 'cezar', 'config.json'), JSON.stringify({ defaultRunner: runner }), 'utf8');
   }
 
-  it.each(RUNNER_IDS)('plans on %s with its preset model or none', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('plans on %s with its preset model or none', async (runner) => {
     useDefaultRunner(runner);
     await planChain(repoRoot, 'do it', fixedSkillCatalog(), testHome(), runners);
     expect(run).toHaveBeenCalled();
-    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner].planner);
+    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner]!.planner);
   });
 
-  it.each(RUNNER_IDS)('names on %s with its preset model or none', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('names on %s with its preset model or none', async (runner) => {
     useDefaultRunner(runner);
     await generateRunName(repoRoot, { task: 'rename the settings page' }, testHome(), runners);
     expect(run).toHaveBeenCalled();
-    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner].namer);
+    for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner]!.namer);
   });
 });

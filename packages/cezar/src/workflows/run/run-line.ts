@@ -1,5 +1,5 @@
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import { atTaskHead } from './launch-read-resolver.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import { getRepoInfo } from '../../server/git.ts';
@@ -38,8 +38,8 @@ export function oldestEligibleWakeAt(entries: Iterable<string>, reads: {
   wakeJoinedAt(id: string): number | undefined;
   accountHolds(): AccountHolds;
   getRun(id: string): RunRecord | undefined;
-  canLeaveLine(id: string, holds: AccountHolds, fallback: RunnerId): boolean;
-}, configuredDefaultRunner: RunnerId | undefined): number | null {
+  canLeaveLine(id: string, holds: AccountHolds, fallback: string): boolean;
+}, configuredDefaultRunner: string | undefined): number | null {
   let oldest: number | null = null;
   let holds: AccountHolds | undefined;
   for (const id of entries) {
@@ -68,7 +68,7 @@ export class RunLine {
   }
   /** The configured default runner as `pump()` last read it, so the sync `oldestWakeAt()` resolves
    *  a runnerless record's account the same way (hearsay-tools/cezarion#1236). */
-  private configuredDefaultRunner: RunnerId | undefined;
+  private configuredDefaultRunner: string | undefined;
   private pumping = false;
   /** The scheduler only needs repo presence. Cache the promise (including null) so every sweep
    * doesn't spawn Git (hearsay-tools/cezarion#364); only `rediscoverRepo()` drops a null result.
@@ -181,7 +181,7 @@ export class RunLine {
    *  autosave cleanup, no pending root finish, no account hold, and not already admitted
    *  elsewhere. `pump()` and `oldestWakeAt()` share it, so the workspace order and the project
    *  order agree (hearsay-tools/cezarion#1236). */
-  private canLeaveLine(id: string, holds: AccountHolds, fallbackRunner: RunnerId): boolean {
+  private canLeaveLine(id: string, holds: AccountHolds, fallbackRunner: string): boolean {
     if (this.host.maintenance(id)) return false;
     const queued = this.context.store.getRun(id);
     if (!queued || historyDeletionPending(this.context.store, id)) return true;

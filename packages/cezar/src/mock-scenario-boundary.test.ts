@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from './runners/built-in.ts';
 import { checkRule } from './lint/ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './core/agent-runner.ts';
 import { RUNNER_MOCKS, mockScenarioBoundary as rule } from './lint/mock-scenario-boundary.ts';
 
 const file = 'packages/cezar/scripts/mock-pi-rpc.mjs';
@@ -8,7 +8,7 @@ const adopted = "import { play, scenarioFor } from './mock-scenario.mjs';\n";
 
 describe('shared scenario boundary', () => {
   it('requires an encoder entry for every runner', () => {
-    expect([...RUNNER_MOCKS.keys()].sort()).toEqual([...RUNNER_IDS].sort());
+    expect([...RUNNER_MOCKS.keys()].sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
   });
 
   it.each([

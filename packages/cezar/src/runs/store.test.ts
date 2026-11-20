@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -2729,7 +2730,7 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
   });
 
   it('persists and reloads a `pi` run, index and step alike (#387)', () => {
-    // `storedRunnerSchema` derives from `RUNNER_IDS` rather than re-listing the ids, so a new
+    // `storedRunnerSchema` derives from `BUILT_IN_RUNNER_IDS` rather than re-listing the ids, so a new
     // runner is readable the moment it is registered. Without this, a completed pi run would
     // fail the whole-array parse on the next boot and take every other run down with it.
     seedRuns(dataDir, [

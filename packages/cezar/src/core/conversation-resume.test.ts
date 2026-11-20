@@ -1,17 +1,17 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 // This suite enters through the opt-in service, unlike the manager-only fixtures.
 afterEach(() => vi.unstubAllEnvs());
 
-for (const backend of RUNNER_IDS) {
+for (const backend of BUILT_IN_RUNNER_IDS) {
   it.each(['live', 'restart'] as const)(`${backend}: %s parent resume executes its message once without human input`, async mode => {
     const semaphore = new WorkspaceSemaphore({ home: testHome() });
     await withOwnedInputRun(backend, 'baseline', async fixture => {

@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -167,8 +168,8 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/runners/pi/definition.ts': "const load = () => import('./pi-runner.ts');\n",
   'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
   // runner-roster-literal: the definition, a subset and a derived list. No file keeps a listed roster.
-  'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,
-  'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...RUNNER_IDS, 'claude-cli'];\n",
+  'packages/cezar/src/runners/built-in.ts': `export const BUILT_IN_RUNNER_IDS = [${ROSTER}] as const;\n`,
+  'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];\n",
   // undocumented-env-name: a documented name, a mock control, and a test.
   'packages/cezar/src/j.ts': "process.env.CEZ_DRY_RUN = '1'; env.CEZ_MOCK_ANYTHING = '1';\n",
   'packages/cezar/src/k.test.ts': 'const c = process.env.CEZ_NOT_DOCUMENTED_ANYWHERE;\n',

@@ -4,7 +4,7 @@ import { fallbackProjectWriteError } from '../project-paths.ts';
 import { join } from 'node:path';
 import type { Context } from 'hono';
 import { imageMimeType, isOsOpenableImage } from '@open-mercato/cezar-contract/image-path';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { terminalExecutable, type resumeCommand } from '../core/runner-cli.ts';
 import type { RunRecord } from '../runs/store.ts';
@@ -15,9 +15,9 @@ import type { openInTerminal } from './open-in-terminal.ts';
 
 interface CliHandoffDeps {
   home: Home;
-  providerActionError: (required: readonly RunnerId[]) => Promise<string | null>;
+  providerActionError: (required: readonly string[]) => Promise<string | null>;
   resumeCommand: typeof resumeCommand;
-  handoffEnv: (provider: RunnerId, profileId: string | undefined) => Promise<{ env: Record<string, string> } | { error: string }>;
+  handoffEnv: (provider: string, profileId: string | undefined) => Promise<{ env: Record<string, string> } | { error: string }>;
   handoffFallbackCommand: (cwd: string, command: string, env: Record<string, string>) => string | null;
   openTerminal: typeof openInTerminal;
 }
@@ -81,7 +81,7 @@ export async function openRunDefaultApp(
 export async function openRunCli(
   c: Context,
   run: RunRecord,
-  cliRunner: RunnerId,
+  cliRunner: string,
   dir: string,
   repoRoot: string,
   { providerActionError, resumeCommand, handoffEnv, handoffFallbackCommand, openTerminal, home }: CliHandoffDeps,
@@ -115,7 +115,7 @@ export async function openRunCli(
 }
 
 /** Fresh terminals use the selected executable and the project's account. */
-export async function freshCliHandoff(cliRunner: RunnerId, repoRoot: string, home: Home): Promise<
+export async function freshCliHandoff(cliRunner: string, repoRoot: string, home: Home): Promise<
   { command: string; env: Record<string, string> } | { error: string }
 > {
   // Only a configured executable can fail to quote; a PATH name always can.

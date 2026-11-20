@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { IN_THREAD, skillResumeParity } from './skill-resume-rows.testkit.ts';
@@ -14,7 +15,6 @@ import { promisify } from 'node:util';
 import { expect } from 'vitest';
 import { observationClock } from './observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-registry.ts';
 import {
   HARNESS_ADAPTERS,
@@ -83,7 +83,7 @@ function recordedSessionId(store: RunStore, runId: string): string {
 }
 
 function assertReusedRecordedSession(
-  backend: RunnerId,
+  backend: string,
   continuationRecording: string,
   sessionId: string,
 ): void {
@@ -126,7 +126,7 @@ function appendedSystemPrompts(rows: unknown[]): string[] {
   });
 }
 
-function recordedSystemPrompt(backend: RunnerId, rec: Record<string, unknown>): string | undefined {
+function recordedSystemPrompt(backend: string, rec: Record<string, unknown>): string | undefined {
   if (backend === 'codex' && rec.method === 'turn/start') {
     const input = (rec.params as { input?: Array<{ text?: string }> } | undefined)?.input;
     const text = input?.[0]?.text;
@@ -141,7 +141,7 @@ function recordedSystemPrompt(backend: RunnerId, rec: Record<string, unknown>): 
   return undefined;
 }
 
-function systemPromptsFrom(backend: RunnerId, recording: string): string[] {
+function systemPromptsFrom(backend: string, recording: string): string[] {
   const rows = parsedLines(recording);
   if (backend === 'claude' || backend === 'pi' || backend === 'omp') return appendedSystemPrompts(rows);
   const texts: string[] = [];
@@ -174,7 +174,7 @@ function markWire(argsFile: string, stdinFile: string): { args: number; stdin: n
 function skillInPrompt(prompt: string, _repoRoot: string): boolean {
   return !prompt.includes(SKILL_BODY) && !prompt.includes('Selected skill:') && prompt.includes(EXTRA_PROMPT);
 }
-function hasNativeTrigger(backend: RunnerId, recording: string): boolean {
+function hasNativeTrigger(backend: string, recording: string): boolean {
   return parsedLines(recording).some(row => {
     const rec = asRecord(row);
     if (!rec) return false;
@@ -235,7 +235,7 @@ async function continueAndPark(
     markWire: () => { args: number; stdin: number };
     wireSince: (marked: { args: number; stdin: number }) => string;
   },
-  opts: { text: string; runner?: RunnerId },
+  opts: { text: string; runner?: string },
   marked: { args: number; stdin: number },
 ): Promise<string> {
   expect(fixture.manager.continueRun(fixture.runId, opts).ok).toBe(true);
@@ -246,7 +246,7 @@ async function continueAndPark(
 }
 
 async function withSkillResumeRun(
-  backend: RunnerId,
+  backend: string,
   body: (fixture: {
     repoRoot: string;
     runId: string;
@@ -260,7 +260,7 @@ async function withSkillResumeRun(
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
-  const adapter = HARNESS_ADAPTERS[backend];
+  const adapter = HARNESS_ADAPTERS[backend]!;
   const saved: Array<[string, string | undefined]> = [];
   const remember = (name: string, value: string | undefined) => {
     saved.push([name, process.env[name]]);
@@ -339,7 +339,7 @@ async function withSkillResumeRun(
   }
 }
 
-function assertLaunchKeepsSkill(backend: RunnerId, repoRoot: string, recording: string): string {
+function assertLaunchKeepsSkill(backend: string, repoRoot: string, recording: string): string {
   const prompts = systemPromptsFrom(backend, recording);
   expect(prompts.length, `${backend} launch recorded a system prompt`).toBeGreaterThan(0);
   const launch = prompts[0]!;
@@ -349,7 +349,7 @@ function assertLaunchKeepsSkill(backend: RunnerId, repoRoot: string, recording: 
 }
 
 function assertContinuationSkill(
-  backend: RunnerId,
+  backend: string,
   repoRoot: string,
   _launchPrompt: string,
   continuationRecording: string,
@@ -444,11 +444,11 @@ export const describeSkillResumeParity = skillResumeParity({
     });
   },
   freshSession: backend => async () => {
-    const origin: RunnerId = 'claude';
+    const origin: string = 'claude';
     const savedClaude = process.env.CEZ_CLAUDE_BIN;
-    const savedTarget = process.env[HARNESS_ADAPTERS[backend].binEnv];
-    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-    process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
+    const savedTarget = process.env[HARNESS_ADAPTERS[backend]!.binEnv];
+    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+    process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
     try {
       await withSkillResumeRun(origin, async (fixture) => {
         const launchPrompt = assertLaunchKeepsSkill(origin, fixture.repoRoot, fixture.snapshotWire());
@@ -469,19 +469,19 @@ export const describeSkillResumeParity = skillResumeParity({
     } finally {
       if (savedClaude === undefined) delete process.env.CEZ_CLAUDE_BIN;
       else process.env.CEZ_CLAUDE_BIN = savedClaude;
-      if (savedTarget === undefined) delete process.env[HARNESS_ADAPTERS[backend].binEnv];
-      else process.env[HARNESS_ADAPTERS[backend].binEnv] = savedTarget;
+      if (savedTarget === undefined) delete process.env[HARNESS_ADAPTERS[backend]!.binEnv];
+      else process.env[HARNESS_ADAPTERS[backend]!.binEnv] = savedTarget;
     }
   },
   declaresResumeMode: async () => {
-    const expected: Record<RunnerId, 'resent' | 'in-thread'> = {
+    const expected: Record<string, 'resent' | 'in-thread'> = {
       claude: 'resent',
       pi: 'resent',
       omp: 'resent',
       opencode: 'in-thread',
       codex: 'in-thread',
     };
-    for (const backend of RUNNER_IDS) {
+    for (const backend of BUILT_IN_RUNNER_IDS) {
       expect((await createRunner(backend)).systemPromptOnResume).toBe(expected[backend]);
     }
   },

@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, expect, test, vi } from 'vitest';
-import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from '../../packages/cezar/src/core/agent-runner.ts';
+import type { AgentEvent, AgentSession } from '../../packages/cezar/src/core/agent-runner.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/runners/built-in.ts';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } from '../../packages/cezar/src/core/harness-parity.testkit.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
@@ -29,17 +30,17 @@ const shared = [
   'turn-messages', 'ack-only', 'busy-progress', 'provider-error',
   'resume-cezar-done', 'steer-tool', 'steer-late', 'subagent-after-park',
 ] as const;
-const gaps: Array<{ runner: RunnerId; scenario: string; reason: string }> = [];
-const counts: Partial<Record<RunnerId, number>> = {};
+const gaps: Array<{ runner: string; scenario: string; reason: string }> = [];
+const counts: Partial<Record<string, number>> = {};
 
-function gap(runner: RunnerId, scenario: string): string | undefined {
+function gap(runner: string, scenario: string): string | undefined {
   if (runner === 'pi' && scenario === 'subagent-after-park') return 'Pi has no child wire for this recipe.';
   if (runner === 'claude' && scenario === 'steer-late') return 'Claude has no direct mock:steer-late token.';
   if (scenario === 'silent-tail-ack-delay' && runner !== 'opencode') return 'f7-delay-ack is an OpenCode HTTP acknowledgement recipe.';
   return undefined;
 }
 
-function prompt(scenario: string, runner: RunnerId, park: string): string {
+function prompt(scenario: string, runner: string, park: string): string {
   if (['untokened', 'deferred-turn-start', 'silent-tail-ack-delay'].includes(scenario)) return 'Inspect the working tree.';
   if (scenario === 'no-progress-gated-ack') return 'mock:no-progress mock:gate-prompt-ack';
   if (scenario === 'turn-messages') return `mock:turn-messages:${encoded}`;
@@ -53,7 +54,7 @@ function prompt(scenario: string, runner: RunnerId, park: string): string {
 const turns = (events: AgentEvent[]) => events.filter(event => event.type === 'turn-end').length;
 const failed = (events: AgentEvent[]) => events.some(event => event.type === 'error');
 
-function acknowledgementBoundary(runner: RunnerId, file: string, offset = 0): number | undefined {
+function acknowledgementBoundary(runner: string, file: string, offset = 0): number | undefined {
   const lines = readFileSync(file, 'utf8').slice(offset).split('\n');
   const index = lines.findIndex(line => {
     if (!line) return false;
@@ -70,17 +71,17 @@ function acknowledgementBoundary(runner: RunnerId, file: string, offset = 0): nu
   return offset + lines.slice(0, index + 1).join('\n').length + 1;
 }
 
-function acknowledged(runner: RunnerId, file: string, offset = 0): boolean {
+function acknowledged(runner: string, file: string, offset = 0): boolean {
   return acknowledgementBoundary(runner, file, offset) !== undefined;
 }
 
-function transcriptAtAcknowledgement(runner: RunnerId, file: string, offset = 0) {
+function transcriptAtAcknowledgement(runner: string, file: string, offset = 0) {
   const boundary = acknowledgementBoundary(runner, file, offset);
   if (boundary === undefined) throw new Error('Missing recipe acknowledgement boundary');
   return readFileSync(file, 'utf8').slice(0, boundary);
 }
 
-function stallFramesRecorded(runner: RunnerId, file: string): boolean {
+function stallFramesRecorded(runner: string, file: string): boolean {
   const wire = readFileSync(file, 'utf8');
   if (runner === 'pi') return acknowledged(runner, file) && wire.split('\n').some(line => {
     if (!line) return false;
@@ -127,14 +128,14 @@ async function send(session: AgentSession, text: string) {
   await waitFor(() => session.sendMessage([{ type: 'text', text }]), 5_000);
 }
 
-function openingTurnActive(runner: RunnerId, file: string, events: AgentEvent[]): boolean {
+function openingTurnActive(runner: string, file: string, events: AgentEvent[]): boolean {
   const data = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line).data).join('\n');
-  const starts = { claude: /isReplay/, codex: /turn\/started/, opencode: /message.updated/, pi: /turn_start/, omp: /turn_start/ };
-  const ends = { claude: /"type":"result"/, codex: /turn\/completed/, opencode: /session.idle/, pi: /turn_end/, omp: /turn_end/ };
-  return starts[runner].test(data) && !ends[runner].test(data) && turns(events) === 0;
+  const starts: Record<string, RegExp> = { claude: /isReplay/, codex: /turn\/started/, opencode: /message.updated/, pi: /turn_start/, omp: /turn_start/ };
+  const ends: Record<string, RegExp> = { claude: /"type":"result"/, codex: /turn\/completed/, opencode: /session.idle/, pi: /turn_end/, omp: /turn_end/ };
+  return starts[runner]!.test(data) && !ends[runner]!.test(data) && turns(events) === 0;
 }
 
-async function sendSteer(session: AgentSession, runner: RunnerId, file: string, events: AgentEvent[]) {
+async function sendSteer(session: AgentSession, runner: string, file: string, events: AgentEvent[]) {
   let accepted: false | Promise<void> = false;
   // bound: the opening native ACK must clear before the runner admits agent input.
   await waitFor(() => {
@@ -152,7 +153,7 @@ async function followTurn(session: AgentSession, events: AgentEvent[], text: str
   await waitFor(() => turns(events) > before || failed(events), 5_000);
 }
 
-async function driveRecipe(scenario: string, runner: RunnerId, session: AgentSession, events: AgentEvent[], activity: () => number, cwd: string, file: string, exits: ReturnType<typeof observeExits>['exits'], asked: () => boolean) {
+async function driveRecipe(scenario: string, runner: string, session: AgentSession, events: AgentEvent[], activity: () => number, cwd: string, file: string, exits: ReturnType<typeof observeExits>['exits'], asked: () => boolean) {
   if (scenario.startsWith('crash-stderr') && scenario !== 'crash-stderr-clean') {
     // bound: the held-pipe recipe starts its leader exit only after child readiness.
     await waitFor(() => exits.length > 0, 5_000);
@@ -206,7 +207,7 @@ async function driveRecipe(scenario: string, runner: RunnerId, session: AgentSes
   return driveFollowups(scenario, runner, session, events, activity, file);
 }
 
-async function driveFollowups(scenario: string, runner: RunnerId, session: AgentSession, events: AgentEvent[], activity: () => number, file: string) {
+async function driveFollowups(scenario: string, runner: string, session: AgentSession, events: AgentEvent[], activity: () => number, file: string) {
   if (scenario === 'silent-tail-ack-delay') await followTurn(session, events, 'mock:silent-tail f7-delay-ack');
   if (scenario === 'untokened') await followTurn(session, events, 'Describe the result.');
   if (scenario === 'deferred-turn-start') await followTurn(session, events, 'mock:deferred-turn-start');
@@ -228,8 +229,8 @@ async function driveFollowups(scenario: string, runner: RunnerId, session: Agent
   }
 }
 
-async function recordRecipe(runner: RunnerId, scenario: string) {
-  const adapter = HARNESS_ADAPTERS[runner];
+async function recordRecipe(runner: string, scenario: string) {
+  const adapter = HARNESS_ADAPTERS[runner]!;
   const dir = join(output, runner);
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `${scenario}.ndjson`);
@@ -274,7 +275,7 @@ async function recordRecipe(runner: RunnerId, scenario: string) {
   }
 }
 
-for (const runner of RUNNER_IDS) {
+for (const runner of BUILT_IN_RUNNER_IDS) {
   if (process.env.MOCK_WIRE_RUNNER && process.env.MOCK_WIRE_RUNNER !== runner) continue;
   for (const scenario of shared) {
     if (process.env.MOCK_WIRE_SCENARIO && process.env.MOCK_WIRE_SCENARIO !== scenario) continue;

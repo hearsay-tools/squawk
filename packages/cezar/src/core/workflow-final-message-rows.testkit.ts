@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { describe, it } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runsOn } from './parity-classes.testkit.ts';
 import { FINAL_MESSAGE_CRITERIA, exemptionFor } from './harness-parity-core.testkit.ts';
 import { collectedOnly, type CellBody } from './parity-partition.testkit.ts';
@@ -10,8 +10,8 @@ export const WORKFLOW_FINAL_MESSAGE_GROUPS = {'ack-delay': ['F7'], 'reply-bound'
 
 type FinalMessageRow = (typeof FINAL_MESSAGE_CRITERIA)[number];
 export type WorkflowFinalMessageCells = {
-  exemption: (backend: RunnerId, row: FinalMessageRow) => CellBody;
-  row: (backend: RunnerId, row: FinalMessageRow) => CellBody;
+  exemption: (backend: string, row: FinalMessageRow) => CellBody;
+  row: (backend: string, row: FinalMessageRow) => CellBody;
 };
 
 // The rows a runner may exempt, with the exemption cell's timeout: F8's exemption still drives a run.
@@ -22,7 +22,7 @@ export function workflowFinalMessage(cells: WorkflowFinalMessageCells) {
   return function describeWorkflowFinalMessage(group: keyof typeof WORKFLOW_FINAL_MESSAGE_GROUPS, registration = { describe, it }) {
     const { describe, it } = registration;
     describe('no-wait nudge parity — #544, hearsay-tools/cezarion#1234', () => {
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         for (const row of FINAL_MESSAGE_CRITERIA.filter(row => { return (WORKFLOW_FINAL_MESSAGE_GROUPS[group] as readonly string[]).includes(row.id) && runsOn('workflow-final-message', row.id, backend); })) {
           const exemption = EXEMPTION_TIMEOUT_MS.has(row.id) ? exemptionFor(row.id, backend) : undefined;
           if (exemption) it(`${backend} ${row.id} exemption — ${exemption.reason}`, cells.exemption(backend, row), EXEMPTION_TIMEOUT_MS.get(row.id));

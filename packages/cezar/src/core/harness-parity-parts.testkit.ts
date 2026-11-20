@@ -1,4 +1,3 @@
-import type { RunnerId } from './agent-runner.ts';
 
 /**
  * The parts of the harness parity matrix, as plain data. Each part's cells live in
@@ -22,7 +21,7 @@ export const HARNESS_PARITY_GROUPS: Readonly<Record<HarnessParityPart, readonly 
   'pending-request': ['retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission'],
 };
 
-export const harnessParityFile = (backend: RunnerId, part: HarnessParityPart): string =>
+export const harnessParityFile = (backend: string, part: HarnessParityPart): string =>
   `harness-${backend}-${part}-parity.test.ts`;
 
 /** The module that defines one part's cells; its runner files import it and nothing wider. */

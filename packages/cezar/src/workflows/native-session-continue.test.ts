@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
@@ -7,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor } from '../core/harness-parity.testkit.ts';
 import { RunStore } from '../runs/store.ts';
@@ -56,7 +56,7 @@ function flagValues(wire: Row[], flag: string): string[] {
 }
 
 /** How each native wire shows a resumed session, a fresh one, a started turn and its effort. */
-const WIRES: Record<RunnerId, {
+const WIRES: Record<string, {
   resumed(wire: Row[]): string[];
   freshSessions(wire: Row[]): number;
   started(wire: Row[]): boolean;
@@ -153,8 +153,8 @@ describe('Continue after a crash before the native session event', () => {
 
   /** A failed run whose first step holds `sessionId`. `launched` writes the step-start event a
    *  real launch writes before the runner starts; without it the run has no event history. */
-  function failedRun(backend: RunnerId, sessionId: string, options: { launched: boolean }): string {
-    setEnv(HARNESS_ADAPTERS[backend].binEnv, HARNESS_ADAPTERS[backend].mockBin);
+  function failedRun(backend: string, sessionId: string, options: { launched: boolean }): string {
+    setEnv(HARNESS_ADAPTERS[backend]!.binEnv, HARNESS_ADAPTERS[backend]!.mockBin);
     const workflowDef = CHAIN_DEF;
     const created = store.createRun({
       title: 't', workflow: workflowDef.name, task: promptFor(backend, 'baseline'), runner: backend,
@@ -170,29 +170,29 @@ describe('Continue after a crash before the native session event', () => {
     return created.id;
   }
 
-  async function continueWire(runId: string, backend: RunnerId): Promise<Row[]> {
+  async function continueWire(runId: string, backend: string): Promise<Row[]> {
     expect(manager!.continueRun(runId, { text: promptFor(backend, 'baseline') })).toEqual({ ok: true });
     const read = () => rows(existsSync(argsFile) ? readFileSync(argsFile, 'utf8') : '');
     // bound: hang guard; the turn's first request on the wire is the product signal.
-    await waitFor(() => WIRES[backend].started(read()) || store.getRun(runId)?.status === 'failed', 30_000);
+    await waitFor(() => WIRES[backend]!.started(read()) || store.getRun(runId)?.status === 'failed', 30_000);
     expect(store.getRun(runId)?.error).toBeUndefined();
     return read();
   }
 
-  for (const backend of RUNNER_IDS) {
-    const source = RUNNER_FACTS[backend].sessionIdSource;
+  for (const backend of BUILT_IN_RUNNER_IDS) {
+    const source = RUNNER_FACTS[backend]!.sessionIdSource;
     it(`${backend} ${source === 'launch' ? 'resumes' : 'never resumes'} the launch UUID and runs as the continued step`, async () => {
       const id = failedRun(backend, LAUNCH_SESSION_ID, { launched: true });
       const wire = await continueWire(id, backend);
       if (source === 'launch') {
-        expect(WIRES[backend].resumed(wire)).toEqual([LAUNCH_SESSION_ID]);
-        expect(WIRES[backend].freshSessions(wire)).toBe(0);
+        expect(WIRES[backend]!.resumed(wire)).toEqual([LAUNCH_SESSION_ID]);
+        expect(WIRES[backend]!.freshSessions(wire)).toBe(0);
       } else {
-        expect(WIRES[backend].resumed(wire)).toEqual([]);
-        expect(WIRES[backend].freshSessions(wire)).toBeGreaterThan(0);
+        expect(WIRES[backend]!.resumed(wire)).toEqual([]);
+        expect(WIRES[backend]!.freshSessions(wire)).toBeGreaterThan(0);
       }
       // The Continue runs as `implement`, the step whose session it continues.
-      expect(WIRES[backend].effort(wire)).toBe('high');
+      expect(WIRES[backend]!.effort(wire)).toBe('high');
       if (source === 'native') {
         // bound: hang guard; the runner reports its own id, which the Continue step records.
         await waitFor(() => store.readEvents(id).some(event => event.type === 'session' && event.stepId === 'continue-1'), 15_000);
@@ -206,8 +206,8 @@ describe('Continue after a crash before the native session event', () => {
     // then shows that the runner never reported the id, so the Continue keeps the conversation.
     const id = failedRun('codex', 'thread-from-salvaged-run', { launched: false });
     const wire = await continueWire(id, 'codex');
-    expect(WIRES.codex.resumed(wire)).toEqual(['thread-from-salvaged-run']);
-    expect(WIRES.codex.freshSessions(wire)).toBe(0);
-    expect(WIRES.codex.effort(wire)).toBe('high');
+    expect(WIRES.codex!.resumed(wire)).toEqual(['thread-from-salvaged-run']);
+    expect(WIRES.codex!.freshSessions(wire)).toBe(0);
+    expect(WIRES.codex!.effort(wire)).toBe('high');
   }, 60_000);
 });

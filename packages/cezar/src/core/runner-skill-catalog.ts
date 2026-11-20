@@ -1,8 +1,7 @@
 import type { RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
-import type { RunnerId } from './agent-runner.ts';
 
 export type SkillCatalog = Pick<RunnerSkillList, 'skills' | 'problems'>;
-export interface SkillCatalogQuery { runner: RunnerId; cwd: string; accountHome?: string | undefined }
+export interface SkillCatalogQuery { runner: string; cwd: string; accountHome?: string | undefined }
 export interface RunnerSkillCatalogAdapter {
   discover(query: SkillCatalogQuery, signal: AbortSignal): Promise<SkillCatalog>;
 }
@@ -17,7 +16,7 @@ export class RunnerSkillCatalog {
   readonly #ttl: number;
   readonly #timeout: number;
   constructor(readonly options: {
-    adapters: Partial<Record<RunnerId, RunnerSkillCatalogAdapter>>;
+    adapters: Partial<Record<string, RunnerSkillCatalogAdapter>>;
     now?: () => number;
     ttlMs?: number;
     timeoutMs?: number;
@@ -76,7 +75,7 @@ export class RunnerSkillCatalog {
 function catalogKey(query: SkillCatalogQuery): string {
   return JSON.stringify([query.runner, query.accountHome ?? null, query.cwd]);
 }
-function answer(runner: RunnerId, entry: Entry, fresh = false): RunnerSkillList {
+function answer(runner: string, entry: Entry, fresh = false): RunnerSkillList {
   return structuredClone({ runner, skills: entry.value?.skills ?? [], problems: entry.value?.problems ?? [],
     source: entry.value ? (fresh && !entry.reason ? 'live' : 'cache') : 'unavailable',
     ...(entry.reason ? { reason: entry.reason } : {}) });

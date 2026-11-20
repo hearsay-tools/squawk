@@ -1,5 +1,4 @@
 import { productIdentity } from '../home/identity.ts';
-import type { RunnerId } from './agent-runner.ts';
 import type { RunnerDetection } from './runner-definition.ts';
 import { registeredRunners } from './runner-registry.ts';
 import { productEnv } from './product-env.ts';
@@ -37,7 +36,7 @@ function dryRunVersion(): string {
  * Probe one runner's CLI, as its definition describes it (`RunnerDetection`): an override key or
  * the PATH name, a `--version` call, and the definition's hints.
  */
-export async function probeRunner(name: RunnerId, detection: RunnerDetection): Promise<BackendCheck> {
+export async function probeRunner(name: string, detection: RunnerDetection): Promise<BackendCheck> {
   const override = detection.binOverride();
   if (productEnv('DRY_RUN') === '1' && (detection.dryRun === 'always' || override === undefined)) {
     return { name, available: true, version: dryRunVersion() };

@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it as registerTest, expect, onTestFinished } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { manager, until, store, semaphore, root, checkpoint, timeline, terminal } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -16,7 +16,7 @@ import { toolCall } from './waits-parity.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('input', inputCells);
 
-export function inputCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function inputCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U2 ci and timer open: the timer wakes, ci stays open and is in the footer, the turn end re-parks without re-registering, the later ci result is delivered`, async () => {
       const external = github();
@@ -46,7 +46,7 @@ export function inputCells(runners: RunnerId[], it: typeof registerTest = regist
       await until(() => parkedOn(run.id, waitOfKind(run.id, 'pr')));
       const ci = waitOfKind(run.id, 'pr')!;
       const turns = turnEnds(run.id);
-      const text = `${HARNESS_ADAPTERS[runner].scenarios.hold!}\nPlease also update the docs`;
+      const text = `${HARNESS_ADAPTERS[runner]!.scenarios.hold!}\nPlease also update the docs`;
       expect(manager.sendMessage(run.id, [{ type: 'text', text }])).toBe(true);
       await until(() => prompted(runner, 'Please also update the docs').length > 0);
       expect(prompted(runner, 'Please also update the docs').at(-1)).toContain(`\n\nStill open: CI wait ${ci.id} for acme/repo#12`);
@@ -107,7 +107,7 @@ export function inputCells(runners: RunnerId[], it: typeof registerTest = regist
         process.env.CEZ_MOCK_RELEASE_FILE = release;
         // parkedOn above proves the first child already inherited its own store path.
         if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8-blocker-sessions.json');
-        const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios['hold-gated']!, runner });
+        const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
         try {
           checkpoint(`u8-blocker-started:${blocker.id}`);
           await until(() => store.readEvents(blocker.id).some(event => event.type === 'turn.started'));
@@ -143,7 +143,7 @@ export function inputCells(runners: RunnerId[], it: typeof registerTest = regist
         const previousSessionsFile = process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE;
         try {
           if (runner === 'opencode') process.env.CEZ_MOCK_OPENCODE_SESSIONS_FILE = join(root, 'u8l-blocker-sessions.json');
-          const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios['hold-gated']!, runner });
+          const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
           await until(() => store.readEvents(blocker.id).some(event => event.type === 'turn.started'));
         } finally {
           if (runner === 'opencode') {
@@ -152,7 +152,7 @@ export function inputCells(runners: RunnerId[], it: typeof registerTest = regist
           }
         }
         // Queued before the wake joins the line.
-        task = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+        task = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
         expect(store.getRun(task.id)?.status).toBe('queued');
         if (runner === 'opencode') {
           const taskId = task.id;

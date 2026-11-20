@@ -11,12 +11,12 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
-import { inputDeliveryOf, type AgentEvent, type RunnerId } from '../../packages/cezar/src/core/agent-runner.ts';
+import { inputDeliveryOf, type AgentEvent } from '../../packages/cezar/src/core/agent-runner.ts';
 import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
 registerBuiltInRunners();
 
-const [backend, model] = process.argv.slice(2) as [RunnerId, string | undefined];
+const [backend, model] = process.argv.slice(2) as [string, string | undefined];
 if (!backend) { console.error('usage: probe-steering.ts <backend> [model]'); process.exit(2); }
 const cwd = mkdtempSync(join(tmpdir(), `probe-steering-${backend}-`));
 execFileSync('git', ['init', '-q'], { cwd }); writeFileSync(join(cwd, 'README.md'), 'probe\n');

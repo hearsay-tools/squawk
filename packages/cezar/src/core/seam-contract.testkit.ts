@@ -33,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
-import { inputDeliveryOf, type AgentEvent, type AgentSession, type InputDelivery, type RunnerId } from './agent-runner.ts';
+import { inputDeliveryOf, type AgentEvent, type AgentSession, type InputDelivery } from './agent-runner.ts';
 import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
@@ -43,7 +43,7 @@ import type { UiEvent } from './ui-events.ts';
 export type ContractEntry = { readonly v1: AgentEvent } | { readonly v2: UiEvent } | { readonly mark: string };
 
 export interface ContractObservation {
-  readonly backend: RunnerId;
+  readonly backend: string;
   readonly delivery: InputDelivery;
   readonly obs: SeamObservation;
   readonly timeline: readonly ContractEntry[];
@@ -66,7 +66,7 @@ export interface SeamContractRow {
   readonly id: string;
   readonly name: string;
   readonly scenario: ScenarioName;
-  readonly observe: (backend: RunnerId) => Promise<ContractObservation>;
+  readonly observe: (backend: string) => Promise<ContractObservation>;
   readonly assert: (observed: ContractObservation) => void;
 }
 
@@ -216,7 +216,7 @@ interface DriveContract {
 }
 
 /** Drive one runner's native mock with test-controlled gates, a wire recording and a recorder. */
-async function driveContract(backend: RunnerId, drive: DriveContract): Promise<ContractObservation> {
+async function driveContract(backend: string, drive: DriveContract): Promise<ContractObservation> {
   const dir = mkdtempSync(join(tmpdir(), `cez-contract-${backend}-`));
   const releaseFile = join(dir, 'release');
   const gateFile = join(dir, 'steer-gate');
@@ -264,7 +264,7 @@ async function driveContract(backend: RunnerId, drive: DriveContract): Promise<C
  * Wait until a mid-turn human message is on the mock's wire, when the runner writes it there while
  * the turn runs. An `always-held` runner keeps it until the turn ends, so nothing reaches the wire.
  */
-async function deliveredMidTurn(backend: RunnerId, mock: MockControl): Promise<void> {
+async function deliveredMidTurn(backend: string, mock: MockControl): Promise<void> {
   if (inputDeliveryOf(await runnersUnderTest()(backend)).humanInputAtTurnEnd !== 'always-held') await mock.onWire(FOLLOW_UP);
 }
 
@@ -324,7 +324,7 @@ const ACK_IDS = ['contract-S36-running', 'contract-S36-stopped'] as const;
 const reportedUnread = (timeline: readonly ContractEntry[], id: string) => timeline.some(entry => 'v1' in entry &&
   ((entry.v1.type === 'turn-end' && !!entry.v1.unconsumedInputIds?.includes(id)) || (entry.v1.type === 'input-unconsumed' && entry.v1.inputIds.includes(id))));
 
-async function observeAcknowledgement(backend: RunnerId): Promise<ContractObservation> {
+async function observeAcknowledgement(backend: string): Promise<ContractObservation> {
   const consumed: string[] = [];
   let recorder: Recorder | undefined;
   return driveContract(backend, {
@@ -421,7 +421,7 @@ function assertAcknowledgement({ delivery, timeline, at, read }: ContractObserva
 
 // ---- S37: turn start -----------------------------------------------------------------------------
 
-async function observeTurnStart(backend: RunnerId): Promise<ContractObservation> {
+async function observeTurnStart(backend: string): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: 'hold', variant: 'follow-up',
     whileOpen: async (session, rec) => {
@@ -440,8 +440,8 @@ function assertTurnStart({ backend, timeline, at }: ContractObservation): void {
   expect(firstCompleted).toBeGreaterThanOrEqual(0);
   const started = indexFrom(timeline, isStart, firstCompleted + 1);
   expect(started, `the follow-up turn starts${trace}`).toBeGreaterThan(firstCompleted);
-  expect(started < at.get('sent')!, `turn.started before sendMessage returns: turnStart ${RUNNER_FACTS[backend].turnStart}${trace}`)
-    .toBe(RUNNER_FACTS[backend].turnStart === 'on-write');
+  expect(started < at.get('sent')!, `turn.started before sendMessage returns: turnStart ${RUNNER_FACTS[backend]!.turnStart}${trace}`)
+    .toBe(RUNNER_FACTS[backend]!.turnStart === 'on-write');
   const content = [indexFrom(timeline, isItem, firstCompleted + 1), indexFrom(timeline, isV1Content, firstTurnEnd + 1)].filter(index => index >= 0);
   expect(content.length, `the follow-up turn has content${trace}`).toBeGreaterThan(0);
   for (const index of content) expect(index, `content follows turn.started${trace}`).toBeGreaterThan(started);
@@ -462,7 +462,7 @@ const HELD_VARIANTS = {
   startup: `${FOLLOW_UP} ${DEFERRED_TURN_START}`,
 } as const;
 
-async function observeHeld(backend: RunnerId, variant: keyof typeof HELD_VARIANTS): Promise<ContractObservation> {
+async function observeHeld(backend: string, variant: keyof typeof HELD_VARIANTS): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: 'hold-gated', variant,
     whileOpen: async (session, rec, mock) => {
@@ -505,7 +505,7 @@ function assertHeld({ timeline, at, read, released }: ContractObservation): void
 
 // ---- S39: held input never dropped at finish ------------------------------------------------------
 
-async function observeFinish(backend: RunnerId): Promise<ContractObservation> {
+async function observeFinish(backend: string): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: 'hold-gated', variant: 'auto-end',
     // The session is asked to close after its first turn, as a finished step is.
@@ -537,7 +537,7 @@ function assertFinish({ timeline, at, read }: ContractObservation): void {
 
 // ---- S40, S41: humanInputAtTurnEnd matches the wire -----------------------------------------------
 
-async function observeTiming(backend: RunnerId, timing: 'early' | 'late'): Promise<ContractObservation> {
+async function observeTiming(backend: string, timing: 'early' | 'late'): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: timing === 'early' ? 'steer-tool' : 'steer-late', variant: timing, steerGate: true,
     whileOpen: async (session, rec, mock) => {
@@ -566,7 +566,7 @@ function assertTiming({ delivery, timeline, at, read, variant }: ContractObserva
 
 // ---- S42: systemPromptOnResume matches the wire ---------------------------------------------------
 
-async function observeSystemPrompt(backend: RunnerId, resume: boolean): Promise<ContractObservation> {
+async function observeSystemPrompt(backend: string, resume: boolean): Promise<ContractObservation> {
   const dir = mkdtempSync(join(tmpdir(), `cez-contract-${backend}-prompt-`));
   const files = [join(dir, 'args.ndjson'), join(dir, 'stdin.ndjson')] as const;
   try {
@@ -607,7 +607,7 @@ function running(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
 }
 
-async function observeProcesses(backend: RunnerId): Promise<ContractObservation> {
+async function observeProcesses(backend: string): Promise<ContractObservation> {
   const dir = mkdtempSync(join(tmpdir(), `cez-contract-${backend}-pids-`));
   const pidFile = join(dir, 'pids');
   const reported: { pid: number; alive: boolean }[] = [];
@@ -651,7 +651,7 @@ function assertProcesses({ processes, timeline }: ContractObservation): void {
 const WAKE_OPENING = 'Resume to receive the queued timer result.';
 const FAILURE_VARIANTS = ['wake', 'gated'] as const;
 
-async function observeProviderFailure(backend: RunnerId, variant: typeof FAILURE_VARIANTS[number]): Promise<ContractObservation> {
+async function observeProviderFailure(backend: string, variant: typeof FAILURE_VARIANTS[number]): Promise<ContractObservation> {
   const dir = mkdtempSync(join(tmpdir(), `cez-contract-${backend}-failure-`));
   const files = [join(dir, 'args.ndjson'), join(dir, 'stdin.ndjson')] as const;
   // `wake`: every continuation's opening prompt fails, as `persistentWakeFailure` does. `gated`: the
@@ -698,7 +698,7 @@ function assertProviderFailure({ timeline, at }: ContractObservation): void {
   expect(at.get('ended'), `the session ended after the interrupt${trace}`).toBeGreaterThan(at.get('interrupt')!);
 }
 
-async function observeUnknownSkill(backend: RunnerId): Promise<ContractObservation> {
+async function observeUnknownSkill(backend: string): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: 'baseline', variant: 'unknown-skill',
     spec: { userPrompt: '', skill: { id: 'probe-missing', path: '/probe/missing/SKILL.md', args: 'unknown fixture' } },
@@ -706,7 +706,7 @@ async function observeUnknownSkill(backend: RunnerId): Promise<ContractObservati
   });
 }
 
-async function observeMidTurnSkill(backend: RunnerId): Promise<ContractObservation> {
+async function observeMidTurnSkill(backend: string): Promise<ContractObservation> {
   return driveContract(backend, {
     scenario: 'steer-tool', variant: 'mid-turn-skill', steerGate: true,
     whileOpen: async (session, recorder, mock) => {
@@ -719,7 +719,7 @@ async function observeMidTurnSkill(backend: RunnerId): Promise<ContractObservati
   });
 }
 
-async function observeSkillVisibility(backend: RunnerId): Promise<ContractObservation> {
+async function observeSkillVisibility(backend: string): Promise<ContractObservation> {
   const dir = mkdtempSync(join(tmpdir(), 'skill-visibility-'));
   const path = join(dir, 'SKILL.md');
   try {
@@ -745,7 +745,7 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
     name: 'S37 starts a follow-up turn before its content and its turn end',
   },
   ...(Object.keys(HELD_VARIANTS) as (keyof typeof HELD_VARIANTS)[]).map(variant => ({
-    id: 'S38', scenario: 'hold-gated' as const, observe: (backend: RunnerId) => observeHeld(backend, variant), assert: assertHeld,
+    id: 'S38', scenario: 'hold-gated' as const, observe: (backend: string) => observeHeld(backend, variant), assert: assertHeld,
     name: `S38 holds a human follow-up until the turn that carries it starts (${variant})`,
   })),
   {
@@ -753,15 +753,15 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
     name: 'S39 reports human input held at a turn end and runs it before the session closes',
   },
   {
-    id: 'S40', scenario: 'steer-tool', observe: (backend: RunnerId) => observeTiming(backend, 'early'), assert: assertTiming,
+    id: 'S40', scenario: 'steer-tool', observe: (backend: string) => observeTiming(backend, 'early'), assert: assertTiming,
     name: 'S40 reads or holds a human message sent before the last model call as humanInputAtTurnEnd declares',
   },
   {
-    id: 'S41', scenario: 'steer-late', observe: (backend: RunnerId) => observeTiming(backend, 'late'), assert: assertTiming,
+    id: 'S41', scenario: 'steer-late', observe: (backend: string) => observeTiming(backend, 'late'), assert: assertTiming,
     name: 'S41 reads or holds a human message sent after the last model call as humanInputAtTurnEnd declares',
   },
   ...([false, true] as const).map(resume => ({
-    id: 'S42', scenario: 'baseline' as const, observe: (backend: RunnerId) => observeSystemPrompt(backend, resume), assert: assertSystemPrompt,
+    id: 'S42', scenario: 'baseline' as const, observe: (backend: string) => observeSystemPrompt(backend, resume), assert: assertSystemPrompt,
     name: `S42 carries spec.systemPrompt as systemPromptOnResume declares (${resume ? 'resume' : 'fresh'})`,
   })),
   {
@@ -771,14 +771,14 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
   ...FAILURE_VARIANTS.map(variant => ({
     // Both variants raise the failure control's provider error; the wake drives a baseline prompt.
     id: 'S44', scenario: 'provider-error-controlled' as const,
-    observe: (backend: RunnerId) => observeProviderFailure(backend, variant), assert: assertProviderFailure,
+    observe: (backend: string) => observeProviderFailure(backend, variant), assert: assertProviderFailure,
     name: `S44 fails a ${variant === 'wake' ? 'wake continuation' : 'running'} turn on a provider error before any turn end, and ends once interrupted`,
   })),
   {
     id: 'S45', scenario: 'baseline', observe: observeUnknownSkill,
     name: 'S45 reports an unknown native skill as skillUnknownName declares',
     assert: ({ backend, obs }) => {
-      expect(obs.v1.some(event => event.type === 'error')).toBe(RUNNER_FACTS[backend].skillUnknownName === 'error');
+      expect(obs.v1.some(event => event.type === 'error')).toBe(RUNNER_FACTS[backend]!.skillUnknownName === 'error');
       expect(obs.v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
     },
   },
@@ -786,8 +786,8 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
     id: 'S46', scenario: 'steer-tool', observe: observeMidTurnSkill,
     name: 'S46 admits a native skill during a running turn only as skillTriggerMidTurn declares',
     assert: ({ backend, obs, read }) => {
-      expect(read.acceptedSkill).toBe(RUNNER_FACTS[backend].skillTriggerMidTurn);
-      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend].skillTriggerMidTurn);
+      expect(read.acceptedSkill).toBe(RUNNER_FACTS[backend]!.skillTriggerMidTurn);
+      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend]!.skillTriggerMidTurn);
       expect(obs.v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
     },
   },
@@ -795,7 +795,7 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
     id: 'S47', scenario: 'baseline', observe: observeSkillVisibility,
     name: 'S47 sees skills added after start only as skillsSeenBySession declares',
     assert: ({ backend, obs }) => {
-      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend].skillsSeenBySession === 'live');
+      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend]!.skillsSeenBySession === 'live');
     },
   },
 ];

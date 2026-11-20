@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +8,6 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { provisionDelegationSession, DelegationController } from './provision.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import * as transport from './transport.ts';
 
 describe('session provisioning', () => {
@@ -41,7 +41,7 @@ describe('session provisioning', () => {
     second.revoke(); expect(f.credentials.authenticate(second.env.CEZ_DELEGATION_TOKEN!)).toBeUndefined();
     expect(old.runId).toBe(f.parent.id);
   });
-  it.each(RUNNER_IDS.flatMap(backend => ['0', '1'].map(full => ({ backend, full }))))('passes only session-specific env to $backend with full-env=$full', ({ backend, full }) => {
+  it.each(BUILT_IN_RUNNER_IDS.flatMap(backend => ['0', '1'].map(full => ({ backend, full }))))('passes only session-specific env to $backend with full-env=$full', ({ backend, full }) => {
     const session = provision()!;
     const env = buildChildEnv({ backend, source: { CEZ_HOME: '/live/home', CEZ_ENV_PASSTHROUGH: 'CEZ_HOME', CEZ_AGENT_ENV_FULL: full, CEZ_DELEGATION_TOKEN: 'parent-token', CEZ_DELEGATION_URL: 'http://evil' }, extraEnv: session.env });
     expect(env.CEZ_HOME).toBeUndefined();
@@ -49,7 +49,7 @@ describe('session provisioning', () => {
   });
   it('teaches runner selection and live message delivery in the parent instructions', () => {
     const { instructions } = provision()!;
-    expect(instructions).toContain(`--runner <${RUNNER_IDS.join('|')}>`);
+    expect(instructions).toContain(`--runner <${BUILT_IN_RUNNER_IDS.join('|')}>`);
     expect(instructions).toContain('--request-id <UUID> --runner codex');
     expect(instructions).toContain('inbox remains a fallback read during an active turn; it acknowledges only the messages it returns');
     // Messages reach a live session mid-turn; nothing promises turn-boundary delivery.

@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { describeHarnessParity, HARNESS_PARITY_GROUPS, harnessParityFile, harnessParityRegistrations, type HarnessParityPart } from './harness-parity-cells.testkit.ts';
 
 import { describeAutosaveChurn, describeAutosaveSettlement } from './harness-autosave-settlement.testkit.ts';
@@ -11,12 +11,12 @@ describeHarnessParity('once');
 describe('harness parity part registration', () => {
   it('registers every criterion and runner exactly once across its part files', () => {
     const parts = Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[];
-    const expectedFiles = RUNNER_IDS.flatMap(runner => parts.map(part => harnessParityFile(runner, part)));
-    const actualFiles = RUNNER_IDS.flatMap(runner =>
+    const expectedFiles = BUILT_IN_RUNNER_IDS.flatMap(runner => parts.map(part => harnessParityFile(runner, part)));
+    const actualFiles = BUILT_IN_RUNNER_IDS.flatMap(runner =>
       readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
         file.startsWith(`harness-${runner}-`) && file.endsWith('-parity.test.ts')));
     expect(actualFiles.sort()).toEqual(expectedFiles.sort());
-    for (const runner of RUNNER_IDS) {
+    for (const runner of BUILT_IN_RUNNER_IDS) {
       const all = harnessParityRegistrations(runner);
       const routed = parts.map(part => harnessParityRegistrations(runner, part));
       // Full names also pin each variant of a criterion (permission decisions, fresh/Continue).
@@ -56,7 +56,7 @@ describe('harness autosave settlement part registration', () => {
     expect(churn.match(/describeAutosaveChurn\(/g)).toHaveLength(1);
     describeAutosaveChurn(registration);
     const pairs = names.map(name => name.match(/^(\w+) (R\d+) /)!.slice(1).join('/'));
-    expect(pairs.sort()).toEqual(RUNNER_IDS.flatMap(runner =>
+    expect(pairs.sort()).toEqual(BUILT_IN_RUNNER_IDS.flatMap(runner =>
       Array.from({ length: 8 }, (_, index) => `${runner}/R${61 + index}`)).sort());
   });
 });

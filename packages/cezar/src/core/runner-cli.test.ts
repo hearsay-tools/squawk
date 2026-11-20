@@ -1,27 +1,27 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { isSafeSessionId, resumeCommand, terminalExecutable } from './runner-cli.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
 // The golden take-over commands cover every runner.
 
-describe('resume commands — shared golden parity across RUNNER_IDS', () => {
+describe('resume commands — shared golden parity across BUILT_IN_RUNNER_IDS', () => {
   beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });
   afterEach(() => vi.unstubAllEnvs());
 
-  const commands = goldenCommands satisfies Record<(typeof RUNNER_IDS)[number], string>;
+  const commands: Record<string, string> = goldenCommands;
 
   it('covers exactly the registered runners', () => {
-    expect(Object.keys(commands).sort()).toEqual([...RUNNER_IDS].sort());
+    expect(Object.keys(commands).sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
   });
 
-  it.each(RUNNER_IDS)('matches the golden take-over command for %s', (runner) => {
-    expect(resumeCommand(runner, sessionId)).toBe(commands[runner]);
+  it.each(BUILT_IN_RUNNER_IDS)('matches the golden take-over command for %s', (runner) => {
+    expect(resumeCommand(runner, sessionId)).toBe(commands[runner]!);
   });
 
-  it.each(RUNNER_IDS)('rejects unsafe session ids for %s', (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('rejects unsafe session ids for %s', (runner) => {
     for (const id of unsafeSessionIds) {
       expect(resumeCommand(runner, id)).toBeNull();
     }
@@ -73,13 +73,13 @@ describe('terminalExecutable — PATH name or the configured executable', () => 
 
   it('starts a path-name runner by its PATH name, even in dry-run', () => {
     vi.stubEnv('CEZ_DRY_RUN', '1');
-    for (const runner of RUNNER_IDS) {
+    for (const runner of BUILT_IN_RUNNER_IDS) {
       const executable = runnerDefinition(runner).cli.terminalExecutable;
       if (executable.kind === 'path-name') expect(terminalExecutable(runner)).toBe(executable.name);
     }
   });
 
-  it.each(RUNNER_IDS.filter(runner => runnerDefinition(runner).cli.terminalExecutable.kind === 'configured'))(
+  it.each(BUILT_IN_RUNNER_IDS.filter(runner => runnerDefinition(runner).cli.terminalExecutable.kind === 'configured'))(
     'quotes the configured %s executable, and refuses one the platform cannot spell', (runner) => {
       const variable = `HSQ_${runner.toUpperCase()}_BIN`;
       vi.stubEnv(variable, '/opt/Some Agent/bin');

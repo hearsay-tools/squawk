@@ -1,11 +1,11 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { parityRunnerSubset, runnerSubsets } from './parity-runner-subset.ts';
 
 const file = 'packages/cezar/src/core/runner-group-parity.test.ts';
 const quoted = (ids: readonly string[]) => ids.map(id => `'${id}'`).join(', ');
-const [first, second] = RUNNER_IDS;
+const [first = 'claude', second = 'codex'] = BUILT_IN_RUNNER_IDS;
 const PAIR = quoted([first, second]);
 
 describe('parity-runner-subset (hearsay-tools/squawk#3642)', () => {
@@ -15,7 +15,7 @@ describe('parity-runner-subset (hearsay-tools/squawk#3642)', () => {
     ['a set', `const held = new Set([${PAIR}]);`],
     ['an includes test', `if ([${PAIR}].includes(runner)) {}`],
     ['an oracle', `expect([${PAIR}]).toContain(runner);`],
-    ['every runner but one', `const rest = [${quoted(RUNNER_IDS.slice(1))}];`],
+    ['every runner but one', `const rest = [${quoted(BUILT_IN_RUNNER_IDS.slice(1))}];`],
     ['cast and template elements', `const held = [\`${first}\`, '${second}' as const];`],
     ['one id per line', `const held = [\n  '${first}',\n  '${second}',\n];`],
   ])('refuses %s', (_case, source) => {
@@ -30,7 +30,7 @@ describe('parity-runner-subset (hearsay-tools/squawk#3642)', () => {
     ['one runner twice', `const one = ['${first}', '${first}'];`],
     ['a per-runner reason table', `const reasons = [['${first}', 'its wire'], ['${second}', 'its wire']];`],
     ['a pair beside another value', `const mixed = [${PAIR}, 'gh'];`],
-    ['every runner', `const all = [${quoted(RUNNER_IDS)}];`],
+    ['every runner', `const all = [${quoted(BUILT_IN_RUNNER_IDS)}];`],
     ['a list derived from the facts', "const held = runnersWhere(facts => facts.hookEvents === 'none');"],
     ['object keys', `const reasons = { ${first}: 'a', ${second}: 'b' };`],
     ['a union type', `type Pair = '${first}' | '${second}';`],

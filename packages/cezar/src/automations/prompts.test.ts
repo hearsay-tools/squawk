@@ -1,7 +1,7 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { describe, expect, it } from 'vitest';
 import { createAutomationInputSchema } from '@open-mercato/cezar-contract/automations';
 import { SCHEDULE_HOURS_OPTIONS, SCHEDULE_TYPES } from '@open-mercato/cezar-contract/automation-schedule';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { GITHUB_PLACEHOLDERS, SCHEDULE_PLACEHOLDERS } from './task-template.ts';
 import { automationDefinitionObjectSchema, automationDefinitionSchema, automationEventSchema, automationFiltersSchema, automationTaskSchema } from './types.ts';
 import {
@@ -33,7 +33,7 @@ describe('AUTOMATION_SCHEMA_REFERENCE', () => {
     for (const event of automationEventSchema.options) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(event);
     for (const type of SCHEDULE_TYPES) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(`"${type}"`);
     for (const every of SCHEDULE_HOURS_OPTIONS) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(String(every));
-    for (const runner of RUNNER_IDS) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(runner);
+    for (const runner of BUILT_IN_RUNNER_IDS) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(runner);
   });
 
   it('states the storage bounds', () => {

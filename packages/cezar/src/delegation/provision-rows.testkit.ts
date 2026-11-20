@@ -1,10 +1,10 @@
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { registrationGroups } from '../core/registration-coverage.testkit.ts';
 
 /** The provision matrix rows and the files that register them. Apart from the provision fixture,
  *  so the registration guard reads them without loading the run engine. */
 export const PROVISION_ROWS = {
-  governedIntent: RUNNER_IDS.flatMap(backend => ['start', 'continue', 'recovery', 'noninteractive', 'off'].map(mode => ({ backend, mode }))),
+  governedIntent: BUILT_IN_RUNNER_IDS.flatMap(backend => ['start', 'continue', 'recovery', 'noninteractive', 'off'].map(mode => ({ backend, mode }))),
   catalogMutation: ['queued', 'restart', 'continue'] as const,
   mixedBackend: ['queued', 'restart', 'continue'] as const,
   mixedChain: ['queued', 'restart', 'continue'] as const,

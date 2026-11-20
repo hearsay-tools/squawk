@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { readHandoff } from '../handoff.ts';
 import { AUTOSAVE_INTERVAL_MS } from '../workflows/run.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
@@ -29,7 +29,7 @@ const autosaveLines = (text: string) => section(text, '### Autosave').split('\n'
 // a timer commit that leaves the turn-end flush nothing to save) in the parity
 // guard.
 describe('harness parity — autosave on an agent-checked-out branch (#1004)', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     for (const continuation of [false, true]) {
       it(`${backend} ${continuation ? 'R79 continuation turn end' : 'R78 initial run finalize'} leaves work on another branch uncommitted and reports it`, async () => {
 

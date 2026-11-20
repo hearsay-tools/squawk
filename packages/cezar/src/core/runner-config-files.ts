@@ -1,4 +1,3 @@
-import type { RunnerId } from './agent-runner.ts';
 
 /**
  * The shape of one native config file that Settings → Agent config shows. Each runner's
@@ -35,7 +34,7 @@ export interface ConfigFileDef {
   /** Stable, opaque, URL-safe. The ONLY thing a client may name (traversal-proof). */
   id: string;
   /** Every runner that reads this file. `<repo>/AGENTS.md` is one file, two readers. */
-  runners: RunnerId[];
+  runners: string[];
   kind: ConfigKind;
   scope: ConfigScope;
   /** Absolute path, resolved per request so `$CODEX_HOME`/`$XDG_CONFIG_HOME` are honoured. */

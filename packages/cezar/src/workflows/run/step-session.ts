@@ -6,7 +6,7 @@ import { atStepOpen } from './launch-read-resolver.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, AgentSession, ContentBlock } from '../../core/agent-runner.ts';
 import type { SessionEventHandler } from './session-events.ts';
 import { inputDeliveryOf } from '../../core/agent-runner.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
@@ -63,7 +63,7 @@ export class StepSession {
     nextStep: WorkflowStepDef | undefined,
     emit: (event: { type: string; stepId?: string; [k: string]: unknown }) => void,
     images: ContentBlock[] | undefined,
-    taskBackend: RunnerId,
+    taskBackend: string,
     extraSystemPrompt: string | undefined,
     /** The chain-boundary note for this step (#410), or undefined when the
      *  workflow has a single agent step and there is no boundary to explain. */

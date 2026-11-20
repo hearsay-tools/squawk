@@ -157,7 +157,7 @@ export async function generateRunName(repoRoot: string, ctx: NamerContext, home:
   try {
     const config = await loadConfig(repoRoot, home);
     const runner = await createRunner(config.defaultRunner);
-    const model = RUNNER_FACTS[config.defaultRunner].claudeModelAliases ? config.namerModel : undefined;
+    const model = RUNNER_FACTS[config.defaultRunner]!.claudeModelAliases ? config.namerModel : undefined;
     // Name under the project's own agent account (spec 2026-07-29-agent-profiles) — naming is
     // a model call like any other, and billing it to the personal subscription for a work
     // project is the exact confusion accounts exist to remove.

@@ -1,11 +1,11 @@
 import { ReadonlyMapView, ReadonlySetView } from './readonly-collections.ts';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { unregisterRunProcess } from '../../core/process-usage.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
-import { runnerIdOf } from '../../core/runner-registry.ts';
+import { resolveRunnerId } from '../../core/runner-registry.ts';
 
 export interface UsageAccountingHost {
   isDisposedDelegatedRun(runId: string): boolean;
@@ -96,13 +96,13 @@ export function beginUsageInvocation(store: RunStore, runId: string, state: Acti
 /** A runner whose declared `costReport` is `cumulative` (Claude's `total_cost_usd`) reports the
  * conversation total, including turns in Continue steps; its reports become deltas here. The
  * others report new cost since their previous report. */
-export function recordReportedCost(store: RunStore, runId: string, stepId: string, state: ActiveRun, backend: RunnerId, reportedUsd: number): void {
+export function recordReportedCost(store: RunStore, runId: string, stepId: string, state: ActiveRun, backend: string, reportedUsd: number): void {
   if (!Number.isFinite(reportedUsd) || reportedUsd < 0) return;
   const run = store.getRun(runId);
   const step = run?.steps.find((candidate) => candidate.id === stepId);
   if (!run || !step) return;
   let delta = reportedUsd;
-  if (RUNNER_FACTS[backend].costReport === 'cumulative') {
+  if (RUNNER_FACTS[backend]!.costReport === 'cumulative') {
     const sessionKey = step.sessionId ?? step.id;
     const costs = usageWrites.costs(state.usage);
     let previous = costs.get(sessionKey);
@@ -138,7 +138,7 @@ function restoreCumulativeSessionCost(
   }
   const sessionStepIds = new Set(run.steps.filter((candidate) => {
     // A step with no recorded backend ran on the default runner, Claude.
-    return RUNNER_FACTS[runnerIdOf(candidate.backend)].costReport === 'cumulative' && (step.sessionId
+    return RUNNER_FACTS[resolveRunnerId(candidate.backend)]!.costReport === 'cumulative' && (step.sessionId
       ? candidate.sessionId === step.sessionId
       : candidate.id === step.id);
   }).map((candidate) => candidate.id));

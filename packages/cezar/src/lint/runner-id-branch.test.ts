@@ -1,9 +1,9 @@
+import { BUILT_IN_RUNNERS, BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
   declaredRunnerIds, readRunnerIdBranchExceptions, runnerIdBranch, runnerIdBranches, runnerIdBranchesFile, scanRunnerIdBranches,
   staleRunnerIdBranches,
@@ -19,13 +19,11 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
-  it('reads the ids the runner module declares', () => {
-    expect(declaredRunnerIds()).toEqual([...RUNNER_IDS]);
-    expect(() => declaredRunnerIds(() => 'export const RUNNER_IDS = build();')).toThrow('RUNNER_IDS is not a string array literal');
-    expect(() => declaredRunnerIds(() => "export const RUNNER_IDS = ['a', other] as const;")).toThrow('RUNNER_IDS is not a string array literal');
+  it('reads the ids the built-in runner list declares', () => {
+    expect(declaredRunnerIds()).toEqual(BUILT_IN_RUNNERS.map(({ id }) => id));
   });
 
-  it.each([...RUNNER_IDS, 'claude-cli'])('refuses a comparison and a case label with %s', (id) => {
+  it.each([...BUILT_IN_RUNNER_IDS, 'claude-cli'])('refuses a comparison and a case label with %s', (id) => {
     expect(sites(`if (runner === '${id}') go();`)).toEqual([`runner === '${id}'`]);
     expect(sites(`switch (runner) { case '${id}': go(); }`)).toEqual([`switch (runner) case '${id}'`]);
   });

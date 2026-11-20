@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -5,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import type { SubagentWaitEntry, TimerWaitEntry, Wait } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS, SUBAGENT_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { exemptionReasonProblem } from '../core/exemption-reason.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
@@ -29,13 +29,13 @@ import { SUBAGENT_CRITERIA, SUBAGENT_EXEMPTIONS, type SubagentCriterion } from '
 export { SUBAGENT_CRITERIA, SUBAGENT_EXEMPTIONS };
 
 /** The prompt each runner's mock answers with backgrounded children (Worker A's scenarios). */
-const SCENARIO: Partial<Record<RunnerId, string>> = { claude: 'mock:subagent-background', codex: 'mock:subagent-background' };
+const SCENARIO: Partial<Record<string, string>> = { claude: 'mock:subagent-background', codex: 'mock:subagent-background' };
 
-const exemptionOf = (criterion: SubagentCriterion, runner: RunnerId) => SUBAGENT_EXEMPTIONS.find(entry => entry.criterion === criterion && entry.runner === runner);
+const exemptionOf = (criterion: SubagentCriterion, runner: string) => SUBAGENT_EXEMPTIONS.find(entry => entry.criterion === criterion && entry.runner === runner);
 
-function nativeWire(runner: RunnerId) {
+function nativeWire(runner: string) {
   process.env.CEZ_DRY_RUN = '0';
-  process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+  process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
 }
 
 const subagentWait = (id: string): SubagentWaitEntry | undefined =>
@@ -50,7 +50,7 @@ const wakeInputs = (id: string, waitId: string) => (store.getRun(id)?.agentInput
 const graceClock = () => observationClock(() => /SubagentWaits\.armGrace/.test(new Error().stack ?? ''));
 
 /** A run parked on the subagent wait; `release()` lets the mock end its children. */
-async function parkedOnSubagents(runner: RunnerId, tokens = '') {
+async function parkedOnSubagents(runner: string, tokens = '') {
   nativeWire(runner);
   // With no monitoring exemptions, a pool member holds exactly one slot; an ordinary park holds none.
   vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(0);
@@ -160,16 +160,16 @@ export function subagentCells(runners: readonly RunnerDefinition[]): void {
 
 /** The guard, run once: a runner with a live row has its file, a runner exempt from every row has
  *  none, and each exemption is a runner with no scenario. */
-export function subagentGuard(file: (runner: RunnerId) => string): void {
+export function subagentGuard(file: (runner: string) => string): void {
   describe('native subagent cells (hearsay-tools/cezarion#2431)', () => {
     it('runs the subagent cells of each runner with a live row from its own file', () => {
-      for (const runner of RUNNER_IDS) {
+      for (const runner of BUILT_IN_RUNNER_IDS) {
         const live = !SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
         expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(live);
       }
     });
     it('exempts a runner from every row exactly when its wire reports no subagents to wait on', () => {
-      for (const runner of RUNNER_IDS) {
+      for (const runner of BUILT_IN_RUNNER_IDS) {
         const exemptAll = SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
         expect({ runner, scenario: SCENARIO[runner] !== undefined, reports: reportsNativeSubagents(runner) })
           .toEqual({ runner, scenario: !exemptAll, reports: !exemptAll });

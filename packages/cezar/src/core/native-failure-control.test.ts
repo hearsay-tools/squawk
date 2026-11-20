@@ -1,10 +1,10 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { createDeliveryControl } from '../../scripts/mock-delivery-control.mjs';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runnersWhere } from './runner-facts.ts';
 import { driveSeam, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 
@@ -26,7 +26,7 @@ function fixture(config: unknown) {
     lift: () => writeFileSync(`${path}.lifted`, ''),
   };
 }
-function run(runner: RunnerId, path: string, prompt: string) {
+function run(runner: string, path: string, prompt: string) {
   // driveSeam supplies a fresh cwd and native subprocess on every call. The
   // absolute control path must retain state independently of either lifetime.
   return driveSeam(runner, 'baseline', { spec: { userPrompt: prompt,
@@ -100,7 +100,7 @@ function expectFailedDrain(path: string, runner: 'pi' | 'omp') {
   }
 }
 
-describe.each(RUNNER_IDS)('%s native failure control', runner => {
+describe.each(BUILT_IN_RUNNER_IDS)('%s native failure control', runner => {
   it('holds the native failure until release and consumes it once across subprocesses', async () => {
     const control = fixture({ mode: 'gated-once' });
     expectSuccess(await run(runner, control.path, 'inspect the working tree'));
@@ -116,7 +116,7 @@ describe.each(RUNNER_IDS)('%s native failure control', runner => {
       },
     });
     expectFailure(observation);
-    expectSuccess(await run(runner, control.path, HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']!));
+    expectSuccess(await run(runner, control.path, HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']!));
     expectSuccess(await run(runner, control.path, 'Resume to receive the queued CI observation.'));
   });
 

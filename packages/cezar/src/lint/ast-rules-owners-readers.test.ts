@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { expect, it } from 'vitest';
 /* oxlint-disable cez/run-internals -- The retired name and module path are rule fixtures. */
 import { AST_RULES } from './plugin.ts';
@@ -190,7 +191,7 @@ ruleCases(AST_RULES.find(rule => rule.name === "runner-class-outside-factory")!,
     "import { createRunner } from './core/runner-registry.ts'",
     "import type { AgentSession } from '../../runners/claude/claude-cli-runner.ts'",
     "export type { AgentSession } from '../runners/claude/claude-cli-runner.ts'",
-    "import { RUNNER_IDS, type RunnerFactory } from '../core/agent-runner.ts'",
+    "import { BUILT_IN_RUNNER_IDS, type RunnerFactory } from '../core/agent-runner.ts'",
     "const kit = await import('../core/agent-runner.ts')",
     "import { ScheduleRunner } from './schedule-runner.ts'",
     "const runner = new ScheduleRunner(handle)",

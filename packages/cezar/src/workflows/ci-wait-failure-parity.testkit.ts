@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiWaitResult, Wait } from '@open-mercato/cezar-contract';
-import { type RunnerId } from '../core/agent-runner.ts';
+
 import { CI_FAILURE_GROUPS, ciFailureRowId, type CiFailureGroup, type CiFailureRow } from './ci-wait-failure-rows.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
@@ -41,14 +41,14 @@ function github() {
 
 // An earlier step completes only on its done (hearsay-tools/cezarion#1620): a turn that signals
 // it replaces the plain session close these cells once used to run the tail.
-function signalDone(id: string, runner: RunnerId): void {
-  expect(manager.sendMessage(id, [{ type: 'text', text: HARNESS_ADAPTERS[runner].scenarios['cezar-done']! }])).toBe(true);
+function signalDone(id: string, runner: string): void {
+  expect(manager.sendMessage(id, [{ type: 'text', text: HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']! }])).toBe(true);
 }
 function register(id: string): Promise<Wait> {
   return manager.registerWait(id, { kind: WAIT_KIND.pr, pr: identity.prUrl, timeout_seconds: 30 }, 'cezar_wait', toolGenerationOf(id));
 }
 
-async function ownedChain(runner: RunnerId, workflow: WorkflowDef) {
+async function ownedChain(runner: string, workflow: WorkflowDef) {
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
   setRunStatus(store, parent.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -82,7 +82,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
       const wire = gatedProviderFailure(root, runner);
       // A failure that owes the CI result retries after the wake backoff (hearsay-tools/cezarion#1233);
       // the cell is about the failure history, so the retry need not wait out production cadence.
-      const adapter = HARNESS_ADAPTERS[runner];
+      const adapter = HARNESS_ADAPTERS[runner]!;
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: adapter.scenarios[mode === 'fresh' ? 'provider-error-controlled' : 'baseline']! });
       let wait: Wait;
       if (mode === 'fresh') {
@@ -140,7 +140,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
     it(`${runner} ${cell} resumes a failed nonfinal CI agent with ${outcome} checks and preserves failure history`, async () => {
       const settle = github();
       const wire = gatedProviderFailure(root, runner);
-      const adapter = HARNESS_ADAPTERS[runner];
+      const adapter = HARNESS_ADAPTERS[runner]!;
       const command = outcome === 'failed'
         ? 'node -e "process.exit(1)"'
         : 'node -e "const fs=require(\'node:fs\');if(!fs.existsSync(\'check-retried\')){fs.writeFileSync(\'check-retried\',\'\');process.exit(1)}"';
@@ -203,7 +203,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
     it(`${runner} R75 resumes the owned workflow after restart at ${boundary} without rewriting its failed source`, async () => {
       const settle = github();
       const wire = gatedProviderFailure(root, runner);
-      const adapter = HARNESS_ADAPTERS[runner];
+      const adapter = HARNESS_ADAPTERS[runner]!;
       const run = await ownedChain(runner, { name: 'owned-ci-chain', source: 'built-in', steps: [
         { id: 'first', prompt: adapter.scenarios['provider-error-controlled']!, runner, agentProfile: 'default' },
         { id: 'later', prompt: adapter.scenarios['cezar-done']!, runner, agentProfile: 'default' },

@@ -91,7 +91,7 @@ export const PENDING_REQUEST_GROUPS = {
         if (permissionExemption('P5', backend, 'approval-reply-fails')) continue;
         it(`${backend} P5 replaces the card it could not deliver and keeps the run waiting`, async () => {
           let repoRoot = '';
-          const { pick, echo } = HARNESS_ADAPTERS[backend].approvalDecisions![0]!;
+          const { pick, echo } = HARNESS_ADAPTERS[backend]!.approvalDecisions![0]!;
           let freshId = '';
           // bound: hang guard for the live mock run; the predicate waits on the run settling, and a stuck card fails here instead of at the test timeout.
           const observation = await driveRun(backend, 'approval-reply-fails', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
@@ -152,7 +152,7 @@ export const PENDING_REQUEST_GROUPS = {
           expect(observation.events.some(event => event.type === 'permission.requested')).toBe(false);
           expect(observation.record?.hasPendingPermission).toBeFalsy();
           expect(observation.statuses).not.toContain('waiting');
-          expect(joinedText(observation.events)).toContain(HARNESS_ADAPTERS[backend].malformedApprovalEcho!);
+          expect(joinedText(observation.events)).toContain(HARNESS_ADAPTERS[backend]!.malformedApprovalEcho!);
           expect(observation.events).toContainEqual(expect.objectContaining({ type: 'turn.completed' }));
         // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
         }, 45_000);
@@ -208,7 +208,7 @@ export const PENDING_REQUEST_GROUPS = {
       for (const backend of runners) {
         // The close after an accepted done follows the declared nativePermission (hearsay-tools/squawk#1680):
         // only a wire that can raise a request after its turn keeps the session up for one.
-        const closesWhenQuiet = RUNNER_FACTS[backend].nativePermission === 'after-turn';
+        const closesWhenQuiet = RUNNER_FACTS[backend]!.nativePermission === 'after-turn';
         it(`${backend} closes on an accepted done ${closesWhenQuiet ? 'once no late permission request is pending' : 'at once'}, as its nativePermission declares`, async () => {
           const observation = await driveSeam(backend, 'baseline', {
             whileOpen: async (session, observed) => {

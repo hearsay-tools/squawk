@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { NO_PROGRESS_CRITERIA, exemptionFor } from './harness-parity-core.testkit.ts';
 
 // The workflow-no-progress cells and their partition, apart from the engine the cell bodies
@@ -64,8 +64,8 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 export type WorkflowNoProgressCells = {
-  exemption: (backend: RunnerId) => CellBody;
-  row: (backend: RunnerId, row: (typeof NO_PROGRESS_CRITERIA)[number]) => CellBody;
+  exemption: (backend: string) => CellBody;
+  row: (backend: string, row: (typeof NO_PROGRESS_CRITERIA)[number]) => CellBody;
 };
 
 /** The registrar over the exemption and row cell bodies per runner and criterion. */
@@ -73,7 +73,7 @@ export function workflowNoProgressParity(cells: WorkflowNoProgressCells) {
   return function describeWorkflowNoProgressParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect);
     describe('managed open-turn inactivity — #470', () => {
-      for (const backend of RUNNER_IDS) {
+      for (const backend of BUILT_IN_RUNNER_IDS) {
         for (const row of NO_PROGRESS_CRITERIA) {
           const exemption = exemptionFor(row.id, backend);
           if (exemption) {

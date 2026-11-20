@@ -6,9 +6,8 @@
  * as written (`~` kept); only the probe expands them.
  */
 import type { SetWorkspaceConfigInput } from '@open-mercato/cezar-contract/workspace';
-import { PROVIDER_IDS } from '../core/provider-auth.ts';
 import type { WorkspaceConfig } from '../workspace/config.ts';
-import { registeredRunnerId } from '../core/runner-registry.ts';
+import { registeredRunnerId, registeredRunners } from '../core/runner-registry.ts';
 
 function applyComposerDefaults(
   config: WorkspaceConfig,
@@ -55,7 +54,7 @@ function applyAgentDefaults(
   // and leaving a stale runner behind would keep overriding repos that never chose.
   if (agentDefaults.runner === null) delete config.agentDefaults.runner;
   else if (agentDefaults.runner !== undefined) config.agentDefaults.runner = registeredRunnerId(agentDefaults.runner);
-  for (const runner of PROVIDER_IDS) {
+  for (const runner of registeredRunners().map(({ id }) => id)) {
     const model = agentDefaults.models?.[runner];
     if (model === undefined) continue;
     const models = config.agentDefaults.models ?? {};

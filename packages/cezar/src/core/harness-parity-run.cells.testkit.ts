@@ -1,4 +1,4 @@
-import type { RunnerId } from './agent-runner.ts';
+
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ import { RUNNER_FACTS } from './runner-facts.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
 // #723: use the real RunManager on both event-handler construction paths.
-async function continueDiagnosticRun(backend: RunnerId, prompt: string): Promise<RunObservation> {
+async function continueDiagnosticRun(backend: string, prompt: string): Promise<RunObservation> {
   return driveObservedRun(backend, 'baseline', record => record?.status === 'waiting', 30_000,
     async ({ store, manager, runId, idle }) => {
       await idle.advance(IDLE_TIMEOUT_MS);
@@ -98,7 +98,7 @@ export const RUN_GROUPS = {
         if (exempt) {
           it(`${backend} is exempt from R15 — ${exempt.reason}`, () => {
             expect(exempt.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].scenarios['subagent-after-park']).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.scenarios['subagent-after-park']!).toBeUndefined();
           });
           continue;
         }
@@ -151,7 +151,7 @@ export const RUN_GROUPS = {
         if (exempt) {
           it(`${backend} is exempt from R77 — ${exempt.reason}`, () => {
             expect(exempt.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].scenarios['hook-after-park']).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.scenarios['hook-after-park']!).toBeUndefined();
           });
           continue;
         }
@@ -200,12 +200,12 @@ export const RUN_GROUPS = {
         if (exempt) {
           it(`${backend} is exempt from R26 — ${exempt.reason}`, () => {
             expect(exempt.kind).toBe('scenario-unconstructible');
-            expect(HARNESS_ADAPTERS[backend].askResumeCases).toEqual([]);
-            expect(HARNESS_ADAPTERS[backend].scenarios['ask-resume']).toBeUndefined();
+            expect(HARNESS_ADAPTERS[backend]!.askResumeCases).toEqual([]);
+            expect(HARNESS_ADAPTERS[backend]!.scenarios['ask-resume']!).toBeUndefined();
           });
           continue;
         }
-        for (const ask of HARNESS_ADAPTERS[backend].askResumeCases) {
+        for (const ask of HARNESS_ADAPTERS[backend]!.askResumeCases) {
           it(`${backend} R26 completes after ${ask.kind} without another needs-you park`, async () => {
             await withOwnedInputRun(backend, ask.scenario, async ({ store, manager, runId, answer }) => {
               manager.enqueueOwnedRun(runId);
@@ -256,7 +256,7 @@ export const RUN_GROUPS = {
             const { store } = await fixture.restart();
             const first = store.getRun(fixture.runId)!.waits!.find(wait => wait.kind === WAIT_KIND.human)!;
             expect(first).toMatchObject({ phase: WAIT_PHASE.open, askSeq: asks(store)[0]!.seq });
-            await fixture.answer(`Vitest. ${promptFor(backend, RUNNER_FACTS[backend].nativeAsk === 'answerable' ? 'ask' : 'cezar-ask')}`);
+            await fixture.answer(`Vitest. ${promptFor(backend, RUNNER_FACTS[backend]!.nativeAsk === 'answerable' ? 'ask' : 'cezar-ask')}`);
             await waitFor(() => asks(store).length === 2 && store.getRun(fixture.runId)?.status === 'waiting');
             const second = asks(store)[1]!;
             const human = (store.getRun(fixture.runId)?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human);
@@ -294,14 +294,14 @@ export const RUN_GROUPS = {
       };
       const records = (path: string) => readMockRecords<Wire | string[]>(path);
       // Claude/Pi/OMP carry the prompt on stdin and keep the system prompt in argv.
-      const stdinWire = (backend: RunnerId) => backend === 'claude' || backend === 'pi' || backend === 'omp';
+      const stdinWire = (backend: string) => backend === 'claude' || backend === 'pi' || backend === 'omp';
       const stdinRowText = (row: Wire): string[] => row.userText === undefined ? [] : [row.userText];
       // The per-backend prompt carrier: Codex turn input, OpenCode body parts.
-      const providerRowParts = (backend: RunnerId, row: Wire) =>
+      const providerRowParts = (backend: string, row: Wire) =>
         backend === 'codex' && row.method === 'turn/start' ? row.params?.input
           : backend === 'opencode' && /\/(message|prompt_async)$/.test(row.url ?? '') ? row.body?.parts : undefined;
       const joinRowParts = (parts: { text?: string }[]): string => parts.map(part => part.text ?? '').join('\n');
-      const messages = (backend: RunnerId, dir: string): string[] => {
+      const messages = (backend: string, dir: string): string[] => {
         const channel = stdinWire(backend) ? 'stdin' : 'args';
         const wire = records(join(dir, channel));
         return wire.flatMap(row => {
@@ -311,7 +311,7 @@ export const RUN_GROUPS = {
           return parts ? [joinRowParts(parts)] : [];
         });
       };
-      const systemPrompt = (backend: RunnerId, dir: string): string => {
+      const systemPrompt = (backend: string, dir: string): string => {
         if (!stdinWire(backend)) return messages(backend, dir)[0] ?? '';
         const argv = records(join(dir, 'args')).find(Array.isArray) ?? [];
         const index = argv.indexOf('--append-system-prompt');

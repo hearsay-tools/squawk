@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
@@ -11,7 +12,6 @@ import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runWorkerCommand, runMessageCommand } from './cli.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import '../core/every-runner.testkit.ts';
 import { fixture, seedWorkerWait } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
@@ -425,7 +425,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
   });
   describe('runner flag (hearsay-tools/cezarion#632)', () => {
     const spawnArgs = (flags: string[]) => ['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), ...flags, 'work'];
-    it.each(RUNNER_IDS.flatMap(runner => [
+    it.each(BUILT_IN_RUNNER_IDS.flatMap(runner => [
       { runner, flags: ['--runner', runner] },
       { runner, flags: ['--backend', runner] },
       { runner, flags: ['--runner', runner, '--backend', runner] },

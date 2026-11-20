@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { runsOn } from './parity-classes.testkit.ts';
 import { FINAL_MESSAGE_CRITERIA } from './harness-parity.testkit.ts';
 import { workflowFinalMessageCellNames, WORKFLOW_FINAL_MESSAGE_GROUPS } from './workflow-final-message-rows.testkit.ts';
@@ -26,7 +26,7 @@ describe('workflow final-message family registration', () => {
       workflowFinalMessageCellNames(group, registration);
     }
     expect(new Set(names).size).toBe(names.length);
-    for (const runner of RUNNER_IDS) for (const row of FINAL_MESSAGE_CRITERIA) {
+    for (const runner of BUILT_IN_RUNNER_IDS) for (const row of FINAL_MESSAGE_CRITERIA) {
       if (!runsOn('workflow-final-message', row.id, runner)) { expect(names.filter(name => name.startsWith(`${runner} ${row.id} `))).toEqual([]); continue; }
       expect(names.filter(name => name.startsWith(`${runner} ${row.id} `))).toHaveLength(1);
     }

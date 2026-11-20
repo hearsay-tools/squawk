@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../src/runners/built-in.ts';
 /**
  * Prints the parity row index: every row the parity kits declare, and the runners exempt from it.
  *
@@ -11,7 +12,6 @@
  */
 import { parseArgs } from 'node:util';
 
-import { RUNNER_IDS } from '../src/core/agent-runner.ts';
 import * as harnessCore from '../src/core/harness-parity-core.testkit.ts';
 import * as harnessRows from '../src/core/harness-parity-rows.testkit.ts';
 import { PARITY_ROW_ID } from '../src/core/parity-classes.testkit.ts';
@@ -122,8 +122,8 @@ export interface RowQuery { readonly row?: string; readonly runner?: string; rea
 
 /** What the command prints for a query: `out` on stdout, `error` on stderr with exit code 1. */
 export function renderRows(index: readonly IndexedRow[], query: RowQuery): { out: string[]; error?: string } {
-  if (query.runner !== undefined && !(RUNNER_IDS as readonly string[]).includes(query.runner)) {
-    return { out: [], error: `unknown runner "${query.runner}"; the runners are ${RUNNER_IDS.join(', ')}` };
+  if (query.runner !== undefined && !(BUILT_IN_RUNNER_IDS as readonly string[]).includes(query.runner)) {
+    return { out: [], error: `unknown runner "${query.runner}"; the runners are ${BUILT_IN_RUNNER_IDS.join(', ')}` };
   }
   const named = index.filter(row => query.row === undefined || row.id === query.row);
   const rows = named

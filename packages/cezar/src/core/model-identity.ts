@@ -2,7 +2,6 @@
  * Canonical provider/model identity and conversion to backend wire forms. Keep backend-specific
  * wire types behind the AgentRunner seam.
  */
-import type { AgentBackend, RunnerId } from './agent-runner.ts';
 import { isRegisteredRunner, LEGACY_RUNNER_IDS, runnerDefinition } from './runner-registry.ts';
 
 /**
@@ -65,9 +64,9 @@ export interface BackendModelMap {
  * and a lookup resolves it through the registry's legacy map first. An id that no runner
  * registered has no map.
  */
-export function backendModelMap(backend: AgentBackend): BackendModelMap | undefined {
+export function backendModelMap(backend: string): BackendModelMap | undefined {
   const id = LEGACY_RUNNER_IDS.get(backend) ?? backend;
-  return isRegisteredRunner(id) ? runnerDefinition(id as RunnerId).models.idMap : undefined;
+  return isRegisteredRunner(id) ? runnerDefinition(id).models.idMap : undefined;
 }
 
 const SLASH = '/';
@@ -108,7 +107,7 @@ export function parseModelIdentity(raw: string | undefined | null): ModelIdentit
  *    {@link ModelIdentityError}.
  */
 export function resolveModelIdentity(
-  backend: AgentBackend,
+  backend: string,
   raw: string | undefined,
   options: { configuredProvider?: string | undefined } = {},
 ): ModelIdentity | undefined {
@@ -151,7 +150,7 @@ export function resolveModelIdentity(
  * multi-provider backends (opencode) want the full `provider/model`, which
  * they re-split into their own request shape.
  */
-export function toBackendModel(backend: AgentBackend, id: ModelIdentity): string {
+export function toBackendModel(backend: string, id: ModelIdentity): string {
   const map = backendModelMap(backend) ?? {};
   if (map.defaultProvider === undefined) return formatModelIdentity(id);
   if (
@@ -171,7 +170,7 @@ export function toBackendModel(backend: AgentBackend, id: ModelIdentity): string
  * unresolvable model — the single fail-loud gate the run wiring calls.
  */
 export function normalizeModelForBackend(
-  backend: AgentBackend,
+  backend: string,
   raw: string | undefined,
   options: { configuredProvider?: string | undefined } = {},
 ): { backendModel: string; identity: ModelIdentity } | undefined {

@@ -44,7 +44,7 @@ import {
   delegationErrorResponseSchema,
 } from '@open-mercato/cezar-contract/delegation';
 import { discoveryRequestSchema, discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
 import { runnerFlag, skillFlagIssue } from '../workflows/types.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { gitSync } from '../git-command.ts';
@@ -115,7 +115,7 @@ const WORKER_FLAG_HELP: Record<string, string> = {
   '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required for an isolated workspace. A shared workspace takes only parent-head, or none.',
   '--workspace': '<isolated|shared>    Default: the first kind you may start (a task: isolated; a worker: shared, its only kind). isolated: own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --attach; of --baseline only parent-head.',
   '--request-id': '<UUID>              Spawn retry ID, or request being followed up/replied to.',
-  '--runner': `<name>                  ${RUNNER_IDS.join(' | ')}.`,
+  '--runner': `<name>                  ${BUILT_IN_RUNNERS.map(({ id }) => id).join(' | ')}.`,
   '--backend': '<name>                 Alias of --runner.',
   '--model': '<model>                  Model override.',
   '--effort': '<level>                 low | medium | high | xhigh | max | auto.',

@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 /**
  * Backend-parity roll-up — the spec's hard rule made executable.
  *
@@ -26,16 +27,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { runnersWhere } from './runner-facts.ts';
 import type { UiEvent, UiItem } from './ui-events.ts';
 
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BACKENDS = RUNNER_IDS;
+const BACKENDS = BUILT_IN_RUNNER_IDS;
 
 /** Every event across every golden fixture of one backend. */
-function fixtureEvents(backend: RunnerId): UiEvent[] {
+function fixtureEvents(backend: string): UiEvent[] {
   const dir = join(HERE, '..', 'runners', backend, '__fixtures__');
   const events: UiEvent[] = [];
   for (const file of readdirSync(dir).sort()) {

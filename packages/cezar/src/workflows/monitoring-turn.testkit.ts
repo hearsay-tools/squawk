@@ -1,5 +1,4 @@
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
 
 // hearsay-tools/cezarion#2397: a turn monitors through `cezar_wait` (a timer) or live workers, asks
 // through `cezar_ask` and finishes through `cezar_done`; the rows that only read marker lines are gone.
@@ -25,7 +24,7 @@ export const MONITORING_ACK_CRITERIA = [
   { id: 'M26', scenario: 'baseline', name: 'fresh input ACK keeps monitoring with live workers' },
   { id: 'M27', scenario: 'baseline', name: 'Continue input ACK keeps monitoring with live workers' },
 ] as const;
-export function messagesPrompt(backend: RunnerId, messages: string[]): string {
-  return `${HARNESS_ADAPTERS[backend].scenarios['turn-messages']}:${Buffer.from(JSON.stringify(messages)).toString('base64')}`;
+export function messagesPrompt(backend: string, messages: string[]): string {
+  return `${HARNESS_ADAPTERS[backend]!.scenarios['turn-messages']!}:${Buffer.from(JSON.stringify(messages)).toString('base64')}`;
 }
 export const ACK_TEXT = 'I’ll fetch and merge the latest `main` before opening the draft PR, resolve any conflicts, and rerun the checks affected by the merged changes.';

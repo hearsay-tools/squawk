@@ -1,6 +1,6 @@
 import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { SPAWN_NEXT } from '../runs/worker-execution.ts';
 import { modelConflictsWithRunner } from '../core/model-presets.ts';
@@ -20,9 +20,9 @@ export type ContinueRunOptions = {
   /** A scheduler-owned continuation may deliver waits beside a pending question. */
   waitWake?: true;
   images?: PastedContent[] | undefined;
-  runner?: RunnerId | undefined;
+  runner?: string | undefined;
   /** Configured fallback for an untouched workflow, resolved by the route. */
-  originalRunner?: RunnerId;
+  originalRunner?: string;
   model?: string | undefined;
   /** Omitted keeps the pin; empty string clears it. */
   effort?: string | undefined;
@@ -33,7 +33,7 @@ export type ContinueRunOptions = {
   freshSession?: true;
   /** A provider-error retry runs on the held step's own runner, without rewriting the run's
    *  (hearsay-tools/squawk#3337): a mixed-runner workflow's step keeps its runner and model. */
-  retryRunner?: RunnerId;
+  retryRunner?: string;
   /** Set by the provider-error retry alone. Any other continuation drops the hold's reason in its
    *  own accepted write, so a restart cannot take it for the retry (hearsay-tools/squawk#3337). */
   providerRetry?: true;
@@ -120,14 +120,14 @@ export function hasOverrides(opts: ContinueRunOptions): boolean {
   return opts.runner !== undefined || opts.model !== undefined || opts.effort !== undefined;
 }
 
-export function modelRefusal(opts: ContinueRunOptions, targetRunner: RunnerId): ContinuationRefusal | undefined {
+export function modelRefusal(opts: ContinueRunOptions, targetRunner: string): ContinuationRefusal | undefined {
   if (opts.model && modelConflictsWithRunner(opts.model, targetRunner)) {
     return { ok: false, error: `model '${opts.model}' is not a ${targetRunner} model` };
   }
 }
 
 /** Clear foreign inherited presets/accounts on a switch; keep custom model ids and effort. */
-export function overridePatch(run: RunRecord, opts: ContinueRunOptions, targetRunner: RunnerId, originalRunner: RunnerId) {
+export function overridePatch(run: RunRecord, opts: ContinueRunOptions, targetRunner: string, originalRunner: string) {
   const inheritedPinIsForeign = opts.model === undefined && run.model !== undefined && modelConflictsWithRunner(run.model, targetRunner);
   const inheritedAccountIsForeign = run.agentProfile !== undefined && targetRunner !== originalRunner;
   return {

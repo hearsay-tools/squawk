@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
@@ -122,7 +122,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
   /** A FINISHED run by default — `createRun` parks new records at `queued`, which the engine still
    *  owns, and only a run the engine has let go of resumes at all (see the status cases below). */
-  const makeRun = (runner: RunnerId | undefined, sessionId?: string) => {
+  const makeRun = (runner: string | undefined, sessionId?: string) => {
     const run = store.createRun({
       title: 't',
       workflow: 'quick-task',

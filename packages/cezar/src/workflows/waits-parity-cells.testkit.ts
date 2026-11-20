@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { parentWithWorker, sessionOf, retryClock, nudgeNotes, nativeWire, parkedOn, waitOfKind, fireTimer, settled, prompted, inputsFor, workerParent, turnEnds, blockedDone, blockingWorker, liveRefusal, agentWaits, humanOpen, gated, workerWaits, repliesDoneAgain, replyBlockedAgain, describeWaitCells } from './waits-parity-fixture.testkit.ts';
 import { moduleImports } from '../core/module-imports.testkit.ts';
 import { COMPLETION_NUDGE_NOTE } from './run.ts';
@@ -7,7 +8,6 @@ import { join } from 'node:path';
 import { it as registerTest, expect } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentInput } from '@open-mercato/cezar-contract';
-import { type RunnerId, RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { familyCells } from '../core/parity-classes.testkit.ts';
 import { collect, store, until, manager, semaphore, waitOf, root, terminal } from './worker-wait-core.testkit.ts';
@@ -57,14 +57,14 @@ const WAIT_PARITY_CELLS = {
 } satisfies Record<WaitParityPart, WaitCells>;
 
 /** The titles a folded runner's group registers. */
-function foldTitles(runner: RunnerId, fold: WaitFold): string[] {
+function foldTitles(runner: string, fold: WaitFold): string[] {
   const titles: string[] = [];
   foldCells(runner, fold, WAIT_PARITY_CELLS, ((title: string) => { titles.push(title); }) as typeof registerTest);
   return titles;
 }
 
 function waitParityFileUrl(file: string): URL {
-  const runner = RUNNER_IDS.find(id => file.startsWith(`waits-${id}-`));
+  const runner = BUILT_IN_RUNNER_IDS.find(id => file.startsWith(`waits-${id}-`));
   if (!runner) throw new Error(`${file}: not a per-runner wait parity file`);
   return new URL(`../runners/${runner}/${file}`, import.meta.url);
 }
@@ -80,14 +80,14 @@ function cellModules(file: string): string[] {
 
 /** Whether a runner runs any cell of a part, after the wait family's class (hearsay-tools/cezarion#2991)
  *  drops the shared rows on every runner but the scenario runner. A part with none has no file. */
-export function partRuns(runner: RunnerId, part: WaitParityPart): boolean {
+export function partRuns(runner: string, part: WaitParityPart): boolean {
   let any = false;
   WAIT_PARITY_CELLS[part]([runner], familyCells('waits', runner, (() => { any = true; }) as unknown as typeof registerTest));
   return any;
 }
 
 /** Whether a runner runs any cell of one row family of a part. */
-function familyRuns(runner: RunnerId, part: WaitParityPart, family: RowFamily): boolean {
+function familyRuns(runner: string, part: WaitParityPart, family: RowFamily): boolean {
   let any = false;
   WAIT_PARITY_CELLS[part]([runner], familyCells('waits', runner, ((title: string) => {
     if (rowFamily(part as FamilyPart, title) === family) any = true;
@@ -97,14 +97,14 @@ function familyRuns(runner: RunnerId, part: WaitParityPart, family: RowFamily): 
 
 /** The files a runner that is not folded runs a part from, each with the scope its describer
  *  names: one file, or one per row family with cells for a part in `FAMILY_FILE_PARTS`. */
-function partFiles(runner: RunnerId, part: WaitParityPart): Array<{ file: string; scope: string }> {
+function partFiles(runner: string, part: WaitParityPart): Array<{ file: string; scope: string }> {
   const families = fileFamilies(part);
   if (families.length === 0) return partRuns(runner, part) ? [{ file: WAIT_PARITY_FILES[part](runner), scope: `{ runner: ${runner}Runner, part: '${part}' }` }] : [];
   return families.filter(family => familyRuns(runner, part, family))
     .map(family => ({ file: waitFamilyFile(runner, part, family), scope: `{ runner: ${runner}Runner, part: '${part}', family: '${family}' }` }));
 }
 
-function expectPartLeaf(runner: RunnerId, part: WaitParityPart): void {
+function expectPartLeaf(runner: string, part: WaitParityPart): void {
   if (folded(runner)) return; // Its one file is checked below.
   for (const { file, scope } of partFiles(runner, part)) {
     const source = readFileSync(waitParityFileUrl(file), 'utf8');
@@ -243,15 +243,15 @@ export function describeWaitParity(scope: 'once'): void {
   if (scope !== 'once') throw Error(`Import the module of the ${String(scope)} cells`);
   describeWaitCells(() => {
     it('runs every runner\'s cells from its own file', () => {
-      const files = RUNNER_IDS.flatMap(runner =>
+      const files = BUILT_IN_RUNNER_IDS.flatMap(runner =>
         readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
           /^waits-.*-parity\.test\.ts$/.test(file) && readFileSync(new URL(`../runners/${runner}/${file}`, import.meta.url), 'utf8').includes('describeWaitParity(')));
       const parts = Object.keys(WAIT_PARITY_FILES) as WaitParityPart[];
-      expect(files.sort()).toEqual(RUNNER_IDS.flatMap(runner => {
+      expect(files.sort()).toEqual(BUILT_IN_RUNNER_IDS.flatMap(runner => {
         if (folded(runner)) return (Object.keys(WAIT_FOLDS) as WaitFold[]).filter(fold => foldTitles(runner, fold).length > 0).map(fold => foldedWaitFile(runner, fold));
         return parts.flatMap(part => partFiles(runner, part).map(({ file }) => file));
       }).sort());
-      for (const runner of RUNNER_IDS) for (const part of parts) {
+      for (const runner of BUILT_IN_RUNNER_IDS) for (const part of parts) {
         const families = fileFamilies(part);
         const file = WAIT_PARITY_FILES[part](runner);
         expect(existsSync(new URL(`../runners/${runner}/${file}`, import.meta.url)), file).toBe(!folded(runner) && families.length === 0 && partRuns(runner, part));
@@ -278,7 +278,7 @@ export function describeWaitParity(scope: 'once'): void {
     });
 
     it('registers every criterion and runner in exactly one part', () => {
-      for (const runner of RUNNER_IDS) {
+      for (const runner of BUILT_IN_RUNNER_IDS) {
         const owners = new Map<string, string[]>();
         for (const part of Object.keys(WAIT_PARITY_CELLS) as WaitParityPart[]) {
           const criteria = new Set<string>();
@@ -294,7 +294,7 @@ export function describeWaitParity(scope: 'once'): void {
 
     it('registers every criterion', () => {
       expect(WAIT_CRITERIA.map(row => row.id)).toEqual(['U29p', 'U29q', 'U29m', 'U28w', 'U28r', 'U28p', 'U1', 'U4', 'U9', 'U2', 'U3', 'U7', 'U8', 'U8l', 'U8h', 'U10', 'U11', 'U12', 'U13', 'U14', 'U16', 'U16b', 'U9c', 'U7h', 'U7k', 'U7a', 'U9h', 'U6', 'U6r', 'U6p', 'U7d', 'U7q', 'U7b', 'U6s', 'U5', 'U5a', 'U5c', 'U5d', 'U18', 'U17', 'U15', 'U2w', 'U2t', 'U2c', 'U3w', 'U3n', 'U3r', 'U3d', 'U7w', 'U9w', 'U14m', 'U14i', 'U9u', 'U9v', 'U19', 'U19p', 'U19q', 'U19w', 'U20', 'U20u', 'U20h', 'U21', 'U21s', 'U21g', 'U21r', 'U21m', 'U21t', 'U21h', 'U21a', 'U22', 'U22s', 'U22c', 'U22f', 'U22k', 'U22r', 'U22x', 'U24', 'U24r', 'U26', 'U25', 'U1p', 'U2p', 'U4p', 'U9p', 'U9pr', 'U27', 'R13', 'R18', 'R17']);
-      for (const runner of RUNNER_IDS) for (const row of WAIT_CRITERIA) expect(HARNESS_ADAPTERS[runner].scenarios[row.scenario]).toBeDefined();
+      for (const runner of BUILT_IN_RUNNER_IDS) for (const row of WAIT_CRITERIA) expect(HARNESS_ADAPTERS[runner]!.scenarios[row.scenario]!).toBeDefined();
     });
 
     singleRunnerCells();

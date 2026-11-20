@@ -3,7 +3,7 @@ import { WAIT_KINDS } from './wait-kinds.ts';
 import { withoutHomeEnv } from '../../core/agent-env.ts';
 import { atTaskHead, atStepOpen, type LaunchSource } from './launch-read-resolver.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import type { RunnerId } from '../../core/agent-runner.ts';
+
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowDef } from '../types.ts';
@@ -74,7 +74,7 @@ export class StepLoop {
       this.host.dropActive(runId);
       return undefined;
     }
-    const taskBackend: RunnerId = atTaskHead.runner(input, config);
+    const taskBackend: string = atTaskHead.runner(input, config);
     // The account may have gone into a usage-limit hold since this run was dequeued — the queue
     // gate cannot be the only one, because dequeue is not the moment of no return. Nothing has
     // happened yet here, so the run goes back to the queue untouched (spec
@@ -277,7 +277,7 @@ export class StepLoop {
     runId: string,
     workflow: WorkflowDef,
     input: StartRunInput | LaunchSource,
-    runner: RunnerId,
+    runner: string,
     state?: ActiveRun,
     startAt?: number,
   ): boolean {

@@ -1,11 +1,11 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 registerBuiltInRunners();
 
-const UNAVAILABLE_REASON_NAME: Record<RunnerId, string> = {
+const UNAVAILABLE_REASON_NAME: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
@@ -99,7 +99,7 @@ describe('RunnerModelCatalog', () => {
     expect(discover).toHaveBeenCalledOnce();
   });
 
-  it.each(RUNNER_IDS)('names %s when its discovery is unavailable', async (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('names %s when its discovery is unavailable', async (runner) => {
     const catalog = new RunnerModelCatalog({
       adapters: { [runner]: { discover: async () => { throw new Error('secret'); } } },
     });

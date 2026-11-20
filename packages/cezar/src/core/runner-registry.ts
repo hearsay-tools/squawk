@@ -1,4 +1,4 @@
-import { isRunnerId, RUNNER_IDS, type AgentBackend, type AgentRunner, type RunnerId } from './agent-runner.ts';
+import type { AgentRunner } from './agent-runner.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
 
 /**
@@ -8,27 +8,29 @@ import type { RunnerDefinition } from './runner-definition.ts';
  * a runner file, so a test that drives one runner loads only that adapter
  * (hearsay-tools/cezarion#2939).
  */
-const registry = new Map<RunnerId, RunnerDefinition>();
+const registry = new Map<string, RunnerDefinition>();
 
 /** The runner that a task with no runner, a legacy id or an unknown id gets. */
-export const DEFAULT_RUNNER_ID = 'claude' satisfies RunnerId;
+export const DEFAULT_RUNNER_ID = 'claude';
 
 /** Legacy ids that old records carry, each with the runner it now names. */
-export const LEGACY_RUNNER_IDS: ReadonlyMap<string, RunnerId> = new Map([['claude-cli', 'claude']]);
+export const LEGACY_RUNNER_IDS: ReadonlyMap<string, string> = new Map([['claude-cli', 'claude']]);
 
 /**
- * The runner a backend value names. A legacy id maps to its runner; undefined and an unknown value
- * map to the default runner (`claude`), as `createRunner` does.
+ * The runner a backend value names. A registered id resolves to its own runner (a non-built-in
+ * one included), a legacy id to the runner it names, and undefined and an unknown value to the
+ * default runner (`claude`), as `createRunner` does.
  */
-export function runnerIdOf(backend: string | undefined): RunnerId {
+export function resolveRunnerId(backend: string | undefined): string {
   if (backend === undefined) return DEFAULT_RUNNER_ID;
-  return isRunnerId(backend) ? backend : LEGACY_RUNNER_IDS.get(backend) ?? DEFAULT_RUNNER_ID;
+  const target = LEGACY_RUNNER_IDS.get(backend) ?? backend;
+  return registry.has(target) ? target : DEFAULT_RUNNER_ID;
 }
 
-/** A runner id read back from saved data (a run, a workflow file), mapped as `runnerIdOf` maps it.
- *  Undefined stays undefined. */
-export function savedRunnerId(id: string | undefined): RunnerId | undefined {
-  return id === undefined ? undefined : runnerIdOf(id);
+/** A runner id read back from saved data (a run, a workflow file), mapped as `resolveRunnerId`
+ *  maps it. Undefined stays undefined. */
+export function savedRunnerId(id: string | undefined): string | undefined {
+  return id === undefined ? undefined : resolveRunnerId(id);
 }
 
 /**
@@ -60,16 +62,16 @@ export function registeredRunners(): RunnerDefinition[] {
 }
 
 /** Whether a runner with this id is registered. */
-export function isRegisteredRunner(id: string): id is RunnerId {
+export function isRegisteredRunner(id: string): boolean {
   assertRegistered();
-  return registry.has(id as RunnerId);
+  return registry.has(id);
 }
 
 /**
  * A runner id that its source has checked: a request that the route's runner check
  * (`server/runner-fields.ts`) admitted, or a saved setting. Throws when no runner registered it.
  */
-export function registeredRunnerId(id: string): RunnerId {
+export function registeredRunnerId(id: string): string {
   if (!isRegisteredRunner(id)) throw new Error(`Runner ${id} is not registered.`);
   return id;
 }
@@ -80,21 +82,20 @@ export function registeredRunnerId(id: string): RunnerId {
  * the read it had before runner ids were open. Every other read throws on an empty registry.
  */
 export function savedRunnerRegistration(id: string): boolean | undefined {
-  return registry.size === 0 ? undefined : registry.has(id as RunnerId);
+  return registry.size === 0 ? undefined : registry.has(id);
 }
 
 /**
- * The runner ids this process knows: the registered ids, or, in a process that registered no
- * runner, the built-in ids, which is what such a process knew before runner ids were open. Saved
- * data (runs, workflow files, automation definitions) and the CLI's own checks of a runner id read
- * it. Never throws, like `savedRunnerRegistration`.
+ * The runner ids this process knows: the registered ids, and nothing in a process that registered
+ * no runner. Saved data (runs, workflow files, automation definitions) and the CLI's own checks of
+ * a runner id read it. Never throws, like `savedRunnerRegistration`.
  */
 export function knownRunnerIds(): readonly string[] {
-  return registry.size === 0 ? RUNNER_IDS : [...registry.keys()];
+  return [...registry.keys()];
 }
 
 /** The registered definition of a runner. */
-export function runnerDefinition(id: RunnerId): RunnerDefinition {
+export function runnerDefinition(id: string): RunnerDefinition {
   assertRegistered();
   const definition = registry.get(id);
   if (!definition) throw new Error(`Runner ${id} is not registered: register its definition (runners/${id}/definition.ts) before you read it.`);
@@ -107,7 +108,6 @@ export function runnerDefinition(id: RunnerId): RunnerDefinition {
  * the legacy id for `claude`. No id, and an id that no runner registered (an unknown string from
  * stored state), get the Claude runner.
  */
-export async function createRunner(backend: AgentBackend | RunnerId | undefined): Promise<AgentRunner> {
-  const id = backend === undefined ? DEFAULT_RUNNER_ID : LEGACY_RUNNER_IDS.get(backend) ?? backend;
-  return runnerDefinition(isRegisteredRunner(id) ? id as RunnerId : DEFAULT_RUNNER_ID).loadAdapter();
+export async function createRunner(backend: string | undefined): Promise<AgentRunner> {
+  return runnerDefinition(resolveRunnerId(backend)).loadAdapter();
 }

@@ -1,5 +1,5 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import type { UiEvent } from './ui-events.ts';
 import { driveSeam } from './harness-parity.testkit.ts';
 
@@ -14,7 +14,7 @@ function lastTopLevelTail(events: readonly UiEvent[]): Extract<UiEvent, { type: 
 export function describeSilentTail(registration = { describe, it }) {
   const { describe, it } = registration;
 describe('silent-tail seam — mapper emits reasoning/tool with no later message (#544)', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     it(`${backend} silent-tail ends on reasoning or tool, not a later assistant message`, async () => {
       const observed = await driveSeam(backend, 'silent-tail');
       const completed = observed.v2.filter((e): e is Extract<UiEvent, { type: 'item.completed' }> =>

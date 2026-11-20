@@ -18,8 +18,8 @@ import {
 } from '@open-mercato/cezar-contract/project-limits';
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
-import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
-import { registeredRunners } from '../core/runner-registry.ts';
+import type { ProviderId } from '../core/provider-auth.ts';
+import { knownRunnerIds, registeredRunners } from '../core/runner-registry.ts';
 
 /**
  * `~/.cezar/config.json` — the per-user workspace config + project registry
@@ -231,7 +231,7 @@ export function registeredRunnerRecord(field: z.ZodType<string | undefined>) {
  */
 const agentDefaultsSchema = z
   .object({
-    runner: z.enum(PROVIDER_IDS).optional().catch(undefined),
+    runner: z.string().min(1).refine((id) => knownRunnerIds().includes(id)).optional().catch(undefined),
     models: registeredRunnerRecord(z.string().trim().min(1).max(200).optional().catch(undefined))
       .optional()
       .catch(undefined),
@@ -243,19 +243,14 @@ const workspacePathSchema = (read: () => string | undefined, fallback: string) =
   return z.string().min(1).max(4096).default(defaultValue).catch(defaultValue);
 };
 
-const providerIdSet = new Set<string>(PROVIDER_IDS);
-
 const disabledProvidersSchema = z
   .array(z.unknown())
   .default(() => [])
   .catch(() => [])
   .transform((values): ProviderId[] => {
-    const seen = new Set<ProviderId>();
-    for (const value of values) {
-      if (typeof value !== 'string' || !providerIdSet.has(value)) continue;
-      seen.add(value as ProviderId);
-    }
-    return PROVIDER_IDS.filter((provider) => seen.has(provider));
+    const ids = knownRunnerIds();
+    const seen = new Set(values.filter((value): value is ProviderId => typeof value === 'string' && ids.includes(value)));
+    return ids.filter((provider) => seen.has(provider));
   });
 
 export const workspaceConfigSchema = z

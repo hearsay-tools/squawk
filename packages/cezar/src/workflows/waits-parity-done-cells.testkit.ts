@@ -7,7 +7,7 @@ import { it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { root, parent, until, store, worker, manager, collect, terminal, timeline } from './worker-wait-core.testkit.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW } from './types.ts';
@@ -20,14 +20,14 @@ import { toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('done', doneCells);
 
-export function doneCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function doneCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U6 cezar_done is refused with live workers and with settled but uncollected workers, accepted once collected, and open waits are cancelled`, async () => {
       const external = github();
       nativeWire(runner);
       const answers = join(root, 'done-answers');
       process.env.CEZ_MOCK_CI_RESULT = answers;
-      const p = await parent(HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       await until(() => store.getRun(p.id)?.status === 'waiting');
       const w = await worker(p.id);
       /** One turn through the native wire; the answer of its last Squawk tool call. */
@@ -67,7 +67,7 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
     it(`${runner} U6r a wait result that arrives after an accepted cezar_done is delivered with the done note, and the run finishes when that turn ends, also with the wake budget spent`, async () => {
       const external = github();
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const prWait = () => store.getRun(run.id)?.waits?.find(wait => wait.kind === 'pr');
       await parentTurn(run.id, toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), () => prWait()?.phase === WAIT_PHASE.open);
@@ -93,7 +93,7 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
       nativeWire(runner);
       const answers = join(root, 'done-answers');
       process.env.CEZ_MOCK_CI_RESULT = answers;
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       const prWait = () => store.getRun(run.id)?.waits?.find(wait => wait.kind === 'pr');
       await parentTurn(run.id, toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), () => prWait()?.phase === WAIT_PHASE.open);
@@ -123,7 +123,7 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
       process.env.CEZ_MOCK_CI_RESULT = answers;
       const chain = workflowDefSchema.parse({ name: 'done-chain', source: 'file', steps: [
         { id: 'implement', prompt: '{{task}}' },
-        { id: 'review', name: 'Review', prompt: HARNESS_ADAPTERS[runner].scenarios.baseline! },
+        { id: 'review', name: 'Review', prompt: HARNESS_ADAPTERS[runner]!.scenarios.baseline! },
       ] });
       const run = manager.startRun(chain, { task: toolCall('cezar_done', { summary: 'step shipped' }), runner });
       await until(() => stepStatus(run.id, 'review') === 'waiting' && existsSync(answers));
@@ -142,7 +142,7 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
       nativeWire(runner);
       const closings = (id: string) => store.readEvents(id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
       const finished = (id: string) => terminal.includes(store.getRun(id)?.status ?? '') && !manager.isActive(id);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       // A turn that ends on an accepted done gets no no-wait nudge, fresh or continued.
       const nudged = prompted(runner, NO_WAIT_NUDGE).length;
@@ -199,7 +199,7 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
     // hearsay-tools/cezarion#1234 phase 2b: one turn-end rule. Nothing reads the turn's prose.
     it(`${runner} U5 a turn end with no wait gets one nudge, then a second no-wait turn end opens a no-wait human wait and reads needs you`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios.baseline! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => gated(run.id));
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(1);
       expectNoWaitNudgeKinds(prompted(runner, NO_WAIT_NUDGE)[0]!);

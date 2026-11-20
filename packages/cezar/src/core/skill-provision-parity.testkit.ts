@@ -4,7 +4,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
-import type { RunnerId } from './agent-runner.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
 import { driveRun } from './workflow-parity-core.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
@@ -16,7 +15,7 @@ import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 const read = (file: string) => existsSync(file) ? readFileSync(file, 'utf8') : '';
 
 /** A native gate proves the trigger stays above the seam until the running turn ends. */
-async function heldTrigger(runner: RunnerId): Promise<void> {
+async function heldTrigger(runner: string): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'held-native-trigger-'));
   const wire = join(dir, 'stdin.ndjson');
   const release = join(dir, 'release');
@@ -75,7 +74,7 @@ export const describeSkillProvisionParity = skillProvisionParity({
         env: { CEZ_MOCK_STDIN_FILE: wireFile, CEZ_MOCK_ARGS_FILE: argsFile },
         beforeStart: ({ manager, repoRoot }) => {
           writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: native-opening\n    on: session_start\n    target: both\n    template: CONTEXT-RULE-NATIVE-SENTINEL\n');
-          manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) }));
+          manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner]!.mockBin }) }));
         },
       });
       expect(result.record?.error).toBeUndefined();

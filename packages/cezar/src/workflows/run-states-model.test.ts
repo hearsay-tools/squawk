@@ -258,7 +258,7 @@ describe('the run state table drives a real run', { timeout: 600_000 }, () => {
 
   it('reaches the state each trigger row names, across restarts with no live session', async () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
+    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
     controlExternalWatches();
     idleClock = observeIdleClose();
     await fc.assert(fc.asyncProperty(reply, commands, async (first, steps) => {

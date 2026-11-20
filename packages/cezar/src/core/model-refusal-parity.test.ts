@@ -1,12 +1,12 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
 import { driveSeam, MODEL_REFUSAL_CRITERIA, promptFor, waitFor } from './harness-parity.testkit.ts';
 
 // Use each runner's native rejection. Claude alone has the selected-model +
 // zero-usage result that this change classifies; other wires keep their existing
 // rejection policy. None may swallow the error because an earlier turn worked.
 describe('post-success provider refusal parity (hearsay-tools/cezarion#1351)', () => {
-  for (const backend of RUNNER_IDS) {
+  for (const backend of BUILT_IN_RUNNER_IDS) {
     const criterion = MODEL_REFUSAL_CRITERIA[0];
     it(`${backend} ${criterion.id} ${criterion.name}`, async () => {
       const observed = await driveSeam(backend, criterion.scenario, {

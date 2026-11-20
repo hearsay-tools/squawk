@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { productIdentity } from './identity.ts';
@@ -7,8 +8,6 @@ import { runMessageCommand, runWorkerCommand } from '../delegation/cli.ts';
 import { taskHelp } from '../task-cli/cli.ts';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import { checkoutRoot, discoverCockpit } from '../task-cli/discovery.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
-
 // DetectEnvironment reports a row for every runner.
 
 afterEach(() => {
@@ -39,7 +38,7 @@ it('uses the preferred dry-run setting name for every agent', async () => {
   vi.stubEnv('HSQ_OPENCODE_BIN', undefined);
   const checks = await detectEnvironment();
   expect(checks.filter(check => !['gh', 'git'].includes(check.name)).map(check => check.version))
-    .toEqual(Array(RUNNER_IDS.length).fill('mock (HSQ_DRY_RUN=1)'));
+    .toEqual(Array(BUILT_IN_RUNNER_IDS.length).fill('mock (HSQ_DRY_RUN=1)'));
 });
 
 it('uses the preferred command in the missing cockpit hint', async () => {

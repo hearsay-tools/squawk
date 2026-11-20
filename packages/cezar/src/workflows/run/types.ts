@@ -6,7 +6,7 @@ import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { DoneRequest } from './turn-boundary.ts';
 import type { ScheduleTaskAnswer, ScheduleTaskRequest, ScheduledTasksAnswer, ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
-import type { ContentBlock, RunnerId, ToolGrant } from '../../core/agent-runner.ts';
+import type { ContentBlock, ToolGrant } from '../../core/agent-runner.ts';
 import type { CiToolSession } from '../../ci-wait/controller.ts';
 import type { LaunchConfig, LaunchSource } from './launch-read-resolver.ts';
 import type { WorkerAccountBinding } from '../../delegation/execution-identity.ts';
@@ -22,7 +22,7 @@ export type { FileBlock, PastedContent, PersistedAttachment } from '../pasted-co
 
 type ReadonlyValue<T> = T extends object ? { readonly [K in keyof T]: ReadonlyValue<T[K]> } : T;
 
-export type DelegationExecutionSettings = ReadonlyValue<{ cwd: string; runner: RunnerId; model?: string | undefined; modelIdentity?: string | undefined; effort?: string | undefined; agentProfile: string; accountBinding?: WorkerAccountBinding | undefined; systemPrompt?: string | undefined; allowedTools?: string[] | undefined; bashAllowlist?: string[] | undefined }>;
+export type DelegationExecutionSettings = ReadonlyValue<{ cwd: string; runner: string; model?: string | undefined; modelIdentity?: string | undefined; effort?: string | undefined; agentProfile: string; accountBinding?: WorkerAccountBinding | undefined; systemPrompt?: string | undefined; allowedTools?: string[] | undefined; bashAllowlist?: string[] | undefined }>;
 
 export interface StartRunInput {
   skillPaths?: Record<string, string> | undefined;
@@ -32,7 +32,7 @@ export interface StartRunInput {
    *  Unset = harness default. Same class of override as `model`. */
   effort?: string | undefined;
   /** Agent backend chosen for this task (GUI). Unset = the config default. */
-  runner?: RunnerId | undefined;
+  runner?: string | undefined;
   /** Agent account for this task (spec 2026-07-29-agent-profiles), applying to steps that run
    *  on `runner`. Unset = the project's own selection. Persisted on the record so the choice
    *  survives into resume and Continue, and so the thread can say which account did the work. */
@@ -75,7 +75,7 @@ export interface StartRunInput {
 export interface PendingContinuation {
   stepId: string;
   sessionId: string | undefined;
-  backend: RunnerId;
+  backend: string;
   prompt: string;
   /** Attachments the user pasted into the follow-up composer — images to view, files (#950) to
    *  be given the path of. Persisted when the continuation actually opens, not here. */
@@ -94,7 +94,7 @@ export type Execution = { runId: string; workflow: WorkflowDef; input: LaunchSou
 /** What `startExecution` resolved before the first step. */
 export type ExecutionLaunch = {
   config: LaunchConfig;
-  taskBackend: RunnerId;
+  taskBackend: string;
   extraSystemPrompt: string | undefined;
   /** The run record as it was before `startExecution` recorded the start. */
   ownedRun: RunRecord | undefined;

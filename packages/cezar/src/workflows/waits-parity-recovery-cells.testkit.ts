@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { it as registerTest, expect, vi } from 'vitest';
 import { WAIT_KIND, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { WorkerWaitEntry } from '@open-mercato/cezar-contract';
-import type { RunnerId } from '../core/agent-runner.ts';
+
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { root, manager, store, until, worker, toolGenerationOf, fixtureUpdateRun, restart, terminal, semaphore } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -19,11 +19,11 @@ import { gatedProviderFailure, persistentWakeFailure, MESSAGE_WAKE_OPENING, tool
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('recovery', recoveryCells);
 
-export function recoveryCells(runners: RunnerId[], it: typeof registerTest = registerTest): void {
+export function recoveryCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
     it(`${runner} U9w provider failure with a worker wait open leaves the run recoverable and the next resolution delivers`, async () => {
       const wire = gatedProviderFailure(root, runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner].scenarios['provider-error-controlled']! });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       await until(wire.held);
       const w = await worker(run.id);

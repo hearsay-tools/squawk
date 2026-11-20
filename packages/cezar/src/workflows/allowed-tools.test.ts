@@ -1,6 +1,6 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import '../core/register-all-runners.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
   allowedToolsForStep,
   DEFAULT_ALLOWED_TOOLS,
@@ -51,7 +51,7 @@ describe('allowedToolsForStep', () => {
   });
 
   it('has an extras row for every selectable runner', () => {
-    expect(registeredRunners().filter(definition => Array.isArray(definition.extraTools)).map(definition => definition.id).sort()).toEqual([...RUNNER_IDS].sort());
+    expect(registeredRunners().filter(definition => Array.isArray(definition.extraTools)).map(definition => definition.id).sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
     expect(runnerDefinition('pi').extraTools).toEqual(['Subagent', 'SubagentSupervisor', 'SubagentWait']);
     expect(runnerDefinition('claude').extraTools).toEqual([]);
   });

@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -7,7 +8,6 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync,
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
@@ -36,10 +36,10 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
     vi.restoreAllMocks(); syncBuiltinESMExports();
   });
 
-  for (const damage of cases) it.each(RUNNER_IDS)(`%s settles a crashed generation beside an outside fallback holder, keeping scratch while ${damage}`, async runner => {
+  for (const damage of cases) it.each(BUILT_IN_RUNNER_IDS)(`%s settles a crashed generation beside an outside fallback holder, keeping scratch while ${damage}`, async runner => {
     // Explicit opt-in: this recovery fixture seeds an inactive parent and registers the rebuilt runtime.
-    const adapter = HARNESS_ADAPTERS[runner];
-    process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv] = adapter.mockBin;
+    const adapter = HARNESS_ADAPTERS[runner]!;
+    process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv]! = adapter.mockBin;
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
     setRunStatus(store, parent.id, RUN_STATUS.waiting, { currentStepId: 'task', delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
     const priorTmpdir = process.env.TMPDIR, oldRoot = mkdtempSync('/tmp/cez-old-');

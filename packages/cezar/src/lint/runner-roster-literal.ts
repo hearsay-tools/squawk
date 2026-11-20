@@ -8,23 +8,23 @@ import { declaredRunnerIds, literalText, parserPlugins } from './runner-id-branc
 import { repoRoot } from './source-rule.ts';
 
 /**
- * `RUNNER_IDS` in `core/agent-runner.ts` is the one roster of runners. A second list written by
- * hand keeps compiling when a runner is added, and that runner is then missing from one seam
- * (open-mercato/cezar#387).
+ * `runners/built-in.ts` is the one roster of runners. A second list written by
+ * hand keeps compiling when a runner is added, and that runner is then missing
+ * from one seam (open-mercato/cezar#387).
  *
  * Static scope: every JS and TS file under `packages/`, tests included, except the file that
- * defines `RUNNER_IDS`. The rule reports an array literal whose string elements name every id of
- * `RUNNER_IDS`, in any order and with any other element beside them.
+ * holds the roster. The rule reports an array literal whose string elements name every id of the
+ * roster, in any order and with any other element beside them.
  *
  * It leaves out a list that omits a runner (a deliberate subset), a roster spelled as a union
  * type, as object keys or as separate arguments, and a list built from parts. An object typed
- * `Record<RunnerId, …>` needs no rule: the compiler refuses a missing key.
+ * over the roster's ids needs no rule: the compiler refuses a missing key.
  *
  * `runner-roster-literal.baseline.json` lists the files that keep a roster, each with its count
  * and a reason. It only shrinks: `npm run lint` fails a stale entry, and CI's baseline-growth
  * gate refuses a new one.
  */
-const DEFINITION = 'packages/cezar/src/core/agent-runner.ts';
+const DEFINITION = 'packages/cezar/src/runners/built-in.ts';
 
 export const runnerRostersFile = 'packages/cezar/src/lint/runner-roster-literal.baseline.json';
 
@@ -76,7 +76,7 @@ export function staleRunnerRosters(root = repoRoot): string[] {
 
 export const runnerRosterLiteral: AstRule = {
   name: 'runner-roster-literal',
-  description: 'RUNNER_IDS is the one roster of runners; no other array literal lists every runner id (open-mercato/cezar#387).',
+  description: 'runners/built-in.ts is the one roster of runners; no other array literal lists every runner id (open-mercato/cezar#387).',
   applies,
   create(report, { file }) {
     const ids = declared ??= declaredRunnerIds();
@@ -84,7 +84,7 @@ export const runnerRosterLiteral: AstRule = {
     return {
       ArrayExpression(node) {
         const named = new Set(children(node, 'elements').map(element => literal(element)));
-        if (ids.every(id => named.has(id)) && remaining-- <= 0) report(node, "This array lists every runner id by hand, so a new runner would be missing here. Use RUNNER_IDS or isRunnerId() from packages/cezar/src/core/agent-runner.ts; a Node-free package reads the runners from GET /api/v1/runners (open-mercato/cezar#387).");
+        if (ids.every(id => named.has(id)) && remaining-- <= 0) report(node, "This array lists every runner id by hand, so a new runner would be missing here. Use BUILT_IN_RUNNERS or BUILT_IN_RUNNER_IDS from packages/cezar/src/runners/built-in.ts; a Node-free package reads the runners from GET /api/v1/runners (open-mercato/cezar#387).");
       },
     };
   },

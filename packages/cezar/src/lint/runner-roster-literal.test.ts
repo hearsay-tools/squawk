@@ -1,16 +1,16 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
   readRunnerRosterExceptions, runnerRosterLiteral, runnerRosters, runnerRostersFile, scanRunnerRosters, staleRunnerRosters,
 } from './runner-roster-literal.ts';
 
 const file = 'packages/web/src/lib/providers.ts';
 const quoted = (ids: readonly string[]) => ids.map(id => `'${id}'`).join(', ');
-const ALL = quoted(RUNNER_IDS);
+const ALL = quoted(BUILT_IN_RUNNER_IDS);
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
@@ -18,25 +18,25 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   it.each([
     ['a constant', `const PROVIDERS = [${ALL}];`],
     ['a const tuple', `const PROVIDERS = [${ALL}] as const;`],
-    ['another order', `const PROVIDERS = [${quoted([...RUNNER_IDS].reverse())}];`],
+    ['another order', `const PROVIDERS = [${quoted([...BUILT_IN_RUNNER_IDS].reverse())}];`],
     ['a roster with more names', `const TOOLS = [${ALL}, 'gh', 'git'];`],
     ['a schema', `const schema = z.enum([${ALL}]);`],
     ['a set', `const ids = new Set<string>([${ALL}]);`],
-    ['one id per line', `const PROVIDERS = [\n  ${RUNNER_IDS.map(id => `'${id}'`).join(',\n  ')},\n];`],
-    ['cast and template elements', `const PROVIDERS = [${RUNNER_IDS.map((id, index) => (index % 2 ? `\`${id}\`` : `'${id}' as const`)).join(', ')}];`],
+    ['one id per line', `const PROVIDERS = [\n  ${BUILT_IN_RUNNER_IDS.map(id => `'${id}'`).join(',\n  ')},\n];`],
+    ['cast and template elements', `const PROVIDERS = [${BUILT_IN_RUNNER_IDS.map((id, index) => (index % 2 ? `\`${id}\`` : `'${id}' as const`)).join(', ')}];`],
     ['a test oracle', `expect(tabs()).toEqual([${ALL}]);`],
   ])('refuses %s', (_case, source) => {
     expect(runnerRosters(file, `\n${source}`)).toHaveLength(1);
     expect(checkRule(runnerRosterLiteral, file, `\n${source}`)).toEqual([
-      { line: 2, message: expect.stringMatching(/RUNNER_IDS or isRunnerId\(\).+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
+      { line: 2, message: expect.stringMatching(/Use BUILT_IN_RUNNERS or BUILT_IN_RUNNER_IDS from packages\/cezar\/src\/runners\/built-in\.ts.+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
     ]);
   });
 
   it.each([
-    ['a list that omits a runner', `const SOME = [${quoted(RUNNER_IDS.slice(1))}];`],
-    ['a list derived from the roster', "const STORED = [...RUNNER_IDS, 'claude-cli'];"],
-    ['object keys', `const LABELS = { ${RUNNER_IDS.map(id => `${id}: ''`).join(', ')} };`],
-    ['a union type', `type Runner = ${RUNNER_IDS.map(id => `'${id}'`).join(' | ')};`],
+    ['a list that omits a runner', `const SOME = [${quoted(BUILT_IN_RUNNER_IDS.slice(1))}];`],
+    ['a list derived from the roster', "const STORED = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];"],
+    ['object keys', `const LABELS = { ${BUILT_IN_RUNNER_IDS.map(id => `${id}: ''`).join(', ')} };`],
+    ['a union type', `type Runner = ${BUILT_IN_RUNNER_IDS.map(id => `'${id}'`).join(' | ')};`],
     ['a string', `const text = "[${ALL}]";`],
     ['a comment', `// [${ALL}]`],
     ['separate arguments', `pick(${ALL});`],
@@ -53,7 +53,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   });
 
   it.each([
-    ['packages/cezar/src/core/agent-runner.ts', false],
+    ['packages/cezar/src/runners/built-in.ts', false],
     ['packages/cezar/src/core/provider-auth.ts', true],
     ['packages/cezar/src/core/ui-parity.test.ts', true],
     ['packages/web/e2e/tools-menu.e2e.ts', true],
@@ -95,11 +95,11 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), text);
     };
-    const definition = 'packages/cezar/src/core/agent-runner.ts';
+    const definition = 'packages/cezar/src/runners/built-in.ts';
     const derived = 'packages/web/src/lib/derived.ts';
     const unreasoned = 'packages/web/src/lib/unreasoned.ts';
     write(file, `const a = [${ALL}];\n`);
-    write(definition, `export const RUNNER_IDS = [${ALL}] as const;\n`);
+    write(definition, `export const BUILT_IN_RUNNER_IDS = [${ALL}] as const;\n`);
     write(derived, 'const a = runnerSchema.options;\n');
     write(unreasoned, `const a = [${ALL}];\n`);
     write(runnerRostersFile, JSON.stringify({ entries: [

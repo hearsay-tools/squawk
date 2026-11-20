@@ -1,6 +1,8 @@
 import '../core/register-all-runners.testkit.ts';
+import { registeredRunners } from './runner-registry.ts';
+
+const PROVIDER_IDS = registeredRunners().map(({ id }) => id);
 import { describe, expect, it } from 'vitest';
-import { PROVIDER_IDS } from './provider-auth.ts';
 import {
   looksLikeProfileDir,
   profileCapableProviders,

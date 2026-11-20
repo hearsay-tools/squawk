@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import childProcess, { execFileSync, spawn, type ChildProcess, type ExecFileOptions, type SpawnOptions } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,7 +11,6 @@ import * as worktrees from '../autosave-commit.ts';
 import { RunStore } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS, RunManager } from '../workflows/run.ts';
 import { createFixtureManager } from '../workflows/fixture-cleanup.testkit.ts';
-import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
@@ -27,9 +27,9 @@ const FIXTURE_STEP_MS = 30_000;
 /** A Continue cell reopens its settled session. The cancelled cell's pending question is the worker's
  *  own, so its parent's answer reopens it (hearsay-tools/cezarion#2410); the others continue it. */
 async function reopenSettled(fixture: { store: RunStore; manager: RunManager; runId: string; answer: (text: string) => Promise<string> },
-  backend: RunnerId, outcome: 'failed' | 'cancelled' | 'success', prompt: string): Promise<void> {
+  backend: string, outcome: 'failed' | 'cancelled' | 'success', prompt: string): Promise<void> {
   if (outcome === 'cancelled') {
-    await fixture.answer(`Library: Vitest. ${HARNESS_ADAPTERS[backend].scenarios['cezar-done']!}`);
+    await fixture.answer(`Library: Vitest. ${HARNESS_ADAPTERS[backend]!.scenarios['cezar-done']!}`);
     return;
   }
   expect(fixture.manager.continueRun(fixture.runId, { text: outcome === 'failed' ? prompt : 'mock:baseline' }).ok).toBe(true);
@@ -147,8 +147,8 @@ const timer = setInterval(() => {
 }
 
 async function startSettlement({ store, manager, runId, answer }: SettlementFixture,
-  backend: RunnerId, continuation: boolean, outcome: SettlementOutcome): Promise<void> {
-  const prompt = HARNESS_ADAPTERS[backend].scenarios['provider-error']!;
+  backend: string, continuation: boolean, outcome: SettlementOutcome): Promise<void> {
+  const prompt = HARNESS_ADAPTERS[backend]!.scenarios['provider-error']!;
   if (continuation) {
     await reopenSettled({ store, manager, runId, answer }, backend, outcome, prompt);
     if (outcome === 'success') {
@@ -215,7 +215,7 @@ export function describeAutosaveSettlement(outcome: 'failed' | 'cancelled' | 'su
   registration = { describe, it }, continuations: readonly boolean[] = [false, true]): void {
   const { describe, it } = registration;
   describe('harness parity — settlement during blocked autosave', () => {
-    for (const backend of RUNNER_IDS) {
+    for (const backend of BUILT_IN_RUNNER_IDS) {
       for (const continuation of continuations) {
           const row = (outcome === 'failed' ? 61 : outcome === 'cancelled' ? 63 : 65) + Number(continuation);
           it(`${backend} R${row} ${continuation ? 'Continue' : 'fresh'} ${outcome} settles with a detached Git holder`, async () => {
@@ -317,7 +317,7 @@ export function describeAutosaveSettlement(outcome: 'failed' | 'cancelled' | 'su
 export function describeAutosaveChurn(registration = { describe, it }): void {
   const { describe, it } = registration;
   describe('harness parity — final autosave beside unrelated process churn', () => {
-    for (const backend of RUNNER_IDS) {
+    for (const backend of BUILT_IN_RUNNER_IDS) {
       for (const continuation of [false, true]) {
         const row = continuation ? 68 : 67;
         it(`${backend} R${row} ${continuation ? 'Continue' : 'fresh'} Finish commits without holding cleanup`, async () => {

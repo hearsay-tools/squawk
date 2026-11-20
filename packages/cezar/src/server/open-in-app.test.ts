@@ -1,3 +1,4 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,8 +20,6 @@ vi.mock('node:child_process', async (importOriginal) => {
   spawnMock.mockImplementation(() => ({ once: vi.fn(), unref: vi.fn() }));
   return { ...actual, spawn: (...args: unknown[]) => spawnMock(...args) };
 });
-
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 
 // This file is the one place allowed past the #824 spawn guard, and the reason is visible above:
 // `spawn` is replaced file-wide by an inert stub, so no launcher call here reaches the OS. The
@@ -239,9 +238,9 @@ describe('resolveOnPath (#469 Windows launcher safety)', () => {
 });
 
 describe('agentCliRunner', () => {
-  // Driven off RUNNER_IDS, not a literal list, so runner #5 is covered the moment it is added
+  // Driven off BUILT_IN_RUNNER_IDS, not a literal list, so runner #5 is covered the moment it is added
   // (the pi entry was missed on the hand-written list, #387 review).
-  it.each(RUNNER_IDS)('maps cli:%s to that runner', (runner) => {
+  it.each(BUILT_IN_RUNNER_IDS)('maps cli:%s to that runner', (runner) => {
     expect(agentCliRunner(`cli:${runner}`)).toBe(runner);
   });
 

@@ -1,10 +1,11 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeliveryControl, readDeliveryControl, type DeliveryControlOptions, type DeliveryKind } from '../../scripts/mock-delivery-control.mjs';
-import { RUNNER_IDS, type AgentEvent, type AgentSession, type RunnerId } from './agent-runner.ts';
+import { type AgentEvent, type AgentSession } from './agent-runner.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -122,13 +123,13 @@ describe('native delivery control module', () => {
 
 // What each native wire can carry. Claude acknowledges agent input with its local stdin
 // write, never by a provider refusal, so those kinds are named exemptions.
-const EXEMPT: Partial<Record<RunnerId, Partial<Record<DeliveryKind, string>>>> = {
+const EXEMPT: Partial<Record<string, Partial<Record<DeliveryKind, string>>>> = {
   claude: { reject: 'U13', 'hold-ack': 'U12' },
 };
 const ENV_BASE = { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' };
 type Wire = { v1: readonly AgentEvent[]; v2: readonly UiEvent[] };
 /** A baseline turn on a fresh native subprocess, then `exercise` once it has ended. */
-function seam(runner: RunnerId, path: string, exercise?: (session: AgentSession, wire: Wire) => Promise<void>) {
+function seam(runner: string, path: string, exercise?: (session: AgentSession, wire: Wire) => Promise<void>) {
   return driveSeam(runner, 'baseline', {
     spec: { env: { ...ENV_BASE, CEZ_MOCK_DELIVERY_CONTROL: path } },
     whileOpen: async (session, wire) => {
@@ -148,7 +149,7 @@ const send = (session: AgentSession, text: string) => {
 const echoed = (wire: Wire, marker: string) => wire.v1.some(event => event.type === 'text' && event.text.includes(marker));
 const turnEnds = (wire: Wire) => wire.v1.filter(event => event.type === 'turn-end').length;
 
-describe.each(RUNNER_IDS)('%s native delivery control', runner => {
+describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
   const exempt = (kind: DeliveryKind) => EXEMPT[runner]?.[kind];
   const control = (options: DeliveryControlOptions) => createDeliveryControl(tempRoot(), options);
 
@@ -349,7 +350,7 @@ it('opencode matches the prompt text, not its JSON encoding', async () => {
 // follow the held turn's settlement, exactly as on an unconfigured wire.
 it('pi keeps turn framing for a prompt queued behind a held response', async () => {
   const frames = async (env: Record<string, string>, release?: () => void, held?: () => boolean) => {
-    const child = spawn(process.execPath, [HARNESS_ADAPTERS.pi.mockBin, '--mode', 'rpc'], {
+    const child = spawn(process.execPath, [HARNESS_ADAPTERS.pi!.mockBin, '--mode', 'rpc'], {
       cwd: tempRoot(), env: { ...process.env, ...ENV_BASE, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
     const lines: Array<Record<string, unknown>> = [];
     let buffer = '';

@@ -1,20 +1,20 @@
+import { BUILT_IN_RUNNER_IDS } from '../runners/built-in.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { manager, root, store, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
 import { conversationPair, turnEnds } from './worker-wait-conversations.testkit.ts';
 
 describe('parent and worker conversation waits through RunManager', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
-  for (const runner of RUNNER_IDS) {
+  for (const runner of BUILT_IN_RUNNER_IDS) {
     it(`${runner} WP2 preserves a resumed request for 45 minutes and delivers its late reply amendment`, async () => {
       process.env.CEZ_DRY_RUN = '0';
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude.mockBin;
-      process.env[HARNESS_ADAPTERS[runner].binEnv] = HARNESS_ADAPTERS[runner].mockBin;
+      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      process.env[HARNESS_ADAPTERS[runner]!.binEnv] = HARNESS_ADAPTERS[runner]!.mockBin;
       const f = await conversationPair(runner);
       const release = join(root, 'resume-receipt-release');
       try {

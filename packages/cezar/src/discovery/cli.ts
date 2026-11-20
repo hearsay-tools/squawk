@@ -1,5 +1,5 @@
 import { commandText } from '../home/command.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
+import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
 import { productEnv } from '../core/product-env.ts';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
@@ -27,7 +27,7 @@ const HELP = commandText(`cez discover — inspect the host's default-account ca
 
 Usage:
   cez discover runners
-  cez discover models --runner <${RUNNER_IDS.join('|')}>
+  cez discover models --runner <${BUILT_IN_RUNNERS.map(({ id }) => id).join('|')}>
 
 Options:
   --url <origin>  Cockpit to use (also CEZ_URL); operators only.

@@ -1,6 +1,8 @@
 /**
  * Backend-neutral logical sessions for task execution, follow-ups, waiting, interrupt and
  * resume. Adapters own native process lifetimes and emit normalized events behind this seam.
+ * A runner id is an open string (spec 2026-11-18-runner-definitions, decision 5): the registry
+ * (`core/runner-registry.ts`) resolves it, and `runners/built-in.ts` is the one roster.
  */
 
 import type { UiEvent } from './ui-events.ts';
@@ -8,19 +10,6 @@ import type { RunnerTimings } from './runner-runtime.ts';
 import type { SpawnScope } from '../worker-scope/scope.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 
-/**
- * Canonical user-selectable runner tuple in display order. Derive runtime enumerations and
- * schemas from this set; keep legacy backend ids separate for persisted records.
- */
-export const RUNNER_IDS = ['claude', 'codex', 'opencode', 'pi', 'omp'] as const;
-
-/** The user-selectable runners (what config/GUI expose). */
-export type RunnerId = (typeof RUNNER_IDS)[number];
-
-/** `claude-cli` is the legacy id kept so old run records still parse. */
-export type AgentBackend = RunnerId | 'claude-cli';
-
-/** Narrow an arbitrary string (a config value, a check name) to a runner id. */
 /** The rejection of an agent-input acknowledgement that the session's own `end()` cut off
  *  (hearsay-tools/squawk#3508). Squawk keeps such input owed as a closed-session delivery
  *  failure. A runner raises it only for the abort its `end()` fired: a provider error that
@@ -35,10 +24,6 @@ export class SessionEndedBeforeAcknowledgement extends Error {
 /** The abort an `AbortController` fires rejects a fetch or a read with this name. */
 export function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError';
-}
-
-export function isRunnerId(value: string): value is RunnerId {
-  return (RUNNER_IDS as readonly string[]).includes(value);
 }
 
 export interface AgentRunSpec {
@@ -478,10 +463,10 @@ export type SystemPromptOnResume = 'resent' | 'in-thread';
 /** Builds the runner for a backend id. The engine depends on this type only; the entry points
  *  pass `createRunner` from `runner-registry.ts`, which loads the registered runner's adapter, and
  *  a test passes a factory for the one runner it drives (hearsay-tools/cezarion#2939). */
-export type RunnerFactory = (backend: AgentBackend | RunnerId | undefined) => Promise<AgentRunner>;
+export type RunnerFactory = (backend: string | undefined) => Promise<AgentRunner>;
 
 export interface AgentRunner {
-  readonly backend: AgentBackend;
+  readonly backend: string;
   /** Which `AgentRunSpec` fields this runner honors, and how — see `AgentRunSpecSupport`. */
   readonly specSupport: AgentRunSpecSupport;
   /** How this runner carries `spec.systemPrompt` onto a resumed session (#790). Required. */
