@@ -1,10 +1,9 @@
-import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
+import { workflowAutonomousParity } from './workflow-autonomous-rows.testkit.ts';
 import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { expect, onTestFinished, vi } from 'vitest';
 import type { RunRecord } from '../runs/store.ts';
-import { RUNNER_IDS } from './agent-runner.ts';
-import { AUTONOMOUS_CRITERIA, driveSeam, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { driveSeam, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 import { refusedNudgeIdleClose } from './workflow-autonomous-idle-close.testkit.ts';
 import { unacknowledgedNudgeBound } from './workflow-autonomous-ack-bound.testkit.ts';
@@ -49,234 +48,139 @@ async function waitForProgressing(cond: () => boolean, progress: () => unknown, 
 
 const nudges = (events: readonly Record<string, unknown>[]) => events.filter(e => e.type === 'note' && String(e.message).includes('continuing without pausing'));
 
-const PARTS: Readonly<Record<string, readonly string[]>> = {
-  "budget-fresh": [
-    "claude A5 fresh"
-  ],
-  "budget-continuation": [
-    "claude A5 continuation"
-  ],
-  "late-readiness-fresh": [
-    "claude A11 fresh"
-  ],
-  "late-readiness-continuation": [
-    "claude A12 continuation"
-  ],
-  "nudges": [
-    "claude A1 fresh",
-    "claude A2 continuation"
-  ],
-  "ask-refusal": [
-    "claude A3 fresh",
-    "claude A4 continuation"
-  ],
-  "unanswered-question": [
-    "claude A10 fresh"
-  ],
-  "non-autonomous": [
-    "claude A6 continuation",
-    "claude A6 fresh"
-  ],
-  "tool-parking": [
-    "claude A7 fresh",
-    "claude A8 fresh"
-  ],
-  "idle-close-fresh": [
-    "claude A13",
-    "codex A13",
-    "cursor A13",
-    "omp A13",
-    "opencode A13",
-    "pi A13"
-  ],
-  "idle-close-continuation": [
-    "claude A14",
-    "codex A14",
-    "cursor A14",
-    "omp A14",
-    "opencode A14",
-    "pi A14"
-  ],
-  "ack-bound": [
-    "claude A15",
-    "codex A15",
-    "cursor A15",
-    "omp A15",
-    "opencode A15",
-    "pi A15"
-  ],
-  "answer-bound": [
-    "claude A16"
-  ],
-  "native-questions": [
-    "claude A9",
-    "codex A9 fresh",
-    "cursor A9",
-    "omp A9",
-    "opencode A9 fresh",
-    "pi A9"
-  ]
-};
-
-export function describeWorkflowAutonomousParity(part: ParityPart, collect?: ParityCollector): void {
-  const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-autonomous');
-describe('autonomous turn-end parity — #426', () => {
-  for (const backend of RUNNER_IDS) {
-    for (const row of AUTONOMOUS_CRITERIA) {
-      const exemption = exemptionFor(row.id, backend);
-      if (row.id === 'A13' || row.id === 'A14') {
-        // Claude's stdin write is its acknowledgement.
-        const options = { refuses: !exemption, heldAck: backend !== 'claude' };
-        it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
-          () => refusedNudgeIdleClose(backend, row.id === 'A14', options), 60_000);
-        continue;
+export const describeWorkflowAutonomousParity = workflowAutonomousParity({
+  idleClose: (backend, row, options) => () => refusedNudgeIdleClose(backend, row.id === 'A14', options),
+  answerBound: backend => () => acknowledgedNudgeAnswerBound(backend),
+  ackBound: (backend, exemption) => () => unacknowledgedNudgeBound(backend, { heldAck: !exemption }),
+  exemption: backend => async () => {
+    // The wire's ask scenario is a cezar_ask call, which no seam answers: the turn ends with no
+    // native ask.requested. A native mid-turn ask on this wire fails the first line.
+    const observed = await driveSeam(backend, 'ask');
+    expect(observed.v2.some(e => e.type === 'ask.requested')).toBe(false);
+    expect(observed.v1.some(e => e.type === 'turn-end')).toBe(true);
+  },
+  row: (backend, row, mode) => async () => {
+    await withOwnedInputRun(backend, mode === 'continuation' ? 'autonomous' : row.scenario, async ({ store, manager, runId }) => {
+      async function prepareContinuation(): Promise<void> {
+        if (mode === 'continuation') {
+          manager.enqueueOwnedRun(runId);
+          await waitFor(() => store.getRun(runId)?.status === 'waiting', ROW_SETTLE_MS);
+          manager.finish(runId);
+          await waitFor(() => !manager.isActive(runId), ROW_SETTLE_MS);
+        }
       }
-      if (row.id === 'A16') {
-        it(`${backend} ${row.id} ${row.name}`, () => acknowledgedNudgeAnswerBound(backend), 60_000);
-        continue;
+      await prepareContinuation();
+      store.updateRun(runId, { autonomous: row.id !== 'A6' });
+      if (row.id === 'A10') store.appendEvent(runId, {
+        type: 'ask.requested', requestId: randomUUID(),
+        questions: [{ header: 'Prior', question: 'A prior unanswered question?', options: [{ label: 'Yes' }, { label: 'No' }] }],
+      });
+      // Every status write applies a run exit through the store's move (ADR 0056).
+      const moves = vi.spyOn(store, 'move');
+      const statusWrites = () => moves.mock.calls.filter(([id]) => id === runId).map(([, exit]) => RUN_EXITS[exit].to);
+      const priorHumanWaits = new Set((store.getRun(runId)?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human).map(wait => wait.id));
+      const publishedHumanWaits = new Set<string>();
+      const observeHumanWaits = (run: RunRecord) => {
+        if (run.id !== runId) return;
+        for (const wait of run.waits ?? []) {
+          if (wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open && !priorHumanWaits.has(wait.id)) publishedHumanWaits.add(wait.id);
+        }
+      };
+      store.on('run', observeHumanWaits);
+      onTestFinished(() => { store.off('run', observeHumanWaits); });
+      // A refused cezar_ask answers the agent and leaves no run event; the registry's warning is its trace.
+      const warnings = vi.spyOn(console, 'warn');
+      const askRefusals = () => warnings.mock.calls.filter(([message]) => String(message).includes('wait registration refused: autonomous_run')).length;
+      const startSeq = store.readEvents(runId).length;
+      // A native ask parks mid-turn, and nothing may answer it on the wire. Every write to a
+      // session this run opens after the ask is recorded, so a synthetic answer shows when it is
+      // sent, without waiting for the wire to react to it.
+      const writesAfterAsk: string[] = [];
+      if (row.id === 'A9') {
+        const work = fixtureWork(manager);
+        const track = work.trackSession.bind(work);
+        const tracked = vi.spyOn(work, 'trackSession').mockImplementation(((session, closed) => {
+          for (const method of ['sendMessage', 'sendAgentMessage', 'respondPermission'] as const) {
+            const original = session[method] as ((...args: unknown[]) => unknown) | undefined;
+            if (!original) continue;
+            Object.assign(session, { [method]: (...args: unknown[]) => {
+              if (store.readEvents(runId).slice(startSeq).some(e => e.type === 'ask.requested')) writesAfterAsk.push(method);
+              return original.apply(session, args);
+            } });
+          }
+          return track(session, closed);
+        }) as typeof work.trackSession);
+        onTestFinished(() => { tracked.mockRestore(); });
       }
-      if (row.id === 'A15') {
-        it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
-          () => unacknowledgedNudgeBound(backend, { heldAck: !exemption }), 60_000);
-        continue;
+      if (mode === 'continuation') expect(manager.continueRun(runId, { text: promptFor(backend, row.scenario) }).ok).toBe(true);
+      else manager.enqueueOwnedRun(runId);
+      // Done rows reach their terminal outcome before we check publication history.
+      // Other rows settle at their park. Nudge progress resets the stall bound.
+      const expectsDone = ['A1', 'A2', 'A3', 'A4', 'A8'].includes(row.id);
+      await waitForProgressing(
+        () => {
+          return (!expectsDone && store.getRun(runId)?.status === 'waiting') || ['done', 'review', 'failed'].includes(store.getRun(runId)?.status ?? '');
+        },
+        () => store.getRun(runId)?.automaticWakes,
+        ROW_SETTLE_MS,
+      );
+      const events = store.readEvents(runId).slice(startSeq);
+      const notes = nudges(events);
+      function assertCapOutcome(): void {
+        expect(store.getRun(runId)?.status).toBe('waiting');
+        expect(notes).toHaveLength(MAX_AUTO_CONTINUES);
+        expect(statusWrites().filter(status => status === RUN_STATUS.waiting)).toHaveLength(1);
+        expect(events.filter(e => e.type === 'note' && String(e.message).includes(`autonomous — safety cap reached (${MAX_AUTO_CONTINUES})`))).toHaveLength(1);
       }
-      if (exemption) {
-        it(`${backend} ${row.id} exemption — ${exemption.reason}`, async () => {
-          // The wire's ask scenario is a cezar_ask call, which no seam answers: the turn ends with no
-          // native ask.requested. A native mid-turn ask on this wire fails the first line.
-          const observed = await driveSeam(backend, 'ask');
-          expect(observed.v2.some(e => e.type === 'ask.requested')).toBe(false);
-          expect(observed.v1.some(e => e.type === 'turn-end')).toBe(true);
-        });
-        continue;
+      function assertParkedOutcome(): void {
+        expect(store.getRun(runId)?.status).toBe('waiting');
+        expect(notes).toHaveLength(0);
+        if (row.id === 'A9') {
+          expect(events.some(e => e.type === 'ask.requested')).toBe(true);
+          // No synthetic answer reached the wire.
+          expect(writesAfterAsk).toEqual([]);
+        }
+        // The agent's own timer is the run's wake, so no autonomous nudge goes beside it.
+        if (row.id === 'A7') expect(store.getRun(runId)?.waits?.filter(wait => wait.kind === WAIT_KIND.timer && wait.phase === WAIT_PHASE.open)).toHaveLength(1);
+        if (row.id === 'A10') {
+          // The persisted question stays the pending one: the agent's own cezar_ask was refused.
+          expect(hasPendingAsk(store, runId)).toBe(true);
+          expect(askRefusals()).toBeGreaterThanOrEqual(1);
+        }
+        if (row.id !== 'A6') expect(events.some(e => e.type === 'human-input-delivered')).toBe(false);
       }
-      // Cap and non-autonomous controls exercise both constructors as well.
-      const modes = row.id === 'A2' || row.id === 'A4' || row.id === 'A12' ? ['continuation'] : row.id === 'A5' || row.id === 'A6' ? ['fresh', 'continuation'] : ['fresh'];
-      for (const mode of modes) it(`${backend} ${row.id} ${row.name} (${mode})`, async () => {
-        await withOwnedInputRun(backend, mode === 'continuation' ? 'autonomous' : row.scenario, async ({ store, manager, runId }) => {
-          async function prepareContinuation(): Promise<void> {
-            if (mode === 'continuation') {
-              manager.enqueueOwnedRun(runId);
-              await waitFor(() => store.getRun(runId)?.status === 'waiting', ROW_SETTLE_MS);
-              manager.finish(runId);
-              await waitFor(() => !manager.isActive(runId), ROW_SETTLE_MS);
-            }
-          }
-          await prepareContinuation();
-          store.updateRun(runId, { autonomous: row.id !== 'A6' });
-          if (row.id === 'A10') store.appendEvent(runId, {
-            type: 'ask.requested', requestId: randomUUID(),
-            questions: [{ header: 'Prior', question: 'A prior unanswered question?', options: [{ label: 'Yes' }, { label: 'No' }] }],
-          });
-          // Every status write applies a run exit through the store's move (ADR 0056).
-          const moves = vi.spyOn(store, 'move');
-          const statusWrites = () => moves.mock.calls.filter(([id]) => id === runId).map(([, exit]) => RUN_EXITS[exit].to);
-          const priorHumanWaits = new Set((store.getRun(runId)?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human).map(wait => wait.id));
-          const publishedHumanWaits = new Set<string>();
-          const observeHumanWaits = (run: RunRecord) => {
-            if (run.id !== runId) return;
-            for (const wait of run.waits ?? []) {
-              if (wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open && !priorHumanWaits.has(wait.id)) publishedHumanWaits.add(wait.id);
-            }
-          };
-          store.on('run', observeHumanWaits);
-          onTestFinished(() => { store.off('run', observeHumanWaits); });
-          // A refused cezar_ask answers the agent and leaves no run event; the registry's warning is its trace.
-          const warnings = vi.spyOn(console, 'warn');
-          const askRefusals = () => warnings.mock.calls.filter(([message]) => String(message).includes('wait registration refused: autonomous_run')).length;
-          const startSeq = store.readEvents(runId).length;
-          // A native ask parks mid-turn, and nothing may answer it on the wire. Every write to a
-          // session this run opens after the ask is recorded, so a synthetic answer shows when it is
-          // sent, without waiting for the wire to react to it.
-          const writesAfterAsk: string[] = [];
-          if (row.id === 'A9') {
-            const work = fixtureWork(manager);
-            const track = work.trackSession.bind(work);
-            const tracked = vi.spyOn(work, 'trackSession').mockImplementation(((session, closed) => {
-              for (const method of ['sendMessage', 'sendAgentMessage', 'respondPermission'] as const) {
-                const original = session[method] as ((...args: unknown[]) => unknown) | undefined;
-                if (!original) continue;
-                Object.assign(session, { [method]: (...args: unknown[]) => {
-                  if (store.readEvents(runId).slice(startSeq).some(e => e.type === 'ask.requested')) writesAfterAsk.push(method);
-                  return original.apply(session, args);
-                } });
-              }
-              return track(session, closed);
-            }) as typeof work.trackSession);
-            onTestFinished(() => { tracked.mockRestore(); });
-          }
-          if (mode === 'continuation') expect(manager.continueRun(runId, { text: promptFor(backend, row.scenario) }).ok).toBe(true);
-          else manager.enqueueOwnedRun(runId);
-          // Done rows reach their terminal outcome before we check publication history.
-          // Other rows settle at their park. Nudge progress resets the stall bound.
-          const expectsDone = ['A1', 'A2', 'A3', 'A4', 'A8'].includes(row.id);
-          await waitForProgressing(
-            () => {
-              return (!expectsDone && store.getRun(runId)?.status === 'waiting') || ['done', 'review', 'failed'].includes(store.getRun(runId)?.status ?? '');
-            },
-            () => store.getRun(runId)?.automaticWakes,
-            ROW_SETTLE_MS,
-          );
-          const events = store.readEvents(runId).slice(startSeq);
-          const notes = nudges(events);
-          function assertCapOutcome(): void {
-            expect(store.getRun(runId)?.status).toBe('waiting');
-            expect(notes).toHaveLength(MAX_AUTO_CONTINUES);
-            expect(statusWrites().filter(status => status === RUN_STATUS.waiting)).toHaveLength(1);
-            expect(events.filter(e => e.type === 'note' && String(e.message).includes(`autonomous — safety cap reached (${MAX_AUTO_CONTINUES})`))).toHaveLength(1);
-          }
-          function assertParkedOutcome(): void {
-            expect(store.getRun(runId)?.status).toBe('waiting');
-            expect(notes).toHaveLength(0);
-            if (row.id === 'A9') {
-              expect(events.some(e => e.type === 'ask.requested')).toBe(true);
-              // No synthetic answer reached the wire.
-              expect(writesAfterAsk).toEqual([]);
-            }
-            // The agent's own timer is the run's wake, so no autonomous nudge goes beside it.
-            if (row.id === 'A7') expect(store.getRun(runId)?.waits?.filter(wait => wait.kind === WAIT_KIND.timer && wait.phase === WAIT_PHASE.open)).toHaveLength(1);
-            if (row.id === 'A10') {
-              // The persisted question stays the pending one: the agent's own cezar_ask was refused.
-              expect(hasPendingAsk(store, runId)).toBe(true);
-              expect(askRefusals()).toBeGreaterThanOrEqual(1);
-            }
-            if (row.id !== 'A6') expect(events.some(e => e.type === 'human-input-delivered')).toBe(false);
-          }
-          function assertDoneOutcome(): void {
-            expect(store.getRun(runId)?.status).toBe('done');
-            expect(notes).toHaveLength(row.id === 'A8' ? 0 : 1);
-            expect(statusWrites()).not.toContain(RUN_STATUS.waiting);
-            expect([...publishedHumanWaits]).toEqual([]);
-            expect(store.getRun(runId)?.waits?.filter(wait => wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open) ?? []).toEqual([]);
-            const stepId = store.getRun(runId)!.steps.at(-1)!.id;
-            expect(notes.every(note => note.stepId === stepId)).toBe(true);
-            if (row.id === 'A3' || row.id === 'A4') {
-              expect(askRefusals()).toBeGreaterThanOrEqual(1);
-              // The refusal reaches the agent through its own native wire, which echoes it.
-              expect(events.some(e => e.type === 'text' && String(e.text).includes(askErrorMessage('autonomous_run')))).toBe(true);
-              expect(events.filter(e => e.type === 'ask.requested' || e.type === 'human-input-delivered')).toEqual([]);
-              expect(events.filter(e => e.type === 'user-message' && String(e.text).startsWith('Continue working autonomously'))).toEqual([]);
-            }
-          }
-          if (row.id === 'A5' || row.id === 'A11' || row.id === 'A12') {
-            assertCapOutcome();
-          } else if (row.id === 'A6' || row.id === 'A7' || row.id === 'A9' || row.id === 'A10') {
-            assertParkedOutcome();
-          } else {
-            assertDoneOutcome();
-          }
-          if (row.id === 'A11' || row.id === 'A12') {
-            expect(askRefusals()).toBeGreaterThanOrEqual(1);
-            expect(events.filter(e => e.type === 'ask.requested' || e.type === 'human-input-delivered')).toEqual([]);
-            expect(events.filter(e => e.type === 'user-message' && String(e.text).startsWith('Continue working autonomously'))).toEqual([]);
-            expect(statusWrites().filter(status => status === RUN_STATUS.waiting)).toHaveLength(1);
-          }
-          moves.mockRestore();
-          warnings.mockRestore();
-        });
-      }, row.id === 'A5' || row.id === 'A11' || row.id === 'A12' ? CAP_ROW_TIMEOUT_MS : 30_000);
-    }
-  }
+      function assertDoneOutcome(): void {
+        expect(store.getRun(runId)?.status).toBe('done');
+        expect(notes).toHaveLength(row.id === 'A8' ? 0 : 1);
+        expect(statusWrites()).not.toContain(RUN_STATUS.waiting);
+        expect([...publishedHumanWaits]).toEqual([]);
+        expect(store.getRun(runId)?.waits?.filter(wait => wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open) ?? []).toEqual([]);
+        const stepId = store.getRun(runId)!.steps.at(-1)!.id;
+        expect(notes.every(note => note.stepId === stepId)).toBe(true);
+        if (row.id === 'A3' || row.id === 'A4') {
+          expect(askRefusals()).toBeGreaterThanOrEqual(1);
+          // The refusal reaches the agent through its own native wire, which echoes it.
+          expect(events.some(e => e.type === 'text' && String(e.text).includes(askErrorMessage('autonomous_run')))).toBe(true);
+          expect(events.filter(e => e.type === 'ask.requested' || e.type === 'human-input-delivered')).toEqual([]);
+          expect(events.filter(e => e.type === 'user-message' && String(e.text).startsWith('Continue working autonomously'))).toEqual([]);
+        }
+      }
+      if (row.id === 'A5' || row.id === 'A11' || row.id === 'A12') {
+        assertCapOutcome();
+      } else if (row.id === 'A6' || row.id === 'A7' || row.id === 'A9' || row.id === 'A10') {
+        assertParkedOutcome();
+      } else {
+        assertDoneOutcome();
+      }
+      if (row.id === 'A11' || row.id === 'A12') {
+        expect(askRefusals()).toBeGreaterThanOrEqual(1);
+        expect(events.filter(e => e.type === 'ask.requested' || e.type === 'human-input-delivered')).toEqual([]);
+        expect(events.filter(e => e.type === 'user-message' && String(e.text).startsWith('Continue working autonomously'))).toEqual([]);
+        expect(statusWrites().filter(status => status === RUN_STATUS.waiting)).toHaveLength(1);
+      }
+      moves.mockRestore();
+      warnings.mockRestore();
+    });
+  },
+  capRowTimeoutMs: CAP_ROW_TIMEOUT_MS,
 });
-
-}

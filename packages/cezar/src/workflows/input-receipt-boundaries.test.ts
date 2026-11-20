@@ -19,7 +19,8 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as processes from '../core/process-usage.ts';
 import { RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { createFixtureManager, drainFixtureManagers, fixtureWork, fixtureWorkSettled, unused } from './fixture-manager.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork, fixtureWorkSettled } from './fixture-manager.testkit.ts';
+import { unused } from './unused.testkit.ts';
 import type { RunManager } from './run.ts';
 import { noRunners, useRunners } from '../core/runners-under-test.testkit.ts';
 

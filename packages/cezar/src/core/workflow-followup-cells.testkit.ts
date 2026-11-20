@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_IDS } from './agent-runner.ts';
-import { exemptionFor, FOLLOWUP_CRITERIA, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { promptFor, waitFor } from './harness-parity.testkit.ts';
+import { workflowFollowup } from './workflow-followup-rows.testkit.ts';
 import { driveRun } from './workflow-parity.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 
@@ -426,163 +426,136 @@ export function describeCodexAdmission(registration = { describe, it }) {
   });
 }
 
-export const WORKFLOW_FOLLOWUP_GROUPS = {
-  'turn-end': { rows: ['H1', 'H2'], modes: ['fresh'] },
-  'hold': { rows: ['H3'], modes: ['fresh', 'continuation'] },
-  'late-start-fresh': { rows: ['H4'], modes: ['fresh'] },
-  'late-start-continuation': { rows: ['H4'], modes: ['continuation'] },
-  'late-ack-fresh': { rows: ['H5'], modes: ['fresh'] },
-  'late-ack-continuation': { rows: ['H5'], modes: ['continuation'] },
-} as const;
-
-export function describeWorkflowFollowup(
-  group: keyof typeof WORKFLOW_FOLLOWUP_GROUPS,
-  registration = { describe, it },
-  resolveExemption: typeof exemptionFor = exemptionFor,
-) {
-  const { describe, it } = registration;
-describe('mid-turn human follow-up parity — #486', () => {
-  for (const backend of RUNNER_IDS) {
-    for (const row of FOLLOWUP_CRITERIA.filter(row => { return (WORKFLOW_FOLLOWUP_GROUPS[group].rows as readonly string[]).includes(row.id); })) {
-      const exemption = resolveExemption(row.id, backend);
-      if (exemption) {
-        if (!(WORKFLOW_FOLLOWUP_GROUPS[group].modes as readonly string[]).includes('fresh')) continue;
-        it(`${backend} ${row.id} exemption — ${exemption.reason}`, async () => {
-          await withMockLogs(async ({ argsFile, stdinFile, releaseFile, files, release }) => {
-            await driveRun(backend, row.scenario, run =>
-              run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
-              async ({ store, runId }) => {
-                expect(mockLog(files)).toContain(DROP);
-                if (row.id === 'H2') expect(store.getRun(runId)?.status).toBe('waiting');
-              }, {
-                env: { CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile, CEZ_MOCK_RELEASE_FILE: releaseFile },
-                during: async ({ manager, runId, store }) => {
-                  await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
-                  expect(manager.sendMessage(runId, [{ type: 'text', text: DROP }])).toBe(true);
-                  release();
-                },
-              });
+export const describeWorkflowFollowup = workflowFollowup({
+  exemption: (backend, row) => async () => {
+    await withMockLogs(async ({ argsFile, stdinFile, releaseFile, files, release }) => {
+      await driveRun(backend, row.scenario, run =>
+        run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
+        async ({ store, runId }) => {
+          expect(mockLog(files)).toContain(DROP);
+          if (row.id === 'H2') expect(store.getRun(runId)?.status).toBe('waiting');
+        }, {
+          env: { CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile, CEZ_MOCK_RELEASE_FILE: releaseFile },
+          during: async ({ manager, runId, store }) => {
+            await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
+            expect(manager.sendMessage(runId, [{ type: 'text', text: DROP }])).toBe(true);
+            release();
+          },
+        });
+    });
+  },
+  row: (backend, row, mode, lateStart) => async () => {
+    await withMockLogs(async ({ argsFile, stdinFile, releaseFile, files, release }) => {
+      const env = { CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile, CEZ_MOCK_RELEASE_FILE: releaseFile };
+      if (row.id === 'H1') {
+        await driveRun(backend, 'hold-cezar-done', run =>
+          ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
+          async ({ store, runId }) => {
+            const events = store.readEvents(runId);
+            expect(mockLog(files)).toContain(KEEP);
+            expect(['done', 'review']).toContain(store.getRun(runId)?.status);
+            // Queueing wires (and Codex) must not start a follow-up turn after the DONE close.
+            // Pi/OMP acks land before turn-end, so a late native turn.started can trail end().
+            if (backend !== 'pi' && backend !== 'omp') assertCloseAfterLastTurn(events);
+          }, {
+            env,
+            during: async ({ manager, runId, store }) => {
+              await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
+              expect(manager.sendMessage(runId, [{ type: 'text', text: `${KEEP} mock:cezar-done` }])).toBe(true);
+              release();
+            },
           });
-        }, 30_000);
-        continue;
+        return;
       }
-      const lateStart = row.id === 'H4' || row.id === 'H5';
-      const modes = row.id === 'H3' || lateStart ? ['fresh', 'continuation'] as const : ['fresh'] as const;
-      for (const mode of modes.filter(mode => { return (WORKFLOW_FOLLOWUP_GROUPS[group].modes as readonly string[]).includes(mode); })) it(`${backend} ${row.id} ${row.name}${modes.length > 1 ? ` (${mode})` : ''}`, async () => {
-        await withMockLogs(async ({ argsFile, stdinFile, releaseFile, files, release }) => {
-          const env = { CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile, CEZ_MOCK_RELEASE_FILE: releaseFile };
-          if (row.id === 'H1') {
-            await driveRun(backend, 'hold-cezar-done', run =>
-              ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
-              async ({ store, runId }) => {
-                const events = store.readEvents(runId);
-                expect(mockLog(files)).toContain(KEEP);
-                expect(['done', 'review']).toContain(store.getRun(runId)?.status);
-                // Queueing wires (and Codex) must not start a follow-up turn after the DONE close.
-                // Pi/OMP acks land before turn-end, so a late native turn.started can trail end().
-                if (backend !== 'pi' && backend !== 'omp') assertCloseAfterLastTurn(events);
-              }, {
-                env,
-                during: async ({ manager, runId, store }) => {
-                  await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
-                  expect(manager.sendMessage(runId, [{ type: 'text', text: `${KEEP} mock:cezar-done` }])).toBe(true);
-                  release();
-                },
-              });
-            return;
+      if (row.id === 'H3' || lateStart) {
+        // H4 holds the follow-up's native turn start past the 250 ms held-input recheck.
+        // H5 also has the wire acknowledge it inside the running turn first, the
+        // `mock:steer-late` ordering: pi reads it as its next prompt, OMP before settling.
+        const followUp = row.id === 'H5' ? `${KEEP} ${DEFERRED_TURN_START_TOKEN}:late-ack`
+          : row.id === 'H4' ? `${KEEP} ${DEFERRED_TURN_START_TOKEN}` : KEEP;
+        const noNudge = async (store: RunStore, runId: string, startSeq = 0) => {
+          const events = store.readEvents(runId).slice(startSeq);
+          // A park while the follow-up's native turn is still open is the
+          // hearsay-tools/cezarion#1112 shape: the cockpit shows Needs you mid-turn.
+          const turnEdges = events.filter(e => e.type === 'turn.started' || e.type === 'turn.completed');
+          if (store.getRun(runId)?.status === 'waiting') expect(turnEdges.at(-1)?.type).toBe('turn.completed');
+          if (lateStart) {
+            // Settled is the first `waiting`; a spurious park precedes the late native turn
+            // start, so wait out that start before asserting no turn followed the park.
+            // hearsay-tools/cezarion#1112: cursor parked after turn-end, then ran the follow-up as `waiting`.
+            const parkedAt = store.readEvents(runId).length;
+            // bound: observe past the real mock's 800 ms deferred native turn-start timer plus its 250 ms settle drain (1,500 ms total).
+            await new Promise(resolve => setTimeout(resolve, DEFERRED_TURN_START_MS + 700));
+            expect(store.readEvents(runId).slice(parkedAt).filter(e => e.type === 'turn.started')).toEqual([]);
           }
-          if (row.id === 'H3' || lateStart) {
-            // H4 holds the follow-up's native turn start past the 250 ms held-input recheck.
-            // H5 also has the wire acknowledge it inside the running turn first, the
-            // `mock:steer-late` ordering: pi reads it as its next prompt, OMP before settling.
-            const followUp = row.id === 'H5' ? `${KEEP} ${DEFERRED_TURN_START_TOKEN}:late-ack`
-              : row.id === 'H4' ? `${KEEP} ${DEFERRED_TURN_START_TOKEN}` : KEEP;
-            const noNudge = async (store: RunStore, runId: string, startSeq = 0) => {
-              const events = store.readEvents(runId).slice(startSeq);
-              // A park while the follow-up's native turn is still open is the
-              // hearsay-tools/cezarion#1112 shape: the cockpit shows Needs you mid-turn.
-              const turnEdges = events.filter(e => e.type === 'turn.started' || e.type === 'turn.completed');
-              if (store.getRun(runId)?.status === 'waiting') expect(turnEdges.at(-1)?.type).toBe('turn.completed');
-              if (lateStart) {
-                // Settled is the first `waiting`; a spurious park precedes the late native turn
-                // start, so wait out that start before asserting no turn followed the park.
-                // hearsay-tools/cezarion#1112: cursor parked after turn-end, then ran the follow-up as `waiting`.
-                const parkedAt = store.readEvents(runId).length;
-                // bound: observe past the real mock's 800 ms deferred native turn-start timer plus its 250 ms settle drain (1,500 ms total).
-                await new Promise(resolve => setTimeout(resolve, DEFERRED_TURN_START_MS + 700));
-                expect(store.readEvents(runId).slice(parkedAt).filter(e => e.type === 'turn.started')).toEqual([]);
-              }
-              expect(mockLog(files)).toContain(KEEP);
-              expect(events.some(e => e.type === 'note' && String(e.message).includes('continuing without pausing'))).toBe(false);
-            };
-            const noParkBetween = (statuses: readonly string[]) => {
-              const parked = statuses.filter(s => s === 'waiting');
-              const last = statuses.at(-1);
-              if (last === 'waiting') expect(parked).toEqual(['waiting']);
-              else expect(parked).toEqual([]);
-              expect(statuses).not.toContain('monitoring');
-            };
-            if (mode === 'continuation') {
-              await driveRun(backend, 'hold-gated', run => run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
-                async ({ store, manager, runId }) => {
-                  expect(store.getRun(runId)?.status).toBe('waiting');
-                  manager.finish(runId);
-                  await waitFor(() => !manager.isActive(runId));
-                  rmSync(releaseFile, { force: true });
-                  const startSeq = store.readEvents(runId).length;
-                  const statuses: string[] = [];
-                  const continued = manager.continueRun(runId, { text: promptFor(backend, 'hold-gated') });
-                  expect(continued.ok).toBe(true);
-                  await waitFor(() => store.readEvents(runId).slice(startSeq).some(e => e.type === 'turn.started'));
-                  expect(manager.sendMessage(runId, [{ type: 'text', text: followUp }])).toBe(true);
-                  release();
-                  await waitFor(() => {
-                    const status = store.getRun(runId)?.status;
-                    if (status && statuses.at(-1) !== status) statuses.push(status);
-                    return status === 'waiting' || ['done', 'review', 'failed'].includes(status ?? '');
-                  });
-                  const status = store.getRun(runId)?.status;
-                  if (status && statuses.at(-1) !== status) statuses.push(status);
-                  await noNudge(store, runId, startSeq);
-                  noParkBetween(statuses);
-                }, {
-                  env,
-                  during: async () => { release(); },
-                });
-              return;
-            }
-            const observed = await driveRun(backend, 'hold-gated', run =>
-              run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
-              async ({ store, runId }) => { await noNudge(store, runId); }, {
-                env,
-                during: async ({ manager, runId, store }) => {
-                  await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
-                  expect(manager.sendMessage(runId, [{ type: 'text', text: followUp }])).toBe(true);
-                  release();
-                },
-              });
-            noParkBetween(observed.statuses);
-            return;
-          }
-          await driveRun(backend, 'hold-cezar-ask', run =>
-            run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
-            async ({ store, runId }) => {
-              const events = store.readEvents(runId);
+          expect(mockLog(files)).toContain(KEEP);
+          expect(events.some(e => e.type === 'note' && String(e.message).includes('continuing without pausing'))).toBe(false);
+        };
+        const noParkBetween = (statuses: readonly string[]) => {
+          const parked = statuses.filter(s => s === 'waiting');
+          const last = statuses.at(-1);
+          if (last === 'waiting') expect(parked).toEqual(['waiting']);
+          else expect(parked).toEqual([]);
+          expect(statuses).not.toContain('monitoring');
+        };
+        if (mode === 'continuation') {
+          await driveRun(backend, 'hold-gated', run => run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
+            async ({ store, manager, runId }) => {
               expect(store.getRun(runId)?.status).toBe('waiting');
-              expect(events.some(e => e.type === 'ask.requested')).toBe(true);
-              expect(mockLog(files)).not.toContain(DROP);
-              expect(events.some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved — session closed'))).toBe(false);
+              manager.finish(runId);
+              await waitFor(() => !manager.isActive(runId));
+              rmSync(releaseFile, { force: true });
+              const startSeq = store.readEvents(runId).length;
+              const statuses: string[] = [];
+              const continued = manager.continueRun(runId, { text: promptFor(backend, 'hold-gated') });
+              expect(continued.ok).toBe(true);
+              await waitFor(() => store.readEvents(runId).slice(startSeq).some(e => e.type === 'turn.started'));
+              expect(manager.sendMessage(runId, [{ type: 'text', text: followUp }])).toBe(true);
+              release();
+              await waitFor(() => {
+                const status = store.getRun(runId)?.status;
+                if (status && statuses.at(-1) !== status) statuses.push(status);
+                return status === 'waiting' || ['done', 'review', 'failed'].includes(status ?? '');
+              });
+              const status = store.getRun(runId)?.status;
+              if (status && statuses.at(-1) !== status) statuses.push(status);
+              await noNudge(store, runId, startSeq);
+              noParkBetween(statuses);
             }, {
               env,
-              during: async ({ manager, runId, store }) => {
-                await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
-                expect(manager.sendMessage(runId, [{ type: 'text', text: DROP }])).toBe(true);
-                release();
-              },
+              during: async () => { release(); },
             });
+          return;
+        }
+        const observed = await driveRun(backend, 'hold-gated', run =>
+          run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
+          async ({ store, runId }) => { await noNudge(store, runId); }, {
+            env,
+            during: async ({ manager, runId, store }) => {
+              await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
+              expect(manager.sendMessage(runId, [{ type: 'text', text: followUp }])).toBe(true);
+              release();
+            },
+          });
+        noParkBetween(observed.statuses);
+        return;
+      }
+      await driveRun(backend, 'hold-cezar-ask', run =>
+        run?.status === 'waiting' || ['done', 'review', 'failed'].includes(run?.status ?? ''), 30_000,
+        async ({ store, runId }) => {
+          const events = store.readEvents(runId);
+          expect(store.getRun(runId)?.status).toBe('waiting');
+          expect(events.some(e => e.type === 'ask.requested')).toBe(true);
+          expect(mockLog(files)).not.toContain(DROP);
+          expect(events.some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved — session closed'))).toBe(false);
+        }, {
+          env,
+          during: async ({ manager, runId, store }) => {
+            await waitFor(() => store.readEvents(runId).some(e => e.type === 'turn.started'));
+            expect(manager.sendMessage(runId, [{ type: 'text', text: DROP }])).toBe(true);
+            release();
+          },
         });
-      }, 30_000);
-    }
-  }
+    });
+  },
 });
-}

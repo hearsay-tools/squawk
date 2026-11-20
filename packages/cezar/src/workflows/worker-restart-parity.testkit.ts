@@ -23,15 +23,10 @@ import { TranscriptFactsQueue } from '../runs/transcript-facts-queue.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { manager, store, root, worker, until, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+import { RESTART_GROUPS } from './worker-restart-rows.testkit.ts';
 
 // Native wires, tokens, process groups, cancellation, persistence, Git locking, collection and
 // parent Finish are real. Worker ownership comes from the scope and the process ledger (ADR 0032).
-export const RESTART_GROUPS = {
- 'starting-proof': ['starting-proof', 'continue-after-crash', 'continue-after-recovered-crash'],
- 'destroy-absent-ledger': ['destroy-absent'],
- 'destroy-incomplete-ledger': ['destroy-incomplete'],
- 'same-boot-crash-lock': ['same-boot-crash-lock'],
-} as const;
 
 /** The runners each group runs on: a shared family (core/parity-classes.testkit.ts), whose
  *  runner part, the native processes the ledger records, seam row S43 holds on every runner. */

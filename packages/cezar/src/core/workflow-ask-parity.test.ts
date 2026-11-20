@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { runsOn } from './parity-classes.testkit.ts';
 import { WORKFLOW_ASK_CRITERIA } from './harness-parity.testkit.ts';
-import { describeWorkflowAsk, WORKFLOW_ASK_GROUPS } from './workflow-ask-cells.testkit.ts';
+import { workflowAskCellNames, WORKFLOW_ASK_GROUPS } from './workflow-ask-rows.testkit.ts';
 
 describe('workflow ask family registration', () => {
   it('registers every runner and row variant exactly once', () => {
@@ -24,7 +24,7 @@ describe('workflow ask family registration', () => {
       const source = readFileSync(new URL(`./workflow-ask-${group}-parity.test.ts`, import.meta.url), 'utf8');
       expect(source).toContain(`describeWorkflowAsk('${group}');`);
       expect(source.match(/describeWorkflowAsk\(/g)).toHaveLength(1);
-      describeWorkflowAsk(group, registration);
+      workflowAskCellNames(group, registration);
     }
     expect(new Set(names).size).toBe(names.length);
     for (const runner of RUNNER_IDS) for (const row of WORKFLOW_ASK_CRITERIA) {

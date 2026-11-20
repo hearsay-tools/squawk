@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { expect, it } from 'vitest';
-import { buildDelegationCli } from './delegation-integration.testkit.ts';
+import { buildDelegationCli } from './delegation-cli-build.testkit.ts';
 
 it('keeps the source URL of each bundled CLI module for asset lookup', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'cez-cli-source-urls-'));

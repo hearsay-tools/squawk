@@ -10,7 +10,7 @@ import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { RunStore } from '../../runs/store.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createActiveRun, type ActiveRun } from '../active-run.ts';
-import { unused } from '../fixture-no-runner.testkit.ts';
+import { unused } from '../unused.testkit.ts';
 import { InputDelivery } from './input-delivery.ts';
 import { RunMemory } from './run-memory.ts';
 import { TrackedWork } from './tracked-work.ts';

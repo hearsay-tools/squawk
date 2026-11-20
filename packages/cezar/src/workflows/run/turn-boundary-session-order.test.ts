@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import { unused } from '../fixture-no-runner.testkit.ts';
+import { unused } from '../unused.testkit.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';
 import * as receipts from './input-receipts.ts';
 import * as usage from './usage-accounting.ts';

@@ -13,7 +13,8 @@ import { runnerHook, run, GIT_ID, waitForProduct, TURN_TEXT, setupMonitoringFixt
 import { beginUsageInvocation, recordUsageUiEvent } from './run/usage-accounting.ts';
 import { createActiveRun } from './active-run.ts';
 import '../core/created-runners.testkit.ts';
-import { createFixtureManager, drainFixtureManagers, unused, fixtureWork } from './fixture-manager.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
+import { unused } from './unused.testkit.ts';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
