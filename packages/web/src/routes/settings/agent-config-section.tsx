@@ -41,18 +41,24 @@ export function AgentConfigSection() {
   const listing = useAgentConfig()
   useSettingsAdminRefresh()
   const health = useHealth()
-  const registered = useRunners().data
+  const runnersQuery = useRunners()
+  const registered = runnersQuery.data
   const descriptors = useMemo(() => agentDescriptors(registered), [registered])
   const installed = useMemo<Runner[]>(
     () => (health.data ? availableRunners(health.data.checks, registered) : runnerIds(registered)),
     [health.data, registered],
   )
 
-  if (listing.isPending || registered === undefined) {
+  // Errors first: a failed query must show its message, not the loading line.
+  if (runnersQuery.isError) {
     return (
-      <p data-slot="agent-config-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
-        Loading agent config…
-      </p>
+      <CenteredState
+        icon={<FileCogIcon />}
+        tone="danger"
+        title="Runners did not load"
+        subtitle={runnersQuery.error.message}
+        heading="h2"
+      />
     )
   }
   if (listing.isError) {
@@ -64,6 +70,13 @@ export function AgentConfigSection() {
         subtitle={listing.error.message}
         heading="h2"
       />
+    )
+  }
+  if (listing.isPending || registered === undefined) {
+    return (
+      <p data-slot="agent-config-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
+        Loading agent config…
+      </p>
     )
   }
   return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} />

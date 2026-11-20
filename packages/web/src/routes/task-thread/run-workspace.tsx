@@ -101,7 +101,8 @@ function useOpenInChoices(run: ApiRun, canResume: boolean) {
     ? (targets.data?.targets ?? [])
         .filter((target) => {
           const runner = cliTargetRunner(target.id)
-          return runner === undefined || agentAvailable(runner)
+          // An agent CLI target waits for the runners list, which names the runners at all.
+          return runner === undefined || (registered.isSuccess && agentAvailable(runner))
         })
         // Agent-CLI targets (#402): the one matching this run's own runner resumes THIS run's
         // session when one exists — label that explicitly so it reads as different from just

@@ -300,6 +300,20 @@ describe('AgentConfigSection', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="agent-config-precedence"]')?.textContent).toBe('Overrides user settings key by key.'))
   })
 
+  // hearsay-tools/squawk#3898: the panes come from the runners list, so its failure is shown, not a spinner.
+  it('shows the runners query error instead of loading forever when the runners list fails', async () => {
+    serve({ editable: true, userMcp: null, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.md', kind: 'memory', format: 'markdown' })] })
+    const served = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => (
+      String(input).endsWith('/api/v1/runners')
+        ? new Response(JSON.stringify({ error: 'no runners' }), { status: 404, headers: { 'content-type': 'application/json' } })
+        : served(input, init)
+    )))
+    renderSection(createQueryClient())
+    expect(await screen.findByText('Runners did not load')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-loading"]')).toBeNull()
+  })
+
   it('renders read-only in hosted mode — no Save button', async () => {
     serve({
       editable: false,

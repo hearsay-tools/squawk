@@ -57,9 +57,13 @@ export function toolsBlocker(health: HealthResponse, registered: RunnersResponse
 }
 
 /** The trigger's hover tooltip: the Squawk version, then the blocker if there is one — else
- *  the optional tools still worth knowing about. Exported for the tests. */
+ *  the optional tools still worth knowing about. The version alone until the runners list
+ *  answers. Exported for the tests. */
 export function toolsTooltip(health: HealthResponse, runners: RunnersResponse | undefined): string {
   const base = `Squawk v${health.version}`
+  // Until the runners list answers there is no telling a runner from another tool, so the tooltip
+  // claims nothing beyond the version.
+  if (runners === undefined) return base
   const blocker = toolsBlocker(health, runners)
   if (blocker) return `${base} · ${blocker}`
   const missing = health.checks.filter((check) => !check.available).map((check) => check.name)

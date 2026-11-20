@@ -130,6 +130,13 @@ describe('toolsTooltip', () => {
   })
 })
 
+describe('toolsTooltip before the runners list answers', () => {
+  it('claims nothing beyond the version: no missing default runner shown as optional', () => {
+    expect(toolsTooltip(DEFAULT_DOWN, undefined)).toBe('Squawk v0.1.3')
+    expect(toolsTooltip(NO_RUNNER, undefined)).toBe('Squawk v0.1.3')
+  })
+})
+
 describe('toolsBlocker', () => {
   it('is null while the default runner works, whatever else is missing', () => {
     expect(toolsBlocker(HEALTH, RUNNERS_RESPONSE)).toBeNull()
