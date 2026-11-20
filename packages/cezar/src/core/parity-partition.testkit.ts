@@ -69,6 +69,14 @@ export function partitionParity(part: ParityPart, parts: Readonly<Record<string,
   };
 }
 
+/** A cell's kind: its stable identity with a leading runner id replaced, `<runner> R92` for `claude R92`.
+ *  A cell that no runner owns is its own kind. */
+function cellKind(name: string): string {
+  const key = parityCellKey(name);
+  const runner = key.slice(0, key.indexOf(' '));
+  return (BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner) ? `<runner> ${afterRunner(key)}` : key;
+}
+
 /** Read the actual entrypoints, then compare their registrations with the unsplit suite. */
 export function checkParityRegistration(
   family: string,
@@ -79,8 +87,9 @@ export function checkParityRegistration(
 ): void {
   const expected: string[] = [];
   register('all', name => expected.push(name));
-  // `count` is a floor: the cells of the runners that shipped when it was set. A new runner adds cells.
-  expect(expected.length).toBeGreaterThanOrEqual(count);
+  // `count` pins the kinds of cell, not their copies per runner: a new runner adds copies of the
+  // kinds that exist, so it changes no count, while a lost shared cell or constructor variant does.
+  expect(new Set(expected.map(cellKind)).size).toBe(count);
   const registeredPairs = expected.flatMap(name => {
     const pair = /^(\w+) ([A-Z]\d+)\b/.exec(name);
     return pair ? [`${pair[1]} ${pair[2]}`] : [];
