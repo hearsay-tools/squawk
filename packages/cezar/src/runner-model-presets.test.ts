@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type AgentRunner } from './core/agent-runner.ts';
+import type { AgentRunner } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
 import { generateRunName } from './runs/auto-name.ts';
 
