@@ -7,6 +7,7 @@ import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 import type { ConfigFileDef } from './runner-config-files.ts';
 import type { ProviderCommandResult, ProviderConnectionState } from './provider-auth.ts';
+import type { RunnerEntry } from '@open-mercato/cezar-contract/runners';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -56,6 +57,10 @@ export interface RunnerDefinition {
   // The native mock and its scenario adapter (hearsay-tools/squawk#3899).
   /** The runner's native mock script and the prompts that drive it, for tests and lint (the `mock` part). */
   readonly mock: RunnerMock;
+
+  // Display (hearsay-tools/squawk#3897).
+  /** How the cockpit and server messages name the runner. Plain JSON: `GET /api/v1/runners` sends it as it is. */
+  readonly display: RunnerDisplay;
 }
 
 /**
@@ -84,6 +89,9 @@ export interface RunnerMock {
    *  `scenarios['approval-malformed']`. */
   readonly malformedApprovalEcho?: string;
 }
+
+/** The `display` part: a `GET /api/v1/runners` entry without its id. */
+export type RunnerDisplay = Omit<RunnerEntry, 'id'>;
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
 export interface RunnerModelData {

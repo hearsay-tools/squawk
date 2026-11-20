@@ -6,7 +6,6 @@
  * touches a route: every route family keeps its chain in `server.ts`, which is what keeps it in
  * `AppType`.
  */
-import { runnerDiscoversModels } from '@open-mercato/cezar-contract/workspace';
 import { AutomationStore } from '../automations/store.ts';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
@@ -16,8 +15,8 @@ import {
   ProviderAuthService,
   providerAuthChecksDisabled,
   type ProviderId,
-  type ProviderStatusResponse,
 } from '../core/provider-auth.ts';
+import type { ProviderStatusResponse } from '@open-mercato/cezar-contract/workspace';
 import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import type { TaskWebhooks } from '../runs/webhook.ts';
@@ -61,7 +60,7 @@ export function resolveServerDeps(deps: Pick<ServerDeps, HostServiceKey> & Pick<
 export function createProviderStatus(services: Pick<HostServices, 'modelCatalog' | 'providerAuth' | 'workspaceConfig'>) {
   const { modelCatalog, providerAuth, workspaceConfig } = services;
   const invalidateHostModels = (provider: ProviderId): void => {
-    if (runnerDiscoversModels(provider)) modelCatalog.invalidate(provider);
+    modelCatalog.invalidate(provider);
   };
   const providerStatus = async (options?: { refresh?: boolean }): Promise<ProviderStatusResponse> => {
     if (providerAuthChecksDisabled()) {

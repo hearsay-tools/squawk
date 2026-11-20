@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../runners/codex/codex-ui-mapper.ts';
 
-import type { RunnerId } from './agent-runner.ts';
+import type { Runner } from '@open-mercato/cezar-contract/runner';
 import type {
   PlanEntry,
   StopReason,
@@ -27,8 +27,8 @@ type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y 
 function assertType<_T extends true>(): void {}
 
 describe('UiEvent vocabulary (compile-time contract)', () => {
-  it('UiBackend stays in lockstep with RunnerId (no drift with agent-runner.ts)', () => {
-    assertType<Equal<UiBackend, RunnerId>>();
+  it('UiBackend is an open runner id, as the contract runner id is', () => {
+    assertType<Equal<UiBackend, Runner>>();
   });
 
   it('enums match the research §7 vocabulary exactly', () => {

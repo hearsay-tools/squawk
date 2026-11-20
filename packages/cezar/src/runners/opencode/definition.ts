@@ -11,6 +11,7 @@ import { OPENCODE_LOGIN } from './login.ts';
 import { OPENCODE_ACCOUNTS } from './accounts.ts';
 import { OPENCODE_ENV } from './env.ts';
 import { OPENCODE_MOCK } from './mock.ts';
+import { OPENCODE_DISPLAY } from './display.ts';
 
 /** The OpenCode runner. */
 export const opencodeRunner = defineRunner({
@@ -33,4 +34,5 @@ export const opencodeRunner = defineRunner({
   env: OPENCODE_ENV,
   mock: OPENCODE_MOCK,
   loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOpenCodeStatus }),
+  display: OPENCODE_DISPLAY,
 });

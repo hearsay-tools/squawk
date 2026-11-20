@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const UNAVAILABLE_REASON_NAME: Record<RunnerId, string> = {
   claude: 'Claude',

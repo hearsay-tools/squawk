@@ -1,7 +1,6 @@
 import type { ProviderStatus, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
-const RUNNER_ORDER: readonly Runner[] = runnerSchema.options
 const PROVIDER_STATES = new Set(['connected', 'disconnected', 'not-installed', 'unknown'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -37,7 +36,7 @@ function rowFieldsAcceptable(
 ): boolean {
   return (
     typeof provider === 'string'
-    && RUNNER_ORDER.includes(provider as Runner)
+    && provider.length > 0
     && typeof status === 'string'
     && PROVIDER_STATES.has(status)
     && enabledAcceptable(enabled, requireEnabled)
@@ -84,11 +83,7 @@ function safeProviderRows(value: unknown, requireEnabled: boolean): ProviderStat
 function completeProviderRows(value: unknown): ProviderStatus[] | null {
   const rows = safeProviderRows(value, true)
   if (rows === null || rows.length === 0) return null
-  const byProvider = new Map(rows.map((row) => [row.provider, row]))
-  return RUNNER_ORDER.flatMap((provider) => {
-    const row = byProvider.get(provider)
-    return row ? [row as ProviderStatus] : []
-  })
+  return rows as ProviderStatus[]
 }
 
 export function parseProviderStatusResponse(value: unknown): ProviderStatusResponse {
@@ -171,7 +166,12 @@ function sameProviderStatusRow(left: ProviderStatus, right: ProviderStatus): boo
     && left.authFailureId === right.authFailureId
 }
 
-export function usableRunners(status: ProviderStatusResponse | undefined): Runner[] {
+/** The registered runners that are enabled and connected, in the runners list's display order.
+ *  Empty until both the provider status and the runners list have answered. */
+export function usableRunners(
+  status: ProviderStatusResponse | undefined,
+  runners: RunnersResponse | undefined,
+): Runner[] {
   const rows = completeProviderRows(status)
   if (rows === null) return []
   const usable = new Set(
@@ -179,7 +179,7 @@ export function usableRunners(status: ProviderStatusResponse | undefined): Runne
       .filter((row) => row.enabled && row.status === 'connected')
       .map((row) => row.provider),
   )
-  return RUNNER_ORDER.filter((runner) => usable.has(runner))
+  return (runners?.runners ?? []).map((entry) => entry.id).filter((runner) => usable.has(runner))
 }
 
 export function providerStatusFor(

@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { useHealth, useProjectRuns, useProjects } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { HealthResponse, ProjectListEntry, ProjectsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { AppShell } from '@/components/app-shell'
 import { CommandPalette } from '@/components/command-palette'
@@ -137,6 +138,8 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const projectId = useActiveProjectId()
   const health = useHealth()
+  // Read here, at the shell, so the runners list is in the cache before any runner picker opens.
+  useRunners()
   const lastKnownHealth = useRef<HealthResponse | undefined>(undefined)
   useEffect(() => { if (health.data) lastKnownHealth.current = health.data }, [health.data])
   const shellHealth = health.data ?? lastKnownHealth.current

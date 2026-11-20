@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { runnerSchema } from './health.ts';
+import { queryRunnerSchema } from './query-requests.ts';
 
 export const runnerSkillScopeSchema = z.enum(['repo', 'user', 'system', 'other']);
 export const runnerSkillsQuerySchema = z.object({
-  runner: runnerSchema,
+  runner: queryRunnerSchema,
   account: z.string().min(1).max(64).optional(),
   refresh: z.literal('1').optional(),
 });

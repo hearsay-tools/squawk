@@ -12,6 +12,10 @@ import type { WorkflowDef } from '../workflows/types.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// Starting a run and checking a request's runner id read the registered runners.
+registerBuiltInRunners();
 
 /**
  * #950 — the attachment half of the runs routes, now that an attachment is not necessarily an

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import type { Runner } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS, RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 import { EFFORT_OPTIONS } from '@/routes/new-task-form'
 
 import { EnginePills, engineBody, engineRunBody, type EnginePick, type ResolvedEngine, useResolvedEngine } from './engine-pills'
@@ -83,6 +83,7 @@ function stubResolverFetch({
         if (providerPending) return new Promise<Response>(() => {})
         return jsonResponse(providers, providerStatus)
       }
+      if (path === RUNNERS_PATH) return jsonResponse(RUNNERS_RESPONSE)
       if (path === '/api/v1/health') {
         return jsonResponse({
           defaultRunner: bootDefault,
@@ -269,7 +270,7 @@ describe('engineBody', () => {
     expect(engineBody(resolved({ effort: 'max', modelsLocked: true })).effort).toBeUndefined()
   })
 
-  it.each<Runner>(runnerSchema.options)(
+  it.each<Runner>(RUNNER_IDS)(
     'is symmetric for %s as the host default',
     (runner) => {
       expect(engineBody(resolved({ runner, defaultRunner: runner })).runner).toBeUndefined()

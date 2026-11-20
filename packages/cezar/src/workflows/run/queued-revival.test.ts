@@ -58,6 +58,28 @@ it('fails a queued task saved on a removed runner instead of starting it on the 
   expect(move).toHaveBeenCalledWith(run.id, 'fail-start', expect.objectContaining({ error: removedRunnerMessage('cursor') }));
 });
 
+// hearsay-tools/squawk#3897: a task queued on a runner this process did not register waits for a
+// process that registers it; boot recovery neither fails nor starts nor rewrites it.
+it.each([false, true])('leaves a task queued on an unregistered runner queued and untouched (queued continuation: %s)', async (continuation) => {
+  root = mkdtempSync(join(tmpdir(), 'cez-queued-revival-'));
+  const store = RunStore.open(root);
+  const context = { createRunner: noRunners, home: testHome(), store, dataDir: root, repoRoot: root,
+    semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false } as RunModuleContext;
+  const created = store.createRun({ title: 'queued', task: 'build it', workflow: 'quick-task',
+    steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] });
+  const steps = [makeStepState({ id: 'task', kind: STEP_KIND.agent, status: STEP_STATUS.pending }),
+    ...(continuation ? [makeStepState({ id: 'continue-1', kind: STEP_KIND.agent, status: STEP_STATUS.pending, synthetic: 'continuation' })] : [])];
+  const run = makeRunRecord({ id: created.id, status: RUN_STATUS.queued, removedRunner: 'gemini', steps });
+  const before = JSON.stringify(store.getRun(created.id));
+  const enqueueContinuation = vi.fn(); const enqueueJob = vi.fn(); const move = vi.fn(); const checkpointRestartContext = vi.fn();
+  const host = { isActive: () => false, workerExecutionStopped: () => false, isSyntheticContinuation: (_run: unknown, step: { synthetic?: string }) => step.synthetic === 'continuation',
+    enqueueContinuation, enqueueJob, move, checkpointRestartContext, reviveWorkflow: async () => ({ name: 'quick-task', steps: [] }) } as unknown as QueuedRevivalHost;
+  await reviveQueuedRun(context, host, run, 'cezar restarted');
+  for (const call of [enqueueJob, enqueueContinuation, move, checkpointRestartContext]) expect(call).not.toHaveBeenCalled();
+  expect(JSON.stringify(store.getRun(created.id))).toBe(before);
+  expect(store.readEvents(created.id)).toEqual([]);
+});
+
 // hearsay-tools/squawk#3715: a Continue queued after work on a removed runner reopens no older session.
 it('revives a continuation queued after a removed-runner step as a new session', async () => {
   root = mkdtempSync(join(tmpdir(), 'cez-queued-revival-'));

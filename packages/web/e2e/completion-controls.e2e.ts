@@ -57,6 +57,8 @@ beforeAll(async () => {
         repo: { root: '/repo', branch: 'main' }, defaultRunner: 'claude', checks: [{ name: 'claude', available: true }, { name: 'git', available: true }],
         capabilities: { followups: false, preview: false, localHandoff: false, automations: true } });
       if (path.endsWith('/providers/status')) return json({ providers: [{ provider: 'claude', status: 'connected', enabled: true }] });
+      // The registered runners (GET /api/v1/runners): the composer and its runner picker wait for them.
+      if (path.endsWith('/runners')) return json({ runners: [{ id: 'claude', displayName: 'Claude Code', modelListName: 'Claude', modelIdScope: 'own' }] });
       if (path.endsWith('/workflows')) return json({ workflows: [{ name: 'quick-task', source: 'built-in', steps: [] }], issues: [] });
       if (path.endsWith('/repo')) return json({ info: { root: '/repo', branch: 'main' }, status: [], log: [], branches: ['main'], baseBranch: null });
       if (path.endsWith('/workspace/config')) return json({ agentDefaults: {}, composerDefaults: { inheritedAutonomous: 'source-dependent', inheritedWorktree: true } });

@@ -8,6 +8,7 @@ import { workspaceQueryKeys } from '@/api/queries'
 import type { ProviderStatusResponse, WorkspaceUiState } from '@open-mercato/cezar-api-client'
 import { ProviderBannerContainer } from '@/components/provider-banner-container'
 import { resetToasts, Toaster } from '@/components/ui/toaster'
+import { seedRunners } from '@/test/runners.testkit'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -44,6 +45,7 @@ function seed(
 ): void {
   client.setQueryData(workspaceQueryKeys.providerStatus, providers)
   client.setQueryData(workspaceQueryKeys.uiState, uiState)
+  seedRunners(client)
 }
 
 function renderContainer(client: QueryClient) {
@@ -192,6 +194,7 @@ describe('ProviderBannerContainer', () => {
   it('shows incidents while workspace UI state is unavailable or malformed', () => {
     const unavailableClient = createQueryClient()
     unavailableClient.setQueryData(workspaceQueryKeys.providerStatus, INCIDENTS)
+    seedRunners(unavailableClient)
     fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
     const first = renderContainer(unavailableClient)
 

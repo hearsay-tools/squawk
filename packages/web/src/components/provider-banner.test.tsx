@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
 import { ProviderBanner } from './provider-banner'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const DEFINITIVE_MISSING: ProviderStatusResponse = {
   providers: [
@@ -21,6 +22,7 @@ function renderBanner(
     <MemoryRouter initialEntries={[entry]}>
       <ProviderBanner
         status={DEFINITIVE_MISSING}
+        runners={RUNNERS_RESPONSE}
         pending={false}
         error={false}
         dismissals={{}}
@@ -185,6 +187,7 @@ describe('ProviderBanner', () => {
       <MemoryRouter initialEntries={['/p/cezar/']}>
         <ProviderBanner
           status={status}
+          runners={RUNNERS_RESPONSE}
           pending={false}
           error={false}
           dismissals={{ claude: 'claude-1' }}

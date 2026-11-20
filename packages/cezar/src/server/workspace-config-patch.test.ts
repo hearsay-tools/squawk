@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { defaultWorkspaceConfig } from '../workspace/config.ts';
 import { applyWorkspaceConfigPatch } from './workspace-config-patch.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The field merge behind `PUT /workspace/config` (hearsay-tools/cezarion#2849). Route answers

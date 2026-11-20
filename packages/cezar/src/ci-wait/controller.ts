@@ -276,7 +276,7 @@ export function ciToolRoutes(capabilities: Map<string, Capability>) {
     .post('/api/v1/tools/automation', bodyLimit({ maxSize: SCHEDULED_TASK_LIMITS.wireBytes, onError: c => c.json(scheduleRefusal('invalid_request', 'The arguments exceed 1 MiB.')) }), async (c, next) => {
       if (!automationsToolEnabled()) return c.json(scheduleRefusal('automations_off'));
       await next();
-    }, jsonZodValidator(automationToolRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))) }), async c => {
+    }, jsonZodValidator(automationToolRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))), runners: { ids: ['definition.task.runner', 'definition.task.steps.*.runner'] } }), async c => {
       const capability = c.get('capability');
       const automation = capability.automation;
       if (!automation) return c.json(scheduleRefusal('unavailable'));

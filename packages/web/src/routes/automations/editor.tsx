@@ -3,6 +3,7 @@ import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
 import { useConfig, useProviderStatus, useRunnerModels, useWorkflows } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
@@ -296,11 +297,12 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
   const workflows = useWorkflows()
   const providers = useProviderStatus()
   const config = useConfig()
+  const registered = useRunners()
   const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
   const catalog = useRunnerModels(effectiveRunner)
   const names = [...new Set([...(workflows.data?.workflows ?? []).map((workflow) => workflow.name), ...(draft.workflow ? [draft.workflow] : [])])]
-  const runners = [...new Set([...usableRunners(providers.data), ...(draft.runner ? [draft.runner] : [])])]
-  const models = modelsForRunner(effectiveRunner, catalog.data, [draft.model])
+  const runners = [...new Set([...usableRunners(providers.data, registered.data), ...(draft.runner ? [draft.runner] : [])])]
+  const models = modelsForRunner(effectiveRunner, registered.data, catalog.data, [draft.model])
   const modelLabel = models.find((model) => model.id === (draft.model ?? ''))?.label ?? draft.model ?? 'auto'
   const icon = (Icon: typeof CpuIcon) => <Icon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
   return (
@@ -325,6 +327,7 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
           ariaLabel="Runner"
           label={draft.runner ?? 'default'}
           value={draft.runner ?? ''}
+          disabled={!registered.data}
           options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: RUNNERS.find((runner) => runner.id === id)?.label ?? id }))]}
           onPick={(runner) => {
             // A model id belongs to its runner, so picking another runner clears it.

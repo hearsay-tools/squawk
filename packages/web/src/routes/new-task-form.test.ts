@@ -28,6 +28,7 @@ import {
   startedRunPath,
   type TaskSource,
 } from './new-task-form'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available })
 
@@ -101,27 +102,27 @@ describe('model option resolution', () => {
   })
 
   it('claude: usable aliases when discovery is unavailable', () => {
-    expect(modelsForRunner('claude').map((m) => m.id)).toEqual([
+    expect(modelsForRunner('claude', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([
       '', 'opus', 'sonnet', 'haiku',
     ])
   })
 
   it('codex: auto plus host-discovered and custom ids', () => {
     const catalog = { runner: 'codex' as const, models: [{ id: 'gpt-future', label: 'Future', description: 'New' }], source: 'live' as const, stale: false }
-    expect(modelsForRunner('codex', catalog, ['legacy-id']).map((m) => m.id)).toEqual(['', 'gpt-future', 'legacy-id'])
-    expect(modelsForRunner('codex', catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
+    expect(modelsForRunner('codex', RUNNERS_RESPONSE, catalog, ['legacy-id']).map((m) => m.id)).toEqual(['', 'gpt-future', 'legacy-id'])
+    expect(modelsForRunner('codex', RUNNERS_RESPONSE, catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
   })
 
   it('reports stale and unavailable Codex catalogs without exposing reasons', () => {
-    expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
-    expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
-    expect(modelCatalogStatus('claude', undefined, true)).toBe('Latest Claude models unavailable')
+    expect(modelCatalogStatus('codex', RUNNERS_RESPONSE, { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
+    expect(modelCatalogStatus('codex', RUNNERS_RESPONSE, { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
+    expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, true)).toBe('Latest Claude models unavailable')
   })
 
   it('opencode: auto alone until the host catalog answers (#794)', () => {
-    expect(modelsForRunner('opencode').map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('opencode', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
     expect(
-      modelsForRunner('opencode', {
+      modelsForRunner('opencode', RUNNERS_RESPONSE, {
         runner: 'opencode',
         models: [
           { id: 'openai/gpt-5.4', label: 'openai/gpt-5.4', description: 'via openai' },
@@ -137,6 +138,7 @@ describe('model option resolution', () => {
     expect(
       modelsForRunner(
         'opencode',
+        RUNNERS_RESPONSE,
         { runner: 'opencode', models: [], source: 'unavailable', stale: false },
         ['openai/gpt-5.1'],
       ).map((m) => m.id),
@@ -148,17 +150,17 @@ describe('model option resolution', () => {
     // Counting either's list as evidence of "belongs to another runner" would silently strip
     // those ids from the other picker's catalog — the #794 bug, reintroduced through the back door.
     for (const model of ['openai/gpt-5.1', 'anthropic/claude-sonnet-5']) {
-      expect(modelConflictsWithRunner(model, 'opencode')).toBe(false)
-      expect(modelConflictsWithRunner(model, 'pi')).toBe(false)
+      expect(modelConflictsWithRunner(model, 'opencode', RUNNERS_RESPONSE)).toBe(false)
+      expect(modelConflictsWithRunner(model, 'pi', RUNNERS_RESPONSE)).toBe(false)
     }
     // The guard it must NOT lose: a bare id that is unmistakably one single-provider runner's.
-    expect(modelConflictsWithRunner('opus', 'codex')).toBe(true)
+    expect(modelConflictsWithRunner('opus', 'codex', RUNNERS_RESPONSE)).toBe(true)
   })
 
   it('pi: auto alone until the host catalog answers', () => {
-    expect(modelsForRunner('pi').map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('pi', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
     expect(
-      modelsForRunner('pi', {
+      modelsForRunner('pi', RUNNERS_RESPONSE, {
         runner: 'pi',
         models: [{ id: 'xai/grok-4.6', label: 'grok-4.6', description: 'via xai' }],
         source: 'live',
@@ -168,10 +170,10 @@ describe('model option resolution', () => {
   })
 
   it('omp: auto alone until the host catalog answers, and never conflicts', () => {
-    expect(modelsForRunner('omp').map((m) => m.id)).toEqual([''])
-    expect(modelsForRunner('omp')[0]).toMatchObject({ desc: 'Use your OMP default model' })
+    expect(modelsForRunner('omp', RUNNERS_RESPONSE).map((m) => m.id)).toEqual([''])
+    expect(modelsForRunner('omp', RUNNERS_RESPONSE)[0]).toMatchObject({ desc: 'Use your OMP default model' })
     expect(
-      modelsForRunner('omp', {
+      modelsForRunner('omp', RUNNERS_RESPONSE, {
         runner: 'omp',
         models: [{ id: 'anthropic/claude-sonnet-5', label: 'sonnet-5', description: '' }],
         source: 'live',
@@ -180,40 +182,40 @@ describe('model option resolution', () => {
     ).toEqual(['', 'anthropic/claude-sonnet-5'])
     // OMP spans every configured provider like pi, so its ids are never another runner's exclusive model
     // and `opus` stays a claude-only bare id from its point of view too.
-    expect(modelConflictsWithRunner('openai/gpt-5.1', 'omp')).toBe(false)
-    expect(modelConflictsWithRunner('openai/gpt-5.1', 'codex')).toBe(false)
-    expect(modelCatalogStatus('omp', undefined, true)).toBe('Latest OMP models unavailable')
+    expect(modelConflictsWithRunner('openai/gpt-5.1', 'omp', RUNNERS_RESPONSE)).toBe(false)
+    expect(modelConflictsWithRunner('openai/gpt-5.1', 'codex', RUNNERS_RESPONSE)).toBe(false)
+    expect(modelCatalogStatus('omp', RUNNERS_RESPONSE, undefined, true)).toBe('Latest OMP models unavailable')
   })
 
   it('names the runner whose catalog is stale or unavailable', () => {
     expect(
-      modelCatalogStatus('opencode', { runner: 'opencode', models: [], source: 'cache', stale: true, reason: 'raw' }),
+      modelCatalogStatus('opencode', RUNNERS_RESPONSE, { runner: 'opencode', models: [], source: 'cache', stale: true, reason: 'raw' }),
     ).toBe('Using cached OpenCode model list')
-    expect(modelCatalogStatus('opencode', undefined, true)).toBe('Latest OpenCode models unavailable')
+    expect(modelCatalogStatus('opencode', RUNNERS_RESPONSE, undefined, true)).toBe('Latest OpenCode models unavailable')
     expect(
-      modelCatalogStatus('pi', { runner: 'pi', models: [], source: 'cache', stale: true, reason: 'raw' }),
+      modelCatalogStatus('pi', RUNNERS_RESPONSE, { runner: 'pi', models: [], source: 'cache', stale: true, reason: 'raw' }),
     ).toBe('Using cached Pi model list')
-    expect(modelCatalogStatus('pi', undefined, true)).toBe('Latest Pi models unavailable')
+    expect(modelCatalogStatus('pi', RUNNERS_RESPONSE, undefined, true)).toBe('Latest Pi models unavailable')
   })
 
   it('resolveModel keeps known picks and arbitrary native model pins', () => {
-    expect(resolveModel('opus', 'claude')).toBe('opus')
-    expect(resolveModel('custom-codex-id', 'codex')).toBe('custom-codex-id')
-    expect(resolveModel(null, 'opencode', { opencode: 'provider/custom-model' })).toBe('provider/custom-model')
-    expect(resolveModel(null, 'claude')).toBe('')
+    expect(resolveModel('opus', 'claude', RUNNERS_RESPONSE)).toBe('opus')
+    expect(resolveModel('custom-codex-id', 'codex', RUNNERS_RESPONSE)).toBe('custom-codex-id')
+    expect(resolveModel(null, 'opencode', RUNNERS_RESPONSE, { opencode: 'provider/custom-model' })).toBe('provider/custom-model')
+    expect(resolveModel(null, 'claude', RUNNERS_RESPONSE)).toBe('')
   })
 
   it('resolveModel falls back to the Settings → Agents per-runner preset (R6 1.5)', () => {
     const defaults = { claude: 'opus', codex: 'not-a-preset' }
     // Untouched pill: the configured preset for THIS runner preselects.
-    expect(resolveModel(null, 'claude', defaults)).toBe('opus')
+    expect(resolveModel(null, 'claude', RUNNERS_RESPONSE, defaults)).toBe('opus')
     // An explicit pick — including explicitly picking auto ('') — beats the preset.
-    expect(resolveModel('sonnet', 'claude', defaults)).toBe('sonnet')
-    expect(resolveModel('', 'claude', defaults)).toBe('')
+    expect(resolveModel('sonnet', 'claude', RUNNERS_RESPONSE, defaults)).toBe('sonnet')
+    expect(resolveModel('', 'claude', RUNNERS_RESPONSE, defaults)).toBe('')
     // Configured custom ids remain representable even when discovery is unavailable.
-    expect(resolveModel(null, 'codex', defaults)).toBe('not-a-preset')
+    expect(resolveModel(null, 'codex', RUNNERS_RESPONSE, defaults)).toBe('not-a-preset')
     // No preset for the runner → auto, exactly as before.
-    expect(resolveModel(null, 'opencode', defaults)).toBe('')
+    expect(resolveModel(null, 'opencode', RUNNERS_RESPONSE, defaults)).toBe('')
   })
 })
 
@@ -242,32 +244,32 @@ describe('effort option resolution (#55)', () => {
   const full = ['', 'low', 'medium', 'high', 'xhigh', 'max']
 
   it('offers auto plus exactly the selected model levels in backend order', () => {
-    expect(effortOptionsForModel('opencode', 'zai/glm-5.3', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('zai/glm-5.3', catalog).map((option) => option.value))
       .toEqual(['', 'max', 'low', 'high'])
-    expect(effortOptionsForModel('opencode', 'openai/gpt-5.4', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('openai/gpt-5.4', catalog).map((option) => option.value))
       .toEqual(['', 'low', 'medium', 'high', 'xhigh'])
   })
 
   it('resets an unsupported effort to auto and keeps a supported effort', () => {
-    const options = effortOptionsForModel('opencode', 'zai/glm-5.3', catalog)
+    const options = effortOptionsForModel('zai/glm-5.3', catalog)
     expect(resolveEffort('medium', options)).toBe('')
     expect(resolveEffort('high', options)).toBe('high')
     expect(resolveEffort(null, options)).toBe('')
   })
 
   it('falls back per model for static runners, old metadata, custom ids, and missing catalogs', () => {
-    expect(effortOptionsForModel('claude', 'opus').map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('codex', 'gpt-future').map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'openai/legacy', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'openai/empty', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('opencode', 'provider/custom', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('pi', 'xai/grok')).toHaveLength(full.length)
+    expect(effortOptionsForModel('opus').map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('gpt-future').map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('openai/legacy', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('openai/empty', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('provider/custom', catalog).map((option) => option.value)).toEqual(full)
+    expect(effortOptionsForModel('xai/grok')).toHaveLength(full.length)
   })
 
   it('does not let one model metadata entry affect another', () => {
-    expect(effortOptionsForModel('opencode', 'zai/glm-5.3', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('zai/glm-5.3', catalog).map((option) => option.value))
       .not.toContain('medium')
-    expect(effortOptionsForModel('opencode', 'openai/legacy', catalog).map((option) => option.value))
+    expect(effortOptionsForModel('openai/legacy', catalog).map((option) => option.value))
       .toContain('medium')
   })
 })
@@ -390,7 +392,7 @@ describe('buildCreateRunBody — the exact POST /api/v1/runs payloads legacy sen
   })
 
   it('keeps a locked native default visible while omitting it from direct and automation requests', () => {
-    const model = resolveModel(null, 'claude', { claude: 'native-sonnet' })
+    const model = resolveModel(null, 'claude', RUNNERS_RESPONSE, { claude: 'native-sonnet' })
     expect(model).toBe('native-sonnet')
 
     const opts = {
@@ -511,18 +513,18 @@ describe('buildAutomationTask', () => {
  describe('Claude host discovery (#89)', () => {
   it('replaces suggestions with host rows while retaining explicit pins', () => {
     const catalog = { runner: 'claude' as const, models: [{ id: 'opus[1m]', label: 'Host Opus', description: 'Host choice' }], source: 'live' as const, stale: false }
-    expect(modelsForRunner('claude', catalog, ['claude-opus-4-8', 'private-model']).map(m => m.id)).toEqual(['', 'opus[1m]', 'claude-opus-4-8', 'private-model'])
-    expect(resolveModel('private-model', 'claude', undefined, catalog)).toBe('private-model')
-    expect(modelCatalogStatus('claude', { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude model list')
+    expect(modelsForRunner('claude', RUNNERS_RESPONSE, catalog, ['claude-opus-4-8', 'private-model']).map(m => m.id)).toEqual(['', 'opus[1m]', 'claude-opus-4-8', 'private-model'])
+    expect(resolveModel('private-model', 'claude', RUNNERS_RESPONSE, undefined, catalog)).toBe('private-model')
+    expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude model list')
   })
   it('retains the cross-runner guard for retired dated suggestions', () => {
-    expect(modelConflictsWithRunner('claude-opus-4-8', 'codex')).toBe(true)
+    expect(modelConflictsWithRunner('claude-opus-4-8', 'codex', RUNNERS_RESPONSE)).toBe(true)
   })
  })
 
 it('reports discovery in progress without masking cached feedback', () => {
-  expect(modelCatalogStatus('claude', undefined, false, true)).toBe('Loading Claude models…')
-  expect(modelCatalogStatus('claude', { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude model list')
-  expect(modelCatalogStatus('claude', undefined, false, false)).toBeUndefined()
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, false, true)).toBe('Loading Claude models…')
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude model list')
+  expect(modelCatalogStatus('claude', RUNNERS_RESPONSE, undefined, false, false)).toBeUndefined()
 })
 

@@ -12,6 +12,7 @@ import type { PendingContinuation, StartRunInput } from './types.ts';
 import { admissionRefusal } from '../../runs/worker-execution.ts';
 import type { RunMemory } from './run-memory.ts';
 import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
+import { waitsForUnregisteredRunner } from '../../runs/legacy-run-rows.ts';
 
 export type PendingJob = { workflow: WorkflowDef; input: StartRunInput; startAt?: number | undefined };
 
@@ -339,6 +340,14 @@ export class RunLine {
     return this.context.work.track('rescueStalledQueue', this.rescueStalledQueueWork(now));
   }
 
+  /** A run that says `queued` while the engine holds no job, continuation, queue entry or start for
+   *  it. A run on a runner this process did not register waits, untouched, for one that does. */
+  private lostQueuedRun(run: RunRecord): boolean {
+    if (run.status !== 'queued' || this.host.recoveringRun(run) || waitsForUnregisteredRunner(run)) return false;
+    if (this.host.activeHas(run.id) || this.hasStarting(run.id)) return false;
+    return !this.hasJob(run.id) && !this.hasContinuation(run.id) && !this.hasQueued(run.id);
+  }
+
   private async rescueStalledQueueWork(now = Date.now()): Promise<void> {
     if (this.context.disposed()) return;
     // First, the worst shape: a record that says `queued` while the engine holds no job, no
@@ -346,10 +355,7 @@ export class RunLine {
     // queue, and this one is not in it — so nothing will ever start it. Re-adopt it through the
     // same path boot recovery uses.
     for (const run of this.context.store.listRuns()) {
-      if (run.status !== 'queued' || this.host.recoveringRun(run)) continue;
-      if (this.host.activeHas(run.id) || this.hasStarting(run.id)) continue;
-      if (this.hasJob(run.id) || this.hasContinuation(run.id)) continue;
-      if (this.hasQueued(run.id)) continue;
+      if (!this.lostQueuedRun(run)) continue;
       console.warn(`[hsq] queue watchdog: re-adopting queued run ${run.id} the engine had lost`);
       await this.host.reviveQueuedRun(run, 'queue watchdog');
     }

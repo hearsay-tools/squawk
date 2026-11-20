@@ -11,6 +11,7 @@ import {
   existingProviderAvailability,
   providerForExistingRun,
 } from './active-provider'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const run = (overrides: Partial<ApiRun> = {}): ApiRun => ({
   id: 'r1',
@@ -50,7 +51,7 @@ describe('active task provider availability', () => {
     })
 
     expect(providerForActiveRun(active)).toBe('codex')
-    expect(activeProviderAvailability(active, status)).toEqual({ provider: 'codex', usable: true })
+    expect(activeProviderAvailability(active, status, RUNNERS_RESPONSE)).toEqual({ provider: 'codex', usable: true })
   })
 
   it.each([
@@ -59,7 +60,7 @@ describe('active task provider availability', () => {
   ] as const)('reports the fixed server-safe reason for a %s active provider', (_case, row, reason) => {
     const status = providers({ providers: [row, ...providers().providers.slice(1)] })
 
-    expect(activeProviderAvailability(run({ runner: 'claude' }), status)).toEqual({
+    expect(activeProviderAvailability(run({ runner: 'claude' }), status, RUNNERS_RESPONSE)).toEqual({
       provider: 'claude',
       usable: false,
       reason,
@@ -90,7 +91,7 @@ describe('active task provider availability', () => {
     })
 
     expect(providerForExistingRun(closed)).toBe('claude')
-    expect(existingProviderAvailability(closed, status)).toEqual({
+    expect(existingProviderAvailability(closed, status, RUNNERS_RESPONSE)).toEqual({
       provider: 'claude',
       usable: false,
       reason: 'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.',

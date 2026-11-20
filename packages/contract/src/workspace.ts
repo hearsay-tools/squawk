@@ -88,15 +88,8 @@ export const setWorkspaceConfigInputSchema = z.object({
   agentDefaults: z
     .object({
       runner: runnerSchema.nullable().optional(),
-      models: z
-        .object({
-          claude: z.string().trim().min(1).max(200).nullable().optional(),
-          codex: z.string().trim().min(1).max(200).nullable().optional(),
-          opencode: z.string().trim().min(1).max(200).nullable().optional(),
-          pi: z.string().trim().min(1).max(200).nullable().optional(),
-          omp: z.string().trim().min(1).max(200).nullable().optional(),
-        })
-        .optional(),
+      /** Keyed by runner id; the server keeps only the keys of registered runners. */
+      models: z.record(z.string(), z.string().trim().min(1).max(200).nullable().optional()).optional(),
     })
     .optional(),
   resources: z
@@ -292,16 +285,8 @@ export const setWorkspaceUiStateInputSchema = z
           .optional(),
       })
       .optional(),
-    dismissedProviderAuthFailures: z
-      .strictObject({
-        claude: z.string().min(1).max(128).optional(),
-        codex: z.string().min(1).max(128).optional(),
-        opencode: z.string().min(1).max(128).optional(),
-        pi: z.string().min(1).max(128).optional(),
-        cursor: z.string().min(1).max(128).optional(),
-        omp: z.string().min(1).max(128).optional(),
-      })
-      .optional(),
+    /** Keyed by runner id; the server refuses a key that names no registered or removed runner. */
+    dismissedProviderAuthFailures: z.record(z.string(), z.string().min(1).max(128).optional()).optional(),
     taskTable: taskTableUiStateSchema
       .extend({
         expandedColumns: z
@@ -326,9 +311,7 @@ export type SetWorkspaceUiStateInput = z.infer<typeof setWorkspaceUiStateInputSc
 // ---- per-repo agent knobs (`GET/PUT /api/v1/config`) ----------------------------------------
 
 /** Per-runner default model preset (Settings → Agents): the composer preselects this model id for
- *  the runner. Absent = auto (the runner decides). Keyed by runner name rather than derived from
- *  `runnerSchema` because the server's own `defaultModels` object (src/config.ts:92) is spelled
- *  the same way — one key per runner, each independently optional. */
+ *  the runner. Absent = auto (the runner decides). Keyed by runner id, each independently optional. */
 export const runnerModelsSchema = perRunnerOptionalStrings();
 export type RunnerModels = z.infer<typeof runnerModelsSchema>;
 
@@ -406,15 +389,8 @@ export const setConfigInputSchema = z.object({
   baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
   defaultRunner: runnerSchema.optional(),
   systemPrompt: z.string().trim().max(20_000).nullable().optional(),
-  defaultModels: z
-    .object({
-      claude: z.string().trim().max(200).nullable().optional(),
-      codex: z.string().trim().max(200).nullable().optional(),
-      opencode: z.string().trim().max(200).nullable().optional(),
-      pi: z.string().trim().max(200).nullable().optional(),
-      omp: z.string().trim().max(200).nullable().optional(),
-    })
-    .optional(),
+  /** Keyed by runner id; the server keeps only the keys of registered runners. */
+  defaultModels: z.record(z.string(), z.string().trim().max(200).nullable().optional()).optional(),
   maxParallel: z.number().int().min(1).max(16).optional(),
   /** null or 0 clears the ceiling back to "no limit". */
   memoryLimitMb: z.number().int().min(0).max(1_048_576).nullable().optional(),
@@ -488,20 +464,11 @@ export type ProviderConnectResponse = z.infer<typeof providerConnectResponseSche
 // ---- host model catalog (`GET /api/v1/models`) -----------------------------------------------
 
 /**
- * The runners whose model list is discovered from the host rather than hard-coded: Codex
- * through its app-server protocol, OpenCode through its own `models` listing (#794), Pi
- * through `pi --list-models`, and Claude through
- * stream-json `list_models`. One definition, used by the route's query validator and the picker.
+ * A runner whose model list is discovered from the host: every registered runner has a model
+ * catalog (its definition's `loadModelCatalog`). The route's query validator and the picker use it.
  */
 export const modelDiscoveryRunnerSchema = runnerSchema;
 export type ModelDiscoveryRunner = z.infer<typeof modelDiscoveryRunnerSchema>;
-export const MODEL_DISCOVERY_RUNNERS: readonly ModelDiscoveryRunner[] =
-  modelDiscoveryRunnerSchema.options;
-
-/** True when `runner` has a host-discovered catalog (and therefore a `/models` answer). */
-export function runnerDiscoversModels(runner: Runner): runner is ModelDiscoveryRunner {
-  return (MODEL_DISCOVERY_RUNNERS as readonly string[]).includes(runner);
-}
 
 export const runnerModelOptionSchema = z.object({
   id: z.string(),

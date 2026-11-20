@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { ApiError, openRunIn, openRunInCli } from '@/api/client'
 import { useOpenTargets, useProjectRepoBase, useProviderStatus, useReferenceProjectId } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CopyIcon, XIcon } from '@/components/design-icons'
 import { OpenInMenu, openInIcon, type OpenInChoice } from '@/components/open-in-menu'
@@ -84,16 +85,17 @@ export function useResumeInTerminal(run: ApiRun) {
 function useOpenInChoices(run: ApiRun, canResume: boolean) {
   const targets = useOpenTargets()
   const providers = useProviderStatus()
+  const registered = useRunners()
   const open = useMutation({
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  const availableRunners = usableRunners(providers.data)
-  // The action routes remain authoritative for a stale browser. Once the complete status has
-  // arrived, hide only unavailable *agent* handoffs; editors, Finder, and file tools stay
-  // available because they do not launch a provider.
+  const availableRunners = usableRunners(providers.data, registered.data)
+  // The action routes remain authoritative for a stale browser. Once the complete status and the
+  // runners list have arrived, hide only unavailable *agent* handoffs; editors, Finder, and file
+  // tools stay available because they do not launch a provider.
   const agentAvailable = (runner: ApiRun['runner']) =>
-    !providers.isSuccess || availableRunners.includes(runner ?? 'claude')
+    !providers.isSuccess || !registered.isSuccess || availableRunners.includes(runner ?? 'claude')
   const canResumeHere = canResume && agentAvailable(lastSessionBackend(run))
   const choices: OpenInChoice[] = run.worktreePath
     ? (targets.data?.targets ?? [])

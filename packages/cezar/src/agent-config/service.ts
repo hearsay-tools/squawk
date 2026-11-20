@@ -16,7 +16,8 @@ import { hashBytes, statConfigPath } from './files.ts';
 
 export interface ConfigFileListing {
   id: string;
-  runners: ConfigFileDef['runners'];
+  /** Runner ids as the wire sends them: strings. */
+  runners: string[];
   kind: ConfigFileDef['kind'];
   scope: ConfigFileDef['scope'];
   label: string;
@@ -94,7 +95,7 @@ export async function listAgentConfig(
       const { exists, size } = await statConfigPath(path);
       return defined({
         id: def.id,
-        runners: def.runners,
+        runners: [...def.runners],
         kind: def.kind,
         scope: def.scope,
         label: def.label,

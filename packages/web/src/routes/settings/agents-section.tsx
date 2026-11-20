@@ -15,6 +15,7 @@ import {
   useSelectAgentProfile,
 } from '@/api/queries'
 import { useProjectScope } from '@/api/project-scope-context'
+import { useRunners } from '@/api/runners'
 import type { ConfigResponse, Runner, SetConfigInput } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
@@ -25,8 +26,9 @@ import { providerStatusFor } from '@/lib/provider-status'
 import {
   agentPickerRows,
   hasAgentAccounts,
+  providerChoice,
 } from '@/components/default-agent-picker'
-import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { catalogQueryStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
 import { ProviderSettings } from './provider-settings'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
@@ -55,6 +57,7 @@ export function AgentsSection() {
   // unlike the composer, which only ever renders the runner the user picked.
   const catalogs = useRunnerModelCatalogs()
   const providerStatus = useProviderStatus()
+  const runners = useRunners()
 
   if (config.isPending) {
     return (
@@ -74,17 +77,19 @@ export function AgentsSection() {
       />
     )
   }
-  return <AgentsForm config={config.data} catalogs={catalogs} providerStatus={providerStatus} />
+  return <AgentsForm config={config.data} catalogs={catalogs} providerStatus={providerStatus} runners={runners.data} />
 }
 
 function AgentsForm({
   config,
   catalogs,
   providerStatus,
+  runners,
 }: {
   config: ConfigResponse
   catalogs: ReturnType<typeof useRunnerModelCatalogs>
   providerStatus: ReturnType<typeof useProviderStatus>
+  runners: ReturnType<typeof useRunners>['data']
 }) {
   const repo = useRepo()
   const queryClient = useQueryClient()
@@ -119,24 +124,10 @@ function AgentsForm({
     )
 
   const renderModel = (runner: (typeof RUNNERS)[number]) => {
-    const provider = providerStatusFor(providerStatus.data, runner.id)
-    const providerConnected =
-      !providerStatus.isPending &&
-      !providerStatus.isError &&
-      provider?.enabled === true &&
-      provider.status === 'connected'
-    const providerReason = providerStatus.isPending
-      ? 'Checking provider authentication…'
-      : providerStatus.isError
-        ? 'Provider authentication could not be verified.'
-        : provider?.enabled === false
-          ? 'This provider is disabled. Enable it above or choose another provider.'
-        : providerConnected
-          ? undefined
-          : 'Connect this provider before selecting it.'
+    const { providerConnected, providerReason } = providerChoice(providerStatus, runner.id)
     const catalog = catalogs[runner.id]
-    const catalogStatus = modelCatalogStatus(runner.id, catalog.data, catalog.isError, catalog.isFetching)
-    const modelOptions = modelsForRunner(runner.id, catalog.data, [
+    const catalogStatus = catalogQueryStatus(runner.id, runners, catalog)
+    const modelOptions = modelsForRunner(runner.id, runners, catalog?.data, [
       config.defaultModels[runner.id],
     ])
     const configuredModel = config.defaultModels[runner.id] ?? ''
@@ -166,7 +157,7 @@ function AgentsForm({
             data-runner={runner.id}
             value={configuredModel}
             title={providerReason ?? runner.desc}
-            disabled={save.isPending || !providerConnected}
+            disabled={save.isPending || !providerConnected || runners === undefined}
             onChange={(event) =>
               save.mutate({
                 defaultModels: { [runner.id]: event.target.value || null } as Partial<

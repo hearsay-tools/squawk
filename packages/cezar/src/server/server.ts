@@ -43,7 +43,7 @@ import type {
   ProjectWebhookResponse,
   SendAgentReportResponse,
   TestProjectWebhookResponse,
-  WorkspaceConfigResponse,
+  WorkspaceConfigResponse, ConfigResponse, AgentProfileResponse, AgentProfilesResponse,
 } from '@open-mercato/cezar-contract';
 export type { WorkspaceConfigResponse } from '@open-mercato/cezar-contract';
 import { permissionDecisionSchema } from '@open-mercato/cezar-contract/permissions';
@@ -52,6 +52,7 @@ import { CheckoutProgressCache } from './checkout-progress.ts';
 import { checkoutProgressParamsSchema, createProjectInputSchema, type CreateProjectResponse, type GithubOwnersResponse } from '@open-mercato/cezar-contract/projects';
 import { createWorkspaceLiveRoutes } from './workspace-live-routes.ts';
 import { createActivityRoutes, type ActivityServerDeps } from './activity-routes.ts';
+import { createRunnersRoutes } from './runners-routes.ts';
 import type { Home } from '../home/home.ts';
 import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebhooks, type WorkspaceProjects } from './workspace-projects.ts';
 import { subscribeRunFeed } from './run-event-feed.ts';
@@ -110,10 +111,9 @@ import {
 import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/workspace';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
-import {
-  MODEL_DISCOVERY_RUNNERS,
-  openProjectInSchema,
-} from '@open-mercato/cezar-contract/workspace';
+import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
+import { registeredRunnerId, registeredRunners, runnerIdOf } from '../core/runner-registry.ts';
+import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
 } from '@open-mercato/cezar-contract/runs';
@@ -1063,7 +1063,7 @@ export function createApp(deps: ServerDeps) {
       repoRoot: caps.localHandoff ? bootRoot : basename(bootRoot),
       repo,
       checks,
-      defaultRunner: config.defaultRunner,
+      defaultRunner: config.defaultRunner as string,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
       // shell-out. See detectGithubCached.
       forge: forge ? { kind: forge.kind, ...forge.detectCached() } : null,
@@ -1178,9 +1178,9 @@ export function createApp(deps: ServerDeps) {
     // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
     // authoritative host-local catalog (#794), so the client compiles against exactly what this
     // validates, including Claude stream-json discovery (#89).
-    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${MODEL_DISCOVERY_RUNNERS.slice(0, -1).join(', ')}, or ${MODEL_DISCOVERY_RUNNERS.at(-1)}` }), async (c) => {
+    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
       const query = { data: c.req.valid('query') };
-      const { runner } = query.data;
+      const runner = registeredRunnerId(query.data.runner);
       return c.json(await modelCatalog.get(runner));
     });
 
@@ -1266,7 +1266,7 @@ export function createApp(deps: ServerDeps) {
         const query = { data: c.req.valid('query') };
         const refresh = query.data.refresh === '1';
         if (refresh) {
-          for (const runner of MODEL_DISCOVERY_RUNNERS) modelCatalog.invalidate(runner);
+          for (const { id } of registeredRunners()) modelCatalog.invalidate(id);
         }
         return c.json(await providerStatus({ refresh }));
       },
@@ -1274,10 +1274,10 @@ export function createApp(deps: ServerDeps) {
 
     .put(
       '/providers/:provider/enabled',
-      paramZodValidator(providerRouteParamsSchema, { message: 'provider and enabled boolean are required' }),
+      paramZodValidator(providerRouteParamsSchema, { message: 'provider and enabled boolean are required', runners: { ids: ['provider'] } }),
       jsonZodValidator(providerEnabledSchema, { message: 'provider and enabled boolean are required' }),
       async (c) => {
-        const provider = { data: c.req.valid('param').provider };
+        const provider = { data: registeredRunnerId(c.req.valid('param').provider) };
         const body = { data: c.req.valid('json') };
         let workspace: WorkspaceConfig;
         try {
@@ -1301,10 +1301,10 @@ export function createApp(deps: ServerDeps) {
 
     .post(
       '/providers/:provider/retry',
-      paramZodValidator(providerRouteParamsSchema, { message: 'provider and current authFailureId are required' }),
+      paramZodValidator(providerRouteParamsSchema, { message: 'provider and current authFailureId are required', runners: { ids: ['provider'] } }),
       jsonZodValidator(providerRetrySchema, { message: 'provider and current authFailureId are required' }),
       async (c) => {
-        const provider = { data: c.req.valid('param').provider };
+        const provider = { data: registeredRunnerId(c.req.valid('param').provider) };
         const body = { data: c.req.valid('json') };
         if (!providerAuth.clearRuntimeAuthFailure(provider.data, body.data.authFailureId)) {
           return c.json({ error: 'Authentication incident changed. Refresh and try again.' }, 409);
@@ -1316,7 +1316,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}` }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;
@@ -1402,7 +1402,7 @@ export function createApp(deps: ServerDeps) {
   // the username — the same disclosure `/api/v1/health` trims in hosted mode (#431).
 
   /** Build the wire row for one resolved profile: its dir state plus whatever auth is cached. */
-  const agentProfileBody = async (profile: ResolvedAgentProfile) => ({
+  const agentProfileBody = async (profile: ResolvedAgentProfile): Promise<AgentProfileResponse['profile']> => ({
     id: profile.id,
     provider: profile.provider,
     label: profile.label,
@@ -1509,7 +1509,7 @@ export function createApp(deps: ServerDeps) {
       const profiles = editable
         ? await Promise.all(listAgentProfiles(store, PROVIDER_IDS).map(agentProfileBody))
         : [];
-      return c.json({
+      return c.json<AgentProfilesResponse>({
         editable,
         profiles,
         profileCapableProviders: profileCapableProviders(),
@@ -1519,9 +1519,9 @@ export function createApp(deps: ServerDeps) {
       });
     })
 
-    .post('/workspace/agent-profiles', jsonZodValidator(() => createAgentProfileSchema), async (c) => {
+    .post('/workspace/agent-profiles', jsonZodValidator(() => createAgentProfileSchema, { runners: { ids: ['provider'] } }), async (c) => {
       if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-      const { provider, configDir, label } = c.req.valid('json');
+      const { configDir, label } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
       if (!supportsProfiles(provider)) {
         return c.json({ error: `${provider} cannot carry more than one account` }, 400);
       }
@@ -1670,10 +1670,10 @@ export function createApp(deps: ServerDeps) {
     // and nothing about it can be dropped by a Squawk version that never heard of accounts.
     .put(
       '/workspace/agent-profiles/selection',
-      jsonZodValidator(() => selectAgentProfileSchema),
+      jsonZodValidator(() => selectAgentProfileSchema, { runners: { ids: ['provider'] } }),
       async (c) => {
         if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-        const { projectId, provider, profileId } = c.req.valid('json');
+        const { projectId, profileId } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
         const resolvedId = await workspaceProjects.canonicalProjectId(projectId);
         // Keyed by repo ROOT, so the selection survives the registry being rebuilt and needs no
         // cross-reference into config.json. An unknown project is a 404 rather than an orphan
@@ -2345,7 +2345,7 @@ export function createApp(deps: ServerDeps) {
   const workspaceConfigRoutes = new Hono<ProjectApiEnv>()
     .get('/workspace/config', async (c) => c.json(workspaceConfigBody(await loadWorkspaceConfig(deps.home.workspaceConfig))))
 
-    .put('/workspace/config', jsonZodValidator(() => workspaceConfigUpdateSchema), async (c) => {
+    .put('/workspace/config', jsonZodValidator(() => workspaceConfigUpdateSchema, { runners: { ids: ['agentDefaults.runner'], keys: ['agentDefaults.models'] } }), async (c) => {
       const parsed = { data: c.req.valid('json') };
       const { browseRoot, projectsDir, archiveOnMerge, resources } = parsed.data;
       for (const [configuredRoot, create] of [
@@ -2401,7 +2401,7 @@ export function createApp(deps: ServerDeps) {
     // chain's type accumulation alone. Method-agnostic here, which the GET does not mind.
     .use('/workspace/ui-state', bodyLimit({ maxSize: UI_STATE_BODY_LIMIT }))
 
-    .put('/workspace/ui-state', jsonZodValidator(setWorkspaceUiStateInputSchema), async (c) => {
+    .put('/workspace/ui-state', jsonZodValidator(setWorkspaceUiStateInputSchema, { runners: { strictKeys: { path: 'dismissedProviderAuthFailures', also: REMOVED_RUNNER_IDS } } }), async (c) => {
       const parsed = { data: c.req.valid('json') };
       try {
         return c.json(
@@ -2439,7 +2439,7 @@ export function createApp(deps: ServerDeps) {
     );
   // ---- chained family: skills (project-scoped) ----
   const skillsRoutes = new Hono<ProjectApiEnv>()
-    .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema), async c => {
+    .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema, { runners: { ids: ['runner'] } }), async c => {
       if (c.req.valid('query').account !== undefined && !capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
       const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, deps.home, skillCatalog, resolveWorkspaceProfile);
       if ('error' in result) return c.json(result, 400);
@@ -2475,7 +2475,7 @@ export function createApp(deps: ServerDeps) {
     // Save an approved plan as a reusable chain (spec 008): YAML in
     // `.ai/cezar/workflows/<slug>.yaml` — from then on it's in the dropdown
     // like any other workflow.
-    .post('/workflows', jsonZodValidator(saveWorkflowSchema), async (c) => {
+    .post('/workflows', jsonZodValidator(saveWorkflowSchema, { runners: { ids: ['steps.*.runner'] } }), async (c) => {
       const { root: repoRoot } = c.get('project');
       const parsed = { data: c.req.valid('json') };
       const steps = parsed.data.steps ?? skillsToSteps(parsed.data.skills ?? []);
@@ -2656,7 +2656,7 @@ export function createApp(deps: ServerDeps) {
       return c.json(await automationService.list(c.get('project'), c.req.valid('query')));
     })
 
-    .post('/automations', jsonZodValidator(() => automationCreateSchema), async (c) => {
+    .post('/automations', jsonZodValidator(() => automationCreateSchema, { runners: { ids: ['task.runner', 'task.steps.*.runner'] } }), async (c) => {
       const result = await automationService.create(c.get('project'), c.req.valid('json'));
       if (!result.ok) return c.json({ error: result.error }, result.status);
       const once = onceCreateAnswer(result.automation);
@@ -2669,7 +2669,7 @@ export function createApp(deps: ServerDeps) {
       return c.json(result.body);
     })
 
-    .put('/automations/:id', jsonZodValidator(() => automationUpdateSchema), async (c) => {
+    .put('/automations/:id', jsonZodValidator(() => automationUpdateSchema, { runners: { ids: ['task.runner', 'task.steps.*.runner'] } }), async (c) => {
       const result = await automationService.update(c.get('project'), c.req.param('id'), c.req.valid('json'));
       if (!result.ok) return c.json({ error: result.error }, result.status);
       return c.json({ automation: result.automation });
@@ -2784,7 +2784,7 @@ export function createApp(deps: ServerDeps) {
   const withUsage = (run: RunRecord, finishBlocked?: string | null): ApiRun => {
     const usage = currentUsage(run.id);
     const { sessionId, backend } = latestSession(run);
-    const command = sessionId ? resumeCommand(backend, sessionId) : null;
+    const command = sessionId ? resumeCommand(runnerIdOf(backend), sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
   };
@@ -2950,7 +2950,7 @@ export function createApp(deps: ServerDeps) {
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
 
-    .post('/runs', jsonZodValidator(createRunInputSchema), async (c) => {
+    .post('/runs', jsonZodValidator(createRunInputSchema, { runners: { ids: ['runner', 'steps.*.runner'] } }), async (c) => {
       const { id: projectId, root: repoRoot, manager, store } = c.get('project');
       const body = c.req.valid('json');
       const clientRequest = clientRequestOf(body);
@@ -2964,7 +2964,7 @@ export function createApp(deps: ServerDeps) {
       const resolved = await resolveStartWorkflow(repoRoot, body);
       if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
       const { workflow } = resolved;
-      const runner = body.runner ?? (await loadConfig(repoRoot, deps.home)).defaultRunner;
+      const runner = body.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : registeredRunnerId(body.runner);
       const blocked = await providerGateRefusal(providerActionError, workflow, runner);
       if (blocked) return c.json({ error: blocked.error }, blocked.status);
       const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, runner, body.agentProfile);
@@ -3092,7 +3092,7 @@ export function createApp(deps: ServerDeps) {
       // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
       // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
       if (run.status !== 'queued') {
-        const blocked = await providerActionError([providerForActiveRun(run)]);
+        const blocked = await providerActionError([runnerIdOf(providerForActiveRun(run))]);
         if (blocked) return c.json({ error: blocked }, 409);
       }
       const content: PastedContent[] = [
@@ -3205,7 +3205,7 @@ export function createApp(deps: ServerDeps) {
     })
 
     // "Continue" (spec 003): reopen a finished run's session in-process.
-    .post('/runs/:id/continue', jsonZodValidator(continueSchema, { absent: ({}) }), async (c) => {
+    .post('/runs/:id/continue', jsonZodValidator(continueSchema, { absent: ({}), runners: { ids: ['runner'] } }), async (c) => {
       const { root: repoRoot, store, manager } = c.get('project');
       const id = c.req.param('id');
       const run = store.getRun(id);
@@ -3228,9 +3228,9 @@ export function createApp(deps: ServerDeps) {
       }
       const untouched = isUntouchedCancelledRun(run);
       const originalProvider = untouched
-        ? run.runner ?? (await loadConfig(repoRoot, deps.home)).defaultRunner
+        ? run.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : runnerIdOf(run.runner)
         : providerForExistingRun(run);
-      const provider = parsed.data.runner ?? originalProvider;
+      const provider = parsed.data.runner === undefined ? originalProvider : registeredRunnerId(parsed.data.runner);
       const required = untouched
         ? providersRequiredByWorkflow(run.workflowDef!, provider)
         : [provider];
@@ -3239,7 +3239,7 @@ export function createApp(deps: ServerDeps) {
       const result = manager.continueRun(id, {
         text: parsed.data.text,
         images: parsed.data.images?.map(toPastedContent),
-        runner: untouched ? provider : parsed.data.runner,
+        runner: untouched || parsed.data.runner !== undefined ? provider : undefined,
         ...(untouched ? { originalRunner: originalProvider } : {}),
         model: parsed.data.model,
         effort: parsed.data.effort,
@@ -3255,7 +3255,7 @@ export function createApp(deps: ServerDeps) {
       const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
       if ('status' in checkout) return c.json(checkout.body, checkout.status);
       if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
-      const { sessionId, backend, profileId } = latestSession(checkout.run);
+      const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = runnerIdOf(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       const blocked = await providerActionError([backend]);
       if (blocked) return c.json({ error: blocked }, 409);
@@ -4247,7 +4247,7 @@ export function createApp(deps: ServerDeps) {
 
   // The Settings → Agents knobs in one read (R6 Step 1.5) — an ADDITIVE
   // sibling of PUT /api/config below; /api/health keeps its protected shape.
-  const configAnswer = async (repoRoot: string, config: CezConfig) => {
+  const configAnswer = async (repoRoot: string, config: CezConfig): Promise<ConfigResponse> => {
     const archive = resolveArchiveOnMerge(config, await loadWorkspaceConfig(deps.home.workspaceConfig));
     const nativeModels = await readAgentModelDefaults(repoRoot);
     const setup = reportWorktreeCommands(config.worktreeSetup);
@@ -4289,7 +4289,7 @@ export function createApp(deps: ServerDeps) {
       return c.json(await configAnswer(repoRoot, await loadConfig(repoRoot, deps.home)));
     })
 
-    .put('/config', jsonZodValidator(() => setConfigSchema), async (c) => {
+    .put('/config', jsonZodValidator(() => setConfigSchema, { runners: { ids: ['defaultRunner'], keys: ['defaultModels'] } }), async (c) => {
       const { root: repoRoot, dataDir } = c.get('project');
       const parsed = { data: c.req.valid('json') };
       if (agentModelsLocked(repoRoot, process.env, deps.home) && parsed.data.defaultModels !== undefined) {
@@ -4593,7 +4593,7 @@ export function createApp(deps: ServerDeps) {
   }, { ...deps, localHandoff: () => capabilities().localHandoff });
   const workspaceV1 = new Hono()
     .route('/', liveRoutes)
-    .route('/', healthRoutes)
+    .route('/', healthRoutes).route('/', createRunnersRoutes())
     .route('/', modelsRoutes)
     .route('/', providersRoutes)
     .route('/', projectsRoutes)

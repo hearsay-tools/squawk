@@ -1,7 +1,10 @@
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 registerRunner(claudeRunner);
+// The model query below names codex: the route refuses a runner that no one registered.
+registerRunner(codexRunner);
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
