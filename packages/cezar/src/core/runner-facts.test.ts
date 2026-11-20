@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { inputDeliveryOf } from './agent-runner-values.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner, runnerDefinition } from './runner-registry.ts';
-import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
+import { RUNNER_FACTS, runnersWhere, type RunnerFacts } from './runner-facts.ts';
 
 
 describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
@@ -39,11 +39,17 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     }
   });
 
-  it('selects runners by fact in BUILT_IN_RUNNER_IDS order', () => {
-    expect(runnersWhere(facts => facts.nativeSubagents === 'reported')).toEqual(['claude', 'codex']);
-    expect(runnersWhere(facts => facts.nativeTimerTool !== null)).toEqual(['claude']);
-    expect(runnersWhere(facts => facts.sessionIdSource === 'launch')).toEqual(['claude', 'pi']);
-    expect(runnersWhere(facts => facts.turnStart === 'on-write')).toEqual(['claude', 'pi', 'omp']);
+  it.each([
+    ['nativeSubagents', (facts: RunnerFacts) => facts.nativeSubagents === 'reported'],
+    ['nativeTimerTool', (facts: RunnerFacts) => facts.nativeTimerTool !== null],
+    ['sessionIdSource', (facts: RunnerFacts) => facts.sessionIdSource === 'launch'],
+    ['turnStart', (facts: RunnerFacts) => facts.turnStart === 'on-write'],
+  ] as const)('selects runners by %s in BUILT_IN_RUNNER_IDS order, from each registered definition', (_fact, matches) => {
+    const selected = BUILT_IN_RUNNER_IDS.filter(id => matches(runnerDefinition(id).facts));
+    // A proper subset, or the check could not tell a selection from the whole roster.
+    expect(selected.length).toBeGreaterThan(0);
+    expect(selected.length).toBeLessThan(BUILT_IN_RUNNER_IDS.length);
+    expect(runnersWhere(matches)).toEqual(selected);
   });
 
   // The turn-path facts (inputDelivery, systemPromptOnResume) and the narrow facts, including
@@ -58,7 +64,7 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     }
   });
 
-  // These rows hold runner ids by hand; this check ties each one to the declared acknowledgement.
+  // Each runner declares these rows in its runners/<id>/mock.ts; this check ties them to the declared acknowledgement.
   it.each([
     ['U12', (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement === 'write'],
     ['U13', (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement !== 'response'],

@@ -17,11 +17,24 @@ export const FIXTURE_MOCK = {
     hold: 'mock:hold',
     'provider-error': 'mock:provider-error',
   },
-  // The parity kit requires an A9 reason from every runner whose facts declare no answerable native ask.
+  // The reasons the parity kit requires by this runner's facts: A9 for no answerable native ask, and
+  // U12, U13 and U27 for an acknowledgement that is the local write (`runner-facts.test.ts`).
   parityExemptions: {
     A9: {
       kind: 'scenario-unconstructible',
       reason: 'The fixture mock answers no ask scenario and its wire has no native ask, so no native mid-turn ask.requested can arise.',
+    },
+    U12: {
+      kind: 'capability-absent',
+      reason: 'The fixture adapter resolves agent input once its stdin line is written; no provider stands between, so nothing can hold that acknowledgement back.',
+    },
+    U13: {
+      kind: 'capability-absent',
+      reason: 'The fixture adapter resolves agent input once its stdin line is written, and a written line gets no refusal from the mock.',
+    },
+    U27: {
+      kind: 'capability-absent',
+      reason: 'The fixture adapter resolves agent input once its stdin line is written, before the mock starts the turn, so no turn ends with its input unacknowledged.',
     },
   },
 } as const satisfies RunnerMock;
