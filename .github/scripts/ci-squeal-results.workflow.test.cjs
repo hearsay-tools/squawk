@@ -18,8 +18,8 @@ const step = (job, id) => job.steps.find((s) => s.id === id || s.name === id);
 // Squeal's GitHub Action (hearsay-tools/squeal spec 018 D20) puts `squeal` on the PATH and never
 // fails the job. Like every action here it is pinned to a full commit SHA; the comment names its
 // release tag.
-const SQUEAL_ACTION = 'hearsay-tools/squeal/ci@573cb70b9a7f640ea0332347aa8bf5c510ca2efe';
-const SQUEAL_PIN = `uses: ${SQUEAL_ACTION} # v0.1.522`;
+const SQUEAL_ACTION = 'hearsay-tools/squeal/ci@ef0e5002cce936e0971fbb727cbca73f318e69a8';
+const SQUEAL_PIN = `uses: ${SQUEAL_ACTION} # v0.1.582`;
 
 function expression(raw, context) {
   const code = String(raw).replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/needs\.([\w]+-[\w-]+)/g, "needs['$1']");
@@ -53,7 +53,7 @@ test('the Vitest shards and the Squeal jobs read one exact Node version from .no
   const { jobs } = ci();
   const readers = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => s.with?.['node-version-file']))
     .map(([id]) => id);
-  assert.deepEqual(readers.sort(), ['cockpit-browser', 'crap-report', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-export', 'squeal-publish', 'vitest',
+  assert.deepEqual(readers.sort(), ['cockpit-browser', 'crap-report', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-export', 'squeal-node-test', 'squeal-publish', 'vitest',
     'vitest-coverage-merge'], 'the minimum-Node jobs keep engines.node');
   for (const id of readers) {
     const setup = jobs[id].steps.find((s) => s.uses?.startsWith('actions/setup-node@'));
@@ -122,12 +122,14 @@ test('the merge-group step runs the test command under squeal ci record and retu
   }
 });
 
-const SQUEAL_JOBS = ['squeal-export', 'squeal-publish'];
+const SQUEAL_JOBS = ['squeal-export', 'squeal-node-test', 'squeal-publish'];
 
 test('squeal-export runs after passing merge-group shards and only reads', () => {
   const { jobs, permissions } = ci();
   const job = jobs['squeal-export'];
-  assert.deepEqual(job.needs, ['vitest']);
+  // It waits for the node:test recording, but runs without it: only the Vitest shards decide.
+  assert.deepEqual(job.needs, ['vitest', 'squeal-node-test']);
+  assert.doesNotMatch(job.if, /squeal-node-test/);
   for (const event of EVENTS) assert.equal(expression(job.if, context(event)), event === 'merge_group', event);
   for (const vitest of ['failure', 'skipped', 'cancelled']) assert.equal(expression(job.if, context('merge_group', { vitest })), false, vitest);
   assert.equal(expression(job.if, context('merge_group')), true);
@@ -227,8 +229,8 @@ test('squeal-export keys the shard parts in a fresh checkout; squeal-publish pus
   const parts = jobs.vitest.strategy.matrix.shard.map((n) => uploaded.replace('${{ matrix.shard }}', String(n)));
   assert.equal(parts.length, 8);
   assert.deepEqual(parts.filter((name) => !name.startsWith(pattern.slice(0, -1))), []);
-  assert.match(step(job, 'Export Squeal results').run,
-    /^squeal ci export --parts "\$RUNNER_TEMP"\/squeal-parts\/squeal-parts-shard-\* --out "\$RUNNER_TEMP\/squeal-results\.json\.gz"$/);
+  assert.equal(step(job, 'Download Squeal node:test parts').with.name, step(jobs['squeal-node-test'], 'Upload Squeal parts').with.name);
+  assert.equal(step(job, 'Download Squeal node:test parts')['continue-on-error'], true, 'missing node:test parts never fail the export');
   const upload = step(job, 'Upload Squeal results');
   assert.equal(upload.with.path, '${{ runner.temp }}/squeal-results.json.gz');
   assert.equal(upload.with['retention-days'], 3);
@@ -246,7 +248,7 @@ test('every job that runs squeal sets up Squeal\'s pinned action once, after its
   for (const pin of pins) assert.equal(pin.trim(), SQUEAL_PIN);
   const users = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => /(^|\s)squeal (ci|code)\b/m.test(s.run ?? '')))
     .map(([id]) => id);
-  assert.deepEqual(users.sort(), ['squeal-export', 'squeal-publish', 'vitest']);
+  assert.deepEqual(users.sort(), ['squeal-export', 'squeal-node-test', 'squeal-publish', 'vitest']);
   for (const [id, job] of Object.entries(jobs)) {
     const { steps = [] } = job;
     const action = steps.filter((s) => s.uses?.startsWith('hearsay-tools/squeal/'));
@@ -301,6 +303,64 @@ test('an export that writes no file skips the upload and the publish without fai
     assert.equal(read(), 'exists=false\n', 'an empty file');
     fs.writeFileSync(path.join(temp, 'squeal-results.json.gz'), 'x');
     assert.equal(read(), 'exists=true\n', 'a written file');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+// node:test results for Squeal (hearsay-tools/squeal spec 018 D23, D26, D29): a merge-group-only job
+// runs both unit suites on .node-version with Squeal's reporter added. The export leaves out a suite
+// whose flags differ from its squeal.config.json nodeTest entry, so the recorded commands must keep
+// the package scripts' flags.
+test('squeal-node-test records both unit suites with the nodeTest entries\' flags, in merge groups only', () => {
+  const { jobs } = ci();
+  const job = jobs['squeal-node-test'];
+  for (const event of EVENTS) assert.equal(expression(job.if, context(event)), event === 'merge_group', event);
+  assert.deepEqual(job.permissions, { contents: 'read' });
+  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'squeal.config.json'), 'utf8'));
+  const scripts = (dir) => JSON.parse(fs.readFileSync(path.join(repoRoot, dir, 'package.json'), 'utf8')).scripts;
+  const REPORTERS = ' --test-reporter=spec --test-reporter-destination=stdout'
+    + ' --test-reporter="$SQUEAL_NODE_TEST_REPORTER" --test-reporter-destination=stderr ';
+  const suites = [
+    ['Record package unit tests', 'packages/cezar', scripts('packages/cezar')['test:unit'], 'package'],
+    ['Record repository script tests', '.', scripts('.')['test:unit:scripts'], 'scripts'],
+  ];
+  for (const [name, cwd, command, suite] of suites) {
+    const s = step(job, name);
+    assert.equal(s['working-directory'] ?? '.', cwd, name);
+    const prefix = `squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/${suite}" -- `;
+    assert.ok(s.run.startsWith(prefix), name);
+    // The package script's command with the reporter pair after --test.
+    assert.equal(s.run.slice(prefix.length), command.replace(' --test ', ` --test${REPORTERS}`), name);
+    const entry = config.nodeTest.find((e) => (e.cwd ?? '.') === cwd);
+    const flags = command.split(' --test ')[0].split(' ').slice(1);
+    assert.deepEqual(flags, entry.argv, `${name}: the nodeTest entry's argv`);
+    assert.doesNotMatch(s.run, /NODE_OPTIONS/, `${name}: the export job sets no NODE_OPTIONS either`);
+  }
+  assert.equal(step(job, 'Record repository script tests').if, '!cancelled()', 'both suites record when one fails');
+  const upload = step(job, 'Upload Squeal parts');
+  assert.match(String(upload.if), /^!cancelled\(\)$/);
+  assert.equal(upload['continue-on-error'], true);
+  assert.equal(upload.with.path, '${{ runner.temp }}/squeal-parts-node-test/');
+  assert.equal(upload.with['retention-days'], 3);
+});
+
+test('the export adds the node:test parts it downloaded and exports the shards alone without them', () => {
+  const run = step(ci().jobs['squeal-export'], 'Export Squeal results').run;
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-squeal-export-'));
+  try {
+    const bin = path.join(temp, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'squeal'), '#!/bin/sh\necho "squeal $*"\n', { mode: 0o755 });
+    for (const n of [1, 2]) fs.mkdirSync(path.join(temp, 'squeal-parts', `squeal-parts-shard-${n}`), { recursive: true });
+    const exported = () => spawnSync('bash', ['-e', '-c', run], { encoding: 'utf8', env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: temp } }).stdout;
+    const shards = `${temp}/squeal-parts/squeal-parts-shard-1 ${temp}/squeal-parts/squeal-parts-shard-2`;
+    const out = `--out ${temp}/squeal-results.json.gz\n`;
+    assert.equal(exported(), `squeal ci export --parts ${shards} ${out}`);
+    fs.mkdirSync(path.join(temp, 'squeal-parts-node-test', 'scripts'), { recursive: true });
+    assert.equal(exported(), `squeal ci export --parts ${shards} ${temp}/squeal-parts-node-test/scripts ${out}`);
+    fs.mkdirSync(path.join(temp, 'squeal-parts-node-test', 'package'));
+    assert.equal(exported(), `squeal ci export --parts ${shards} ${temp}/squeal-parts-node-test/package ${temp}/squeal-parts-node-test/scripts ${out}`);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
