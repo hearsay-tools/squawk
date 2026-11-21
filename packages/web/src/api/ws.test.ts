@@ -137,6 +137,20 @@ describe('createTopicSocket', () => {
       expect(onRefused).toHaveBeenCalledTimes(1)
     })
 
+    it('counts a silent upgraded socket closed by the watchdog: three silent attempts end in the refusal', () => {
+      const onRefused = vi.fn()
+      const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
+      socket.subscribe('health', () => undefined)
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        instance(attempt).open() // the upgrade succeeds, then no frame ever arrives
+        vi.advanceTimersByTime(HEARTBEAT_TIMEOUT_MS + RECONNECT_DELAY_MS)
+      }
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS)
+      expect(onRefused).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(10 * HEARTBEAT_TIMEOUT_MS)
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS)
+    })
+
     it('reconnects without a limit once an attempt carried a frame (a server restart)', () => {
       const onRefused = vi.fn()
       const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
