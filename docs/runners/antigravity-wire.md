@@ -16,7 +16,7 @@ turn with no cost. The system prompt does not survive `session/resume`.
 | --- | --- |
 | Build | ACP registry archive `antigravity-acp` 1.5.0, `agy-acp-server-1.5.0-linux-x86_64.zip` (sha256 `36f373e8…808c9f`) |
 | Files | `agy_acp_server.par` (714 MB, an embedded Python 3.14 program) and `localharness_external` (140 MB, a Go harness that the `.par` starts per session and talks to over a localhost websocket) |
-| Command | `agy_acp_server.par --uid=`. There is no `acp` subcommand and no `--login`, `--gemini-dir` or `--app-data-dir` flag. The program's own flags are `--debug` and `--notices` |
+| Command | `agy_acp_server.par`, with `--uid=` on Linux only, per the [ACP registry](https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json); macOS and Windows use no launch arguments. There is no `acp` subcommand and no `--login`, `--gemini-dir` or `--app-data-dir` flag. The program's own flags are `--debug` and `--notices` |
 | Environment | `PATH`, `HOME`, `GEMINI_HOME`, `TMPDIR` (each a scratch folder), `AGY_ACP_FORCE_FILE_STORAGE=1`, `AGY_CLI_DISABLE_AUTO_UPDATE=1`, `GEMINI_API_KEY`, `GOOGLE_GEMINI_BASE_URL`, the host's proxy and CA variables |
 | Sign-in | `authenticate {methodId: "gemini-api-key"}` with the key from `GEMINI_API_KEY` |
 | Model route | The owner's CLI Proxy, a Gemini API compatible endpoint, through `GOOGLE_GEMINI_BASE_URL` (see [Models and the API host](#models-and-the-api-host)) |

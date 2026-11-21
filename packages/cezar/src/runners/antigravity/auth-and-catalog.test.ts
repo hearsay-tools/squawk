@@ -11,7 +11,7 @@ import { antigravityLogin } from './login-probe.ts';
 registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
 const roots: string[] = [];
-afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 async function root() {
   const dir = await mkdtemp(join(tmpdir(), 'agy-auth-')); roots.push(dir);
   const executable = join(dir, 'agy'); await copyFile(bin, executable); vi.stubEnv('HSQ_ANTIGRAVITY_BIN', executable);
@@ -35,6 +35,34 @@ it('completes two native personal sign-ins with isolated secret and settings fil
       expect(await readdir(home)).not.toContain('fixture-only');
     }
   } finally { await Promise.all(flows.map(flow => flow.close())); }
+});
+
+it.each([0, 1])('reports an agent exit at sign-in start (code %s), excluding warnings and secrets', async code => {
+  const dir = await root();
+  const stderr = '/archive/types.py:42: SyntaxWarning: invalid escape sequence\n  warning source\n'
+    + 'FATAL Flags parsing error: Unknown command line flag uid https://accounts.google.com/o/oauth2/auth?state=private-state token=private-token  \n';
+  await writeFile(join(dir, 'agy'), `#!/usr/bin/env node\nprocess.stderr.write(${JSON.stringify(stderr)}, () => process.exit(${code}));\n`);
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const failure = await startAntigravitySignIn(join(dir, 'account')).catch(error => error as Error);
+  expect(failure).toBeInstanceOf(Error);
+  expect((failure as Error).message).toContain(`Agent exited (code ${code}): FATAL Flags parsing error: Unknown command line flag uid`);
+  expect((failure as Error).message).not.toMatch(/SyntaxWarning|warning source|https:|private-state|private-token/);
+  expect(log).toHaveBeenCalledWith('Antigravity personal sign-in start failed:', expect.any(Error), expect.objectContaining({ code, stderr }));
+});
+
+it.each(['initialize', 'authenticate'])('reports the %s error without exposing OAuth values', async method => {
+  const dir = await root();
+  await writeFile(join(dir, 'agy'), `#!/usr/bin/env node
+import { createInterface } from 'node:readline';
+createInterface({ input: process.stdin }).on('line', line => {
+  const frame = JSON.parse(line);
+  const response = frame.method === ${JSON.stringify(method)}
+    ? { error: { code: -32603, message: 'Native sign-in refused: https://accounts.google.com/o/oauth2/auth?state=private-state access_token=ya29.private-token' } }
+    : { result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [{ id: 'oauth-personal', name: 'Personal' }] } };
+  console.log(JSON.stringify({ jsonrpc: '2.0', id: frame.id, ...response }));
+});\n`);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  await expect(startAntigravitySignIn(join(dir, 'account'))).rejects.toThrow(`${method}: Native sign-in refused: [URL redacted] access_token=[redacted]`);
 });
 
 it.each([

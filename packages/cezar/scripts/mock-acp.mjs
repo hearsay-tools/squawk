@@ -14,7 +14,7 @@ import { answerNudge } from './mock-nudge.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
 
 if (process.argv.includes('--version')) { console.log('antigravity_extensions/acp_server 1.5.0'); process.exit(0); }
-const antigravity = process.argv.includes('--uid=');
+let antigravity = false;
 const { failureControl, delivery } = await loadControls({ failure: ['provider', 'unread'], delivery: ['reject', 'hold-ack', 'hold-response'] });
 const write = frame => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...frame })}\n`);
 const reply = (id, result) => write({ id, result });
@@ -243,7 +243,10 @@ function setConfig(frame) {
 async function handle(frame) {
   if (process.env.CEZ_MOCK_STDIN_FILE) appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${recorded(frame)}\n`);
   if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${recorded(frame)}\n`);
-  if (['session/new', 'session/resume', 'session/load'].includes(frame.method)) mountBuiltinSkills(frame.params);
+  if (['session/new', 'session/resume', 'session/load'].includes(frame.method)) {
+    antigravity = Boolean(frame.params._meta?.antigravity);
+    mountBuiltinSkills(frame.params);
+  }
   if (!frame.method) { pending.get(frame.id)?.(frame.result); pending.delete(frame.id); return; }
   switch (frame.method) {
     case 'initialize': reply(frame.id, { protocolVersion: 1, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, mcpCapabilities: { http: true, sse: true } }, authMethods: [{ id: 'mock-key', name: 'Mock key' }], agentInfo: { name: 'mock-acp', version: '1.0.0' } }); break;
