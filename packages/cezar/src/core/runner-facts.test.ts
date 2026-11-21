@@ -68,8 +68,13 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   it.each([
     ['U12', (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement === 'write'],
     ['U13', (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement !== 'response'],
-    ['U27', (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement !== 'response'],
   ] as const)('exempts a runner from %s exactly when its acknowledgement cannot be delayed or rejected', (criterion, exempt) => {
     expect(BUILT_IN_RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined)).toEqual(BUILT_IN_RUNNER_IDS.filter(exempt));
+  });
+  it('exempts U27 late ACK ordering exactly where the ACK is a write or also completes the turn', () => {
+    const exempt = (runner: string) => RUNNER_FACTS[runner]!.inputDelivery.acknowledgement !== 'response' ||
+      runnerDefinition(runner).mock.promptResponseEndsTurn === true;
+    expect(BUILT_IN_RUNNER_IDS.filter(runner => exemptionFor('U27', runner) !== undefined))
+      .toEqual(BUILT_IN_RUNNER_IDS.filter(exempt));
   });
 });
