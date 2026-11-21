@@ -129,6 +129,11 @@ CLI Proxy answers `gemini-3-flash` but refuses every base name in that table wit
 
 An API error does not become a JSON-RPC error. It becomes an `agent_message_chunk` starting
 "Agent execution error:" and the turn ends with `stopReason: "end_turn"` (`model-error.ndjson`).
+On task or catalog failure, Squawk captures bounded, redacted tails of stderr and native glog
+INFO/ERROR files from the process's private TMPDIR in the server log before removing that directory.
+This preserves native failure details that the ACP error message can omit.
+`HSQ_ANTIGRAVITY_DEBUG=1` adds native `--debug` traces; it is off by default. macOS can write
+these traces only to stderr, including the native `RAW WS MSG` trajectory entries.
 
 ## Usage
 
@@ -143,6 +148,12 @@ An API error does not become a JSON-RPC error. It becomes an `agent_message_chun
   limits") was not run.
 
 ## Tool frames
+
+Squawk gives this agent's private MCP server the alias `squawk`. The native name
+`mcp_<server>_<tool>` must fit 64 characters. With the shared `cezar_ci_<32 hex>` name,
+1.5.0 rejects the longest Squawk tools at startup, then can fail the second prompt with
+`unexpected end of JSON input` while rebuilding its executor. Both the failure and the
+short-alias two-turn success were reproduced on Linux with personal OAuth and the full tool list.
 
 - **Command** (`prompt-command.ndjson`): `tool_call` kind `execute`, status `pending`, `rawInput`
   `{CommandLine, Cwd, WaitMsBeforeAsync[, NotificationTimeoutSeconds]}`; then the permission

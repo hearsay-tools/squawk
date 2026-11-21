@@ -11,6 +11,7 @@ import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } 
 import { AcpSession } from '../acp/session.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
+import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 import { antigravityTool } from './tool-normalization.ts';
 import { antigravityAsk, permissionPolicy } from './permissions.ts';
 import { squawkToolNames } from '../../ci-wait/tool-catalog.ts';
@@ -20,6 +21,7 @@ import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityStderr } from './stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
+import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
@@ -39,7 +41,7 @@ export class AntigravitySession implements AgentSession {
   private readonly acp: AcpSession;
   private readonly exited: Promise<number | null>;
   private readonly output: AgentRunResult = { text: '', toolCalls: [], tokensUsed: 0 };
-  private readonly stderr: string[] = [];
+  private stderr = '';
   private readonly queue: ContentBlock[][] = [];
   private bridge: Awaited<ReturnType<typeof antigravityMcp>>;
   private ready = false;
@@ -67,11 +69,11 @@ export class AntigravitySession implements AgentSession {
   constructor(bin: string, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(bin, spec);
-    this.child = spawnSessionLeader(bin, antigravityLaunchArgs(), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(bin, antigravityLaunchArgs(process.platform, this.runtime.env), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     this.descendants = new SessionDescendants(this.child);
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
-    this.child.stderr.setEncoding('utf8'); this.child.stderr.on('data', (chunk: string) => this.stderr.push(chunk));
+    this.child.stderr.setEncoding('utf8'); this.child.stderr.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-32_768); });
     this.child.on('error', error => { this.failure = new Error(`${error.message}. Install Antigravity ACP and put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.`); this.acp.transport.close(error); });
     this.exited = new Promise(resolve => this.child.once('close', resolve));
     this.limit = spec.timeoutMs ?? timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
@@ -117,13 +119,13 @@ export class AntigravitySession implements AgentSession {
         selectAuthMethod: hello => this.runtime.env.GEMINI_API_KEY && hello.authMethods.some(method => method.id === 'gemini-api-key') ? 'gemini-api-key' : undefined,
         normalizeTool: antigravityTool, normalizeUsage: antigravityUsage,
         normalizeOptions: value => { this.configOptions = value; },
-        permissionAsk: antigravityAsk, permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${spec.squawkTools!.name}_${name}`) : []),
+        permissionAsk: antigravityAsk, permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${ANTIGRAVITY_MCP_NAME}_${name}`) : []),
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
         // agy sorts active workspaces to choose its command cwd. Extra roots can displace
         // the task checkout. Absolute handoff/temp paths remain available to shell tools.
         sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' },
           // Squawk owns workflows. The native tool also writes a built-in skill into cwd.
-          disabledTools: ['run_workflow'], eagerMcpServers: spec.squawkTools ? [spec.squawkTools.name] : [] } } }),
+          disabledTools: ['run_workflow'], eagerMcpServers: spec.squawkTools ? [ANTIGRAVITY_MCP_NAME] : [] } } }),
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
           this.providerError = failure ?? this.providerError;
@@ -256,10 +258,13 @@ export class AntigravitySession implements AgentSession {
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     await boot;
     await this.bridge?.close();
+    const unexpected = !this.requestedClose && (code !== 0 || this.busy);
+    if (this.timedOut || this.failure || unexpected || this.reportedFailure) {
+      await logAntigravityFailure(this.runtime.temp, 'session', this.failure ?? this.providerError ?? `Agent exited code ${code}`, this.runtime.env, this.stderr);
+    }
     await rm(this.runtime.temp, { recursive: true, force: true });
     if (this.timedOut) throw new Error(`Antigravity timed out after ${this.limit}ms`);
-    const stderr = antigravityStderr(this.stderr.join(''));
-    const unexpected = !this.requestedClose && (code !== 0 || this.busy);
+    const stderr = antigravityStderr(redactAntigravityDiagnostics(this.stderr, this.runtime.env));
     if (this.failure || unexpected) {
       const message = [this.failure?.message, `Antigravity exited code ${code}`, summarizeRunnerStderr(stderr)].filter(Boolean).join(': ');
       const error = new Error(message);

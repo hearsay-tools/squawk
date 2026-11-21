@@ -505,5 +505,16 @@ the runner skips it with a notice.
 Library `SyntaxWarning` startup noise is excluded from task failures. The memory cache separates accounts and
 rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
 auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.
+Before cleaning a failed task or catalog probe's private temporary folder, Squawk writes a
+bounded stderr and native INFO/ERROR log tails to the server log. It reads at most four regular
+log files, up to 16 KiB from each, plus up to 16 KiB of stderr. It redacts URLs and credentials
+with the sign-in diagnostic redaction. `HSQ_ANTIGRAVITY_DEBUG=1` enables native `--debug` traces
+for new sessions and probes; the default is off. macOS can write these traces only to stderr.
+Successful sessions remove their temporary logs without retaining a tail.
+Antigravity's private MCP bridge uses the short server alias `squawk` in its descriptor,
+eager server list and permission identities. The agent qualifies tools as
+`mcp_<server>_<tool>` and rejects names over 64 characters; the shared per-session server
+name can exceed that limit. Tool display uses native MCP metadata to retain the bare tool name.
+Other runners keep the shared descriptor name.
 The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same
 selected account home (ADR 0066).

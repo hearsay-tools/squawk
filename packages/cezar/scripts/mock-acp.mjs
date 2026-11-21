@@ -23,6 +23,7 @@ let active;
 let sessionParams = {};
 const steers = [];
 const latePrompts = [];
+let mcpTurns = 0;
 if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(process.argv.slice(2))}\n`);
 let serverId = 0;
 const pending = new Map();
@@ -108,6 +109,21 @@ function echoSteers(turn) {
   for (const text of steers.splice(0)) content('agent_message_chunk', text.startsWith('/probe-') ? `TRIGGER-FIXTURE ${text}` : `saw: ${text}`);
 }
 async function runtimeProbe(text, turn) {
+  if (text === 'mock:acp-mcp-name-limit') {
+    const server = sessionParams.mcpServers[0];
+    if (!sessionParams._meta?.antigravity?.eagerMcpServers?.includes(server.name)) throw new Error('Squawk MCP server is not eager');
+    const response = await fetch(server.url, { method: 'POST', headers: Object.fromEntries(server.headers.map(header => [header.name, header.value])), body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+    const { result } = await response.json();
+    if (++mcpTurns > 1 && result.tools.some(tool => !/^[a-zA-Z0-9_-]{1,64}$/.test(`mcp_${server.name}_${tool.name}`))) {
+      content('agent_message_chunk', 'Agent execution error: unexpected end of JSON input'); return true;
+    }
+    const toolCall = { toolCallId: `mcp-${mcpTurns}`, title: `${server.name}_cezar_ask`, kind: 'other', rawInput: {}, _meta: { mcp: { server: server.name, tool: 'cezar_ask' } } };
+    update({ sessionUpdate: 'tool_call', ...toolCall, status: 'pending' });
+    const answer = await request('session/request_permission', { sessionId, toolCall, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] });
+    if (answer.outcome?.optionId !== 'allow') throw new Error('Squawk MCP permission was not trusted');
+    update({ sessionUpdate: 'tool_call_update', toolCallId: toolCall.toolCallId, status: 'completed', rawOutput: 'Asked' });
+    content('agent_message_chunk', mcpTurns === 1 ? 'FIRST_OK' : 'SECOND_OK'); return true;
+  }
   if (text === 'mock:acp-detached-command') {
     // Native harness commands lead their own sessions. A stubborn one tests the
     // runner's cleanup after the harness exits, beyond normal cancellation.
