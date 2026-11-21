@@ -3,9 +3,12 @@
 Task webhooks are explicit per-run subscriptions. A run with `notify` on reports to every
 project webhook that has task notifications on, for the states that webhook selects. A project once had one webhook target;
 hearsay-tools/cezarion#1639 replaced it with a list. A legacy single `webhook` key reads as one
-webhook in that list. One store subscriber derives selected attention-state transitions rather
-than observing every lifecycle call site. Attach it before recovery so startup transitions are
-not mistaken for initial state.
+webhook in that list. One subscriber to the store's run lifecycle (`store.lifecycle`) derives
+selected attention-state transitions rather than observing every lifecycle call site: it compares
+the state of each `run.updated`'s `before` with the record's, and a run created opted in announces
+itself on `run.created`. The lifecycle replays nothing and a load publishes nothing, so a restart
+reports no run that did not change. Attach it before recovery so the transitions recovery writes
+are not missed.
 
 ## Consequences
 

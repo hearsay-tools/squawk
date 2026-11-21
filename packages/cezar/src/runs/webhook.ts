@@ -3,17 +3,18 @@ import { productEnv } from '../core/product-env.ts';
 import type { Home } from '../home/home.ts';
 import { randomUUID } from 'node:crypto';
 import type { ApiRun, RunStatus, WebhookTrigger } from '@open-mercato/cezar-contract';
-import { DEFAULT_WEBHOOK_TRIGGERS, deriveWebhookState, type AttentionInput } from '@open-mercato/cezar-contract/attention';
+import { DEFAULT_WEBHOOK_TRIGGERS, deriveWebhookState } from '@open-mercato/cezar-contract/attention';
 import { pendingAskOf, type PendingAsk } from '@open-mercato/cezar-contract/pending-ask';
 import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { projectStatus } from '../task-cli/projections.ts';
 import { registryEntry } from '../workspace/registry-entry.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';
 import { deriveRunContextEvents } from './event-history.ts';
+import type { RunLifecycleEvents, RunLifecycleSource } from './lifecycle.ts';
 import type { RunRecord, RunStore } from './store.ts';
 
 /**
- * Opted-in task webhooks from selected derived-state entries. One store subscriber queues
+ * Opted-in task webhooks from selected derived-state entries. One lifecycle subscriber queues
  * ordered deliveries per run and per webhook, with bounded retries, to every project webhook
  * with task notifications on (hearsay-tools/cezarion#1576): a slow or failing webhook never
  * delays another. Failures never change lifecycle; pending in-memory deliveries can be lost on
@@ -56,6 +57,15 @@ export interface DeliveryResult {
   ok: boolean;
   status?: number;
   error?: string;
+}
+
+/** The run store methods a task webhook and `sendAgentReport` call. */
+export interface TaskWebhookStore {
+  getRun: RunStore['getRun'];
+  sourceDataDir: RunStore['sourceDataDir'];
+  appendEvent: RunStore['appendEvent'];
+  updateRun: RunStore['updateRun'];
+  runOwnership: RunStore['runOwnership'];
 }
 
 export const WEBHOOK_TIMEOUT_MS = 10_000;
@@ -118,11 +128,6 @@ function retryable(result: DeliveryResult): boolean {
   return result.status >= 500 || result.status === 408 || result.status === 429;
 }
 
-interface Seen {
-  status: RunStatus;
-  state: WebhookTrigger | undefined;
-}
-
 interface Pending {
   event: TaskWebhookEvent;
   run: RunRecord;
@@ -132,8 +137,6 @@ interface Pending {
   occurredAt: string;
   message?: string | undefined;
 }
-
-const seenOf = (run: AttentionInput): Seen => ({ status: run.status, state: deriveWebhookState(run) });
 
 const sleepFor = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
@@ -156,36 +159,34 @@ async function deliverWithRetries(
 }
 
 export class TaskWebhook {
-  private readonly seen = new Map<string, Seen>();
   /** Per run: resolves the project's task webhooks in order, then fans out. */
   private readonly dispatches = new Map<string, Promise<void>>();
   /** Per run and webhook (`<runId>\0<webhookId>`): the ordered sends. */
   private readonly queues = new Map<string, Promise<void>>();
   private readonly seqs = new Map<string, number>();
-  private readonly onRun = (run: RunRecord) => this.observe(run);
-  private readonly onDeleted = (id: string) => this.seen.delete(id);
+  private readonly unsubscribe: () => void;
   private disposed = false;
 
+  /** The lifecycle replays nothing and a store load publishes nothing, so a webhook attached
+   *  after a restart reports only the writes after it, never the runs that already exist. */
   constructor(
-    private readonly store: RunStore,
+    lifecycle: RunLifecycleSource,
+    private readonly store: TaskWebhookStore,
     private readonly options: TaskWebhookOptions,
   ) {
-    // Seed from every run the store knows, so a context built after a restart does not report
-    // every existing run as a fresh transition — nor one whose `notify` turns on later. Off the
-    // list rows: a finished run is no longer in memory (#779).
-    for (const run of store.listRunSummaries().runs) this.seen.set(run.id, seenOf(run));
-    store.on('run', this.onRun);
-    store.on('deleted', this.onDeleted);
+    this.unsubscribe = lifecycle.subscribe({
+      'run.created': ({ run }) => this.created(run),
+      'run.updated': (update) => this.updated(update),
+    });
   }
 
   dispose(): void {
     this.disposed = true;
-    this.store.off('run', this.onRun);
-    this.store.off('deleted', this.onDeleted);
+    this.unsubscribe();
   }
 
   /** The hand-off delivery (`POST /runs/:id/notify` turning notify on). A run created with
-   *  `notify: true` gets the same delivery from `observe`. */
+   *  `notify: true` gets the same delivery from `created`. */
   subscribed(runId: string, message?: string): void {
     const run = this.store.getRun(runId);
     if (!run) return;
@@ -199,23 +200,21 @@ export class TaskWebhook {
     }
   }
 
-  private observe(run: RunRecord): void {
-    const before = this.seen.get(run.id);
-    const now = seenOf(run);
-    this.seen.set(run.id, now);
+  /** A run created opted in (the New task toggle, `cez task start`) announces itself once, as
+   *  `POST /runs/:id/notify` does, so the bot learns the id and link while the run is queued. */
+  private created(run: RunRecord): void {
     if (!run.notify || this.disposed) return;
-    const occurredAt = new Date().toISOString();
-    // A run created opted in (the New task toggle, `cez task start`) announces itself once, as
-    // `POST /runs/:id/notify` does, so the bot learns the id and link while the run is queued.
-    if (!before) {
-      this.enqueue({ event: 'task.subscribed', run, previousStatus: null, occurredAt });
-      return;
-    }
-    if (now.state === undefined || before.state === now.state) return;
+    this.enqueue({ event: 'task.subscribed', run, previousStatus: null, occurredAt: new Date().toISOString() });
+  }
+
+  private updated({ run, before }: RunLifecycleEvents['run.updated']): void {
+    if (!run.notify || this.disposed) return;
+    const state = deriveWebhookState(run);
+    if (state === undefined || deriveWebhookState(before) === state) return;
     // One delivery per entry: a question that parks the run is one `task.question`, not a
     // `task.status` to `waiting` beside it.
-    const event = now.state === 'needs-you' && asksQuestion(run) ? 'task.question' : 'task.status';
-    this.enqueue({ event, run, previousStatus: before.status, state: now.state, occurredAt });
+    const event = state === 'needs-you' && asksQuestion(run) ? 'task.question' : 'task.status';
+    this.enqueue({ event, run, previousStatus: before.status, state, occurredAt: new Date().toISOString() });
   }
 
   private enqueue(pending: Pending): void {
@@ -376,7 +375,7 @@ export interface AgentReportOptions {
   webhook: TaskWebhookTarget;
   input: { runId?: string | undefined; title?: string | undefined; message: string; data?: Record<string, unknown> | undefined };
   /** The reporting run's store, when the run is known: its thread gets a `webhook.report` line. */
-  store?: RunStore;
+  store?: TaskWebhookStore;
   origin?: string | undefined;
   dataDir?: string;
   dryRun?: boolean;
@@ -446,7 +445,7 @@ export async function sendAgentReport(options: AgentReportOptions): Promise<Agen
  * so startup transitions retain a usable cockpit URL.
  */
 export class TaskWebhooks {
-  private readonly hooks = new WeakMap<RunStore, TaskWebhook>();
+  private readonly hooks = new WeakMap<TaskWebhookStore, TaskWebhook>();
   private origin: string | undefined;
   private markReady!: () => void;
   private readonly ready = new Promise<void>((done) => { this.markReady = done; });
@@ -467,10 +466,10 @@ export class TaskWebhooks {
 
   /** Idempotent: a store already attached keeps its subscriber and its queue. `id` may be the
    *  reserved `default` alias, which resolves to the registry entry holding `root`. */
-  attach(project: { id: string; root: string; store: RunStore }): TaskWebhook {
+  attach(project: { id: string; root: string; store: TaskWebhookStore & { readonly lifecycle: RunLifecycleSource } }): TaskWebhook {
     const existing = this.hooks.get(project.store);
     if (existing) return existing;
-    const hook = new TaskWebhook(project.store, {
+    const hook = new TaskWebhook(project.store.lifecycle, project.store, {
       resolveProject: () => registryWebhooks(project.id, project.root, this.options.home),
       origin: () => this.origin,
       ready: () => this.ready,
@@ -481,7 +480,7 @@ export class TaskWebhooks {
     return hook;
   }
 
-  get(store: RunStore): TaskWebhook | undefined {
+  get(store: TaskWebhookStore): TaskWebhook | undefined {
     return this.hooks.get(store);
   }
 }
