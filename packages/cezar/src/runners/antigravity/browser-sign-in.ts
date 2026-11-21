@@ -3,11 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { inspect } from 'node:util';
 import type { RunnerBrowserSignIn } from '../../core/runner-definition.ts';
 import { profileEnv } from '../../core/agent-profiles.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { shellQuote } from '../../core/shell-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
+import { antigravityStderr } from './stderr.ts';
+import { BrowserSignInStartError, redactBrowserSignInDetails } from '../../core/browser-sign-in-error.ts';
+import { AcpRpcError } from '../acp/transport.ts';
 
 // No OAuth value is written by the helper. It forwards the browser argument to memory only.
 const helperSource = `const url = process.argv[2];
@@ -69,6 +73,7 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
     finally { await rm(helperDir, { recursive: true, force: true }); }
   })();
   let captureDeadline: NodeJS.Timeout | undefined;
+  let phase = 'setup';
   try {
     await writeFile(helper, helperSource, { mode: 0o700 });
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -80,7 +85,9 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
       SSH_CONNECTION: 'squawk-browser-sign-in',
       SQUAWK_AGY_BROWSER_CAPTURE: `http://127.0.0.1:${address.port}/${nonce}`,
     }, 300_000);
+    phase = 'initialize';
     await probe.acp.initialize();
+    phase = 'authenticate';
     const completion = probe.acp.authenticate('oauth-personal').finally(cleanup);
     // Observe rejection immediately, even if startup is still waiting for the browser helper.
     void completion.catch(() => {});
@@ -107,8 +114,19 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
       },
       close: async () => { url = ''; await cleanup(); },
     };
-  } catch {
+  } catch (error) {
     clearTimeout(captureDeadline); await cleanup();
-    throw new Error('Antigravity personal sign-in could not start. Check the installation and try again.');
+    const diagnostics = probe?.diagnostics;
+    console.error('Antigravity personal sign-in start failed:', redactBrowserSignInDetails(inspect(error)), diagnostics && {
+      ...diagnostics, stderr: redactBrowserSignInDetails(diagnostics.stderr),
+      spawnError: diagnostics.spawnError && redactBrowserSignInDetails(inspect(diagnostics.spawnError)),
+    });
+    let cause = `${phase}: ${error instanceof Error ? error.message : String(error)}`;
+    const transportClosed = error instanceof Error && error.message === 'ACP input/output transport closed';
+    if (!(error instanceof AcpRpcError) && diagnostics && (diagnostics.code !== null && (diagnostics.code !== 0 || transportClosed) || diagnostics.signal)) {
+      const line = redactBrowserSignInDetails(antigravityStderr(diagnostics.stderr)).split(/\r?\n/).find(line => line.trim());
+      cause = `Agent exited (${diagnostics.signal ?? `code ${diagnostics.code}`})${line ? `: ${line.trim()}` : ''}`;
+    }
+    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`);
   }
 }

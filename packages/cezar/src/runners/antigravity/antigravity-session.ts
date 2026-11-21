@@ -19,6 +19,7 @@ import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityStderr } from './stderr.ts';
+import { antigravityLaunchArgs } from './launch-args.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
@@ -66,7 +67,7 @@ export class AntigravitySession implements AgentSession {
   constructor(bin: string, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(bin, spec);
-    this.child = spawnSessionLeader(bin, ['--uid='], { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(bin, antigravityLaunchArgs(), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     this.descendants = new SessionDescendants(this.child);
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
