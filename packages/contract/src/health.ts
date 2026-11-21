@@ -33,9 +33,9 @@ export type ForgeInfo = z.infer<typeof forgeInfoSchema>;
 export const capabilitiesSchema = z.object({
   localHandoff: z.boolean(),
   /**
-   * `true` means this cockpit may edit Agent config and worktree setup: it is local, or the host
+   * `true` means this cockpit may edit Agent config and worktree setup, and complete browser sign-in: it is local, or the host
    * operator ran `cez remote-settings enable` for this cockpit's listen port and it binds loopback
-   * (hearsay-tools/cezarion#2428). Both persist commands the host runs.
+   * (hearsay-tools/cezarion#2428). The editors persist host commands; sign-in writes host credentials.
    */
   settingsAdmin: z.boolean(),
   /** `true` when `settingsAdmin` comes from the host switch on a remote cockpit, not from a local one. */

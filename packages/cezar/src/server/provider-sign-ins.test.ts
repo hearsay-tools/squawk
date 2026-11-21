@@ -5,6 +5,12 @@ import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
+import { resolveCapabilities } from './capabilities.ts';
+import { testHome } from '../home/test-home.testkit.ts';
+import { enableRemoteSettings, disableRemoteSettings } from '../remote-settings.ts';
+
+// Keep the old gate available to the red proof over the pre-fix source.
+const permissions = (local = true, admin = local) => ({ localHandoff: () => local, settingsAdmin: () => admin });
 
 it('joins account starts, erases the consent URL on completion and keeps other accounts independent', async () => {
   const manager = new ProviderSignIns();
@@ -44,12 +50,17 @@ it('expires a waiting flow and releases it even if native cleanup rejects', asyn
   } finally { vi.useRealTimers(); }
 });
 
-it('refuses all browser endpoints in hosted mode before resolving an account', async () => {
+it('refuses every browser endpoint without settings administration before resolving an account', async () => {
   registerRunner(antigravityRunner);
   const resolve = vi.fn(async () => ({ error: 'should not run' }));
-  const app = createProviderSignInRoutes({ localHandoff: () => false, resolve, auth: new ProviderAuthService(), invalidateModels: () => {} });
-  const response = await app.request('/providers/sign-in/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'antigravity', profileId: 'private-account' }) });
-  expect(response.status).toBe(409); expect(response.headers.get('cache-control')).toBe('no-store'); expect(resolve).not.toHaveBeenCalled();
+  const app = createProviderSignInRoutes({ ...permissions(false), resolve, auth: new ProviderAuthService(), invalidateModels: () => {} });
+  for (const [method, path] of [['POST', 'start'], ['GET', 'unknown'], ['POST', 'unknown/redirect'], ['DELETE', 'unknown']] as const) {
+    const response = await app.request(`/providers/sign-in/${path}`, { method });
+    expect(response.status).toBe(409);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('remote-settings enable') });
+  }
+  expect(resolve).not.toHaveBeenCalled();
 });
 
 it('starts, replays and observes the selected native account through the typed API', async () => {
@@ -62,7 +73,7 @@ it('starts, replays and observes the selected native account through the typed A
   const auth = new ProviderAuthService();
   vi.spyOn(auth, 'profileStatus').mockResolvedValue({ provider: 'antigravity', status: 'connected', profileId: 'work' });
   const invalidate = vi.fn();
-  const app = createProviderSignInRoutes({ localHandoff: () => true, auth, invalidateModels: invalidate,
+  const app = createProviderSignInRoutes({ ...permissions(), auth, invalidateModels: invalidate,
     resolve: async () => ({ profile: { id: 'work', provider: 'antigravity', label: 'Work', configDir: '/private/work', path: '/private/work', isDefault: false } }) });
   try {
     const started = await app.request('/providers/sign-in/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'antigravity', profileId: 'work' }) });
@@ -76,4 +87,41 @@ it('starts, replays and observes the selected native account through the typed A
     expect(invalidate).toHaveBeenCalledWith('antigravity');
     expect(auth.profileStatus).toHaveBeenCalledWith('antigravity', { id: 'work', configDir: '/private/work' });
   } finally { loader.mockRestore(); }
+});
+
+it.each([undefined, 'work'])('allows hosted sign-in for account %s only while its listen port has the host grant', async profileId => {
+  registerRunner(antigravityRunner);
+  const home = testHome();
+  const port = 4357;
+  await enableRemoteSettings(port, {}, new Date(), home);
+  const caps = () => resolveCapabilities({ CEZ_REMOTE: '1' }, '127.0.0.1', port, home);
+  const native = { url: 'https://accounts.google.com/o/oauth2/auth?state=fixture', completion: new Promise<void>(() => {}),
+    redirect: vi.fn(async () => {}), close: vi.fn(async () => {}) };
+  const create = vi.fn(async (_home?: string) => native);
+  const loader = vi.spyOn(antigravityRunner, 'loadBrowserSignIn').mockResolvedValue(create);
+  const resolve = vi.fn(async () => ({ profile: { id: profileId ?? 'default', provider: 'antigravity', label: 'Account',
+    configDir: '/private/account', path: '/private/account', isDefault: profileId === undefined } }));
+  const options = { localHandoff: () => caps().localHandoff,
+    settingsAdmin: () => caps().settingsAdmin, resolve, auth: new ProviderAuthService(), invalidateModels: () => {} };
+  const app = createProviderSignInRoutes(options);
+  try {
+    expect(caps()).toMatchObject({ localHandoff: false, settingsAdmin: true });
+    const started = await app.request('/providers/sign-in/start', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'antigravity', ...(profileId ? { profileId } : {}) }) });
+    expect(started.status).toBe(200);
+    const flow = providerSignInSchema.parse(await started.json());
+    expect(flow).toMatchObject({ state: 'waiting', url: native.url });
+    expect(create).toHaveBeenCalledWith(profileId ? '/private/account' : undefined);
+    expect((await app.request(`/providers/sign-in/${flow.id}`)).status).toBe(200);
+    expect((await app.request(`/providers/sign-in/${flow.id}/redirect`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ redirectUrl: 'http://127.0.0.1:5555/?state=fixture&code=fixture' }) })).status).toBe(200);
+    await disableRemoteSettings({}, port, home);
+    for (const [method, path] of [['POST', 'start'], ['GET', flow.id], ['POST', `${flow.id}/redirect`], ['DELETE', flow.id]] as const) {
+      expect((await app.request(`/providers/sign-in/${path}`, { method })).status).toBe(409);
+    }
+    expect(resolve).toHaveBeenCalledOnce();
+    await enableRemoteSettings(port, {}, new Date(), home);
+    expect((await app.request(`/providers/sign-in/${flow.id}`, { method: 'DELETE' })).status).toBe(200);
+    expect(native.close).toHaveBeenCalledOnce();
+  } finally { await disableRemoteSettings({}, port, home); loader.mockRestore(); }
 });

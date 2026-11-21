@@ -145,6 +145,12 @@ function AccountsPane({ data, runners }: { data: AgentProfilesResponse; runners:
           Agent accounts are managed from the machine that owns the checkout — this cockpit runs in
           hosted mode.
         </p>
+        {health.data?.capabilities?.settingsAdmin === true ? runners.runners.filter(entry => entry.browserLogin).map(entry => (
+          <div key={entry.id}>
+            <p>{entry.displayName} · discovered account</p>
+            <BrowserSignInButton provider={entry.id} label={entry.displayName} />
+          </div>
+        )) : null}
       </div>
     )
   }

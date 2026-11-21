@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ProviderSignIn } from '@open-mercato/cezar-api-client'
 import { cancelProviderSignIn, getProviderSignIn, replayProviderSignIn, startProviderSignIn } from '@/api/provider-sign-in'
-import { workspaceQueryKeys } from '@/api/queries'
+import { useHealth, workspaceQueryKeys } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -72,8 +72,16 @@ function useBrowserSignIn(provider: string, profileId?: string) {
   return { open, result, redirect, setRedirect, start, replay, status, error, close, connect }
 }
 
+function SignInInstructions({ local }: { local: boolean }) {
+  return local
+    ? 'After consent, sign-in completes here. If your browser cannot reach the host’s 127.0.0.1 address, paste the full failed redirect URL below.'
+    : 'Open the sign-in link in your browser. After Google consent, your browser will fail to open a 127.0.0.1 address. Copy that full address and paste it below to complete sign-in.'
+}
+
 export function BrowserSignInButton({ provider, profileId, label }: { provider: string; profileId?: string; label: string }) {
   const { open, result, redirect, setRedirect, start, replay, status, error, close, connect } = useBrowserSignIn(provider, profileId)
+  const capabilities = useHealth().data?.capabilities
+  if (capabilities?.settingsAdmin !== true) return null
   return <>
     <Button type="button" size="sm" data-action="account-connect" disabled={start.isPending} onClick={connect}>Connect</Button>
     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
@@ -85,7 +93,7 @@ export function BrowserSignInButton({ provider, profileId, label }: { provider: 
         {start.isPending ? <p role="status">Preparing sign-in…</p> : null}
         {result?.state === 'waiting' ? <div className="grid min-w-0 gap-3">
           <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-action underline">Open Google sign-in</a>
-          <p className="text-sm text-muted-foreground">After consent, sign-in completes here. If your browser cannot reach the host’s 127.0.0.1 address, paste the full failed redirect URL below.</p>
+          <p className="text-sm text-muted-foreground"><SignInInstructions local={capabilities.localHandoff} /></p>
           <label className="grid gap-2">Redirect URL
             <Input type="url" autoComplete="off" spellCheck={false} value={redirect} onChange={event => setRedirect(event.target.value)} />
           </label>

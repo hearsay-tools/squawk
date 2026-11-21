@@ -4,7 +4,7 @@ import { assertHomeWritable } from './home/install-marker.ts';
  *
  * A remote cockpit (`CEZ_REMOTE=1`) keeps Agent config and worktree setup read-only, because both
  * persist commands the host runs outside an agent's tool permissions. The host operator can grant
- * those two settings to the users one cockpit admits by running `cez remote-settings enable`, which
+ * those settings and browser sign-in (which writes host credentials) to the users one cockpit admits by running `cez remote-settings enable`, which
  * writes `~/.cezar/remote-settings/<port>.json` for that cockpit's listen port. The grant names a
  * port because cockpits on one host can share a home: the multi-domain installer runs one service
  * per domain, each with its own port and login, under the same user. No HTTP route writes these

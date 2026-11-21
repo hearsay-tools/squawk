@@ -4576,7 +4576,7 @@ export function createApp(deps: ServerDeps) {
     .route('/', healthRoutes).route('/', createRunnersRoutes())
     .route('/', createModelsRoutes({ capabilities, resolveWorkspaceProfile, modelCatalog, hostedProfileRefusal }))
     .route('/', providersRoutes)
-    .route('/', createProviderSignInRoutes({ localHandoff: () => capabilities().localHandoff, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))
+    .route('/', createProviderSignInRoutes({ settingsAdmin: () => capabilities().settingsAdmin, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))
     .route('/', projectsRoutes)
     .route('/', agentProfilesRoutes)
     .route('/', workspaceConfigRoutes)
