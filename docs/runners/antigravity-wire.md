@@ -26,7 +26,7 @@ turn with no cost. The system prompt does not survive `session/resume`.
 An earlier probe reported that `session/new` hangs. It does not. That probe called `select()` on
 the pipe and then a buffered `readline()`. agy writes `usage_update`, `available_commands_update`
 and the `session/new` response in one write, so the response stayed in Python's read buffer and
-`select()` never fired again. With a reader thread, `session/new` answers in 0.11–0.2 s.
+`select()` never fired again. With a reader thread, `session/new` answers in 0.11–0.2 s (0.173 s in `handshake.ndjson`).
 
 The agent's Python sources are inside the `.par` (a zip archive). Code references below name
 files under `google3/cloud/developer_experience/antigravity_extensions/acp_server/` in that
@@ -46,19 +46,19 @@ Each value is what agy 1.5.0 did, with the fixture or code that shows it. `Runne
 | `inputDelivery.consumption` | `unobservable` | No frame echoes the steered prompt or marks it read. |
 | `inputDelivery.acknowledgement` | `response` | The steered `session/prompt` gets its own response, before the running turn ends. See [Wire hazards](#wire-hazards). |
 | `inputDelivery.humanInputAtTurnEnd` | `held-when-late` | Observed: steers sent after the last tool result, and during the final answer, were read in the running turn. A prompt that arrives after the agent's step loop has ended runs as a turn of its own, so `held-when-late` is the safe value. Not observed: a steer lost at turn end. |
-| `nativePermission` | `in-turn` | `session/request_permission` comes only inside `session/prompt`. No frame arrived in 30 s after a background command ended its turn or in 45 s after a timer turn (`background-command.ndjson`, `schedule-timer.ndjson`). `prompt()` in `server.py` is the only reader of the step stream. |
+| `nativePermission` | `in-turn` | `session/request_permission` comes only inside `session/prompt`. After a background command's turn and after a timer's turn, neither side sent a frame until the client's next prompt, 30 s and 45 s later (`background-command.ndjson`, `schedule-timer.ndjson`); the command and the timer both ended inside their own turn. `prompt()` in `server.py` is the only reader of the step stream. |
 | `nativeAsk` | `answerable` | The `ask_question` tool shows as `tool_call` id `interaction_<8 hex>` plus `session/request_permission` whose options are the answers; the selected `optionId` is the answer (`interaction-question.ndjson`). |
 | `nativeSubagents` | `turn-held` | `invoke_subagent` completes at once; the child runs inside the same `session/prompt`, which ends after the child returns (`subagent.ndjson`). Background commands and `schedule` timers also hold the turn open. |
 | `childWork` | `none` | The child's tool calls arrive as top-level `tool_call` frames with no link to the `invoke_subagent` call. Child text is never streamed: `_stream_live_step` drops steps with a `parent_trajectory_id`. |
 | `hookEvents` | `none` | Hooks from `hooks.json` run in-process (`hooks.py`, `ExternalPreToolCallDecideHook` and others). No hook frame exists in the ACP stream. |
 | `humanPromptHold` | `acknowledgement` | The wire has no consumption signal; the prompt's own response is the only acknowledgement. |
-| `nativeTimerTool` | `null` | The built-in `schedule` tool exists, but it sends no `tool_call` frame, so no tool-call event can name it. Its timer fires inside the same held turn (`schedule-timer.ndjson`: the turn stayed open 20 s and ended after the timer). |
+| `nativeTimerTool` | `null` | The built-in `schedule` tool works, but its timer fires inside the same held turn (`schedule-timer.ndjson`: the turn stayed open 20 s and ended after the timer), so it never wakes an idle session. It also sends no `tool_call` frame. Squawk reads this field only to match a tool-call event by name (`workflows/run/turn-markers.ts`), and no event can carry `schedule`. |
 | `costReport` | `per-turn` | The `session/prompt` result carries this turn's tokens (`usage.totalTokens`, `inputTokens`, `outputTokens`, `thoughtTokens`, `cachedReadTokens`, `cachedWriteTokens`). No frame carries a cost. See [Usage](#usage). |
 | `claudeModelAliases` | `false` | Models are Gemini ids from `configOptions` (`config-options.ndjson`). |
 | `turnStart` | `on-write` | No frame starts a turn; the turn is the `session/prompt` request. The runner reports `turn.started` when it writes the request. |
 | `skillTriggerMidTurn` | `true` | `/probe-alpha` steered into a running turn ran the skill in that turn (`skill-midturn.ndjson`). |
 | `skillUnknownName` | `silent` | `/no-such-skill` gets a model reply that names the known skills; no error frame (`skill-slash.ndjson`). |
-| `skillsSeenBySession` | `live` | A skill folder added after `session/new` was listed in the next turn (`skills-live.ndjson`). The cache read of that turn was 0 tokens, so the prompt was rebuilt. |
+| `skillsSeenBySession` | `live` | The probe created `probe-alpha` before `session/new` and `probe-beta` on disk after six turns of the same session; the next turn listed both (`skills-live.ndjson`, that turn only: a folder change sends no frame). That turn read 0 cached tokens, while the turns before it read 12,000 or more. |
 
 ## Launch, detection and the host probe
 
@@ -114,9 +114,10 @@ An API error does not become a JSON-RPC error. It becomes an `agent_message_chun
 
 ## Usage
 
-- The `session/prompt` result's `usage` counts this turn's model calls only. Two turns in a row
-  give independent totals (`prompt-text-usage.ndjson`: 14,264 then 29,294 tokens, where the
-  second turn made two model calls).
+- The `session/prompt` result's `usage` sums this turn's model calls only, not the session so
+  far (`prompt-text-usage.ndjson`). The first turn made one call: 14,264 tokens, equal to its
+  `usage_update.used`. The second turn made two calls (`used` 14,585 then 14,709), and its
+  result counts 29,294, about their sum.
 - `usage_update {used, size}` comes after each model call and once at `session/new`
   (`used: 0`). `used` is the tokens now in the context window and `size` is the window
   (1,048,576). It is a snapshot of occupancy, not a running sum and not a cost.
@@ -268,9 +269,9 @@ in them. Frame order and timing are as recorded.
 | `resume-without-system-prompt.ndjson` | `session/resume` without `_meta`; the system prompt is gone |
 | `resume-with-system-prompt.ndjson` | `session/resume` with `_meta` resent |
 | `load-replay.ndjson` | `session/load` history replay |
-| `background-command.ndjson` | A background command that holds the turn, then 30 s of silence |
+| `background-command.ndjson` | A background command that holds the turn; no frame in the 30 s before the next prompt |
 | `subagent.ndjson` | `invoke_subagent` and the child's command |
-| `schedule-timer.ndjson` | A `schedule` timer that holds the turn, then 45 s of silence |
+| `schedule-timer.ndjson` | A `schedule` timer that holds the turn; no frame in the 45 s before the next prompt |
 | `mode-yolo.ndjson` | `session/set_mode yolo`, then a command with no permission request |
 | `config-options.ndjson` | `session/set_config_option` for effort, model and an unknown model |
 | `skills-live.ndjson` | A skill added after `session/new`, listed next turn |
