@@ -16,6 +16,8 @@ import { squawkToolNames } from '../../ci-wait/tool-catalog.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
+import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
 function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown>[] {
@@ -48,6 +50,7 @@ export class AntigravitySession implements AgentSession {
   private humanAcks = 0;
   private agentAcks = 0;
   private reportedFailure = false;
+  private failedTurn: Extract<UiEvent, { type: 'turn.completed' }> | undefined;
   private readonly humanHolds = new Set<symbol>();
   private readonly steers = new Map<symbol, boolean>();
   private configOptions: unknown;
@@ -73,6 +76,7 @@ export class AntigravitySession implements AgentSession {
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
   private emit(event: AgentEvent): void {
+    if (event.type === 'turn-end' && this.failedTurn) return;
     if (event.type === 'text') this.output.text += event.text;
     if (event.type === 'tool-call') this.output.toolCalls.push({ id: event.id, name: event.tool, input: event.input });
     if (event.type === 'session') this.output.sessionId = event.sessionId;
@@ -86,9 +90,15 @@ export class AntigravitySession implements AgentSession {
       onActivity: () => this.options.onActivity?.(),
       uiEvent: event => {
         if (event.type === 'turn.started' || event.type === 'turn.completed') {
+          if (event.type === 'turn.completed') {
+            for (const hold of this.humanHolds) if (!this.steers.has(hold)) this.humanHolds.delete(hold);
+          }
           for (const [hold, acknowledged] of this.steers) {
             if (event.type === 'turn.started' || acknowledged) { this.humanHolds.delete(hold); this.steers.delete(hold); }
           }
+        }
+        if (event.type === 'turn.completed' && event.stopReason === 'error' && !this.reportedFailure) {
+          this.failedTurn = event; return;
         }
         if (event.type === 'turn.completed' && event.usage) {
           this.output.tokensUsed += event.usage.total;
@@ -131,6 +141,7 @@ export class AntigravitySession implements AgentSession {
     if (!this.open) return;
     this.ready = true;
     void this.submit(openingContent(this.spec, !!this.spec.resume)).catch(error => this.fail(error));
+    this.options.onAgentInputReady?.();
   }
   private submit(content: ContentBlock[]): Promise<void> {
     this.clearAutoEnd();
@@ -203,8 +214,8 @@ export class AntigravitySession implements AgentSession {
   }
   private fail(error: unknown): void {
     if (!this.open) return;
-    this.failure = error instanceof Error ? error : new Error(String(error));
-    this.interrupt();
+    this.failure ??= error instanceof Error ? error : new Error(String(error));
+    this.end();
   }
   private clearAutoEnd(): void { clearTimeout(this.autoEnd); this.autoEnd = undefined; }
   private scheduleAutoEnd(): void {
@@ -230,9 +241,14 @@ export class AntigravitySession implements AgentSession {
     const stderr = this.stderr.join('').trim();
     const unexpected = !this.requestedClose && (code !== 0 || this.busy);
     if (this.failure || unexpected) {
-      const message = [this.failure?.message, `Antigravity exited code ${code}`, stderr].filter(Boolean).join(': ');
+      const message = [this.failure?.message, `Antigravity exited code ${code}`, summarizeRunnerStderr(stderr)].filter(Boolean).join(': ');
       const error = new Error(message);
       this.reportFailure(message);
+      if (stderr) this.emit({ type: 'note', message: `Antigravity stderr:\n${stderr}` });
+      if (this.failedTurn) {
+        const turn = this.failedTurn; this.failedTurn = undefined;
+        this.options.onUiEvent?.(turn); this.emit({ type: 'turn-end' });
+      }
       throw error;
     }
     this.emit({ type: 'done' }); this.output.text = this.output.text.trim(); return this.output;

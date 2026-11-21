@@ -11,7 +11,7 @@ export const ANTIGRAVITY_MOCK = {
   approvalDecisions: [{ pick: 'allow', echo: 'Approval response: allow' }, { pick: 'deny', echo: 'Approval response: deny' }],
   parityExemptions: {
     N8: { kind: 'scenario-unconstructible', reason: 'An idle ACP session/prompt starts a normalized turn on write and acknowledges only at completion; no idle ACK without turn-start exists (recording prompt-text-usage, docs/runners/antigravity-wire.md).' },
-    F9: { kind: 'scenario-unconstructible', reason: 'ACP idle session/prompt response completes the turn; acknowledgement cannot precede a later answer (recording prompt-text-usage, docs/runners/antigravity-wire.md).' },
+    F9: { kind: 'scenario-unconstructible', reason: 'ACP idle session/prompt response completes the turn; acknowledgement and turn completion cannot be separated (recording prompt-text-usage, docs/runners/antigravity-wire.md).' },
     F8: { kind: 'scenario-unconstructible', reason: 'ACP idle session/prompt response completes its turn; it cannot acknowledge a nudge without completing a turn (recording prompt-text-usage, docs/runners/antigravity-wire.md).' },
     UI1: { kind: 'capability-absent', reason: 'Antigravity ACP 1.5.0 sends no plan update; /plan writes an artifact instead (docs/runners/antigravity-wire.md, Gaps that need a parity exemption).' },
     D1: { kind: 'capability-absent', reason: 'Antigravity ACP 1.5.0 has no native cross-session messaging tool to disable.' },

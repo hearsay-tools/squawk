@@ -98,6 +98,7 @@ it('holds human steering after its early ACK until the carrying turn completes',
   { autoEndAfterFirstTurn: true, onAgentInputReady: () => { ready++; } });
   try {
     await waitFor(() => events.some(event => event.type === 'tool-call'));
+    ready = 0;
     expect(session.sendMessage([{ type: 'text', text: 'human steer' }])).toBe(true);
     expect(session.holdsHumanInput()).toBe(true);
     await waitFor(() => ready > 0); // The early prompt response has arrived.
@@ -138,6 +139,7 @@ it.each(['discard', 'close', 'reject'] as const)('releases a human hold on %s', 
     const settled = session.result.catch(() => undefined);
     try {
       await waitFor(() => events.some(event => event.type === 'tool-call'));
+      ready = 0;
       expect(session.sendMessage([{ type: 'text', text: action === 'reject' ? 'reject-owned-turn' : 'human input' }])).toBe(true);
       expect(session.holdsHumanInput()).toBe(true);
       if (action === 'discard') session.discardQueuedMessages();

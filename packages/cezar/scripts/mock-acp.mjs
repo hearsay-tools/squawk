@@ -87,7 +87,8 @@ async function prompt(frame) {
     const failure = await failureControl?.failureFor(text);
     if (failure) content('agent_message_chunk', `Agent execution error: ${PI_FAILURES[failure]}`);
     else await runPrompt(answerNudge(text), turn);
-    echoSteers(turn);
+    if (failure) steers.length = 0;
+    else echoSteers(turn);
     if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
     if (!turn.mainReplied) acknowledge(frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text);
   } catch (error) { write({ id: frame.id, error: { code: -32603, message: error.message } }); }
