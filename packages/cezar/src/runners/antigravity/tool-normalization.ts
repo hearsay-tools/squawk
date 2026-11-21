@@ -11,6 +11,10 @@ export function antigravityNativeToolName(update: Record<string, unknown>): stri
   if (typeof update.name === 'string') return update.name;
   return typeof update.title === 'string' ? update.title.replace(/^(Run |Running )/, '').replace(/\?$/, '') : '';
 }
+/** Native MCP metadata supplies display labels and server-qualified permission identity. */
+export function antigravityMcpTool(update: Record<string, unknown>): { server: string; tool: string } | undefined {
+  return z.object({ mcp: z.object({ tool: z.string(), server: z.string() }) }).safeParse(update._meta).data?.mcp;
+}
 export function antigravityTool(update: Record<string, unknown>, previous?: UiToolItem): Partial<Omit<UiToolItem, 'id' | 'kind'>> {
   const input = fields.safeParse(update.rawInput).data;
   const title = typeof update.title === 'string' ? update.title : previous?.title ?? '';
@@ -20,8 +24,8 @@ export function antigravityTool(update: Record<string, unknown>, previous?: UiTo
   const cwd = input?.Cwd ?? input?.working_dir;
   const result: Partial<Omit<UiToolItem, 'id' | 'kind'>> = {};
   if (name) result.name = name;
-  const mcp = z.object({ mcp: z.object({ tool: z.string(), server: z.string() }) }).safeParse(update._meta);
-  if (mcp.success) { result.name = mcp.data.mcp.tool; result.title = mcp.data.mcp.tool; }
+  const mcp = antigravityMcpTool(update);
+  if (mcp) { result.name = mcp.tool; result.title = mcp.tool; }
   if (command !== undefined) result.input = { command, ...(cwd === undefined ? {} : { cwd }) };
   Object.assign(result, toolOutput(update.rawOutput));
   if (name === 'Task') {

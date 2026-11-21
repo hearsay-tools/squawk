@@ -11,6 +11,7 @@ import { AntigravityRunner } from './antigravity-runner.ts';
 import { antigravityRunner } from './definition.ts';
 import { pidExists } from '../../core/process-stat.ts';
 import { permissionPolicy, antigravityAsk } from './permissions.ts';
+import { antigravityTool } from './tool-normalization.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
 registerRunner(antigravityRunner);
 const dirs: string[] = [];
@@ -249,4 +250,16 @@ it('maps distinct shortened native ask labels back to their opaque option IDs', 
   expect(labels.every(label => label.length <= 60)).toBe(true);
   expect(ask.answer(`Question: ${labels[0]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'red' } });
   expect(ask.answer(`Question: ${labels[1]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'blue' } });
+});
+
+it.each(['Read', 'Bash'])('requires a server-qualified grant for an MCP tool named %s', name => {
+  const request: AcpPermissionRequest = { sessionId: 'session',
+    toolCall: { toolCallId: 'external-call', title: `external_${name}`, kind: 'execute', rawInput: {},
+      _meta: { mcp: { server: 'external', tool: name } } },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] };
+  expect(antigravityTool(request.toolCall)).toMatchObject({ name, title: name });
+  expect(permissionPolicy({ kind: 'explicit', tools: [name] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  expect(permissionPolicy({ kind: 'explicit', tools: [`other_${name}`] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  expect(permissionPolicy({ kind: 'explicit', tools: [`external_${name}`], bashAllowlist: ['git status'] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+  expect(permissionPolicy({ kind: 'inherited', tools: [`mcp__external__${name}`] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
 });

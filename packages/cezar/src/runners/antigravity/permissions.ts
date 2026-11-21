@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ToolGrant } from '../../core/agent-runner.ts';
 import { unknownToolGrant } from '../../core/agent-runner-values.ts';
 import type { AcpAsk, AcpAskRefusal, AcpPermissionOutcome, AcpPermissionRequest } from '../acp/protocol.ts';
-import { antigravityTool, antigravityNativeToolName } from './tool-normalization.ts';
+import { antigravityTool, antigravityNativeToolName, antigravityMcpTool } from './tool-normalization.ts';
 
 export function antigravityAsk(request: AcpPermissionRequest): AcpAsk | AcpAskRefusal | undefined {
   if (!request.toolCall.toolCallId.startsWith('interaction_')) return undefined;
@@ -56,10 +56,11 @@ export function permissionPolicy(grant: ToolGrant, request: AcpPermissionRequest
   const tool = antigravityTool(request.toolCall);
   const names = allowedTools(grant);
   const prefixes = grant.bashAllowlist ?? [];
-  const name = tool.name ?? antigravityNativeToolName(request.toolCall);
-  const native = antigravityNativeToolName(request.toolCall);
+  const mcp = antigravityMcpTool(request.toolCall);
+  const native = mcp ? `${mcp.server}_${mcp.tool}` : antigravityNativeToolName(request.toolCall);
+  const name = mcp ? native : tool.name ?? native;
   const named = names === undefined || names.some(allowed => allowed === name || allowed === native || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === native);
-  const permitted = named && (tool.name !== 'Bash' || commandAllowed(tool.input, prefixes));
+  const permitted = named && (!!mcp || tool.name !== 'Bash' || commandAllowed(tool.input, prefixes));
   // An unset grant leaves native approvals in control, as on the other adapters.
   if ((names === undefined && !prefixes.length) || (!permitted && approvalGate)) return undefined;
   return selected(request, permitted);
