@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -77,6 +77,26 @@ it('changes catalog identity for account auth, key and build changes', async () 
   expect(await key()).not.toBe(api);
   expect(await antigravityModelCatalogKey({ accountHome: join(dir, 'other') })).not.toBe(await key());
   expect((await readFile(versionLog, 'utf8')).trim().split('\n')).toHaveLength(2);
+});
+
+it.each(['api-key', 'oauth'].flatMap(auth => [false, true].map(fails => ({ auth, fails }))))('leaves no discovery state in the $auth account (failure=$fails)', async ({ auth, fails }) => {
+  const dir = await root(); const accountHome = join(dir, 'account'); const authDir = join(accountHome, 'antigravity-acp');
+  await mkdir(join(authDir, 'conversations'), { recursive: true });
+  await writeFile(join(authDir, 'conversations/existing.json'), 'keep');
+  const settings = '{"auth":{"type":"oauth-personal"}}'; const token = '{"mock":"oauth-fixture"}';
+  await writeFile(join(authDir, 'settings.json'), settings); await writeFile(join(authDir, 'acp_token.json'), token);
+  vi.stubEnv('GEMINI_API_KEY', auth === 'api-key' ? 'fixture-key' : ''); vi.stubEnv('GOOGLE_API_KEY', '');
+  const log = join(dir, 'homes'); vi.stubEnv('AGY_MOCK_HOME_LOG', log);
+  vi.stubEnv('AGY_MOCK_BAD_MODELS', fails ? '1' : '');
+  const discovery = discoverAntigravityModels({ cwd: dir, accountHome });
+  if (fails) await expect(discovery).rejects.toThrow('Antigravity returned no models');
+  else expect(await discovery).toHaveLength(2);
+  expect(await readdir(join(authDir, 'conversations'))).toEqual(['existing.json']);
+  expect(await readFile(join(authDir, 'settings.json'), 'utf8')).toBe(settings);
+  expect(await readFile(join(authDir, 'acp_token.json'), 'utf8')).toBe(token);
+  const probeHome = (await readFile(log, 'utf8')).trim();
+  expect(probeHome).not.toBe(accountHome);
+  await expect(access(probeHome)).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
 it('explains API-key presence without requiring a folder or treating business auth as supported', async () => {

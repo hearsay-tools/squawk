@@ -3,7 +3,7 @@
 import { createInterface } from 'node:readline';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 if (process.argv.includes('--version')) {
   if (process.env.AGY_MOCK_VERSION_LOG) appendFileSync(process.env.AGY_MOCK_VERSION_LOG, 'version\n');
@@ -44,7 +44,17 @@ lines.on('line', line => {
     { id: 'oauth-personal', name: 'Personal' }, { id: 'gemini-api-key', name: 'API key' },
   ] });
   else if (frame.method === 'authenticate') void authenticate(frame);
-  else if (frame.method === 'session/new') write(frame.id, { sessionId: 'catalog-fixture', configOptions: configs('opaque/flash') });
+  else if (frame.method === 'session/new') {
+    if (!process.env.GEMINI_API_KEY) {
+      readFileSync(join(process.env.GEMINI_HOME, 'antigravity-acp/settings.json'));
+      readFileSync(join(process.env.GEMINI_HOME, 'antigravity-acp/acp_token.json'));
+      writeFileSync(join(process.env.GEMINI_HOME, 'antigravity-acp/acp_token.json'), '{"mock":"refreshed"}');
+    }
+    const folder = join(process.env.GEMINI_HOME, 'antigravity-acp/conversations');
+    mkdirSync(folder, { recursive: true }); writeFileSync(join(folder, 'catalog-fixture.json'), '{}');
+    if (process.env.AGY_MOCK_HOME_LOG) appendFileSync(process.env.AGY_MOCK_HOME_LOG, `${process.env.GEMINI_HOME}\n`);
+    write(frame.id, { sessionId: 'catalog-fixture', configOptions: process.env.AGY_MOCK_BAD_MODELS ? [] : configs('opaque/flash') });
+  }
   else if (frame.method === 'session/set_config_option') write(frame.id, { configOptions: configs(frame.params.value) });
 });
 lines.on('close', () => { listener?.close(); process.exit(0); });

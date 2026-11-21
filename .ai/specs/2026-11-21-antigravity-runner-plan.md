@@ -115,6 +115,7 @@ build and credential digest. Other runners keep their existing login and admissi
 | Existing native instruction or skill link | Preserve it; only absent account links point to default Gemini sources |
 | Source native skill absent or removed | A dangling source link remains; native catalog reads current sources |
 | API key connected, account folder absent | Connected with an environment-source hint; no folder/Connect promise |
+| Account status not known yet | Neutral Checking state; no folder warning or sign-in action before the result |
 | Personal OAuth absent | Connect shows consent and accepts only the captured callback origin/path/state and one code |
 | Remote browser cannot reach loopback | Pasted callback is replayed on the host without following its response redirect |
 | Wrong callback, repeat code or wrong state | Refuse without calling the listener; one accepted replay per flow |
@@ -139,7 +140,11 @@ build and credential digest. Other runners keep their existing login and admissi
 
 | Case | Result |
 | --- | --- |
-| Picker first opens | Short-lived session/new in private temp cwd, no session/prompt/model turn |
+| Picker first opens | Short-lived session/new in private temp cwd and disposable authenticated Gemini home; no session/prompt/model turn or retained account conversation |
+| Discovery completes or fails | Remove the private home and probe process cwd; original settings, tokens and conversations stay unchanged |
+| Selected model advertises effortLevels: [] | Show only auto; clear a carried explicit effort before submission |
+| Effort metadata absent | Preserve generic effort choices |
+| Caller requests effort but selected model has no thought_level | Skip effort with a visible notice and run the prompt |
 | Same account/build/auth inside TTL | Reuse the cached model/thinking list |
 | Account, build label or auth changes | Discard that account's old identity entry and discover again |
 | Auth invalidated during identity read | Recheck identity before consulting the cache |

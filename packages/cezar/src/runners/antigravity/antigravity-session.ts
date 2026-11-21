@@ -18,6 +18,7 @@ import { productEnv } from '../../core/product-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
+import { antigravityStderr } from './stderr.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
@@ -142,8 +143,8 @@ export class AntigravitySession implements AgentSession {
     if (this.spec.model) await this.acp.setConfigOption('model', this.spec.model);
     if (this.spec.effort) {
       const option = configSchema.parse(this.configOptions).find(option => option.category === 'thought_level');
-      if (!option) throw new Error('Antigravity has no thought_level config option');
-      await this.acp.setConfigOption(option.id, this.spec.effort);
+      if (option) await this.acp.setConfigOption(option.id, this.spec.effort);
+      else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} has no effort setting; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
     this.ready = true;
@@ -255,7 +256,7 @@ export class AntigravitySession implements AgentSession {
     await this.bridge?.close();
     await rm(this.runtime.temp, { recursive: true, force: true });
     if (this.timedOut) throw new Error(`Antigravity timed out after ${this.limit}ms`);
-    const stderr = this.stderr.join('').trim();
+    const stderr = antigravityStderr(this.stderr.join(''));
     const unexpected = !this.requestedClose && (code !== 0 || this.busy);
     if (this.failure || unexpected) {
       const message = [this.failure?.message, `Antigravity exited code ${code}`, summarizeRunnerStderr(stderr)].filter(Boolean).join(': ');

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { effortLevelSchema } from '@open-mercato/cezar-contract/effort';
@@ -10,6 +10,7 @@ import { productEnv } from '../../core/product-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { storedPersonalOAuth } from './login-probe.ts';
 import { antigravityBuildLabel } from './build-label.ts';
+import { antigravityCatalogHome } from './catalog-home.ts';
 
 const optionSchema = z.object({ value: z.string(), name: z.string() });
 const configsSchema = z.array(z.object({ id: z.string(), category: z.string().optional(), options: z.array(optionSchema).optional() }));
@@ -35,11 +36,13 @@ export async function discoverAntigravityModels(options: { cwd: string } & Model
   if (!authEnv.GEMINI_API_KEY && !authEnv.GOOGLE_API_KEY && !await storedPersonalOAuth(authEnv).catch(() => false)) {
     throw new Error('Sign in to Antigravity before discovering models');
   }
-  let configs: unknown;
-  const probe = new AntigravityProbe(executable(), { ...accountEnv, BROWSER: '/bin/false', SSH_CONNECTION: 'squawk-model-discovery' }, 20_000, {
-    normalizeOptions: value => { configs = value; },
-  });
+  const home = await antigravityCatalogHome(authEnv);
+  let probe: AntigravityProbe | undefined;
   try {
+    let configs: unknown;
+    probe = new AntigravityProbe(executable(), { ...profileEnv('antigravity', home), BROWSER: '/bin/false', SSH_CONNECTION: 'squawk-model-discovery' }, 20_000, {
+      normalizeOptions: value => { configs = value; },
+    });
     await probe.acp.initialize();
     // Stored personal OAuth is inferred by agy. Never start an interactive flow for discovery.
     if (probe.env.GEMINI_API_KEY) await probe.acp.authenticate('gemini-api-key');
@@ -59,5 +62,8 @@ export async function discoverAntigravityModels(options: { cwd: string } & Model
       result.push({ id: model.value, label: model.name, description: 'From Antigravity', effortLevels });
     }
     return result;
-  } finally { await probe.close(); }
+  } finally {
+    try { await probe?.close(); }
+    finally { await rm(home, { recursive: true, force: true }); }
+  }
 }

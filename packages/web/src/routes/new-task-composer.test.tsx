@@ -188,7 +188,7 @@ describe('picker data flows', () => {
     expect(document.querySelector('[data-slot="effort-pill"]')).not.toBeNull()
   })
 
-  it('filters effort by model and resets an unsupported pick before submission', async () => {
+  it.each([{ levels: ['low'] }, { levels: [] }])('resets unsupported effort for discovered levels $levels before submission', async ({ levels }) => {
     serve({
       health: HEALTH_MULTI,
       providerStatus: PROVIDERS_MULTI,
@@ -196,7 +196,7 @@ describe('picker data flows', () => {
         runner: 'codex',
         models: [
           { id: 'gpt-wide', label: 'gpt-wide', description: '', effortLevels: ['high', 'xhigh'] },
-          { id: 'gpt-lean', label: 'gpt-lean', description: '', effortLevels: ['low'] },
+          { id: 'gpt-lean', label: 'gpt-lean', description: '', effortLevels: levels },
         ],
         source: 'live',
         stale: false,
@@ -233,6 +233,9 @@ describe('picker data flows', () => {
     options = await screen.findAllByRole('menuitemradio')
     fireEvent.click(options.find((option) => option.textContent?.includes('gpt-lean')) as HTMLElement)
     await waitFor(() => expect(effort.textContent).toContain('auto'))
+    fireEvent.pointerDown(effort)
+    expect(await screen.findAllByRole('menuitemradio')).toHaveLength(1 + levels.length)
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
 
     fireEvent.change(textarea(), { target: { value: 'use supported effort only' } })
     await startTask()

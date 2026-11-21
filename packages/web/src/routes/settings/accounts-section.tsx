@@ -406,10 +406,10 @@ function AccountSignIn({ account, runners, status }: {
 }) {
   const connect = useConnectAgentAccount()
   return <>
-          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.browserLogin ? (
+          {status && status.status !== 'connected' && runnerEntry(runners, account.provider)?.browserLogin ? (
             <BrowserSignInButton provider={account.provider} {...(account.isDefault ? {} : { profileId: account.id })} label={account.label} />
           ) : null}
-          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
+          {status && status.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
             <Button
               type="button"
               size="sm"
@@ -479,7 +479,7 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
                 yet. Showing `unknown` here would claim a verification that never ran. */}
             <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
             <span data-slot="account-status">{presentation?.label ?? 'Checking…'}</span>
-            {status?.requiresAccountHome === false ? null : !account.exists ? (
+            {!status || status.requiresAccountHome === false ? null : !account.exists ? (
               <span data-slot="account-missing">— folder not created yet; Connect will make it</span>
             ) : !account.looksValid ? (
               <span data-slot="account-unrecognised">

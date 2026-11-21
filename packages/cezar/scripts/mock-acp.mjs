@@ -226,6 +226,17 @@ function mountBuiltinSkills(params) {
   mkdirSync(folder, { recursive: true }); writeFileSync(join(folder, 'SKILL.md'), 'Native generated skill');
 }
 
+function setConfig(frame) {
+  if (antigravity && frame.params.configId === 'model' && frame.params.value.startsWith('mock-')) {
+    console.error('/archive/google/genai/types.py:18270: SyntaxWarning: invalid escape sequence');
+    if (frame.params.value === 'mock-invalid-model') {
+      write({ id: frame.id, error: { code: -32602, message: 'Requested model is unavailable' } }); return;
+    }
+    if (frame.params.value === 'mock-no-thinking') { reply(frame.id, { configOptions: [] }); return; }
+  }
+  reply(frame.id, { configOptions: antigravity ? [{ id: 'thinking_level', category: 'thought_level', currentValue: frame.params.configId === 'thinking_level' ? frame.params.value : 'medium' }] : [{ id: frame.params.configId, currentValue: frame.params.value }] });
+}
+
 async function handle(frame) {
   if (process.env.CEZ_MOCK_STDIN_FILE) appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${recorded(frame)}\n`);
   if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${recorded(frame)}\n`);
@@ -240,7 +251,7 @@ async function handle(frame) {
       update({ sessionUpdate: 'usage_update', used: 0, size: 1048576 });
       reply(frame.id, { sessionId, configOptions: [{ id: 'thinking_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/resume': case 'session/load': context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thinking_level', category: 'thought_level', currentValue: 'medium' }] }); break;
-    case 'session/set_config_option': reply(frame.id, { configOptions: antigravity ? [{ id: 'thinking_level', category: 'thought_level', currentValue: frame.params.configId === 'thinking_level' ? frame.params.value : 'medium' }] : [{ id: frame.params.configId, currentValue: frame.params.value }] }); break;
+    case 'session/set_config_option': setConfig(frame); break;
     case 'session/prompt': await prompt(frame); break;
     case 'session/cancel': active?.cancel(); break;
     default: if (frame.id !== undefined) write({ id: frame.id, error: { code: -32601, message: `Unknown method: ${frame.method}` } });
