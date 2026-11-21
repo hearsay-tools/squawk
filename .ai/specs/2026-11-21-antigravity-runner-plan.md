@@ -145,6 +145,7 @@ build and credential digest. Other runners keep their existing login and admissi
 | Selected model advertises effortLevels: [] | Show only auto; clear a carried explicit effort before submission |
 | Effort metadata absent | Preserve generic effort choices |
 | Caller requests effort but selected model has no thought_level | Skip effort with a visible notice and run the prompt |
+| Caller requests a level excluded by the selected model's thought_level options | Skip that effort with a visible notice and use the model default |
 | Same account/build/auth inside TTL | Reuse the cached model/thinking list |
 | Account, build label or auth changes | Discard that account's old identity entry and discover again |
 | Auth invalidated during identity read | Recheck identity before consulting the cache |

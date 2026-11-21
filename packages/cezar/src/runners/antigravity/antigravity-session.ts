@@ -143,8 +143,9 @@ export class AntigravitySession implements AgentSession {
     if (this.spec.model) await this.acp.setConfigOption('model', this.spec.model);
     if (this.spec.effort) {
       const option = configSchema.parse(this.configOptions).find(option => option.category === 'thought_level');
-      if (option) await this.acp.setConfigOption(option.id, this.spec.effort);
-      else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} has no effort setting; ignoring requested effort ${this.spec.effort}.` });
+      const levels = z.array(z.object({ value: z.string() })).safeParse(option?.options);
+      if (option && (!levels.success || levels.data.some(level => level.value === this.spec.effort))) await this.acp.setConfigOption(option.id, this.spec.effort);
+      else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} ${option ? `does not offer effort ${this.spec.effort}` : 'has no effort setting'}; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
     this.ready = true;

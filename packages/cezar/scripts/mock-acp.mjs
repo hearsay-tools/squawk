@@ -233,6 +233,9 @@ function setConfig(frame) {
       write({ id: frame.id, error: { code: -32602, message: 'Requested model is unavailable' } }); return;
     }
     if (frame.params.value === 'mock-no-thinking') { reply(frame.id, { configOptions: [] }); return; }
+    if (frame.params.value === 'mock-low-thinking') {
+      reply(frame.id, { configOptions: [{ id: 'thinking_level', category: 'thought_level', options: [{ value: 'low', name: 'Low' }] }] }); return;
+    }
   }
   reply(frame.id, { configOptions: antigravity ? [{ id: 'thinking_level', category: 'thought_level', currentValue: frame.params.configId === 'thinking_level' ? frame.params.value : 'medium' }] : [{ id: frame.params.configId, currentValue: frame.params.value }] });
 }

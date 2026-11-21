@@ -486,7 +486,8 @@ and token files when needed, then removes the copy and every probe conversation 
 The account's settings, credentials and conversation list stay unchanged. The probe reads `model`
 plus each model's `thinking_level` options. No prompt/model turn runs. An explicit empty effort
 list means auto only in every picker; missing metadata keeps the generic fallback. If a caller
-still requests effort for a model without `thought_level`, the runner skips it with a notice.
+still requests effort for a model without `thought_level`, or a level its options exclude,
+the runner skips it with a notice.
 Library `SyntaxWarning` startup noise is excluded from task failures. The memory cache separates accounts and
 rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
 auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.

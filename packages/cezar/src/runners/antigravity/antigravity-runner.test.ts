@@ -48,12 +48,12 @@ it('routes a native interaction answer to its opaque option id', async () => {
   expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"1"}}' });
 });
 
-it.each([false, true])('ignores an effort absent from the selected model options and completes (resume=%s)', async resume => {
+it.each([false, true].flatMap(resume => ['mock-no-thinking', 'mock-low-thinking'].map(model => ({ resume, model }))))('ignores an effort absent from $model options and completes (resume=$resume)', async ({ resume, model }) => {
   const cwd = await workspace(); const wire = join(cwd, 'wire'); const events: AgentEvent[] = [];
   const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'inspect the working tree',
-    model: 'mock-no-thinking', effort: 'high', ...(resume ? { resume: true, sessionId: 'saved' } : {}), env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
+    model, effort: 'high', ...(resume ? { resume: true, sessionId: 'saved' } : {}), env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
   expect(result.text).not.toBe('');
-  expect(events).toContainEqual({ type: 'note', message: 'Antigravity model mock-no-thinking has no effort setting; ignoring requested effort high.' });
+  expect(events).toContainEqual({ type: 'note', message: `Antigravity model ${model} ${model === 'mock-no-thinking' ? 'has no effort setting' : 'does not offer effort high'}; ignoring requested effort high.` });
   expect(events.some(event => event.type === 'error')).toBe(false);
   const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   expect(frames.some(frame => frame.method === 'session/prompt')).toBe(true);
