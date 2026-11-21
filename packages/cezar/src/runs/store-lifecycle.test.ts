@@ -282,7 +282,7 @@ describe('before holds the record as it was at the entry of each write path', ()
   it('a heal of a cold row by the repository handle: what the load changed is in before, the scope is the change', () => {
     const { dir, store } = setup();
     const foreign = 'https://github.com/other/repo/pull/5';
-    // The load restores the issue the task names (#3) over the stored 9: a load change, not this write's.
+    // The load restores the issue number the task names (3) over the stored 9: a load change, not this write's.
     seedRuns(dir, [{ id: 'cold', title: 't', workflow: 'w', task: 'fix #3', status: RUN_STATUS.done, issueNumber: 9, markerRefs: { issue: 9 },
       createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
       referencedPullRequestUrl: foreign, referencedPrCandidates: [foreign] }]);
