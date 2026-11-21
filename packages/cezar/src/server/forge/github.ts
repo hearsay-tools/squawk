@@ -10,6 +10,7 @@ import { matchesGithubPullRequest, mergedPullRequestObservations } from '../../m
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { githubRequestGate } from './github-request-gate.ts';
+import { refStatusQuery } from './github-ref-status-query.ts';
 import { mergedPullRequestChunk } from './github-merged-pr-chunk.ts';
 import { gh, githubContext, parseOwnerName, type GithubContext } from './github-cli.ts';
 import { canonicalRepoRef, discoverRepoHandle, forgetRepoHandle, forgettingNameOnMiss, resolveRepoHandle, sharedRepoHandle } from './github-repo-handle.ts';
@@ -1646,20 +1647,6 @@ const ghRefStatusIssueSchema = z.object({ state: z.string(), stateReason: z.stri
 // strips unknown keys, so a PR node matched by the issue arm would come back with `isDraft` and
 // `commits` silently removed.
 const ghRefStatusSchema = z.record(z.string(), z.unknown());
-
-/**
- * Query issueOrPullRequest once per number and use __typename for the actual kind. Include
- * branch-work and review timestamps for freshness decisions.
- */
-function refStatusQuery(numbers: number[]): string {
-  const aliases = numbers
-    .map(
-      (n, i) =>
-        `    r${i}: issueOrPullRequest(number: ${n}) { __typename ... on PullRequest { url mergedAt state isDraft reviewDecision mergeable commits(last: 1) { nodes { commit { committedDate parents(first: 1) { totalCount nodes { committedDate } } statusCheckRollup { state } } } } reviews(last: 1, states: CHANGES_REQUESTED) { nodes { submittedAt } } reviewRequests(first: 20) { totalCount nodes { requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Team { slug } } } } timelineItems(last: 20, itemTypes: [REVIEW_REQUESTED_EVENT]) { nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Team { slug } } } } } } ... on Issue { state stateReason } }`,
-    )
-    .join('\n');
-  return `query ($owner: String!, $name: String!) {\n  repository(owner: $owner, name: $name) {\nnameWithOwner\n${aliases}\n  }\n}`;
-}
 
 /**
  * Derive whose action is pending: terminal, draft, pending checks, current requested changes,
