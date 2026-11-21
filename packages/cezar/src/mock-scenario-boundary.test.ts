@@ -1,7 +1,8 @@
 import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
 import { checkRule } from './lint/ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { RUNNER_MOCKS, mockScenarioBoundary as rule } from './lint/mock-scenario-boundary.ts';
+import { RUNNER_MOCKS, mockScript, mockScenarioBoundary as rule } from './lint/mock-scenario-boundary.ts';
+import { BUILT_IN_RUNNERS } from './runners/built-in.ts';
 
 const file = 'packages/cezar/scripts/mock-pi-rpc.mjs';
 const adopted = "import { play, scenarioFor } from './mock-scenario.mjs';\n";
@@ -9,6 +10,22 @@ const adopted = "import { play, scenarioFor } from './mock-scenario.mjs';\n";
 describe('shared scenario boundary', () => {
   it('requires an encoder entry for every runner', () => {
     expect([...RUNNER_MOCKS.keys()].sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
+  });
+
+  it('reads each runner\'s mock script from source as its definition declares it', () => {
+    expect(Object.fromEntries(RUNNER_MOCKS)).toEqual(Object.fromEntries(BUILT_IN_RUNNERS.map(definition => [definition.id, definition.mock.script])));
+  });
+
+  it.each([
+    ["export const X_MOCK = { script: 'mock-x.mjs' } satisfies RunnerMock;", 'mock-x.mjs'],
+    ['const s = 1;\nexport const X_MOCK = { binEnv: `X`, script: `mock-x.mjs` };', 'mock-x.mjs'],
+    ["export const X_MOCK = { 'script': 'mock-x.mjs' };", 'mock-x.mjs'],
+  ])('reads the literal script of the exported mock: %s', (source, script) => {
+    expect(mockScript('x', source)).toBe(script);
+  });
+
+  it('throws when the mock exports no literal script', () => {
+    expect(() => mockScript('x', "const name = 'a.mjs';\nexport const X_MOCK = { script: name };")).toThrow('runners/x/mock.ts');
   });
 
   it.each([

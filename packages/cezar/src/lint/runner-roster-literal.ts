@@ -76,7 +76,7 @@ export function staleRunnerRosters(root = repoRoot): string[] {
 
 export const runnerRosterLiteral: AstRule = {
   name: 'runner-roster-literal',
-  description: 'runners/built-in.ts is the one roster of runners; no other array literal lists every runner id (open-mercato/cezar#387).',
+  description: 'runners/ids.ts is the one roster of runner ids; no other array literal lists every runner id (open-mercato/cezar#387).',
   applies,
   create(report, { file }) {
     const ids = declared ??= declaredRunnerIds();

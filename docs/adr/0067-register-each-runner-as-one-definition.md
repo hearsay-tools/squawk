@@ -49,9 +49,9 @@ Rules:
    file in `packages/cezar/src` that names `runners/ids.ts` with a literal path: a static import
    or export, a literal `import()`, an `import x = require()`, a type import or any call with
    that literal. A path built from pieces, such as a template literal with a substitution, is
-   outside its static scope. It exempts the two runner-id lint
-   rules, `lint/runner-roster-literal.ts` and `lint/runner-id-branch.ts`, which read the ids
-   from `runners/built-in.ts`. Production code reads the registry. Without that rule the id list
+   outside its static scope. It exempts the lint
+   rules that read the ids, `lint/runner-roster-literal.ts`, `lint/runner-id-branch.ts` and
+   `lint/mock-scenario-boundary.ts`, so the lint plugin loads no runner module. Production code reads the registry. Without that rule the id list
    could grow back into a closed list. The dev scripts `packages/cezar/scripts/parity-rows.ts`
    and `.ai/scripts/mock-wire-evidence.ts` read `runners/ids.ts` and are outside the rule.
 7. **The cockpit reads `GET /api/v1/runners`.** The route sends each registered runner's

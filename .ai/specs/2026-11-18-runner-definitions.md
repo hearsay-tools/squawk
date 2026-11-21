@@ -198,7 +198,8 @@ the entry registers the built-ins (`index-runners.test.ts`). Scripts under
 `packages/cezar/scripts/` that read runner data call it themselves.
 
 `RUNNER_IDS` and `RunnerId` left the service in C3 (decision 5).
-`cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
+`cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/ids.ts`, so the lint
+plugin loads no runner module.
 `runners/ids.ts` holds the same ids as plain data for tests (decision 5 as amended). A new
 built-in runner adds its folder, its scripts in `packages/cezar/scripts/`, one line in
 `runners/built-in.ts` and its id in `runners/ids.ts`; an outside runner (step 4) only calls
@@ -300,7 +301,7 @@ As built (D1, in two parts):
   static test table reads `core/runner-fact-rows.testkit.ts`; a test that needs only the ids
   reads `runners/ids.ts`.
 - `MOCKS` (`core/skill-probe.ts`) reads the registry, and `lint/mock-scenario-boundary.ts`
-  reads the built-in list.
+  reads the ids from `runners/ids.ts` and parses `script` from each `runners/<id>/mock.ts`.
 - The fixture runner is `runners/fixture/` plus `packages/cezar/scripts/mock-fixture-runner.mjs`.
   `runners/fixture/fixture-runner.test.ts` runs a task to review and the kit rows S1, S2, S3, S4,
   S7, S10 and S20, the rows whose scenarios its mock declares. The rows that need a
@@ -441,7 +442,8 @@ runner does.
   (`completion-controls`); C2 fixed it.
 - **`runners/ids.ts`** (C3 review, then the owner on 2026-11-20). See decision 5 as amended. The
   lint rule `cez/runner-ids-import` covers non-test files in `packages/cezar/src`, except the
-  two runner-id lint rules, and catches literal paths only (see decision 5). The dev scripts `packages/cezar/scripts/parity-rows.ts` and
+  lint rules that read the ids (`runner-roster-literal`, `runner-id-branch`,
+  `mock-scenario-boundary`), and catches literal paths only (see decision 5). The dev scripts `packages/cezar/scripts/parity-rows.ts` and
   `.ai/scripts/mock-wire-evidence.ts` read the file and are outside the rule.
 - **Fixture runner** (D1 part 2). See [The parity kit](#the-parity-kit).
 - **The guard lists follow the folders** (D2a to D2c, after review round 1 of D2 found that a new

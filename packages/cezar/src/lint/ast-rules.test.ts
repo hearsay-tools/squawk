@@ -118,6 +118,7 @@ describe('AST rule scopes', () => {
     ['packages/cezar/src/lint/runner-ids-import.ts', true],
     ['packages/cezar/src/lint/runner-roster-literal.ts', false],
     ['packages/cezar/src/lint/runner-id-branch.ts', false],
+    ['packages/cezar/src/lint/mock-scenario-boundary.ts', false],
     ['packages/cezar/src/core/runner-registry.test.ts', false],
     ['packages/cezar/src/core/register-all-runners.testkit.ts', false],
     ['packages/cezar/vitest.setup.ts', false],
