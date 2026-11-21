@@ -64,10 +64,15 @@ Issue: hearsay-tools/squawk#4028.
 Issue: hearsay-tools/squawk#4029.
 
 - `activity/publisher.ts`, `activity/tool-activity.ts`, `artifacts/reports-index.ts` and
-  `delegation/worker-cleanup.ts` subscribe to the lifecycle. Reports-index reads
-  `run.status-changed` and drops its `live` set. `LiveActivityStore` and the `on` overloads in
+  `delegation/worker-cleanup.ts` subscribe to the lifecycle. Reports-index keeps sending every
+  `run.created` and `run.updated` to its report watch, for report metadata and live scans, and
+  reads `run.status-changed` for settlement, so its `live` set goes. Worker cleanup checks
+  `failedBeforeFirstStep` on every `run.updated`, not only on status changes, because a worker
+  execution can complete with no status change. `LiveActivityStore` and the `on` overloads in
   `tool-activity.ts` go.
-- The activity and reports-index tests run against a lifecycle and ports, with no real store.
+- The activity and reports-index tests run against a lifecycle and ports, with no real store. A
+  reports-index test checks that an update with no status change, such as a title change, still
+  reaches the report watch.
 - Files: those four files, their testkits and tests.
 
 ## B2. Shell feeds move

@@ -87,8 +87,8 @@ listeners after it, and the error reaches the writer after the commit.
 | `runs/webhook.ts` | feature:webhooks | `run`, `deleted` | A new run, a status change, a question. Keeps a `seen` map seeded from `listRunSummaries()` |
 | `activity/publisher.ts` | feature:activity | `run`, `deleted` | Any change: rebuild the activity view |
 | `activity/tool-activity.ts` | feature:activity | `run`, `deleted` | Live or not live, for each run |
-| `artifacts/reports-index.ts` | feature:artifacts | `run`, `deleted`, `closed` | A run that settled. Keeps a `live` set |
-| `delegation/worker-cleanup.ts` | feature:workers | `run` | A worker that failed to start or settled |
+| `artifacts/reports-index.ts` | feature:artifacts | `run`, `deleted`, `closed` | Report metadata on any change, and a run that settled. Keeps a `live` set |
+| `delegation/worker-cleanup.ts` | feature:workers | `run` | A worker that failed before its first step. A state check on every change: the second `run` emit of `commitWorkerExecutionComplete` changes no status |
 | `headless-run.ts` | shell | `event`, `run` | Console output and the final status of `hsq run` |
 | `server/run-event-feed.ts` | shell | `event`, `deleted`, `closed` | The SSE feed of one run |
 | `server/workspace-run-feed.ts` | shell | `run`, `deleted` | The workspace task feed |
@@ -156,7 +156,7 @@ instance in `RunStore.open` and exposes it as `store.lifecycle`, typed by the po
 | --- | --- | --- |
 | `run.created` | `run` | `createRun` and owned-run creation add the run |
 | `run.updated` | `run`, `before`, `source?` | Every change that emits `run` today, except creation: committed writes, debounced writes, `republish` and conflicts. `source` keeps today's `CommitSource` values, plus `conflict` |
-| `run.status-changed` | `run`, `exit`, `from`, `to` | A write that changes `status`. `exit` is the `RunExitId` that `applyExit` applied, or `conflict` when another writer's status wins. It follows the `run.updated` of the same write |
+| `run.status-changed` | `run`, `exit`, `from`, `to` | A write that changes `status`. `exit` is the `RunExitId` that `applyExit` applied, `conflict` when another writer's status wins, or `patch` when `updateRun` writes `status` directly, which only test fixtures do today. It follows the `run.updated` of the same write |
 | `run.deleted` | `runId` | Where `deleted` is emitted today |
 | `run.event` | `runId`, `event` | Where `event` is emitted today |
 | `store.closed` | none | Where `closed` is emitted today |
@@ -279,6 +279,7 @@ The slots keep each path's behavior; this table is the reviewed list for C1.
 | `createRun` | `run.created` | When `touch` runs, as `run` today |
 | Committed `move` that changes status | `run.updated`, `run.status-changed`, then `run.event` for the `lifecycle` event | After the commit |
 | Debounced `move` or `updateRun` | `run.updated` (and `run.status-changed` when status changed) | When `touch` runs, before the SQLite write |
+| `updateRun` with a `status` in the patch (test fixtures) | `run.updated`, then `run.status-changed` with exit `patch` | As the write path it takes |
 | `appendEvent` that finds a PR reference | `run.event`, then `run.updated` | As today |
 | Conflict: another writer's row wins | `run.updated` with source `conflict`, and `run.status-changed` with exit `conflict` when status differs | During `handleConflicts` |
 | Delete of a plain run | `run.deleted` | Before the debounced write, as today |

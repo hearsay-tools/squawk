@@ -75,10 +75,12 @@ Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its scripts
 
 ### Step 2: typed lifecycle and store ports
 
-- Name the events: run created, step started, turn ended, wait resolved, run finished. Start
-  with listeners that only observe; they cannot change a run.
+- Name the events that a first-party listener uses: run created, run updated, status changed,
+  run deleted, the per-run event stream and store closed. Step, turn and wait events wait for a
+  listener (spec decision 1). Listeners only observe; they cannot change a run.
 - Move the current listeners on `RunStore` onto the typed events. Webhooks go first.
-- Add a hook that can change an outcome only when a first-party feature needs one.
+- Add a hook that can change an outcome only when a first-party feature needs one. Run removal
+  is the one such need: three removal slots.
 - Give the run store a few named ports (read runs, write runs, event log, worker results,
   retention) and move one topic at a time out of the `RunStore` class behind its port. The
   split of `workflows/run.ts` under
