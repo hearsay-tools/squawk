@@ -1098,8 +1098,9 @@ jobs:
 
   # Squeal shared results for node:test, merge groups only: both unit suites run once more on
   # the .node-version developers use, under `squeal ci record` with Squeal's node:test reporter
-  # added, and their parts join the export. unit-tests keeps the engines minimum. Outside
-  # verify.needs and every required check. See docs/sdlc/ci.md § Squeal shared results.
+  # added, and their parts join the export. unit-tests keeps the engines minimum. verify
+  # waits for it through squeal-export but never reads its result. See docs/sdlc/ci.md §
+  # Squeal shared results.
   squeal-node-test:
     name: Record node:test for Squeal
     if: github.event_name == 'merge_group'
@@ -1177,8 +1178,9 @@ jobs:
 
   # Squeal shared results, after passing merge-group shards: squeal-export keys the shard
   # parts in a read-only checkout, squeal-publish pushes them as refs/squeal/<sha> for
-  # squeal.config.json `shared.ref`. Both stay outside verify.needs and every required
-  # check: a failure never blocks a merge. See docs/sdlc/ci.md § Squeal shared results.
+  # squeal.config.json `shared.ref`. verify waits for both, so the ref exists before main
+  # moves, but never reads their results: a failure never blocks a merge. See
+  # docs/sdlc/ci.md § Squeal shared results.
   squeal-export:
     name: Export Squeal shared results
     needs: [vitest, squeal-node-test]
@@ -1719,10 +1721,12 @@ jobs:
 
   # Keep this aggregate job's name stable: branch protection uses it as the
   # required-check identity while the work runs in the build, Vitest, and
-  # cockpit browser jobs.
+  # cockpit browser jobs. It waits for squeal-export and squeal-publish, so a merge
+  # group's shared results are published before main moves to its commit, but it
+  # never reads their results.
   verify:
     name: Unit, build, E2E, and package
-    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser, queue-admission]
+    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser, queue-admission, squeal-export, squeal-publish]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
