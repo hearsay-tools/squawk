@@ -240,28 +240,36 @@ function expectNoFailures(report: Report): void {
   expect({ failed: report.failures.length, first: report.failures.slice(0, FAILURES_SHOWN) }).toEqual({ failed: 0, first: [] });
 }
 
-export function describeUiMapperRobustness(runner: string): void {
+export const ROBUSTNESS_PARTS = ['hostile', 0, 1] as const;
+
+export function describeUiMapperRobustness(runner: string, part: typeof ROBUSTNESS_PARTS[number]): void {
   describe(`${runner} UI mapper robustness`, () => {
     const row = MAPPERS[runner]!;
 
-    it('has golden fixture frames to replay', () => {
-      expect(fixtureFrames(runner).flat().length).toBeGreaterThan(0);
-    });
-
-    it('returns no events for a value of no known type, in any state', () => {
-      const result = replay(runner, ({ report, frames, index, held }) => {
-        const at = frames[index]?.at ?? 'end of fixture';
-        for (const [label, value] of HOSTILE) {
-          report.calls += 1;
-          const outcome = call(row, value, held);
-          const failure = outcome.failure ?? (outcome.events.length > 0 ? `returned events ${JSON.stringify(outcome.events)}` : null);
-          if (failure !== null) report.failures.push(`before ${at}, ${label}: ${failure}`);
-        }
+    if (part === 'hostile') {
+      it('has golden fixture frames to replay', () => {
+        expect(fixtureFrames(runner).flat().length).toBeGreaterThan(0);
       });
-      expectNoFailures(result);
-    });
 
-    const fixtures = fixtureFrames(runner).map(frames => ({ fixture: frames[0]?.at.split(':')[0] ?? 'empty fixture', frames }));
+      it('returns no events for a value of no known type, in any state', () => {
+        const result = replay(runner, ({ report, frames, index, held }) => {
+          const at = frames[index]?.at ?? 'end of fixture';
+          for (const [label, value] of HOSTILE) {
+            report.calls += 1;
+            const outcome = call(row, value, held);
+            const failure = outcome.failure ?? (outcome.events.length > 0 ? `returned events ${JSON.stringify(outcome.events)}` : null);
+            if (failure !== null) report.failures.push(`before ${at}, ${label}: ${failure}`);
+          }
+        });
+        expectNoFailures(result);
+      });
+
+      return;
+    }
+
+    // The two mutation files form an exhaustive, disjoint partition of sorted fixtures.
+    const fixtures = fixtureFrames(runner).filter((_, index) => index % 2 === part)
+      .map(frames => ({ fixture: frames[0]?.at.split(':')[0] ?? 'empty fixture', frames }));
     it.each(fixtures)('$fixture never throws or mutates its state when one field is broken', ({ frames: corpus }) => {
       const result = replay(runner, ({ report, frames, index, held }) => {
         const frame = frames[index];

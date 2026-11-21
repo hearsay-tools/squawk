@@ -1,3 +1,3 @@
 import { describeUiMapperRobustness } from '../../core/ui-mapper-robustness.testkit.ts';
 
-describeUiMapperRobustness('antigravity');
+describeUiMapperRobustness('antigravity', "hostile");

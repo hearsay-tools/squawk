@@ -1,3 +1,3 @@
 import { describeUiMapperRobustness } from '../../core/ui-mapper-robustness.testkit.ts';
 
-describeUiMapperRobustness('codex');
+describeUiMapperRobustness('codex', "hostile");
