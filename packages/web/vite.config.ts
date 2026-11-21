@@ -87,6 +87,8 @@ export default defineConfig({
     proxy: {
       // `ws: true` — /api/ws (the subscription socket) upgrades through the same proxy.
       '/api': { target: API_TARGET, changeOrigin: true, ws: true },
+      // The service builds the manifest from the product name (brand-file-routes.ts).
+      '/manifest.webmanifest': { target: API_TARGET, changeOrigin: true },
     },
   },
 })

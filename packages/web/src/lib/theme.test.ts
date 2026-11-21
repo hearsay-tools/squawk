@@ -4,6 +4,7 @@ import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
   applyFaviconTheme,
+  applyThemeColor,
   applyResolvedTheme,
   faviconHrefFor,
   normalizeTheme,
@@ -176,5 +177,41 @@ describe('favicon theming (#143)', () => {
 
   it('is a no-op when the document has no icon link', () => {
     expect(() => applyFaviconTheme('light')).not.toThrow()
+  })
+})
+
+describe('status bar color', () => {
+  it('paints the theme-color meta with the root’s card token', () => {
+    const meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    meta.content = 'black'
+    document.head.append(meta)
+    const root = document.createElement('div')
+    document.body.append(root)
+    try {
+      root.style.setProperty('--card', 'oklch(0.25 0.005 260)')
+      applyThemeColor(root)
+      expect(meta.content).toBe('oklch(0.25 0.005 260)')
+    } finally {
+      meta.remove()
+      root.remove()
+    }
+  })
+
+  it('keeps the pre-paint value while the token is not there yet', () => {
+    const meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    meta.content = 'black'
+    document.head.append(meta)
+    try {
+      applyThemeColor(document.createElement('div'))
+      expect(meta.content).toBe('black')
+    } finally {
+      meta.remove()
+    }
+  })
+
+  it('is a no-op when the document has no theme-color meta', () => {
+    expect(() => applyThemeColor(document.documentElement)).not.toThrow()
   })
 })
