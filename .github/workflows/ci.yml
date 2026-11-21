@@ -1010,7 +1010,7 @@ jobs:
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
-        uses: hearsay-tools/squeal/ci@ef0e5002cce936e0971fbb727cbca73f318e69a8 # v0.1.582
+        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
 
       - name: Run server and cockpit unit suites with Squeal recording
         id: record
@@ -1141,7 +1141,7 @@ jobs:
       # Squeal's action also sets SQUEAL_NODE_TEST_REPORTER for the steps below, also when
       # Squeal cannot run; the reporter then writes nothing (hearsay-tools/squeal spec 018 D23).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@ef0e5002cce936e0971fbb727cbca73f318e69a8 # v0.1.582
+        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
 
       # The commands of test:unit:package and test:unit:scripts, whose flags squeal.config.json's
       # nodeTest entries repeat, with Squeal's reporter beside the default one. The output and
@@ -1226,7 +1226,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@ef0e5002cce936e0971fbb727cbca73f318e69a8 # v0.1.582
+        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
 
       - name: Download Squeal parts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1305,7 +1305,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@ef0e5002cce936e0971fbb727cbca73f318e69a8 # v0.1.582
+        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
 
       - name: Download Squeal results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
