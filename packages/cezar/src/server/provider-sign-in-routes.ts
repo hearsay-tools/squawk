@@ -7,6 +7,7 @@ import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import type { ProviderAuthService } from '../core/provider-auth.ts';
 import { jsonZodValidator, paramZodValidator } from './validators.ts';
 import { ProviderSignIns } from './provider-sign-ins.ts';
+import { BrowserSignInStartError } from '../core/browser-sign-in-error.ts';
 
 export function createProviderSignInRoutes(options: {
   settingsAdmin(): boolean;
@@ -40,7 +41,9 @@ export function createProviderSignInRoutes(options: {
             else await options.auth.profileStatus(provider, { id: profile.id, configDir: profile.path });
           });
         return c.json(result);
-      } catch { return c.json({ error: 'Browser sign-in could not start. Check the installation and try again.' }, 409); }
+      } catch (error) {
+        return c.json({ error: error instanceof BrowserSignInStartError ? error.message : 'Browser sign-in could not start. Check the installation and try again.' }, 409);
+      }
     })
     .get('/providers/sign-in/:id', paramZodValidator(providerSignInParamsSchema), c => {
       const result = signIns.get(c.req.valid('param').id);

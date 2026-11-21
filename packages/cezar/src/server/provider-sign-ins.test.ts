@@ -8,9 +8,27 @@ import { ProviderAuthService } from '../core/provider-auth.ts';
 import { resolveCapabilities } from './capabilities.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { enableRemoteSettings, disableRemoteSettings } from '../remote-settings.ts';
+import { BrowserSignInStartError } from '../core/browser-sign-in-error.ts';
 
 // Keep the old gate available to the red proof over the pre-fix source.
 const permissions = (local = true, admin = local) => ({ localHandoff: () => local, settingsAdmin: () => admin });
+
+it.each([true, false])('shows only sanitized startup causes through the API (safe error=%s)', async safe => {
+  registerRunner(antigravityRunner);
+  const message = 'Antigravity personal sign-in could not start. Agent exited (code 1): Unknown flag uid https://accounts.google.com/o/oauth2/auth?state=private-state token=private-token';
+  const create = vi.fn().mockRejectedValue(safe ? new BrowserSignInStartError(message) : new Error(message));
+  const loader = vi.spyOn(antigravityRunner, 'loadBrowserSignIn').mockResolvedValue(create);
+  const app = createProviderSignInRoutes({ ...permissions(), auth: new ProviderAuthService(), invalidateModels: () => {},
+    resolve: async () => ({ profile: { id: 'work', provider: 'antigravity', label: 'Work', configDir: '/private/work', path: '/private/work', isDefault: false } }) });
+  try {
+    const response = await app.request('/providers/sign-in/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'antigravity', profileId: 'work' }) });
+    expect(response.status).toBe(409);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const body = await response.json();
+    expect(body.error).toBe(safe ? 'Antigravity personal sign-in could not start. Agent exited (code 1): Unknown flag uid [URL redacted] token=[redacted]' : 'Browser sign-in could not start. Check the installation and try again.');
+    expect(JSON.stringify(body)).not.toMatch(/accounts\.google|private-state|private-token/);
+  } finally { loader.mockRestore(); }
+});
 
 it('joins account starts, erases the consent URL on completion and keeps other accounts independent', async () => {
   const manager = new ProviderSignIns();

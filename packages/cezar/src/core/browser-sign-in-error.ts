@@ -1,0 +1,13 @@
+import { collectSecretValues, redactSecrets } from './secret-redaction.ts';
+
+/** A startup error whose message may cross the browser sign-in HTTP boundary. */
+export class BrowserSignInStartError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    const safe = redactSecrets(message, collectSecretValues())
+      .replace(/https?:\/\/[^\s<>"']+/gi, '[URL redacted]')
+      .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/\b(access_token|refresh_token|id_token|client_secret|token|code|state|authorization)["']?\s*[:=]\s*["']?[^\s,"'}]+/gi, '$1=[redacted]')
+      .replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 320);
+    super(safe, options);
+  }
+}

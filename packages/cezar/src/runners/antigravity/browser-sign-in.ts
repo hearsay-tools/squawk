@@ -9,17 +9,8 @@ import { productEnv } from '../../core/product-env.ts';
 import { shellQuote } from '../../core/shell-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityStderr } from './stderr.ts';
-import { collectSecretValues, redactSecrets } from '../../core/secret-redaction.ts';
+import { BrowserSignInStartError } from '../../core/browser-sign-in-error.ts';
 import { AcpRpcError } from '../acp/transport.ts';
-
-/** Native errors can echo consent URLs and credentials. Never send those to the cockpit. */
-function safeStartCause(value: string): string {
-  return redactSecrets(value, collectSecretValues())
-    .replace(/https?:\/\/[^\s<>"']+/gi, '[URL redacted]')
-    .replace(/\b(access_token|refresh_token|id_token|client_secret|token|code|state|authorization)["']?\s*[:=]\s*["']?[^\s,"'}]+/gi, '$1=[redacted]')
-    .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 240);
-}
 
 // No OAuth value is written by the helper. It forwards the browser argument to memory only.
 const helperSource = `const url = process.argv[2];
@@ -132,6 +123,6 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
       const line = antigravityStderr(diagnostics.stderr).split(/\r?\n/).find(line => line.trim());
       cause = `Agent exited (${diagnostics.signal ?? `code ${diagnostics.code}`})${line ? `: ${line.trim()}` : ''}`;
     }
-    throw new Error(`Antigravity personal sign-in could not start. ${safeStartCause(cause)}`, { cause: error });
+    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`, { cause: error });
   }
 }
