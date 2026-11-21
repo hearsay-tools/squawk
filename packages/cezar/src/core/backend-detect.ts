@@ -3,6 +3,8 @@ import type { RunnerDetection } from './runner-definition.ts';
 import { registeredRunners } from './runner-registry.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
+import { realpath, stat } from 'node:fs/promises';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { runGit } from '../git-command.ts';
 
@@ -25,6 +27,59 @@ export interface BackendCheck {
  */
 export async function detectEnvironment(): Promise<BackendCheck[]> {
   return Promise.all([...registeredRunners().map((runner) => probeRunner(runner.id, runner.detection)), probeGh(), probeGit()]);
+}
+
+/** The executables `detectEnvironment` starts, as each probe names them. */
+function probedBinaries(): string[] {
+  return [...registeredRunners().map(({ detection }) => detection.binOverride() ?? detection.binary), 'gh', 'git'];
+}
+
+/** The file a PATH lookup of `bin` finds, followed through symlinks, with its identity; `-` when none. */
+async function binarySignature(bin: string, env: NodeJS.ProcessEnv): Promise<string> {
+  const names = process.platform === 'win32'
+    ? ['', ...(env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';')].map((ext) => bin + ext.toLowerCase())
+    : [bin];
+  const dirs = bin.includes('/') || isAbsolute(bin) ? [''] : (env.PATH ?? '').split(delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    for (const name of names) {
+      const path = dir ? join(dir, name) : name;
+      try {
+        const s = await stat(path, { bigint: true });
+        if (!s.isFile()) continue;
+        const target = await realpath(path);
+        const t = await stat(target, { bigint: true });
+        return `${path}>${target}:${t.dev}:${t.ino}:${t.size}:${t.mtimeNs}:${t.ctimeNs}:${t.mode}`;
+      } catch {
+        // not here: the lookup goes on to the next PATH entry
+      }
+    }
+  }
+  return '-';
+}
+
+/** The file `gh auth login` and `gh auth logout` rewrite. */
+function ghHostsFile(env: NodeJS.ProcessEnv): string | undefined {
+  if (env.GH_CONFIG_DIR) return join(env.GH_CONFIG_DIR, 'hosts.yml');
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, 'gh', 'hosts.yml');
+  if (process.platform === 'win32' && env.AppData) return join(env.AppData, 'GitHub CLI', 'hosts.yml');
+  return env.HOME ? join(env.HOME, '.config', 'gh', 'hosts.yml') : undefined;
+}
+
+/**
+ * A signature of what `detectEnvironment` would see, read from file metadata only: where each
+ * probed executable resolves on PATH and the file behind it, the `gh` login file and the dry-run
+ * switch. Installing, removing or upgrading a CLI, and `gh auth login`/`logout`, change it. It
+ * starts no process, so a caller can check it often and probe only on a change
+ * (hearsay-tools/squawk#3658).
+ */
+export async function environmentStamp(env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const binaries = await Promise.all(probedBinaries().map(async (bin) => `${bin}=${await binarySignature(bin, env)}`));
+  const hostsFile = ghHostsFile(env);
+  const hosts = hostsFile ? await stat(hostsFile, { bigint: true }).then(
+    (s) => `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`,
+    () => '-', // not logged in through a hosts file
+  ) : '-';
+  return [...binaries, `gh-hosts=${hosts}`, `dry-run=${productEnv('DRY_RUN') ?? ''}`].join('\n');
 }
 
 /** Banner spelling follows the release identity; switch-off output stays stable. */

@@ -2,6 +2,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { isSafeGitRef } from '../git-refs.ts';
 import { runGit } from '../git-command.ts';
+import { readGitDirStamp } from './git-dir-stamp.ts';
 
 export interface RepoInfo {
   root: string;
@@ -42,8 +43,40 @@ async function git(root: string, args: string[]): Promise<string> {
   return stdout;
 }
 
-/** Null when `dir` isn't inside a git repository. */
+/** Entries kept by `getRepoInfo`: one per directory asked about (project roots, the boot root). */
+const REPO_INFO_CACHE_MAX = 512;
+const repoInfoCache = new Map<string, { stamp: string; info: Promise<RepoInfo | null> }>();
+
+/**
+ * Null when `dir` isn't inside a git repository. The answer is kept per directory and keyed on
+ * `readGitDirStamp`: while `HEAD`, the `.git` entry and the config files keep their metadata, a
+ * repeat call reads only that metadata and starts no `git` process. Each process start forks this
+ * large server process (hearsay-tools/squawk#3651, hearsay-tools/squawk#3658). A branch switch or
+ * a remote change rewrites one of those files, so the next call asks Git again.
+ */
 export async function getRepoInfo(dir: string): Promise<RepoInfo | null> {
+  const stamp = await readGitDirStamp(dir);
+  if (!stamp) return readRepoInfo(dir);
+  const key = `${stamp.kind}:${stamp.key}`;
+  const cached = repoInfoCache.get(dir);
+  // A copy for each caller, so one caller's edit never reaches the next.
+  if (cached?.stamp === key) return cached.info.then((info) => info && { ...info });
+  const info = readRepoInfo(dir);
+  const entry = { stamp: key, info };
+  repoInfoCache.delete(dir);
+  if (repoInfoCache.size >= REPO_INFO_CACHE_MAX) repoInfoCache.delete(repoInfoCache.keys().next().value!);
+  repoInfoCache.set(dir, entry);
+  // Keep only an answer the metadata explains: a repository where a `.git` was found, or null
+  // where none exists. Null beside a `.git` (an unborn HEAD before its first commit, a missing
+  // `git`) can change with no file above changing, so that call is asked again next time.
+  void info.then((result) => {
+    if ((result === null) === (stamp.kind === 'none')) return;
+    if (repoInfoCache.get(dir) === entry) repoInfoCache.delete(dir);
+  });
+  return info.then((result) => result && { ...result });
+}
+
+async function readRepoInfo(dir: string): Promise<RepoInfo | null> {
   try {
     const output = (await git(dir, ['rev-parse', '--show-toplevel', '--abbrev-ref', 'HEAD'])).trim();
     const split = output.lastIndexOf('\n');
