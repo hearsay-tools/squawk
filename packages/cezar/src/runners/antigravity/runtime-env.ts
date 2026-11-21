@@ -1,3 +1,4 @@
+import { prepareAntigravityAccount } from './account-home.ts';
 import { accessSync, constants, existsSync, realpathSync, mkdtempSync } from 'node:fs';
 import { delimiter, dirname, join, resolve, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -17,6 +18,7 @@ export function antigravityHarness(bin: string, env: NodeJS.ProcessEnv, cwd: str
 }
 export function antigravityEnv(bin: string, spec: AgentRunSpec): { env: NodeJS.ProcessEnv; temp: string } {
   const env = buildChildEnv({ backend: 'antigravity', extraEnv: spec.env });
+  prepareAntigravityAccount(env.GEMINI_HOME);
   const temp = mkdtempSync(join(tmpdir(), 'squawk-antigravity-'));
   const harness = antigravityHarness(bin, env, spec.cwd);
   if (!env.GEMINI_API_KEY && env.GOOGLE_API_KEY) env.GEMINI_API_KEY = env.GOOGLE_API_KEY;

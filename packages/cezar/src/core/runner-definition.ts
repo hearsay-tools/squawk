@@ -263,6 +263,8 @@ export interface AccountLayout {
    * carries no named accounts.
    */
   readonly envVar: string | null;
+  /** Additional child-home variables, each relative to the selected account folder. */
+  readonly envPaths?: Readonly<Record<string, string>>;
   /**
    * Whether a worker binding of the default account pins its discovered home. false: the default
    * spawns bare and follows the host env. A machine where the agent never ran has no home to pin.

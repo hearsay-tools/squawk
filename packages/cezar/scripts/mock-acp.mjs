@@ -63,6 +63,10 @@ function acknowledge(frame, result, text) {
 }
 async function prompt(frame) {
   const text = promptText(frame);
+  if (text === 'mock:account-homes') {
+    content('agent_message_chunk', JSON.stringify({ gemini: process.env.GEMINI_HOME, home: process.env.HOME, config: process.env.XDG_CONFIG_HOME }));
+    reply(frame.id, { stopReason: 'end_turn' }); return;
+  }
   if (delivery?.rejects(text)) { write({ id: frame.id, error: { code: -32000, message: 'owned turn rejected' } }); return; }
   if (active?.late) {
     const turn = active;

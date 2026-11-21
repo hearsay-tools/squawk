@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import type { ProviderId } from './provider-auth.ts';
 import type { AccountLayout } from './runner-definition.ts';
 import { registeredRunners, runnerDefinition } from './runner-registry.ts';
@@ -40,7 +41,9 @@ export function supportsProfiles(provider: ProviderId): boolean {
 export function profileEnv(provider: ProviderId, configDir: string | null | undefined): Record<string, string> {
   const envVar = profileEnvVar(provider);
   const dir = configDir?.trim();
-  return envVar === null || !dir ? {} : { [envVar]: dir };
+  if (envVar === null || !dir) return {};
+  const paths = runnerDefinition(provider).accounts.layout.envPaths ?? {};
+  return { [envVar]: dir, ...Object.fromEntries(Object.entries(paths).map(([name, relative]) => [name, join(dir, relative)])) };
 }
 
 /**

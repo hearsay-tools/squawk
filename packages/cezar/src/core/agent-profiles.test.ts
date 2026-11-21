@@ -25,7 +25,7 @@ describe('profileEnvVar', () => {
     expect(profileEnvVar('omp')).toBeNull();
     expect(supportsProfiles('opencode')).toBe(false);
     expect(supportsProfiles('omp')).toBe(false);
-    expect(profileCapableProviders()).toEqual(['claude', 'codex', 'pi']);
+    expect(profileCapableProviders()).toEqual(['claude', 'codex', 'pi', 'antigravity']);
   });
 
   it('answers for every provider, so adding one forces a decision here', () => {
