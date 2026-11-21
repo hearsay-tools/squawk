@@ -8,14 +8,16 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 /** Consent and pasted callbacks stay in component memory; neither enters persisted UI state. */
-export function BrowserSignInButton({ provider, profileId, label }: { provider: string; profileId?: string; label: string }) {
+function useBrowserSignIn(provider: string, profileId?: string) {
   const client = useQueryClient()
   const [open, setOpen] = useState(false)
   const [flow, setFlow] = useState<ProviderSignIn | null>(null)
   const [redirect, setRedirect] = useState('')
   const active = useRef<ProviderSignIn | null>(null)
   const mounted = useRef(true)
+  const attempt = useRef(0)
   const close = () => {
+    attempt.current++
     openRef.current = false
     const current = active.current
     active.current = null
@@ -26,14 +28,15 @@ export function BrowserSignInButton({ provider, profileId, label }: { provider: 
     mounted.current = true
     return () => {
       mounted.current = false
+      attempt.current++
       const current = active.current
       if (current?.state === 'waiting') void cancelProviderSignIn(current.id).catch(() => {})
     }
   }, [])
   const start = useMutation({
-    mutationFn: () => startProviderSignIn(provider, profileId), retry: false,
-    onSuccess: result => {
-      if (!mounted.current || !openRef.current) { void cancelProviderSignIn(result.id).catch(() => {}); return }
+    mutationFn: (generation: number) => startProviderSignIn(provider, profileId).then(result => ({ result, generation })), retry: false,
+    onSuccess: ({ result, generation }) => {
+      if (!mounted.current || !openRef.current || generation !== attempt.current) { void cancelProviderSignIn(result.id).catch(() => {}); return }
       active.current = result; setFlow(result)
     },
   })
@@ -62,10 +65,17 @@ export function BrowserSignInButton({ provider, profileId, label }: { provider: 
     ])
   }, [result, client, provider])
   const error = start.error ?? replay.error ?? status.error
+  const connect = () => {
+    // Do not overlap starts: the server coalesces them to one native flow.
+    setOpen(true); openRef.current = true; start.reset(); replay.reset(); start.mutate(++attempt.current)
+  }
+  return { open, result, redirect, setRedirect, start, replay, status, error, close, connect }
+}
+
+export function BrowserSignInButton({ provider, profileId, label }: { provider: string; profileId?: string; label: string }) {
+  const { open, result, redirect, setRedirect, start, replay, status, error, close, connect } = useBrowserSignIn(provider, profileId)
   return <>
-    <Button type="button" size="sm" data-action="account-connect" onClick={() => {
-      setOpen(true); openRef.current = true; start.reset(); replay.reset(); start.mutate()
-    }}>Connect</Button>
+    <Button type="button" size="sm" data-action="account-connect" disabled={start.isPending} onClick={connect}>Connect</Button>
     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
       <DialogContent>
         <DialogHeader>
@@ -85,6 +95,7 @@ export function BrowserSignInButton({ provider, profileId, label }: { provider: 
         {result?.state === 'failed' ? <p role="alert">{result.error}</p> : null}
         {result?.state === 'cancelled' ? <p role="status">Sign-in cancelled. Close this window and Connect again.</p> : null}
         {error ? <p role="alert">{error.message}</p> : null}
+        {status.isError && result?.state === 'waiting' ? <Button onClick={() => void status.refetch()}>Retry status</Button> : null}
         <DialogFooter><Button variant="outline" onClick={close}>{result?.state === 'connected' ? 'Done' : 'Cancel'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>

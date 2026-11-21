@@ -7,7 +7,7 @@ import { useState, type ReactNode } from 'react'
 
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { ApiError, continueRun } from '@/api/client'
-import { useConfig, useRunnerModels } from '@/api/queries'
+import { useConfig, useHealth, useRunnerModels } from '@/api/queries'
 import { useRunners } from '@/api/runners'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { ApiRun, ContinueResponse, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
@@ -76,13 +76,12 @@ function resolveContinueModel(
 }
 
 /**
- * The account this Continue runs on, for the skill list. A Continue names no account: it stays on
- * the STEP that spawned the session (`sessionId` and `profileId` are a pair), and a runner switch
- * falls back to what the project resolves to for THAT agent.
+ * Match server session affinity: a run-account override starts a fresh conversation, while a
+ * runner switch falls back to the project's account for that agent.
  */
 function resolveContinueAccount(run: ApiRun, runner: Runner, runnerChanged: boolean, repoAccount: ContinueAccounts['repoAccount']) {
   const sessionStep = latestSessionStep(run.steps)
-  const runAccount = sessionStep?.profileId ?? run.agentProfile ?? DEFAULT_AGENT_ACCOUNT_ID
+  const runAccount = run.agentProfile ?? sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
   return { sessionStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
 }
 
@@ -176,7 +175,9 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   // fetches at all — every other thread (running, queued, closed with no session) would be
   // fetching it to render nothing.
   const { sessionStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
-  const catalog = useRunnerModels(runner, available, account)
+  const health = useHealth()
+  const localHandoff = health.data?.capabilities?.localHandoff !== false
+  const catalog = useRunnerModels(runner, available && !health.isPending, localHandoff ? account : null)
   const registered = useRunners()
   const modelsLocked = config.data?.modelsLocked === true
   const runnerChanged = runner !== currentRunner

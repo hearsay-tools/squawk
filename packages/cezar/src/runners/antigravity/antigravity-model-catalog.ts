@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,18 +9,16 @@ import { agentHomeDir } from '../../paths.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { storedPersonalOAuth } from './login-probe.ts';
+import { antigravityBuildLabel } from './build-label.ts';
 
 const optionSchema = z.object({ value: z.string(), name: z.string() });
 const configsSchema = z.array(z.object({ id: z.string(), category: z.string().optional(), options: z.array(optionSchema).optional() }));
-const execute = promisify(execFile);
 const executable = () => productEnv('ANTIGRAVITY_BIN') ?? 'agy';
 
 /** Hashes stay in memory. Never retain credential contents or put them in cache diagnostics. */
 export async function antigravityModelCatalogKey(options: ModelDiscoveryContext): Promise<string> {
   const bin = executable();
-  const { stdout } = await execute(bin, ['--version'], { timeout: 5000, maxBuffer: 32_768 });
-  const version = /^Build label:\s*(.+)$/m.exec(stdout)?.[1]?.trim();
-  if (!version) throw new Error('Antigravity build label is unavailable');
+  const version = await antigravityBuildLabel(bin);
   const env = { ...process.env, ...profileEnv('antigravity', options.accountHome) };
   const home = agentHomeDir('antigravity', env);
   const hash = createHash('sha256').update(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || '');

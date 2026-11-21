@@ -146,3 +146,16 @@ build and credential digest. Other runners keep their existing login and admissi
 | Probe fails or credentials absent | Suggested presets/auto stay usable; boot and task/worker admission never await this probe |
 | New task, GitHub handoff or Continue selects a named account | Request/cache key carries its selected account id |
 | Global model defaults or an automation without an account override | Default-account catalog, as before |
+
+### Review corrections for account selection and sign-in
+
+| Case | Required behavior |
+| --- | --- |
+| Relative default Gemini home | Resolve shared instruction/skill symlink sources against the host cwd |
+| Cached catalog read or concurrent identity reads | Stat the resolved executable; share its build-label probe until that file identity changes; always recheck auth |
+| Planned task with an explicit account | Submit that account, matching the normal task path and the displayed catalog |
+| Continue starts a fresh conversation on the run account | Models and skills use that account, rather than the previous session account |
+| Hosted catalog picker | Omit named-account discovery; keep the unscoped fallback usable |
+| Account home updated under the same profile id | Invalidate model queries alongside account and skill queries |
+| Dialog closes while sign-in is starting | Invalidate the start attempt and cancel its late result; keep Connect disabled until that pending start settles |
+| Status request fails transiently | Show the error and an explicit Retry status action, which restores polling after a successful read |

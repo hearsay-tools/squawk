@@ -152,6 +152,7 @@ describe('buildPlannedRunBody — the POST /api/v1/runs wire contract for approv
 
   it.each([
     { name: 'model rides when chosen', patch: { model: 'sonnet' }, key: 'model', expected: 'sonnet' },
+    { name: 'selected account rides with the plan', patch: { agentProfile: 'work' }, key: 'agentProfile', expected: 'work' },
     { name: 'connected fallback rides when it differs from the default', patch: { runner: 'codex' as const }, key: 'runner', expected: 'codex' },
     { name: 'removed count never rides along', patch: { variants: 3 }, key: 'variants', expected: undefined },
   ])('$name', ({ patch, key, expected }) => {

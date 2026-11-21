@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -12,7 +12,11 @@ registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
 const roots: string[] = [];
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function root() { const dir = await mkdtemp(join(tmpdir(), 'agy-auth-')); roots.push(dir); vi.stubEnv('HSQ_ANTIGRAVITY_BIN', bin); return dir; }
+async function root() {
+  const dir = await mkdtemp(join(tmpdir(), 'agy-auth-')); roots.push(dir);
+  const executable = join(dir, 'agy'); await copyFile(bin, executable); vi.stubEnv('HSQ_ANTIGRAVITY_BIN', executable);
+  return dir;
+}
 
 it('completes two native personal sign-ins with isolated secret and settings files', async () => {
   const dir = await root(); const homes = [join(dir, 'one'), join(dir, 'two')];
@@ -58,15 +62,21 @@ it('discovers native opaque IDs and model-specific thinking levels without a pro
 
 it('changes catalog identity for account auth, key and build changes', async () => {
   const dir = await root(); const accountHome = join(dir, 'account');
+  vi.stubEnv('GEMINI_API_KEY', ''); vi.stubEnv('GOOGLE_API_KEY', '');
+  const versionLog = join(dir, 'versions'); vi.stubEnv('AGY_MOCK_VERSION_LOG', versionLog);
   const key = () => antigravityModelCatalogKey({ accountHome });
-  const initial = await key();
+  const [initial, concurrent] = await Promise.all([key(), key()]); expect(concurrent).toBe(initial);
   await mkdir(join(accountHome, 'antigravity-acp'), { recursive: true });
   await writeFile(join(accountHome, 'antigravity-acp/settings.json'), '{"auth":{"type":"oauth-personal"}}');
   const auth = await key(); expect(auth).not.toBe(initial);
   vi.stubEnv('GEMINI_API_KEY', 'new-fixture-key');
   const api = await key(); expect(api).not.toBe(auth); expect(api).not.toContain('new-fixture-key');
-  vi.stubEnv('AGY_MOCK_VERSION', '1.5.1'); expect(await key()).not.toBe(api);
+  expect((await readFile(versionLog, 'utf8')).trim().split('\n')).toHaveLength(1);
+  vi.stubEnv('AGY_MOCK_VERSION', '1.5.1');
+  const executable = join(dir, 'agy'); await writeFile(executable, `${await readFile(executable, 'utf8')}\n`);
+  expect(await key()).not.toBe(api);
   expect(await antigravityModelCatalogKey({ accountHome: join(dir, 'other') })).not.toBe(await key());
+  expect((await readFile(versionLog, 'utf8')).trim().split('\n')).toHaveLength(2);
 });
 
 it('explains API-key presence without requiring a folder or treating business auth as supported', async () => {

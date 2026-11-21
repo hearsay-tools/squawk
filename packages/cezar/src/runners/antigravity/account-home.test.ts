@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, writeFile, readFile, readlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { profileEnv } from '../../core/agent-profiles.ts';
@@ -12,15 +12,16 @@ const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 async function workspace() { const dir = await mkdtemp(join(tmpdir(), 'agy-accounts-')); dirs.push(dir); return dir; }
 
-it('shares only native instructions and skills and preserves account-owned files', async () => {
+it.each(['absolute', 'relative'])('shares native files from an %s source home and preserves account files', async kind => {
   const root = await workspace(); const source = join(root, 'default'); const account = join(root, 'work');
   await mkdir(source); await writeFile(join(source, 'AGENTS.md'), 'User instructions');
-  prepareAntigravityAccount(account, source);
+  const sourceHome = kind === 'relative' ? relative(process.cwd(), source) : source;
+  prepareAntigravityAccount(account, sourceHome);
   for (const name of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills']) {
     expect(await readlink(join(account, name))).toBe(join(source, name));
   }
   await writeFile(join(account, 'antigravity-acp-settings'), 'account-owned');
-  prepareAntigravityAccount(account, source);
+  prepareAntigravityAccount(account, sourceHome);
   expect(await readFile(join(account, 'antigravity-acp-settings'), 'utf8')).toBe('account-owned');
   expect(await readFile(join(account, 'AGENTS.md'), 'utf8')).toBe('User instructions');
 });

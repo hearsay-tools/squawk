@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 if (process.argv.includes('--version')) {
+  if (process.env.AGY_MOCK_VERSION_LOG) appendFileSync(process.env.AGY_MOCK_VERSION_LOG, 'version\n');
   console.log(`antigravity_extensions/acp_server\nBuild label: ${process.env.AGY_MOCK_VERSION || '1.5.0'}`);
   process.exit(0);
 }

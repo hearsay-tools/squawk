@@ -71,7 +71,10 @@ Each value is what agy 1.5.0 did, with the fixture or code that shows it. `Runne
 
 **The host probe may spawn `agy --version`.** It costs about 2.6 s and 260 MB of memory once,
 writes nothing and needs no credential. Its timeout must allow at least 5 s on a loaded host.
-Read the version from the `Build label:` line.
+Read the version from the `Build label:` line. Model-catalog identity requests share one
+version probe for the resolved executable’s file identity (path, device/inode, size, timestamps
+and mode); replacing or modifying it triggers another probe. Credential identity is still read
+on every catalog request.
 
 **Launch through a symlink (owner decision D1).** The `.par` looks for `localharness_external`
 in `dirname(abspath(argv[0]))`, which does not resolve symlinks, then next to

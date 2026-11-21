@@ -5,16 +5,21 @@ import { tmpdir } from 'node:os';
 import type { AgentRunSpec } from '../../core/agent-runner.ts';
 import { buildChildEnv } from '../../core/agent-env.ts';
 
-export function antigravityHarness(bin: string, env: NodeJS.ProcessEnv, cwd: string): string | undefined {
+export function resolveAntigravityExecutable(bin: string, env: NodeJS.ProcessEnv, cwd: string): string | undefined {
   const candidates = isAbsolute(bin) || bin.includes('/') ? [resolve(cwd, bin)] : (env.PATH ?? '').split(delimiter).map(dir => join(dir, bin));
   for (const candidate of candidates) {
     try {
       accessSync(candidate, constants.X_OK);
-      const harness = join(dirname(realpathSync(candidate)), 'localharness_external');
-      return existsSync(harness) ? harness : undefined;
+      return realpathSync(candidate);
     } catch { /* An absent agy is handled by spawn, never at boot. */ }
   }
   return undefined;
+}
+export function antigravityHarness(bin: string, env: NodeJS.ProcessEnv, cwd: string): string | undefined {
+  const executable = resolveAntigravityExecutable(bin, env, cwd);
+  if (!executable) return undefined;
+  const harness = join(dirname(executable), 'localharness_external');
+  return existsSync(harness) ? harness : undefined;
 }
 export function antigravityEnv(bin: string, spec: AgentRunSpec): { env: NodeJS.ProcessEnv; temp: string } {
   const env = buildChildEnv({ backend: 'antigravity', extraEnv: spec.env });

@@ -529,6 +529,7 @@ export function useNewTaskSubmit(input: {
         buildPlannedRunBody({
           task: plan.task,
           steps: plan.steps,
+          agentProfile: input.agentProfile,
           model: engine.model,
           modelsLocked: engine.modelsLocked,
           effort: engine.effort,

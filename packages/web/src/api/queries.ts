@@ -610,11 +610,11 @@ function useAgentProfileMutation<TVariables>(
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles }),
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
         queryClient.invalidateQueries({ predicate: ({ queryKey }) => queryKey[1] === 'runner-skills' }),
+        invalidateRunnerModels(queryClient),
       ])
     },
   })
 }
-
 export function useCreateAgentProfile() {
   return useAgentProfileMutation((input: CreateAgentProfileInput) => createAgentProfile(input))
 }

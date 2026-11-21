@@ -38,6 +38,7 @@ import {
   useArchivedRuns,
   useRunnerSkills,
   useSelectAgentProfile,
+  useUpdateAgentProfile,
   workspaceQueryKeys,
 } from './queries'
 
@@ -1505,5 +1506,15 @@ it('invalidates cached runner lists after changing the project account', async (
   client.setQueryData(key, { runner: 'codex', skills: [], problems: [], source: 'live' })
   const { result } = renderHook(useSelectAgentProfile, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> })
   await act(async () => { await result.current.mutateAsync({ projectId: 'default', provider: 'codex', profileId: 'work' }) })
+  expect(client.getQueryState(key)?.isInvalidated).toBe(true)
+})
+
+it('invalidates named-account models when a profile moves to a different home', async () => {
+  fetchMock.mockResolvedValue(json({}))
+  const client = createQueryClient()
+  const key = workspaceQueryKeys.models('antigravity', 'work')
+  client.setQueryData(key, { runner: 'antigravity', models: [], source: 'live', stale: false })
+  const { result } = renderHook(useUpdateAgentProfile, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> })
+  await act(async () => { await result.current.mutateAsync({ id: 'work', configDir: '/new/account' }) })
   expect(client.getQueryState(key)?.isInvalidated).toBe(true)
 })
