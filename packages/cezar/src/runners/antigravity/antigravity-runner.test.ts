@@ -74,6 +74,9 @@ it('reports native execution errors as a failed turn and a failed result', async
   await expect(session.result).rejects.toThrow('Agent execution error:');
   expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'error' }));
   expect(events).toContainEqual(expect.objectContaining({ type: 'error' }));
+  // S44/S18: the run consumer must see the fault before any terminal boundary.
+  expect(events.filter(event => event.type === 'error' || event.type === 'turn-end').map(event => event.type))
+    .toEqual(['error', 'turn-end']);
 });
 
 it('counts a late steer as a successor turn and waits for its permission and result', async () => {
