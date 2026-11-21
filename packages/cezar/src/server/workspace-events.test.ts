@@ -484,6 +484,51 @@ describe('GET /api/v1/workspace/events', () => {
     expect(summaries[0]!.run).toEqual(row);
   });
 
+  it('serves both live streams in remote mode through a proxy that keeps its own Host (hearsay-tools/squawk#4014)', async () => {
+    process.env.CEZ_REMOTE = '1';
+    // Header names the live proxy sends; the shared worker's requests carry the page's cookies.
+    const proxy = {
+      host: 'cockpit.example.com',
+      cookie: 'session=opaque',
+      'remote-user': 'someone',
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': 'cockpit.example.com',
+      'sec-fetch-site': 'same-origin',
+    };
+    const workspace = await apiRequest(app, '/api/v1/workspace/events?runs=summary', { headers: proxy });
+    expect(workspace.status).toBe(200);
+    expect(workspace.headers.get('content-type')).toContain('text/event-stream');
+    const workspaceReader = (workspace.body as ReadableStream<Uint8Array>).getReader();
+    closers.push(() => workspaceReader.cancel());
+    expect(new TextDecoder().decode((await workspaceReader.read()).value)).toContain('event: ready');
+
+    const run = store.createRun({ title: 'remote', workflow: 'quick-task', task: 't', steps: [] });
+    const controller = new AbortController();
+    closers.push(async () => controller.abort());
+    const runs = await apiRequest(app, '/api/v1/workspace/run-events', {
+      method: 'POST', signal: controller.signal,
+      headers: { ...proxy, origin: 'https://cockpit.example.com', 'content-type': 'application/json' },
+      body: JSON.stringify({ runs: [{ projectId: bootId, runId: run.id, afterSeq: 0 }] }),
+    });
+    expect(runs.status).toBe(200);
+    const runsReader = (runs.body as ReadableStream<Uint8Array>).getReader();
+    closers.push(() => runsReader.cancel());
+    let wire = '';
+    while (!wire.includes('"type":"ready"')) {
+      const next = await runsReader.read();
+      if (next.done) break;
+      wire += new TextDecoder().decode(next.value);
+    }
+    expect(wire).toContain('"type":"ready"');
+
+    // A page of another site still cannot open the task stream.
+    const foreign = await apiRequest(app, '/api/v1/workspace/run-events', {
+      method: 'POST', headers: { ...proxy, origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ runs: [{ projectId: bootId, runId: run.id, afterSeq: 0 }] }),
+    });
+    expect(foreign.status).toBe(403);
+  });
+
   it('refuses an unknown stream mode', async () => {
     expect((await apiRequest(app, '/api/v1/workspace/events?runs=full')).status).toBe(400);
   });

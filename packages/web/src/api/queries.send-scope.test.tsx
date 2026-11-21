@@ -12,7 +12,7 @@ const fetchMock = vi.fn<typeof fetch>()
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
-  configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+  configureLiveSession({ bootProject: 'boot', apiBase: '' })
   setApiScope('active')
 })
 

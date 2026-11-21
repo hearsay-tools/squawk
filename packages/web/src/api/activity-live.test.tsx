@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACTIVITY_READ_MS, UNEXPECTED_ACTIVITY, activityQueryKey, useActivityLive, type ActivityScope } from './activity-live'
 import { configureLiveSession, resetLiveSession } from './live-coordinator'
-import { LIVE_PROTOCOL } from './live-protocol'
+import { LIVE_CHANNEL_REFUSED, LIVE_PROTOCOL } from './live-protocol'
 import { createQueryClient } from './query-client'
 import { run } from '@/routes/activity/activity.testkit'
 
@@ -59,7 +59,7 @@ const synced = (worker: Worker) => {
 
 describe('useActivityLive', () => {
   it('reads the snapshot once, then folds the project topic when the coordinator has topics', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { hook, title } = mount()
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(title()).toBe('first')
@@ -84,7 +84,7 @@ describe('useActivityLive', () => {
   it('keeps a topic snapshot when an older initial read answers after it', async () => {
     let answer!: (response: Response) => void
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { answer = resolve })))
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { title } = mount()
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     const worker = Worker.all[0]!
@@ -102,7 +102,7 @@ describe('useActivityLive', () => {
 
   it('never lets a delayed older topic frame replace a newer snapshot', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(snapshot('read', '2026-11-05T00:00:05.000Z')))))
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { title } = mount()
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(title()).toBe('read')
@@ -119,7 +119,7 @@ describe('useActivityLive', () => {
   })
 
   it('never lets an older HTTP answer replace a newer cached snapshot', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { client, title } = mount()
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     act(() => { client.setQueryData(activityQueryKey(shop), snapshot('pushed', '2026-11-05T00:00:02.000Z')) })
@@ -129,7 +129,7 @@ describe('useActivityLive', () => {
   })
 
   it('subscribes the workspace topic for the global view', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     mount({ kind: 'workspace' })
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(synced(Worker.all[0]!).entries.map((entry) => entry.demand)).toEqual([{ kind: 'topic', topic: 'activity:workspace' }])
@@ -137,13 +137,17 @@ describe('useActivityLive', () => {
   })
 
   it.each([
-    ['remote mode', () => configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })],
+    ['a shared channel the path refused', () => {
+      configureLiveSession({ bootProject: 'boot', apiBase: '' })
+      const worker = Worker.all[0]!
+      worker.port.onmessage?.({ data: { type: 'unavailable', version: LIVE_PROTOCOL, epoch: synced(worker).epoch, reason: LIVE_CHANNEL_REFUSED } })
+    }],
     ['no SharedWorker', () => {
       vi.stubGlobal('SharedWorker', undefined)
-      configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+      configureLiveSession({ bootProject: 'boot', apiBase: '' })
     }],
     ['a failed SharedWorker', () => {
-      configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+      configureLiveSession({ bootProject: 'boot', apiBase: '' })
       Worker.all[0]!.listeners.get('error')!()
     }],
   ])('re-reads the snapshot every 5 s with %s', async (_name, arrange) => {
@@ -164,8 +168,9 @@ describe('useActivityLive', () => {
   })
 
   it('shows a project the finite read finds removed as unavailable', async () => {
+    vi.stubGlobal('SharedWorker', undefined)
     const { project } = mount()
-    configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(project()).toMatchObject({ loaded: true, tasks: [{ title: 'first' }] })
 
@@ -176,8 +181,9 @@ describe('useActivityLive', () => {
   })
 
   it('reports any other failed finite read as the query error and keeps the last snapshot', async () => {
+    vi.stubGlobal('SharedWorker', undefined)
     const { title, client } = mount()
-    configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     refusal = { status: 500, error: 'boom' }
     await act(async () => { await vi.advanceTimersByTimeAsync(ACTIVITY_READ_MS) })
@@ -206,7 +212,7 @@ describe('useActivityLive', () => {
 
   it('reports a read that fails the contract as the query error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ generatedAt: 'x', projects: 'nope' }))))
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { client } = mount()
     // The query client retries a failed read once; the second answer is just as malformed.
     await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
@@ -214,7 +220,7 @@ describe('useActivityLive', () => {
   })
 
   it('keeps the last snapshot and reports the error when a topic frame fails the contract', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const { client, title } = mount()
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     const worker = Worker.all[0]!

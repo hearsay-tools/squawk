@@ -46,7 +46,7 @@ async function tick(ms = 1) {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
-  configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+  configureLiveSession({ bootProject: 'boot', apiBase: '' })
   vi.useFakeTimers()
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   document.dispatchEvent(new Event('visibilitychange'))

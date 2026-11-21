@@ -89,6 +89,55 @@ afterEach(() => {
 })
 
 describe('createTopicSocket', () => {
+  describe('bounded attempts for a path that never carries the upgrade (hearsay-tools/squawk#4014)', () => {
+    const ATTEMPTS = 3
+
+    it('gives up after the attempts that never opened, reports it once and stops reconnecting', () => {
+      const onRefused = vi.fn()
+      const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
+      socket.subscribe('health', () => undefined)
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        instance(attempt).drop() // a 401 from a Basic Auth proxy: the handshake fails, then close
+        vi.advanceTimersByTime(RECONNECT_DELAY_MS)
+      }
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS)
+      expect(onRefused).toHaveBeenCalledTimes(1)
+      socket.subscribe('home:recovery', () => undefined) // more demand in the same cycle
+      vi.advanceTimersByTime(10 * RECONNECT_DELAY_MS)
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS)
+      expect(onRefused).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives the next demand fresh attempts once every listener left', () => {
+      const onRefused = vi.fn()
+      const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
+      const release = socket.subscribe('health', () => undefined)
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        instance(attempt).drop()
+        vi.advanceTimersByTime(RECONNECT_DELAY_MS)
+      }
+      release()
+      socket.subscribe('health', () => undefined)
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS + 1)
+      instance(ATTEMPTS).open()
+      expect(instance(ATTEMPTS).frames()).toEqual([{ type: 'subscribe', topic: 'health' }])
+      expect(onRefused).toHaveBeenCalledTimes(1)
+    })
+
+    it('reconnects without a limit once an attempt opened (a server restart)', () => {
+      const onRefused = vi.fn()
+      const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
+      socket.subscribe('health', () => undefined)
+      instance(0).open()
+      for (let attempt = 0; attempt < ATTEMPTS + 2; attempt++) {
+        instance(attempt).drop()
+        vi.advanceTimersByTime(RECONNECT_DELAY_MS)
+      }
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS + 3)
+      expect(onRefused).not.toHaveBeenCalled()
+    })
+  })
+
   it('connects lazily on the first subscription and announces the topic on open', () => {
     const socket = createTopicSocket(URL)
     expect(FakeWebSocket.instances).toHaveLength(0)

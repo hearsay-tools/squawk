@@ -215,10 +215,64 @@ it('blocked SharedWorker uses finite HTTP in ten visible windows and aborts on p
   })
 })
 
-it('remote Basic Auth keeps finite recovery authenticated without a worker or ordinary socket', async () => {
+/** Auto-attach shared workers on this CDP connection and watch their network: SSE responses still
+ *  open, WebSockets still open, and every shared worker target seen. */
+const watchSharedWorkers = async (request: Request, subscribe: Parameters<Parameters<AgentBrowser['withCdp']>[0]>[1]) => {
+  const streams = new Set<string>(), sockets = new Set<string>(), workers = new Set<string>(), setupErrors: unknown[] = []
+  const off = subscribe(event => {
+    if (event.method === 'Target.attachedToTarget' && event.params.targetInfo.type === 'shared_worker') {
+      workers.add(event.params.targetInfo.targetId)
+      void request('Network.enable', {}, event.params.sessionId)
+        .then(() => request('Runtime.runIfWaitingForDebugger', {}, event.params.sessionId))
+        .catch(error => { setupErrors.push(error) })
+    }
+    const key = `${event.sessionId}:${event.params.requestId}`
+    if (event.method === 'Network.responseReceived' && event.params.response.mimeType === 'text/event-stream') streams.add(key)
+    if (event.method === 'Network.loadingFinished' || event.method === 'Network.loadingFailed') streams.delete(key)
+    if (event.method === 'Network.webSocketCreated') sockets.add(key)
+    if (event.method === 'Network.webSocketClosed') sockets.delete(key)
+  })
+  await request('Target.setAutoAttach', { autoAttach: true, flatten: true, waitForDebuggerOnStart: true, filter: [{ type: 'shared_worker', exclude: false }, { exclude: true }] })
+  return { streams, sockets, workers, setupErrors, off }
+}
+
+it('remote mode behind a path that carries cookies uses the shared worker: pushes, no 5 s reconciliation (hearsay-tools/squawk#4014)', async () => {
+  const remote = await createTabFixture(process.cwd(), { remote: true })
+  try {
+    await browser.withCdp(async (request, subscribe) => {
+      const live = await watchSharedWorkers(request, subscribe)
+      const reconciliations: string[] = []
+      const { targetId } = await request('Target.createTarget', { url: 'about:blank', newWindow: true })
+      const { sessionId } = await request('Target.attachToTarget', { targetId, flatten: true })
+      const off = subscribe(event => {
+        if (event.sessionId === sessionId && event.method === 'Network.requestWillBeSent' && new URL(event.params.request.url).pathname === '/api/v1/projects') reconciliations.push(event.params.request.url)
+      })
+      try {
+        await request('Network.enable', {}, sessionId)
+        const run = remote.runs[0]!
+        await request('Page.navigate', { url: `${remote.origin}/p/${run.projectId}/tasks/${run.runId}` }, sessionId)
+        await waitText(request, sessionId, `Tab fixture transcript ${run.runId}`)
+        await pollFor(async () => live.streams.size === 2 && live.sockets.size === 1 ? true : undefined,
+          () => `live union: ${live.streams.size} SSE, ${live.sockets.size} WS, ${live.workers.size} workers; setup errors: ${live.setupErrors.map(String).join('; ') || 'none'}`, { timeoutMs: 20_000 })
+        const text = `pushed-${Date.now()}`
+        await remote.control({ publish: text, runs: [run] })
+        await waitText(request, sessionId, text)
+        // The finite fallback reads the registry every 5 s; the shared feed does not.
+        reconciliations.length = 0
+        // bound: proves an absence; two finite cycles would fit in this window.
+        await new Promise(resolve => setTimeout(resolve, 11_000))
+        expect(reconciliations).toEqual([])
+        expect(live.workers.size).toBe(1)
+      } finally { off(); live.off(); await request('Target.closeTarget', { targetId }) }
+    })
+  } finally { await remote.stop() }
+})
+
+it('remote Basic Auth the shared worker cannot carry falls back once to authenticated finite recovery, with no page socket', async () => {
   const remote = await createTabFixture(process.cwd(), { remote: true, basicAuth: true })
   try {
     await browser.withCdp(async (request, subscribe) => {
+      const live = await watchSharedWorkers(request, subscribe)
       const persistent: string[] = [], failures: number[] = []
       const { targetId } = await request('Target.createTarget', { url: 'about:blank', newWindow: true })
       const { sessionId } = await request('Target.attachToTarget', { targetId, flatten: true })
@@ -249,7 +303,11 @@ it('remote Basic Auth keeps finite recovery authenticated without a worker or or
         expect(await read(request, sessionId, `document.body.innerText.split(${JSON.stringify(afterOffline)}).length - 1`)).toBe(1)
         expect(persistent).toEqual([])
         expect(failures).toEqual([])
-      } finally { off(); await request('Target.closeTarget', { targetId }) }
+        // The worker's unauthenticated stream was refused once; the restore after going online
+        // stayed on finite HTTP instead of trying the worker again.
+        expect(live.workers.size).toBeLessThanOrEqual(1)
+        expect(live.sockets.size).toBe(0)
+      } finally { off(); live.off(); await request('Target.closeTarget', { targetId }) }
     })
   } finally { await remote.stop() }
 })

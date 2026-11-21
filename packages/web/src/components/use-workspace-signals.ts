@@ -28,9 +28,10 @@ export type WorkspaceSignals = {
  * order (hearsay-tools/cezarion#438) is applied here for the same reason: one place, every surface.
  *
  * Every mark reads the SSE-patched workspace runs index — the current project's too. No WebSocket
- * topic: remote mode opens no browser WebSocket, and a WS-driven signal would go stale in hosted
- * cockpits. The index is observed at every width: the rail is `md`-up but the drawer's rows and
- * the menu button's pills are the phone's answer to "which project needs me".
+ * topic: a cockpit without a working shared socket (another API origin, or a proxy that refuses
+ * the upgrade) would see a WS-driven signal go stale. The index is observed at every width: the
+ * rail is `md`-up but the drawer's rows and the menu button's pills are the phone's answer to
+ * "which project needs me".
  *
  * Null until the registry answers, so a shell without a QueryClient answer renders no project UI.
  */

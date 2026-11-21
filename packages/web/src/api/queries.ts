@@ -742,10 +742,11 @@ export function useGithubOwners({ enabled }: { enabled: boolean }) {
  * not any one view. Subscribing per `useHealth` consumer instead would tie that global signal to
  * ~15 component lifecycles — the topic would flap `subscribe`/`unsubscribe` on every mount,
  * unmount and StrictMode remount, and would drop entirely for any instant no consumer happened
- * to be mounted. One root-level subscription keeps local cockpits live continuously, so they are
- * always notified when health changes; remote cockpits stay on authenticated HTTP because browser
- * WebSocket cannot carry proxy credentials explicitly. The `useHealth` readers below just read
- * the cache either transport fills.
+ * to be mounted. One root-level subscription keeps the cockpit live continuously, so it is always
+ * notified when health changes. When the shared channels are not available (another API origin,
+ * no SharedWorker, or a proxy that refuses them) the live coordinator reads health over
+ * authenticated HTTP instead. The `useHealth` readers below just read the cache either transport
+ * fills.
  *
  * The cache key is read inside the callback (`queryKeys.health` is a scope-aware getter), so a
  * project switch routes each pushed snapshot to the active scope's cache without re-subscribing.
@@ -757,22 +758,17 @@ export function useHealthSubscription(): void {
 
     const syncTransport = (): void => {
       const health = queryClient.getQueryData<HealthResponse>(queryKeys.health)
-      const local = health?.capabilities?.localHandoff === true
-      if (health) configureLiveSession({ local, bootProject: health.bootProject ?? 'default', apiBase: getApiBaseUrl() })
-      if (local && releaseTopic === undefined) {
-        releaseTopic = subscribeTopic('health', (data) => {
-          queryClient.setQueryData(queryKeys.health, data as HealthResponse)
-        })
-      } else if (!local && releaseTopic !== undefined) {
-        releaseTopic()
-        releaseTopic = undefined
-      }
+      if (!health) return
+      configureLiveSession({ bootProject: health.bootProject ?? 'default', apiBase: getApiBaseUrl() })
+      releaseTopic ??= subscribeTopic('health', (data) => {
+        queryClient.setQueryData(queryKeys.health, data as HealthResponse)
+      })
     }
 
-    // Do not open a socket before the authenticated HTTP bootstrap tells us the deployment
-    // mode. Browser WebSocket has no credentials option, so a remote Basic Auth proxy can reject
-    // the upgrade and trigger ws.ts's three-second reconnect loop (and a login prompt each time).
-    // Local cockpits opt in after health arrives; remote/failed bootstraps fail closed to HTTP.
+    // Do not open a socket before the authenticated HTTP bootstrap answers: a proxy that has not
+    // authenticated this document yet would refuse it. After that, local and remote cockpits alike
+    // try the shared channels; one that never connects ends in finite HTTP after a bounded number
+    // of attempts (`LIVE_CONNECT_ATTEMPTS`, hearsay-tools/squawk#4014).
     syncTransport()
     const releaseCache = queryClient.getQueryCache().subscribe(syncTransport)
     return () => {

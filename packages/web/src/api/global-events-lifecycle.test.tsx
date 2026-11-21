@@ -23,16 +23,17 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); resetLiveSession(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
-it.each([true, false].flatMap(local => ['visibility', 'bfcache', 'freeze'].map(lifecycle => ({ local, lifecycle }))))(
-  'reconciles once after fresh authentication on $lifecycle restoration (local: $local)', async ({ local, lifecycle }) => {
+it.each([true, false].flatMap(shared => ['visibility', 'bfcache', 'freeze'].map(lifecycle => ({ shared, lifecycle }))))(
+  'reconciles once after fresh authentication on $lifecycle restoration (shared worker: $shared)', async ({ shared, lifecycle }) => {
   const client = createQueryClient()
   const usage = createUsageStore()
-  configureLiveSession({ local, bootProject: 'boot', apiBase: '' })
+  if (!shared) vi.stubGlobal('SharedWorker', undefined)
+  configureLiveSession({ bootProject: 'boot', apiBase: '' })
   renderHook(() => useGlobalEvents(usage), {
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   })
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-  expect(Worker.all).toHaveLength(local ? 1 : 0)
+  expect(Worker.all).toHaveLength(shared ? 1 : 0)
   const invalidation = vi.spyOn(client, 'invalidateQueries')
   let authenticate!: (response: Response) => void
   vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { authenticate = resolve })))
@@ -43,7 +44,7 @@ it.each([true, false].flatMap(local => ['visibility', 'bfcache', 'freeze'].map(l
     } else if (lifecycle === 'bfcache') window.dispatchEvent(new Event('pagehide'))
     else document.dispatchEvent(new Event('freeze'))
   })
-  if (local) expect(Worker.all[0]!.port.close).toHaveBeenCalledTimes(1)
+  if (shared) expect(Worker.all[0]!.port.close).toHaveBeenCalledTimes(1)
   act(() => {
     if (lifecycle === 'visibility') {
       Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
@@ -53,10 +54,10 @@ it.each([true, false].flatMap(local => ['visibility', 'bfcache', 'freeze'].map(l
   })
   expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/health', expect.objectContaining({ credentials: 'include' }))
   expect(invalidation).not.toHaveBeenCalled()
-  expect(Worker.all).toHaveLength(local ? 1 : 0)
+  expect(Worker.all).toHaveLength(shared ? 1 : 0)
   await act(async () => {
     authenticate(new Response(JSON.stringify({ bootProject: 'boot', capabilities: {
-      localHandoff: local, automations: false,
+      localHandoff: true, automations: false,
       preview: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true,
     } })))
     await vi.advanceTimersByTimeAsync(0)
@@ -64,8 +65,8 @@ it.each([true, false].flatMap(local => ['visibility', 'bfcache', 'freeze'].map(l
   const runInvalidations = invalidation.mock.calls.map(([filters]) => filters?.queryKey)
     .filter(key => key?.length === 2 && key[1] === 'runs')
   expect(runInvalidations).toEqual([queryKeys.runs.all])
-  expect(Worker.all).toHaveLength(local ? 2 : 0)
-  if (!local) {
+  expect(Worker.all).toHaveLength(shared ? 2 : 0)
+  if (!shared) {
     invalidation.mockClear()
     await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
     expect(invalidation.mock.calls.filter(([filters]) => filters?.queryKey?.[1] === 'runs')).toHaveLength(1)

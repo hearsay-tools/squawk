@@ -1,5 +1,5 @@
 /**
- * Ref-counted topic socket used by the shared local live owner. Subscribe once per topic,
+ * Ref-counted topic socket used by the shared live owner. Subscribe once per topic,
  * unsubscribe on last listener and close with no demand. JSON frames carry subscriptions, events
  * or errors.
  */
@@ -46,11 +46,24 @@ export interface TopicSocket {
   subscribe(topic: string, listener: TopicListener): () => void
 }
 
-export function createTopicSocket(url?: string): TopicSocket {
+export interface TopicSocketOptions {
+  /** Connection attempts before the socket gives up, while no attempt of the current demand has
+   *  opened. A socket that opened once reconnects without a limit (a server restart). */
+  connectAttempts?: number
+  /** Called once when `connectAttempts` attempts failed to open. The socket then stays closed
+   *  until every listener leaves; the next demand gets fresh attempts. */
+  onRefused?: () => void
+}
+
+export function createTopicSocket(url?: string, options: TopicSocketOptions = {}): TopicSocket {
   const listeners = new Map<string, Set<TopicListener>>()
   const pendingSnapshots = new Set<string>()
   const id = {}
   let connecting = false
+  /** An attempt of the current demand opened: the path carries the socket. */
+  let opened = false
+  let failedOpens = 0
+  let refused = false
   let socket: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
   let idleTimer: ReturnType<typeof setTimeout> | undefined
@@ -96,6 +109,8 @@ export function createTopicSocket(url?: string): TopicSocket {
     ws.addEventListener('open', () => {
       if (ws !== socket) return
       connecting = false
+      opened = true
+      failedOpens = 0
       for (const topic of listeners.keys()) pendingSnapshots.add(topic)
       syncIdle()
       petWatchdog() // arm liveness detection the moment the socket is usable
@@ -131,6 +146,12 @@ export function createTopicSocket(url?: string): TopicSocket {
       syncIdle()
       clearTimeout(watchdogTimer) // no live socket to watch; a fresh one re-arms on open
       watchdogTimer = undefined
+      // A proxy that cannot carry the upgrade fails every attempt the same way: stop and say so.
+      if (!opened && options.onRefused && ++failedOpens >= (options.connectAttempts ?? 1)) {
+        refused = true
+        options.onRefused()
+        return
+      }
       // Reconnect only while something is held; the idle path already closed on purpose.
       if (listeners.size > 0 && reconnectTimer === undefined) {
         reconnectTimer = setTimeout(() => {
@@ -161,7 +182,7 @@ export function createTopicSocket(url?: string): TopicSocket {
       clearTimeout(idleTimer)
       idleTimer = undefined
 
-      if (!socket) {
+      if (!socket && !refused) {
         // A pending reconnect backoff shouldn't delay a fresh subscription.
         clearTimeout(reconnectTimer)
         reconnectTimer = undefined
@@ -182,6 +203,8 @@ export function createTopicSocket(url?: string): TopicSocket {
         pendingSnapshots.delete(topic)
         syncIdle()
         send({ type: 'unsubscribe', topic })
+        // The refused demand has ended. The next one tries again with fresh attempts.
+        if (listeners.size === 0 && refused) { refused = false; failedOpens = 0 }
         if (listeners.size === 0 && idleTimer === undefined) {
           idleTimer = setTimeout(() => {
             idleTimer = undefined
@@ -194,6 +217,8 @@ export function createTopicSocket(url?: string): TopicSocket {
             watchdogTimer = undefined
             socket?.close()
             socket = null
+            opened = false
+            failedOpens = 0
           }, IDLE_CLOSE_DELAY_MS)
         }
       }

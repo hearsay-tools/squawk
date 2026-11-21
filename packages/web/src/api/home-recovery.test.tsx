@@ -38,7 +38,7 @@ afterEach(() => {
 function setup(local = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } })
   clients.push(client)
-  client.setQueryData(queryKeys.health, { capabilities: { localHandoff: local } })
+  client.setQueryData(queryKeys.health, { capabilities: { localHandoff: local } }) // remote mode unless asked
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
   return { client, wrapper }
 }
@@ -55,13 +55,12 @@ it('reads one workspace snapshot and turns malformed server bodies into API erro
   await expect(getHomeRecovery()).rejects.toThrow('unexpected body')
 });
 
-it('holds one local topic after bootstrap, validates frames, and releases it while hidden', async () => {
+it('holds one topic in local and remote mode, validates frames, and releases it while hidden (hearsay-tools/squawk#4014)', async () => {
+  // The live coordinator opens no channel before the health bootstrap; the topic demand waits there.
   const { client, wrapper } = setup(false)
   const release = vi.fn()
   vi.mocked(subscribeTopic).mockReturnValue(release)
-  client.setQueryData(queryKeys.health, {}) // An incomplete bootstrap must keep topic demand closed.
   const hook = renderHook(() => useHomeRecoverySubscription(), { wrapper })
-  expect(subscribeTopic).not.toHaveBeenCalled()
   act(() => client.setQueryData(queryKeys.health, { capabilities: { localHandoff: true } }))
   expect(subscribeTopic).toHaveBeenCalledTimes(1)
   expect(subscribeTopic).toHaveBeenCalledWith('home:recovery', expect.any(Function))
@@ -79,11 +78,11 @@ it('holds one local topic after bootstrap, validates frames, and releases it whi
   expect(release).toHaveBeenCalledTimes(1)
 });
 
-it.each([false, true])('uses coordinator finite fallback when local=%s and does no hidden read', async local => {
-  const { client, wrapper } = setup(local)
+it('uses coordinator finite fallback and does no hidden read', async () => {
+  const { client, wrapper } = setup()
   renderHook(() => useHomeRecoverySubscription(), { wrapper })
-  expect(subscribeTopic).toHaveBeenCalledTimes(local ? 1 : 0)
-  // A local topic can remain registered while a failed SharedWorker uses finite delivery.
+  expect(subscribeTopic).toHaveBeenCalledTimes(1)
+  // The topic remains registered while a failed or refused SharedWorker uses finite delivery.
   const reconcile = vi.mocked(onLiveReconcile).mock.calls[0]![0]
   const signal = new AbortController().signal
   fetchMock.mockResolvedValueOnce(json(flagged))

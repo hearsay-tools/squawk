@@ -2,8 +2,10 @@ import { liveRunFrameSchema } from '@open-mercato/cezar-api-client/contract/live
 import { createLiveOwner, type LivePort } from './live-owner'
 import { createTopicSocket } from './topic-socket'
 import { readSse } from './sse-reader'
+import { LIVE_CONNECT_ATTEMPTS } from './live-protocol'
 
-const topicSocket = createTopicSocket()
+// The owner is created below; the socket reports a refusal only after its first attempts fail.
+const topicSocket = createTopicSocket(undefined, { connectAttempts: LIVE_CONNECT_ATTEMPTS, onRefused: () => owner.refuse() })
 const owner = createLiveOwner({
   async stream(kind, runs, frame, signal) {
     // The workspace lane reads list rows (hearsay-tools/cezarion#2730); `LIVE_WORKER_NAME` changed with it.

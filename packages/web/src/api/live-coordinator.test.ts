@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLiveCoordinator, onLiveReconcile } from './live-coordinator'
-import { LIVE_PROTOCOL } from './live-protocol'
+import { LIVE_CHANNEL_REFUSED, LIVE_PROTOCOL } from './live-protocol'
 
 class Worker {
   static all: Worker[] = []
@@ -27,7 +27,9 @@ afterEach(() => {
   if (visibilityState) Object.defineProperty(document, 'visibilityState', visibilityState)
   else Reflect.deleteProperty(document, 'visibilityState')
 })
-const local = { local: true, bootProject: 'boot', apiBase: '' }
+const local = { bootProject: 'boot', apiBase: '' }
+/** The epoch of the document's last message to `worker`. */
+const lastEpoch = (worker: Worker) => (worker.port.postMessage.mock.calls.at(-1)![0] as { epoch: number }).epoch
 
 describe('document live demand', () => {
   it('waits for authenticated bootstrap and suspends hidden/pagehide work', async () => {
@@ -60,16 +62,49 @@ describe('document live demand', () => {
     expect(Worker.all[0]!.port.close).toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledWith('/api/v1/workspace/run-event-batches', expect.objectContaining({ credentials: 'include', method: 'POST' }))
   })
-  it('opens no SharedWorker, EventSource, or ordinary socket in remote mode', async () => {
+  it('opens no EventSource or ordinary socket of its own: shared delivery goes through the worker (hearsay-tools/squawk#4014)', async () => {
     const eventSource = vi.fn(), socket = vi.fn()
     vi.stubGlobal('EventSource', eventSource); vi.stubGlobal('WebSocket', socket)
-    coordinator.configure({ ...local, local: false })
+    coordinator.configure(local)
     coordinator.subscribe({ kind: 'workspace' }, {})
     coordinator.subscribe({ kind: 'topic', topic: 'health' }, {})
     coordinator.subscribe({ kind: 'run', projectId: 'boot', runId: 'run', afterSeq: 0 }, {})
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(Worker.all).toHaveLength(0); expect(eventSource).not.toHaveBeenCalled(); expect(socket).not.toHaveBeenCalled()
-    expect(fetch).toHaveBeenCalled()
+    expect(Worker.all).toHaveLength(1); expect(eventSource).not.toHaveBeenCalled(); expect(socket).not.toHaveBeenCalled()
+    expect(coordinator.transport()).toBe('topics')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it.each([LIVE_CHANNEL_REFUSED, 'authentication required'])('stays on finite HTTP after the worker reports %s, also after a visibility restore (hearsay-tools/squawk#4014)', async reason => {
+    coordinator.configure(local)
+    coordinator.subscribe({ kind: 'workspace' }, {})
+    const worker = Worker.all[0]!
+    worker.reply({ type: 'unavailable', version: LIVE_PROTOCOL, epoch: lastEpoch(worker), reason })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(worker.port.close).toHaveBeenCalled()
+    expect(coordinator.transport()).toBe('finite')
+    expect(fetch).not.toHaveBeenCalledWith('/api/v1/health', expect.anything())
+    // A restore authenticates again but does not retry a path that refused the channels.
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledWith('/api/v1/health', expect.anything())
+    expect(Worker.all).toHaveLength(1)
+    expect(coordinator.transport()).toBe('finite')
+    // A new session (a new bootstrap) tries the shared channels again.
+    coordinator.resetSession()
+    coordinator.configure(local)
+    expect(Worker.all).toHaveLength(2)
+  })
+  it('retries the worker after a visibility restore when the worker itself failed', async () => {
+    coordinator.configure(local)
+    coordinator.subscribe({ kind: 'workspace' }, {})
+    Worker.all[0]!.reply({ type: 'hello', version: LIVE_PROTOCOL + 1 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.transport()).toBe('finite')
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(Worker.all).toHaveLength(2)
   })
   it('filters stale epochs and other project transcripts before acknowledgement', () => {
     const frame = vi.fn()
@@ -145,7 +180,8 @@ describe('worker recovery boundaries', () => {
     coordinator.subscribe({ kind: 'topic', topic: 'other' }, {})
     expect(syncs().at(-1)!.workspaceReady).toBeUndefined()
     coordinator.resetSession()
-    coordinator.configure({ ...local, local: false })
+    vi.stubGlobal('SharedWorker', undefined)
+    coordinator.configure(local)
     expect(coordinator.requestWorkspaceReady()).toBe(false)
   })
   it('clears shared delivery and uses document authentication after an authorization failure', async () => {
@@ -193,7 +229,8 @@ describe('authoritative restoration barriers', () => {
   it('aborts stalled reset hydration at the finite-cycle deadline and retries', async () => {
     let signal: AbortSignal | undefined
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ generation: 'one', results: [{ type: 'reset', projectId: 'boot', runId: 'a', status: 409, error: 'expired' }] })))
-    coordinator.configure({ ...local, local: false })
+    vi.stubGlobal('SharedWorker', undefined)
+    coordinator.configure(local)
     coordinator.subscribe({ kind: 'run', projectId: 'boot', runId: 'a', afterSeq: 0 }, {
       reset: (_reason, current) => { signal = current; return new Promise<void>(resolve => current.addEventListener('abort', () => resolve(), { once: true })) },
     })
@@ -222,7 +259,7 @@ it('keeps shared delivery closed after restore authentication fails, then retrie
   expect(Worker.all).toHaveLength(2)
 })
 
-it('uses the restored deployment mode and boot alias before resubscribing a task', async () => {
+it('uses the restored boot alias before resubscribing a task; remote mode keeps the shared worker', async () => {
   coordinator.configure(local)
   coordinator.subscribe({ kind: 'run', projectId: 'default', runId: 'a', afterSeq: 5 }, { reset: async () => ({ afterSeq: 8 }) })
   window.dispatchEvent(new Event('pagehide'))
@@ -235,9 +272,10 @@ it('uses the restored deployment mode and boot alias before resubscribing a task
   })
   window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
   await vi.advanceTimersByTimeAsync(0)
-  expect(Worker.all).toHaveLength(1)
-  const batch = vi.mocked(fetch).mock.calls.find(([path]) => String(path).endsWith('/run-event-batches'))!
-  expect(JSON.parse(String(batch[1]!.body)).runs).toEqual([{ projectId: 'new-boot', runId: 'a', afterSeq: 8 }])
+  expect(Worker.all).toHaveLength(2)
+  const sync = Worker.all[1]!.port.postMessage.mock.calls.map(([message]) => message as any).filter(message => message.type === 'sync').at(-1)
+  expect(sync.entries.map((entry: any) => entry.demand)).toEqual([{ kind: 'run', projectId: 'new-boot', runId: 'a', afterSeq: 8 }])
+  expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/run-event-batches'))).toBe(false)
 })
 
 it('restores live delivery from an older server whose health lacks newer capabilities', async () => {
@@ -260,7 +298,8 @@ it('keeps report-state reads in the finite document transport and sends only the
   const sync = worker.port.postMessage.mock.calls.at(-1)![0] as any
   expect(sync.entries.map((entry: any) => entry.demand)).toEqual([{ kind: 'topic', topic: 'reports:project:P' }])
   expect(fetch).not.toHaveBeenCalled()
-  coordinator.configure({ ...local, local: false })
+  worker.reply({ type: 'unavailable', version: LIVE_PROTOCOL, epoch: lastEpoch(worker), reason: LIVE_CHANNEL_REFUSED })
+  await vi.advanceTimersByTimeAsync(0)
   const offRead = coordinator.subscribe({ kind: 'read', path: '/api/v1/p/P/reports/state', intervalMs: 5_000 }, {})
   await vi.advanceTimersByTimeAsync(5_000)
   expect(fetch).toHaveBeenCalledWith('/api/v1/p/P/reports/state', expect.objectContaining({ credentials: 'include' }))

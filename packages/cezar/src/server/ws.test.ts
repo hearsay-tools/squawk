@@ -417,6 +417,42 @@ describe('verifyWsUpgrade', () => {
     ).toEqual({ trusted: true });
   });
 
+  // Remote mode behind a cookie or forward-auth proxy that keeps the public Host: the cockpit's
+  // shared worker opens this socket, and the browser sends the page's own origin (hearsay-tools/squawk#4014).
+  describe('remote mode behind a reverse proxy', () => {
+    const proxied = {
+      host: 'cockpit.example.com',
+      cookie: 'session=opaque',
+      'remote-user': 'someone',
+      'x-forwarded-proto': 'https',
+      'x-forwarded-for': '203.0.113.7',
+      'sec-fetch-site': 'same-origin',
+    };
+    beforeEach(() => {
+      process.env.CEZ_REMOTE = '1';
+    });
+
+    it('trusts the proxied cockpit: the Origin has the Host authority', () => {
+      expect(verifyWsUpgrade(req({ ...proxied, origin: 'https://cockpit.example.com' }))).toEqual({ trusted: true });
+    });
+
+    it('trusts a proxy on a non-default port when the Origin carries the same port', () => {
+      expect(verifyWsUpgrade(req({ ...proxied, host: 'cockpit.example.com:8443', origin: 'https://cockpit.example.com:8443' }))).toEqual({
+        trusted: true,
+      });
+    });
+
+    it('refuses a page of another site', () => {
+      expect(verifyWsUpgrade(req({ ...proxied, origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }))).toBe(false);
+    });
+
+    it('refuses the upgrade when the proxy rewrites Host to the upstream address', () => {
+      // The authorities no longer match and neither end is loopback on both sides. The cockpit
+      // falls back to finite HTTP after its bounded attempts.
+      expect(verifyWsUpgrade(req({ ...proxied, host: '127.0.0.1:4321', origin: 'https://cockpit.example.com' }))).toBe(false);
+    });
+  });
+
   it('the cockpit itself passes trusted on authority alone, whatever Sec-Fetch-Site says', () => {
     expect(
       verifyWsUpgrade(

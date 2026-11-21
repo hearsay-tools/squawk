@@ -1,6 +1,6 @@
 import { LIVE_BYTE_LIMIT, LIVE_RUN_LIMIT } from '@open-mercato/cezar-api-client/contract/live-limits'
 import type { LiveRunDemand } from '@open-mercato/cezar-api-client'
-import { LEASE_MS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerOutput } from './live-protocol'
+import { LEASE_MS, LIVE_CHANNEL_REFUSED, LIVE_CONNECT_ATTEMPTS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerOutput } from './live-protocol'
 
 export interface LivePort {
   onmessage: ((event: { data: unknown }) => void) | null
@@ -30,14 +30,20 @@ interface DocumentPort {
    *  may have dropped under the old epoch. A new workspace subscription clears it. */
   readyGeneration?: string | undefined
 }
-interface Lane { signature: string; controller?: AbortController | undefined; retry?: ReturnType<typeof setTimeout> | undefined; lastFrame: number }
+interface Lane {
+  signature: string; controller?: AbortController | undefined; retry?: ReturnType<typeof setTimeout> | undefined; lastFrame: number
+  /** A frame arrived since this lane last gained demand: the path carries the stream. */
+  proven: boolean
+  /** Attempts that ended, or fell silent, before the lane was proven. */
+  failures: number
+}
 interface ReadJob { controller: AbortController; deadline?: ReturnType<typeof setTimeout> | undefined; nextAt: number; timer?: ReturnType<typeof setTimeout> | undefined; revision: number; interval: number }
 
-/** Worker-owned demand union. No React, document globals, or authentication-bound remote data. */
+/** Worker-owned demand union. No React or document globals; same-origin cookies authenticate it. */
 export function createLiveOwner(deps: LiveOwnerDeps) {
   const documents = new Set<DocumentPort>()
   const lanes: Record<'workspace' | 'runs', Lane> = {
-    workspace: { signature: '', lastFrame: 0 }, runs: { signature: '', lastFrame: 0 },
+    workspace: { signature: '', lastFrame: 0, proven: false, failures: 0 }, runs: { signature: '', lastFrame: 0, proven: false, failures: 0 },
   }
   const topics = new Map<string, () => void>()
   const topicValues = new Map<string, unknown>()
@@ -90,12 +96,22 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
   const send = (doc: DocumentPort, message: OwnerOutput) => {
     try { doc.port.postMessage(message) } catch { release(doc) }
   }
-  const failure = (error: unknown) => {
-    if (!(error instanceof Error) || error.message !== 'authentication required') return
+  /** Every document leaves shared delivery for its own finite HTTP. */
+  const unavailable = (reason: string) => {
     for (const doc of [...documents]) {
-      send(doc, { type: 'unavailable', version: LIVE_PROTOCOL, epoch: doc.epoch, reason: error.message })
+      send(doc, { type: 'unavailable', version: LIVE_PROTOCOL, epoch: doc.epoch, reason })
       release(doc)
     }
+  }
+  const failure = (error: unknown) => {
+    if (error instanceof Error && error.message === 'authentication required') unavailable(error.message)
+  }
+  /** An attempt ended or fell silent. Before the lane was ever proven, the attempts are bounded:
+   *  a proxy that buffers or refuses the stream would otherwise retry forever. */
+  const retryLane = (kind: 'workspace' | 'runs', restart: () => void) => {
+    const lane = lanes[kind]
+    if (!lane.proven && ++lane.failures >= LIVE_CONNECT_ATTEMPTS) { unavailable(LIVE_CHANNEL_REFUSED); return }
+    restart()
   }
   const reset = (doc: DocumentPort, entry: Entry, reason: string) => {
     entry.paused = true
@@ -147,6 +163,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
     void deps.stream(kind, [...runs.values()], frame => {
       if (lane.controller !== controller || controller.signal.aborted) return
       lane.lastFrame = Date.now()
+      lane.proven = true; lane.failures = 0
       if ('type' in frame && frame.type === 'ready') onGeneration(frame.generation)
       if ('data' in frame && frame.event === 'ready') {
         try { const data = JSON.parse(frame.data) as { generation?: unknown }; if (typeof data.generation === 'string') onGeneration(data.generation) } catch { /* ignore malformed control */ }
@@ -166,7 +183,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
         workspaceReady = false
         workspaceDropped = true
       }
-      lane.retry = setTimeout(() => { lane.retry = undefined; startLane(kind) }, 1_500)
+      retryLane(kind, () => { lane.retry = setTimeout(() => { lane.retry = undefined; startLane(kind) }, 1_500) })
     })
   }
   const refreshRead = (path: string, job: ReadJob) => {
@@ -208,8 +225,9 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
       if (lane.signature === signatures[kind]) continue
       lane.signature = signatures[kind]
       stopLane(lane)
-      if (lane.signature) startLane(kind)
-      else if (kind === 'workspace') workspaceReady = false
+      if (lane.signature) { startLane(kind); continue }
+      lane.proven = false; lane.failures = 0
+      if (kind === 'workspace') workspaceReady = false
     }
   }
   const reconcileTopics = () => {
@@ -343,12 +361,14 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
     send(doc, { type: 'hello', version: LIVE_PROTOCOL })
     tick ??= setInterval(() => {
       for (const doc of [...documents]) if (Date.now() - doc.seenAt >= LEASE_MS) release(doc)
-      for (const kind of ['workspace', 'runs'] as const) if (lanes[kind].controller && Date.now() - lanes[kind].lastFrame >= 40_000) startLane(kind)
+      for (const kind of ['workspace', 'runs'] as const) if (lanes[kind].controller && Date.now() - lanes[kind].lastFrame >= 40_000) retryLane(kind, () => startLane(kind))
     }, 1_000)
     return () => release(doc)
   }
   return {
     attach,
+    /** A shared channel outside the lanes (the topic socket) never connected: see `retryLane`. */
+    refuse() { unavailable(LIVE_CHANNEL_REFUSED) },
     dispose() {
       disposed = true
       for (const doc of [...documents]) release(doc)
