@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { inspect } from 'node:util';
 import type { RunnerBrowserSignIn } from '../../core/runner-definition.ts';
 import { profileEnv } from '../../core/agent-profiles.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { shellQuote } from '../../core/shell-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityStderr } from './stderr.ts';
-import { BrowserSignInStartError } from '../../core/browser-sign-in-error.ts';
+import { BrowserSignInStartError, redactBrowserSignInDetails } from '../../core/browser-sign-in-error.ts';
 import { AcpRpcError } from '../acp/transport.ts';
 
 // No OAuth value is written by the helper. It forwards the browser argument to memory only.
@@ -116,11 +117,14 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
   } catch (error) {
     clearTimeout(captureDeadline); await cleanup();
     const diagnostics = probe?.diagnostics;
-    console.error('Antigravity personal sign-in start failed:', error, diagnostics);
+    console.error('Antigravity personal sign-in start failed:', redactBrowserSignInDetails(inspect(error)), diagnostics && {
+      ...diagnostics, stderr: redactBrowserSignInDetails(diagnostics.stderr),
+      spawnError: diagnostics.spawnError && redactBrowserSignInDetails(inspect(diagnostics.spawnError)),
+    });
     let cause = `${phase}: ${error instanceof Error ? error.message : String(error)}`;
     const transportClosed = error instanceof Error && error.message === 'ACP input/output transport closed';
     if (!(error instanceof AcpRpcError) && diagnostics && (diagnostics.code !== null && (diagnostics.code !== 0 || transportClosed) || diagnostics.signal)) {
-      const line = antigravityStderr(diagnostics.stderr).split(/\r?\n/).find(line => line.trim());
+      const line = redactBrowserSignInDetails(antigravityStderr(diagnostics.stderr)).split(/\r?\n/).find(line => line.trim());
       cause = `Agent exited (${diagnostics.signal ?? `code ${diagnostics.code}`})${line ? `: ${line.trim()}` : ''}`;
     }
     throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`, { cause: error });

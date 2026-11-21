@@ -47,7 +47,8 @@ it.each([0, 1])('reports an agent exit at sign-in start (code %s), excluding war
   expect(failure).toBeInstanceOf(Error);
   expect((failure as Error).message).toContain(`Agent exited (code ${code}): FATAL Flags parsing error: Unknown command line flag uid`);
   expect((failure as Error).message).not.toMatch(/SyntaxWarning|warning source|https:|private-state|private-token/);
-  expect(log).toHaveBeenCalledWith('Antigravity personal sign-in start failed:', expect.any(Error), expect.objectContaining({ code, stderr }));
+  expect(log).toHaveBeenCalledWith('Antigravity personal sign-in start failed:', expect.any(String), expect.objectContaining({ code, stderr: expect.stringContaining('FATAL Flags parsing error') }));
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/https:|private-state|private-token/);
 });
 
 it.each(['initialize', 'authenticate'])('reports the %s error without exposing OAuth values', async method => {
@@ -61,8 +62,9 @@ createInterface({ input: process.stdin }).on('line', line => {
     : { result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [{ id: 'oauth-personal', name: 'Personal' }] } };
   console.log(JSON.stringify({ jsonrpc: '2.0', id: frame.id, ...response }));
 });\n`);
-  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   await expect(startAntigravitySignIn(join(dir, 'account'))).rejects.toThrow(`${method}: Native sign-in refused: [URL redacted] access_token=[redacted]`);
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/https:|private-state|private-token/);
 });
 
 it.each([
