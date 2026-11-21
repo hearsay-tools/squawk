@@ -257,10 +257,14 @@ it('remote mode behind a path that carries cookies uses the shared worker: pushe
         const text = `pushed-${Date.now()}`
         await remote.control({ publish: text, runs: [run] })
         await waitText(request, sessionId, text)
-        // The finite fallback reads the registry every 5 s; the shared feed does not.
+        // The finite fallback reads the registry every 5 s; the shared feed does not. The named
+        // condition: two finite cycles have passed while the shared union stays up.
         reconciliations.length = 0
-        // bound: proves an absence; two finite cycles would fit in this window.
-        await new Promise(resolve => setTimeout(resolve, 11_000))
+        const since = Date.now()
+        await pollFor(async () => {
+          if (reconciliations.length || live.sockets.size !== 1 || live.streams.size !== 2) throw new Error(`finite reads ${reconciliations.length}, ${live.streams.size} SSE, ${live.sockets.size} WS`)
+          return Date.now() - since >= 11_000 ? true : undefined
+        }, () => 'two finite cycles never elapsed', { timeoutMs: 20_000, tries: 100 })
         expect(reconciliations).toEqual([])
         expect(live.workers.size).toBe(1)
       } finally { off(); live.off(); await request('Target.closeTarget', { targetId }) }
