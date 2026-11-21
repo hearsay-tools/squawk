@@ -150,8 +150,8 @@ export const OWNED_INPUT_GROUPS = {
             await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('parent steering')));
             expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             // Restarted answers are acknowledged at opening turn completion, after streamed text.
-            await waitFor(() => expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered'))
-              .toEqual([expect.objectContaining({ source: 'parent' })]));
+            await waitFor(() => store.readEvents(runId).some(e => e.type === 'human-input-delivered'));
+            expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ source: 'parent' })]);
           });
         }, 60_000);
 
