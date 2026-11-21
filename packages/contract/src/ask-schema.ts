@@ -35,6 +35,8 @@ export const askQuestionSchema = z
       .optional(),
     /** Applies to the options; an open question ignores it. */
     multiSelect: z.boolean().optional(),
+    /** False for native option-only prompts. Absent keeps the Other answer. */
+    allowFreeText: z.boolean().optional(),
   })
   .strict();
 

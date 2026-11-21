@@ -385,7 +385,7 @@ function AskQuestionBlock({
               )
             })}
           </div>
-          <div className="mt-2">
+          {question.allowFreeText !== false ? <div className="mt-2">
             <Button
               type="button"
               variant="outline"
@@ -416,7 +416,7 @@ function AskQuestionBlock({
                 />
               </div>
             ) : null}
-          </div>
+          </div> : null}
         </>
       ) : (
         <div>

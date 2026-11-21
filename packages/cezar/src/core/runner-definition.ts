@@ -197,6 +197,8 @@ export interface RunnerDetection {
    * this CLI (a shell wrapper or an unrelated tool on PATH), and the probe reports it absent.
    */
   readonly banner?: { readonly pattern: RegExp; readonly label: string };
+  /** First capture is the version in a multiline banner. Identity still checks the full banner. */
+  readonly versionPattern?: RegExp;
   /** The hint that goes with a CLI that answered. */
   readonly availableHint: string;
   /** The hint that goes with a CLI that did not answer. */

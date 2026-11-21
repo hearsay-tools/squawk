@@ -1,10 +1,5 @@
 [
   {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
-  },
-  {
     "type": "turn.started",
     "turnId": "acp-turn-1"
   },

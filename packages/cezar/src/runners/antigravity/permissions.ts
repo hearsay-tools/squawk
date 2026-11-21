@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import type { ToolGrant } from '../../core/agent-runner.ts';
 import { unknownToolGrant } from '../../core/agent-runner-values.ts';
-import type { AcpAsk, AcpPermissionOutcome, AcpPermissionRequest } from '../acp/protocol.ts';
+import type { AcpAsk, AcpAskRefusal, AcpPermissionOutcome, AcpPermissionRequest } from '../acp/protocol.ts';
 import { antigravityTool, antigravityNativeToolName } from './tool-normalization.ts';
 
-export function antigravityAsk(request: AcpPermissionRequest): AcpAsk | undefined {
+export function antigravityAsk(request: AcpPermissionRequest): AcpAsk | AcpAskRefusal | undefined {
   if (!request.toolCall.toolCallId.startsWith('interaction_')) return undefined;
+  if (request.options.length < 2 || request.options.length > 4) return { refused: 'Antigravity question cancelled: requires two to four offered answers' };
   const used = new Set<string>();
   const choices = request.options.map(option => {
     let label = option.name.slice(0, 60);
@@ -18,7 +19,7 @@ export function antigravityAsk(request: AcpPermissionRequest): AcpAsk | undefine
   const options = choices.map(({ label }) => ({ label }));
   return {
     questions: [{ header: 'Question', question: (request.toolCall.title ?? 'Choose an option').slice(0, 400),
-      ...(options.length >= 2 && options.length <= 4 ? { options } : {}) }],
+      options, allowFreeText: false }],
     answer(value) {
       const text = z.string().parse(value).trim().replace(/^Question:\s*/, '');
       const option = choices.find(choice => choice.label === text)?.option
@@ -56,7 +57,8 @@ export function permissionPolicy(grant: ToolGrant, request: AcpPermissionRequest
   const names = allowedTools(grant);
   const prefixes = grant.bashAllowlist ?? [];
   const name = tool.name ?? antigravityNativeToolName(request.toolCall);
-  const named = names === undefined || names.some(allowed => allowed === name || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === name);
+  const native = antigravityNativeToolName(request.toolCall);
+  const named = names === undefined || names.some(allowed => allowed === name || allowed === native || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === native);
   const permitted = named && (tool.name !== 'Bash' || commandAllowed(tool.input, prefixes));
   // An unset grant leaves native approvals in control, as on the other adapters.
   if ((names === undefined && !prefixes.length) || (!permitted && approvalGate)) return undefined;

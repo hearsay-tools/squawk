@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // ACP v1 encoder. Shared scenarios own content; this module owns native framing and timing.
 import readline from 'node:readline';
-import { appendFileSync, closeSync } from 'node:fs';
+import { appendFileSync, closeSync, mkdirSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { join } from 'node:path';
 import { lifecycleCall, ciPrompt, toolPrompt, probeCiTool } from './mock-ci-tool.mjs';
 import { scenarioFor, play } from './mock-scenario.mjs';
 import { withoutSessionContextParts } from './mock-session-context.mjs';
@@ -100,7 +103,32 @@ function echoSteers(turn) {
   if (turn.cancelled) return;
   for (const text of steers.splice(0)) content('agent_message_chunk', text.startsWith('/probe-') ? `TRIGGER-FIXTURE ${text}` : `saw: ${text}`);
 }
+async function runtimeProbe(text, turn) {
+  if (text === 'mock:acp-detached-command') {
+    // Native harness commands lead their own sessions. A stubborn one tests the
+    // runner's cleanup after the harness exits, beyond normal cancellation.
+    const command = spawn(process.execPath, ['-e', `process.on('SIGTERM',()=>{}); setInterval(()=>{try{process.kill(${process.ppid},0)}catch{process.kill(process.pid,'SIGKILL')}},1000).unref(); setInterval(()=>{},1000); console.log('ready')`], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] }); // stubborn-child: guarded by the test worker, to survive harness exit and prove runner cleanup.
+    await once(command.stdout, 'data');
+    update({ sessionUpdate: 'tool_call', toolCallId: 'foreground', title: 'run_command', kind: 'execute', status: 'in_progress', rawInput: { pid: command.pid } });
+    await turn.cancelledPromise;
+    update({ sessionUpdate: 'tool_call_update', toolCallId: 'foreground', status: 'failed', rawOutput: 'Cancelled by agent' });
+    return true;
+  }
+  if (text === 'mock:acp-runtime-workspace') {
+    mkdirSync('skills/system/run-workflow', { recursive: true });
+    writeFileSync('skills/system/run-workflow/SKILL.md', 'Native generated skill');
+    writeFileSync(join(sessionParams.cwd, 'workspace-proof'), JSON.stringify({ processCwd: process.cwd(), sessionCwd: sessionParams.cwd, additionalDirectories: sessionParams.additionalDirectories }));
+    return true;
+  }
+  if (text === 'mock:acp-eager-done') {
+    const server = sessionParams.mcpServers[0];
+    if (!sessionParams._meta?.antigravity?.eagerMcpServers?.includes(server.name)) throw new Error('Lifecycle server is lazy');
+    content('agent_message_chunk', `Done${await context.lifecycle(['cezar_done', {}])}`); return true;
+  }
+  return false;
+}
 async function runPrompt(text, turn) {
+  if (await runtimeProbe(text, turn)) return;
   // The managed recovery prompt is supplied as the resumed system prompt.
   if (sessionParams._meta?.antigravity?.systemPrompt?.append?.includes('mock:approval')) return permissionPrompt('mock:approval', turn);
   if (text.includes('mock:acp-late-steer')) {
@@ -137,8 +165,9 @@ async function permissionPrompt(text, turn) {
   const toolCall = { toolCallId: nativeAsk ? 'interaction_12345678' : 'permission-tool',
     title: nativeAsk ? 'Which test library?' : defaultPermission ? 'Run run_command?' : 'Run generate_image?',
     kind: defaultPermission ? 'execute' : 'other', rawInput: defaultPermission ? { CommandLine: 'pwd' } : {} };
-  const options = nativeAsk ? [{ optionId: '1', name: 'Vitest', kind: 'allow_once' }, { optionId: '2', name: 'Node test', kind: 'allow_once' }]
+  let options = nativeAsk ? [{ optionId: '1', name: 'Vitest', kind: 'allow_once' }, { optionId: '2', name: 'Node test', kind: 'allow_once' }]
     : [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }, { optionId: 'reject-once', name: 'Deny', kind: 'reject_once' }];
+  if (text.includes('one-option')) options = options.slice(0, 1);
   const responsePromise = request('session/request_permission', { sessionId, toolCall, options: malformed ? [] : options }, text.includes('long-id') ? 'native-id-'.repeat(64) : undefined);
   if (text.includes('mock:approval-turn-end')) {
     await waitForRelease();
@@ -197,6 +226,7 @@ async function handle(frame) {
     case 'authenticate': reply(frame.id, {}); break;
     case 'session/new':
       sessionParams = frame.params; sessionId = 'mock-acp-session';
+      update({ sessionUpdate: 'available_commands_update', availableCommands: [] });
       update({ sessionUpdate: 'usage_update', used: 0, size: 1048576 });
       reply(frame.id, { sessionId, configOptions: [{ id: 'thinking_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/resume': case 'session/load': context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thinking_level', category: 'thought_level', currentValue: 'medium' }] }); break;

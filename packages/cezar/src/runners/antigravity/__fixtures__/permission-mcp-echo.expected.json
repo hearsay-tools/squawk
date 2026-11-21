@@ -129,8 +129,8 @@
     "item": {
       "kind": "tool",
       "id": "ff854eb1f70b40c6913358dc3107c421",
-      "name": "probe_echo",
-      "title": "probe_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -157,8 +157,8 @@
     "item": {
       "kind": "tool",
       "id": "ff854eb1f70b40c6913358dc3107c421",
-      "name": "probe_echo",
-      "title": "probe_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -176,8 +176,8 @@
     "item": {
       "kind": "tool",
       "id": "ff854eb1f70b40c6913358dc3107c421",
-      "name": "probe_echo",
-      "title": "probe_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "completed",
       "input": {

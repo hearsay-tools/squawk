@@ -20,6 +20,8 @@ export function antigravityTool(update: Record<string, unknown>, previous?: UiTo
   const cwd = input?.Cwd ?? input?.working_dir;
   const result: Partial<Omit<UiToolItem, 'id' | 'kind'>> = {};
   if (name) result.name = name;
+  const mcp = z.object({ mcp: z.object({ tool: z.string(), server: z.string() }) }).safeParse(update._meta);
+  if (mcp.success) { result.name = mcp.data.mcp.tool; result.title = mcp.data.mcp.tool; }
   if (command !== undefined) result.input = { command, ...(cwd === undefined ? {} : { cwd }) };
   Object.assign(result, toolOutput(update.rawOutput));
   if (name === 'Task') {

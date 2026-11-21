@@ -92,6 +92,16 @@ const singleAsk: ThreadAsk = {
   ],
 }
 
+it('hides Other for native option-only questions and still delivers an offered answer', async () => {
+  const native: ThreadAsk = { ...singleAsk, questions: singleAsk.questions.map(question => ({ ...question, allowFreeText: false })) }
+  renderAsk(native)
+  expect(screen.queryByRole('button', { name: 'Other' })).toBeNull()
+  expect(screen.queryByRole('textbox')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+  expect(JSON.stringify(mutateAsync.mock.calls)).toContain('Library: date-fns')
+})
+
 const multiAsk: ThreadAsk = {
   kind: 'ask',
   id: 'ask_2',

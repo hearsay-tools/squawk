@@ -355,6 +355,8 @@ export interface UiAskQuestion {
   question: string;
   options?: UiAskOption[];
   multiSelect?: boolean;
+  /** False when the native question accepts option IDs only. Absent allows Other. */
+  allowFreeText?: boolean;
 }
 
 /**

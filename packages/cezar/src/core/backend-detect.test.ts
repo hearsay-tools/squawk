@@ -199,3 +199,15 @@ describe('probeRunner: the Claude version banner', () => {
     expect(check.hint).toContain("doesn't look like Claude Code (got: wrapper-tool unknown)");
   });
 });
+
+
+it('extracts the Antigravity build label after checking the full native banner', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-version-'));
+  try {
+    const bin = join(root, 'agy');
+    writeFileSync(bin, '#!/bin/sh\nprintf \'Build label: 1.5.0\\nBuilt as //antigravity_extensions/acp_server\\nBuild timestamp: fixture\\n\'\n', { mode: 0o755 });
+    vi.stubEnv('HSQ_DRY_RUN', undefined); vi.stubEnv('CEZ_DRY_RUN', undefined);
+    await expect(probeRunner('antigravity', { ...runnerDefinition('antigravity').detection, binOverride: () => bin }))
+      .resolves.toMatchObject({ available: true, version: '1.5.0' });
+  } finally { vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); }
+});

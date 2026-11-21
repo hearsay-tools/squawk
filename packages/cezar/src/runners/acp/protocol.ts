@@ -21,6 +21,7 @@ export interface AcpAsk {
   /** ACP extensions encode answers differently. Only the runner knows that shape. */
   answer(value: unknown): unknown;
 }
+export interface AcpAskRefusal { refused: string }
 export interface AcpHooks {
   /** Some ACP agents report execution failures as text followed by end_turn. */
   promptError?(): string | undefined;
@@ -33,7 +34,7 @@ export interface AcpHooks {
   normalizeTool?(update: Record<string, unknown>, previous: UiToolItem | undefined): Partial<Omit<UiToolItem, 'id' | 'kind'>>;
   normalizeOptions?(options: unknown): void;
   permissionPolicy?(request: AcpPermissionRequest): AcpPermissionOutcome | undefined;
-  permissionAsk?(request: AcpPermissionRequest): AcpAsk | undefined;
+  permissionAsk?(request: AcpPermissionRequest): AcpAsk | AcpAskRefusal | undefined;
   /** Only advertise filesystem reads when this callback is provided. */
   readTextFile?(params: unknown): Promise<{ content: string }>;
 }

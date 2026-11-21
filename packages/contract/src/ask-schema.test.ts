@@ -5,6 +5,12 @@ import { squawkAskRequestSchema, humanWaitEntrySchema } from './waits.ts';
 
 const questions = [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner' }] }];
 
+it('preserves option-only questions and keeps existing questions unchanged', () => {
+  expect(askRequestSchema.parse({ questions }).questions[0]).not.toHaveProperty('allowFreeText');
+  const native = [{ ...questions[0], allowFreeText: false }];
+  expect(askRequestSchema.parse({ questions: native }).questions).toEqual(native);
+});
+
 // hearsay-tools/cezarion#1458: the tool requires context; every stored shape keeps asks without it.
 describe('ask context', () => {
   it('keeps context optional in the stored ask shape', () => {

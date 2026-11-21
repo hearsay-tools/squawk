@@ -64,6 +64,12 @@ describe('resolveModelIdentity — empty / auto', () => {
 });
 
 describe('resolveModelIdentity — bare ids per backend', () => {
+  it.each(['gemini-3-flash', 'GATEWAY/Custom/Model'])('keeps the opaque Antigravity id %s on start and Continue', model => {
+    const selected = normalizeModelForBackend('antigravity', model)!;
+    expect(selected).toEqual({ backendModel: model, identity: { provider: 'antigravity', model } });
+    expect(toBackendModel('antigravity', parseModelIdentity(formatModelIdentity(selected.identity))!)).toBe(model);
+    expect(normalizeModelForBackend('antigravity', selected.backendModel)).toEqual(selected);
+  });
   it('claude bare aliases and pinned ids resolve to anthropic', () => {
     expect(resolveModelIdentity('claude', 'opus')).toEqual({ provider: 'anthropic', model: 'opus' });
     expect(resolveModelIdentity('claude', 'claude-opus-4-8')).toEqual({

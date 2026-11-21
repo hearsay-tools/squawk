@@ -7,10 +7,5 @@
       "total": 0,
       "contextWindow": 1048576
     }
-  },
-  {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
   }
 ]

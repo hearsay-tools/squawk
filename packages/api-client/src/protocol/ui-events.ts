@@ -240,6 +240,7 @@ export interface UiAskQuestion {
   question: string
   options?: UiAskOption[]
   multiSelect?: boolean
+  allowFreeText?: boolean
 }
 
 /**

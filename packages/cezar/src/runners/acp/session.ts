@@ -176,7 +176,14 @@ export class AcpSession {
   respondAsk(requestId: string, answer: unknown): boolean {
     const pending = this.permissions.get(requestId);
     if (!pending?.ask) return false;
-    const response = pending.ask.answer(answer);
+    let response: unknown;
+    try { response = pending.ask.answer(answer); }
+    catch (error) {
+      // Native choices can have no free-text route. Refuse visibly and release the
+      // request, rather than keep a question the caller thinks it answered.
+      response = { outcome: { outcome: 'cancelled' } };
+      this.events.notice(error instanceof Error ? error.message : 'Native question rejected the answer');
+    }
     this.permissions.delete(requestId);
     pending.resolve(response);
     return true;
@@ -207,6 +214,10 @@ export class AcpSession {
     // Native JSON-RPC string IDs have no length bound; UI permission IDs do.
     const requestId = `acp-permission-${this.permissionPrefix}-${++this.permissionSerial}`;
     const ask = this.hooks.permissionAsk?.(request);
+    if (ask && 'refused' in ask) {
+      this.events.notice(ask.refused);
+      return { outcome: { outcome: 'cancelled' } };
+    }
     return new Promise(resolve => {
       this.permissions.set(requestId, { request, resolve, ...(ask ? { ask } : {}) });
       if (ask) this.options.uiEvent?.({ type: 'ask.requested', requestId, questions: ask.questions });
