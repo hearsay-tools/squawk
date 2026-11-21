@@ -353,7 +353,8 @@ What a new runner's folder holds:
   `missingSession`;
 - `session-wire.testkit.ts`, which says how the mock's recorded wire shows a session, a turn, its
   effort, prompts, steers, the system prompt and skill triggers, and `ui-mapper-row.testkit.ts`,
-  the runner's row of the mapper robustness test;
+  the runner's row of the mapper robustness test, and `ui-mapper-robustness.test.ts`, a
+  thin wrapper that calls `describeUiMapperRobustness('<id>')` from the shared testkit;
 - `__fixtures__/golden.json`, the runner's own expected values for tests outside its code (the
   keys are in `core/runner-golden.testkit.ts`), and the golden wire fixtures;
 - the per-runner parity files (`harness-<id>-*`, `waits-<id>-*`, `automation-tools-<id>-*`,

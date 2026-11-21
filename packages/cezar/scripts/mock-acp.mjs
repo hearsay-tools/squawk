@@ -12,7 +12,7 @@ import { PI_FAILURES } from './mock-provider-failures.mjs';
 
 if (process.argv.includes('--version')) { console.log('antigravity_extensions/acp_server 1.5.0'); process.exit(0); }
 const antigravity = process.argv.includes('--uid=');
-const { failureControl, delivery } = await loadControls({ delivery: ['reject', 'hold-ack', 'hold-response'] });
+const { failureControl, delivery } = await loadControls({ failure: ['provider', 'unread'], delivery: ['reject', 'hold-ack', 'hold-response'] });
 const write = frame => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...frame })}\n`);
 const reply = (id, result) => write({ id, result });
 let sessionId = 'mock-acp-session';
@@ -83,6 +83,8 @@ async function prompt(frame) {
   turn.frameId = frame.id;
   active = turn;
   try {
+    // An unread crash stops before the first yield can accept a concurrent steer.
+    if (failureControl?.failure === 'unread' && failureControl.failureFor(text) === 'unread') process.exit(1);
     await delivery?.holdResponse(text);
     const failure = await failureControl?.failureFor(text);
     if (failure) content('agent_message_chunk', `Agent execution error: ${PI_FAILURES[failure]}`);
