@@ -14,9 +14,11 @@ an unavailable worker, a worker request that fails authentication, or a channel 
 connects uses finite authenticated HTTP reads with backoff. A shared channel (the topic socket,
 the workspace or task stream) gets `LIVE_CONNECT_ATTEMPTS` (3) attempts until it first carries a
 frame; then the worker tells every document, and a document that heard it stays on finite HTTP
-until its next session, so a proxy that refuses the upgrade (Basic Auth,
-hearsay-tools/squawk#783) costs three attempts, not a loop. A channel that connected once
-reconnects without a limit (a server restart). Finite HTTP does not open a permanent stream in
+until its next session. The worker answers a later document the same way at once, so a proxy
+that refuses the upgrade (Basic Auth, hearsay-tools/squawk#783) costs three attempts per worker,
+not a loop. A stream that falls silent for 40 s counts as an attempt even after a frame (a proxy
+that passes the first frame and buffers the rest); a frame 10 s into an attempt resets the count.
+A channel that connected once otherwise reconnects without a limit (a server restart). Finite HTTP does not open a permanent stream in
 every tab. Epochs and server generations reject stale delivery and trigger authoritative
 hydration after restart.
 
