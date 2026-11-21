@@ -4558,7 +4558,7 @@ export function createApp(deps: ServerDeps) {
   }, { ...deps, localHandoff: () => capabilities().localHandoff });
   const workspaceV1 = new Hono()
     .route('/', liveRoutes)
-    .route('/', healthRoutes).route('/', createRunnersRoutes())
+    .route('/', healthRoutes).route('/', createRunnersRoutes({ home: deps.home, settingsAdmin: () => capabilities().settingsAdmin }))
     .route('/', createModelsRoutes({ capabilities, resolveWorkspaceProfile, modelCatalog, hostedProfileRefusal }))
     .route('/', providersRoutes)
     .route('/', createProviderSignInRoutes({ settingsAdmin: () => capabilities().settingsAdmin, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))

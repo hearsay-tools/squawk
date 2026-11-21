@@ -71,6 +71,8 @@ export const runnerEntrySchema = z.object({
   terminalLogin: z.boolean().optional(),
   /** The runner can sign in through an ephemeral browser flow in the cockpit. */
   browserLogin: z.boolean().optional(),
+  /** The cockpit can install, update and remove this runner's managed CLI. */
+  managedInstall: z.literal(true).optional(),
   /** A generic example account folder for the add-account dialog. */
   accountFolderExample: z.string().optional(),
   models: runnerModelSuggestionsSchema,

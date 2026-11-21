@@ -1,4 +1,5 @@
 import type { AgentRunner, AgentRunSpecSupport } from './agent-runner.ts';
+import type { ManagedCliSource } from './managed-cli-source.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { BackendModelMap } from './model-identity.ts';
 import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
@@ -226,7 +227,7 @@ export interface RunnerCli {
   /** The arguments that reopen a recorded session, after the executable. */
   readonly resumeArgs: (sessionId: string) => string;
   /** Where the installer gets the CLI: an npm package, a site the operator installs from, or nowhere it knows. */
-  readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | null;
+  readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | { readonly managed: ManagedCliSource } | null;
   /** The "Open in" menu entry (`cli:<id>`) that hands a session to this CLI: its label and its icon key. */
   readonly openTarget: { readonly label: string; readonly icon: string };
 }

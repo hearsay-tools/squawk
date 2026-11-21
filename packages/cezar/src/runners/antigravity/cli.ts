@@ -4,6 +4,10 @@ export const ANTIGRAVITY_CLI = {
   terminalExecutable: { kind: 'path-name', name: 'agy' },
   // The server has no interactive terminal or session-resume command.
   resumeArgs: () => '',
-  installSource: { site: 'https://antigravity.google', label: 'Antigravity ACP registry archive' },
+  installSource: { managed: {
+    manifestUrl: 'https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/{target}.json',
+    downloadUrlPrefix: 'https://storage.googleapis.com/antigravity-public/antigravity-cli/',
+    executable: 'antigravity', windowsExecutable: 'agy.exe',
+  } },
   openTarget: { label: 'Antigravity ACP server', icon: 'bot' },
 } as const satisfies RunnerCli;
