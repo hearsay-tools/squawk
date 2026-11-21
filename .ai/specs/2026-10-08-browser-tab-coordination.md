@@ -48,8 +48,12 @@ behavior; the new finite limit does not restrict existing clients.
 
 ## Finite fallback
 
-Remote mode, absent/blocked workers, protocol mismatch and failed workers use no
-persistent SSE or ordinary WebSocket. Task batches run on a two-second visible
+Another API origin or service prefix, absent/blocked workers, protocol mismatch, failed
+workers, worker requests that fail authentication and channels that never connect use no
+persistent SSE or ordinary WebSocket. Remote mode alone does not choose finite HTTP
+(hearsay-tools/squawk#4014): a shared channel gets three attempts (`LIVE_CONNECT_ATTEMPTS`)
+until it first carries a frame, and a document whose worker reported `unavailable` stays
+finite until its next session. Task batches run on a two-second visible
 cadence, workspace reconciliation on five seconds, with one finite cycle per document
 and a ten-second abort deadline that also cancels reset/history hydration. Errors back off up to 30 seconds. Backlog drains in
 small yielded batches. Browser/OS suspension can delay all timing guarantees; native
@@ -70,7 +74,7 @@ that fails reaches its consumers as `HTTP <status>` with the answer's JSON body 
 for no answer); the cycle still backs off. The activity view shows a project whose scoped
 read answers 404, 409 or 503 as unavailable, and any other failure as its query error.
 
-Remote fallback trades connection safety for up to two seconds of task latency and
+Finite fallback trades connection safety for up to two seconds of task latency and
 five seconds of workspace latency, plus request/backoff time. Ephemeral intermediate
 deltas coalesce into full active-item snapshots in finite batches, so unfinished text
 and tool output remain visible. The store retains at most 256 active items / 4 MiB of serialized snapshots,
@@ -81,7 +85,7 @@ batch, so events arriving during filesystem IO cannot be skipped. No raw deltas 
 Completion/session end, run deletion and store closure release their retained items.
 Eviction drops whole items (never a partial suffix); subsequent full snapshots can
 reseed them, and persisted content is always recovered. As with an SSE reconnect,
-process restart or eviction can lose intermediate ephemeral content. Simultaneously visible remote tabs still duplicate finite reads. Caches,
+process restart or eviction can lose intermediate ephemeral content. Simultaneously visible finite tabs still duplicate finite reads. Caches,
 rendering and memory are deliberately document-local.
 
 ## Preview
@@ -96,7 +100,7 @@ here” can claim it. Visibility never replenishes blocked-proxy retry budgets.
 
 `tab-coordination.e2e.ts` observes page and SharedWorker Network domains in one Chrome
 profile over real HTTP/1.1. It covers mixed tabs, ten native visible windows, task/project
-isolation, late join, owner loss, finite fallback, remote Basic Auth, freeze/resume and
+isolation, late join, owner loss, finite fallback, remote push, remote Basic Auth, freeze/resume and
 server connection loss. Unit tests cover protocol/epochs, leases, independent feed
 watchdogs, cancellation, replay races, bounded prefixes, project removal and preview
 ownership. `live-preview.e2e.ts` exercises real frames and competing viewers.

@@ -111,7 +111,7 @@ export function createLiveFallback(
         workspaceAt = Date.now()
         await reconcile(current.signal)
       }
-      // Topic-only remote consumers reconcile through their authoritative HTTP queries.
+      // Topic-only consumers reconcile through their authoritative HTTP queries.
       for (const entry of active) {
         if (entry.demand.kind !== 'read') continue
         const { path, intervalMs } = entry.demand

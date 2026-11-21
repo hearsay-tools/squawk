@@ -1,4 +1,4 @@
-/** Local topic demand belongs to the shared owner; remote/unsupported browsers reconcile HTTP. */
+/** Topic demand belongs to the shared owner; a document without one reconciles over HTTP. */
 import { subscribeLive } from './live-coordinator'
 export { createTopicSocket } from './topic-socket'
 export type { TopicSocket, TopicListener } from './topic-socket'

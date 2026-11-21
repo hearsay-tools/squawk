@@ -37,13 +37,13 @@ bus is that a tab pays for exactly the streams it is looking at and **nothing el
     is exactly the "we unsubscribed from health" churn to avoid.
   - **Health is the worked example.** It feeds the shell's repo/branch chip, version chip, nav
     gating and Tools menu, so its demand *is* the whole session. One `useHealthSubscription()` at
-    the root (`GlobalEventsProvider`) holds it live continuously in local mode; `useHealth()` is a
-    pure cache **read** that any component may call without touching the socket. In remote mode the
-    authenticated HTTP bootstrap reports `localHandoff: false`, and the hook deliberately opens no
-    WebSocket: browser WebSocket has no credentials option, so a Basic Auth proxy can otherwise
-    challenge every reconnect forever. Remote health uses HTTP bootstrap plus the workspace SSE's
-    reconnect/visibility reconciliation. Separate the subscription (once, at the demand scope)
-    from the read (anywhere), and fail closed to HTTP until deployment mode is known.
+    the root (`GlobalEventsProvider`) holds it live continuously; `useHealth()` is a
+    pure cache **read** that any component may call without touching the socket. The hook
+    subscribes only after the authenticated HTTP bootstrap, in local and remote mode
+    (hearsay-tools/squawk#4014). A proxy that cannot carry the upgrade (Basic Auth) fails the
+    socket's bounded attempts, and the live coordinator then reads health over finite HTTP.
+    Separate the subscription (once, at the demand scope) from the read (anywhere), and fail
+    closed to HTTP until the bootstrap answers.
 - **Always return the unsubscribe.** In React that means `useEffect(() => subscribeTopic(...),
   [])` — the effect returns the unsubscribe so unmount releases it. An unsubscribe that never
   runs is a memory leak on the client (a listener retained) **and** a resource leak on the server
@@ -212,8 +212,8 @@ Health is the reference consumer, and it shows the split every session-global to
 
 - `useHealthSubscription()` — the ONE subscription controller, called once from
   `GlobalEventsProvider` (the root that is mounted for the app's whole life, alongside the SSE
-  stream). After authenticated health bootstrap it subscribes only when `localHandoff` is true and
-  folds pushed payloads into the TanStack Query cache in place. Remote mode opens no WebSocket.
+  stream). After authenticated health bootstrap it subscribes, in local and remote mode, and
+  folds pushed payloads into the TanStack Query cache in place (hearsay-tools/squawk#4014).
 - `useHealth()` — a pure `useQuery` **read** with no side effect, called by the ~15 components
   that show health. They share one cache and none of them touches the socket, so mounting and
   unmounting them never subscribes or unsubscribes anything.
@@ -271,7 +271,8 @@ A dropped connection must not leave a publisher running server-side or a stale s
 
 [Browser tab coordination](2026-10-08-browser-tab-coordination.md), implemented for
 [hearsay-tools/cezarion#924](https://github.com/hearsay-tools/cezarion/issues/924), moves
-local topic ownership into one SharedWorker per origin. Components still subscribe
+topic ownership into one SharedWorker per origin. Components still subscribe
 through `subscribeTopic` and release demand on unmount; hidden documents release all
-demand. Remote/unavailable-worker mode uses finite authenticated HTTP reconciliation
-with no ordinary browser socket or permanent SSE. The opt-in preview exception remains.
+demand. A document whose worker or channels are unavailable uses finite authenticated HTTP
+reconciliation with no ordinary browser socket or permanent SSE; remote mode alone does not
+(hearsay-tools/squawk#4014). The opt-in preview exception remains.

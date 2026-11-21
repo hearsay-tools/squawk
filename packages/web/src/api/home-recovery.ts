@@ -1,12 +1,11 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { homeRecoveryReaderSchema, type HomeFile, type HomeRecovery, type HomeRecoveryAction } from '@open-mercato/cezar-api-client/contract/home-recovery'
-import type { HealthResponse } from '@open-mercato/cezar-api-client'
 import { ApiError, cez, init, unwrap, type ReadOptions } from './client'
 import { fetchAsConsumer } from './fetch-as-consumer'
 import { onLiveReconcile } from './live-coordinator'
 import { pageIsActive, subscribePageActivity, usePageActive } from './live-visibility'
-import { queryKeys, workspaceQueryKeys } from './queries'
+import { workspaceQueryKeys } from './queries'
 import { subscribeTopic } from './ws'
 
 export const HOME_RECOVERY_QUERY_KEY = ['workspace', 'home-recovery'] as const
@@ -28,7 +27,8 @@ export function useHomeRecovery() {
     enabled: active, staleTime: Infinity, retry: false })
 }
 
-/** Call once at the root, beside health's controller. Hidden and remote documents hold no topic. */
+/** Call once at the root, beside health's controller. Hidden documents hold no topic. The live
+ *  coordinator opens no channel before the health bootstrap and reads over HTTP without one. */
 export function useHomeRecoverySubscription(): void {
   const client = useQueryClient()
   useEffect(() => {
@@ -50,12 +50,10 @@ export function useHomeRecoverySubscription(): void {
       })
     }
     const follow = () => {
-      const local = client.getQueryData<HealthResponse>(queryKeys.health)?.capabilities?.localHandoff === true
-      if (local && pageIsActive() && !releaseTopic) releaseTopic = subscribeTopic('home:recovery', fold)
-      else if ((!local || !pageIsActive()) && releaseTopic) { releaseTopic(); releaseTopic = undefined }
+      if (pageIsActive() && !releaseTopic) releaseTopic = subscribeTopic('home:recovery', fold)
+      else if (!pageIsActive() && releaseTopic) { releaseTopic(); releaseTopic = undefined }
     }
     follow()
-    const releaseCache = client.getQueryCache().subscribe(follow)
     const releaseActivity = subscribePageActivity(active => {
       follow()
       if (active) void refresh().catch(() => {})
@@ -63,7 +61,7 @@ export function useHomeRecoverySubscription(): void {
     })
     // The shared coordinator supplies finite reads when topic delivery is unavailable.
     const releaseReconcile = onLiveReconcile(signal => refresh(signal))
-    return () => { mounted = false; lifetime.abort(); releaseReconcile(); releaseActivity(); releaseCache(); releaseTopic?.() }
+    return () => { mounted = false; lifetime.abort(); releaseReconcile(); releaseActivity(); releaseTopic?.() }
   }, [client])
 }
 

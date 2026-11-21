@@ -22,7 +22,7 @@ Open it in a browser. It runs a scripted 50-second loop with sample data.
 | D4 | The service records the latest tool call and a tool-call rate for every running task and worker, and the check progress of every open CI wait, as part of this work. | Owner, 2026-11-05 |
 | D5 | No new setting, flag, file or interval that a user must choose. The activity data is derived from the run store and from in-memory trackers. Deleting `.ai/cezar/` loses nothing this view needs beyond the runs themselves. | AGENTS.md § Zero config |
 | D6 | The activity data is never written to `RunRecord`. Tool activity and check progress live in memory and start empty after a restart. | Planner: a tool call per second would rewrite the run row and fire a workspace `run` frame for every call. |
-| D7 | When the live coordinator has topics, live data comes from a new WebSocket topic. Without topics (remote mode, or no working SharedWorker), the view reads the HTTP snapshot every 5 s while it is visible. | docs/areas/realtime-events.md: a new live signal is a topic; remote mode opens no WebSocket. |
+| D7 | When the live coordinator has topics, live data comes from a new WebSocket topic. Without topics (no working SharedWorker, or a path that refused it), the view reads the HTTP snapshot every 5 s while it is visible. | docs/areas/realtime-events.md: a new live signal is a topic; the transport follows what connects (hearsay-tools/squawk#4014). |
 | D8 | The view shows **active work**: root tasks that are `queued`, `running` or `waiting`, and any root that still has a live worker (a worker whose status is `queued`, `running` or `waiting`: `isLiveStatus`). Tasks in `review`, `failed`, `done` or `cancelled` are not cards. One summary chip counts tasks in review and links to Tasks. | Planner: review is finished work at the human gate; many review tasks would crowd out live work. |
 | D9 | Card placement is stable. A card keeps its column and order while it stays on the view. State changes never move a card. | Planner: a living view that reorders on every change cannot be read. |
 | D10 | An open **peer wait** (`cez message wait --peer`) is drawn too: a dotted line from each named peer to the waiter, not a request line. Pointing at or focusing a card outlines the cards its peer waits link to. | Owner, 2026-11-06 (option A with the hover highlight, from three mockups). |
@@ -550,8 +550,8 @@ Case table for the probe (a detached process):
   within 5 s. With no subscriber, nothing runs.
 - **HTTP**: `GET /api/v1/workspace/activity?project=<id>` (or no `project` for all)
   returns the same snapshot. The view reads it once on mount for a fast first paint.
-  The topic takes over when the live coordinator has topics. When it has none (remote
-  mode, or a local browser with no SharedWorker or a failed one:
+  The topic takes over when the live coordinator has topics. When it has none (a browser
+  with no SharedWorker, a failed one, or a path that refused its channels:
   `createLiveCoordinator()` disables topics in those cases), the view re-reads the
   snapshot every 5 s while it is visible (D7). When a SharedWorker works, the read
   joins the coordinator's allowlist of shared recurring reads, so

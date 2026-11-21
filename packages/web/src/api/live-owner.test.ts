@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLiveOwner, type LivePort, type LiveOwnerDeps } from './live-owner'
-import { LIVE_PROTOCOL } from './live-protocol'
+import { LIVE_CHANNEL_REFUSED, LIVE_CONNECT_ATTEMPTS, LIVE_PROTOCOL } from './live-protocol'
 import { createWorkspaceSeqFence } from './events'
 
 class Port implements LivePort {
@@ -260,6 +260,128 @@ describe('shared live ownership', () => {
     expect(deps.topic).toHaveBeenCalledTimes(1)
     expect(b.frames).toContainEqual(expect.objectContaining({ type: 'value', value: { version: 'next' } }))
     owner.dispose()
+  })
+
+  describe('bounded attempts for a channel the path never carried (hearsay-tools/squawk#4014)', () => {
+    const refusals = (port: Port) => port.frames.filter(frame => frame.type === 'unavailable' && frame.reason === LIVE_CHANNEL_REFUSED)
+
+    it('releases every document after LIVE_CONNECT_ATTEMPTS streams end without a frame, and stops retrying', async () => {
+      deps.stream = async (kind, demand, frame, signal) => { streams.push({ kind, demand, frame, signal }); throw new Error('live stream HTTP 502') }
+      const owner = createLiveOwner(deps)
+      const a = new Port(), b = new Port()
+      owner.attach(a); a.sync('a', [workspace]); owner.attach(b); b.sync('b', [workspace])
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS)
+      expect(refusals(a)).toHaveLength(1)
+      expect(refusals(b)).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS)
+      expect(vi.getTimerCount()).toBe(0)
+      owner.dispose()
+    })
+
+    it('counts the watchdog reopenings of a stream that never sends a frame (a buffering proxy)', async () => {
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port)
+      const renewal = setInterval(() => port.sync('a', [workspace]), 5_000)
+      port.sync('a', [workspace])
+      try {
+        await vi.advanceTimersByTimeAsync(40_000 * LIVE_CONNECT_ATTEMPTS + 5_000)
+        expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS)
+        expect(streams.every(stream => stream.signal.aborted)).toBe(true)
+        expect(refusals(port)).toHaveLength(1)
+      } finally { clearInterval(renewal); owner.dispose() }
+    })
+
+    it('retries a stream that once delivered a frame without a bound (a server restart)', async () => {
+      let first = true
+      deps.stream = async (kind, demand, frame, signal) => {
+        streams.push({ kind, demand, frame, signal })
+        if (first) { first = false; frame({ event: 'ping', data: '', id: '' }) }
+        throw new Error('live stream HTTP 502')
+      }
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port)
+      const renewal = setInterval(() => port.sync('a', [workspace]), 5_000)
+      port.sync('a', [workspace])
+      try {
+        await vi.advanceTimersByTimeAsync(1_500 * (LIVE_CONNECT_ATTEMPTS + 3))
+        expect(streams.length).toBeGreaterThan(LIVE_CONNECT_ATTEMPTS + 1)
+        expect(port.frames.some(frame => frame.type === 'unavailable')).toBe(false)
+      } finally { clearInterval(renewal); owner.dispose() }
+    })
+
+    it('a new demand after the lane lost all demand gets fresh attempts', async () => {
+      deps.stream = async (kind, demand, frame, signal) => { streams.push({ kind, demand, frame, signal }); throw new Error('live stream HTTP 502') }
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port); port.sync('a', [workspace])
+      await vi.advanceTimersByTimeAsync(1_500 * (LIVE_CONNECT_ATTEMPTS - 1) - 1)
+      expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS - 1)
+      port.sync('a', [], 2) // the last demand leaves; the document is released
+      await vi.advanceTimersByTimeAsync(0)
+      const next = new Port(); owner.attach(next); next.sync('b', [workspace])
+      await vi.advanceTimersByTimeAsync(1_500 * (LIVE_CONNECT_ATTEMPTS - 2))
+      expect(refusals(next)).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(refusals(next)).toHaveLength(1)
+      expect(streams).toHaveLength(2 * LIVE_CONNECT_ATTEMPTS - 1)
+      owner.dispose()
+    })
+
+    it('counts silence after a first frame: a proxy that passes one ping and buffers the rest', async () => {
+      deps.stream = (kind, demand, frame, signal) => {
+        streams.push({ kind, demand, frame, signal })
+        frame({ event: 'ping', data: '', id: '' })
+        return new Promise(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      }
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port)
+      const renewal = setInterval(() => port.sync('a', [workspace]), 5_000)
+      port.sync('a', [workspace])
+      try {
+        await vi.advanceTimersByTimeAsync(40_000 * LIVE_CONNECT_ATTEMPTS + 5_000)
+        expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS)
+        expect(refusals(port)).toHaveLength(1)
+      } finally { clearInterval(renewal); owner.dispose() }
+    })
+
+    it('keeps a stream that pings every 15 s, however long it runs', async () => {
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port)
+      const renewal = setInterval(() => port.sync('a', [workspace]), 5_000)
+      port.sync('a', [workspace])
+      await vi.advanceTimersByTimeAsync(0)
+      const ping = setInterval(() => streams.at(-1)!.frame({ event: 'ping', data: '', id: '' }), 15_000)
+      try {
+        await vi.advanceTimersByTimeAsync(300_000)
+        expect(streams).toHaveLength(1)
+        expect(port.frames.some(frame => frame.type === 'unavailable')).toBe(false)
+      } finally { clearInterval(ping); clearInterval(renewal); owner.dispose() }
+    })
+
+    it('answers a later document at once after a refusal and opens no channel for it', async () => {
+      deps.stream = async (kind, demand, frame, signal) => { streams.push({ kind, demand, frame, signal }); throw new Error('live stream HTTP 502') }
+      const owner = createLiveOwner(deps)
+      const first = new Port(); owner.attach(first); first.sync('a', [workspace])
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(refusals(first)).toHaveLength(1)
+      const later = new Port(); owner.attach(later)
+      later.sync('b', [workspace, { id: 'health', demand: { kind: 'topic', topic: 'health' } }], 7)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(later.frames).toContainEqual(expect.objectContaining({ type: 'unavailable', epoch: 7, reason: LIVE_CHANNEL_REFUSED }))
+      expect(streams).toHaveLength(LIVE_CONNECT_ATTEMPTS)
+      expect(deps.topic).not.toHaveBeenCalled()
+      owner.dispose()
+    })
+
+    it('refuse() releases every document with the refused reason (the topic socket never opened)', async () => {
+      const owner = createLiveOwner(deps)
+      const port = new Port(); owner.attach(port); port.sync('a', [{ id: 'health', demand: { kind: 'topic', topic: 'health' } }])
+      await vi.advanceTimersByTimeAsync(0)
+      owner.refuse()
+      expect(refusals(port)).toHaveLength(1)
+      owner.dispose()
+    })
   })
 
   it('releases all shared work when the transport rejects authentication', async () => {

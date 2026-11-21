@@ -58,7 +58,7 @@ const visibilityState = Object.getOwnPropertyDescriptor(document, 'visibilitySta
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
-  configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+  configureLiveSession({ bootProject: 'boot', apiBase: '' })
 })
 
 afterEach(() => {
@@ -705,13 +705,11 @@ describe('useHealth', () => {
     }
   })
 
-  it('uses authenticated HTTP only in remote mode and never starts the WebSocket reconnect loop', async () => {
+  it('subscribes in remote mode too, but only after the authenticated HTTP bootstrap (hearsay-tools/squawk#4014)', async () => {
     FakeHealthSocket.instances = []
     vi.stubGlobal('WebSocket', FakeHealthSocket)
-    fetchMock.mockResolvedValue(json({
-      ...HEALTH,
-      capabilities: { ...HEALTH.capabilities, localHandoff: false },
-    }))
+    let answer!: (response: Response) => void
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { answer = resolve }))
     const client = createQueryClient()
     const scopedWrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -723,12 +721,14 @@ describe('useHealth', () => {
       },
       { wrapper: scopedWrapper },
     )
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(FakeHealthSocket.instances).toHaveLength(0)
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/health', expect.objectContaining({
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/v1/health', expect.objectContaining({
       credentials: 'include',
-    }))
+    })))
+    // A proxy has not authenticated this document before health answers: no socket yet.
+    expect(FakeHealthSocket.instances).toHaveLength(0)
+    answer(json({ ...HEALTH, capabilities: { ...HEALTH.capabilities, localHandoff: false } }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(FakeHealthSocket.instances).toHaveLength(1)
   })
 })
 

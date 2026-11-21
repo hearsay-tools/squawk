@@ -11,9 +11,11 @@ export interface LiveHandlers {
   reset?(reason: string, signal: AbortSignal): Promise<Pick<LiveRunDemand, 'cursor' | 'afterSeq'> | void> | void
 }
 interface Subscription extends FallbackEntry { handlers: LiveHandlers; bootAlias: boolean; recovering: boolean; released: boolean; recovery?: AbortController | undefined }
-interface LiveSession { local: boolean; bootProject: string; apiBase: string }
-/** How this document's live demand travels: `topics` through the SharedWorker's socket, `finite`
- *  through document-authenticated HTTP (remote mode, no SharedWorker, or a failed one). Topic data
+interface LiveSession { bootProject: string; apiBase: string }
+/** How this document's live demand travels: `topics` through the SharedWorker's socket and streams,
+ *  `finite` through document-authenticated HTTP (another API origin or prefix, no SharedWorker, a
+ *  failed one, or a path that refused the shared channels). The deployment mode does not choose it
+ *  (hearsay-tools/squawk#4014). Topic data
  *  arrives only with `topics`; a view whose topic has an HTTP twin reads it itself on `finite`. */
 export type LiveTransport = 'topics' | 'finite'
 type ReconcileListener = (signal: AbortSignal, periodic: boolean) => void | Promise<void>
@@ -37,10 +39,11 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-/** Root-relative local URLs use the shared owner; anything else stays on document HTTP. */
+/** Root-relative URLs use the shared owner, in local and remote mode alike: same-origin cookies
+ *  reach its streams and socket. Anything else stays on document HTTP. */
 function usesFiniteTransport(session: LiveSession, workerFailed: boolean): boolean {
   const apiUrl = new URL(session.apiBase || '/', location.href)
-  return !session.local || apiUrl.origin !== location.origin || apiUrl.pathname !== '/' || workerFailed || typeof SharedWorker !== 'function'
+  return apiUrl.origin !== location.origin || apiUrl.pathname !== '/' || workerFailed || typeof SharedWorker !== 'function'
 }
 
 function liveWorkerUrl(): URL {
@@ -61,6 +64,11 @@ export function createLiveCoordinator() {
   let releaseActivity: (() => void) | undefined
   let epoch = 0, nextId = 0, lastAlive = 0
   let active = false, workerFailed = false, disposed = false
+  /** The worker reported that the path does not carry its requests: a shared channel never
+   *  connected (`LIVE_CHANNEL_REFUSED`: a proxy refuses the upgrade or buffers the stream), or
+   *  its requests lack the document's credentials. That is a fact about the path, not a
+   *  transient failure: unlike `workerFailed`, a visibility restore does not retry it. */
+  let channelsRefused = false
   let restoration: AbortController | undefined
   let restoreRetry: ReturnType<typeof setTimeout> | undefined
   let restoreFailures = 0
@@ -146,7 +154,7 @@ export function createLiveCoordinator() {
     active = true
     // The shared owner serves root-relative URLs. Other origins or service prefixes
     // use document-authenticated finite requests, which preserve the configured base.
-    if (usesFiniteTransport(session, workerFailed)) {
+    if (usesFiniteTransport(session, workerFailed || channelsRefused)) {
       setTransport('finite')
       signalReady(available())
       fallback.start(workspaceReconciled)
@@ -165,10 +173,12 @@ export function createLiveCoordinator() {
         if (!parsed.success) { failWorker(); return }
         const message = parsed.data
         if (message.type === 'hello') { lastAlive = Date.now(); sync(); return }
+        // Session-wide, not per subscription: the worker has already released this document, so
+        // an epoch that moved since must not hide it.
+        if (message.type === 'unavailable') { channelsRefused = true; failWorker(); return }
         if (message.epoch !== epoch) return
         lastAlive = Date.now()
         if (message.type === 'alive') return
-        if (message.type === 'unavailable') { failWorker(); return }
         const entry = subscriptions.get(message.id)
         if (!entry || entry.recovering) return
         if (message.type === 'reset') {
@@ -206,14 +216,14 @@ export function createLiveCoordinator() {
     active = true
     const current = restoration = new AbortController()
     const deadline = setTimeout(() => current.abort(), 10_000)
-    // Cached health is not proof of the current proxy session or deployment mode.
+    // Cached health is not proof of the current proxy session or boot project.
     // Keep all shared delivery closed until authenticated scope and history recover.
     void (async () => {
       const response = await fetch(`${session!.apiBase}/api/v1/health`, { credentials: 'include', signal: current.signal, cache: 'no-store' })
       if (!response.ok) throw new Error(`bootstrap HTTP ${response.status}`)
-      const health = healthPayloadSchema.pick({ capabilities: true, bootProject: true }).parse(await response.json())
+      const health = healthPayloadSchema.pick({ bootProject: true }).parse(await response.json())
       current.signal.throwIfAborted()
-      session = { ...session!, local: health.capabilities.localHandoff === true, bootProject: health.bootProject }
+      session = { ...session!, bootProject: health.bootProject }
       for (const entry of subscriptions.values()) if (entry.bootAlias && entry.demand.kind === 'run') entry.demand.projectId = health.bootProject
       await reconcileLive(current.signal)
       await Promise.all(available().filter(entry => entry.demand.kind === 'run').map(entry => recover(entry, 'document resumed', current.signal)))
@@ -235,7 +245,7 @@ export function createLiveCoordinator() {
     window.addEventListener('online', onOnline)
   }
   return {
-    resetSession() { stop(); session = undefined; workerFailed = false; workspaceReadyWanted = false; setTransport(undefined) },
+    resetSession() { stop(); session = undefined; workerFailed = false; channelsRefused = false; workspaceReadyWanted = false; setTransport(undefined) },
     /** Ask the shared worker for the workspace stream's `ready` again. False without a worker
      *  (finite HTTP): there is no stream to answer. */
     requestWorkspaceReady(): boolean {
@@ -257,7 +267,7 @@ export function createLiveCoordinator() {
     bootProject: () => session?.bootProject,
     configure(next: LiveSession) {
       if (restoration) return
-      if (session && session.local === next.local && session.apiBase === next.apiBase && session.bootProject === next.bootProject) return
+      if (session && session.apiBase === next.apiBase && session.bootProject === next.bootProject) return
       stop(); session = next; workerFailed = false
       for (const entry of subscriptions.values()) if (entry.bootAlias && entry.demand.kind === 'run') entry.demand.projectId = next.bootProject
       ++epoch; start()

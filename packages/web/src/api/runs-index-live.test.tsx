@@ -69,7 +69,7 @@ function setVisibility(state: 'visible' | 'hidden'): void {
 
 describe('runs index backstop (D2)', () => {
   it('asks the shared worker for one read per 60 s by default, a shorter interval when a page asks, none when disabled', () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const shell = renderHook(() => useRunsIndex(), { wrapper })
     const worker = Worker.all[0]!
     expect(readDemands(worker).map((entry) => entry.demand.intervalMs)).toEqual([RUNS_INDEX_BACKSTOP_MS])
@@ -83,7 +83,7 @@ describe('runs index backstop (D2)', () => {
   })
 
   it('a hidden document releases the backstop demand', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     renderHook(() => useRunsIndex(), { wrapper })
     const worker = Worker.all[0]!
     expect(readDemands(worker)).toHaveLength(1)
@@ -96,7 +96,7 @@ describe('runs index backstop (D2)', () => {
 
   it('a hidden document makes no backstop request in finite mode', async () => {
     vi.stubGlobal('SharedWorker', undefined)
-    configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     renderHook(() => useRunsIndex(), { wrapper })
     await act(async () => vi.advanceTimersByTimeAsync(0))
     act(() => setVisibility('hidden'))
@@ -106,7 +106,7 @@ describe('runs index backstop (D2)', () => {
   })
 
   it('the shared read passes the fence: a frame newer than the polled snapshot stays on top', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     renderHook(() => useRunsIndex(), { wrapper })
     await act(async () => vi.advanceTimersByTimeAsync(0))
     expect(title()).toBe('a1')
@@ -125,10 +125,10 @@ describe('runs index backstop (D2)', () => {
   })
 })
 
-describe('runs index: remote mode (D9)', () => {
+describe('runs index: finite transport (D9)', () => {
   it('keeps the 5 s full reconciliation through the fence, with no extra read per snapshot', async () => {
     vi.stubGlobal('SharedWorker', undefined)
-    configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const usage = createUsageStore()
     renderHook(() => { useGlobalEvents(usage); return useRunsIndex() }, { wrapper })
     await act(async () => vi.advanceTimersByTimeAsync(10_000))
@@ -143,7 +143,7 @@ describe('runs index: remote mode (D9)', () => {
 
 describe('runs index: visibility restore', () => {
   it('reconciles through the fence: the restored snapshot keeps frames newer than it', async () => {
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const usage = createUsageStore()
     renderHook(() => { useGlobalEvents(usage); return useRunsIndex() }, { wrapper })
     await act(async () => vi.advanceTimersByTimeAsync(0))
@@ -226,7 +226,7 @@ describe('runs index: a first ready lost to an epoch change (review round 5)', (
 
   it('the document asks for the ready once, learns the generation, reads the index once and applies later frames', async () => {
     const worker = bridgedWorker()
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const usage = createUsageStore()
     renderHook(() => { useGlobalEvents(usage); return useRunsIndex() }, { wrapper })
     await act(async () => { worker.toOwner(); await vi.advanceTimersByTimeAsync(0) })
@@ -263,7 +263,7 @@ describe('runs index: a first ready lost to an epoch change (review round 5)', (
 
   it('an ordinary epoch change after an accepted ready sends no ready and causes no extra read', async () => {
     const worker = bridgedWorker()
-    configureLiveSession({ local: true, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     const usage = createUsageStore()
     renderHook(() => { useGlobalEvents(usage); return useRunsIndex() }, { wrapper })
     await act(async () => {

@@ -1,6 +1,6 @@
 import { LIVE_BYTE_LIMIT, LIVE_RUN_LIMIT } from '@open-mercato/cezar-api-client/contract/live-limits'
 import type { LiveRunDemand } from '@open-mercato/cezar-api-client'
-import { LEASE_MS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerOutput } from './live-protocol'
+import { LEASE_MS, LIVE_CHANNEL_REFUSED, LIVE_CONNECT_ATTEMPTS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerOutput } from './live-protocol'
 
 export interface LivePort {
   onmessage: ((event: { data: unknown }) => void) | null
@@ -30,14 +30,26 @@ interface DocumentPort {
    *  may have dropped under the old epoch. A new workspace subscription clears it. */
   readyGeneration?: string | undefined
 }
-interface Lane { signature: string; controller?: AbortController | undefined; retry?: ReturnType<typeof setTimeout> | undefined; lastFrame: number }
+interface Lane {
+  signature: string; controller?: AbortController | undefined; retry?: ReturnType<typeof setTimeout> | undefined; lastFrame: number
+  /** A frame arrived since this lane last gained demand: the path carries the stream. */
+  proven: boolean
+  /** Attempts that ended before the lane was proven, or fell silent at any time, since the last
+   *  sustained delivery. */
+  failures: number
+  /** When the current attempt started. */
+  startedAt: number
+}
 interface ReadJob { controller: AbortController; deadline?: ReturnType<typeof setTimeout> | undefined; nextAt: number; timer?: ReturnType<typeof setTimeout> | undefined; revision: number; interval: number }
 
-/** Worker-owned demand union. No React, document globals, or authentication-bound remote data. */
+/** Both live streams ping every 15 s: a frame this far into an attempt proves sustained delivery. */
+const SUSTAINED_MS = 10_000
+
+/** Worker-owned demand union. No React or document globals; same-origin cookies authenticate it. */
 export function createLiveOwner(deps: LiveOwnerDeps) {
   const documents = new Set<DocumentPort>()
   const lanes: Record<'workspace' | 'runs', Lane> = {
-    workspace: { signature: '', lastFrame: 0 }, runs: { signature: '', lastFrame: 0 },
+    workspace: { signature: '', lastFrame: 0, proven: false, failures: 0, startedAt: 0 }, runs: { signature: '', lastFrame: 0, proven: false, failures: 0, startedAt: 0 },
   }
   const topics = new Map<string, () => void>()
   const topicValues = new Map<string, unknown>()
@@ -90,12 +102,28 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
   const send = (doc: DocumentPort, message: OwnerOutput) => {
     try { doc.port.postMessage(message) } catch { release(doc) }
   }
-  const failure = (error: unknown) => {
-    if (!(error instanceof Error) || error.message !== 'authentication required') return
+  /** A shared channel never connected. Later documents get `unavailable` at once: the path does
+   *  not change while this worker lives, so a new tab must not spend its own attempts. */
+  let channelsRefused = false
+  /** Every document leaves shared delivery for its own finite HTTP. */
+  const unavailable = (reason: string) => {
+    if (reason === LIVE_CHANNEL_REFUSED) channelsRefused = true
     for (const doc of [...documents]) {
-      send(doc, { type: 'unavailable', version: LIVE_PROTOCOL, epoch: doc.epoch, reason: error.message })
+      send(doc, { type: 'unavailable', version: LIVE_PROTOCOL, epoch: doc.epoch, reason })
       release(doc)
     }
+  }
+  const failure = (error: unknown) => {
+    if (error instanceof Error && error.message === 'authentication required') unavailable(error.message)
+  }
+  /** An attempt ended or fell silent. A proxy that refuses or buffers the stream would otherwise
+   *  retry forever, so attempts are bounded: an end counts until the lane was ever proven (after
+   *  that it is a server restart), and silence always counts, because a proxy may pass the first
+   *  frame and buffer the rest. A frame `SUSTAINED_MS` into an attempt resets the count. */
+  const retryLane = (kind: 'workspace' | 'runs', restart: () => void, silent = false) => {
+    const lane = lanes[kind]
+    if ((silent || !lane.proven) && ++lane.failures >= LIVE_CONNECT_ATTEMPTS) { unavailable(LIVE_CHANNEL_REFUSED); return }
+    restart()
   }
   const reset = (doc: DocumentPort, entry: Entry, reason: string) => {
     entry.paused = true
@@ -129,7 +157,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
     if (!lane.signature || disposed) return
     stopLane(lane)
     const controller = new AbortController()
-    lane.controller = controller; lane.lastFrame = Date.now()
+    lane.controller = controller; lane.lastFrame = lane.startedAt = Date.now()
     if (kind === 'workspace') {
       if (workspaceReady || workspaceDropped) for (const { doc, entry } of held('workspace')) deliver(doc, entry, { event: 'reconnect', data: '', id: '' })
       workspaceReady = false
@@ -147,6 +175,8 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
     void deps.stream(kind, [...runs.values()], frame => {
       if (lane.controller !== controller || controller.signal.aborted) return
       lane.lastFrame = Date.now()
+      lane.proven = true
+      if (lane.lastFrame - lane.startedAt >= SUSTAINED_MS) lane.failures = 0
       if ('type' in frame && frame.type === 'ready') onGeneration(frame.generation)
       if ('data' in frame && frame.event === 'ready') {
         try { const data = JSON.parse(frame.data) as { generation?: unknown }; if (typeof data.generation === 'string') onGeneration(data.generation) } catch { /* ignore malformed control */ }
@@ -166,7 +196,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
         workspaceReady = false
         workspaceDropped = true
       }
-      lane.retry = setTimeout(() => { lane.retry = undefined; startLane(kind) }, 1_500)
+      retryLane(kind, () => { lane.retry = setTimeout(() => { lane.retry = undefined; startLane(kind) }, 1_500) })
     })
   }
   const refreshRead = (path: string, job: ReadJob) => {
@@ -208,8 +238,9 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
       if (lane.signature === signatures[kind]) continue
       lane.signature = signatures[kind]
       stopLane(lane)
-      if (lane.signature) startLane(kind)
-      else if (kind === 'workspace') workspaceReady = false
+      if (lane.signature) { startLane(kind); continue }
+      lane.proven = false; lane.failures = 0
+      if (kind === 'workspace') workspaceReady = false
     }
   }
   const reconcileTopics = () => {
@@ -310,6 +341,10 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
       const message = parsed.data
       if (doc.id && message.documentId !== doc.id || message.epoch < doc.epoch) return
       if (message.type === 'sync') {
+        if (channelsRefused) {
+          send(doc, { type: 'unavailable', version: LIVE_PROTOCOL, epoch: message.epoch, reason: LIVE_CHANNEL_REFUSED })
+          release(doc); return
+        }
         doc.id = message.documentId
         const epochChanged = doc.epoch !== message.epoch
         doc.epoch = message.epoch; doc.seenAt = Date.now()
@@ -343,12 +378,14 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
     send(doc, { type: 'hello', version: LIVE_PROTOCOL })
     tick ??= setInterval(() => {
       for (const doc of [...documents]) if (Date.now() - doc.seenAt >= LEASE_MS) release(doc)
-      for (const kind of ['workspace', 'runs'] as const) if (lanes[kind].controller && Date.now() - lanes[kind].lastFrame >= 40_000) startLane(kind)
+      for (const kind of ['workspace', 'runs'] as const) if (lanes[kind].controller && Date.now() - lanes[kind].lastFrame >= 40_000) retryLane(kind, () => startLane(kind), true)
     }, 1_000)
     return () => release(doc)
   }
   return {
     attach,
+    /** A shared channel outside the lanes (the topic socket) never connected: see `retryLane`. */
+    refuse() { unavailable(LIVE_CHANNEL_REFUSED) },
     dispose() {
       disposed = true
       for (const doc of [...documents]) release(doc)

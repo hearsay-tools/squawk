@@ -57,7 +57,7 @@ describe('run cache ownership', () => {
   })
 
   it('invalidates the boot slug, its default alias and the late current scope for a boot-project send', async () => {
-    configureLiveSession({ local: false, bootProject: 'boot', apiBase: '' })
+    configureLiveSession({ bootProject: 'boot', apiBase: '' })
     setApiScope(null)
     const address = runAddress('r', { projectId: 'boot' })
     const client = new QueryClient()

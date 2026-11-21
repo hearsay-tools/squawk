@@ -88,7 +88,7 @@ The real [preview test](../../packages/web/e2e/live-preview.e2e.ts) receives and
 
 ## Remaining limits
 
-- Remote deployments, configured API bases with a path prefix, and unavailable/failed workers use finite authenticated HTTP, with no ordinary persistent SSE or WebSocket. Expected freshness is about two seconds for tasks and five seconds for workspace reconciliation, plus transport delay; failures back off up to 30 seconds. Simultaneously visible fallback tabs still duplicate finite requests.
+- Configured API bases on another origin or with a path prefix, unavailable/failed workers, and paths that refuse the worker's channels (after three attempts each, hearsay-tools/squawk#4014) use finite authenticated HTTP, with no ordinary persistent SSE or WebSocket. Expected freshness is about two seconds for tasks and five seconds for workspace reconciliation, plus transport delay; failures back off up to 30 seconds. Simultaneously visible fallback tabs still duplicate finite requests.
 - A shared task stream accepts at most 32 distinct runs and 1 MiB per complete SSE frame; capacity overflow uses finite recovery. Oversized events use the existing authoritative history/context hydration path.
 - Hidden documents release demand immediately; crashed/frozen owners are reclaimed by 15-second leases or the independent feed watchdog. Whole-browser/OS suspension can delay timers until execution resumes.
 - Subsequent review fixes add a store-wide cache of at most 256 active items / 4 MiB of serialized snapshots for finite polling of unfinished text. The tables above predate that cache and make no measurement claim about its CPU/RSS cost. Browser regressions cover live-only deltas and content-only updates in blocked-worker and authenticated remote mode.
