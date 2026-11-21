@@ -81,7 +81,9 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
   `vitest.setup.ts` and dev scripts. `core/runner-registry.test.ts` holds the two lists equal, and
   `cez/runner-ids-import` fails a production file that names `runners/ids.ts` with a literal path
   (a static import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope. The lint rules
-  `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
+  `cez/runner-id-branch`, `cez/runner-roster-literal` and `cez/parity-runner-subset` read the ids from
+  `runners/ids.ts`. No lint rule imports `runners/built-in.ts` or a runner definition: Squeal relints
+  the whole project when the lint plugin's import closure changes (`core/runner-closure.test.ts`).
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
 

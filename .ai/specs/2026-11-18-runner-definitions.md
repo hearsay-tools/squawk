@@ -198,7 +198,8 @@ the entry registers the built-ins (`index-runners.test.ts`). Scripts under
 `packages/cezar/scripts/` that read runner data call it themselves.
 
 `RUNNER_IDS` and `RunnerId` left the service in C3 (decision 5).
-`cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
+`cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/ids.ts`, so the lint
+plugin loads no runner module.
 `runners/ids.ts` holds the same ids as plain data for tests (decision 5 as amended). A new
 built-in runner adds its folder, its scripts in `packages/cezar/scripts/`, one line in
 `runners/built-in.ts` and its id in `runners/ids.ts`; an outside runner (step 4) only calls
