@@ -3,6 +3,7 @@ import type { RunnerDetection } from './runner-definition.ts';
 import { registeredRunners } from './runner-registry.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { realpath, stat } from 'node:fs/promises';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -57,6 +58,12 @@ async function binarySignature(bin: string, env: NodeJS.ProcessEnv): Promise<str
   return '-';
 }
 
+/** The variables `gh` reads before its hosts file: tokens and the host they belong to. */
+function ghEnv(env: NodeJS.ProcessEnv): Array<string | null> {
+  return [env.GH_TOKEN, env.GITHUB_TOKEN, env.GH_ENTERPRISE_TOKEN, env.GITHUB_ENTERPRISE_TOKEN, env.GH_HOST, env.GH_CONFIG_DIR]
+    .map((value) => value ?? null);
+}
+
 /** The file `gh auth login` and `gh auth logout` rewrite. */
 function ghHostsFile(env: NodeJS.ProcessEnv): string | undefined {
   if (env.GH_CONFIG_DIR) return join(env.GH_CONFIG_DIR, 'hosts.yml');
@@ -68,9 +75,9 @@ function ghHostsFile(env: NodeJS.ProcessEnv): string | undefined {
 /**
  * A signature of what `detectEnvironment` would see, read from file metadata only: where each
  * probed executable resolves on PATH and the file behind it, the `gh` login file and the dry-run
- * switch. Installing, removing or upgrading a CLI, and `gh auth login`/`logout`, change it. It
- * starts no process, so a caller can check it often and probe only on a change
- * (hearsay-tools/squawk#3658).
+ * switch. Installing, removing or upgrading a CLI, `gh auth login`/`logout` and a `gh` token in the
+ * environment change it. It starts no process, so a caller can check it often and probe only on a
+ * change (hearsay-tools/squawk#3658).
  */
 export async function environmentStamp(env: NodeJS.ProcessEnv = process.env): Promise<string> {
   const binaries = await Promise.all(probedBinaries().map(async (bin) => `${bin}=${await binarySignature(bin, env)}`));
@@ -79,7 +86,9 @@ export async function environmentStamp(env: NodeJS.ProcessEnv = process.env): Pr
     (s) => `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`,
     () => '-', // not logged in through a hosts file
   ) : '-';
-  return [...binaries, `gh-hosts=${hosts}`, `dry-run=${productEnv('DRY_RUN') ?? ''}`].join('\n');
+  // `gh` prefers these over its hosts file; only a digest enters the stamp, never a token.
+  const tokens = createHash('sha256').update(JSON.stringify(ghEnv(env))).digest('hex');
+  return [...binaries, `gh-hosts=${hosts}`, `gh-env=${tokens}`, `dry-run=${productEnv('DRY_RUN') ?? ''}`].join('\n');
 }
 
 /** Banner spelling follows the release identity; switch-off output stays stable. */

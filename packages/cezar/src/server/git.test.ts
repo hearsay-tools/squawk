@@ -1,5 +1,5 @@
 import { ChildProcess, execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -166,6 +166,37 @@ describe('getRepoInfo — change-keyed cache', () => {
     g(dir, 'remote', 'set-url', 'origin', 'https://github.com/acme/shared.git');
     expect((await getRepoInfo(linked))?.remote).toBe('https://github.com/acme/shared.git');
     expect((await getRepoInfo(dir))?.branch).toBe('main');
+  });
+
+  it('shows a remote rewritten in an included config file', async () => {
+    const included = join(dir, 'remote.inc');
+    writeFileSync(included, '[url "https://github.com/"]\n\tinsteadOf = fixture:\n');
+    g(dir, 'config', 'include.path', '../remote.inc');
+    g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
+    writeFileSync(included, '[url "https://example.com/"]\n\tinsteadOf = fixture:\n');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://example.com/acme/demo.git');
+  });
+
+  it('shows a remote rewritten through config in the environment', async () => {
+    g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
+    vi.stubEnv('GIT_CONFIG_COUNT', '1');
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'url.https://github.com/.insteadOf');
+    vi.stubEnv('GIT_CONFIG_VALUE_0', 'fixture:');
+    try {
+      expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
+      vi.stubEnv('GIT_CONFIG_VALUE_0', 'no-match:');
+      expect((await getRepoInfo(dir))?.remote).toBe('fixture:acme/demo.git');
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('asks Git each time when HEAD names a branch that is itself a symbolic ref', async () => {
+    g(dir, 'branch', 'other');
+    g(dir, 'symbolic-ref', 'refs/heads/alias', 'refs/heads/main');
+    g(dir, 'symbolic-ref', 'HEAD', 'refs/heads/alias');
+    expect((await getRepoInfo(dir))?.branch).toBe('main');
+    g(dir, 'symbolic-ref', 'refs/heads/alias', 'refs/heads/other');
+    expect((await getRepoInfo(dir))?.branch).toBe('other');
   });
 
   it('keeps null for a directory outside any repository until a repository appears', async () => {

@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 /**
  * What `getRepoInfo` reads, as file metadata: the `.git` entry Git discovers from `dir`, the
@@ -45,6 +45,73 @@ function sharedConfigFiles(env: NodeJS.ProcessEnv): string[] {
   return [...global, ...system];
 }
 
+/** Config Git takes from the environment (`git -c`, `GIT_CONFIG_COUNT`): no file records it. */
+function envConfig(env: NodeJS.ProcessEnv): string {
+  const pairs = Object.entries(env)
+    .filter(([name]) => /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name))
+    .sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify([env.GIT_CONFIG_PARAMETERS ?? '', env.GIT_CONFIG_COUNT ?? '', ...pairs]);
+}
+
+/** The `path` values of a config file's `[include]` and `[includeIf]` sections, as Git resolves them. */
+function includePaths(text: string, file: string, env: NodeJS.ProcessEnv): string[] {
+  const paths: string[] = [];
+  let including = false;
+  for (const raw of text.split('\n')) {
+    let line = raw.trim();
+    const header = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"(?:[^"\\]|\\.)*")?\s*\]/.exec(line);
+    if (header) {
+      including = /^include(if)?$/i.test(header[1]!);
+      line = line.slice(header[0].length).trim();
+    }
+    const entry = including ? /^path\s*=\s*(.*)$/i.exec(line) : null;
+    if (!entry) continue;
+    const value = entry[1]!.replace(/\s[#;].*$/, '').trim().replace(/^"(.*)"$/, '$1');
+    if (!value) continue;
+    if (value.startsWith('~/')) {
+      if (env.HOME) paths.push(join(env.HOME, value.slice(2)));
+    } else {
+      paths.push(isAbsolute(value) ? value : resolve(dirname(file), value));
+    }
+  }
+  return paths;
+}
+
+/** Each config file and every file it includes, conditional or not, with its signature. */
+async function configSignatures(files: string[], env: NodeJS.ProcessEnv): Promise<string[]> {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  // Git stops at 10 levels of nested includes.
+  let level = files;
+  for (let depth = 0; depth <= 10 && level.length > 0; depth++) {
+    const next: string[] = [];
+    for (const file of level) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      out.push(`${file}=${await fileSignature(file)}`);
+      const text = await readOptional(file);
+      if (text && /\[\s*include/i.test(text)) next.push(...includePaths(text, file, env));
+    }
+    level = next;
+  }
+  return out;
+}
+
+/**
+ * What `HEAD` names, as a stamp part, or undefined when only Git can tell: a branch ref that is
+ * itself a symbolic ref (Git follows the chain, and rewriting the branch ref leaves `HEAD` alone).
+ * A reftable repository keeps its refs in `reftable/`, so its table list joins the stamp.
+ */
+async function headTarget(gitDir: string, commonDir: string): Promise<string | undefined> {
+  const head = (await readOptional(join(gitDir, 'HEAD')))?.trim() ?? '';
+  const tables = await fileSignature(join(commonDir, 'reftable', 'tables.list'));
+  if (tables !== '-') return `reftable=${tables}`;
+  const ref = /^ref:\s*(\S+)$/.exec(head)?.[1];
+  if (!ref) return 'detached';
+  const target = await readOptional(join(commonDir, ref)) ?? await readOptional(join(gitDir, ref));
+  return target?.startsWith('ref:') ? undefined : ref;
+}
+
 /** The nearest `.git` at or above `dir`, as Git's discovery walks; undefined when there is none. */
 async function findDotGit(dir: string): Promise<{ path: string; isFile: boolean } | undefined> {
   let current = resolve(dir);
@@ -63,33 +130,36 @@ async function findDotGit(dir: string): Promise<{ path: string; isFile: boolean 
   }
 }
 
+/** The Git directory a `.git` entry names: itself, or the `gitdir:` target of a `.git` file. */
+async function resolveGitDir(dotGit: { path: string; isFile: boolean }): Promise<{ gitDir: string; pointer: string } | undefined> {
+  if (!dotGit.isFile) return { gitDir: dotGit.path, pointer: '' };
+  const pointer = (await readFile(dotGit.path, 'utf8')).trim();
+  const match = /^gitdir:\s*(.+)$/m.exec(pointer);
+  return match?.[1] ? { gitDir: resolve(dirname(dotGit.path), match[1].trim()), pointer } : undefined;
+}
+
 /**
  * The stamp of `dir`, or undefined when it cannot be read with confidence (a `.git` file without a
- * `gitdir:` line, a Git directory without `HEAD`, an unreadable path). Undefined means: ask Git.
+ * `gitdir:` line, a Git directory without `HEAD`, a symbolic branch ref, an unreadable path).
+ * Undefined means: ask Git.
  */
 export async function readGitDirStamp(dir: string, env: NodeJS.ProcessEnv = process.env): Promise<GitDirStamp | undefined> {
   try {
-    const shared = await Promise.all(sharedConfigFiles(env).map(fileSignature));
+    const environment = envConfig(env);
     const dotGit = await findDotGit(dir);
-    if (!dotGit) return { kind: 'none', key: shared.join('|') };
-    let gitDir = dotGit.path;
-    let pointer = '';
-    if (dotGit.isFile) {
-      pointer = (await readFile(dotGit.path, 'utf8')).trim();
-      const match = /^gitdir:\s*(.+)$/m.exec(pointer);
-      if (!match?.[1]) return undefined;
-      gitDir = resolve(dirname(dotGit.path), match[1].trim());
-    }
+    if (!dotGit) return { kind: 'none', key: [environment, ...await configSignatures(sharedConfigFiles(env), env)].join('|') };
+    const resolved = await resolveGitDir(dotGit);
+    if (!resolved) return undefined;
+    const { gitDir, pointer } = resolved;
     const commonPointer = (await readOptional(join(gitDir, 'commondir')))?.trim();
     const commonDir = commonPointer ? resolve(gitDir, commonPointer) : gitDir;
     const head = await fileSignature(join(gitDir, 'HEAD'));
     if (head === '-') return undefined;
-    const files = await Promise.all([
-      fileSignature(dotGit.path),
-      fileSignature(join(commonDir, 'config')),
-      fileSignature(join(gitDir, 'config.worktree')),
-    ]);
-    return { kind: 'repo', key: [dotGit.path, pointer, gitDir, commonDir, head, ...files, ...shared].join('|') };
+    const target = await headTarget(gitDir, commonDir);
+    if (target === undefined) return undefined;
+    const configs = await configSignatures([join(commonDir, 'config'), join(gitDir, 'config.worktree'), ...sharedConfigFiles(env)], env);
+    const parts = [dotGit.path, await fileSignature(dotGit.path), pointer, gitDir, commonDir, head, target, environment, ...configs];
+    return { kind: 'repo', key: parts.join('|') };
   } catch {
     return undefined;
   }

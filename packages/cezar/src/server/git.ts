@@ -68,9 +68,12 @@ export async function getRepoInfo(dir: string): Promise<RepoInfo | null> {
   repoInfoCache.set(dir, entry);
   // Keep only an answer the metadata explains: a repository where a `.git` was found, or null
   // where none exists. Null beside a `.git` (an unborn HEAD before its first commit, a missing
-  // `git`) can change with no file above changing, so that call is asked again next time.
-  void info.then((result) => {
-    if ((result === null) === (stamp.kind === 'none')) return;
+  // `git`) can change with no file above changing, so that call is asked again next time. A file
+  // rewritten while Git ran may hold a value Git did not read, so the stamp is read again.
+  void info.then(async (result) => {
+    const explained = (result === null) === (stamp.kind === 'none');
+    const after = explained ? await readGitDirStamp(dir) : undefined;
+    if (after && `${after.kind}:${after.key}` === key) return;
     if (repoInfoCache.get(dir) === entry) repoInfoCache.delete(dir);
   });
   return info.then((result) => result && { ...result });

@@ -2702,8 +2702,8 @@ async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
 }
 
 /**
- * How old an availability answer `/health` serves before it probes again. Longer than `CACHE_MS`:
- * a client reads health every 5 s, so the 60 s list-cache lifetime started one `gh repo view` per
+ * How old an availability answer `/health` serves before it probes again. The server rebuilds
+ * health every 5 s while a client reads it, so `CACHE_MS` (60 s) started one `gh repo view` a
  * minute, and each start forks the server process (hearsay-tools/squawk#3658). The answer depends
  * on the network and on GitHub access, so no file change can signal it. A direct `detectGithub`
  * call (automation discovery) still refreshes the shared slot after 60 s.
