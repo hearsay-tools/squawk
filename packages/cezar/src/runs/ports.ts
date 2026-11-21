@@ -8,6 +8,7 @@
  * `.ai/specs/2026-11-21-run-lifecycle-and-store-ports.md`), and the port then points at the module
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
+import type { EventEmitter } from 'node:events';
 import type { RunStore } from './store.ts';
 
 export type { RunLifecycleSource } from './lifecycle.ts';
@@ -152,11 +153,13 @@ export interface RunPins {
 
 /**
  * The store's own `EventEmitter` surface. Transitional: the activity publisher still listens
- * through it, and slice B4 (hearsay-tools/squawk#4032) moves that listener to `RunLifecycleSource` and deletes this port.
+ * through it, and slice B4 (hearsay-tools/squawk#4032) moves that listener to `RunLifecycleSource`
+ * and deletes this port. The members are `EventEmitter`'s: the store's own `on` returns `this`, a
+ * `RunStore`, which no other emitter is.
  */
 export interface RunStoreEvents {
-  on: RunStore['on'];
-  off: RunStore['off'];
+  on: EventEmitter['on'];
+  off: EventEmitter['off'];
 }
 
 /** Closing the store and writing it out. */

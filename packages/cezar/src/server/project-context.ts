@@ -18,6 +18,7 @@ import { armRepoHandle } from '../runs/arm-repo-handle.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
 import { reclaimWorktrees } from '../runs/retention.ts';
 import { SWEEP_MIN_INTERVAL_MS, sweepMergedBranches, type SweepOptions, type SweepProject } from './repo-branch-sweep.ts';
+import type { RunEventLog, RunLookup, RunStoreEvents } from '../runs/ports.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunDatabase, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run-database.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -143,7 +144,7 @@ function sweepPreviewOnce(dataDir: string, host: PreviewHost | undefined): Promi
  * is not swept again, and what the live host runs is spared either way), and a deleted run's
  * preview is released with its profile.
  */
-export function armPreview(store: RunStore, dataDir: string, host: PreviewHost | undefined): void {
+export function armPreview(store: RunStoreEvents & RunLookup & Pick<RunEventLog, 'appendEvent'>, dataDir: string, host: PreviewHost | undefined): void {
   // Before the sweep's first await: a crash's agent state is reconciled before any agent can connect.
   reconcileAgentMarkers(dataDir, store, runId => host?.hasAgents(runId) ?? false);
   void sweepPreviewOnce(dataDir, host);

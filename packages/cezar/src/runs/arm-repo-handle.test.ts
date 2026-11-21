@@ -21,7 +21,7 @@ describe('armRepoHandle (#945)', () => {
   /** Just enough store to observe the one call this module makes. */
   const fakeStore = () => {
     const setRepoHandle = vi.fn();
-    return { store: { setRepoHandle } as unknown as RunStore, setRepoHandle };
+    return { store: { setRepoHandle }, setRepoHandle };
   };
 
   /** Let the promise chain inside `armRepoHandle` settle without the caller awaiting it. */

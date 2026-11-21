@@ -1,11 +1,10 @@
 import { expect, it, vi } from 'vitest';
 import { runtimeHomes } from './runtime-isolation.testkit.ts';
-import { reconcileServeWorktrees } from '../serve-boot.ts';
+import { reconcileServeWorktrees, type ReconcileStore } from '../serve-boot.ts';
 import { classifyInputFor, type BranchForge } from '../server/repo-branches.ts';
 import { createWorkspaceProjectContexts } from '../server/workspace-projects.ts';
 import { ProjectContexts, type ProjectContextDeps } from '../server/project-context.ts';
 import * as config from '../config.ts';
-import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
@@ -16,7 +15,7 @@ vi.mock('../server/git.ts', () => ({ getRepoInfo: vi.fn(async (root: string) => 
 
 it('passes the selected Home to boot retention and background branch sweeping', async () => {
   const { root, selected } = runtimeHomes();
-  const store = { listRunIds: () => [] } as unknown as RunStore;
+  const store = { listRunIds: () => [] } as unknown as ReconcileStore;
   const manager = {} as RunManager;
   const retention = vi.fn(async () => 17);
   const sweep = vi.fn(async () => null);

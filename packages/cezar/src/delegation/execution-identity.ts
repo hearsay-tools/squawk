@@ -10,6 +10,7 @@ import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { agentHomeDir, claudeStateFilePath } from '../paths.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
+import type { RunLookup, WorkerExecutions } from '../runs/ports.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
@@ -140,7 +141,7 @@ export function workerWorkflowHash(workflow: WorkflowDef): string {
  * `stepId`, the step's own pinned entry is checked too (#452): its account must still be
  * available and its model/effort must clear the lock, exactly as the run-level fields must.
  */
-export function workerIdentity(store: RunStore, repoRoot: string, runId: string, stepId: string | undefined, home: Home) {
+export function workerIdentity(store: RunLookup & Pick<WorkerExecutions, 'readWorkerIdentity'>, repoRoot: string, runId: string, stepId: string | undefined, home: Home) {
   const run = store.getRun(runId);
   if (run?.delegation?.role !== 'worker') return undefined;
   const identity = store.readWorkerIdentity(runId);

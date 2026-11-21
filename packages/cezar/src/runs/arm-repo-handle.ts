@@ -2,6 +2,9 @@ import { resolveForgeRoot, type ForgeFactory } from '../server/forge/index.ts';
 
 import type { RunStore } from './store.ts';
 
+/** What the discovery writes: the one store method it calls. */
+export interface RepoHandleTarget { setRepoHandle: RunStore['setRepoHandle']; }
+
 const RETRY_DELAYS_MS = [1_000, 5_000] as const;
 
 /**
@@ -11,7 +14,7 @@ const RETRY_DELAYS_MS = [1_000, 5_000] as const;
  * Permanent unknown identity and exhausted retries retain the existing unscoped behavior.
  * Successful discovery uses setRepoHandle's existing repair and reference-ownership rules.
  */
-export function armRepoHandle(store: RunStore, repoRoot: string, signal?: AbortSignal, forgeFactory?: ForgeFactory): void {
+export function armRepoHandle(store: RepoHandleTarget, repoRoot: string, signal?: AbortSignal, forgeFactory?: ForgeFactory): void {
   if (signal?.aborted) return;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retries = 0;

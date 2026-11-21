@@ -81,7 +81,7 @@ it.each(['run', 'step'] as const)('validates accepted worker %s pins against the
   const identity = { kind: 'accepted', account, grants: {}, ...pin,
     ...(scope === 'step' ? { steps: [{ stepId: 'first', account, grants: {}, model: 'sonnet' }] } : {}) };
   const store = { getRun: () => ({ delegation: { role: 'worker' }, runner: 'claude', agentProfile: 'work', ...pin }),
-    readWorkerIdentity: () => identity } as unknown as RunStore;
+    readWorkerIdentity: () => identity } as unknown as Parameters<typeof workerIdentity>[0];
   expect(() => workerIdentity(store, root, 'worker', 'first', selected)).toThrow(AGENT_MODELS_LOCKED_ERROR);
   expect(workerIdentity(store, root, 'worker', 'first', testHome())).toBe(identity);
 });
