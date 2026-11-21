@@ -145,9 +145,11 @@ An API error does not become a JSON-RPC error. It becomes an `agent_message_chun
   options are the answers, each with kind `allow_once` (`{optionId: "1", name: "red"}`). Select an
   `optionId` to answer; agy closes the call with `rawOutput: "Response received"`. Route by the
   `interaction_` prefix, since every option has kind `allow_once`.
-- **Subagent** (`subagent.ndjson`): `tool_call` kind `other`, title `Run invoke_subagent?`, empty
-  `rawInput`, completed at once with `rawOutput: "Tool execution"`. The child's own calls follow
-  as ordinary top-level calls.
+- **Subagent** (`subagent.ndjson`): `tool_call` kind `other`, title `Run invoke_subagent?`,
+  status `pending`, `rawInput` `{Subagents: [{Model, Prompt, Role, TypeName}]}`; the permission
+  request carries the same `rawInput`. The `in_progress` update has title
+  `Running invoke_subagent` and an empty `rawInput`, and the call completes at once with
+  `rawOutput: "Tool execution"`. The child's own calls follow as ordinary top-level calls.
 - **Tool call ids** take three forms: 32 hex digits, `call_<digits>`, and `<sessionId>:<n>` (yolo
   mode).
 - **Modes** `default`, `auto_edit` and `yolo` are accepted; `session/set_mode` answers `{}`. In
