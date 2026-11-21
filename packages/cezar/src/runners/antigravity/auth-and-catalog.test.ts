@@ -1,6 +1,7 @@
 import { access, mkdtemp, readFile, rm, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { inspect } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { antigravityRunner } from './definition.ts';
@@ -63,7 +64,10 @@ createInterface({ input: process.stdin }).on('line', line => {
   console.log(JSON.stringify({ jsonrpc: '2.0', id: frame.id, ...response }));
 });\n`);
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-  await expect(startAntigravitySignIn(join(dir, 'account'))).rejects.toThrow(`${method}: Native sign-in refused: [URL redacted] access_token=[redacted]`);
+  const failure = await startAntigravitySignIn(join(dir, 'account')).catch(error => error as Error);
+  expect(failure).toBeInstanceOf(Error);
+  expect((failure as Error).message).toContain(`${method}: Native sign-in refused: [URL redacted] access_token=[redacted]`);
+  expect(inspect(failure)).not.toMatch(/https:|private-state|private-token/);
   expect(JSON.stringify(log.mock.calls)).not.toMatch(/https:|private-state|private-token/);
 });
 

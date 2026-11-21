@@ -127,6 +127,6 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
       const line = redactBrowserSignInDetails(antigravityStderr(diagnostics.stderr)).split(/\r?\n/).find(line => line.trim());
       cause = `Agent exited (${diagnostics.signal ?? `code ${diagnostics.code}`})${line ? `: ${line.trim()}` : ''}`;
     }
-    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`, { cause: error });
+    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`);
   }
 }

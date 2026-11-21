@@ -10,8 +10,8 @@ export function redactBrowserSignInDetails(message: string): string {
 
 /** A startup error whose message may cross the browser sign-in HTTP boundary. */
 export class BrowserSignInStartError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  constructor(message: string) {
     const safe = redactBrowserSignInDetails(message).replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 320);
-    super(safe, options);
+    super(safe);
   }
 }
