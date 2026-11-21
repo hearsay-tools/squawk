@@ -55,8 +55,9 @@ export class AcpEvents {
   fork(sink: AcpEventSink): AcpEvents {
     const next = new AcpEvents(sink, this.hooks);
     next.serial = this.serial; next.turnId = this.turnId;
-    next.block = this.block ? structuredClone(this.block) : undefined;
-    next.tools = structuredClone(this.tools);
+    next.block = this.block ? { ...this.block } : undefined;
+    // Updates replace tool snapshots; their nested input/output values are never mutated.
+    next.tools = new Map(this.tools);
     return next;
   }
 

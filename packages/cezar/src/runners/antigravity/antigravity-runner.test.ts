@@ -1,4 +1,6 @@
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { waitFor } from '../../core/harness-parity-core.testkit.ts';
+import { withRejectedInput } from '../../core/owned-input-delivery.testkit.ts';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -7,7 +9,7 @@ import type { UiEvent } from '../../core/ui-events.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
 import { antigravityRunner } from './definition.ts';
-import { permissionPolicy } from './permissions.ts';
+import { permissionPolicy, antigravityAsk } from './permissions.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
 registerRunner(antigravityRunner);
 const dirs: string[] = [];
@@ -86,4 +88,81 @@ it('counts a late steer as a successor turn and waits for its permission and res
   const result = await session.result; await ack;
   expect(result.tokensUsed).toBe(18);
   expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
+});
+
+it('holds human steering after its early ACK until the carrying turn completes', async () => {
+  const cwd = await workspace(); const gate = join(cwd, 'release');
+  const events: AgentEvent[] = []; let ready = 0;
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' },
+    userPrompt: 'mock:steer-tool', env: { CEZ_MOCK_STEER_GATE: gate } }, event => events.push(event),
+  { autoEndAfterFirstTurn: true, onAgentInputReady: () => { ready++; } });
+  try {
+    await waitFor(() => events.some(event => event.type === 'tool-call'));
+    expect(session.sendMessage([{ type: 'text', text: 'human steer' }])).toBe(true);
+    expect(session.holdsHumanInput()).toBe(true);
+    await waitFor(() => ready > 0); // The early prompt response has arrived.
+    expect(session.holdsHumanInput()).toBe(true);
+    expect(events.filter(event => event.type === 'turn-end')).toHaveLength(0);
+    await writeFile(gate, 'release');
+    await waitFor(() => events.some(event => event.type === 'turn-end'));
+    expect(session.holdsHumanInput()).toBe(false);
+    await session.result;
+    expect(events.filter(event => event.type === 'token-usage')).toEqual([{ type: 'token-usage', tokensUsed: 7 }]);
+  } finally { session.interrupt(); await session.result.catch(() => undefined); }
+});
+
+it('holds late human steering through the original turn end and releases at successor start', async () => {
+  const cwd = await workspace(); const events: AgentEvent[] = [];
+  const holdsAtCompletion: boolean[] = []; const holdsAtStart: boolean[] = [];
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' },
+    userPrompt: 'mock:acp-late-steer' }, event => {
+    events.push(event);
+    if (event.type === 'tool-call') expect(session.sendMessage([{ type: 'text', text: 'late human steer' }])).toBe(true);
+  }, { autoEndAfterFirstTurn: true, onUiEvent: event => {
+    if (event.type === 'turn.completed') holdsAtCompletion.push(session.holdsHumanInput());
+    if (event.type === 'turn.started') holdsAtStart.push(session.holdsHumanInput());
+    if (event.type === 'permission.requested') expect(session.respondPermission?.(event.requestId, 'allow-once')).toBe(true);
+  } });
+  await session.result;
+  expect(holdsAtCompletion).toEqual([true, false]);
+  expect(holdsAtStart).toEqual([false, false]);
+  expect(events.filter(event => event.type === 'turn-end')).toHaveLength(2);
+});
+
+it.each(['discard', 'close', 'reject'] as const)('releases a human hold on %s', async action => {
+  await withRejectedInput('antigravity', async () => {
+    const cwd = await workspace(); const events: AgentEvent[] = []; let ready = 0;
+    const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' },
+      userPrompt: 'mock:steer-tool', env: { CEZ_MOCK_STEER_GATE: join(cwd, 'release') } }, event => events.push(event),
+    { onAgentInputReady: () => { ready++; } });
+    const settled = session.result.catch(() => undefined);
+    try {
+      await waitFor(() => events.some(event => event.type === 'tool-call'));
+      expect(session.sendMessage([{ type: 'text', text: action === 'reject' ? 'reject-owned-turn' : 'human input' }])).toBe(true);
+      expect(session.holdsHumanInput()).toBe(true);
+      if (action === 'discard') session.discardQueuedMessages();
+      else if (action === 'close') session.end();
+      else await waitFor(() => ready > 0);
+      expect(session.holdsHumanInput()).toBe(false);
+    } finally { session.interrupt(); await settled; }
+  });
+});
+
+it('matches explicitly granted native tools outside the common alias table', () => {
+  const request: AcpPermissionRequest = { sessionId: 'session',
+    toolCall: { toolCallId: 'image', title: 'Run generate_image?', kind: 'other', rawInput: {} },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] };
+  expect(permissionPolicy({ kind: 'explicit', tools: ['generate_image'] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+  expect(permissionPolicy({ kind: 'explicit', tools: ['Read'] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+});
+
+it('maps distinct shortened native ask labels back to their opaque option IDs', () => {
+  const prefix = 'A'.repeat(70);
+  const ask = antigravityAsk({ sessionId: 'session', toolCall: { toolCallId: 'interaction_long', title: 'Choose' },
+    options: [{ optionId: 'red', name: `${prefix} red`, kind: 'allow_once' }, { optionId: 'blue', name: `${prefix} blue`, kind: 'allow_once' }] })!;
+  const labels = ask.questions[0]!.options!.map(option => option.label);
+  expect(new Set(labels).size).toBe(2);
+  expect(labels.every(label => label.length <= 60)).toBe(true);
+  expect(ask.answer(`Question: ${labels[0]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'red' } });
+  expect(ask.answer(`Question: ${labels[1]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'blue' } });
 });

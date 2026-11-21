@@ -19,7 +19,7 @@ import { antigravityUsage } from './usage.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
 function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown>[] {
-  return content.map(block => {
+  return content.filter(block => !(content[0]?.type === 'skill' && block.type === 'text' && !block.text)).map(block => {
     if (block.type === 'skill') return { type: 'text', text: `/${block.id}${block.args ? ` ${block.args}` : ''}` };
     if (block.type === 'image') return { type: 'image', data: block.source.data, mimeType: block.source.media_type };
     return block;
@@ -46,7 +46,10 @@ export class AntigravitySession implements AgentSession {
   private failure: Error | undefined;
   private pendingAsk: string | undefined;
   private humanAcks = 0;
-  private heldSteers = 0;
+  private agentAcks = 0;
+  private reportedFailure = false;
+  private readonly humanHolds = new Set<symbol>();
+  private readonly steers = new Map<symbol, boolean>();
   private configOptions: unknown;
   private autoEnd: NodeJS.Timeout | undefined;
   private term: NodeJS.Timeout | undefined;
@@ -60,7 +63,7 @@ export class AntigravitySession implements AgentSession {
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
     this.child.stderr.setEncoding('utf8'); this.child.stderr.on('data', (chunk: string) => this.stderr.push(chunk));
-    this.child.on('error', error => { this.failure = error; this.acp.transport.close(error); });
+    this.child.on('error', error => { this.failure = new Error(`${error.message}. Install Antigravity ACP and put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.`); this.acp.transport.close(error); });
     this.exited = new Promise(resolve => this.child.once('close', resolve));
     this.limit = spec.timeoutMs ?? timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     if (this.limit > 0) this.deadline = setTimeout(() => { this.timedOut = true; this.emit({ type: 'error', message: `Antigravity timed out after ${this.limit}ms` }); this.interrupt(); }, this.limit);
@@ -78,9 +81,15 @@ export class AntigravitySession implements AgentSession {
   private createAcp(): AcpSession {
     const spec = this.spec;
     return new AcpSession({ input: this.child.stdin, output: this.child.stdout }, {
-      backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, event: event => this.emit(event),
+      backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, // ACP usage_update reports context occupancy, not spent tokens.
+      event: event => { if (event.type !== 'token-usage') this.emit(event); },
       onActivity: () => this.options.onActivity?.(),
       uiEvent: event => {
+        if (event.type === 'turn.started' || event.type === 'turn.completed') {
+          for (const [hold, acknowledged] of this.steers) {
+            if (event.type === 'turn.started' || acknowledged) { this.humanHolds.delete(hold); this.steers.delete(hold); }
+          }
+        }
         if (event.type === 'turn.completed' && event.usage) {
           this.output.tokensUsed += event.usage.total;
           this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
@@ -97,7 +106,9 @@ export class AntigravitySession implements AgentSession {
         sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } },
           ...(spec.additionalDirectories ? { additionalDirectories: spec.additionalDirectories } : {}) }),
         filterUpdate: update => {
-          this.providerError = antigravityUpdateError(update) ?? this.providerError;
+          const failure = antigravityUpdateError(update);
+          this.providerError = failure ?? this.providerError;
+          if (failure) this.reportFailure(failure);
           return filterAntigravityUpdate(update);
         },
         promptError: () => { const error = this.providerError; this.providerError = undefined; return error; },
@@ -131,7 +142,7 @@ export class AntigravitySession implements AgentSession {
       if (this.busy) return;
       this.pendingAsk = undefined;
       if (this.open && this.queue.length) void this.submit(this.queue.shift()!).catch(error => this.fail(error));
-      else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleEnd(); }
+      else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
     });
   }
   sendMessage(content: ContentBlock[]): boolean {
@@ -139,9 +150,10 @@ export class AntigravitySession implements AgentSession {
     if (this.pendingAsk) return this.answerAsk(content);
     if (!this.ready) { this.queue.push(content); return true; }
     const steered = this.busy;
-    this.humanAcks++;
-    if (steered) this.heldSteers++;
-    void this.submit(content).then(() => this.releaseHuman(steered), error => { this.releaseHuman(steered); this.fail(error); });
+    const hold = Symbol('human input');
+    this.humanHolds.add(hold); this.humanAcks++;
+    if (steered) this.steers.set(hold, false);
+    void this.submit(content).then(() => this.releaseHuman(hold, false), error => { this.releaseHuman(hold, true); this.fail(error); });
     return true;
   }
   private answerAsk(content: ContentBlock[]): boolean {
@@ -151,36 +163,43 @@ export class AntigravitySession implements AgentSession {
       this.pendingAsk = undefined; return true;
     } catch (error) { this.emit({ type: 'note', message: String(error) }); return false; }
   }
-  private releaseHuman(steered: boolean): void {
+  private releaseHuman(hold: symbol, rejected: boolean): void {
     this.humanAcks = Math.max(0, this.humanAcks - 1);
-    if (steered) this.heldSteers = Math.max(0, this.heldSteers - 1);
+    if (rejected || !this.steers.has(hold)) this.humanHolds.delete(hold);
+    else this.steers.set(hold, true);
+    if (rejected) this.steers.delete(hold);
     this.options.onAgentInputReady?.();
+    if (!this.busy) this.scheduleAutoEnd();
   }
   sendAgentMessage(content: ContentBlock[]): false | Promise<void> {
-    if (!this.open || !this.ready || this.humanAcks || this.pendingAsk || !validSkillMessage(content)) return false;
-    return this.submit(content).catch(error => { if (!this.open && this.requestedClose) throw new SessionEndedBeforeAcknowledgement(); throw error; });
+    if (!this.open || !this.ready || this.humanAcks || this.agentAcks || this.pendingAsk || !validSkillMessage(content)) return false;
+    this.agentAcks++;
+    return this.submit(content).catch(error => { if (!this.open && this.requestedClose) throw new SessionEndedBeforeAcknowledgement(); throw error; }).finally(() => {
+      this.agentAcks--; this.options.onAgentInputReady?.(); if (!this.busy) this.scheduleAutoEnd();
+    });
   }
   respondPermission(id: string, option: string): boolean { return this.acp.respondPermission(id, option); }
-  discardQueuedMessages(): void { this.queue.length = 0; this.heldSteers = 0; }
-  // Idle prompts release at synchronous turn.started. Steers release at their response while
-  // the original turn remains open, or on close/discard. No native consumption signal exists.
+  discardQueuedMessages(): void { this.queue.length = 0; this.humanHolds.clear(); this.steers.clear(); }
+  // Idle prompts release at their response. Early-acknowledged steers release at the
+  // carrying turn completion; late steers release at successor turn.started. Rejection,
+  // close and discard also release. ACP has no native consumption signal.
   holdsHumanInput(): boolean { return this.heldHumanInputCount() > 0; }
-  heldHumanInputCount(): number { return this.queue.length + this.heldSteers; }
+  heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size; }
   end(): void {
     if (!this.open) return;
-    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); this.queue.length = 0; this.pendingAsk = undefined;
+    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
     this.acp.close(); this.child.stdin.end();
     this.term = setTimeout(() => this.terminate(), this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
   }
   private terminate(): void {
     signalSession(this.child, 'SIGTERM');
-    this.kill = setTimeout(() => signalSession(this.child, 'SIGKILL'), this.spec.timings?.killGraceMs ?? DEFAULT_RUNNER_TIMINGS.killGraceMs);
+    this.kill = setTimeout(() => signalSession(this.child, 'SIGKILL'), this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
   }
   interrupt(): void {
     if (!this.open) return;
     if (this.ready && this.busy) { try { this.acp.cancel(); } catch { /* Exit owns cleanup. */ } }
     this.end(); clearTimeout(this.term);
-    this.term = setTimeout(() => this.terminate(), AUTO_END_DELAY_MS);
+    this.terminate();
   }
   private fail(error: unknown): void {
     if (!this.open) return;
@@ -188,11 +207,18 @@ export class AntigravitySession implements AgentSession {
     this.interrupt();
   }
   private clearAutoEnd(): void { clearTimeout(this.autoEnd); this.autoEnd = undefined; }
-  private scheduleEnd(): void {
-    if (!this.options.autoEndAfterFirstTurn) return;
+  private scheduleAutoEnd(): void {
+    if (!this.open || !this.options.autoEndAfterFirstTurn || this.agentAcks || this.humanAcks || this.autoEnd) return;
     this.autoEnd = setTimeout(() => {
+      this.autoEnd = undefined;
       if (this.open && !this.busy && !this.humanAcks && !this.queue.length && this.options.shouldAutoEnd?.() !== false) this.end();
     }, AUTO_END_DELAY_MS);
+  }
+  private reportFailure(message: string): void {
+    if (this.reportedFailure) return;
+    this.reportedFailure = true;
+    this.emit({ type: 'error', message });
+    this.options.onUiEvent?.({ type: 'session.error', message, fatal: true });
   }
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
@@ -204,10 +230,9 @@ export class AntigravitySession implements AgentSession {
     const stderr = this.stderr.join('').trim();
     const unexpected = !this.requestedClose && (code !== 0 || this.busy);
     if (this.failure || unexpected) {
-      const message = [this.failure?.message ?? `Antigravity exited ${code}`, stderr].filter(Boolean).join(': ');
+      const message = [this.failure?.message, `Antigravity exited code ${code}`, stderr].filter(Boolean).join(': ');
       const error = new Error(message);
-      this.emit({ type: 'error', message });
-      this.options.onUiEvent?.({ type: 'session.error', message, fatal: true });
+      this.reportFailure(message);
       throw error;
     }
     this.emit({ type: 'done' }); this.output.text = this.output.text.trim(); return this.output;

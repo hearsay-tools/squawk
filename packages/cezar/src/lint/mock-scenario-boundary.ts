@@ -20,6 +20,8 @@ const NATIVE_TOKENS = new Set([
   'no-progress-ack-only', // Codex holds its native acknowledgement without a turn.
 ]);
 const FILE_NATIVE_TOKENS: Readonly<Record<string, readonly string[]>> = {
+  // Antigravity's interaction permission response carries the native answer.
+  'packages/cezar/scripts/mock-acp.mjs': ['resume-cezar-done'],
   // Codex's native requestUserInput reply consumes this flag, outside shared scenarios.
   'packages/cezar/scripts/mock-codex-app-server.mjs': ['resume-cezar-done'],
   // OpenCode's native question reply consumes this flag, outside shared scenarios.

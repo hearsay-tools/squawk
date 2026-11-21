@@ -90,6 +90,8 @@ export interface RunnerMock {
    * `cezar-wait` prompts, which every mock answers the same way.
    */
   readonly scenarios: Readonly<Record<string, string>>;
+  /** Scenario for rows that specifically require a native ask. Defaults to ask. */
+  readonly nativeAskScenario?: 'ask' | 'ask-resume';
   /** P1: the option to pick (matched case-insensitively against its label) and the text the
    *  mock echoes once that native reply arrives. Required with `scenarios.approval`. */
   readonly approvalDecisions?: readonly { pick: string; echo: string }[];

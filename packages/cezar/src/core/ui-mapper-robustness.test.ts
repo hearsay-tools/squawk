@@ -216,10 +216,10 @@ interface Position {
 }
 
 /** Replays every fixture of `runner` and gives `visit` each position. */
-function replay(runner: string, visit: (position: Position) => void): Report {
+function replay(runner: string, visit: (position: Position) => void, corpus = fixtureFrames(runner)): Report {
   const row = MAPPERS[runner]!;
   const report: Report = { calls: 0, failures: [] };
-  for (const frames of fixtureFrames(runner)) {
+  for (const frames of corpus) {
     let state = row.seed();
     // `<=`: the last visit has no frame, only the state the whole fixture leaves.
     for (let index = 0; index <= frames.length; index += 1) {
@@ -260,7 +260,8 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s UI mapper robustness', (runner) => {
     expectNoFailures(result);
   });
 
-  it('never throws and never mutates its state when one field of a frame is broken', () => {
+  const fixtures = fixtureFrames(runner).map(frames => ({ fixture: frames[0]?.at.split(':')[0] ?? 'empty fixture', frames }));
+  it.each(fixtures)('$fixture never throws or mutates its state when one field is broken', ({ frames: corpus }) => {
     const result = replay(runner, ({ report, frames, index, held }) => {
       const frame = frames[index];
       if (frame === undefined) return;
@@ -275,7 +276,7 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s UI mapper robustness', (runner) => {
           if (outcome.failure !== null) report.failures.push(`${frame.at} ${label}, then ${next.at}: ${outcome.failure}`);
         }
       }
-    });
+    }, [corpus]);
     expectNoFailures(result);
   });
 });

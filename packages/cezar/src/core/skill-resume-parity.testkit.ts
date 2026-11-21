@@ -113,7 +113,7 @@ export const describeSkillResumeParity = skillResumeParity({
       if (mode === 'resent') {
         expect(freshWire).toContain('SENTINEL-790-SYSTEM');
         expect(resumeWire).toContain('SENTINEL-790-SYSTEM');
-        expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/load/);
+        expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/(?:load|resume)/);
       } else {
         expect(freshWire).toContain('SENTINEL-790-SYSTEM');
         // The runner's reader shows which session each launch resumed: the pinned one, and none fresh.

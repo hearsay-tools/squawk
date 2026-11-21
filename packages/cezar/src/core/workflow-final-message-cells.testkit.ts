@@ -1,3 +1,5 @@
+import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -57,6 +59,7 @@ const EXEMPTION_CELLS: Record<string, (backend: string) => CellBody> = {
   },
   F8: backend => async () => {
     expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-no-reply']).toBeUndefined();
+    if (runnerDefinition(backend).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(backend);
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId }) => {
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
@@ -67,6 +70,7 @@ const EXEMPTION_CELLS: Record<string, (backend: string) => CellBody> = {
   },
   F9: backend => async () => {
     expect(HARNESS_ADAPTERS[backend]!.scenarios['silent-tail-late-reply']).toBeUndefined();
+    if (runnerDefinition(backend).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(backend);
     const observed = await driveSeam(backend, 'silent-tail');
     expect(observed.v2.some(event => event.type === 'turn.started')).toBe(true);
     expect(observed.v1.some(event => event.type === 'turn-end')).toBe(true);

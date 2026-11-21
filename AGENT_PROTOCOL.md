@@ -233,6 +233,16 @@ per-runner file and for regression coverage. Rules that no check holds:
 Autosave process attribution is observation, not OS containment: `autosave-holders.ts` and
 `autosave-windows.ts` say what it cannot see.
 
+### Human input holds
+
+`AgentSession.holdsHumanInput` releases a follow-up when its carrying normalized turn
+starts, when the wire reports a read inside an open turn, or on rejection, close or discard.
+For `inputDelivery.consumption: unobservable`, an early steering acknowledgement keeps the
+hold until the carrying `turn.completed`. A late steer keeps its hold until the successor
+`turn.started`. An acknowledgement alone never proves consumption. Observable wires keep
+their existing release points. The Antigravity runner tests cover both steering orders and
+rejection, close and discard.
+
 ### Continue: session and step (hearsay-tools/cezarion#2991)
 
 `continuedSessionId` and `resumableSessionId` in `workflows/run/launch-read-resolver.ts` own

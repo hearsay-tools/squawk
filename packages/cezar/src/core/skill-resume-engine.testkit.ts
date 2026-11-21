@@ -1,3 +1,7 @@
+import { knownRunnerIds, registerRunner } from './runner-registry.ts';
+import type { RunnerDefinition } from './runner-definition.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { IN_THREAD } from './skill-resume-rows.testkit.ts';
 import { asRecord, opencodeSessionGets, parsedLines, readRecording, setSkillResumeEngineCells, type SkillResumeEngineCells } from './skill-resume-parity.testkit.ts';
@@ -83,8 +87,9 @@ function assertReusedRecordedSession(
     expect(continuationRecording).toContain(sessionId);
     return;
   }
-  expect(continuationRecording).toMatch(/--resume/);
-  expect(continuationRecording).toContain(sessionId);
+  const rows = parsedLines(continuationRecording) as WireRow[];
+  expect(sessionWire(backend).resumed(rows)).toEqual([sessionId]);
+  expect(sessionWire(backend).freshSessions(rows)).toBe(0);
 }
 
 function systemFromPrepended(text: string): string {
@@ -119,6 +124,10 @@ function recordedSystemPrompt(backend: string, rec: Record<string, unknown>): st
 function systemPromptsFrom(backend: string, recording: string): string[] {
   const rows = parsedLines(recording);
   if (backend === 'claude' || backend === 'pi' || backend === 'omp') return appendedSystemPrompts(rows);
+  if (!['codex', 'opencode'].includes(backend)) {
+    const prompt = sessionWire(backend).systemPrompt({ args: rows as WireRow[], stdin: rows as WireRow[] });
+    return prompt === undefined ? [] : [prompt];
+  }
   const texts: string[] = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
@@ -229,6 +238,11 @@ async function withSkillResumeRun(
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
+  if (!knownRunnerIds().includes(backend)) {
+    const definitions = Object.values(await import(`../runners/${backend}/definition.ts`)) as RunnerDefinition[];
+    if (definitions.length !== 1 || definitions[0]?.id !== backend) throw new Error(`Runner ${backend} must export its definition`);
+    registerRunner(definitions[0]);
+  }
   const adapter = HARNESS_ADAPTERS[backend]!;
   const saved: Array<[string, string | undefined]> = [];
   const remember = (name: string, value: string | undefined) => {

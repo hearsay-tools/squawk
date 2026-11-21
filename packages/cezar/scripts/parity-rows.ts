@@ -18,10 +18,12 @@ import { PARITY_ROW_ID } from '../src/core/parity-classes.testkit.ts';
 import * as seamContract from '../src/core/seam-contract.testkit.ts';
 import * as monitoringTurn from '../src/workflows/monitoring-turn.testkit.ts';
 import * as waits from '../src/workflows/waits-parity.testkit.ts';
+import * as uiRows from '../src/core/ui-parity-rows.testkit.ts';
 import * as subagents from '../src/workflows/waits-subagents-rows.testkit.ts';
 
 /** The kit modules that declare rows, by path under `packages/cezar/src`. */
 const KITS: Readonly<Record<string, object>> = {
+  'core/ui-parity-rows.testkit.ts': uiRows,
   'core/harness-parity-core.testkit.ts': harnessCore,
   'core/harness-parity-rows.testkit.ts': harnessRows,
   'core/seam-contract.testkit.ts': seamContract,

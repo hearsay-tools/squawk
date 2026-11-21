@@ -1,3 +1,4 @@
+import { UI_CRITERIA } from './ui-parity-rows.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -213,6 +214,7 @@ function matrixGuards(r: HarnessRegistrar): void {
   if (scope === 'once') {
     describe('harness parity — the matrix itself', () => {
       const allIds = [
+        ...UI_CRITERIA.map(row => row.id),
         ...SHUTDOWN_CRITERIA.map(c => c.id),
     ...MODEL_REFUSAL_CRITERIA.map(c => c.id),
         ...PERMISSION_CRITERIA.map(c => c.id),
@@ -239,7 +241,7 @@ function matrixGuards(r: HarnessRegistrar): void {
         ...CONTROL_CRITERIA.map((c) => c.id),
         ...RUN_CRITERIA.map((c) => c.id),
       ];
-      const rows = parityRowScenarios();
+      const rows = [...parityRowScenarios(), ...UI_CRITERIA];
       const scenarioOf = (id: string): ScenarioName => {
         const row = rows.find(c => c.id === id);
         if (!row) throw new Error(`unknown criterion id "${id}"`);

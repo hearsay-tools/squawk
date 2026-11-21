@@ -2,11 +2,12 @@
 // ACP v1 encoder. Shared scenarios own content; this module owns native framing and timing.
 import readline from 'node:readline';
 import { appendFileSync, closeSync } from 'node:fs';
-import { lifecycleCall, ciPrompt, toolPrompt } from './mock-ci-tool.mjs';
+import { lifecycleCall, ciPrompt, toolPrompt, probeCiTool } from './mock-ci-tool.mjs';
 import { scenarioFor, play } from './mock-scenario.mjs';
 import { withoutSessionContextParts } from './mock-session-context.mjs';
 import { loadControls } from './mock-controls.mjs';
 import { waitForRelease } from './mock-lifecycle.mjs';
+import { answerNudge } from './mock-nudge.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
 
 if (process.argv.includes('--version')) { console.log('antigravity_extensions/acp_server 1.5.0'); process.exit(0); }
@@ -18,6 +19,7 @@ let sessionId = 'mock-acp-session';
 let active;
 let sessionParams = {};
 const steers = [];
+const latePrompts = [];
 if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(process.argv.slice(2))}\n`);
 let serverId = 0;
 const pending = new Map();
@@ -32,20 +34,20 @@ const context = {
   lifecycle: ([name, args]) => lifecycleCall('acp', sessionParams, name, args),
   toolPrompt: text => toolPrompt('acp', sessionParams, text),
   ciPrompt: text => ciPrompt('acp', sessionParams, text),
-  async crash(text) { const { crashWithStderr } = await import('./mock-runner-crash.mjs'); crashWithStderr(text, '{"jsonrpc":"2.0","method":"session/update'); },
+  async crash(text) { const { crashWithStderr } = await import('./mock-runner-crash.mjs'); if (crashWithStderr(text, '{"jsonrpc":"2.0","method":"session/update')) await new Promise(() => {}); },
 };
 function encoder(turn) {
   const send = value => { if (active === turn && !turn.cancelled) update(value); };
   const text = (sessionUpdate, value) => send({ sessionUpdate, content: { type: 'text', text: value } });
   return {
     open() {},
-    text: ({ parts }) => { for (const part of parts) text('agent_message_chunk', part); },
+    text: ({ parts }) => text('agent_message_chunk', parts.join('')),
     reasoning: step => text('agent_thought_chunk', step.text),
     toolStart: ({ call }) => send({ sessionUpdate: 'tool_call', toolCallId: call.id, title: call.name, kind: 'other', status: 'in_progress', rawInput: call.input }),
     toolEnd: ({ call }) => send({ sessionUpdate: 'tool_call_update', toolCallId: call.id, status: call.isError ? 'failed' : 'completed', rawOutput: call.output }),
     progress: () => send({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }),
     end: ({ error } = {}) => { if (error) text('agent_message_chunk', `Agent execution error: ${PI_FAILURES[error] ?? error}`); },
-    readSteers: () => steers.splice(0),
+    readSteers: ({ late }) => { turn.lateWindow = late; if (!late) echoSteers(turn); return []; },
     closeInput: () => closeSync(0),
     child: (_step, playChild) => playChild(encoder(turn)),
     reply: ({ prompt }) => text('agent_message_chunk', `Investigating: ${prompt}`),
@@ -71,6 +73,7 @@ async function prompt(frame) {
     turn.releaseLate(); return;
   }
   if (active) {
+    if (active.lateWindow) { latePrompts.push(frame); return; }
     steers.push(text);
     content('agent_message_chunk', 'Agent connection was lost and could not be re-established: Concurrent receive_steps() calls are not supported on this connection.');
     acknowledge(frame, { stopReason: 'end_turn' }, text); return;
@@ -83,11 +86,16 @@ async function prompt(frame) {
     await delivery?.holdResponse(text);
     const failure = await failureControl?.failureFor(text);
     if (failure) content('agent_message_chunk', `Agent execution error: ${PI_FAILURES[failure]}`);
-    else await runPrompt(text, turn);
+    else await runPrompt(answerNudge(text), turn);
+    echoSteers(turn);
     if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
     if (!turn.mainReplied) acknowledge(frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text);
   } catch (error) { write({ id: frame.id, error: { code: -32603, message: error.message } }); }
-  finally { active = undefined; }
+  finally { active = undefined; const late = latePrompts.shift(); if (late) void prompt(late); }
+}
+function echoSteers(turn) {
+  if (turn.cancelled) return;
+  for (const text of steers.splice(0)) content('agent_message_chunk', text.startsWith('/probe-') ? `TRIGGER-FIXTURE ${text}` : `saw: ${text}`);
 }
 async function runPrompt(text, turn) {
   // The managed recovery prompt is supplied as the resumed system prompt.
@@ -104,10 +112,12 @@ async function runPrompt(text, turn) {
   if (context.session.resumeAfterAsk && text.trim().startsWith('Question:')) {
     content('agent_message_chunk', `Answer received${await context.lifecycle(['cezar_done', {}])}`); return;
   }
-  if (text.startsWith('/probe-project')) { content('agent_message_chunk', `TRIGGER-FIXTURE ${text}`); return; }
+  if (text.startsWith('/probe-')) { content('agent_message_chunk', `TRIGGER-FIXTURE ${text}`); return; }
+  if (process.env.CEZ_MOCK_CI_PR) await probeCiTool('acp', sessionParams);
   const scenario = scenarioFor(text, context);
   const wire = encoder(turn);
   if (scenario) {
+    if (scenario.name === 'no-progress' && text.includes('ignore-term')) ignoreEof = true;
     await Promise.race([play(scenario, wire), turn.cancelledPromise]);
     if (scenario.name === 'no-progress') await turn.cancelledPromise;
   }
@@ -135,7 +145,7 @@ async function permissionPrompt(text, turn) {
   const response = await responsePromise;
   if (turn.cancelled) return;
   if (malformed) content('agent_message_chunk', `Malformed permission refused${await context.lifecycle(['cezar_done', {}])}`);
-  else if (nativeAsk || text.includes('mock:acp-')) content('agent_message_chunk', JSON.stringify(response));
+  else if (nativeAsk || text.includes('mock:acp-')) content('agent_message_chunk', JSON.stringify(response) + (text.includes('mock:resume-cezar-done') ? await context.lifecycle(['cezar_done', {}]) : ''));
   else content('agent_message_chunk', `Approval response: ${response.outcome.optionId === 'allow-once' ? 'allow' : 'deny'}${await context.lifecycle(['cezar_done', {}])}`);
 }
 
@@ -194,6 +204,10 @@ async function handle(frame) {
   }
 }
 
+let ignoreEof = false;
 const lines = readline.createInterface({ input: process.stdin });
 lines.on('line', line => { void handle(JSON.parse(line)); });
-lines.on('close', () => { active?.cancel(); for (const resolve of pending.values()) resolve({ outcome: { outcome: 'cancelled' } }); });
+lines.on('close', () => {
+  active?.cancel(); for (const resolve of pending.values()) resolve({ outcome: { outcome: 'cancelled' } });
+  if (!ignoreEof) process.exit(0);
+});

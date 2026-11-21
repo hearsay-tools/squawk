@@ -1,3 +1,5 @@
+import { runnerDefinition } from './runner-registry.ts';
+import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 import { WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { workflowNoProgressParity } from './workflow-no-progress-rows.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -43,6 +45,9 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 export const describeWorkflowNoProgressParity = workflowNoProgressParity({
   exemption: backend => async () => {
+    if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+      await assertPromptResponseCompletion(backend); return;
+    }
     const observed = await driveSeam(backend, 'no-progress', { timeoutMs: 2_500, spec: { timings: { noProgressTimeoutMs: 800, killGraceMs: 150 } } });
     expect(observed.v2.some(event => event.type === 'turn.started')).toBe(true);
     expect(observed.v1.some(event => event.type === 'error' && /no progress/i.test(event.message))).toBe(true);

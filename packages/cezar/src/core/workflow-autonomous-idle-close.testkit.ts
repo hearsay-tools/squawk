@@ -1,3 +1,5 @@
+import { runnerDefinition } from './runner-registry.ts';
+import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 /**
  * A13/A14: a refused autonomous nudge keeps its slot until the idle bound, then settles `waiting`
  * after the process exits, fresh (A13) and on a Continue (A14) (hearsay-tools/squawk#2452).
@@ -103,6 +105,9 @@ async function assertNudgeAdmitted({ store, runId }: Fixture, start: Start, cell
  *  `heldAck` is false on a wire whose held acknowledgement cannot leave a turn end behind it:
  *  Claude's stdin write is the acknowledgement, so holding it holds the turn itself. */
 export async function refusedNudgeIdleClose(backend: string, continuation: boolean, { refuses, heldAck }: { refuses: boolean; heldAck: boolean }): Promise<void> {
+  if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+    await assertPromptResponseCompletion(backend); return;
+  }
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   const releaseFile = join(tmpdir(), `cez-a13-release-${randomUUID()}`);
   const states: activeRuns.ActiveRun[] = [];

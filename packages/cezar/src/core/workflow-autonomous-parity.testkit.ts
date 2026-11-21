@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { workflowAutonomousParity } from './workflow-autonomous-rows.testkit.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -60,7 +61,8 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
     expect(observed.v1.some(e => e.type === 'turn-end')).toBe(true);
   },
   row: (backend, row, mode) => async () => {
-    await withOwnedInputRun(backend, mode === 'continuation' ? 'autonomous' : row.scenario, async ({ store, manager, runId }) => {
+    const scenario = row.id === 'A9' ? runnerDefinition(backend).mock.nativeAskScenario ?? row.scenario : row.scenario;
+    await withOwnedInputRun(backend, mode === 'continuation' ? 'autonomous' : scenario, async ({ store, manager, runId }) => {
       async function prepareContinuation(): Promise<void> {
         if (mode === 'continuation') {
           manager.enqueueOwnedRun(runId);
@@ -112,7 +114,7 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
         }) as typeof work.trackSession);
         onTestFinished(() => { tracked.mockRestore(); });
       }
-      if (mode === 'continuation') expect(manager.continueRun(runId, { text: promptFor(backend, row.scenario) }).ok).toBe(true);
+      if (mode === 'continuation') expect(manager.continueRun(runId, { text: promptFor(backend, scenario) }).ok).toBe(true);
       else manager.enqueueOwnedRun(runId);
       // Done rows reach their terminal outcome before we check publication history.
       // Other rows settle at their park. Nudge progress resets the stall bound.

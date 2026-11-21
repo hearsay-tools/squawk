@@ -1,3 +1,5 @@
+import { runnerDefinition } from './runner-registry.ts';
+import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 /**
  * A15: an autonomous nudge whose acknowledgement never arrives is bounded at the no-wait nudge's
  * reply bound. At expiry the run notes the unanswered nudge, closes its session through the idle
@@ -70,6 +72,9 @@ async function assertAcknowledged({ store, runId }: Fixture, cell: Cell): Promis
 
 /** Drive A15 on `backend`. `heldAck` is false on a wire whose acknowledgement is its own write. */
 export async function unacknowledgedNudgeBound(backend: string, { heldAck }: { heldAck: boolean }): Promise<void> {
+  if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+    await assertPromptResponseCompletion(backend); return;
+  }
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   const states: activeRuns.ActiveRun[] = [];
   const create = activeRuns.createActiveRun;

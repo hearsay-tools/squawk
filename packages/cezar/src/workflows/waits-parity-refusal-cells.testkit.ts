@@ -1,3 +1,5 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
+import { assertPromptResponseCompletion } from '../core/owned-input-delivery.testkit.ts';
 import { waitPartDescribers, workerParent, turnEnds, blockedDone, blockingWorker, uncollectedRefusal, liveRefusal, prompted, workerWaits, silenceRefusals, idleClock, noReplyNotes, gated, nudgeNotes, humanOpen, parentOn, sessionOf, settled } from './waits-parity-fixture.testkit.ts';
 import { COMPLETION_NUDGE_NOTE, COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
@@ -79,6 +81,9 @@ export function refusalCells(runners: string[], it: typeof registerTest = regist
         if (exemptionFor('U20h', runner)) {
           expect(exemptionFor('U20h', runner)?.kind).toBe('capability-absent');
           return;
+        }
+        if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
+          await assertPromptResponseCompletion(runner); return;
         }
         const silence = silenceRefusals();
         const p = await workerParent(runner);

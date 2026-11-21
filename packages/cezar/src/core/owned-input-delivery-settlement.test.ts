@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -26,13 +27,19 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
             let accepted = false;
             if (!ack) throw new Error('expected reserved submission');
             void ack.then(() => { accepted = true; }, () => {});
-            await waitFor(() => v1.filter(event => event.type === 'turn-end').length === 2);
+            if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+              await waitFor(() => v1.some(event => event.type === 'text' && event.text.includes('delay-owned-ack')));
+              expect(v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
+            } else {
+              await waitFor(() => v1.filter(event => event.type === 'turn-end').length === 2);
+            }
             // The turn end arms its close window in the same handler: a held ACK arms none.
             expect(autoEnd.pending).toBe(0);
             await autoEnd.advance(AUTO_END_DELAY_MS);
             expect(accepted).toBe(false); expect(session.open).toBe(true);
             expect(session.sendAgentMessage([{ type: 'text', text: 'duplicate' }])).toBe(false);
             release(); await ack;
+            await waitFor(() => v1.filter(event => event.type === 'turn-end').length === 2);
             // Acceptance resumes the close window.
             await waitFor(() => autoEnd.pending === 1);
             await autoEnd.advance(AUTO_END_DELAY_MS);

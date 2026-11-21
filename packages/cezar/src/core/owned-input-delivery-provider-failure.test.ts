@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 
 import { randomUUID } from 'node:crypto';
@@ -23,7 +24,12 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.mode === 'steer'
       await waitFor(() => !manager.isActive(runId));
       expect(store.getRun(runId)?.status).toBe('failed');
       // hearsay-tools/cezarion#505: an observable harness may also have reported reading it before the failure.
-      expect(store.getRun(runId)?.agentInputs).toEqual([delivered(input, store.getRun(runId)?.agentInputs?.[0])]);
+      if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+        expect(store.getRun(runId)?.agentInputs).toEqual([input]);
+        expect(store.readEvents(runId).filter(event => event.type === 'agent-input-consumed')).toEqual([]);
+      } else {
+        expect(store.getRun(runId)?.agentInputs).toEqual([delivered(input, store.getRun(runId)?.agentInputs?.[0])]);
+      }
       expect(store.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
     });
   }, 60_000);

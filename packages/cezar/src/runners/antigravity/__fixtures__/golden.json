@@ -11,7 +11,7 @@
     "connected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 },
     "disconnected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 }
   },
-  "installerDryRun": "Install Antigravity ACP registry archive from https://antigravity.google, then re-run.",
+  "installerDryRun": "note antigravity: Install Antigravity ACP registry archive from https://antigravity.google, then re-run.",
   "plannerModels": {},
   "workerAccountBinding": { "provider": "antigravity", "profileId": "default" },
   "runnerEntry": {

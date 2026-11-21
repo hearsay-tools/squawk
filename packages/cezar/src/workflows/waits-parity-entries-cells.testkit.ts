@@ -1,3 +1,5 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
+import { assertPromptResponseCompletion } from '../core/owned-input-delivery.testkit.ts';
 import { waitPartDescribers, runnerBoundary, sessionOf, flushMicrotasks, prompted, nudgeNotes, idleClock, turnEnds, nativeWire, gated, humanOpen, repliesDoneAgain, workerParent, ignoreRefusal, workerWaits, blockedDone, blockingWorker, liveRefusal, replyBlockedAgain, parkedOn, viaOf, expectPoolCapacity, parentWithWorker, uncollectedRefusal } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, COMPLETION_WILL_WAIT } from './run.ts';
 import { onTestFinished, expect, vi, it as registerTest } from 'vitest';
@@ -88,6 +90,7 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
     const continued = (id: string) => (prompt: string) => expect(manager.continueRun(id, { text: prompt }).ok).toBe(true);
     /** A late acknowledgement needs a wire whose turn can end before its input is acknowledged. */
     const lateAck = (body: (release: () => void) => Promise<void>, match?: string) => {
+      if (runnerDefinition(runner).mock.promptResponseEndsTurn) return assertPromptResponseCompletion(runner);
       if (exemptionFor('U27', runner)) {
         expect(exemptionFor('U27', runner)?.kind).toBe('capability-absent');
         return Promise.resolve();
