@@ -139,7 +139,7 @@ import {
   setProjectWebhooks,
   taskWebhooks as taskWebhookList,
 } from '../workspace/webhooks.ts';
-import type { detectEnvironment } from '../core/backend-detect.ts';
+import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
@@ -185,6 +185,7 @@ import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
 import { getBranches, getCommit, getDiff, getLogWithParents, getRepoInfo, getStatus, getTracking } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
+import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
 import { attributeLog, classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
 import { claimRepoGitMutation, localPullBranches, pullRepoCheckout } from './repo-pull.ts';
@@ -1004,29 +1005,17 @@ export function createApp(deps: ServerDeps) {
   // contract circular, rather than deriving the DTO from what the handler sends.
   // Availability has its own lifetime: even a cold/max-stale health read must not
   // await agent startup. Repository/config freshness below remains independently bounded.
-  let backendChecks: Awaited<ReturnType<typeof detectEnvironment>> = [];
-  let backendChecksAt = -Infinity;
-  let backendChecksPending: Promise<void> | undefined;
-  const readBackendChecks = () => {
-    if (!backendChecksPending && Date.now() - backendChecksAt >= 5_000) {
-      backendChecksPending = detectEnvironment().then((checks) => {
-        const changed = JSON.stringify(checks) !== JSON.stringify(backendChecks);
-        backendChecks = checks;
-        return changed;
-      }).catch(() => false)
-        .finally(() => { backendChecksAt = Date.now(); backendChecksPending = undefined; })
-        .then((changed) => {
-          if (!changed) return;
-          // Probe is settled; publish the new checks to both transports. Only availability changed:
-          // re-reading Git would spawn processes on this loop (hearsay-tools/squawk#3355).
-          void healthCache.patch((payload) => ({ ...payload, checks: backendChecks })).catch(() => {});
-        });
-    }
-    return backendChecks;
-  };
+  // Detection starts one process per CLI, so it runs again only when the environment stamp
+  // changes (hearsay-tools/squawk#3658). A settled change patches the cached snapshot alone:
+  // re-reading Git here would only repeat work (hearsay-tools/squawk#3355).
+  const backendChecks = createBackendChecks({
+    detect: detectEnvironment,
+    stamp: environmentStamp,
+    onChange: (checks) => { void healthCache.patch((payload) => ({ ...payload, checks })).catch(() => {}); },
+  });
   const healthSnapshot = async () => {
     const [checks, repo, config, workspace] = await Promise.all([
-      readBackendChecks(),
+      backendChecks.read(),
       getRepoInfo(bootRoot),
       healthConfig(bootRoot, deps.home),
       workspaceSummary(),
@@ -1102,7 +1091,8 @@ export function createApp(deps: ServerDeps) {
   // subscriber) runs no timer. Nothing server-side watches `.git/HEAD`, so the
   // interval stays the honest mechanism; it just lives behind the socket now
   // instead of N tabs × 5 s HTTP polls. Every tick and every subscriber read
-  // goes through the cache above, so N subscribers still cost one compute.
+  // goes through the cache above, so N subscribers still cost one compute, and
+  // a tick with no Git or CLI change reads file metadata and starts no process.
   deps.socketHub?.registerTopic(
     'health',
     {

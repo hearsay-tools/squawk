@@ -1,11 +1,11 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detectEnvironment, probeRunner } from './backend-detect.ts';
+import { detectEnvironment, environmentStamp, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
 
 // DetectEnvironment probes every registered runner.
@@ -210,4 +210,46 @@ it('extracts the Antigravity build label after checking the full native banner',
     await expect(probeRunner('antigravity', { ...runnerDefinition('antigravity').detection, binOverride: () => bin }))
       .resolves.toMatchObject({ available: true, version: '1.5.0' });
   } finally { vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); }
+});
+
+// hearsay-tools/squawk#3658: detection runs again only when this stamp changes.
+describe('environmentStamp', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'cez-env-stamp-')); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('changes when a gh token is set or cleared, and never holds the token', async () => {
+    const base = { PATH: root, HOME: root };
+    const none = await environmentStamp(base);
+    const set = await environmentStamp({ ...base, GH_TOKEN: 'secret-token-value' });
+    expect(set).not.toBe(none);
+    expect(set).not.toContain('secret-token-value');
+    expect(await environmentStamp({ ...base, GITHUB_TOKEN: 'secret-token-value' })).not.toBe(set);
+    expect(await environmentStamp(base)).toBe(none);
+  });
+
+  it.skipIf(process.platform === 'win32')('skips a non-executable file earlier on PATH, as the process lookup does', async () => {
+    const first = join(root, 'first');
+    const second = join(root, 'second');
+    mkdirSync(first); mkdirSync(second);
+    writeFileSync(join(first, 'gh'), 'not a program\n');
+    const PATH = `${first}:${second}`;
+    const shadowed = await environmentStamp({ PATH });
+    writeFileSync(join(second, 'gh'), '#!/bin/sh\necho 1\n');
+    chmodSync(join(second, 'gh'), 0o755);
+    expect(await environmentStamp({ PATH })).not.toBe(shadowed);
+  });
+
+  it('changes when a probed CLI appears on PATH or is replaced', async () => {
+    const before = await environmentStamp({ PATH: root });
+    const gh = join(root, 'gh');
+    writeFileSync(gh, '#!/bin/sh\necho 1\n');
+    chmodSync(gh, 0o755);
+    const installed = await environmentStamp({ PATH: root });
+    expect(installed).not.toBe(before);
+    rmSync(gh);
+    writeFileSync(gh, '#!/bin/sh\necho 2.0\n');
+    chmodSync(gh, 0o755);
+    expect(await environmentStamp({ PATH: root })).not.toBe(installed);
+  });
 });

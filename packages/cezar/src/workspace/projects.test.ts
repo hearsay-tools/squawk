@@ -1,7 +1,7 @@
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { execFileSync } from 'node:child_process';
+import { ChildProcess, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os'; // test-home-read: import for the annotated sandbox and refusal probes
 import { join } from 'node:path';
@@ -236,6 +236,27 @@ describe('workspace projects', () => {
       time++;
       expect((await probeProjectStatus(root)).status).toBe('missing');
     } finally { clock.mockRestore(); }
+  });
+
+  // hearsay-tools/squawk#3651: a cockpit reads the project list every 5 s; each `git` start
+  // forks the server. Past the TTL an unchanged repository is probed from file metadata alone.
+  it('re-probes an unchanged repository without git, and shows a branch switch within the TTL', async () => {
+    const root = makeRepo('quiet');
+    let time = 100;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => time);
+    try {
+      expect(await probeProjectStatus(root)).toMatchObject({ status: 'ok', branch: 'main' });
+      const spawn = vi.spyOn(ChildProcess.prototype as unknown as { spawn(options: unknown): void }, 'spawn');
+      for (let tick = 0; tick < 3; tick++) {
+        time += 5_000;
+        expect(await probeProjectStatus(root)).toMatchObject({ status: 'ok', branch: 'main' });
+      }
+      expect(spawn).not.toHaveBeenCalled();
+      execFileSync('git', ['checkout', '-q', '-b', 'switched'], { cwd: root });
+      time += 5_000;
+      expect(await probeProjectStatus(root)).toMatchObject({ status: 'ok', branch: 'switched' });
+      expect(spawn).toHaveBeenCalled();
+    } finally { vi.restoreAllMocks(); clock.mockRestore(); }
   });
 
   it('evicts probes on removal and on new registration', async () => {

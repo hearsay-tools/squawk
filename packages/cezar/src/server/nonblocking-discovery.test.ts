@@ -9,6 +9,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
+import { BACKEND_MAX_AGE_MS } from './backend-checks.ts';
 
 import * as git from './git.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
@@ -40,7 +41,7 @@ it('answers cold health while availability probes remain unresolved', async () =
   expect(detectEnvironment).toHaveBeenCalledOnce();
 }, 5_000);
 
-it.each([false, true])('keeps last-known availability while a stale probe is pending, dedupes, and retries after failure (held refresh=%s)', async (heldRefresh) => {
+it.each([false, true])('keeps last-known availability while an aged probe is pending, dedupes, and retries after failure (held refresh=%s)', async (heldRefresh) => {
   vi.useFakeTimers({ toFake: ['Date'] });
   try {
     const checks: BackendCheck[] = [{ name: 'omp', available: true, version: '1' }];
@@ -67,7 +68,7 @@ it.each([false, true])('keeps last-known availability while a stale probe is pen
     await apiRequest(app, '/api/v1/health');
     if (heldRefresh) await refreshEnteredPromise;
     expect(await (await apiRequest(app, '/api/v1/health')).json()).toMatchObject({ checks });
-    vi.setSystemTime(Date.now() + 120_000);
+    vi.setSystemTime(Date.now() + BACKEND_MAX_AGE_MS);
     for (let i = 0; i < 2; i++) {
       expect(await (await apiRequest(app, '/api/v1/health')).json()).toMatchObject({ checks });
       if (heldRefresh && i === 0) {
