@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
-import { crashStore, readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
+import { blockRunWrites, crashStore, readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import type { RunLifecycleEvents, RunLifecycleEventType } from './lifecycle.ts';
 import { RunStore, type RunRecord } from './store.ts';
 
@@ -251,36 +252,6 @@ describe('before holds the record as it was at the entry of each write path', ()
     expect(run.pullRequests?.map((pr) => pr.number)).toEqual([7]);
   });
 
-  it('a commitOutcome that applies an exit names it', () => {
-    const { store, created } = setup();
-    const id = created();
-    setRunStatus(store, id, RUN_STATUS.waiting);
-    const deliveries = record(store);
-    store.commitOutcome(id, [], { exit: 'resume' });
-    expect(only(deliveries, 'run.updated').before.status).toBe(RUN_STATUS.waiting);
-    expect(only(deliveries, 'run.status-changed')).toMatchObject({ exit: 'resume', from: RUN_STATUS.waiting, to: RUN_STATUS.running });
-  });
-
-  it('an archive that withdraws a usage-limit hold names withdraw-hold', () => {
-    const { store, created } = setup();
-    const id = created();
-    setRunStatus(store, id, RUN_STATUS.waiting, { autoResumeAt: '2026-11-21T12:00:00.000Z' });
-    const deliveries = record(store);
-    store.setArchived(id, true);
-    expect(only(deliveries, 'run.updated').before).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: '2026-11-21T12:00:00.000Z' });
-    expect(only(deliveries, 'run.status-changed')).toMatchObject({ exit: 'withdraw-hold', from: RUN_STATUS.waiting, to: RUN_STATUS.failed });
-  });
-
-  it('a debounced write through touch', () => {
-    const { store, created } = setup();
-    const id = created();
-    const deliveries = record(store);
-    store.setRead(id);
-    const { run, before } = only(deliveries, 'run.updated');
-    expect(before.seenAt).toBeUndefined();
-    expect(run.seenAt).toEqual(expect.any(String));
-  });
-
   it('a debounced move and a debounced updateRun', () => {
     const { store, created } = setup();
     const id = created();
@@ -308,11 +279,130 @@ describe('before holds the record as it was at the entry of each write path', ()
     expect(added!.run.steps.map((step) => step.id)).toEqual(['a', 'b']);
   });
 
-  it('republish', () => {
-    const { store, created } = setup();
-    const id = created();
+  it('a heal of a cold row by the repository handle: what the load changed is in before, the scope is the change', () => {
+    const { dir, store } = setup();
+    const foreign = 'https://github.com/other/repo/pull/5';
+    // The load restores the issue the task names (#3) over the stored 9: a load change, not this write's.
+    seedRuns(dir, [{ id: 'cold', title: 't', workflow: 'w', task: 'fix #3', status: RUN_STATUS.done, issueNumber: 9, markerRefs: { issue: 9 },
+      createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
+      referencedPullRequestUrl: foreign, referencedPrCandidates: [foreign] }]);
     const deliveries = record(store);
-    store.republish(id);
-    expect(deliveries).toEqual([{ type: 'run.updated', payload: { run: store.getRun(id), before: { ...store.getRun(id) }, source: 'live-release' } }]);
+    store.setRepoHandle({ owner: 'me', name: 'repo' });
+    expect(types(deliveries)).toEqual(['run.updated']);
+    const { run, before } = only(deliveries, 'run.updated');
+    expect(before).toMatchObject({ issueNumber: 3, referencedPullRequestUrl: foreign });
+    expect(run.issueNumber).toBe(3);
+    expect(run.referencedPullRequestUrl).toBeUndefined();
+  });
+
+  it('a conflict on a row the store neither holds nor stages: a frozen before, source conflict', () => {
+    const { dir, store, created, persisted } = setup();
+    const id = created();
+    store.flush();
+    expect(store.deleteRun(id)).toBe(true);
+    const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+    try { raw.transaction({ upserts: [encodeRunRow({ ...persisted(id)!, title: 'elsewhere' })], deletes: [] }); } finally { raw.close(); }
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deliveries = record(store);
+    store.flush();
+    expect(types(deliveries)).toEqual(['run.updated']);
+    const { run, before, source } = only(deliveries, 'run.updated');
+    expect(source).toBe('conflict');
+    expect(run).toMatchObject({ title: 'elsewhere' });
+    expect(before).not.toBe(run);
+    expect(before).toEqual({ ...run });
+    expect(Object.isFrozen(before)).toBe(true);
+  });
+});
+
+/** A root run with one owned worker, its execution proof written. */
+function family(fixture: ReturnType<typeof setup>) {
+  const { dir, store, created } = fixture;
+  const rootId = created();
+  store.updateRun(rootId, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
+  const workerId = randomUUID();
+  const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, rootId, randomUUID(), {
+    role: 'worker', permissions: [], parentRunId: rootId, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
+      path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
+  }, 'a'.repeat(64));
+  return { rootId, workerId: worker.id };
+}
+
+type Fixture = ReturnType<typeof setup> & { id: string; family: () => ReturnType<typeof family> };
+const HOLD = { autoResumeAt: '2026-11-21T12:00:00.000Z' };
+const PR = 'https://github.com/o/r/pull/7';
+const any = expect.any(String);
+
+/** One write path: `act` writes run `target` (the fixture's run unless it names one); the last
+ *  `run.updated` of that run holds `before` and `after`, and `exit` names its status change. */
+interface WritePathCase {
+  key: string;
+  arrange?: (f: Fixture) => string | void;
+  act: (f: Fixture, target: string) => void;
+  before: Partial<RunRecord>;
+  after: Partial<RunRecord>;
+  exit?: string;
+  source?: string;
+}
+const pick = (run: Readonly<RunRecord>, shape: Partial<RunRecord>) =>
+  Object.fromEntries(Object.keys(shape).map((key) => [key, run[key as keyof RunRecord]]));
+
+describe('each write path publishes its before, source and exit', () => {
+  it.each<WritePathCase>([
+    { key: 'setRead (change)', act: ({ store }, id) => store.setRead(id), before: { seenAt: undefined }, after: { seenAt: any } },
+    { key: 'setUnread (change)', arrange: ({ store, id }) => { store.setRead(id); }, act: ({ store }, id) => store.setUnread(id), before: { seenAt: any }, after: { seenAt: undefined } },
+    { key: 'setPinned (change)', act: ({ store }, id) => store.setPinned(id, true), before: { pinned: undefined }, after: { pinned: true } },
+    { key: 'markAllRead', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.done, { finishedAt: '2026-11-21T10:00:00.000Z' }); },
+      act: ({ store }) => store.markAllRead(), before: { seenAt: undefined }, after: { seenAt: any } },
+    { key: 'applyMarkerRefs', act: ({ store }, id) => store.applyMarkerRefs(id, { issue: 9 }), before: { issueNumber: undefined }, after: { issueNumber: 9 } },
+    { key: 'recordCreatedPr', act: ({ store }, id) => store.recordCreatedPr(id, PR), before: { pullRequestUrl: undefined }, after: { pullRequestUrl: PR } },
+    { key: 'debounced archive through applyArchived', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, HOLD); },
+      act: ({ store }, id) => store.updateRun(id, { archived: true }),
+      before: { status: RUN_STATUS.waiting, archived: false, ...HOLD }, after: { status: RUN_STATUS.failed, archived: true, autoResumeAt: undefined }, exit: 'withdraw-hold' },
+    { key: 'committed archive (setArchived)', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, HOLD); },
+      act: ({ store }, id) => store.setArchived(id, true),
+      before: { status: RUN_STATUS.waiting, archived: false, ...HOLD }, after: { status: RUN_STATUS.failed, archived: true }, exit: 'withdraw-hold' },
+    { key: 'archive cascade to a worker in a hold', arrange: (f) => { const { workerId } = f.family(); setRunStatus(f.store, workerId, RUN_STATUS.waiting, HOLD); return workerId; },
+      act: ({ store }, workerId) => store.setArchived((store.getRun(workerId)!.delegation as { parentRunId: string }).parentRunId, true),
+      before: { status: RUN_STATUS.waiting, archived: false }, after: { status: RUN_STATUS.failed, archived: true }, exit: 'withdraw-hold' },
+    { key: 'commitOutcome', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting); },
+      act: ({ store }, id) => store.commitOutcome(id, [], { exit: 'resume' }), before: { status: RUN_STATUS.waiting }, after: { status: RUN_STATUS.running }, exit: 'resume' },
+    { key: 'commitOutcome best-effort fallback', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting); },
+      act: ({ store, dir }, id) => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const unblock = blockRunWrites(dir);
+        try { expect(store.commitOutcome(id, [], { exit: 'resume' }, { bestEffort: true }).committed).toBe(false); } finally { unblock(); }
+      }, before: { status: RUN_STATUS.waiting }, after: { status: RUN_STATUS.running }, exit: 'resume' },
+    { key: 'commitDelegation', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, { delegation: ROOT }); },
+      act: ({ store }, id) => store.commitRootFinishIntent(id), before: { delegation: ROOT }, after: { delegation: { ...ROOT, finishRequestedAt: any } }, source: 'delegation-checkpoint' },
+    { key: 'commitWorkerContinuation', arrange: (f) => { const { workerId } = f.family(); f.store.move(workerId, 'stop-worker'); return workerId; },
+      act: ({ store }, workerId) => store.commitWorkerContinuation(workerId, 'continue-line'), before: { status: RUN_STATUS.cancelled }, after: { status: RUN_STATUS.queued }, exit: 'continue-line' },
+    { key: 'commitWorkerExecutionComplete second publish', arrange: (f) => { const { workerId } = f.family(); f.store.move(workerId, 'stop-worker'); return workerId; },
+      act: ({ store }, workerId) => { expect(store.commitWorkerExecutionComplete(workerId, store.readWorkerExecution(workerId)!.generation)).toBe(true); },
+      before: { status: RUN_STATUS.cancelled }, after: { status: RUN_STATUS.cancelled } },
+    { key: 'republish', act: ({ store }, id) => store.republish(id), before: { title: 'lifecycle' }, after: { title: 'lifecycle' }, source: 'live-release' },
+  ])('$key', ({ arrange, act, before, after, exit, source }) => {
+    const fixture = setup();
+    const f: Fixture = { ...fixture, id: fixture.created(), family: () => family(fixture) };
+    const target = arrange?.(f) ?? f.id;
+    const deliveries = record(f.store);
+    act(f, target);
+    const updates = deliveries.filter((delivery) => delivery.type === 'run.updated' && delivery.payload.run.id === target)
+      .map((delivery) => delivery.payload as RunLifecycleEvents['run.updated']);
+    const last = updates.at(-1)!;
+    expect(pick(last.before, before)).toEqual(before);
+    expect(pick(last.run, after)).toEqual(after);
+    expect(Object.isFrozen(last.before)).toBe(true);
+    expect(last.source).toBe(source);
+    const changes = deliveries.filter((delivery) => delivery.type === 'run.status-changed' && delivery.payload.run.id === target);
+    expect(changes.map((delivery) => (delivery.payload as RunLifecycleEvents['run.status-changed']).exit)).toEqual(exit ? [exit] : []);
+  });
+
+  it('owned-run creation publishes run.created from the commit', () => {
+    const fixture = setup();
+    const deliveries = record(fixture.store);
+    const { rootId, workerId } = family(fixture);
+    expect(deliveries.filter((delivery) => delivery.type === 'run.created').map((delivery) => (delivery.payload as RunLifecycleEvents['run.created']).run.id))
+      .toEqual([rootId, workerId]);
   });
 });

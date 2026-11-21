@@ -922,7 +922,8 @@ export class RunStore extends EventEmitter {
     return row ? this.decodeCold(row) : undefined;
   }
 
-  private decodeCold(row: RunRow): RunRecord | undefined {
+  /** `loaded` sees the record once the load has normalized it, before it is scoped: a heal's `before`. */
+  private decodeCold(row: RunRow, loaded?: (run: RunRecord) => void): RunRecord | undefined {
     this.coldReads.at(row.id, row.revision); // the fence below moves to this revision
     const decoded = decodeRunRow(row.data);
     if (!decoded) {
@@ -935,6 +936,7 @@ export class RunStore extends EventEmitter {
     const family = rowFamily(row);
     this.coldBase.set(row.id, { revision: row.revision, seq: row.seq, data: row.data, extras, owned: this.claimed.has(family) || this.pendingClaims.has(family) });
     reconcileLoadedRun(run, { keepLive: this.keepLive });
+    loaded?.(run);
     rescopeRun(run, this.repoHandle);
     return run;
   }
@@ -1066,11 +1068,12 @@ export class RunStore extends EventEmitter {
     const writable = this.claimFamilies(stored.map(rowFamily));
     for (const row of stored) {
       if (!writable.has(rowFamily(row))) continue;
-      const run = this.decodeCold(row);
+      let before: Readonly<RunRecord> | undefined;
+      const run = this.decodeCold(row, (loaded) => { before = snapshotRun(loaded); });
       // `decodeCold` already scoped it with the handle just armed; write it when that changed it.
       if (!run || !this.storedScopeDiffers(row, run)) continue;
       this.holdDecoded(run);
-      this.touch(run, snapshotRun(decodeRunRow(row.data)?.run ?? run));
+      this.touch(run, before ?? snapshotRun(run));
       healed = true;
     }
     // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
@@ -2382,9 +2385,8 @@ export class RunStore extends EventEmitter {
 
   /** A debounced write of the held record `id`: `apply` changes it in place, then `touch` saves it. */
   private change(id: string, apply: (run: RunRecord) => void): RunRecord | undefined {
-    const run = this.record(id);
+    const run = this.record(id), before = snapshotRun(run);
     if (!run) return undefined;
-    const before = snapshotRun(run);
     apply(run);
     this.touch(run, before);
     return run;
@@ -2469,47 +2471,45 @@ export class RunStore extends EventEmitter {
    * re-declare after it opens a PR, and taking that literally cost the task the PR it was about.
    */
   applyMarkerRefs(runId: string, refs: { pr?: number | undefined; prs?: readonly number[] | undefined; issue?: number | undefined }): RunRecord | undefined {
-    const run = this.record(runId);
-    if (!run || (refs.pr === undefined && refs.issue === undefined)) return run;
-    const before = snapshotRun(run);
-    const numbers = [...new Set([...(run.markerRefs?.pr === undefined ? [] : [run.markerRefs.pr]),
-      ...(refs.prs ?? (refs.pr === undefined ? [] : [refs.pr]))])];
-    if (numbers.length) this.accumulatePullRequests(run, numbers.flatMap((number) => {
-      const matches = (run.referencedPrCandidates ?? []).filter((url) => refUrlNumber(url) === number &&
-        (this.repoHandle ? isRepoScopedRef(url, run.task, this.repoHandle) : promptNamesRepo(url, run.task)));
-      const url = matches.length === 1 ? matches[0] : matches.length === 0 && this.repoHandle
-        ? `https://github.com/${this.repoHandle.owner}/${this.repoHandle.name}/pull/${number}` : undefined;
-      const parsed = runPullRequestSchema.safeParse({ number, ...(url ? { url } : {}), source: 'declared' });
-      return parsed.success ? [parsed.data] : [];
-    }));
-    run.markerRefs = {
-      ...run.markerRefs,
-      ...(refs.pr !== undefined ? { pr: refs.pr } : {}),
-      ...(refs.issue !== undefined ? { issue: refs.issue } : {}),
-    };
-    // `prNumber` is the about-PR as well (it is what paints a numeric-only chip), so a
-    // re-declaration naming the created PR only FILLS it — it never overwrites the number the
-    // task came in with, which is still the PR this task is about.
-    if (refs.pr !== undefined && (run.prNumber === undefined || refs.pr !== refUrlNumber(run.pullRequestUrl))) {
-      run.prNumber = refs.pr;
-    }
-    if (refs.issue !== undefined) {
-      run.issueNumber = originatingIssue(run) ?? refs.issue;
-      delete run.referencedIssueNumberSeeded;
-    }
-    if (run.markerRefs.pr !== undefined) {
-      run.referencedPullRequestUrl = resolveReferencedRef(
-        run.referencedPrCandidates ?? [],
-        run.task,
-        referencedPrDeclaration(run),
-        this.repoHandle,
-      );
-    }
-    if (run.markerRefs.issue !== undefined) {
-      run.referencedIssueUrl = resolveIssueReference(run, this.repoHandle);
-    }
-    this.touch(run, before);
-    return run;
+    if (refs.pr === undefined && refs.issue === undefined) return this.record(runId);
+    return this.change(runId, (run) => {
+      const numbers = [...new Set([...(run.markerRefs?.pr === undefined ? [] : [run.markerRefs.pr]),
+        ...(refs.prs ?? (refs.pr === undefined ? [] : [refs.pr]))])];
+      if (numbers.length) this.accumulatePullRequests(run, numbers.flatMap((number) => {
+        const matches = (run.referencedPrCandidates ?? []).filter((url) => refUrlNumber(url) === number &&
+          (this.repoHandle ? isRepoScopedRef(url, run.task, this.repoHandle) : promptNamesRepo(url, run.task)));
+        const url = matches.length === 1 ? matches[0] : matches.length === 0 && this.repoHandle
+          ? `https://github.com/${this.repoHandle.owner}/${this.repoHandle.name}/pull/${number}` : undefined;
+        const parsed = runPullRequestSchema.safeParse({ number, ...(url ? { url } : {}), source: 'declared' });
+        return parsed.success ? [parsed.data] : [];
+      }));
+      run.markerRefs = {
+        ...run.markerRefs,
+        ...(refs.pr !== undefined ? { pr: refs.pr } : {}),
+        ...(refs.issue !== undefined ? { issue: refs.issue } : {}),
+      };
+      // `prNumber` is the about-PR as well (it is what paints a numeric-only chip), so a
+      // re-declaration naming the created PR only FILLS it — it never overwrites the number the
+      // task came in with, which is still the PR this task is about.
+      if (refs.pr !== undefined && (run.prNumber === undefined || refs.pr !== refUrlNumber(run.pullRequestUrl))) {
+        run.prNumber = refs.pr;
+      }
+      if (refs.issue !== undefined) {
+        run.issueNumber = originatingIssue(run) ?? refs.issue;
+        delete run.referencedIssueNumberSeeded;
+      }
+      if (run.markerRefs.pr !== undefined) {
+        run.referencedPullRequestUrl = resolveReferencedRef(
+          run.referencedPrCandidates ?? [],
+          run.task,
+          referencedPrDeclaration(run),
+          this.repoHandle,
+        );
+      }
+      if (run.markerRefs.issue !== undefined) {
+        run.referencedIssueUrl = resolveIssueReference(run, this.repoHandle);
+      }
+    });
   }
 
   /** Authoritative creation keeps the first scalar for publishing, plus every created identity. */
@@ -3299,7 +3299,7 @@ export class RunStore extends EventEmitter {
         rescopeRun(current, this.repoHandle);
         if (held) replaceRecord(held, current);
         this.base.set(conflict.id, { revision: conflict.current.revision, seq: conflict.current.seq, data: conflict.current.data, extras: decoded!.extras });
-        publishRunWrite(this.published, held ?? current, before ?? current, 'conflict');
+        publishRunWrite(this.published, held ?? current, before ?? snapshotRun(current), 'conflict');
         this.emit('run', held ?? current);
       } else {
         this.held.delete(conflict.id);

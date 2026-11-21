@@ -112,7 +112,9 @@ export function recordReportedCost(store: RunStore, runId: string, stepId: strin
     delta = Math.max(0, reportedUsd - previous);
     costs.set(sessionKey, Math.max(previous, reportedUsd));
   }
-  store.updateStep(runId, stepId, { costUsd: (step.costUsd ?? 0) + delta });
+  // Read again: the restore above may have replaced this step's record.
+  const current = store.getRun(runId)?.steps.find((candidate) => candidate.id === stepId) ?? step;
+  store.updateStep(runId, stepId, { costUsd: (current.costUsd ?? 0) + delta });
 }
 
 /** Rebuild a cumulative session's checkpoint and restore reports missing from step totals. */
