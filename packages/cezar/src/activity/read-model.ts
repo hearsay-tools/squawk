@@ -3,7 +3,8 @@ import { ACTIVITY_ERROR_MAX, ACTIVITY_RATE_SECONDS } from '@open-mercato/cezar-c
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import { workerRevision } from '../delegation/results.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunFamilyReads, RunQueries } from '../runs/ports.ts';
 import { readActivityRequests, type ActivityRequestStore } from './requests.ts';
 import { firstLine } from './text.ts';
 import { activityWait, type CiProgressSource } from './wait.ts';
@@ -16,7 +17,7 @@ export interface ToolActivitySource {
 }
 
 /** What the read model needs from a project's run store. It reads; it never writes a run. */
-export type ActivityStore = ActivityRequestStore & Pick<RunStore, 'listRunSummaries' | 'listOwnedWorkers' | 'withReadCache'>;
+export type ActivityStore = ActivityRequestStore & Pick<RunQueries, 'listRunSummaries' | 'withReadCache'> & Pick<RunFamilyReads, 'listOwnedWorkers'>;
 
 /** One project to read: its store and run manager when this process has loaded it. `ci` is the
  *  check progress of that project's own CI watchers; without it, `ActivityDeps.ci` is read. */

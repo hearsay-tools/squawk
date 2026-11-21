@@ -3,7 +3,8 @@ import { transitionTurnBoundary } from './turn-boundary.ts';
 import { nudgeAwaitsAcknowledgement, retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
 import { askPayloadOf, askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import { AgentTempDirError } from '../../runs/agent-tmpdir.ts';
 import { ToolsUnavailableError } from '../../ci-wait/errors.ts';
 import { artifactInstructions } from '../../artifacts/lifecycle.ts';
@@ -115,7 +116,7 @@ export interface SessionHelperHost {
   line: RunLine;
   humanWaits: HumanWaits;
   inputReceiptHost: inputReceipts.InputReceiptsHost;
-  move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   workerExecutionStopped(runId: string): boolean;
   executionBlockedByRootFinish(run: RunRecord): boolean;
   agentEnvForStep(runId: string, backend: string, options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<StepProfile>;

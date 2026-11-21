@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, DelegationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import { deliveryReceipts } from '../runs/outcome-commit.ts';
 import { ConversationIdInUseError, RunWriteRefusedError, type RunRecord, type RunStore } from '../runs/store.ts';
+import type { RunAccess, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { reservedReplies } from './questions.ts';
@@ -224,7 +225,7 @@ export function orphanedPeerMessage(input: AgentInput): ConversationMessage | un
 
 /** A Cezar-written message (a routed question, a park notice) whose deterministic ID a peer
  *  already took: nothing is written, and `onConflict` says what happens instead. */
-export function commitNewMessage(store: Pick<RunStore, 'commitConversation'>,
+export function commitNewMessage(store: RunWrites,
   rootId: string, conversation: ConversationState, delivery: { recipientRunId: string; input: AgentInput }, onConflict: () => void): boolean {
   try { store.commitConversation(rootId, conversation, delivery); return true; }
   catch (error) { if (!(error instanceof ConversationIdInUseError)) throw error; onConflict(); return false; }
@@ -243,7 +244,7 @@ export function takesPart(self: RunRecord, other: RunRecord | undefined, otherId
 /** Every conversation root, live or settled, with an open peer request to `runId`: the peer's
  *  settlement or deletion settles each at once (spec § 5, R17). Roots another process owns are its
  *  own to settle. */
-export function rootsAwaitingPeer(store: Pick<RunStore, 'listConversationRootIds' | 'getRun' | 'writeRefusal'>, runId: string): string[] {
+export function rootsAwaitingPeer(store: RunQueries & RunLookup & RunAccess, runId: string): string[] {
   // Only ledgers that name the run are read: the store narrows the candidates before decoding any.
   return store.listConversationRootIds(runId).filter(id => {
     const root = store.writeRefusal(id) ? undefined : store.getRun(id);
@@ -255,7 +256,7 @@ export function rootsAwaitingPeer(store: Pick<RunStore, 'listConversationRootIds
 
 /** The families a settled run's reconcile covers: a worker's parent, or a root's own family and
  *  every root that awaits it as a peer (`rootsAwaitingPeer`). */
-export function settledRunFamilies(store: Pick<RunStore, 'listConversationRootIds' | 'getRun' | 'writeRefusal'>, run: RunRecord): string[] {
+export function settledRunFamilies(store: RunQueries & RunLookup & RunAccess, run: RunRecord): string[] {
   const family = familyRecordIdOf(run);
   if (family === undefined) return [];
   return family === run.id ? [run.id, ...rootsAwaitingPeer(store, run.id)] : [family];

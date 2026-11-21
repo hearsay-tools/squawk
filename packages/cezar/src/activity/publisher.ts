@@ -1,5 +1,6 @@
 import type { ActivityRun, ActivitySnapshot, ActivityWorker } from '@open-mercato/cezar-contract';
-import type { RunStore } from '../runs/store.ts';
+
+import type { RunStoreEvents } from '../runs/ports.ts';
 import type { TopicPublisher } from '../server/ws.ts';
 import { buildActivityProject, type ActivityDeps, type ActivityProjectSource, type ActivityStore, type CiProgressSource } from './read-model.ts';
 import { projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
@@ -12,7 +13,7 @@ export const ACTIVITY_DRAIN_TICK_MS = 1_000;
 export const ACTIVITY_FOREIGN_CHECK_MS = 5_000;
 
 /** A loaded project's store as the publisher needs it: the read model's reads plus its change events. */
-export type LiveActivityStore = ActivityStore & Pick<RunStore, 'on' | 'off'>;
+export type LiveActivityStore = ActivityStore & RunStoreEvents;
 
 export interface LiveActivitySource extends ActivityProjectSource {
   loaded?: { store: LiveActivityStore; isActive: (runId: string) => boolean; ci?: CiProgressSource | undefined; dataDir?: string | undefined } | undefined;

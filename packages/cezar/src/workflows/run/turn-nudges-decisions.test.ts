@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, STEP_STATUS, STEP_KIND, WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import { RunStore } from '../../runs/store.ts';
+import type { RunEventInput } from '../../runs/ports.ts';
 import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../fixture-no-runner.testkit.ts';
@@ -85,7 +86,7 @@ describe('closed-session refusal effects through public recovery', () => {
       text: `Workers are still live: ${workerId}. ${COMPLETION_WILL_WAIT}`, createdAt: new Date().toISOString() };
   }
 
-  function observeGate(expected: string[], beforeEvent?: (event: Parameters<RunStore['appendEvent']>[1]) => void) {
+  function observeGate(expected: string[], beforeEvent?: (event: RunEventInput) => void) {
     const trace: string[] = [];
     let inGate = false;
     let checked = false;

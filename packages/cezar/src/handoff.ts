@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { exactLineIndex, HANDOFF_AUTOSAVE_RECORDS_MAX, nextLineIndex, type HandoffAutosaveRecord, type HandoffRecords } from '@open-mercato/cezar-contract/handoff';
 import { localTimeZone } from '@open-mercato/cezar-contract/zoned-time';
-import type { RunStore } from './runs/store.ts';
+
+import type { RunLookup, RunWrites } from './runs/ports.ts';
 
 /**
  * Per-task handoff journal (spec 007): `.ai/cezar/runs/<runId>.handoff.md`,
@@ -106,7 +107,7 @@ function writeHandoffRecords(dataDir: string, runId: string, records: HandoffRec
   }
 }
 
-type HandoffStore = Pick<RunStore, 'getRun' | 'updateRun'>;
+type HandoffStore = RunLookup & RunWrites;
 
 /** Show the store's records in the file again. Every session launch does, so its opening message
  *  carries them after a crash, an agent edit, or a deleted block or file. */

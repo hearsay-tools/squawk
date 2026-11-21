@@ -1,13 +1,14 @@
 import type { Server } from 'node:http';
 import type { DelegationController } from './delegation/provision.ts';
 import type { PreviewHost } from './preview/host.ts';
-import type { RunStore } from './runs/store.ts';
+
+import type { StoreHandle } from './runs/ports.ts';
 import type { StoppableServer, StopServeOptions } from './serve-boot.ts';
 
 /** What `serve` has built so far. Boot fills each field as the part comes to exist. */
 export interface ServeParts {
   listener?: Pick<Server, 'close' | 'closeAllConnections'>;
-  store?: Pick<RunStore, 'close'>;
+  store?: Pick<StoreHandle, 'close'>;
   delegation?: Pick<DelegationController, 'close'>;
   previewHost?: Pick<PreviewHost, 'close'> | undefined;
   /** Set once `startServer` returned: its own shutdown then stops every part above. */

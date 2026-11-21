@@ -1,6 +1,6 @@
 /**
  * The ports of the run store: what a caller may ask of a store, by topic. A caller takes the port
- * (or an intersection of ports) that holds what it calls, never `Pick<RunStore, …>`: the guard in
+ * (or an intersection of ports) that holds what it calls, never a `Pick` of `RunStore`: the guard in
  * `runs/ports-guard.test.ts` refuses that in every non-test file. Each port is an interface whose
  * members are `RunStore`'s own method types, so a port never drifts from the store's signatures.
  *
@@ -12,9 +12,13 @@ import type { RunStore } from './store.ts';
 
 export type { RunLifecycleSource } from './lifecycle.ts';
 
-/** One run's record, by id. */
-export interface RunReads {
+/** One run's record, by id. Nearly every caller needs only this. */
+export interface RunLookup {
   getRun: RunStore['getRun'];
+}
+
+/** A run's record, and whether a row exists whose record cannot be read. */
+export interface RunReads extends RunLookup {
   isUnreadable: RunStore['isUnreadable'];
 }
 
@@ -167,3 +171,10 @@ export type RunPatchInput = Parameters<RunWrites['updateRun']>[1];
 export type CreateRunInput = Parameters<RunWrites['createRun']>[0];
 /** An event as `appendEvent` takes it. */
 export type RunEventInput = Parameters<RunEventLog['appendEvent']>[1];
+
+/** What `projectLiveTasks` reads: the live task view of a project, over a store or over its files read-only. */
+export interface LiveRunReads {
+  listRuns: RunStore['listRuns'];
+  persistedLiveRunIds: RunStore['persistedLiveRunIds'];
+  getRun: RunStore['getRun'];
+}

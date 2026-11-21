@@ -7,6 +7,7 @@ import type { AgentInput } from '@open-mercato/cezar-contract';
 import { STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentEvent, AgentRunResult, AgentSession, InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
 import { RunStore } from '../../runs/store.ts';
+import type { RunEventInput } from '../../runs/ports.ts';
 import { createActiveRun, type ActiveRun } from '../active-run.ts';
 import { unused } from '../unused.testkit.ts';
 import { MAX_AUTO_CONTINUES, UNREAD_INPUT_GRACE_MS } from './constants.ts';
@@ -102,7 +103,7 @@ export function inputDeliveryModule(policy: InputDeliveryPolicy): InputDeliveryM
     receipt: id => store.getRun(runId)?.agentInputs?.find(entry => entry.id === id),
     consumed: ids => inputReceipts.handleAgentInputConsumed(context, receiptHost, runId, state, session, ids),
     receiptEvent: event => inputReceipts.handleReceiptEvent(context, receiptHost, steps, runId, state, turn, event, 'task',
-      published => { store.appendEvent(runId, published as Parameters<RunStore['appendEvent']>[1]); }, session),
+      published => { store.appendEvent(runId, published as RunEventInput); }, session),
     turnEnd: () => markTurnBoundary(context, unused<SessionHelperHost>('session helper host', { inputReceiptHost: receiptHost }), runId, state, { type: 'turn-end' }),
   };
 }

@@ -8,7 +8,9 @@ import type { AgentSession } from '../../core/agent-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import type { RunEvent, RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunEvent, RunRecord } from '../../runs/store.ts';
+import type { RunEventInput } from '../../runs/ports.ts';
+import type { RunEventLog, RunLookup, RunWrites } from '../../runs/ports.ts';
 import { failedResultAfter, humanMessageAfter, instructionAfter, laterTurn, registeredAfter } from './done-accepted.ts';
 import type { RunExitId, ExitCall, RunPatch } from '../../runs/run-exits.ts';
 import type { ActiveRun } from '../active-run.ts';
@@ -450,7 +452,7 @@ export class TurnSettler {
 
   /** The idle path's close: `event` says why, the open session ends, and the run settles once its
    *  process has exited (`RunSettlement.settleIdleClosedRun`). */
-  closeIdleSession(runId: string, state: ActiveRun, event: Parameters<RunStore['appendEvent']>[1]): void {
+  closeIdleSession(runId: string, state: ActiveRun, event: RunEventInput): void {
     const session = state.liveSession.session;
     if (!session?.open || state.liveSession.cancelled) return;
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session });
@@ -537,7 +539,7 @@ export class TurnSettler {
  *  when the run or its step finishes on the done; `reconsidered` when a human message, a new
  *  instruction, a failed wait result, a wait or question the agent registers, or a completion
  *  refusal withdraws it, and the agent must call `cezar_done` again. False when none was on record. */
-export function retireDoneAccepted(store: Pick<RunStore, 'getRun' | 'commitOutcome' | 'appendEvent'>, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
+export function retireDoneAccepted(store: RunLookup & RunWrites & RunEventLog, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
   if (!store.getRun(runId)?.doneAccepted) return false;
   store.commitOutcome(runId, { kind: 'done-retired', as, reason }, {}, { bestEffort: true });
   if (as === 'reconsidered') store.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });
@@ -569,7 +571,7 @@ export function acceptedDoneHolds(run: RunRecord, events: readonly RunEvent[], t
 
 /** The only writer that spends the accepted done's one free delivery turn (hearsay-tools/squawk#2587):
  *  later deliveries charge as wakes do, so the wake cap still holds. */
-export function spendDoneFreeTurn(store: Pick<RunStore, 'commitOutcome'>, runId: string): void {
+export function spendDoneFreeTurn(store: RunWrites, runId: string): void {
   store.commitOutcome(runId, { kind: 'done-free-turn' }, {}, { bestEffort: true });
 }
 

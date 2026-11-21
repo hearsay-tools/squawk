@@ -4,7 +4,9 @@ import { atContinue, atTaskHead } from './launch-read-resolver.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
-import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
+import type { RunRecord, StepState } from '../../runs/store.ts';
+import type { RunWrites } from '../../runs/ports.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import * as continuation from '../continuation-admission.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
@@ -25,7 +27,7 @@ import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 
 interface ContinuationAcceptanceHost {
   isActive(runId: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>): RunRecord | undefined;
   ownedJob(run: RunRecord): { workflow: WorkflowDef; input: StartRunInput };
   executionBlockedByRootFinish(run: RunRecord): boolean;
   finishWorkerExecution(runId: string): Promise<void>;
@@ -165,8 +167,8 @@ export class ContinuationAcceptance {
   }
 
   private checkpointContinuation(runId: string, run: RunRecord, exit: 'continue-line' | 'continue-now',
-    acceptedPatch: Parameters<RunStore['commitWorkerContinuation']>[2],
-    continuationStep: Parameters<RunStore['commitWorkerContinuation']>[3],
+    acceptedPatch: Parameters<RunWrites['commitWorkerContinuation']>[2],
+    continuationStep: Parameters<RunWrites['commitWorkerContinuation']>[3],
     conversation: continuation.ContinuationConversation): continuation.ContinuationRefusal | undefined {
     if (run.delegation?.role === 'worker') {
       try { this.context.store.commitWorkerContinuation(runId, exit, acceptedPatch, continuationStep, conversation); }

@@ -2,7 +2,8 @@ import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold'
 import { parseUsageLimit } from '../../core/usage-limit.ts';
 import { classifyProviderError, PROVIDER_ERROR_LABELS } from '../../core/provider-error.ts';
 import { noJitter, PROVIDER_RETRY_BACKOFF, retryDelayMs } from '../../delegation/retry-backoff.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import { formatWakeInstant } from '../run-scheduling.ts';
 import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
@@ -11,7 +12,7 @@ import { LivenessTimers } from './liveness-timers.ts';
 import { atContinue } from './launch-read-resolver.ts';
 
 interface AutoResumeHost {
-  move(runId: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   continueRun(runId: string, opts: ContinueRunOptions, deferForCapacity: boolean): { ok: boolean; error?: string };
   pump(): Promise<void>;
 }

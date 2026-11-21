@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ARCHIVED_ROOT, RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { ARCHIVED_WINDOW, RunStore } from './store.ts';
+import type { RunQueries } from './ports.ts';
 import { seedRuns } from './run-store.testkit.ts';
 
 /**
@@ -179,7 +180,7 @@ describe('RunStore.listArchivedRuns', () => {
   /** A step status the record schema rejects: the row's stored summary is valid, its record is not. */
   const unreadableSteps = [{ id: 's', name: 's', kind: STEP_KIND.agent, status: 'bogus', iterations: 1, tokensUsed: 0 }];
 
-  const list = (store: RunStore, options: Parameters<RunStore['listArchivedRuns']>[0]) => {
+  const list = (store: RunStore, options: Parameters<RunQueries['listArchivedRuns']>[0]) => {
     const found = store.listArchivedRuns(options);
     if ('error' in found) throw new Error(found.error);
     return found;

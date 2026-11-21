@@ -8,7 +8,6 @@ const forgeFactory = (root: string) => ({ ...resolveForgeRoot(root), discoverRep
 
 import { armRepoHandle } from './arm-repo-handle.ts';
 
-import type { RunStore } from './store.ts';
 
 /**
  * `armRepoHandle` is the safety wrapper around the #945 repo lookup, and both of its call sites

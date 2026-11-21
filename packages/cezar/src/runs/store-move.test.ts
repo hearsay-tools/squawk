@@ -8,6 +8,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 import { takeRunExitViolations } from './run-exits.ts';
 import { setRunStatus, blockRunWrites, readPersistedRuns } from './run-store.testkit.ts';
 import { RunStore } from './store.ts';
+import type { RunPatchInput } from './ports.ts';
 
 /**
  * `RunStore.move` applies a run exit (ADR 0056, slice S2 of
@@ -117,7 +118,7 @@ describe('RunStore.move with a guarded exit', () => {
     const { store } = base;
     const withSteps = () => store.createRun({ title: 'move', task: 'move', workflow: 'quick-task', steps: [
       { id: 'a', name: 'a', kind: STEP_KIND.agent }, { id: 'b', name: 'b', kind: STEP_KIND.agent }, { id: 'c', name: 'c', kind: STEP_KIND.agent }] }).id;
-    const finishing = (patch: Parameters<RunStore['updateRun']>[1] = {}) => {
+    const finishing = (patch: RunPatchInput = {}) => {
       const id = withSteps();
       {
         const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.waiting, delegation: ROOT, ...patch };

@@ -13,7 +13,8 @@ import { clearHeldHumanInputTimer, clearUnreadInputTimer } from './input-timers.
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { askCardFields, humanWaitCard } from './turn-markers.ts';
 import type { RunModuleContext } from './types.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunLookup, RunWrites } from '../../runs/ports.ts';
 
 /** The question the user still owes an answer: an open human wait the agent raised, other than the
  *  one whose answer is in flight (`answering`, its `askSeq`). Squawk's own human waits ask nothing. */
@@ -30,7 +31,7 @@ export function isQuestionPending(run: Pick<RunRecord, 'waits'> | undefined, ans
  *  its slot to the agent's next question: the answer settles it now instead of at the turn's
  *  acknowledgement, so the new question still gets its own wait (hearsay-tools/squawk#1293).
  *  Returns the run as it stands after. */
-export function yieldAnsweredSlot(store: Pick<RunStore, 'getRun' | 'commitOutcome'>, runId: string, answering: number | undefined,
+export function yieldAnsweredSlot(store: RunLookup & RunWrites, runId: string, answering: number | undefined,
   hasRoom: (run: RunRecord) => boolean): RunRecord | undefined {
   const run = store.getRun(runId);
   if (!run || answering === undefined || hasRoom(run)) return run;

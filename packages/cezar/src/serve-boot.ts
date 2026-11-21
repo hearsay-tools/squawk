@@ -9,6 +9,7 @@ import { DEFAULT_WORKTREE_RETENTION, resolveWorktreeRetention } from './config.t
 import { reclaimWorktrees } from './runs/retention.ts';
 import { sweepMergedBranches } from './server/repo-branch-sweep.ts';
 import type { RunStore } from './runs/store.ts';
+import type { StoreHandle } from './runs/ports.ts';
 import type { RunManager } from './workflows/run.ts';
 import type { PreviewHost } from './preview/host.ts';
 import type { getRepoInfo } from './server/git.ts';
@@ -93,7 +94,7 @@ export const STOP_SERVE_BOUND_MS = 5_000;
 
 export interface StopServeOptions {
   /** The boot store: closed here when the server's shutdown failed or did not finish in time. */
-  store?: Pick<RunStore, 'close'> | undefined;
+  store?: Pick<StoreHandle, 'close'> | undefined;
   boundMs?: number;
   forward?: (signal: NodeJS.Signals) => void;
 }

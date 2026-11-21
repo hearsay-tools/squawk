@@ -4,7 +4,8 @@ import type { WorkerStopResult, WorkerWait } from '@open-mercato/cezar-contract/
 import { workerWaitEntryToLegacy, type DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
 import { clearIdleTimer } from './input-timers.ts';
@@ -24,7 +25,7 @@ interface RunCancelHost {
   cancelAutoResume(id: string): boolean;
   rootFinishRequested(id: string): boolean;
   historyDeletionPending(id: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>): RunRecord | undefined;
 }
 
 /** The cancellation event of a run Stop takes out of the line. */

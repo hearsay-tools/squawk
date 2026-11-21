@@ -1,10 +1,11 @@
 import type { RunRelationships } from '@open-mercato/cezar-contract/delegation';
 import { workerCapacity } from '../delegation/capacity.ts';
 import { workerDestroyView, workerObservation } from '../runs/delegation-state.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunFamilyReads, RunLookup, WorkerExecutions } from '../runs/ports.ts';
 import { familyRecordOf, isFamilyRecord, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
 
-type Reads = Pick<RunStore, 'getRun' | 'listOwnedWorkers' | 'readWorkerExecution'>;
+type Reads = RunLookup & Pick<RunFamilyReads, 'listOwnedWorkers'> & Pick<WorkerExecutions, 'readWorkerExecution'>;
 
 /**
  * What the cockpit shows around one run: a root's whole family, each worker naming the worker that

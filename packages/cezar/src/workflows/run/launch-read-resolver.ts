@@ -15,6 +15,7 @@ import { parseDelegationEffort } from '../../delegation/effort.ts';
 import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, removedRunnerStepAfter, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../../runs/store.ts';
+import type { CreateRunInput, RunEventLog, RunLookup } from '../../runs/ports.ts';
 import { makeRunTitle } from '../../runs/run-title.ts';
 import { readProjectUiState, readProjectUiStateSync } from '../../ui-state.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../../workspace/agent-accounts.ts';
@@ -514,7 +515,7 @@ function taskSystemPrompt(store: RunStore, runId: string, source: LaunchSource, 
     : resolveExtraSystemPrompt(inputValue(source).systemPrompt, configValue(config).systemPrompt);
 }
 
-function acceptedRunFields(input: StartRunInput, workflow: WorkflowDef, effectiveInput: StartRunInput, clientRequest?: { id: string; hash: string }): Parameters<RunStore['createRun']>[0] {
+function acceptedRunFields(input: StartRunInput, workflow: WorkflowDef, effectiveInput: StartRunInput, clientRequest?: { id: string; hash: string }): CreateRunInput {
   return {
       title: makeRunTitle(input.task, workflow),
       workflow: workflow.name,
@@ -647,7 +648,7 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
 
 /** The workflow step a Continue's done starts: the run's `start` cursor (hearsay-tools/squawk#1621),
  *  else the step after the one the Continue resumes. */
-function continuationNextStep(store: Pick<RunStore, 'getRun'>, runId: string, waitingWorkflowStepIndex: (run: RunRecord) => number): WorkflowStepDef | undefined {
+function continuationNextStep(store: RunLookup, runId: string, waitingWorkflowStepIndex: (run: RunRecord) => number): WorkflowStepDef | undefined {
   const run = store.getRun(runId);
   if (!run?.workflowDef) return undefined;
   const start = workflowStartIndex(run, run.workflowDef);
@@ -703,7 +704,7 @@ function ciWorkflowResumeStepIndex(run: RunRecord): number {
  * refuses the resume. A shown launch with no matching `session` event ended before the runner
  * reported its id.
  */
-function resumableSessionId(store: Pick<RunStore, 'getRun' | 'readEvents'>, runId: string, sessionStep: StepState | undefined): string | undefined {
+function resumableSessionId(store: RunLookup & RunEventLog, runId: string, sessionStep: StepState | undefined): string | undefined {
   const sessionId = sessionStep?.sessionId;
   if (!sessionId) return undefined;
   const run = store.getRun(runId);
@@ -824,7 +825,7 @@ function sourceInput(source: SourceInput): StartRunInput { return source instanc
 
 function recordedRunner(run: RunRecord): string | undefined { return savedRunnerId(run.runner); }
 function defaultRunner(config: LaunchConfig): string { return configValue(config).defaultRunner; }
-function runnerless(store: Pick<RunStore, 'getRun'>, id: string): boolean { return store.getRun(id)?.runner === undefined; }
+function runnerless(store: RunLookup, id: string): boolean { return store.getRun(id)?.runner === undefined; }
 function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }
 function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<typeof executionAccount> { return executionAccount(...args); }
 
