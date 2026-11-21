@@ -62,7 +62,7 @@ inventory. Counts of callers come from text search and are approximate.
 | `this.emit(` in `runs/store.ts` | 10 sites; events `run`, `deleted`, `event`, `closed` |
 | Production listener files | 12 (table below) |
 | Test files that call `.on` or `.once` on a store | 42 (51 calls in `*.test.ts`, 24 in `*.testkit.ts`) |
-| `Pick<RunStore, …>` sites | 41 in 25 non-test files, plus `Partial<RunStore>` in `runs/retention.ts` |
+| `Pick<RunStore, …>` sites | 41 in 28 non-test files, two of them under `runs/` (`live-tasks.ts`, `supervised.ts`), plus `Partial<RunStore>` in `runs/retention.ts` |
 | `layer-import.baseline.json` | 122 entries; 17 have a file under `runs/` |
 | Test files Squeal selects for `runs/store.ts` | about 870 of 2,001 (the epic's count; the selection was `unsynced` at `8a331af92`) |
 

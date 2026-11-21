@@ -150,9 +150,10 @@ Issue: hearsay-tools/squawk#4035.
   `workflows/run/` take a port. The test fakes (`activity/activity.testkit.ts`,
   `preview/host.testkit.ts` and the `as unknown as RunStore` casts that build partial fakes) are
   typed by port.
-- A lint rule or a test refuses a new `Pick<RunStore, …>` outside `runs/`.
+- A lint rule or a test refuses a `Pick<RunStore, …>` in any non-test file, `runs/` included.
 - Types only; no behavior changes.
-- Files: `runs/ports.ts` and the 25 files with a `Pick`. Run it when no B slice edits the same
+- Files: `runs/ports.ts` and the 28 non-test files with a `Pick`, `runs/live-tasks.ts` and
+  `runs/supervised.ts` included. Run it when no B slice edits the same
   file.
 
 ## D2 to D10. One topic each
