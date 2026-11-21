@@ -1,1 +1,1 @@
-export * from '@open-mercato/cezar-contract/runner-install';
+export * from '@open-mercato/cezar-contract/runner-install'
