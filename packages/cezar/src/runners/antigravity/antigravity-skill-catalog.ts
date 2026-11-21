@@ -1,3 +1,4 @@
+import { prepareAntigravityAccount } from './account-home.ts';
 import { readdir, readFile } from 'node:fs/promises';
 import { agentHomeDir } from '../../paths.ts';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ const metadataSchema = z.object({ name: z.string().optional(), description: z.st
  * ACP exposes no skills/list; available_commands_update contains built-in commands only. */
 export async function discoverAntigravitySkills(options: SkillDiscoveryOptions): Promise<SkillCatalog> {
   const home = options.accountHome || agentHomeDir('antigravity');
+  prepareAntigravityAccount(options.accountHome);
   const roots = [
     { path: join(home, 'config', 'skills'), scope: 'user' as const },
     { path: join(options.cwd, '.gemini', 'skills'), scope: 'repo' as const },

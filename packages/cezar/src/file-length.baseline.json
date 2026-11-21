@@ -7,10 +7,10 @@
     "packages/cezar/src/runs/store.ts": 3381,
     "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1004,
     "packages/cezar/src/server/forge/github.ts": 3181,
-    "packages/cezar/src/server/server.ts": 4715,
+    "packages/cezar/src/server/server.ts": 4708,
     "packages/web/e2e/agent-browser.ts": 1139,
-    "packages/web/src/api/client.ts": 2087,
-    "packages/web/src/api/queries.ts": 1965,
+    "packages/web/src/api/client.ts": 2077,
+    "packages/web/src/api/queries.ts": 1923,
     "packages/web/src/routes/github/github.tsx": 1242,
     "packages/web/src/routes/global-tasks.tsx": 1069,
     "packages/web/src/routes/tasks-overview.tsx": 1619

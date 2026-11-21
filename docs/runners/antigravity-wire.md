@@ -71,7 +71,10 @@ Each value is what agy 1.5.0 did, with the fixture or code that shows it. `Runne
 
 **The host probe may spawn `agy --version`.** It costs about 2.6 s and 260 MB of memory once,
 writes nothing and needs no credential. Its timeout must allow at least 5 s on a loaded host.
-Read the version from the `Build label:` line.
+Read the version from the `Build label:` line. Model-catalog identity requests share one
+version probe for the resolved executable’s file identity (path, device/inode, size, timestamps
+and mode); replacing or modifying it triggers another probe. Credential identity is still read
+on every catalog request.
 
 **Launch through a symlink (owner decision D1).** The `.par` looks for `localharness_external`
 in `dirname(abspath(argv[0]))`, which does not resolve symlinks, then next to
@@ -87,14 +90,29 @@ binary path, or the install hint tells the user to link the whole folder.
 | Method | Headless | How |
 | --- | --- | --- |
 | `gemini-api-key` | Yes | `authenticate {methodId: "gemini-api-key"}` takes the key from `_meta` (`api-key`, `apiKey` or `api_key`) or from `GEMINI_API_KEY`. It writes `{"auth":{"type":"gemini-api-key"}}` to `$GEMINI_HOME/antigravity-acp/settings.json`, so later launches infer it. The code shows that without a key it still answers `{}` and `session/new` then fails with an auth error (not run). |
-| `oauth-personal` | No, unless the browser can reach the agy host | The server opens a one-shot loopback listener at `http://127.0.0.1:<random port>/` for 300 s, prints the Google consent URL to stderr and opens it through `webbrowser` (`$BROWSER`). The redirect must reach that port, so a remote host needs an SSH port forward. There is no device-code or paste flow (`oauth/credential_manager.py`). Not completed in this probe: the owner chose CLI Proxy. |
+| `oauth-personal` | No, unless the browser can reach the agy host | The server opens a one-shot loopback listener at `http://127.0.0.1:<random port>/` for 300 s, prints the Google consent URL to stderr and opens it through `webbrowser` (`$BROWSER`). The redirect must reach that port, agy itself has no device-code or paste flow (`oauth/credential_manager.py`). Squawk captures `$BROWSER` in memory and offers a pasted redirect in its cockpit, then replays it to this listener on the host. Personal consent URL capture/cancellation was verified live; completing consent with real Google accounts remains the owner’s check. |
 | `oauth-business` | Not probed | Gemini Enterprise sign-in through the same kind of browser flow. |
 | `agent-platform` | Not probed | Vertex AI; needs `gcp.project` and `gcp.location` in `settings.json` and Google credentials. |
 
-`AGY_ACP_FORCE_FILE_STORAGE=1` keeps stored credentials in files instead of a keyring
-(`oauth/credential_store.py`); the harness logged `$HOME/.config/antigravity/plugin-secrets.json`.
+`AGY_ACP_FORCE_FILE_STORAGE=1` keeps ACP OAuth credentials in files instead of a keyring
+(`oauth/credential_store.py`). Personal OAuth uses
+`$GEMINI_HOME/antigravity-acp/acp_token.json` (`ccpa_connection/oauth_manager.py`;
+confirmed by native file-access tracing). The harness's separately logged
+`$HOME/.config/antigravity/plugin-secrets.json` is plugin state, not this OAuth token.
+Named Squawk accounts relocate HOME and XDG_CONFIG_HOME too, while retaining links to
+user native instructions and skills. Read-only Go symbol/disassembly inspection of 1.5.0
+confirms `authstore.pluginFallbackPath` calls `os.UserConfigDir()` then joins
+`antigravity/plugin-secrets.json`; on Linux that uses XDG_CONFIG_HOME or HOME/.config.
+The live API-key runs did not access this plugin store. No credential values are copied into Squawk state.
 
 ## Models and the API host
+
+Squawk's catalog opens a short-lived ACP session and reads native `configOptions`. It sets
+each listed model with `session/set_config_option` to read that model's thinking choices,
+without sending a prompt. On 1.5.0 the live table offered gemini-3.8/3.7/3.6/3.5-flash
+(low/medium/high) and gemini-3.1-pro (low/high). A proxy-configured gemini-3-flash also
+appeared with no thinking choices. Cache identity includes account, Build label and auth
+material digested only in memory. A failed probe falls back to suggested presets.
 
 The Go harness calls the Gemini API at `GOOGLE_GEMINI_BASE_URL` (it inherits the server's
 environment) and sends the key as `x-goog-api-key`. The model list comes from a table in the
@@ -306,9 +324,10 @@ Limits that are not parity cells, but that the runner must state:
 
 ## Frames not produced
 
-Every frame the issue asks for was recorded. Three things were not run: the OAuth sign-ins
-(the owner chose CLI Proxy), Agent Platform sign-in, and a plugin skill with a correct
-manifest.
+Every frame the issue asks for was recorded. Completed real personal/business OAuth consent,
+Agent Platform sign-in, and a plugin skill with a correct manifest were not run. The accounts
+follow-up verified personal consent capture/cancellation, two isolated API-key sessions, native
+model/thinking discovery, and both linked user and project skill triggers on the real build.
 
 ## Fixtures
 

@@ -96,3 +96,66 @@ Existing Continue admission, workflow cursors and run exit triggers remain uncha
 only session-resume changes are resending the workflow filter and eager MCP server name.
 
 Explicit shutdown parity (S27/S28/S30) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30 calls end and captures before EOF; S31 abrupt external exit remains unchanged because no pre-shutdown snapshot is guaranteed.
+
+
+## Accounts and discovery slice (hearsay-tools/squawk#4003)
+
+The coordinator approved personal OAuth with cockpit consent capture and server replay of a
+pasted loopback redirect. API keys remain environment-owned. Named accounts isolate Gemini,
+HOME and XDG roots while linking native instructions and skills; no saved run format changes.
+Live model probes are picker-only (`catalogAtAdmission: false`), bounded and cached by account,
+build and credential digest. Other runners keep their existing login and admission defaults.
+
+### Account and sign-in cases
+
+| Case | Behavior at shipped defaults |
+| --- | --- |
+| Default account, no saved selection | Discover the user's Gemini home; no folder/config prerequisite |
+| Two named accounts | Separate settings, conversations and OAuth token files; separate HOME/XDG roots |
+| Existing native instruction or skill link | Preserve it; only absent account links point to default Gemini sources |
+| Source native skill absent or removed | A dangling source link remains; native catalog reads current sources |
+| API key connected, account folder absent | Connected with an environment-source hint; no folder/Connect promise |
+| Personal OAuth absent | Connect shows consent and accepts only the captured callback origin/path/state and one code |
+| Remote browser cannot reach loopback | Pasted callback is replayed on the host without following its response redirect |
+| Wrong callback, repeat code or wrong state | Refuse without calling the listener; one accepted replay per flow |
+| Same account starts twice | Join the memory-only start/flow; different account starts stay independent |
+| Cancel races native completion | Cancelled state wins; close process and erase the exposed URL |
+| Expired flow or server restart | No saved consent/code/flow; start another flow |
+| Business/platform credentials | Unsupported; never shown as a supported personal login |
+| Hosted cockpit | Refuse browser endpoints and named-account model queries before resolving paths |
+
+### Probe process exits
+
+| Case | What stops it | Behavior at shipped defaults |
+| --- | --- | --- |
+| Catalog answered or sign-in completed | Close ACP input; TERM at 100 ms, KILL at 1 s if needed | Await process close and remove temporary cwd/browser helper |
+| User cancels or deadline expires | Same close path; sign-in deadline 300 s, catalog 20 s | Pending ACP calls reject; no task/run state is held |
+| Startup command interrupted before spawn | Existing process owner scope | No child exists; failed starts remove the helper directory/listener |
+| Owner interrupted after spawn | EOF/process owner scope | Same shared session-leader guarantees; no new persistent containment claim |
+| Owner SIGKILL | Existing owned scope only | In-memory cleanup cannot run; no durable PID/URL/code file is introduced |
+| Missing/forged handle or reused PID | Session leader plus observed descendant identities | No new durable stop handle; shared identity checks govern signals |
+
+### Catalog selection cases
+
+| Case | Result |
+| --- | --- |
+| Picker first opens | Short-lived session/new in private temp cwd, no session/prompt/model turn |
+| Same account/build/auth inside TTL | Reuse the cached model/thinking list |
+| Account, build label or auth changes | Discard that account's old identity entry and discover again |
+| Auth invalidated during identity read | Recheck identity before consulting the cache |
+| Probe fails or credentials absent | Suggested presets/auto stay usable; boot and task/worker admission never await this probe |
+| New task, GitHub handoff or Continue selects a named account | Request/cache key carries its selected account id |
+| Global model defaults or an automation without an account override | Default-account catalog, as before |
+
+### Review corrections for account selection and sign-in
+
+| Case | Required behavior |
+| --- | --- |
+| Relative default Gemini home | Resolve shared instruction/skill symlink sources against the host cwd |
+| Cached catalog read or concurrent identity reads | Stat the resolved executable; share its build-label probe until that file identity changes; always recheck auth |
+| Planned task with an explicit account | Submit that account, matching the normal task path and the displayed catalog |
+| Continue starts a fresh conversation on the run account | Models and skills use that account, rather than the previous session account |
+| Hosted catalog picker | Omit named-account discovery; keep the unscoped fallback usable |
+| Account home updated under the same profile id | Invalidate model queries alongside account and skill queries |
+| Dialog closes while sign-in is starting | Invalidate the start attempt and cancel its late result; keep Connect disabled until that pending start settles |
+| Status request fails transiently | Show the error and an explicit Retry status action, which restores polling after a successful read |

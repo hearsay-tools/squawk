@@ -22,8 +22,10 @@ export const antigravityRunner = defineRunner({
   login: { ...ANTIGRAVITY_LOGIN, executable: () => productEnv('ANTIGRAVITY_BIN') ?? 'agy' },
   configFiles: ANTIGRAVITY_CONFIG_FILES, extraTools: ANTIGRAVITY_EXTRA_TOOLS,
   loadLogin: async () => (await import('./login-probe.ts')).antigravityLogin,
+  loadBrowserSignIn: async () => (await import('./browser-sign-in.ts')).startAntigravitySignIn,
   loadAdapter: async () => new (await import('./antigravity-runner.ts')).AntigravityRunner(),
   loadModelCatalog: async () => (await import('./antigravity-model-catalog.ts')).discoverAntigravityModels,
+  loadModelCatalogKey: async () => (await import('./antigravity-model-catalog.ts')).antigravityModelCatalogKey,
   skillCatalog: { source: 'filesystem', projectRoots: ['.gemini/skills', '.agents/skills'], userRoots: ['config/skills', 'antigravity-cli/skills'], plugins: false, evidence: 'antigravity-acp 1.5.0 resolve_skills_paths; docs/runners/antigravity-wire.md' },
   loadSkillCatalog: async () => (await import('./antigravity-skill-catalog.ts')).discoverAntigravitySkills,
 });

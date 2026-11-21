@@ -208,7 +208,10 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
     isPending: providers.isPending || registered.isPending,
     isError: providers.isError || registered.isError,
   }
-  const catalog = useRunnerModels(displayRunner)
+  const accountChoices = useAgentAccounts()
+  const pickedAccount = accountChoices.accounts.some(choice => choice.provider === displayRunner && choice.id === draft.agentProfile)
+    ? draft.agentProfile : accountChoices.repoAccount?.[displayRunner]
+  const catalog = useRunnerModels(displayRunner, true, pickedAccount)
   const modelsLocked = config.data?.modelsLocked === true
   const defaultModels = config.data?.defaultModels
   const models = runner === null
@@ -526,6 +529,7 @@ export function useNewTaskSubmit(input: {
         buildPlannedRunBody({
           task: plan.task,
           steps: plan.steps,
+          agentProfile: input.agentProfile,
           model: engine.model,
           modelsLocked: engine.modelsLocked,
           effort: engine.effort,

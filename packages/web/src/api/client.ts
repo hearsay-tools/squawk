@@ -1,3 +1,4 @@
+export { getRunnerModels } from './model-catalog-client'
 import type { RunnerSkillList } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import type { ProjectAddress, RunAddress } from './run-address'
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
@@ -107,8 +108,6 @@ import type {
   RunHistoryPage,
   RepoResponse,
   Runner,
-  ModelDiscoveryRunner,
-  RunnerModelCatalogResponse,
   RunRecord,
   RunsIndexResponse,
   RunsSearchResponse,
@@ -438,15 +437,6 @@ export const runPath = (id: string, suffix = ''): string => `/runs/${encodeURICo
 /** Version, update check, repo/branch, and the tool probes behind the Tools menu. */
 export async function getHealth(opts?: ReadOptions): Promise<HealthResponse> {
   return unwrap(await cez.api.v1.health.$get({}, init(opts)), '/health')
-}
-
-/** Host-local catalog for one discovery runner (`codex`, `opencode`, `pi`). Workspace-level:
- *  one CLI/account serves every project. */
-export async function getRunnerModels(
-  runner: ModelDiscoveryRunner,
-  opts?: ReadOptions,
-): Promise<RunnerModelCatalogResponse> {
-  return unwrap(await cez.api.v1.models.$get({ query: { runner } }, init(opts)), '/models')
 }
 
 /** Host-local authentication state shared by every project. */

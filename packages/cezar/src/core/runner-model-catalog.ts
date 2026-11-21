@@ -8,6 +8,8 @@ export interface ModelOption {
   effortLevels?: EffortLevel[];
 }
 
+export interface ModelDiscoveryContext { accountHome?: string | undefined }
+
 export type ModelCatalogSource = 'live' | 'cache' | 'unavailable';
 
 export interface RunnerModelCatalogResult {
@@ -20,7 +22,9 @@ export interface RunnerModelCatalogResult {
 }
 
 export interface RunnerModelCatalogAdapter {
-  discover(): Promise<ModelOption[]>;
+  discover(options?: ModelDiscoveryContext): Promise<ModelOption[]>;
+  /** Native auth/build identity, checked before consulting the TTL. */
+  cacheKey?(options: ModelDiscoveryContext): Promise<string>;
 }
 
 export interface RunnerModelCatalogOptions {
@@ -45,6 +49,8 @@ export class RunnerModelCatalog {
   readonly #cache = new Map<string, CachedCatalog>();
   readonly #inFlight = new Map<string, Promise<RunnerModelCatalogResult>>();
   readonly #generation = new Map<string, number>();
+  readonly #identities = new Map<string, string>();
+  readonly #runnerGeneration = new Map<string, number>();
 
   constructor(options: RunnerModelCatalogOptions) {
     this.#adapters = options.adapters;
@@ -53,14 +59,36 @@ export class RunnerModelCatalog {
   }
 
   invalidate(runner: string): void {
-    const cached = this.#cache.get(runner);
-    if (cached) cached.expiresAt = 0;
-    this.#inFlight.delete(runner);
-    this.#generation.set(runner, (this.#generation.get(runner) ?? 0) + 1);
+    this.#runnerGeneration.set(runner, (this.#runnerGeneration.get(runner) ?? 0) + 1);
+    for (const key of new Set([...this.#cache.keys(), ...this.#inFlight.keys()])) {
+      if (key !== runner && !key.startsWith(`${runner}\u0000`)) continue;
+      const cached = this.#cache.get(key);
+      if (cached) cached.expiresAt = 0;
+      this.#inFlight.delete(key);
+      this.#generation.set(key, (this.#generation.get(key) ?? 0) + 1);
+    }
   }
 
-  get(runner: string): Promise<RunnerModelCatalogResult> {
-    const cached = this.#cache.get(runner);
+  get(runner: string, options: ModelDiscoveryContext = {}): Promise<RunnerModelCatalogResult> {
+    const adapter = this.#adapters[runner];
+    const key = options.accountHome ? `${runner}\u0000${options.accountHome}` : runner;
+    if (!adapter?.cacheKey) return this.#get(runner, key, options);
+    const generation = this.#runnerGeneration.get(runner) ?? 0;
+    return adapter.cacheKey(options).then(value => {
+      // An auth refresh during the asynchronous identity probe invalidates its answer too.
+      if ((this.#runnerGeneration.get(runner) ?? 0) !== generation) return this.get(runner, options);
+      if (this.#identities.get(key) !== value) {
+        this.#identities.set(key, value);
+        this.#cache.delete(key);
+        this.#inFlight.delete(key);
+        this.#generation.set(key, (this.#generation.get(key) ?? 0) + 1);
+      }
+      return this.#get(runner, key, options);
+    }, () => ({ runner, models: [], source: 'unavailable' as const, stale: false, reason: unavailableReason(runner) }));
+  }
+
+  #get(runner: string, key: string, options: ModelDiscoveryContext): Promise<RunnerModelCatalogResult> {
+    const cached = this.#cache.get(key);
     if (cached && this.#now() < cached.expiresAt) {
       if (cached.failureReason) {
         return Promise.resolve({
@@ -74,40 +102,42 @@ export class RunnerModelCatalog {
       return Promise.resolve({ runner, models: cached.models, source: 'cache', stale: false });
     }
 
-    const pending = this.#inFlight.get(runner);
+    const pending = this.#inFlight.get(key);
     if (pending) return pending;
 
-    const generation = this.#generation.get(runner) ?? 0;
-    const refresh = this.#refresh(runner, cached, generation).finally(() => {
-      if ((this.#generation.get(runner) ?? 0) === generation) this.#inFlight.delete(runner);
+    const generation = this.#generation.get(key) ?? 0;
+    const refresh = this.#refresh(runner, key, options, cached, generation).finally(() => {
+      if ((this.#generation.get(key) ?? 0) === generation) this.#inFlight.delete(key);
     });
-    this.#inFlight.set(runner, refresh);
+    this.#inFlight.set(key, refresh);
     return refresh;
   }
 
   async #refresh(
     runner: string,
+    key: string,
+    options: ModelDiscoveryContext,
     cached: CachedCatalog | undefined,
     generation: number,
   ): Promise<RunnerModelCatalogResult> {
-    const current = () => (this.#generation.get(runner) ?? 0) === generation;
+    const current = () => (this.#generation.get(key) ?? 0) === generation;
     try {
       const adapter = this.#adapters[runner];
       if (!adapter) throw new Error('adapter unavailable');
-      const models = await adapter.discover();
+      const models = await (options.accountHome ? adapter.discover(options) : adapter.discover());
       const value = { models: [...models], expiresAt: this.#now() + this.#ttlMs };
-      if (current()) this.#cache.set(runner, value);
+      if (current()) this.#cache.set(key, value);
       return { runner, models: value.models, source: 'live', stale: false };
     } catch {
       const reason = unavailableReason(runner);
       if (cached) {
         if (current()) {
-          this.#cache.set(runner, { models: cached.models, expiresAt: this.#now() + this.#ttlMs, failureReason: reason });
+          this.#cache.set(key, { models: cached.models, expiresAt: this.#now() + this.#ttlMs, failureReason: reason });
         }
         return { runner, models: cached.models, source: 'cache', stale: true, reason };
       }
       if (current()) {
-        this.#cache.set(runner, { models: [], expiresAt: this.#now() + this.#ttlMs, failureReason: reason });
+        this.#cache.set(key, { models: [], expiresAt: this.#now() + this.#ttlMs, failureReason: reason });
       }
       return { runner, models: [], source: 'unavailable', stale: false, reason };
     }

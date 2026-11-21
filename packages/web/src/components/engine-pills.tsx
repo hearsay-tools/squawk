@@ -87,7 +87,6 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const defaultRunner = config.data?.defaultRunner
   const runner = resolveRunner(pick.runner, runners, defaultRunner ?? runners[0] ?? 'claude')
   // Resolved first: each runner has its own host catalog (#794), so the fetch follows the pick.
-  const catalog = useRunnerModels(runner)
   const modelsLocked = config.data?.modelsLocked === true
   // Agent accounts (spec 2026-07-29-agent-profiles), read through the shared hook the /new composer
   // and the thread's Continue read, so no start surface can disagree about which login runs.
@@ -97,6 +96,7 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const account = accounts.some((choice) => choice.provider === runner && choice.id === pick.account)
     ? pick.account
     : null
+  const catalog = useRunnerModels(runner, true, account ?? repoAccount?.[runner])
   const model = resolveModel(
     modelsLocked ? null : pick.model,
     runner,
@@ -222,7 +222,7 @@ export function EnginePills({
   const { runner, model, effort, effortOptions, runners, canRun, modelsLocked } = resolved
   const config = useConfig()
   const registered = useRunners()
-  const catalog = useRunnerModels(runner)
+  const catalog = useRunnerModels(runner, true, resolved.account ?? resolved.repoAccount?.[runner])
   const models = modelsForRunner(runner, registered.data, catalog.data, [pick.model, config.data?.defaultModels?.[runner]])
   const unavailable = disabled || !canRun
   const accountChoices = accounts ? resolved.accounts : []

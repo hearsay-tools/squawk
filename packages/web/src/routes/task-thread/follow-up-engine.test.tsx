@@ -119,8 +119,8 @@ function serve(
         }
         return json({ runner: 'claude', skills: [{ id: 'check', name: 'Check' }], problems: [], source: 'live' })
       }
-      if (url === '/api/v1/models?runner=claude') return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
-      if (url === '/api/v1/models?runner=codex') {
+      if (url.startsWith('/api/v1/models?runner=claude')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
+      if (url.startsWith('/api/v1/models?runner=codex')) {
         return typeof modelCatalog === 'function' ? modelCatalog() : json(modelCatalog)
       }
       if (url === '/api/v1/config' && method === 'GET')
@@ -213,6 +213,7 @@ it.each(['default', 'work'])('loads hosted thread skills without an explicit %s 
   await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
   const urls = requests.filter((request) => request.url.includes('/runner-skills?')).map((request) => request.url)
   expect(urls).toEqual(['/api/v1/runner-skills?runner=claude'])
+  expect(requests.filter(request => request.url.includes('/models?')).map(request => request.url)).toEqual(['/api/v1/models?runner=claude'])
 })
 
 it.each(['default', 'work'])('loads local thread skills with the recorded %s account', async (profileId) => {
@@ -220,6 +221,16 @@ it.each(['default', 'work'])('loads local thread skills with the recorded %s acc
   renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId })] }))
   await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
   expect(requests.some((request) => request.url === `/api/v1/runner-skills?runner=claude&account=${profileId}`)).toBe(true)
+  expect(requests.some(request => request.url === `/api/v1/models?runner=claude${profileId === 'default' ? '' : `&profileId=${profileId}`}`)).toBe(true)
+})
+
+it('uses the run account for models and skills when Continue starts a fresh conversation', async () => {
+  serve()
+  renderAction(makeRun({ agentProfile: 'work', steps: [step({ sessionId: 'old', profileId: 'default' })] }))
+  await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
+  expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
+  expect(requests.some(request => request.url === '/api/v1/models?runner=claude&profileId=work')).toBe(true)
+  expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/work')
 })
 
 describe('follow-up ContinueAction runner/model selection (#401)', () => {

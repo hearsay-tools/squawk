@@ -1,3 +1,6 @@
+import { invalidateRunnerModels } from './model-catalog'
+export { invalidateRunnerModels, useRunnerModels, useRunnerModelCatalogs } from './model-catalog'
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { projectAddress, runAddress, type RunAddress, type ProjectAddress } from './run-address'
 import type { ReadPatch } from './run-cache'
 import { useRunCacheWriter } from './use-run-cache-writer'
@@ -25,7 +28,7 @@ export {
 import { getApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { normalizeSidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
 import { toast } from '@/components/ui/toaster'
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type MutateOptions } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type MutateOptions } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
 
 import { mergeProviderStatusResponse } from '@/lib/provider-status'
@@ -57,7 +60,6 @@ import {
   getOpenTargets,
   getProviderStatus,
   getProjects,
-  getRunnerModels,
   getRepo,
   getRepoBranches,
   getRunCommit,
@@ -255,7 +257,9 @@ export const queryKeys = {
  * scope changes → key changes → data gone → provider unmounts).
  */
 export const workspaceQueryKeys = {
-  models: (runner: string) => ['workspace', 'models', runner] as const,
+  models: (runner: string, profileId?: string | null) => profileId && profileId !== DEFAULT_AGENT_ACCOUNT_ID
+    ? ['workspace', 'models', runner, profileId] as const
+    : ['workspace', 'models', runner] as const,
   providerStatus: ['workspace', 'providers', 'status'] as const,
   projects: ['workspace', 'projects'] as const,
   /** The accounts a new GitHub repository may belong to — read only while the New project dialog
@@ -284,52 +288,6 @@ export const workspaceQueryKeys = {
   fsBrowseRoot: ['workspace', 'fs-browse'] as const,
   fsBrowse: (path: string | null, showHidden = false) =>
     [...workspaceQueryKeys.fsBrowseRoot, path, showHidden] as const,
-}
-
-/** Drop the cockpit's host model catalog so the next picker open rediscovers. Omit `runner` to bust every discovery runner (Providers "Check again"). */
-export function invalidateRunnerModels(
-  queryClient: QueryClient,
-  runner?: string,
-  refetchType: 'active' | 'none' = 'active',
-) {
-  return queryClient.invalidateQueries({
-    queryKey: runner === undefined ? (['workspace', 'models'] as const) : workspaceQueryKeys.models(runner),
-    refetchType,
-  })
-}
-
-/**
- * One runner's host-discovered catalog, cached per runner (#794 — this used to be hard-wired to
- * Codex, which is why OpenCode had nothing but stale presets to show).
- *
- * Every runner discovers models. Failures retain the existing picker fallback;
- * callers read `data`/`isError` without backend-specific branches.
- *
- * `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue — hooks
- * cannot be called conditionally) skip the fetch when it definitely won't.
- */
-export function useRunnerModels(runner: Runner, enabled = true) {
-  return useQuery({ ...runnerModelsQuery(runner), enabled })
-}
-
-const runnerModelsQuery = (runner: string) => ({
-  queryKey: workspaceQueryKeys.models(runner),
-  queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels(runner, { signal }),
-  staleTime: 5 * 60 * 1_000,
-})
-
-/**
- * Every listed runner's catalog at once, keyed by runner — for the screens that render a row PER
- * runner (the Settings default-model selects) rather than one for the runner the user picked.
- * One query per runner with its own cache entry, `enabled` state and error state; none until the
- * runners list answers.
- */
-export function useRunnerModelCatalogs(
-  runners: readonly string[],
-  enabled = true,
-): Record<string, ReturnType<typeof useRunnerModels>> {
-  const results = useQueries({ queries: runners.map((runner) => ({ ...runnerModelsQuery(runner), enabled })) })
-  return Object.fromEntries(runners.map((runner, index) => [runner, results[index] as (typeof results)[number]]))
 }
 
 export function useProviderStatus() {
@@ -652,11 +610,11 @@ function useAgentProfileMutation<TVariables>(
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles }),
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
         queryClient.invalidateQueries({ predicate: ({ queryKey }) => queryKey[1] === 'runner-skills' }),
+        invalidateRunnerModels(queryClient),
       ])
     },
   })
 }
-
 export function useCreateAgentProfile() {
   return useAgentProfileMutation((input: CreateAgentProfileInput) => createAgentProfile(input))
 }

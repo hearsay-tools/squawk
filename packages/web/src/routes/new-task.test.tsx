@@ -1,4 +1,4 @@
-import { HEALTH, HEALTH_MULTI, PROVIDERS_CONNECTED, PROVIDERS_MULTI, PROVIDERS_NONE, WORKFLOWS, WORKSPACE_CONFIG, PLAN, FALLBACK_PLAN, requests, deferredJson, serve, renderNewTask, textarea, sourcePill, location, draftSource, pillReady, startTask, postedBody, planToggle, startToggle, stepIds, planTask } from './new-task.testkit'
+import { ACCOUNTS, HEALTH, HEALTH_MULTI, PROVIDERS_CONNECTED, PROVIDERS_MULTI, PROVIDERS_NONE, WORKFLOWS, WORKSPACE_CONFIG, PLAN, FALLBACK_PLAN, requests, deferredJson, serve, renderNewTask, textarea, sourcePill, location, draftSource, pillReady, startTask, postedBody, planToggle, startToggle, stepIds, planTask } from './new-task.testkit'
 
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -653,6 +653,15 @@ describe('the plan flow', () => {
       ],
     })
     await waitFor(() => expect(location()).toBe('/tasks/planned-1'))
+  })
+
+  it('▶ Start sends the account selected for the displayed model catalog', async () => {
+    serve({ agentProfiles: ACCOUNTS })
+    writeDraft({ ...readDraft(), agentProfile: 'klaudiusz' })
+    renderNewTask()
+    await planTask('Plan on the selected account')
+    fireEvent.click(document.querySelector('[data-slot="plan-start"]') as HTMLElement)
+    await waitFor(() => expect(postedBody()).toMatchObject({ agentProfile: 'klaudiusz' }))
   })
 
   it('▶ Start omits a locked native default from the planned run request', async () => {

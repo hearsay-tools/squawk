@@ -16,6 +16,33 @@ const models: ModelOption[] = [
 ];
 
 describe('RunnerModelCatalog', () => {
+  it('caches accounts separately and refreshes when the native build/auth identity changes', async () => {
+    let identity = 'v1-auth1';
+    const discover = vi.fn(async () => models);
+    const catalog = new RunnerModelCatalog({ adapters: { antigravity: { discover, cacheKey: async () => identity } } });
+    await catalog.get('antigravity', { accountHome: '/one' });
+    expect((await catalog.get('antigravity', { accountHome: '/one' })).source).toBe('cache');
+    await catalog.get('antigravity', { accountHome: '/two' });
+    expect(discover).toHaveBeenCalledTimes(2);
+    identity = 'v2-auth1'; await catalog.get('antigravity', { accountHome: '/one' });
+    identity = 'v2-auth2'; await catalog.get('antigravity', { accountHome: '/one' });
+    expect(discover).toHaveBeenCalledTimes(4);
+    catalog.invalidate('antigravity'); await catalog.get('antigravity', { accountHome: '/one' });
+    expect(discover).toHaveBeenCalledTimes(5);
+  });
+  it('rechecks an identity probe invalidated before it settles', async () => {
+    let resolveIdentity!: (value: string) => void;
+    const cacheKey = vi.fn().mockImplementationOnce(() => new Promise<string>(resolve => { resolveIdentity = resolve; }))
+      .mockResolvedValue('new-auth');
+    const discover = vi.fn(async () => models);
+    const catalog = new RunnerModelCatalog({ adapters: { antigravity: { discover, cacheKey } } });
+    const pending = catalog.get('antigravity', { accountHome: '/one' });
+    catalog.invalidate('antigravity'); resolveIdentity('old-auth');
+    await pending;
+    expect(cacheKey).toHaveBeenCalledTimes(2);
+    expect((await catalog.get('antigravity', { accountHome: '/one' })).source).toBe('cache');
+    expect(discover).toHaveBeenCalledOnce();
+  });
   it('returns a live discovery, then a cached value for five minutes', async () => {
     let now = 1_000;
     const discover = vi.fn(async () => models);

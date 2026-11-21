@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys, workspaceQueryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import type { AgentProfile, AgentProfilesResponse } from '@open-mercato/cezar-api-client'
-import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
+import { RUNNER_IDS, RUNNERS_RESPONSE, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
@@ -122,10 +122,10 @@ function serve(
   )
 }
 
-function renderAccounts() {
+function renderAccounts(runners = RUNNERS_RESPONSE) {
   const client = createQueryClient()
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
-  seedRunners(client)
+  seedRunners(client, runners)
   client.setQueryData(queryKeys.health, {
     bootProject: 'boot',
     // The install/version rows come from the health probe — the one place a version can honestly
@@ -178,6 +178,16 @@ const waitForRow = (id: string) =>
   })
 
 describe('the agent accounts section', () => {
+  it('shows a connected API-key account without a folder or Connect hint', async () => {
+    serve({ editable: true, profiles: [profile({ id: 'default', provider: 'antigravity', isDefault: true,
+      exists: false, looksValid: false, status: { provider: 'antigravity', status: 'connected', requiresAccountHome: false,
+        hint: 'Uses GEMINI_API_KEY from the Squawk host environment; no account folder is required.' } })], profileCapableProviders: ['antigravity'], selections: {} });
+    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', terminalLogin: false, browserLogin: true }] });
+    await openTab('antigravity');
+    expect(await screen.findByText(/Uses GEMINI_API_KEY/)).toBeTruthy();
+    expect(document.querySelector('[data-slot="account-missing"]')).toBeNull();
+    expect(document.querySelector('[data-action="account-connect"]')).toBeNull();
+  });
   it('does not invent a discovered login when the selected provider has no account rows', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: [] })
     renderAccounts()

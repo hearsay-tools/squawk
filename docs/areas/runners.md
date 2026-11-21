@@ -36,11 +36,11 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `specSupport` | `spec-support.ts` | Which `AgentRunSpec` fields the wire honors |
 | `detection` | `detection.ts` | The PATH name, the `*_BIN` override, the dry-run rule, the version banner and the hints. The "Open in" menu reads the binary and the override from here |
 | `cli` | `cli.ts` | How a terminal starts and resumes the CLI, the installer's source and `openTarget`, the "Open in" menu entry's label and icon key |
-| `login`, `loadLogin()` | `login.ts`, `login-probe.ts` | The status and login arguments, the install hint and the status parser |
+| `login`, `loadLogin()`, optional `loadBrowserSignIn()` | `login.ts`, `login-probe.ts`, `browser-sign-in.ts` | Status, native terminal login arguments, optional browser consent/replay flow, and account-home/hint metadata |
 | `accounts` | `accounts.ts`; `homeDir()` in `definition.ts` | The account folder layout, the profile markers and the home slot (its key in `AgentHomePaths`, which `agentHomePaths()` in `paths.ts` builds from the registered runners). `homeDir(env, userHome)` resolves the runner's default home |
 | `env` | `env.ts` | The environment allow-list prefixes |
 | `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
-| `loadModelCatalog()` | `<id>-model-catalog.ts` | The host model discovery adapter |
+| `loadModelCatalog()`, optional `loadModelCatalogKey()` | `<id>-model-catalog.ts` | The host model discovery adapter, with optional native auth/build cache identity; requests can carry the selected account home |
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `runners/project-agents-file.ts`) names no runner |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
@@ -460,6 +460,30 @@ questions allow only the offered answers; unsupported option counts cancel with 
 See [the recorded wire](../runners/antigravity-wire.md).
 
 
-Antigravity status reports credential presence. It checks `GEMINI_API_KEY` or `GOOGLE_API_KEY`,
-or a stored OAuth sign-in under `GEMINI_HOME` (default `~/.gemini`) with the harness credential
-file present. It does not validate a key with the model API. Credential file contents stay unread.
+Antigravity status reports credential presence. `GEMINI_API_KEY` (or `GOOGLE_API_KEY`, mapped
+in the child) connects without an account folder; Settings names the environment source.
+Personal OAuth requires `auth.type: oauth-personal` in `antigravity-acp/settings.json` and
+`antigravity-acp/acp_token.json` under the selected `GEMINI_HOME` (default `~/.gemini`).
+Status does not read token contents or validate credentials against the API. Business and
+agent-platform sign-in are unsupported.
+
+Named accounts set their own `GEMINI_HOME`, `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`.
+Only native instruction files (`AGENTS.md`, `GEMINI.md`) and skill folders (`config/skills`,
+`antigravity-cli/skills`) link back to the user's default Gemini home; existing account files
+are preserved. Settings, conversations and credentials stay separate. The default account
+continues to use the discovered host home.
+
+Settings → Agent accounts offers personal Google sign-in through the browser. The consent URL
+stays in memory. If the browser cannot reach agy's loopback listener on the Squawk host, paste
+the failed redirect URL into that same dialog. The host replays only the captured listener's
+origin/path with matching state and a single code; it never follows redirect responses. Codes,
+URLs and tokens are not logged or saved by Squawk. Only agy writes credentials inside the account.
+The flow expires after five minutes and closes on Cancel. Hosted mode refuses these endpoints.
+
+Model discovery is lazy: a picker request opens one bounded ACP session in a temporary working
+folder, authenticates using the selected account, and reads `model` plus each model's
+`thinking_level` options. No prompt/model turn runs. The memory cache separates accounts and
+rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
+auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.
+The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same
+selected account home (ADR 0066).

@@ -151,6 +151,8 @@ describe('workspace provider API', () => {
 
     expect(response.status).toBe(200);
     const rows: Record<string, unknown> = {
+      antigravity: { provider: 'antigravity', status: 'connected', enabled: true, requiresAccountHome: false,
+        hint: 'Uses GEMINI_API_KEY from the Squawk host environment; no account folder is required.' },
       codex: { provider: 'codex', status: 'disconnected', enabled: false },
       opencode: {
         provider: 'opencode',

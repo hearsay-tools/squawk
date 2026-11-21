@@ -2,7 +2,7 @@ import type { AgentRunner, AgentRunSpecSupport } from './agent-runner.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { BackendModelMap } from './model-identity.ts';
 import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
-import type { ModelOption } from './runner-model-catalog.ts';
+import type { ModelOption, ModelDiscoveryContext } from './runner-model-catalog.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 import type { RunnerConfigFile } from './runner-config-files.ts';
@@ -36,7 +36,9 @@ export interface RunnerDefinition {
   /** The model presets, the model id map and the reader of the native default model. */
   readonly models: RunnerModels;
   /** Imports the runner's model catalog adapter, which lists the models its CLI offers. */
-  loadModelCatalog(): Promise<(options: { cwd: string }) => Promise<ModelOption[]>>;
+  loadModelCatalog(): Promise<(options: { cwd: string } & ModelDiscoveryContext) => Promise<ModelOption[]>>;
+  /** Runners whose native build/auth controls the list can invalidate before the ordinary TTL. */
+  loadModelCatalogKey?(): Promise<(options: ModelDiscoveryContext) => Promise<string>>;
   /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
   /** A filesystem catalog exposes only sources confirmed in the native harness. */
   readonly skillCatalog?: { readonly source: 'filesystem'; readonly projectRoots: readonly string[]; readonly userRoots: readonly string[]; readonly plugins: false; readonly evidence: string };
@@ -51,6 +53,8 @@ export interface RunnerDefinition {
   readonly login: RunnerLogin;
   /** Imports the runner's status parser (`runners/<id>/login-probe.ts`). */
   loadLogin(): Promise<RunnerLoginStatus>;
+  /** Optional native browser sign-in; no terminal command is invented for an ACP-only CLI. */
+  loadBrowserSignIn?(): Promise<(accountHome?: string) => Promise<RunnerBrowserSignIn>>;
   /** Account folder layout, profile markers, home slot (the `accounts` part). */
   readonly accounts: RunnerAccounts;
   /** The environment allow-list prefixes (the `env` part). */
@@ -155,6 +159,8 @@ export interface RunnerConfigFiles {
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
 export interface RunnerModelData {
+  /** false: expensive live discovery is picker-only, never part of task/worker admission. */
+  readonly catalogAtAdmission?: boolean;
   /**
    * The model picker's fallback suggestions, in order, before host discovery answers. The first is
    * auto (`id: ''`). The cockpit reads them from `GET /api/v1/runners`.
@@ -253,6 +259,16 @@ export interface RunnerLoginStatus {
    * Receives the same account environment as its native status command. Never returns secrets. */
   inspect?(result: ProviderCommandResult, env: NodeJS.ProcessEnv): Promise<ProviderConnectionState | null>;
   parse(result: ProviderCommandResult): ProviderConnectionState | null;
+  /** Explain the detected authentication mode without returning credentials. */
+  hint?(env: NodeJS.ProcessEnv, status: ProviderConnectionState): string | undefined;
+  requiresAccountHome?(env: NodeJS.ProcessEnv): boolean;
+}
+
+export interface RunnerBrowserSignIn {
+  readonly url: string;
+  readonly completion: Promise<void>;
+  redirect(url: string): Promise<void>;
+  close(): Promise<void>;
 }
 
 /** How one runner lays out an account, declared once per runner. Moved verbatim from
@@ -263,6 +279,8 @@ export interface AccountLayout {
    * carries no named accounts.
    */
   readonly envVar: string | null;
+  /** Additional child-home variables, each relative to the selected account folder. */
+  readonly envPaths?: Readonly<Record<string, string>>;
   /**
    * Whether a worker binding of the default account pins its discovered home. false: the default
    * spawns bare and follows the host env. A machine where the agent never ran has no home to pin.

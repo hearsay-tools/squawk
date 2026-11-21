@@ -50,6 +50,7 @@ import { toast } from '@/components/ui/toaster'
 import { agentPickerRows } from '@/components/default-agent-picker'
 import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
+import { BrowserSignInButton } from './browser-sign-in'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
 
@@ -400,9 +401,47 @@ function CatalogStatusOption({ runner, runners, catalog }: {
   return status ? <option disabled>{status}</option> : null
 }
 
+function AccountSignIn({ account, runners, status }: {
+  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']
+}) {
+  const connect = useConnectAgentAccount()
+  return <>
+          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.browserLogin ? (
+            <BrowserSignInButton provider={account.provider} {...(account.isDefault ? {} : { profileId: account.id })} label={account.label} />
+          ) : null}
+          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
+            <Button
+              type="button"
+              size="sm"
+              data-action="account-connect"
+              disabled={connect.isPending}
+              onClick={() =>
+                connect.mutate(
+                  { provider: account.provider, ...(account.isDefault ? {} : { profileId: account.id }) },
+                  {
+                    onSuccess: (result) =>
+                      toast(result.opened
+                        ? 'Finish signing in in the terminal, then Check again.'
+                        : 'This account is already connected.'),
+                    // The server answers a copyable command when it cannot open a terminal (hosted
+                    // mode, no emulator, a folder it refuses to embed). Showing it is the whole
+                    // point of failing closed rather than running the bare login.
+                    onError: (error: Error) =>
+                      toast(error instanceof ApiError && error.command
+                        ? `${error.message} — run: ${error.command}`
+                        : error.message, { tone: 'danger' }),
+                  },
+                )
+              }
+            >
+              Connect
+            </Button>
+          ) : null}
+  </>
+}
+
 function AccountRow({ account, runners, onRemove }: { account: AgentProfile; runners: RunnersResponse; onRemove: () => void }) {
   const routeId = agentAccountRouteId(account)
-  const connect = useConnectAgentAccount()
   const recheck = useRecheckAgentAccount()
   // The listing carries a status whenever the server has one cached — which, after its boot warm,
   // is the normal case. Only ask for a probe when it does not: an account added mid-session, or a
@@ -440,7 +479,7 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
                 yet. Showing `unknown` here would claim a verification that never ran. */}
             <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
             <span data-slot="account-status">{presentation?.label ?? 'Checking…'}</span>
-            {!account.exists ? (
+            {status?.requiresAccountHome === false ? null : !account.exists ? (
               <span data-slot="account-missing">— folder not created yet; Connect will make it</span>
             ) : !account.looksValid ? (
               <span data-slot="account-unrecognised">
@@ -448,39 +487,13 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
               </span>
             ) : null}
           </div>
+          {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
           </div>
         </div>
 
         {/* Public account actions stay separate from the opt-in identity details below. */}
         <div className="settings-account-actions">
-          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
-            <Button
-              type="button"
-              size="sm"
-              data-action="account-connect"
-              disabled={connect.isPending}
-              onClick={() =>
-                connect.mutate(
-                  { provider: account.provider, ...(account.isDefault ? {} : { profileId: account.id }) },
-                  {
-                    onSuccess: (result) =>
-                      toast(result.opened
-                        ? 'Finish signing in in the terminal, then Check again.'
-                        : 'This account is already connected.'),
-                    // The server answers a copyable command when it cannot open a terminal (hosted
-                    // mode, no emulator, a folder it refuses to embed). Showing it is the whole
-                    // point of failing closed rather than running the bare login.
-                    onError: (error: Error) =>
-                      toast(error instanceof ApiError && error.command
-                        ? `${error.message} — run: ${error.command}`
-                        : error.message, { tone: 'danger' }),
-                  },
-                )
-              }
-            >
-              Connect
-            </Button>
-          ) : null}
+          <AccountSignIn account={account} runners={runners} status={status} />
           <Button
             type="button"
             variant="outline"

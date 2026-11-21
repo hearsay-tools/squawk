@@ -45,3 +45,8 @@ export const providerRetrySchema = z.object({
 export const providerRouteParamsSchema = z.object({ provider: providerParamSchema });
 
 export const agentProfileRouteParamsSchema = z.object({ id: z.string() });
+
+export const providerSignInParamsSchema = z.object({ id: z.uuid() });
+export const providerSignInRedirectSchema = z.object({
+  redirectUrl: z.string().url().max(8192),
+}).strict();

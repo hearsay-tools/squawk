@@ -85,6 +85,7 @@ export function planTaskLine(task: string, max = 120): string {
 export function buildPlannedRunBody(opts: {
   task: string
   steps: readonly WorkflowStepDef[]
+  agentProfile?: string | null | undefined
   model: string
   /** Native coding-agent settings stay visible, but a locked model is never a request override. */
   modelsLocked?: boolean
@@ -99,11 +100,12 @@ export function buildPlannedRunBody(opts: {
   allowWorkers?: boolean
   allowMessaging?: boolean
 }): CreateRunInput {
-  const { task, steps, model, modelsLocked, effort, runner, runnerExplicit, defaultRunner, images, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging } =
+  const { task, steps, agentProfile, model, modelsLocked, effort, runner, runnerExplicit, defaultRunner, images, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging } =
     opts
   return {
     task,
     steps: [...steps],
+    ...(agentProfile ? { agentProfile } : {}),
     model: modelsLocked ? undefined : model || undefined,
     effort: modelsLocked ? undefined : effort || undefined,
     runner: runnerOverride(runner, defaultRunner, runnerExplicit),
