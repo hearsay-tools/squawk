@@ -22,6 +22,7 @@ import {
   __clearRepoHandleCacheForTests,
   resolveRepoHandle,
   detectGithubCached,
+  HEALTH_AVAILABILITY_TTL_MS,
   createGithubDriver,
   fetchGithubComments,
   fetchGithubCommentCounts,
@@ -681,7 +682,6 @@ describe('fetchGithubComments per-project cache isolation (step 2.6)', () => {
  *  every time the 60 s probe cache expired; the fix is stale-while-revalidate — keep serving the
  *  last-known answer while a background probe refreshes it, so the item never blinks out. */
 describe('detectGithubCached', () => {
-  const CACHE_MS = 60_000; // mirrors the constant in github.ts
   const repoRoot = '/repo/detect-swr'; // distinct root so the module-level cache is isolated
 
   /** Resolve `gh repo view` as if it succeeded — promisify(execFile) resolves with our value. */
@@ -711,15 +711,34 @@ describe('detectGithubCached', () => {
     await vi.advanceTimersByTimeAsync(0); // let the fire-and-forget probe settle
     expect(execFileMock).toHaveBeenCalledTimes(1);
 
-    // Warm: within the 60 s window the cached result is served with no new probe.
+    // Warm: within the health TTL the cached result is served with no new probe.
     expect(detectGithubCached(repoRoot)).toEqual({ available: true });
     expect(execFileMock).toHaveBeenCalledTimes(1);
 
     // Cache expires. The bug returned null here (item vanishes); the fix returns the stale value.
-    vi.setSystemTime(CACHE_MS + 1);
+    vi.setSystemTime(HEALTH_AVAILABILITY_TTL_MS + 1);
     expect(detectGithubCached(repoRoot)).toEqual({ available: true });
 
     // …and a background revalidate was kicked off exactly once for the stale read.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execFileMock).toHaveBeenCalledTimes(2);
+  });
+
+  // hearsay-tools/squawk#3658: health is read every 5 s and each `gh` start forks the server, so
+  // the list caches' 60 s lifetime would start one probe a minute.
+  it('starts no probe for 5 s health reads until the health TTL ends', async () => {
+    ghOk();
+    const root = '/repo/detect-health-ttl';
+    detectGithubCached(root);
+    await vi.advanceTimersByTimeAsync(0);
+    for (let at = 5_000; at < HEALTH_AVAILABILITY_TTL_MS; at += 5_000) {
+      vi.setSystemTime(at);
+      expect(detectGithubCached(root)).toEqual({ available: true });
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(HEALTH_AVAILABILITY_TTL_MS);
+    detectGithubCached(root);
     await vi.advanceTimersByTimeAsync(0);
     expect(execFileMock).toHaveBeenCalledTimes(2);
   });

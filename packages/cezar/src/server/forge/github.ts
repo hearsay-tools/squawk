@@ -2715,6 +2715,15 @@ async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
 }
 
 /**
+ * How old an availability answer `/health` serves before it probes again. Longer than `CACHE_MS`:
+ * a client reads health every 5 s, so the 60 s list-cache lifetime started one `gh repo view` per
+ * minute, and each start forks the server process (hearsay-tools/squawk#3658). The answer depends
+ * on the network and on GitHub access, so no file change can signal it. A direct `detectGithub`
+ * call (automation discovery) still refreshes the shared slot after 60 s.
+ */
+export const HEALTH_AVAILABILITY_TTL_MS = 10 * 60_000;
+
+/**
  * Non-blocking availability for `GET /api/health` (#major-health-latency): serves the last-known
  * probe immediately (stale-while-revalidate) and only returns `null` on a cold start, before the
  * first probe has ever warmed the cache. It NEVER shells out to `gh` on the request that reads it,
@@ -2722,14 +2731,14 @@ async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
  * "unknown until warm" is a valid answer.
  *
  * Serving the stale value while revalidating is what keeps the GitHub nav item from flickering:
- * without it, every time the 60 s cache expired this returned `null` for one 5 s health poll,
+ * without it, every time the cache expired this returned `null` for one 5 s health poll,
  * dropping `forge.available` and blinking the sidebar item out until the background probe warmed.
  */
 export function detectGithubCached(repoRoot: string): ForgeAvailability | null {
   if (productEnv('DRY_RUN') === '1') return { available: true };
   const hit = detectCache.get(repoRoot);
   const cached = hit?.result ?? null;
-  const fresh = hit !== undefined && Date.now() - hit.at < CACHE_MS;
+  const fresh = hit !== undefined && Date.now() - hit.at < HEALTH_AVAILABILITY_TTL_MS;
   if (!fresh) {
     void detectGithub(repoRoot).catch(() => {}); // revalidate off the request path
   }
