@@ -43,7 +43,7 @@ it('starts no process on a health refresh while nothing changed, and still shows
   await health();
   await vi.waitFor(async () => expect((await health()).checks).toHaveLength(1), { timeout: HANG_GUARD_MS });
 
-  const spawn = vi.spyOn(ChildProcess.prototype, 'spawn');
+  const spawn = vi.spyOn(ChildProcess.prototype as unknown as { spawn(options: unknown): void }, 'spawn');
   for (let tick = 0; tick < 3; tick++) {
     vi.setSystemTime(Date.now() + HEALTH_TTL_MS + 1);
     expect(await health()).toMatchObject({ repo: { branch: 'main' }, checks: [{ name: 'git', available: true }] });

@@ -53,6 +53,20 @@ function envConfig(env: NodeJS.ProcessEnv): string {
   return JSON.stringify([env.GIT_CONFIG_PARAMETERS ?? '', env.GIT_CONFIG_COUNT ?? '', ...pairs]);
 }
 
+/** A config value as Git reads it: quotes removed, `\\` escapes applied, a `#` or `;` comment cut. */
+function configValue(raw: string): string {
+  let value = '';
+  let quoted = false;
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i]!;
+    if (char === '\\') value += raw[++i] ?? '';
+    else if (char === '"') quoted = !quoted;
+    else if (!quoted && (char === '#' || char === ';')) break;
+    else value += char;
+  }
+  return value.trim();
+}
+
 /** The `path` values of a config file's `[include]` and `[includeIf]` sections, as Git resolves them. */
 function includePaths(text: string, file: string, env: NodeJS.ProcessEnv): string[] {
   const paths: string[] = [];
@@ -66,7 +80,7 @@ function includePaths(text: string, file: string, env: NodeJS.ProcessEnv): strin
     }
     const entry = including ? /^path\s*=\s*(.*)$/i.exec(line) : null;
     if (!entry) continue;
-    const value = entry[1]!.replace(/\s[#;].*$/, '').trim().replace(/^"(.*)"$/, '$1');
+    const value = configValue(entry[1]!);
     if (!value) continue;
     if (value.startsWith('~/')) {
       if (env.HOME) paths.push(join(env.HOME, value.slice(2)));

@@ -115,7 +115,7 @@ describe('getRepoInfo — remote discovery', () => {
  */
 describe('getRepoInfo — change-keyed cache', () => {
   let dir: string;
-  const spawned = () => vi.spyOn(ChildProcess.prototype, 'spawn');
+  const spawned = () => vi.spyOn(ChildProcess.prototype as unknown as { spawn(options: unknown): void }, 'spawn');
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'cez-git-cache-'));
@@ -172,6 +172,16 @@ describe('getRepoInfo — change-keyed cache', () => {
     const included = join(dir, 'remote.inc');
     writeFileSync(included, '[url "https://github.com/"]\n\tinsteadOf = fixture:\n');
     g(dir, 'config', 'include.path', '../remote.inc');
+    g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
+    writeFileSync(included, '[url "https://example.com/"]\n\tinsteadOf = fixture:\n');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://example.com/acme/demo.git');
+  });
+
+  it('follows a quoted include path with a space, relative to the config file inside .git', async () => {
+    const included = join(dir, '.git', 'my remote.inc');
+    writeFileSync(included, '[url "https://github.com/"]\n\tinsteadOf = fixture:\n');
+    writeFileSync(join(dir, '.git', 'config'), '[include]\n\tpath = "my remote.inc" ; quoted, with a comment\n', { flag: 'a' });
     g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
     expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
     writeFileSync(included, '[url "https://example.com/"]\n\tinsteadOf = fixture:\n');

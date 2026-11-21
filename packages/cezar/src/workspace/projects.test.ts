@@ -246,7 +246,7 @@ describe('workspace projects', () => {
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => time);
     try {
       expect(await probeProjectStatus(root)).toMatchObject({ status: 'ok', branch: 'main' });
-      const spawn = vi.spyOn(ChildProcess.prototype, 'spawn');
+      const spawn = vi.spyOn(ChildProcess.prototype as unknown as { spawn(options: unknown): void }, 'spawn');
       for (let tick = 0; tick < 3; tick++) {
         time += 5_000;
         expect(await probeProjectStatus(root)).toMatchObject({ status: 'ok', branch: 'main' });
