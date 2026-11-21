@@ -1,6 +1,6 @@
 import { ChildProcess, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { parseProcStat, pidExists, processStartToken, statFields } from './process-stat.ts';
+import { linuxBootId, parseProcStat, pidExists, processStartToken, statFields } from './process-stat.ts';
 
 interface ProcessRow { pid: number; parent: number; token: string }
 
@@ -8,11 +8,12 @@ function processRows(): ProcessRow[] {
   if (process.platform === 'linux') {
     let names: string[];
     try { names = readdirSync('/proc'); } catch { return []; }
+    const boot = linuxBootId();
     return names.filter(name => /^\d+$/.test(name)).flatMap(name => {
       try {
         const stat = readFileSync(`/proc/${name}/stat`, 'utf8');
         const parsed = parseProcStat(stat);
-        return parsed && parsed.state !== 'Z' ? [{ pid: Number(name), parent: Number(statFields(stat)[1]), token: parsed.startToken }] : [];
+        return parsed && parsed.state !== 'Z' ? [{ pid: Number(name), parent: Number(statFields(stat)[1]), token: boot ? `${boot}:${parsed.startToken}` : parsed.startToken }] : [];
       } catch { return []; } // A process can exit during the snapshot.
     });
   }
@@ -37,8 +38,7 @@ export class SessionDescendants {
     this.rootToken = child instanceof ChildProcess && child.pid ? this.token(child.pid) : undefined;
   }
   private token(pid: number): string | undefined {
-    const token = processStartToken(pid);
-    return process.platform === 'linux' ? token?.split(':').at(-1) : token;
+    return processStartToken(pid);
   }
   capture(): void {
     if (!this.child.pid || !this.rootToken) return;
