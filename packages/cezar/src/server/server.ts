@@ -17,7 +17,7 @@ import { providerConnectSchema, createAgentProfileSchema, updateAgentProfileSche
 import { planSchema, parseWorkflowSchema } from '@open-mercato/cezar-contract/workflow-requests';
 import { uiStateBody } from '@open-mercato/cezar-contract/ui-state-requests';
 import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
-import { refreshQuery, modelDiscoveryQuerySchema, strictRefreshQuerySchema, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
+import { refreshQuery, strictRefreshQuerySchema, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { mergeNumberParams, prChangesParams, prChangesQuery, mergeBodySchema } from '@open-mercato/cezar-contract/github-requests';
 import { gitCommitSchema, reclaimBodySchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { setConfigSchema, setAgentConfigSchema } from '@open-mercato/cezar-contract/config-requests';
@@ -145,6 +145,7 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-mode
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
+import { createModelsRoutes } from './models-routes.ts';
 import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
 import { allUsage, currentUsage, onUsage } from '../core/process-usage.ts';
 import { loadWorkflows } from '../workflows/load.ts';
@@ -1160,22 +1161,6 @@ export function createApp(deps: ServerDeps) {
   // cold, which is exactly the state every reader already handles.
   if (deps.socketHub) void warmAgentKnowledge();
 
-  // ---- chained family: host model catalog (workspace-level) ----
-  const modelsRoutes = new Hono<ProjectApiEnv>()
-    // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
-    // authoritative host-local catalog (#794), so the client compiles against exactly what this
-    // validates, including Claude stream-json discovery (#89).
-    .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
-      const query = { data: c.req.valid('query') };
-      const runner = registeredRunnerId(query.data.runner);
-      if (query.data.profileId === undefined || query.data.profileId === DEFAULT_AGENT_ACCOUNT_ID) {
-        return c.json(await modelCatalog.get(runner));
-      }
-      if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-      const resolved = await resolveWorkspaceProfile(runner, query.data.profileId);
-      if ('error' in resolved) return c.json({ error: resolved.error }, 400);
-      return c.json(await modelCatalog.get(runner, { accountHome: resolved.profile.path }));
-    });
 
   /**
    * Resolve `profileId` (absent = the discovered default) into a concrete account for `provider`.
@@ -4589,7 +4574,7 @@ export function createApp(deps: ServerDeps) {
   const workspaceV1 = new Hono()
     .route('/', liveRoutes)
     .route('/', healthRoutes).route('/', createRunnersRoutes())
-    .route('/', modelsRoutes)
+    .route('/', createModelsRoutes({ capabilities, resolveWorkspaceProfile, modelCatalog, hostedProfileRefusal }))
     .route('/', providersRoutes)
     .route('/', createProviderSignInRoutes({ localHandoff: () => capabilities().localHandoff, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))
     .route('/', projectsRoutes)

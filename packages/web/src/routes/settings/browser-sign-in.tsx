@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ProviderSignIn } from '@open-mercato/cezar-api-client'
-import { cancelProviderSignIn, getProviderSignIn, replayProviderSignIn, startProviderSignIn } from '@/api/client'
+import { cancelProviderSignIn, getProviderSignIn, replayProviderSignIn, startProviderSignIn } from '@/api/provider-sign-in'
 import { workspaceQueryKeys } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

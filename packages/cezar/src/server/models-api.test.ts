@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { agentProfileResponseSchema } from '@open-mercato/cezar-contract/agent-profiles';
 import { Home } from '../home/home.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 
@@ -87,7 +88,7 @@ describe('workspace model catalog API', () => {
       body: JSON.stringify({ provider: 'antigravity', label: 'Work', configDir: join(root, 'native-account') }),
     });
     expect(created.status).toBe(201);
-    const account = (await created.json()).profile;
+    const account = agentProfileResponseSchema.parse(await created.json()).profile;
     const path = `/api/v1/models?runner=antigravity&profileId=${account.id}`;
     expect((await apiRequest(server, path)).status).toBe(200);
     expect(homes).toEqual([join(root, 'native-account')]);

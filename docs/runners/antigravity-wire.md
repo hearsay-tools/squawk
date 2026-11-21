@@ -97,7 +97,10 @@ binary path, or the install hint tells the user to link the whole folder.
 confirmed by native file-access tracing). The harness's separately logged
 `$HOME/.config/antigravity/plugin-secrets.json` is plugin state, not this OAuth token.
 Named Squawk accounts relocate HOME and XDG_CONFIG_HOME too, while retaining links to
-user native instructions and skills. No credential values are copied into Squawk state.
+user native instructions and skills. Read-only Go symbol/disassembly inspection of 1.5.0
+confirms `authstore.pluginFallbackPath` calls `os.UserConfigDir()` then joins
+`antigravity/plugin-secrets.json`; on Linux that uses XDG_CONFIG_HOME or HOME/.config.
+The live API-key runs did not access this plugin store. No credential values are copied into Squawk state.
 
 ## Models and the API host
 
