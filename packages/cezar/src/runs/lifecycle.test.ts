@@ -67,6 +67,50 @@ describe('RunLifecycle', () => {
     ]);
   });
 
+  it('reports the status of this write, not one a nested write set during run.updated', () => {
+    const lifecycle = new RunLifecycle();
+    const log: string[] = [];
+    const run = makeRunRecord({ status: RUN_STATUS.queued });
+    const before = snapshotRun(run);
+    run.title = 'renamed';
+    // A listener that starts the run: a nested write changes the held record and publishes its own change.
+    lifecycle.subscribe({ 'run.updated': ({ run: held }) => {
+      if (held.status !== RUN_STATUS.queued) return;
+      const nestedBefore = snapshotRun(held);
+      held.status = RUN_STATUS.running;
+      publishRunWrite(lifecycle, held, nestedBefore, undefined, 'start');
+    } });
+    lifecycle.subscribe(recording(log));
+    publishRunWrite(lifecycle, run, before);
+    expect(log).toEqual([
+      'a:run.updated:queued->running',
+      'a:run.status-changed:start:queued->running',
+      'a:run.updated:queued->running',
+    ]);
+  });
+
+  it('keeps the outer transition when a nested write moves the status again during run.updated', () => {
+    const lifecycle = new RunLifecycle();
+    const log: string[] = [];
+    const run = makeRunRecord({ status: RUN_STATUS.queued });
+    const before = snapshotRun(run);
+    run.status = RUN_STATUS.running;
+    lifecycle.subscribe({ 'run.updated': ({ run: held }) => {
+      if (held.status !== RUN_STATUS.running) return;
+      const nestedBefore = snapshotRun(held);
+      held.status = RUN_STATUS.waiting;
+      publishRunWrite(lifecycle, held, nestedBefore, undefined, 'park');
+    } });
+    lifecycle.subscribe(recording(log));
+    publishRunWrite(lifecycle, run, before, undefined, 'start');
+    expect(log).toEqual([
+      'a:run.updated:running->waiting',
+      'a:run.status-changed:park:running->waiting',
+      'a:run.updated:queued->waiting',
+      'a:run.status-changed:start:queued->running',
+    ]);
+  });
+
   it('calls listeners in subscription order, and logs a throwing listener with its event type and run id', () => {
     const lifecycle = new RunLifecycle();
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});

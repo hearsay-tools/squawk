@@ -1917,7 +1917,7 @@ export class RunStore extends EventEmitter {
       completionArchiveBlocker: run => this.completionArchiveBlocker(run),
       stageArchive: (staged, run, archived) => this.stageArchive(staged, run, archived, exits),
     });
-    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined]));
+    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined])), to = new Map([...staged].map(([id, next]) => [id, next?.status]));
     if (!this.db) throw this.openFailure ?? new Error('runs database unavailable: nothing can be saved');
     this.assertWritable(staged);
     this.persist(staged);
@@ -1934,7 +1934,7 @@ export class RunStore extends EventEmitter {
     try {
       for (const id of staged.keys()) {
         const run = this.held.get(id);
-        if (run) { publishRunWrite(this.published, run, before.get(id), source, exits.get(id)); this.emit('run', run, source); }
+        if (run) { publishRunWrite(this.published, run, before.get(id), source, exits.get(id), to.get(id)); this.emit('run', run, source); }
         else { this.published.publish('run.deleted', { runId: id }); this.emit('deleted', id); }
       }
     } finally {

@@ -398,6 +398,24 @@ describe('each write path publishes its before, source and exit', () => {
     expect(changes.map((delivery) => (delivery.payload as RunLifecycleEvents['run.status-changed']).exit)).toEqual(exit ? [exit] : []);
   });
 
+  it('a commit of several runs keeps each run\'s transition when a listener writes a sibling before it is published', () => {
+    const fixture = setup();
+    const { store } = fixture;
+    const { rootId, workerId } = family(fixture);
+    setRunStatus(store, workerId, RUN_STATUS.waiting, HOLD);
+    const deliveries = record(store);
+    let nested = false;
+    store.lifecycle.subscribe({ 'run.updated': ({ run }) => {
+      if (run.id !== rootId || nested) return;
+      nested = true;
+      setRunStatus(store, workerId, RUN_STATUS.done);
+    } });
+    store.setArchived(rootId, true);
+    const changes = deliveries.filter((delivery) => delivery.type === 'run.status-changed' && delivery.payload.run.id === workerId)
+      .map((delivery) => { const { exit, from, to } = delivery.payload as RunLifecycleEvents['run.status-changed']; return `${exit}:${from}->${to}`; });
+    expect(changes).toEqual(['patch:failed->done', 'withdraw-hold:waiting->failed']);
+  });
+
   it('owned-run creation publishes run.created from the commit', () => {
     const fixture = setup();
     const deliveries = record(fixture.store);
