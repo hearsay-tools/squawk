@@ -143,6 +143,7 @@ export interface RunAccess {
   sourceDataDir: RunStore['sourceDataDir'];
   redactText: RunStore['redactText'];
   isFallbackRun: RunStore['isFallbackRun'];
+  runOwnership: RunStore['runOwnership'];
 }
 
 /** The hold that keeps a run loaded while a process works on it. Not in the spec's table: retention needs it. */
