@@ -1,0 +1,327 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants to schedule a one-shot timer in 20 seconds"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " with the prompt \"reply with the word TIMER-FIRED\".\nLet's look at the `schedule` tool:\n-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " `DurationSeconds`: 20\n- `Prompt`: \"reply with the word TIMER-FIRED\"\n\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "'s call `schedule`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13417,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants to schedule a one-shot timer in 20 seconds with the prompt \"reply with the word TIMER-FIRED\".\nLet's look at the `schedule` tool:\n- `DurationSeconds`: 20\n- `Prompt`: \"reply with the word TIMER-FIRED\"\n\nLet's call `schedule`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_6027393927065967360",
+      "name": "schedule",
+      "title": "Run schedule",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "DurationSeconds": 20,
+        "Prompt": "reply with the word TIMER-FIRED"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The timer has been scheduled successfully. We should stop and wait for the notification when"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " the timer fires. As instructed in the guidelines: \"After launching anything that performs work asynchronously, you may continue other work or simply"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " stop by calling no more tools. The system will notify you when there is something to process.\"\n\nLet's respond"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " to the user confirming the schedule was set."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The timer has been scheduled successfully. We should stop and wait for the notification when the timer fires. As instructed in the guidelines: \"After launching anything that performs work asynchronously, you may continue other work or simply stop by calling no more tools. The system will notify you when there is something to process.\"\n\nLet's respond to the user confirming the schedule was set."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "I have scheduled a timer for 20 seconds. I will notify you when"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": " it fires."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13780,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "I have scheduled a timer for 20 seconds. I will notify you when it fires."
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_6027393927065967360",
+      "name": "schedule",
+      "title": "Run schedule",
+      "toolKind": "other",
+      "status": "failed",
+      "input": {
+        "DurationSeconds": 20,
+        "Prompt": "reply with the word TIMER-FIRED"
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 5326,
+      "output": 193,
+      "total": 27197,
+      "reasoning": 147,
+      "cacheRead": 21678,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_6027393927065967360",
+      "name": "schedule",
+      "title": "Run schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "DurationSeconds": 20,
+        "Prompt": "reply with the word TIMER-FIRED"
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The timer fired, and the prompt received is \"reply with the word TIMER-FIRED\".\nLet'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "s reply with `TIMER-FIRED`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The timer fired, and the prompt received is \"reply with the word TIMER-FIRED\".\nLet's reply with `TIMER-FIRED`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "\n\nTIMER-FIRED"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14018,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-7"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "\n\nTIMER-FIRED"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-8",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "reasoning",
+    "delta": "The user asks: \"Did the timer fire? Reply YES or NO.\"\nSince the timer fired and we received the message `reply with the word TIMER-FIRED`, the answer is YES."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-8",
+      "text": "The user asks: \"Did the timer fire? Reply YES or NO.\"\nSince the timer fired and we received the message `reply with the word TIMER-FIRED`, the answer is YES."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-9",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "YES"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14166,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-9",
+      "role": "assistant",
+      "text": "YES"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-7",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3251,
+      "output": 41,
+      "total": 14166,
+      "reasoning": 40,
+      "cacheRead": 10874,
+      "cacheWrite": 0
+    }
+  }
+]

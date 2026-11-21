@@ -1,0 +1,170 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to use the shell command tool to run `echo probe-42` in the workspace and reply with its output only.\n\nLet's call `run_command` with `CommandLine=\"echo probe-4"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "2\"`, `toolSummary=\"Run echo command\"`, `WaitMsBeforeAsync=5000`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 11973,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to use the shell command tool to run `echo probe-42` in the workspace and reply with its output only.\n\nLet's call `run_command` with `CommandLine=\"echo probe-42\"`, `toolSummary=\"Run echo command\"`, `WaitMsBeforeAsync=5000`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_8876758024865487100",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo probe-42"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8876758024865487100",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo probe-42"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8876758024865487100",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo probe-42"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_8876758024865487100",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "echo probe-42"
+      },
+      "output": "{\"output\":\"Created At: 2026-11-22T00:33:42+01:00\\nCompleted At: 2026-11-22T00:33:43+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nprobe-42\\r\\n\",\"exit_code\":0}",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The command output is `probe-42\\n`. The user asked to reply with its output only.\nLet's respond with `probe-42`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The command output is `probe-42\\n`. The user asked to reply with its output only.\nLet's respond with `probe-42`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "probe-42"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12101,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "probe-42"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 7169,
+      "output": 152,
+      "total": 24074,
+      "reasoning": 104,
+      "cacheRead": 16753,
+      "cacheWrite": 0
+    }
+  }
+]

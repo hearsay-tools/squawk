@@ -1,0 +1,4 @@
+{"t":0.175,"from":"client","frame":{"jsonrpc":"2.0","id":2,"method":"authenticate","params":{"methodId":"gemini-api-key"}}}
+{"t":0.266,"from":"agent","frame":{"jsonrpc":"2.0","error":{"code":-32602,"message":"GEMINI_API_KEY is not set; pass an API key in _meta.apiKey or set the GEMINI_API_KEY environment variable."},"id":2}}
+{"t":0.266,"from":"client","frame":{"jsonrpc":"2.0","id":3,"method":"session/new","params":{"cwd":"/work/project","mcpServers":[]}}}
+{"t":0.267,"from":"agent","frame":{"jsonrpc":"2.0","error":{"code":-32000,"message":"Authentication required"},"id":3}}

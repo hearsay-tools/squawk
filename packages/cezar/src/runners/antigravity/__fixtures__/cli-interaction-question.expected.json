@@ -1,0 +1,327 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " me to use the `ask_question` tool to ask which color they prefer, offering exactly"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " two options: red and blue.\nAfter they answer, I should reply with their answer.\n\nLet's check the parameters"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " for `ask_question`:\n`questions`: list of questions, each with `question` and `options` (min"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Items: 2, recommended answer first with `(Recommended)` prefix, unnumbered and without 'Other' option).\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "'s see:\n- question: \"Which color do you prefer?\"\n- options: `[\"(Recommended) Red\", \""
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Blue\"]` or similar. Wait, the prompt says \"offering exactly two options: red and blue\". Let'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "s provide `[\"(Recommended) Red\", \"Blue\"]` or `[\"(Recommended) Blue\", \"Red\"]`.\n\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Let's call `ask_question`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9407,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to use the `ask_question` tool to ask which color they prefer, offering exactly two options: red and blue.\nAfter they answer, I should reply with their answer.\n\nLet's check the parameters for `ask_question`:\n`questions`: list of questions, each with `question` and `options` (minItems: 2, recommended answer first with `(Recommended)` prefix, unnumbered and without 'Other' option).\nLet's see:\n- question: \"Which color do you prefer?\"\n- options: `[\"(Recommended) Red\", \"Blue\"]` or similar. Wait, the prompt says \"offering exactly two options: red and blue\". Let's provide `[\"(Recommended) Red\", \"Blue\"]` or `[\"(Recommended) Blue\", \"Red\"]`.\n\nLet's call `ask_question`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_9690246566483500780",
+      "name": "ask_question",
+      "title": "Run ask_question",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "questions": [
+          {
+            "options": [
+              "(Recommended) Red",
+              "Blue"
+            ],
+            "question": "Which color do you prefer?"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_9690246566483500780",
+      "name": "ask_question",
+      "title": "Run ask_question",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "questions": [
+          {
+            "options": [
+              "(Recommended) Red",
+              "Blue"
+            ],
+            "question": "Which color do you prefer?"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "\nWhich color do you prefer?\n- [1] (Recommended) Red\n- [2] Blue\n"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "\nWhich color do you prefer?\n- [1] (Recommended) Red\n- [2] Blue\n"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_9690246566483500780",
+      "name": "ask_question",
+      "title": "Run ask_question",
+      "toolKind": "other",
+      "status": "failed",
+      "input": {
+        "questions": [
+          {
+            "options": [
+              "(Recommended) Red",
+              "Blue"
+            ],
+            "question": "Which color do you prefer?"
+          }
+        ]
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 9185,
+      "output": 222,
+      "total": 9407,
+      "reasoning": 185,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-4"
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_9690246566483500780",
+      "name": "ask_question",
+      "title": "Run ask_question",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "questions": [
+          {
+            "options": [
+              "(Recommended) Red",
+              "Blue"
+            ],
+            "question": "Which color do you prefer?"
+          }
+        ]
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_9690246566483500780",
+      "name": "ask_question",
+      "title": "Run ask_question",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "questions": [
+          {
+            "options": [
+              "(Recommended) Red",
+              "Blue"
+            ],
+            "question": "Which color do you prefer?"
+          }
+        ]
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The user selected \"blue\".\nThe instruction says: \"After I answer"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": ", reply with my answer.\"\nLet's reply with their answer (blue)."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The user selected \"blue\".\nThe instruction says: \"After I answer, reply with my answer.\"\nLet's reply with their answer (blue)."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "blue"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9517,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "blue"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-4",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3406,
+      "output": 33,
+      "total": 9517,
+      "reasoning": 32,
+      "cacheRead": 6078,
+      "cacheWrite": 0
+    }
+  }
+]

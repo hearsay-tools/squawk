@@ -1,0 +1,543 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to call the `echo` tool of the MCP server named `squawk` with"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " text `\"probe-1\"`, and reply with its output only.\n\nLet's check the declared tools for MCP servers:\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "We have:\n`default_api:mcp_squawk_echo`\nParameters: `text` (string"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "), `toolSummary` (string).\n\nLet's call `default_api:mcp_squawk_"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "echo` with `text=\"probe-1\"` and `toolSummary=\"Echo probe text\"`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10177,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to call the `echo` tool of the MCP server named `squawk` with text `\"probe-1\"`, and reply with its output only.\n\nLet's check the declared tools for MCP servers:\nWe have:\n`default_api:mcp_squawk_echo`\nParameters: `text` (string), `toolSummary` (string).\n\nLet's call `default_api:mcp_squawk_echo` with `text=\"probe-1\"` and `toolSummary=\"Echo probe text\"`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_8780525026460829537",
+      "name": "mcp_squawk_echo",
+      "title": "Run mcp_squawk_echo",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "text": "probe-1",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8780525026460829537",
+      "name": "mcp_squawk_echo",
+      "title": "Run mcp_squawk_echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "text": "probe-1",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_8780525026460829537",
+      "name": "mcp_squawk_echo",
+      "title": "Run mcp_squawk_echo",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "text": "probe-1",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The output"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " of the echo tool is:\n```\nCreated At: 2026-1"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "1-22T00:33:37+01:00\nCompleted At: "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "2026-11-22T00:33:37+01:0"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "0\necho: probe-1\n```\nWait, the user requested: \"Reply with its output only.\"\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "Let's check what the exact output returned by the tool is or if we should format it. The tool output has"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " `output: \"Created At: ...\\nCompleted At: ...\\necho: probe-1\"`.\nLet's reply"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " with the exact output of the tool or the text part? \"Reply with its output only.\"\nUsually, the MCP tool execution"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " response contains the output string. The output string is:\n```\nCreated At: 2026-11"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "-22T00:33:37+01:00\nCompleted At: 2"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "026-11-22T00:33:37+01:00"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "\necho: probe-1\n```\nWait, let's look at the tool response structure:\n`output:"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " \"Created At: 2026-11-22T00:33:37"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "+01:00\\nCompleted At: 2026-11-22T0"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "0:33:37+01:00\\necho: probe-1\"`\nLet'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "s reply with that exact output string."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The output of the echo tool is:\n```\nCreated At: 2026-11-22T00:33:37+01:00\nCompleted At: 2026-11-22T00:33:37+01:00\necho: probe-1\n```\nWait, the user requested: \"Reply with its output only.\"\nLet's check what the exact output returned by the tool is or if we should format it. The tool output has `output: \"Created At: ...\\nCompleted At: ...\\necho: probe-1\"`.\nLet's reply with the exact output of the tool or the text part? \"Reply with its output only.\"\nUsually, the MCP tool execution response contains the output string. The output string is:\n```\nCreated At: 2026-11-22T00:33:37+01:00\nCompleted At: 2026-11-22T00:33:37+01:00\necho: probe-1\n```\nWait, let's look at the tool response structure:\n`output: \"Created At: 2026-11-22T00:33:37+01:00\\nCompleted At: 2026-11-22T00:33:37+01:00\\necho: probe-1\"`\nLet's reply with that exact output string."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "Created At: 2026-11-22T"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "00:33:37+01:00\nCompleted At: 2026-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "11-22T00:33:37+01:00\necho: probe"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10673,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "Created At: 2026-11-22T00:33:37+01:00\nCompleted At: 2026-11-22T00:33:37+01:00\necho: probe-1"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 12199,
+      "output": 562,
+      "total": 20850,
+      "reasoning": 466,
+      "cacheRead": 8089,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-5"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "The user wants me to call the `echo` tool of the MCP server named `cezar_ci"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "_a1b2c3d4e5f60718293a4b5"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "c6d7e8f90` with text `\"probe-2\"`, and reply with its output only"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": ".\n\nLet's check the tools:\n`default_api:mcp_cezar_ci_a1b2"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "c3d4e5f60718293a4b5c6d7e"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "8f90_echo`\nParameters: `text` (string), `toolSummary` (string).\n\nLet's"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": " call `default_api:mcp_cezar_ci_a1b2c3d4e5"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "f60718293a4b5c6d7e8f90_echo"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "` with `text=\"probe-2\"`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 11418,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": "The user wants me to call the `echo` tool of the MCP server named `cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90` with text `\"probe-2\"`, and reply with its output only.\n\nLet's check the tools:\n`default_api:mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo`\nParameters: `text` (string), `toolSummary` (string).\n\nLet's call `default_api:mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo` with `text=\"probe-2\"`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_7889892387134202802",
+      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "text": "probe-2",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_7889892387134202802",
+      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "text": "probe-2",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_7889892387134202802",
+      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "text": "probe-2",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_7889892387134202802",
+      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "text": "probe-2",
+        "toolSummary": "Echo probe text"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-7",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": "The output is:\n```\nCreated At: 2026-11-22T00"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": ":33:40+01:00\nCompleted At: 2026-11"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": "-22T00:33:40+01:00\necho: probe-2"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": "\n```\nLet's reply with its output only."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-7",
+      "text": "The output is:\n```\nCreated At: 2026-11-22T00:33:40+01:00\nCompleted At: 2026-11-22T00:33:40+01:00\necho: probe-2\n```\nLet's reply with its output only."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "Created At: 2026-11-22"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "T00:33:40+01:00\nCompleted At: 2026"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "-11-22T00:33:40+01:00\necho:"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": " probe-2"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 11684,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": "Created At: 2026-11-22T00:33:40+01:00\nCompleted At: 2026-11-22T00:33:40+01:00\necho: probe-2"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-5",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 6001,
+      "output": 420,
+      "total": 23102,
+      "reasoning": 289,
+      "cacheRead": 16681,
+      "cacheWrite": 0
+    }
+  }
+]
