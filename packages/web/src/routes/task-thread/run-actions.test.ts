@@ -466,3 +466,10 @@ describe('the composer slot holds exactly one of Stop and Archive (#281)', () =>
     expect(runActionFlags({ ...record, archived: true }).archive).toBe(true)
   })
 })
+
+
+it('hides terminal actions and the resume hint for a protocol-only runner', () => {
+  const record = run(RUN_STATUS.done, { cliHandoff: false, cliResumeCommand: 'stale command' })
+  expect(runActionFlags(record).terminal).toBe(false)
+  expect(resumeHint(record)).toBeUndefined()
+})

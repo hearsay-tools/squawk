@@ -1,3 +1,5 @@
+import { filterAntigravityUpdate, antigravityUpdateError } from './wire-updates.ts';
+import { askPayloadOf } from '@open-mercato/cezar-contract/pending-ask';
 import { rm } from 'node:fs/promises';
 import { z } from 'zod';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlock, SessionOptions } from '../../core/agent-runner.ts';
@@ -23,11 +25,6 @@ function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown
     return block;
   });
 }
-export function filterAntigravityUpdate(update: Record<string, unknown>): boolean {
-  const content = z.object({ text: z.string() }).safeParse(update.content);
-  return !(update.sessionUpdate === 'agent_message_chunk' && content.success && content.data.text.includes('Concurrent receive_steps() calls are not supported'));
-}
-
 /** Owns process lifetime. AcpSession owns wire parsing and outstanding native requests. */
 export class AntigravitySession implements AgentSession {
   readonly result: Promise<AgentRunResult>;
@@ -40,7 +37,9 @@ export class AntigravitySession implements AgentSession {
   private readonly queue: ContentBlock[][] = [];
   private bridge: Awaited<ReturnType<typeof antigravityMcp>>;
   private ready = false;
-  private busy = false;
+  private inflight = 0;
+  private get busy(): boolean { return this.inflight > 0; }
+  private providerError: string | undefined;
   private accepting = true;
   private requestedClose = false;
   private timedOut = false;
@@ -82,7 +81,12 @@ export class AntigravitySession implements AgentSession {
       backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, event: event => this.emit(event),
       onActivity: () => this.options.onActivity?.(),
       uiEvent: event => {
-        if (event.type === 'ask.requested') this.pendingAsk = event.requestId;
+        if (event.type === 'turn.completed' && event.usage) {
+          this.output.tokensUsed += event.usage.total;
+          this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
+        }
+        const ask = askPayloadOf(event);
+        if (ask) this.pendingAsk = ask.requestId;
         this.options.onUiEvent?.(event);
       }, hooks: {
         selectAuthMethod: hello => this.runtime.env.GEMINI_API_KEY && hello.authMethods.some(method => method.id === 'gemini-api-key') ? 'gemini-api-key' : undefined,
@@ -92,7 +96,11 @@ export class AntigravitySession implements AgentSession {
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
         sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } },
           ...(spec.additionalDirectories ? { additionalDirectories: spec.additionalDirectories } : {}) }),
-        filterUpdate: filterAntigravityUpdate,
+        filterUpdate: update => {
+          this.providerError = antigravityUpdateError(update) ?? this.providerError;
+          return filterAntigravityUpdate(update);
+        },
+        promptError: () => { const error = this.providerError; this.providerError = undefined; return error; },
       },
     });
   }
@@ -115,13 +123,13 @@ export class AntigravitySession implements AgentSession {
   }
   private submit(content: ContentBlock[]): Promise<void> {
     this.clearAutoEnd();
-    if (this.busy) return this.acp.steer(contentBlocks(content));
-    this.busy = true;
-    return this.acp.prompt(contentBlocks(content)).then(value => {
-      const usage = antigravityUsage(value.usage);
-      if (usage) { this.output.tokensUsed += usage.total; this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed }); }
-    }).finally(() => {
-      this.busy = false; this.pendingAsk = undefined;
+    const steered = this.busy;
+    this.inflight++;
+    const operation = steered ? this.acp.steer(contentBlocks(content)) : this.acp.prompt(contentBlocks(content));
+    return operation.then(() => {}).finally(() => {
+      this.inflight--;
+      if (this.busy) return;
+      this.pendingAsk = undefined;
       if (this.open && this.queue.length) void this.submit(this.queue.shift()!).catch(error => this.fail(error));
       else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleEnd(); }
     });
@@ -177,8 +185,6 @@ export class AntigravitySession implements AgentSession {
   private fail(error: unknown): void {
     if (!this.open) return;
     this.failure = error instanceof Error ? error : new Error(String(error));
-    this.emit({ type: 'error', message: this.failure.message });
-    this.options.onUiEvent?.({ type: 'session.error', message: this.failure.message, fatal: true });
     this.interrupt();
   }
   private clearAutoEnd(): void { clearTimeout(this.autoEnd); this.autoEnd = undefined; }
@@ -195,8 +201,15 @@ export class AntigravitySession implements AgentSession {
     await this.bridge?.close();
     await rm(this.runtime.temp, { recursive: true, force: true });
     if (this.timedOut) throw new Error(`Antigravity timed out after ${this.limit}ms`);
-    if (this.failure) throw this.failure;
-    if (!this.requestedClose && (code !== 0 || this.busy)) throw new Error(`Antigravity exited ${code}: ${this.stderr.join('').trim()}`);
+    const stderr = this.stderr.join('').trim();
+    const unexpected = !this.requestedClose && (code !== 0 || this.busy);
+    if (this.failure || unexpected) {
+      const message = [this.failure?.message ?? `Antigravity exited ${code}`, stderr].filter(Boolean).join(': ');
+      const error = new Error(message);
+      this.emit({ type: 'error', message });
+      this.options.onUiEvent?.({ type: 'session.error', message, fatal: true });
+      throw error;
+    }
     this.emit({ type: 'done' }); this.output.text = this.output.text.trim(); return this.output;
   }
 }

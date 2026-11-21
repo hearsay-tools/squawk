@@ -17,7 +17,10 @@ export function antigravityTool(update: Record<string, unknown>, previous?: UiTo
   if (name) result.name = name;
   if (command !== undefined) result.input = { command, ...(cwd === undefined ? {} : { cwd }) };
   Object.assign(result, toolOutput(update.rawOutput));
-  if (name === 'Task') result.toolKind = 'task';
+  if (name === 'Task') {
+    result.toolKind = 'task';
+    if (input && !Object.keys(input).length) result.input = previous?.input;
+  }
   return result;
 }
 

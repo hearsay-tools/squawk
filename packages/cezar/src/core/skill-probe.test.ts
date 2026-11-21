@@ -18,7 +18,7 @@ const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSour
   { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 member.once('message', () => process.exit(1));`;
 
-for (const runner of BUILT_IN_RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
+for (const runner of BUILT_IN_RUNNER_IDS.filter(id => runnerDefinition(id).skillCatalog?.source !== 'filesystem')) describe(`${runner} skill probe process cleanup`, () => {
   // Windows uses taskkill trees; leaderless POSIX process groups do not exist there.
   for (const failure of ['hung', 'crashed', 'leader-first'] as const) it.runIf(failure !== 'leader-first' || process.platform !== 'win32')(`${failure}: unavailable with a reason and no child left`, async () => {
     let child!: ChildProcessWithoutNullStreams;

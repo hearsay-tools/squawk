@@ -39,6 +39,9 @@ const originalEnv = {
 };
 
 beforeEach(() => {
+  for (const golden of Object.values(goldens)) {
+    for (const [name, value] of Object.entries(golden.connectedEnv ?? {})) vi.stubEnv(name, value);
+  }
   delete process.env.CEZ_AGENT_MODELS_LOCKED;
   delete process.env.CEZ_DRY_RUN;
   delete process.env.CEZ_CLAUDE_BIN;
@@ -50,6 +53,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;

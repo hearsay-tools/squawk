@@ -170,3 +170,8 @@ describe('gitActionPolicy — terminal handoff (localHandoff gate)', () => {
     expect(action?.reason).toContain(phrase)
   })
 })
+
+
+it('omits terminal handoff when the runner has no interactive CLI', () => {
+  expect(gitActionPolicy(withState({ cliHandoff: false })).menu).toEqual([])
+})

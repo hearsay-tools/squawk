@@ -3,11 +3,12 @@ import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SC
 export const ANTIGRAVITY_MOCK = {
   script: 'mock-acp.mjs', toolGrantObservation: 'permission-policy', promptResponseEndsTurn: true, defaultApprovalEcho: 'Approval response: allow', malformedApprovalEcho: 'Malformed permission refused', binEnv: 'HSQ_ANTIGRAVITY_BIN',
   scenarios: { ...COMMON_MOCK_SCENARIOS, ...STDIO_ASK_MOCK_SCENARIOS, ...PROVIDER_ERROR_MOCK_SCENARIOS,
-    ...NATIVE_APPROVAL_MOCK_SCENARIOS, ask: 'mock:ask-native', 'ask-resume': 'mock:ask-native mock:resume-cezar-done', 'permission-default': 'mock:permission-default', 'approval-malformed': 'mock:approval-malformed', 'provider-unavailable': 'mock:provider-unavailable' },
+    ...NATIVE_APPROVAL_MOCK_SCENARIOS, 'ask-resume': 'mock:ask-native mock:resume-cezar-done', 'permission-default': 'mock:permission-default', 'approval-malformed': 'mock:approval-malformed', 'provider-unavailable': 'mock:provider-unavailable' },
   askResumeCases: [{ kind: 'interaction', scenario: 'ask-resume', answer: 'Question: Vitest', header: 'Question' }],
   scenarioEnv: { approval: { HSQ_APPROVAL_GATE: '1' }, 'approval-turn-end': { HSQ_APPROVAL_GATE: '1' } },
-  approvalDecisions: [{ pick: 'Allow once', echo: 'Approval response: allow' }, { pick: 'Deny', echo: 'Approval response: deny' }],
+  approvalDecisions: [{ pick: 'allow', echo: 'Approval response: allow' }, { pick: 'deny', echo: 'Approval response: deny' }],
   parityExemptions: {
+    UI_PLAN: { kind: 'capability-absent', reason: 'Antigravity ACP 1.5.0 sends no plan update; /plan writes an artifact instead (docs/runners/antigravity-wire.md, Gaps that need a parity exemption).' },
     D1: { kind: 'capability-absent', reason: 'Antigravity ACP 1.5.0 has no native cross-session messaging tool to disable.' },
     D3: { kind: 'capability-absent', reason: 'Antigravity ACP 1.5.0 has no native cross-session messaging tool.' },
     P3: { kind: 'scenario-unconstructible', reason: 'ACP has no provider notification that resolves its own pending permission.' },

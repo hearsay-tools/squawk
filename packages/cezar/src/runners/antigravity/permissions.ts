@@ -27,22 +27,28 @@ function allowedTools(grant: ToolGrant): readonly string[] | undefined {
   }
 }
 
+function selected(request: AcpPermissionRequest, permitted: boolean): AcpPermissionOutcome {
+  const option = request.options.find(option => option.kind === (permitted ? 'allow_once' : 'reject_once'));
+  return option ? { outcome: 'selected', optionId: option.optionId } : { outcome: 'cancelled' };
+}
+function commandAllowed(input: unknown, prefixes: readonly string[]): boolean {
+  if (!prefixes.length) return true;
+  const parsed = z.object({ command: z.string() }).safeParse(input);
+  if (!parsed.success || /[;&|`$<>\\\n\r]/.test(parsed.data.command)) return false;
+  return prefixes.some(prefix => parsed.data.command === prefix || parsed.data.command.startsWith(`${prefix} `));
+}
+
 /** Every process is returned to default mode before prompting: saved yolo must not bypass policy. */
 export function permissionPolicy(grant: ToolGrant, request: AcpPermissionRequest, approvalGate = false, trustedNames: readonly string[] = []): AcpPermissionOutcome | undefined {
   if (request.toolCall.toolCallId.startsWith('interaction_')) return undefined;
+  if (trustedNames.includes(request.toolCall.title ?? '')) return selected(request, true);
   const tool = antigravityTool(request.toolCall);
   const names = allowedTools(grant);
-  if (trustedNames.includes(request.toolCall.title ?? '')) {
-    const allow = request.options.find(option => option.kind === 'allow_once');
-    return allow ? { outcome: 'selected', optionId: allow.optionId } : { outcome: 'cancelled' };
-  }
-  const input = z.object({ command: z.string() }).safeParse(tool.input);
   const prefixes = grant.bashAllowlist ?? [];
-  const commandAllowed = !prefixes.length || (input.success && !/[;&|`$<>\\\n\r]/.test(input.data.command) && prefixes.some(prefix => input.data.command === prefix || input.data.command.startsWith(`${prefix} `)));
   const name = tool.name ?? request.toolCall.title ?? '';
-  const permitted = (names === undefined || names.some(allowed => allowed === name || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === name)) && (tool.name !== 'Bash' || commandAllowed);
-  // An unset grant uses native approvals; written grants are answered from policy.
+  const named = names === undefined || names.some(allowed => allowed === name || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === name);
+  const permitted = named && (tool.name !== 'Bash' || commandAllowed(tool.input, prefixes));
+  // An unset grant leaves native approvals in control, as on the other adapters.
   if ((names === undefined && !prefixes.length) || (!permitted && approvalGate)) return undefined;
-  const option = request.options.find(option => option.kind === (permitted ? 'allow_once' : 'reject_once'));
-  return option ? { outcome: 'selected', optionId: option.optionId } : { outcome: 'cancelled' };
+  return selected(request, permitted);
 }

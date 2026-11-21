@@ -12,7 +12,7 @@ export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   toolGrant: { honored: true, via: 'default mode plus fail-closed session/request_permission policy' },
   restrictCrossSessionMessaging: { honored: false, reason: 'Antigravity 1.5.0 has no cross-session messaging tool' },
   minimal: { honored: false, reason: 'Antigravity 1.5.0 offers no minimal or no-context launch mode' },
-  additionalDirectories: { honored: true, via: '_meta additionalDirectories in session/new and resume' },
+  additionalDirectories: { honored: true, via: 'top-level additionalDirectories in session/new and resume' },
   env: { honored: true, via: 'buildChildEnv over the runner allow-list' },
   model: { honored: true, via: 'session/set_config_option model' },
   effort: { honored: true, via: 'session/set_config_option thought_level category' },

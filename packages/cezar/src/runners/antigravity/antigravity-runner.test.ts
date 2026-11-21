@@ -62,3 +62,28 @@ it('fails closed on a narrowed grant and shell composition outside a command pre
   expect(permissionPolicy({ kind: 'unset', bashAllowlist: ['git status'] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
   expect(permissionPolicy({ kind: 'explicit', tools: ['Bash'], bashAllowlist: ['git status'] }, { ...request, toolCall: { ...request.toolCall, rawInput: { CommandLine: 'git status --short' } } })).toEqual({ outcome: 'selected', optionId: 'allow' });
 });
+
+
+it('reports native execution errors as a failed turn and a failed result', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:provider-unavailable' }, event => events.push(event), {
+    autoEndAfterFirstTurn: true, onUiEvent: event => ui.push(event),
+  });
+  await expect(session.result).rejects.toThrow('Agent execution error:');
+  expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'error' }));
+  expect(events).toContainEqual(expect.objectContaining({ type: 'error' }));
+});
+
+it('counts a late steer as a successor turn and waits for its permission and result', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = [];
+  let ack: Promise<void> | false = false;
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:acp-late-steer' }, event => {
+    if (event.type === 'tool-call') ack = session.sendAgentMessage([{ type: 'text', text: 'late input' }]);
+  }, { autoEndAfterFirstTurn: true, onUiEvent: event => {
+    ui.push(event);
+    if (event.type === 'permission.requested') expect(session.respondPermission?.(event.requestId, 'allow-once')).toBe(true);
+  } });
+  const result = await session.result; await ack;
+  expect(result.tokensUsed).toBe(18);
+  expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
+});

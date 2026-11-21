@@ -22,6 +22,8 @@ export interface AcpAsk {
   answer(value: unknown): unknown;
 }
 export interface AcpHooks {
+  /** Some ACP agents report execution failures as text followed by end_turn. */
+  promptError?(): string | undefined;
   normalizeUsage?(usage: unknown): TokenUsage | undefined;
   /** Provider diagnostics or updates the adapter consumes itself. */
   filterUpdate?(update: Record<string, unknown>): boolean;

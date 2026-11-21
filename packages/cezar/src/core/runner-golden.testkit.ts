@@ -16,7 +16,7 @@ export interface RunnerGolden {
   toolActivity: { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> };
   /** The status probe command, and what that command prints when the account is connected (recorded
    *  from the real CLI) and when it is not. */
-  providerAuth: { command: { executable: string; args: readonly string[] }; connected: ProviderCommandResult; disconnected: ProviderCommandResult };
+  providerAuth: { connectedEnv?: Record<string, string>; command: { executable: string; args: readonly string[] }; connected: ProviderCommandResult; disconnected: ProviderCommandResult };
   /** The line the dry-run installer writes for this runner (`server-install/steps.test.ts`). */
   installerDryRun: string;
   /** The planner and namer model aliases a default runner passes; empty when it passes none. */

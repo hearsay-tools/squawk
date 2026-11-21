@@ -600,8 +600,10 @@ export class ProviderAuthService {
     if (result.errorCode) {
       return { provider, status: 'unknown', hint: UNKNOWN_HINT };
     }
-    const { parse } = await runnerDefinition(provider).loadLogin();
-    const status = parse(result);
+    const parser = await runnerDefinition(provider).loadLogin();
+    const status = parser.inspect
+      ? await parser.inspect(result, { ...process.env, ...env }).catch(() => null)
+      : parser.parse(result);
     if (status !== null) return { provider, status };
     return { provider, status: 'unknown', hint: UNKNOWN_HINT };
   }

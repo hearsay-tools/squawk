@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { createDeliveryControl } from '../../scripts/mock-delivery-control.mjs';
-import { runnersWhere } from './runner-facts.ts';
+import { runnersWhere, RUNNER_FACTS } from './runner-facts.ts';
 import { driveSeam, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 
 // These tests exercise the native mocks as test infrastructure: ignoring a configured
@@ -74,7 +74,7 @@ describe.each(runnersWhere(facts => facts.inputDelivery.acknowledgement === 'res
       if (runner === 'pi' || runner === 'omp') expectFailedDrain(wire, runner);
     } else {
       expectSuccess(observation);
-      expect(consumed).toEqual(['unread-progress']);
+      expect(consumed).toEqual(RUNNER_FACTS[runner]!.inputDelivery.consumption === 'unobservable' ? [] : ['unread-progress']);
     }
   });
 });

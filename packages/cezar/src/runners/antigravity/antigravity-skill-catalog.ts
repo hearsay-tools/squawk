@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { agentHomeDir } from '../../paths.ts';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -9,7 +9,7 @@ const metadataSchema = z.object({ name: z.string().optional(), description: z.st
 /** Live-probed resolve_skills_paths order in antigravity-acp 1.5.0 (hearsay-tools/squawk#4000).
  * ACP exposes no skills/list; available_commands_update contains built-in commands only. */
 export async function discoverAntigravitySkills(options: SkillDiscoveryOptions): Promise<SkillCatalog> {
-  const home = options.accountHome || process.env.GEMINI_HOME?.trim() || join(homedir(), '.gemini');
+  const home = options.accountHome || agentHomeDir('antigravity');
   const roots = [
     { path: join(home, 'config', 'skills'), scope: 'user' as const },
     { path: join(options.cwd, '.gemini', 'skills'), scope: 'repo' as const },

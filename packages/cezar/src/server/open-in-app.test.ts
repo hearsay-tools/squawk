@@ -1,3 +1,4 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
 import '../core/register-all-runners.testkit.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
@@ -243,7 +244,7 @@ describe('agentCliRunner', () => {
   // Driven off BUILT_IN_RUNNER_IDS, not a literal list, so runner #5 is covered the moment it is added
   // (the pi entry was missed on the hand-written list, #387 review).
   it.each(BUILT_IN_RUNNER_IDS)('maps cli:%s to that runner', (runner) => {
-    expect(agentCliRunner(`cli:${runner}`)).toBe(runner);
+    expect(agentCliRunner(`cli:${runner}`)).toBe(runnerDefinition(runner).cli.interactive === false ? null : runner);
   });
 
   it('rejects every id that is not a CLI handoff', () => {
@@ -289,7 +290,7 @@ describe('agent CLI open targets', () => {
 
   it('offers every registered runner\'s CLI on PATH, in registration order, as its cli part names it', () => {
     allOnPath();
-    expect(cliTargets()).toEqual(registeredRunners().map(({ id, cli }) => ({ id: `cli:${id}`, ...cli.openTarget })));
+    expect(cliTargets()).toEqual(registeredRunners().filter(({ cli }) => cli.interactive !== false).map(({ id, cli }) => ({ id: `cli:${id}`, ...cli.openTarget })));
   });
 
   it('keeps the built-in CLI targets: ids, labels, icons and order', () => {

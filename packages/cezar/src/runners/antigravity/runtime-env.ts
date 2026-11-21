@@ -19,6 +19,7 @@ export function antigravityEnv(bin: string, spec: AgentRunSpec): { env: NodeJS.P
   const env = buildChildEnv({ backend: 'antigravity', extraEnv: spec.env });
   const temp = mkdtempSync(join(tmpdir(), 'squawk-antigravity-'));
   const harness = antigravityHarness(bin, env, spec.cwd);
+  if (!env.GEMINI_API_KEY && env.GOOGLE_API_KEY) env.GEMINI_API_KEY = env.GOOGLE_API_KEY;
   // Keep the documented Gemini API endpoint override. Other GOOGLE_* flags select unrelated auth.
   for (const key of Object.keys(env)) if (key.startsWith('GOOGLE_') && key !== 'GOOGLE_GEMINI_BASE_URL') delete env[key];
   env.AGY_ACP_FORCE_FILE_STORAGE = '1'; env.AGY_CLI_DISABLE_AUTO_UPDATE = '1'; env.TMPDIR = temp;

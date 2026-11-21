@@ -88,12 +88,18 @@ export const answerDeliveryCells = answerDeliveryFamilies({
       await answer(`Vitest ${promptFor(backend, steer.scenario)}`);
       await waitFor(() => firstAfter(store, runId, 'tool-call', start) !== undefined);
       const id = await send('mock:agent-echo review progress during the answer');
-      await waitFor(() => !!input(store, runId, id)?.consumedAt);
+      const observable = inputDeliveryOf(await createRunner(backend)).consumption === 'observable';
+      if (observable) await waitFor(() => !!input(store, runId, id)?.consumedAt);
+      else await waitFor(() => !!input(store, runId, id)?.deliveredAt);
       // The answer's durable checkpoint stays at turn-end, after the message was read.
       await waitFor(() => checkpoints(store, runId, askSeq).length === 1);
       const turnEnd = firstAfter(store, runId, 'turn-end', start)!;
       expect(projectionSeq(store, runId, id, 'delivered')).toBeLessThan(turnEnd);
-      expect(projectionSeq(store, runId, id, 'consumed')).toBeLessThan(turnEnd);
+      if (observable) expect(projectionSeq(store, runId, id, 'consumed')).toBeLessThan(turnEnd);
+      else {
+        expect(input(store, runId, id)?.consumedAt).toBeUndefined();
+        expect(projectionSeq(store, runId, id, 'consumed')).toBeUndefined();
+      }
       expect(checkpoints(store, runId, askSeq)[0]!.seq).toBeGreaterThan(turnEnd);
       await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting);
       expect(checkpoints(store, runId, askSeq)).toEqual([expect.objectContaining({ source: 'parent' })]);

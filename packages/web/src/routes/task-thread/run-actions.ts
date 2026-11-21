@@ -32,7 +32,7 @@ export function lastSessionBackend(run: RunRecord): Runner {
  *  session id (open-mercato/cezar#431), and without it there is no hint. Prefixes the `cd` when
  *  the run has its own worktree, because the resume only makes sense from in there. */
 export function resumeHint(run: ApiRun): string | undefined {
-  if (engineOwnsRun(run)) return undefined
+  if (engineOwnsRun(run) || run.cliHandoff === false) return undefined
   const command = run.cliResumeCommand
   if (command === undefined) return undefined
   return run.worktreePath ? `cd ${run.worktreePath} && ${command}` : command

@@ -245,6 +245,9 @@ export interface RunnerLogin extends RunnerLoginData {
 /** The code half of `login`: how a CLI's answer becomes a connection state. Loads from
  *  `runners/<id>/login-probe.ts`, so a definition module imports no parser code. */
 export interface RunnerLoginStatus {
+  /** An installed CLI may need credential presence checked outside its version output.
+   * Receives the same account environment as its native status command. Never returns secrets. */
+  inspect?(result: ProviderCommandResult, env: NodeJS.ProcessEnv): Promise<ProviderConnectionState | null>;
   parse(result: ProviderCommandResult): ProviderConnectionState | null;
 }
 
