@@ -117,7 +117,7 @@ async function runtimeProbe(text, turn) {
     if (++mcpTurns > 1 && result.tools.some(tool => !/^[a-zA-Z0-9_-]{1,64}$/.test(`mcp_${server.name}_${tool.name}`))) {
       content('agent_message_chunk', 'Agent execution error: unexpected end of JSON input'); return true;
     }
-    const toolCall = { toolCallId: `mcp-${mcpTurns}`, title: `mcp_${server.name}_cezar_ask`, kind: 'other', rawInput: {}, _meta: { mcp: { server: server.name, tool: 'cezar_ask' } } };
+    const toolCall = { toolCallId: `mcp-${mcpTurns}`, title: `${server.name}_cezar_ask`, kind: 'other', rawInput: {}, _meta: { mcp: { server: server.name, tool: 'cezar_ask' } } };
     update({ sessionUpdate: 'tool_call', ...toolCall, status: 'pending' });
     const answer = await request('session/request_permission', { sessionId, toolCall, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] });
     if (answer.outcome?.optionId !== 'allow') throw new Error('Squawk MCP permission was not trusted');
