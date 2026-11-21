@@ -1,4 +1,5 @@
-import type { RunRecord, RunStore } from './store.ts';
+import type { RunRecord } from './store.ts';
+import type { RunFamilyReads } from './ports.ts';
 import { familyRecordIdOf, inspectableReceipts, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
 
 /**
@@ -6,7 +7,7 @@ import { familyRecordIdOf, inspectableReceipts, supervisedReceipts, supervisorId
  * The family is every worker whose receipt one family record holds; the supervised set is the
  * workers one task started. For the task that holds the record the family is the larger set.
  */
-type Reads = Pick<RunStore, 'listWorkersOf'>;
+type Reads = Pick<RunFamilyReads, 'listWorkersOf'>;
 const LIVE = ['queued', 'running', 'waiting'];
 
 /** Every worker record of the family `run` belongs to. */

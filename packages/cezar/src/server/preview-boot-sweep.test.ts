@@ -10,7 +10,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { processStartToken } from '../delegation/process-liveness.ts';
 import type { PreviewHost } from '../preview/host.ts';
-import type { RunStore } from '../runs/store.ts';
 import { armPreview, sweepRegisteredPreviewLeftovers } from './project-context.ts';
 
 /**
@@ -73,7 +72,7 @@ describe('sweepRegisteredPreviewLeftovers', () => {
     const a = project();
     await sweepRegisteredPreviewLeftovers([{ root: a.root, status: 'ok' }], noHost);
     const later = leftover(a.dataDir, 'run-c', 5175);
-    armPreview(new EventEmitter() as unknown as RunStore, a.dataDir, noHost);
+    armPreview(armedStore(), a.dataDir, noHost);
     expect(await sweepRegisteredPreviewLeftovers([{ root: a.root, status: 'ok' }], noHost)).toBe(0);
     expect(alive(later.pid!)).toBe(true);
   });
@@ -101,10 +100,13 @@ describe('sweepRegisteredPreviewLeftovers', () => {
     cockpit.kill('SIGKILL');
     await exited(cockpit);
     rmSync(lock);
-    armPreview(new EventEmitter() as unknown as RunStore, a.dataDir, noHost);
+    armPreview(armedStore(), a.dataDir, noHost);
     await exited(server);
   });
 });
+
+/** The store members `armPreview` uses. A run it is never asked about needs none of them. */
+const armedStore = () => Object.assign(new EventEmitter(), { getRun: () => undefined, appendEvent: (): never => { throw new Error('no run was expected'); } });
 
 describe('armPreview', () => {
   it("appends the disconnected a crash left out before anything else runs (hearsay-tools/cezarion#784)", () => {
@@ -113,7 +115,7 @@ describe('armPreview', () => {
     writeFileSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'), '');
     const events: unknown[] = [];
     const store = Object.assign(new EventEmitter(), { getRun: () => ({ id: 'run-crashed' }), appendEvent: (_runId: string, event: unknown) => events.push(event) });
-    armPreview(store as unknown as RunStore, a.dataDir, noHost);
+    armPreview(store as unknown as Parameters<typeof armPreview>[0], a.dataDir, noHost);
     expect(events).toEqual([{ type: 'preview.agent-browser', state: 'disconnected' }]);
     expect(existsSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'))).toBe(false);
   });
@@ -124,9 +126,9 @@ describe('armPreview', () => {
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on('unhandledRejection', onUnhandled);
     try {
-      const store = new EventEmitter();
+      const store = armedStore();
       const host = { release: () => Promise.reject(new Error('boom')), ownsServer: () => false, ownsBrowser: () => false } as unknown as PreviewHost;
-      armPreview(store as unknown as RunStore, a.dataDir, host);
+      armPreview(store, a.dataDir, host);
       store.emit('deleted', 'run-x');
       // Node reports an unhandled rejection once the microtasks after its creation drain, before
       // the next check phase runs.

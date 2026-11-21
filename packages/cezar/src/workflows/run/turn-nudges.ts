@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AgentSession } from '../../core/agent-runner.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunEventInput, RunPatchInput } from '../../runs/ports.ts';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { recordRequestRefusal, type CompletionRefusal } from '../completion-policy.ts';
 import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, COMPLETION_NO_REPLY_NOTE, COMPLETION_NUDGE_NOTE, AUTONOMOUS_NUDGE, AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE, stepScopedNudge, type TurnEndOutcome } from '../turn-end.ts';
@@ -68,7 +69,7 @@ function isModelActivity(event: { type: string; item?: { parentItemId?: string }
 
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
-  move(id: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch: Omit<RunPatchInput, 'status'>): RunRecord | undefined;
   workerExecutionStopped(id: string): boolean;
   executionBlockedByRootFinish(run: RunRecord): boolean;
   countAutomaticWakes(id: string): number;
@@ -79,7 +80,7 @@ interface TurnNudgesHost {
   retryWaitAdmission(id: string): void;
   armIdleTimer(id: string, state: ActiveRun): void;
   /** `TurnSettler.closeIdleSession`: the idle path's close. */
-  closeIdleSession(id: string, state: ActiveRun, event: Parameters<RunStore['appendEvent']>[1]): void;
+  closeIdleSession(id: string, state: ActiveRun, event: RunEventInput): void;
   /** `InputDelivery.abandonNudgeFlight`: drop the nudge's flight before its session closes. */
   abandonNudgeFlight(state: ActiveRun, session: AgentSession): void;
   openTurnEndHumanWait(id: string, state: ActiveRun, step: string | undefined, via: 'no-wait' | 'budget', note: string): void;

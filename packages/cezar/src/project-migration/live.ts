@@ -6,7 +6,8 @@ import { pathPresent, projectPaths } from '../project-paths.ts';
 import { projectLiveTasks } from '../runs/live-tasks.ts';
 import { claimOwnerLive } from '../runs/run-claims.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
-import { parseRunRecords, type RunRecord, type RunStore } from '../runs/store.ts';
+import { parseRunRecords, type RunRecord } from '../runs/store.ts';
+import type { LiveRunReads } from '../runs/ports.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import { anotherCockpitOwner, type LiveProjectTask } from '../server/cockpit-ownership.ts';
 import { loadWorkspaceConfig } from '../workspace/config.ts';
@@ -85,7 +86,7 @@ function record(value: unknown): RunRecord | undefined {
  * JSON. The legacy directory wins an id both hold. Live: rows not terminal, and the runs of
  * families a live process claims. Throws when a live id's record cannot be read.
  */
-export function readLiveTaskView(root: string): Pick<RunStore, 'listRuns' | 'persistedLiveRunIds' | 'getRun'> & {
+export function readLiveTaskView(root: string): LiveRunReads & {
   allRuns: () => RunRecord[];
   /** Ids of rows not archived whose record does not parse: whether they can resume is unknown. */
   unreadableUnarchived: () => string[];

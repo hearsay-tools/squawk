@@ -65,6 +65,7 @@ import type { ContentBlock } from '../core/agent-runner.ts';
 import type { ToolActivityFeed, ToolActivityTracker } from '../activity/tool-activity.ts';
 import * as queuedRevival from './run/queued-revival.ts';
 import { RUN_IN_USE_ELSEWHERE, type CommitSource, type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
+import type { RunWrites } from '../runs/ports.ts';
 import { WorkspaceSemaphore, type AccountHolds } from '../workspace/semaphore.ts';
 import { type WorkflowDef } from './types.ts';
 export { CHECK_KILL_GRACE_MS, CHECK_TERMINATION_CONFIRM_MS } from './grouped-command.ts';
@@ -614,7 +615,7 @@ export class RunManager {
     /** Restart recovery may discover several interrupted tasks at once. Those
      *  continuations are queued; an explicit user Continue remains immediate. */
     deferForCapacity = false,
-    conversation?: Parameters<RunStore['commitWorkerContinuation']>[4],
+    conversation?: Parameters<RunWrites['commitWorkerContinuation']>[4],
   ): ContinuationResult {
     const record = this.#store.getRun(runId);
     // A migration fence refuses new work only. An automatic resume or a wait wake continues a run

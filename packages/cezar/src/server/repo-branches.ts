@@ -14,7 +14,8 @@ import { isSafeGitRef } from '../git-refs.ts';
 import { withWorktreeMutation, type WorktreeGitResult } from '../git-worktree-lock.ts';
 import { branchesInUse, ownedCleanupProtection, parseShortstat, retainingRef } from '../git-worktree.ts';
 import { loadConfig } from '../config.ts';
-import type { BranchOwner, RunStatus, RunStore } from '../runs/store.ts';
+import type { BranchOwner, RunStatus } from '../runs/store.ts';
+import type { RunQueries } from '../runs/ports.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { refNumberFromUrl } from './forge/index.ts';
 import { getBranches, getRepoInfo, type LogEntryWithParents } from './git.ts';
@@ -78,7 +79,7 @@ export interface ClassifyInput {
 export interface ClassifyProject {
   root: string;
   home: Home;
-  store: Pick<RunStore, 'listBranchOwners'>;
+  store: Pick<RunQueries, 'listBranchOwners'>;
   manager: Pick<RunManager, 'isActive' | 'claimForBranchCleanup'>;
 }
 

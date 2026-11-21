@@ -1,7 +1,8 @@
 import { atTaskHead } from './launch-read-resolver.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import { extractTaskRefs, refineTaskRefs } from '../../runs/task-refs.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { PastedContent, PersistedAttachment } from '../pasted-content.ts';
@@ -22,7 +23,7 @@ interface RunStartHost {
   execute(runId: string, workflow: WorkflowDef, input: StartRunInput, startAt?: number): Promise<void>;
   runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: string, prompt: string,
     images?: PastedContent[], persistedImages?: ContentBlock[], persistedAttachments?: PersistedAttachment[]): Promise<void>;
-  move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>): RunRecord | undefined;
   dropActive(runId: string): void;
   historyDeletionPending(runId: string): boolean;
 }

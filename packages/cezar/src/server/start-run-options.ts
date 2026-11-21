@@ -13,7 +13,8 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-mode
 
 import type { ProviderId } from '../core/provider-auth.ts';
 import { clientRequestHash, type ClientRequestPayload } from '../runs/client-request.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunQueries } from '../runs/ports.ts';
 import { loadWorkflows } from '../workflows/load.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { toPastedContent } from '../workflows/pasted-content.ts';
@@ -69,7 +70,7 @@ export function clientRequestOf(body: ClientRequestPayload & { clientRequestId?:
  * answers the existing run; a different one is a conflict; no match lets the start go on.
  */
 export function replayedRun(
-  store: Pick<RunStore, 'findRunByClientRequestId'>,
+  store: Pick<RunQueries, 'findRunByClientRequestId'>,
   request: ClientRequest,
 ): { run: RunRecord } | StartRunRefusal | undefined {
   const existing = store.findRunByClientRequestId(request.id);

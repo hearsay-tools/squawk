@@ -8,7 +8,6 @@ const forgeFactory = (root: string) => ({ ...resolveForgeRoot(root), discoverRep
 
 import { armRepoHandle } from './arm-repo-handle.ts';
 
-import type { RunStore } from './store.ts';
 
 /**
  * `armRepoHandle` is the safety wrapper around the #945 repo lookup, and both of its call sites
@@ -22,7 +21,7 @@ describe('armRepoHandle (#945)', () => {
   /** Just enough store to observe the one call this module makes. */
   const fakeStore = () => {
     const setRepoHandle = vi.fn();
-    return { store: { setRepoHandle } as unknown as RunStore, setRepoHandle };
+    return { store: { setRepoHandle }, setRepoHandle };
   };
 
   /** Let the promise chain inside `armRepoHandle` settle without the caller awaiting it. */

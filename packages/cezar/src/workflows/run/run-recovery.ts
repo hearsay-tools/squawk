@@ -12,7 +12,8 @@ import type { InboxClaims } from './inbox-claims.ts';
 import type { WorkerOrphans } from './worker-orphans.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { ciWorkflowResumeStepIndex } from './workflow-position.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import { supervisedByFamilyRecord, supervisorIdOf } from '../../runs/task-rights.ts';
 import type { RunModuleContext } from './types.ts';
 import { familyOf, rootFinishRequested } from './run-guards.ts';
@@ -25,7 +26,7 @@ interface RunRecoveryHost {
   workerScratchCleanup: WorkerScratchCleanup; humanWaits: HumanWaits;
   inboxClaims: InboxClaims; orphans: WorkerOrphans;
   isActive(id: string): boolean; workerExecutionStopped(id: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): unknown;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>): unknown;
   cancel(id: string): unknown;
   continueRun(id: string, opts: ContinueRunOptions, defer: boolean): { ok: boolean; error?: string };
   reviveQueuedRun(run: RunRecord, reason: string): Promise<void>;

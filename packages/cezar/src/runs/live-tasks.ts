@@ -1,7 +1,8 @@
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { LiveProjectTask } from '../server/cockpit-ownership.ts';
 import { isLiveRecord } from './run-row.ts';
-import type { RunRecord, RunStore } from './store.ts';
+import type { RunRecord } from './store.ts';
+import type { LiveRunReads } from './ports.ts';
 
 /** The state a live-task list shows: the status, and what an idle-looking task still waits for. */
 function liveState(run: RunRecord): string {
@@ -17,7 +18,7 @@ function liveState(run: RunRecord): string {
  * `cez run`, another binary) claims in the same database.
  * The migration fence's live-task check uses this one notion of live.
  */
-export function projectLiveTasks(store: Pick<RunStore, 'listRuns' | 'persistedLiveRunIds' | 'getRun'>): LiveProjectTask[] {
+export function projectLiveTasks(store: LiveRunReads): LiveProjectTask[] {
   const tasks = new Map(store.listRuns().filter(isLiveRecord).map((run) => [run.id, run]));
   // Rows another process left live, whose owner may since have gone, are in the database only.
   const { live, foreign } = store.persistedLiveRunIds();

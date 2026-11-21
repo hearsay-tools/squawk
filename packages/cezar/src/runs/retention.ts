@@ -13,6 +13,7 @@ import { createWorktree } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import type { PreviewHostLike } from '../preview/registration.ts';
 import { isEndedRoot, isLiveRecord } from './run-row.ts';
+import type { RunPins, RunAccess, RunFamilyReads, WorkerExecutions, WorkerResults } from './ports.ts';
 import type { RunRecord, RunStatus, RunStore } from './store.ts';
 
 /** The "finished" status set — mirrors the statuses `RunStore.archiveFinished` sweeps. A run at the
@@ -96,6 +97,9 @@ export function selectReclaimableWorktrees(
   return [...ended, ...budgeted.slice(keep)].map((r) => r.id);
 }
 
+/** The store members a real store has and a structural test store may lack: each use checks for it. */
+type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & WorkerExecutions & WorkerResults>;
+
 /** The slice of the runs store the enforcer needs. Kept structural so the
  *  enforcer stays easy to test and never imports the concrete store. */
 export interface RetentionStore {
@@ -173,7 +177,7 @@ export interface ReclaimOptions {
  *  returns false so the directory is left for the next pass. */
 async function preserveWorkerResult(repoRoot: string, store: RetentionStore, run: RunRecord): Promise<boolean> {
   if (run.delegation?.role !== 'worker') return true;
-  const commit = (store as Partial<RunStore>).commitWorkerResult;
+  const commit = (store as RealStoreMembers).commitWorkerResult;
   if (typeof commit !== 'function') return true;
   const evidence = await collectWorkerEvidence(repoRoot, store as RunStore, run);
   commit.call(store, run.delegation.parentRunId, evidence.result, evidence.diffSnapshot);
@@ -187,7 +191,7 @@ async function preserveWorkerResult(repoRoot: string, store: RetentionStore, run
  * owned worker's generation and fresh resource holders must also be safe, including after async
  * evidence or preview work. Structural test stores have no execution machinery and skip that part.
  */
-export function cleanupSafety(repoRoot: string, store: Partial<RunStore>, run: RunRecord): () => void {
+export function cleanupSafety(repoRoot: string, store: RealStoreMembers, run: RunRecord): () => void {
   const execution = store.readWorkerExecution?.(run.id);
   return () => {
     if (autosaveCleanupBlocker(store.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write, run.id)) throw Error('Autosave cleanup is not confirmed');
@@ -198,7 +202,7 @@ export function cleanupSafety(repoRoot: string, store: Partial<RunStore>, run: R
 }
 
 function readOnlyWorktree(repoRoot: string, store: RetentionStore, run: RunRecord): boolean {
-  return (store as Partial<RunStore>).isFallbackRun?.(run.id) === true ||
+  return (store as RealStoreMembers).isFallbackRun?.(run.id) === true ||
     Boolean(run.worktreePath && isFallbackProjectPath(repoRoot, run.worktreePath));
 }
 
@@ -212,7 +216,7 @@ export async function reclaimWorktrees(
   const byId = new Map(runs.map((r) => [r.id, r]));
   const reclaimed: string[] = [];
   // A real store lists every worker; a structural test store answers from the candidates.
-  const workersOf = (store as Partial<RunStore>).listWorkersOf?.bind(store);
+  const workersOf = (store as RealStoreMembers).listWorkersOf?.bind(store);
   const selected = selectReclaimableWorktrees(runs, keep, (parentId) => store.getRun(parentId), workersOf);
   const readonly = (id: string) => Boolean(byId.get(id) && readOnlyWorktree(repoRoot, store, byId.get(id)!));
   const skipped = selected.filter(readonly).length;
@@ -244,7 +248,7 @@ export async function reclaimWorktree(
   // Branch kept, and only a clean checkout goes: uncommitted work lives only in the directory. An
   // owned worker's evidence is snapshotted first, but a diff snapshot drops binary content and
   // caps its size, so it does not stand in for the directory (hearsay-tools/squawk#2987).
-  const real = store as Partial<RunStore>;
+  const real = store as RealStoreMembers;
   const assertSafe = cleanupSafety(repoRoot, real, run);
   const remove = opts.remove ?? ((root, path) =>
     releaseThenRemoveWorktree({ previewHost: opts.previewHost }, run.id, root, path, undefined,

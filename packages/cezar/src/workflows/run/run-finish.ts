@@ -1,7 +1,9 @@
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer, type DoneErrorCode, type DoneOwedInput } from '@open-mercato/cezar-contract/waits';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
+import type { RunLookup, RunWrites, TranscriptFactsPort } from '../../runs/ports.ts';
 import { doneErrorMessage } from '../../ci-wait/errors.ts';
 import { openCompletionRequests, recordRequestRefusal, type CompletionRefusal } from '../completion-policy.ts';
 import type { ActiveRun } from '../active-run.ts';
@@ -20,7 +22,7 @@ import type { RunLine } from './run-line.ts';
 import { isFamilyRecord, receiptsOf } from '../../runs/task-rights.ts';
 
 interface RunFinishHost {
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   waitEngine: WaitEngine;
   reconcileWorkerWaits(id?: string): void;
@@ -243,7 +245,7 @@ export class RunFinish {
  *  tool answers, so a restart still finishes the run on it. The last event, the waits and the last
  *  agent input then (`factsAtDone`) order what is new to the done. A done that replaces one still on record keeps its spent
  *  free turn, so calling done again earns no second free delivery. */
-function recordDoneAccepted(store: Pick<RunStore, 'commitOutcome' | 'getRun' | 'transcriptFacts'>, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
+function recordDoneAccepted(store: RunWrites & RunLookup & TranscriptFactsPort, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
   const run = store.getRun(runId);
   if (!run) return;
   store.commitOutcome(runId, { kind: 'done-accepted', done: { session: done.session, at: done.at, seq: store.transcriptFacts(runId).lastSeq, ...factsAtDone(run),

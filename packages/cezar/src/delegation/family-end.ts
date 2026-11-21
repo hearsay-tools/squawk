@@ -13,13 +13,14 @@ import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { projectPaths } from '../project-paths.ts';
 import { cleanupSafety, workerFamilyEnded } from '../runs/retention.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunAccess, RunFamilyReads, RunLookup, RunWrites, WorkerExecutions } from '../runs/ports.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 
-export type FamilyEndStore = Pick<RunStore, 'getRun' | 'listWorkersOf' | 'commitDelegation' | 'readWorkerExecution' |
-  'workerResourcesSafe' | 'sourceDataDir' | 'unavailable'>;
+export type FamilyEndStore = RunLookup & Pick<RunFamilyReads, 'listWorkersOf'> & Pick<RunWrites, 'commitDelegation'> &
+  Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> & Pick<RunAccess, 'sourceDataDir' | 'unavailable'>;
 
 const SETTLED: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled', 'review']);
 

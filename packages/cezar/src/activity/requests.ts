@@ -1,11 +1,12 @@
 import type { ActivityClosedRequest, ActivityRequest, ConversationMessage } from '@open-mercato/cezar-contract';
 import { ACTIVITY_CLOSED_WINDOW_MS, ACTIVITY_TEXT_MAX } from '@open-mercato/cezar-contract/activity';
 import { reconcileConversationState } from '../delegation/conversations.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunQueries, RunReads, WorkerExecutions } from '../runs/ports.ts';
 import { clampText } from './text.ts';
 
 /** What the request read needs from a project's run store. */
-export type ActivityRequestStore = Pick<RunStore, 'listRuns' | 'listForeignClaimedRunIds' | 'getRun' | 'isUnreadable' | 'readWorkerExecution'>;
+export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns' | 'listForeignClaimedRunIds'> & Pick<WorkerExecutions, 'readWorkerExecution'>;
 
 export interface ActivityRequestOptions {
   now: number;

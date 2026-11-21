@@ -33,6 +33,7 @@ import { RUN_STATUS, WAIT_SOURCE, WORKER_OUTCOME_STATUS } from '@open-mercato/ce
 import { agentInputEventSchema } from '@open-mercato/cezar-contract/events';
 import type { DelegationState } from '@open-mercato/cezar-contract';
 import { RunStore, runRecordSchema } from './store.ts';
+import type { RunWrites } from './ports.ts';
 import { ConversationIdInUseError } from './conversation-identity.ts';
 import { parentReadiness } from '../delegation/readiness.ts';
 import { blockRunWrites, readPersistedRuns, readPersistedText, runIds, seedRuns } from './run-store.testkit.ts';
@@ -547,7 +548,7 @@ describe('RunStore durable delegation', () => {
       [{ id: run.id, delegation: { role: 'invalid' } }, { id: randomUUID(), delegation: root }],
       [{ id: run.id, delegation: { role: 'invalid' } }, { id: run.id, delegation: root }],
       [{ id: run.id, delegation: { role: 'worker' } }],
-    ]) expect(() => store.commitDelegation(patches as Parameters<RunStore['commitDelegation']>[0])).toThrow();
+    ]) expect(() => store.commitDelegation(patches as Parameters<RunWrites['commitDelegation']>[0])).toThrow();
     expect(store.getRun(run.id)?.delegation).toEqual(root);
     expect(readPersistedText(dataDir)).toBe(original);
   });

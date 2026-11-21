@@ -67,7 +67,9 @@ import { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
 import { type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import * as queuedRevival from './queued-revival.ts';
-import { type RunRecord, type RunStore, type StepState } from '../../runs/store.ts';
+import { type RunRecord, type StepState } from '../../runs/store.ts';
+import type { RunWrites } from '../../runs/ports.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import { type WorkflowDef } from '../types.ts';
 
 export interface RunModules {
@@ -135,7 +137,7 @@ export interface FacadeHost {
   squawkToolHandlers(runId: string, generation: string): SquawkToolHandlers;
   delegationProvisioner?: DelegationProvisioner | undefined;
   workerWorkspaces(): WorkerWorkspacePort | undefined;
-  move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   isActive(runId: string): boolean;
   workerExecutionStopped(runId: string): boolean;
   resumableSessionId(runId: string, sessionStep: StepState | undefined): string | undefined;
@@ -154,7 +156,7 @@ export interface FacadeHost {
   settleOrphanedWorkerExecution(runId: string, opts?: { admitting?: boolean; fresh?: boolean }): boolean;
   sendMessage(runId: string, content: PastedContent[], messageId?: string): boolean;
   canClaimInboxInput(runId: string, id: string): boolean;
-  continueRun(runId: string, opts?: ContinueRunOptions, deferForCapacity?: boolean, conversation?: Parameters<RunStore['commitWorkerContinuation']>[4]): { ok: boolean; error?: string };
+  continueRun(runId: string, opts?: ContinueRunOptions, deferForCapacity?: boolean, conversation?: Parameters<RunWrites['commitWorkerContinuation']>[4]): { ok: boolean; error?: string };
   recover(familyRootId?: string): Promise<void>;
   dropActive(runId: string): void;
   runContinuation(runId: string, stepId: string, sessionId: string | undefined, backend: string, prompt: string, images?: PastedContent[], persistedImages?: ContentBlock[], persistedAttachments?: PersistedAttachment[]): Promise<void>;

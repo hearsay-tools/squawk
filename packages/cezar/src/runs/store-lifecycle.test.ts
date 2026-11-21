@@ -10,6 +10,7 @@ import { encodeRunRow } from './run-row.ts';
 import { blockRunWrites, crashStore, readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import type { RunLifecycleEvents, RunLifecycleEventType } from './lifecycle.ts';
 import { RunStore, type RunRecord } from './store.ts';
+import type { CreateRunInput } from './ports.ts';
 
 /**
  * The lifecycle a `RunStore` publishes beside its emitter (.ai/specs/2026-11-21-run-lifecycle-and-
@@ -31,7 +32,7 @@ function setup() {
   const open = () => { const store = RunStore.open(dir, { keepLive: true }); stores.push(store); return store; };
   const store = open();
   cleanups.push(() => { for (const each of stores) each.close(); rmSync(dir, { recursive: true, force: true }); });
-  const created = (steps: Parameters<RunStore['createRun']>[0]['steps'] = []) => store.createRun({ title: 'lifecycle', task: 'lifecycle', workflow: 'quick-task', steps }).id;
+  const created = (steps: CreateRunInput['steps'] = []) => store.createRun({ title: 'lifecycle', task: 'lifecycle', workflow: 'quick-task', steps }).id;
   const persisted = (id: string) => readPersistedRuns(dir).find((row) => row.id === id) as RunRecord | undefined;
   return { dir, store, open, created, persisted };
 }

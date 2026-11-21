@@ -1,6 +1,7 @@
 import { WAIT_KINDS } from './wait-kinds.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunLookup } from '../../runs/ports.ts';
 import { applyOutcomes, type RunOutcome } from '../../runs/outcome-commit.ts';
 import { hasLiveInboxClaim } from '../../delegation/input.ts';
 import type { ActiveRun } from '../active-run.ts';
@@ -20,7 +21,7 @@ interface WakeReads {
 /** The closing session leaves something undelivered: a resolved wait, or a wake of messages
  *  alone (`owesWake`), which reopens the run as a resolved wait does and so counts against the
  *  same bound (hearsay-tools/cezarion#1235). */
-export function owesDelivery(store: Pick<RunStore, 'getRun'>, runId: string, owesWake: (run: RunRecord) => boolean): boolean {
+export function owesDelivery(store: RunLookup, runId: string, owesWake: (run: RunRecord) => boolean): boolean {
   const run = store.getRun(runId);
   return !!run && (resolvedWaits(run).length > 0 || owesWake(run));
 }
@@ -29,7 +30,7 @@ export function owesDelivery(store: Pick<RunStore, 'getRun'>, runId: string, owe
  *  of `ids` a message the agent received (hearsay-tools/cezarion#1235). The opening prompt of a wake
  *  continuation is not one: a session that reads it and fails has delivered nothing it owed, nor
  *  has a read reported for a message whose submission was never acknowledged. */
-export function withFailuresCleared(store: Pick<RunStore, 'getRun'>, runId: string, outcomes: RunOutcome[], ids: readonly string[], cleared = false): RunOutcome[] {
+export function withFailuresCleared(store: RunLookup, runId: string, outcomes: RunOutcome[], ids: readonly string[], cleared = false): RunOutcome[] {
   const run = store.getRun(runId);
   const next = run && applyOutcomes(run, outcomes).next;
   const received = !!next?.agentInputs?.some(input => ids.includes(input.id) && !!input.deliveredAt && !input.awaitingRead && (!!input.conversation || isUnnamedLifecycleInput(next, input)));
@@ -49,7 +50,7 @@ export function isUnnamedLifecycleInput(run: RunRecord, input: AgentInput): bool
  * record, so a restart, a scheduler continuation and a usage-limit resume keep it. A timer batch
  * still awaiting its acknowledgement counts the unit it reserved.
  */
-export function automaticWakes(store: Pick<RunStore, 'getRun'>, active: Pick<Map<string, ActiveRun>, 'get'>, runId: string, beforeHumanReset?: { spent: number }): number {
+export function automaticWakes(store: RunLookup, active: Pick<Map<string, ActiveRun>, 'get'>, runId: string, beforeHumanReset?: { spent: number }): number {
   const reserved = active.get(runId)?.inputState.agentInputFlight?.wakeReserved ? 1 : 0;
   return (beforeHumanReset?.spent ?? store.getRun(runId)?.automaticWakes ?? 0) + reserved;
 }

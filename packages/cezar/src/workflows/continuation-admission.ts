@@ -5,7 +5,8 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-mode
 import { SPAWN_NEXT } from '../runs/worker-execution.ts';
 import { modelConflictsWithRunner } from '../core/model-presets.ts';
 import { type WorkerStepIdentity, WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
-import type { QueuedMessage, RunRecord, RunStore, StepState } from '../runs/store.ts';
+import type { QueuedMessage, RunRecord, StepState } from '../runs/store.ts';
+import type { RunWrites } from '../runs/ports.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
@@ -43,7 +44,7 @@ export type ContinueRunOptions = {
 /** `next` names the command that gets past a refusal, when retrying the same one is not it. */
 export type ContinuationRefusal = { ok: false; error: string; next?: string };
 export type ContinuationResult = { ok: boolean; error?: string; next?: string };
-export type ContinuationConversation = Parameters<RunStore['commitWorkerContinuation']>[4];
+export type ContinuationConversation = Parameters<RunWrites['commitWorkerContinuation']>[4];
 
 export function modelLockRefusal(repoRoot: string, opts: ContinueRunOptions, home: Home): ContinuationRefusal | undefined {
   if (agentModelsLocked(repoRoot, process.env, home) && (opts.model?.trim() || opts.effort?.trim())) {

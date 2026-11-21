@@ -22,6 +22,7 @@ import { historyPaths } from './history-file.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { RunStore, runRecordSchema } from './store.ts';
+import type { RunPatchInput } from './ports.ts';
 import { setRunStatus, blockRunWrites, overwriteRunColumns, readPersistedRuns, readPersistedText, readStoredSummary, runIds, seedRuns } from './run-store.testkit.ts';
 import {
   STEP_KIND,
@@ -2000,7 +2001,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         expected: { referencedPullRequestUrl: undefined, referencedIssueUrl: undefined, referencedPrCandidates: [foreignPr, secondPr],
           referencedIssueCandidates: [foreignIssue, secondIssue], issueNumber: undefined, referencedIssueNumberSeeded: undefined } },
     ] as const;
-    const writePaths: Array<{ path: string; extra: Parameters<RunStore['updateRun']>[1] }> = [
+    const writePaths: Array<{ path: string; extra: RunPatchInput }> = [
       { path: 'debounced', extra: {} },
       { path: 'durable', extra: { handoffRecords: { autosave: [] } } },
     ];
@@ -2137,7 +2138,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
   describe('healing records the un-scoped rule already poisoned', () => {
     /** Persist one record, then reopen and arm — what a cockpit restart does. */
     const reopenArmed = (
-      record: Parameters<RunStore['updateRun']>[1] & { task: string },
+      record: RunPatchInput & { task: string },
       handle: typeof HANDLE | null = HANDLE,
     ) => {
       const seed = RunStore.open(dataDir);

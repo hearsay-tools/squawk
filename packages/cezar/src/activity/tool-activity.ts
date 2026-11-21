@@ -2,7 +2,8 @@ import type { ActivityTool } from '@open-mercato/cezar-contract';
 import { ACTIVITY_RATE_SECONDS, ACTIVITY_TOOL_TITLE_MAX } from '@open-mercato/cezar-contract/activity';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import type { ToolStatus, UiEvent, UiToolItem } from '../core/ui-events.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunAccess, RunLookup } from '../runs/ports.ts';
 import type { ToolActivitySource } from './read-model.ts';
 import { clampText } from './text.ts';
 
@@ -16,7 +17,7 @@ export const TOOL_ACTIVITY_IDLE_MS = 60_000;
  * What a feed needs from a run store: the run changes it drops runs on, the store's redactor, and
  * a run's current record, read once when an event would create the run's entry.
  */
-export interface ToolActivityStore extends Pick<RunStore, 'redactText' | 'getRun'> {
+export interface ToolActivityStore extends RunLookup, Pick<RunAccess, 'redactText'> {
   on(event: 'run', listener: (run: RunRecord) => void): unknown;
   on(event: 'deleted', listener: (runId: string) => void): unknown;
   off(event: 'run', listener: (run: RunRecord) => void): unknown;

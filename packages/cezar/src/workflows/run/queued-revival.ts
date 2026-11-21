@@ -2,7 +2,8 @@ import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { atTaskHead, atContinue } from './launch-read-resolver.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
-import type { RunRecord, RunStore, QueuedMessage } from '../../runs/store.ts';
+import type { RunRecord, QueuedMessage } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import { queuedStartAt } from '../run-scheduling.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
 import { stepKind, type WorkflowDef } from '../types.ts';
@@ -13,7 +14,7 @@ import { withCutOff } from './cut-off-work.ts';
 import { waitsForUnregisteredRunner } from '../../runs/legacy-run-rows.ts';
 
 export interface QueuedRevivalHost {
-  move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>): RunRecord | undefined;
   isActive(runId: string): boolean;
   workerExecutionStopped(runId: string): boolean;
   ownedJob(run: RunRecord): PendingJob;

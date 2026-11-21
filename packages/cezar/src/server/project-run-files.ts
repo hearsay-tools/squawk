@@ -1,5 +1,6 @@
 import { artifactDirectory } from '../artifacts/store.ts';
-import type { RunStore } from '../runs/store.ts';
+import type { RunAccess } from '../runs/ports.ts';
+
 import type { Context, MiddlewareHandler } from 'hono';
 import { matchedRoutes } from 'hono/route';
 import { delegationFailure } from '../delegation/routes.ts';
@@ -47,6 +48,6 @@ export const adoptFallbackControl: MiddlewareHandler<ProjectApiEnv> = async (con
 };
 
 /** All artifact routes bind their reads to the directory that owns the selected run. */
-export function runArtifactDirectory(store: Pick<RunStore, 'sourceDataDir'>, runId: string): string {
+export function runArtifactDirectory(store: RunAccess, runId: string): string {
   return artifactDirectory(store.sourceDataDir(runId), runId);
 }

@@ -11,7 +11,8 @@ import { registryEntry } from '../workspace/registry-entry.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';
 import { deriveRunContextEvents } from './event-history.ts';
 import type { RunLifecycleEvents, RunLifecycleSource } from './lifecycle.ts';
-import type { RunRecord, RunStore } from './store.ts';
+import type { RunAccess, RunEventLog, RunLookup, RunWrites } from './ports.ts';
+import type { RunRecord } from './store.ts';
 
 /**
  * Opted-in task webhooks from selected derived-state entries. One lifecycle subscriber queues
@@ -60,13 +61,7 @@ export interface DeliveryResult {
 }
 
 /** The run store methods a task webhook and `sendAgentReport` call. */
-export interface TaskWebhookStore {
-  getRun: RunStore['getRun'];
-  sourceDataDir: RunStore['sourceDataDir'];
-  appendEvent: RunStore['appendEvent'];
-  updateRun: RunStore['updateRun'];
-  runOwnership: RunStore['runOwnership'];
-}
+export type TaskWebhookStore = RunLookup & Pick<RunAccess, 'sourceDataDir' | 'runOwnership'> & Pick<RunEventLog, 'appendEvent'> & Pick<RunWrites, 'updateRun'>;
 
 export const WEBHOOK_TIMEOUT_MS = 10_000;
 export const WEBHOOK_ATTEMPTS = 3;

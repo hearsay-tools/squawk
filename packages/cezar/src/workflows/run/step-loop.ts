@@ -4,7 +4,8 @@ import { withoutHomeEnv } from '../../core/agent-env.ts';
 import { atTaskHead, atStepOpen, type LaunchSource } from './launch-read-resolver.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunRecord } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowDef } from '../types.ts';
 import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
@@ -42,7 +43,7 @@ interface StepLoopHost {
   active: Map<string, ActiveRun>;
   closingWakeDecision(id: string, holds: boolean, cancelled: boolean, error: string | undefined): 'park' | 'settle' | 'capped';
   cleanCloseFailsDelivery(id: string, state: ActiveRun): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   workerExecutionStopped(id: string): boolean;
   workerWorkspaces(): WorkerWorkspacePort | undefined;

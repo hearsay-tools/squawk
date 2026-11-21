@@ -10,7 +10,8 @@ import { getStatus } from './git.ts';
 import { existsSync } from 'node:fs';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import type { RunManager } from '../workflows/run.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunAccess, RunFamilyReads, RunLookup, RunRetention, RunWrites } from '../runs/ports.ts';
 
 // ---- session git view (redesign R5 Step 1.2 — §"Git/session API additions").
 // Structured sibling of the text-blob /diff route in server.ts.
@@ -44,7 +45,8 @@ function sharedWorkspaceRefusal(run: RunRecord, intent: keyof typeof SHARED_REFU
 export type CheckoutIntent = 'read' | 'mutate' | 'publish' | 'remove' | 'open';
 export interface RunCheckoutHost {
   root: string;
-  store: Pick<RunStore, 'getRun' | 'updateRun' | 'sourceDataDir' | 'writeRefusal' | 'fallbackDeleteError' | 'canDeleteRun' | 'listWorkersOf'>;
+  store: RunLookup & Pick<RunWrites, 'updateRun'> & Pick<RunAccess, 'sourceDataDir' | 'writeRefusal'> &
+    Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> & Pick<RunFamilyReads, 'listWorkersOf'>;
   manager: Pick<RunManager, 'isActive' | 'claimForPublish' | 'claimWorktreeReclaim'>;
 }
 

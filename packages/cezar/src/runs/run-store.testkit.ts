@@ -6,6 +6,7 @@ import { RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, type RunRowInput }
 import { closeClaimSession } from './run-claims.ts';
 import { encodeRunRow } from './run-row.ts';
 import type { RunRecord, RunStore } from './store.ts';
+import type { RunWrites, TranscriptFactsPort } from './ports.ts';
 
 /**
  * The one way tests put runs on disk and read them back (#779). Every test that seeded or read
@@ -176,7 +177,7 @@ export function crashStore(store: RunStore): void {
  * `hasPendingHumanAsk` summary mirrored until phase 4b (hearsay-tools/cezarion#1236). The open
  * human wait is the display fact; this is the delivery one.
  */
-export function hasPendingAsk(store: Pick<RunStore, 'transcriptFacts'>, runId: string): boolean {
+export function hasPendingAsk(store: TranscriptFactsPort, runId: string): boolean {
   return store.transcriptFacts(runId).pendingAsk !== undefined;
 }
 
@@ -190,7 +191,7 @@ export function commitStagedRuns(store: RunStore, staged: Map<string, RunRecord>
 /** Seed a fixture status through the ordinary update path, including its persistence rules.
  * Tests may construct states that no run exit can reach. Production must use store.move. */
 export function setRunStatus(
-  store: Pick<RunStore, 'updateRun'>,
+  store: RunWrites,
   id: string,
   status: RunRecord['status'],
   extras: Partial<Omit<RunRecord, 'id' | 'steps' | 'status' | 'waits' | 'lastWaits'>> & { waits?: never; lastWaits?: never } = {},
@@ -201,7 +202,7 @@ export function setRunStatus(
 
 /** Seed wait fixtures through the unchecked update path. Production uses wait commits. */
 export function seedWaits(
-  store: Pick<RunStore, 'updateRun'>,
+  store: RunWrites,
   runId: string,
   patch: Partial<Pick<RunRecord, 'waits' | 'lastWaits'>>,
 ): RunRecord | undefined {

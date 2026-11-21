@@ -1,5 +1,5 @@
 import type { RunOutcome } from '../runs/outcome-commit.ts';
-import type { RunStore } from '../runs/store.ts';
+import type { RunWrites } from '../runs/ports.ts';
 
 /**
  * The outcome lists `workflows/run.ts` commits through `RunStore.commitOutcome`
@@ -45,7 +45,7 @@ export function retryDeliveryOutcomes(outcomes: readonly RunOutcome[]): readonly
 /** Deferred delivery must commit before its queue entry disappears from memory. If the second
  * write also fails, keep the question and replay ID and restart only the wake accounting.
  * Other deliveries retain their existing best-effort recovery after the transport accepted them. */
-export function retryDeliveryCheckpoint(store: Pick<RunStore, 'commitOutcome'>, runId: string, outcomes: readonly RunOutcome[]):
+export function retryDeliveryCheckpoint(store: RunWrites, runId: string, outcomes: readonly RunOutcome[]):
   { outcomes?: readonly RunOutcome[]; committed: boolean } {
   const retry = retryDeliveryOutcomes(outcomes);
   if (!retry) return { committed: false };

@@ -1,12 +1,13 @@
 import type { ActiveRun } from './active-run.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import type { RunLookup } from '../runs/ports.ts';
 import { chargesBudget, chargesBudgetMessage, resolvedWaits, waitInputId } from './waits.ts';
 
 /** Facts read when the harness acknowledges its current flight, before its single commit.
  *  Retired markers are cleared here in the same order as the original acknowledgement path. */
 export function analyseAcknowledgedInput(runId: string, state: ActiveRun,
   flight: NonNullable<ActiveRun['inputState']['agentInputFlight']>, inputIds: readonly string[],
-  store: Pick<RunStore, 'getRun'>, admitted: ReadonlySet<string>, owesWake: (run: RunRecord) => boolean) {
+  store: RunLookup, admitted: ReadonlySet<string>, owesWake: (run: RunRecord) => boolean) {
   const queue = store.getRun(runId)?.agentInputs ?? [];
   if (!queue.some(input => inputIds.includes(input.id) && !input.deliveredAt)) return undefined;
   // One checkpoint per wake batch: every resolved wait it carries is delivered together

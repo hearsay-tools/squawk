@@ -8,7 +8,8 @@ import type { PreviewHostLike } from '../../preview/registration.ts';
 import type { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
+import type { RunRecord, StepState } from '../../runs/store.ts';
+import type { RunPatchInput } from '../../runs/ports.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowDef, WorkflowStepDef } from '../types.ts';
@@ -38,7 +39,7 @@ interface RunSettlementHost {
   isSyntheticContinuation(run: RunRecord, step: StepState): boolean;
   generation(id: string): symbol | undefined;
   isActive(id: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<RunPatchInput, 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   saveWorktree(id: string, state: ActiveRun, reason: AutosaveReason): Promise<void>;
   settleSuccess(id: string, durableRootFinish?: boolean, keepStepId?: string): Promise<void>;

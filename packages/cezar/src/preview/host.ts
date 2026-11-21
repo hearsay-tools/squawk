@@ -5,7 +5,8 @@ import { randomBytes } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PreviewStopRequest, PreviewStopResult, PreviewClientMessage, PreviewQuality, PreviewServer, PreviewServerMessage, PreviewStateMessage } from '@open-mercato/cezar-contract';
-import type { RunStore } from '../runs/store.ts';
+
+import type { RunAccess, RunEventLog, RunLookup, WorkerExecutions } from '../runs/ports.ts';
 import { recordAgentBrowser } from './agent-marker.ts';
 import { attachedSchema, ChromiumMissingError, launchBrowser, readOsRelease, waitForExit, type BrowserExit, type BrowserHandle } from './browser-launch.ts';
 import { AgentCdpLink, type AgentClient } from './cdp-proxy.ts';
@@ -31,7 +32,7 @@ export type RunContext = {
   title: string;
   worktreePath: string;
   dataDir: string;
-  store: Pick<RunStore, 'getRun' | 'appendEvent'> & Partial<Pick<RunStore, 'writeRefusal' | 'spawnScope'>>;
+  store: RunLookup & Pick<RunEventLog, 'appendEvent'> & Partial<Pick<RunAccess, 'writeRefusal'> & Pick<WorkerExecutions, 'spawnScope'>>;
 };
 
 export type PreviewTarget = { port: number } | { url: string } | { agent: true };

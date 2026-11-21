@@ -6,19 +6,24 @@ import type { Home } from './home/home.ts';
 import { forwardToSessionGroups } from './core/session-process.ts';
 import { pruneOrphans } from './git-worktree.ts';
 import { DEFAULT_WORKTREE_RETENTION, resolveWorktreeRetention } from './config.ts';
-import { reclaimWorktrees } from './runs/retention.ts';
+import { reclaimWorktrees, type RetentionStore } from './runs/retention.ts';
 import { sweepMergedBranches } from './server/repo-branch-sweep.ts';
 import type { RunStore } from './runs/store.ts';
+import type { RunAccess, RunQueries, StoreHandle } from './runs/ports.ts';
+import type { SweepProject } from './server/repo-branch-sweep.ts';
 import type { RunManager } from './workflows/run.ts';
 import type { PreviewHost } from './preview/host.ts';
 import type { getRepoInfo } from './server/git.ts';
 
 const reconcileDefaults = { pruneOrphans, resolveWorktreeRetention, reclaimWorktrees, sweepMergedBranches, log: (line: string) => console.log(line) };
 
+/** What the startup reconcile reads, and hands on to the retention enforcer and the branch sweep. */
+export type ReconcileStore = Pick<RunAccess, 'unavailable'> & Pick<RunQueries, 'listRunIds'> & RetentionStore & SweepProject['store'];
+
 export async function reconcileServeWorktrees(
   repoRoot: string,
   repo: Awaited<ReturnType<typeof getRepoInfo>>,
-  store: RunStore,
+  store: ReconcileStore,
   manager: RunManager,
   previewHost: PreviewHost | undefined,
   steps = reconcileDefaults,
@@ -93,7 +98,7 @@ export const STOP_SERVE_BOUND_MS = 5_000;
 
 export interface StopServeOptions {
   /** The boot store: closed here when the server's shutdown failed or did not finish in time. */
-  store?: Pick<RunStore, 'close'> | undefined;
+  store?: Pick<StoreHandle, 'close'> | undefined;
   boundMs?: number;
   forward?: (signal: NodeJS.Signals) => void;
 }

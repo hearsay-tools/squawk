@@ -1,7 +1,7 @@
 import { testHome } from './home/test-home.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WORKTREE_RETENTION } from './config.ts';
-import { reconcileServeWorktrees, recoverServeProject, warnServeBind, printServeBanner, stopServe } from './serve-boot.ts';
+import { reconcileServeWorktrees, recoverServeProject, type ReconcileStore, warnServeBind, printServeBanner, stopServe } from './serve-boot.ts';
 import type { RunStore } from './runs/store.ts';
 import type { RunManager } from './workflows/run.ts';
 import type { getRepoInfo } from './server/git.ts';
@@ -11,7 +11,7 @@ import type { detectEnvironment } from './core/backend-detect.ts';
 import type { PreviewHost } from './preview/host.ts';
 
 function reconcileFixture(unavailable = false) {
-  const store = { unavailable, listRunIds: vi.fn(() => ['live-run']) } as unknown as RunStore;
+  const store = { unavailable, listRunIds: vi.fn(() => ['live-run']) } as unknown as ReconcileStore;
   const manager = {} as RunManager;
   const repo = { root: '/repo' } as NonNullable<Awaited<ReturnType<typeof getRepoInfo>>>;
   const steps = {
