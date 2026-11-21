@@ -8,7 +8,14 @@ import { afterEach, expect, it } from 'vitest';
 import { antigravityHarness } from './runtime-env.ts';
 import { discoverAntigravitySkills } from './antigravity-skill-catalog.ts';
 import { antigravityReadFile } from './client-files.ts';
+import { ProviderAuthService } from '../../core/provider-auth.ts';
 registerRunner(antigravityRunner);
+
+it('refuses terminal sign-in and explains how to supply credentials', () => {
+  const auth = new ProviderAuthService();
+  expect(auth.loginCommand('antigravity')).toBeNull();
+  expect(auth.loginRefusalHint('antigravity', '~/.gemini')).toContain('GEMINI_API_KEY');
+});
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 async function workspace() { const dir = await mkdtemp(join(tmpdir(), 'antigravity-runtime-')); dirs.push(dir); return dir; }

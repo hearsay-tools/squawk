@@ -140,7 +140,7 @@ function ProviderActions({
           Check again
         </Button>
       ) : null}
-      {state === 'disconnected' ? (
+      {state === 'disconnected' && provider.terminalLogin !== false ? (
         <Button
           type="button"
           variant="outline"

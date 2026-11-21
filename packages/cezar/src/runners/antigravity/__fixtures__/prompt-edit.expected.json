@@ -1,0 +1,170 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_9669665411146399823",
+      "name": "Read",
+      "title": "Running client_view_file",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "absolute_path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "a0dc3e25dcbe4ef8bb9f947d4a3e0e2a",
+      "name": "Edit",
+      "title": "Run edit_file?",
+      "toolKind": "edit",
+      "status": "pending",
+      "input": {
+        "AllowMultiple": false,
+        "Description": "Replace alpha with beta in notes.txt",
+        "EndLine": 1,
+        "Instruction": "Replace alpha with beta",
+        "ReplacementContent": "beta",
+        "StartLine": 1,
+        "TargetContent": "alpha",
+        "TargetFile": "/work/project/notes.txt"
+      },
+      "output": "",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt",
+          "line": 1
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "a0dc3e25dcbe4ef8bb9f947d4a3e0e2a",
+      "name": "Edit",
+      "title": "Running edit_file",
+      "toolKind": "edit",
+      "status": "running",
+      "input": {
+        "file_path": "/work/project/notes.txt"
+      },
+      "output": "",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "a0dc3e25dcbe4ef8bb9f947d4a3e0e2a",
+      "name": "Edit",
+      "title": "Running edit_file",
+      "toolKind": "edit",
+      "status": "completed",
+      "input": {
+        "file_path": "/work/project/notes.txt"
+      },
+      "output": "Edit notes.txt",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "edited"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": "edited"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_9669665411146399823",
+      "name": "Read",
+      "title": "Running client_view_file",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "absolute_path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 8324,
+      "output": 167,
+      "total": 42957,
+      "reasoning": 0,
+      "cacheRead": 34466,
+      "cacheWrite": 0
+    }
+  }
+]

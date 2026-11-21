@@ -5,7 +5,7 @@ import { antigravityTool } from './tool-normalization.ts';
 import { antigravityUsage } from './usage.ts';
 import { filterAntigravityUpdate, antigravityUpdateError } from './wire-updates.ts';
 
-export interface AntigravityUiState { events: AcpEvents; prompts: Array<string | number>; error?: string }
+export interface AntigravityUiState { events: AcpEvents; prompts: Array<string | number>; error?: string | undefined }
 export function createAntigravityUiState(): AntigravityUiState {
   return { events: new AcpEvents({}, { normalizeTool: antigravityTool }), prompts: [] };
 }

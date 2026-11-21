@@ -1,0 +1,35 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "Agent execution error: Agent execution terminated due to error. (\"agent executor error: Error 400, Message: {\\\"error\\\":{\\\"message\\\":\\\"unknown provider for model gemini-3.8-flash\\\",\\\"type\\\":\\\"invalid_request_error\\\",\\\"code\\\":\\\"model_not_found\\\",\\\"param\\\":\\\"model\\\"}}, Status: 400 Bad Request\")"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": "Agent execution error: Agent execution terminated due to error. (\"agent executor error: Error 400, Message: {\\\"error\\\":{\\\"message\\\":\\\"unknown provider for model gemini-3.8-flash\\\",\\\"type\\\":\\\"invalid_request_error\\\",\\\"code\\\":\\\"model_not_found\\\",\\\"param\\\":\\\"model\\\"}}, Status: 400 Bad Request\")"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "error"
+  }
+]

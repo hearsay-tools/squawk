@@ -1,0 +1,250 @@
+[
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants a list of the exact names of every skill available to me, all of them, comma separated"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ", nothing else.\nLet's check the available skills listed in the system prompt:\n1. `run-workflow`\n2"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ". `sk-cwd-agents`\n3. `sk-cwd-gemini`\n4. `sk"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "-extra-agents`\n5. `sk-extra-gemini`\n6. `sk-gh-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "cli`\n7. `sk-gh-config`\n\nLet's double check if there are any other skills or if"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the user's prompt means *only* comma separated, nothing else.\n\"List the exact names of every skill available to you,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " all of them, comma separated, nothing else.\"\n\nLet's check the list again from the prompt under `<skills>`:\n- run"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "-workflow (/work/project/skills/system/run-workflow/SKILL."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "md)\n- sk-cwd-agents (/work/project"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-cwd-gemini"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " (/work/project/.gemini/skills/sk-cwd-gemini/SK"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "ILL.md)\n- sk-extra-agents (/work/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/extra/.agents/skills/sk-extra-agents/SKILL.md)\n- sk-extra-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "gemini (/work/extra/.gemini/skills/sk"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "-extra-gemini/SKILL.md)\n- sk-gh-cli (/work"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/work/gem/antigravity-cli/skills/sk-gh-cli/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "SKILL.md)\n- sk-gh-config (/work/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "S/gem/config/skills/sk-gh-config/SKILL.md)\n\nExact names:\n`run-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "workflow`, `sk-cwd-agents`, `sk-cwd-gemini`, `sk-extra-agents`,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " `sk-extra-gemini`, `sk-gh-cli`, `sk-gh-config`\n\nWait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ", should it include backticks or just the names comma-separated? \"comma separated, nothing else.\"\nLet's output:"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "\nrun-workflow, sk-cwd-agents, sk-cwd-gemini, sk-extra-agents,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " sk-extra-gemini, sk-gh-cli, sk-gh-config\n\nLet's verify everything"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " carefully.\nNo extra text, no markdown code blocks unless needed, but \"nothing else\" means strictly the comma-separated list of names"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ".\n\nLet's check the exact list of names:\nrun-workflow, sk-cwd-agents, sk-cwd-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "gemini, sk-extra-agents, sk-extra-gemini, sk-gh-cli, sk-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "gh-config\n\nReady."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants a list of the exact names of every skill available to me, all of them, comma separated, nothing else.\nLet's check the available skills listed in the system prompt:\n1. `run-workflow`\n2. `sk-cwd-agents`\n3. `sk-cwd-gemini`\n4. `sk-extra-agents`\n5. `sk-extra-gemini`\n6. `sk-gh-cli`\n7. `sk-gh-config`\n\nLet's double check if there are any other skills or if the user's prompt means *only* comma separated, nothing else.\n\"List the exact names of every skill available to you, all of them, comma separated, nothing else.\"\n\nLet's check the list again from the prompt under `<skills>`:\n- run-workflow (/work/project/skills/system/run-workflow/SKILL.md)\n- sk-cwd-agents (/work/project/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-cwd-gemini (/work/project/.gemini/skills/sk-cwd-gemini/SKILL.md)\n- sk-extra-agents (/work//extra/.agents/skills/sk-extra-agents/SKILL.md)\n- sk-extra-gemini (/work/extra/.gemini/skills/sk-extra-gemini/SKILL.md)\n- sk-gh-cli (/work/work/gem/antigravity-cli/skills/sk-gh-cli/SKILL.md)\n- sk-gh-config (/work/S/gem/config/skills/sk-gh-config/SKILL.md)\n\nExact names:\n`run-workflow`, `sk-cwd-agents`, `sk-cwd-gemini`, `sk-extra-agents`, `sk-extra-gemini`, `sk-gh-cli`, `sk-gh-config`\n\nWait, should it include backticks or just the names comma-separated? \"comma separated, nothing else.\"\nLet's output:\nrun-workflow, sk-cwd-agents, sk-cwd-gemini, sk-extra-agents, sk-extra-gemini, sk-gh-cli, sk-gh-config\n\nLet's verify everything carefully.\nNo extra text, no markdown code blocks unless needed, but \"nothing else\" means strictly the comma-separated list of names.\n\nLet's check the exact list of names:\nrun-workflow, sk-cwd-agents, sk-cwd-gemini, sk-extra-agents, sk-extra-gemini, sk-gh-cli, sk-gh-config\n\nReady."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "run-workflow, sk-cwd-agents, sk-cwd-gemini,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": " sk-extra-agents, sk-extra-gemini, sk-gh-cli, sk-gh-config"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15199,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "run-workflow, sk-cwd-agents, sk-cwd-gemini, sk-extra-agents, sk-extra-gemini, sk-gh-cli, sk-gh-config"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 14492,
+      "output": 707,
+      "total": 15199,
+      "reasoning": 666,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    }
+  }
+]

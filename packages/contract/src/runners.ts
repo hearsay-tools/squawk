@@ -67,6 +67,8 @@ export const runnerEntrySchema = z.object({
   installHint: z.string(),
   /** The command that logs the CLI in, as a terminal runs it. */
   loginCommand: z.string(),
+  /** false when this runner has no terminal sign-in command. Omitted means available. */
+  terminalLogin: z.boolean().optional(),
   /** A generic example account folder for the add-account dialog. */
   accountFolderExample: z.string().optional(),
   models: runnerModelSuggestionsSchema,

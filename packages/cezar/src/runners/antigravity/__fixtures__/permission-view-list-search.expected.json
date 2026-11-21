@@ -1,0 +1,520 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " me to use the `view_file` tool to read `notes.txt` in"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the workspace (`/work/project`).\nThen reply with its content *"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "only*.\n\nLet's check the workspace path: `/work/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/ws/notes.txt`.\nLet's call `view_file` on `/work"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/project/notes.txt`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14789,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to use the `view_file` tool to read `notes.txt` in the workspace (`/work/project`).\nThen reply with its content *only*.\n\nLet's check the workspace path: `/work//ws/notes.txt`.\nLet's call `view_file` on `/work/project/notes.txt`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "61d2e588-427b-410e-9cc5-00009c3ea2bc:2",
+      "name": "Read",
+      "title": "Running view_file",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "file_path": "/work/project/notes.txt",
+        "start_line": 0,
+        "end_line": 799
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "61d2e588-427b-410e-9cc5-00009c3ea2bc:2",
+      "name": "Read",
+      "title": "Running view_file",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "file_path": "/work/project/notes.txt",
+        "start_line": 0,
+        "end_line": 799
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ],
+      "output": "Read notes.txt"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "Wait, the file content view returned:\n```\nCreated At: ...\nFile"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " Path: ...\nTotal Lines: 2\n...\n1: alpha\n2: \n```\nWait, the actual file"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " content is:\n`alpha\\n` (or two lines: `alpha` and empty line).\nLet's"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " check the exact file content or view lines 1 to 2 specifically without line numbers / or what `view_file` returned"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": ".\nWait, `view_file` output includes the wrapper text from the tool output format, but the file content itself has"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " lines 1 and 2:\nLine 1: `alpha`\nLine 2: (empty line)\n\nLet'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "s double check if there's any other content or if we should just output the file content:\n`alpha` ("
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "with a newline or exact content).\nLet's look at `notes.txt` content. Line 1: `alpha`,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " Line 2: empty.\nWait, let's verify if `alpha` is the exact content.\nLet's check `view"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "_file` output carefully.\n`1: alpha`\n`2: `\nSo the content of `notes.txt"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "` is `alpha\\n`.\n\nLet's reply with its content only."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "Wait, the file content view returned:\n```\nCreated At: ...\nFile Path: ...\nTotal Lines: 2\n...\n1: alpha\n2: \n```\nWait, the actual file content is:\n`alpha\\n` (or two lines: `alpha` and empty line).\nLet's check the exact file content or view lines 1 to 2 specifically without line numbers / or what `view_file` returned.\nWait, `view_file` output includes the wrapper text from the tool output format, but the file content itself has lines 1 and 2:\nLine 1: `alpha`\nLine 2: (empty line)\n\nLet's double check if there's any other content or if we should just output the file content:\n`alpha` (with a newline or exact content).\nLet's look at `notes.txt` content. Line 1: `alpha`, Line 2: empty.\nWait, let's verify if `alpha` is the exact content.\nLet's check `view_file` output carefully.\n`1: alpha`\n`2: `\nSo the content of `notes.txt` is `alpha\\n`.\n\nLet's reply with its content only."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "alpha\n"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15257,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "alpha\n"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 17418,
+      "output": 437,
+      "total": 30046,
+      "reasoning": 381,
+      "cacheRead": 12191,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-5"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "The user asks: \"Use a directory listing tool (list_directory) to list the files in the"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": " workspace, not a shell command. If you have no such tool, reply: NO-LIST-TOOL\"\n\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "'s check my available tools in the declaration list:\n- `ask_question`\n- `call_mcp_tool`\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "- `define_subagent`\n- `generate_image`\n- `invoke_subagent`\n-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": " `list_resources`\n- `manage_subagents`\n- `manage_task`\n- `read"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "_resource`\n- `read_url_content`\n- `replace_file_content`\n- `run_"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "command`\n- `run_workflow`\n- `schedule`\n- `search_web`\n- "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "`send_message`\n- `view_file`\n- `write_to_file`\n\nDo I have a `list_directory"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "` tool?\nNo, `list_directory` is not among my available tools (I have `list_resources"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "` for MCP servers, but no `list_directory` tool).\nTherefore, according to the instruction: \"If you have no such tool,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": " reply: NO-LIST-TOOL\".\n\nLet's output `NO-LIST-TOOL`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": "The user asks: \"Use a directory listing tool (list_directory) to list the files in the workspace, not a shell command. If you have no such tool, reply: NO-LIST-TOOL\"\n\nLet's check my available tools in the declaration list:\n- `ask_question`\n- `call_mcp_tool`\n- `define_subagent`\n- `generate_image`\n- `invoke_subagent`\n- `list_resources`\n- `manage_subagents`\n- `manage_task`\n- `read_resource`\n- `read_url_content`\n- `replace_file_content`\n- `run_command`\n- `run_workflow`\n- `schedule`\n- `search_web`\n- `send_message`\n- `view_file`\n- `write_to_file`\n\nDo I have a `list_directory` tool?\nNo, `list_directory` is not among my available tools (I have `list_resources` for MCP servers, but no `list_directory` tool).\nTherefore, according to the instruction: \"If you have no such tool, reply: NO-LIST-TOOL\".\n\nLet's output `NO-LIST-TOOL`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "NO-LIST-TOOL"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15912,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": "NO-LIST-TOOL"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-5",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3232,
+      "output": 280,
+      "total": 15912,
+      "reasoning": 275,
+      "cacheRead": 12400,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-8"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-9",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "The user asks: \"Find which file in the workspace contains the word needle, using a file search tool"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": " (search_directory, find_file or grep_search), not a shell command. If you have no such tool"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": ", reply: NO-SEARCH-TOOL\"\n\nLet's check my available tools:\nDo I have `search_directory"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "`, `find_file`, or `grep_search`?\nLet's check tool declarations:\n- `ask"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "_question`\n- `call_mcp_tool`\n- `define_subagent`\n- "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "`generate_image`\n- `invoke_subagent`\n- `list_resources`\n- `manage_"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "subagents`\n- `manage_task`\n- `read_resource`\n- `read_url_"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "content`\n- `replace_file_content`\n- `run_command`\n- `run_workflow"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "`\n- `schedule`\n- `search_web`\n- `send_message`\n- `view"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "_file`\n- `write_to_file`\n\nNone of these tools are named `search_directory`, "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "`find_file`, or `grep_search`. (I have `search_web` which searches the web, but"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": " no directory search / grep search tool for local files).\nTherefore, I have no such tool.\nAccording to the instruction: \"If"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": " you have no such tool, reply: NO-SEARCH-TOOL\".\n\nLet's reply `NO-SEARCH-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "TOOL`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-9",
+      "text": "The user asks: \"Find which file in the workspace contains the word needle, using a file search tool (search_directory, find_file or grep_search), not a shell command. If you have no such tool, reply: NO-SEARCH-TOOL\"\n\nLet's check my available tools:\nDo I have `search_directory`, `find_file`, or `grep_search`?\nLet's check tool declarations:\n- `ask_question`\n- `call_mcp_tool`\n- `define_subagent`\n- `generate_image`\n- `invoke_subagent`\n- `list_resources`\n- `manage_subagents`\n- `manage_task`\n- `read_resource`\n- `read_url_content`\n- `replace_file_content`\n- `run_command`\n- `run_workflow`\n- `schedule`\n- `search_web`\n- `send_message`\n- `view_file`\n- `write_to_file`\n\nNone of these tools are named `search_directory`, `find_file`, or `grep_search`. (I have `search_web` which searches the web, but no directory search / grep search tool for local files).\nTherefore, I have no such tool.\nAccording to the instruction: \"If you have no such tool, reply: NO-SEARCH-TOOL\".\n\nLet's reply `NO-SEARCH-TOOL`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-10",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-10",
+    "field": "text",
+    "delta": "NO-SEARCH-TOOL"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 16625,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-10",
+      "role": "assistant",
+      "text": "NO-SEARCH-TOOL"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-8",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3700,
+      "output": 324,
+      "total": 16625,
+      "reasoning": 319,
+      "cacheRead": 12601,
+      "cacheWrite": 0
+    }
+  }
+]

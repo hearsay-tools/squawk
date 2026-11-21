@@ -1,0 +1,68 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "interaction_d72aa2aa",
+      "name": "Please choose a color:",
+      "title": "Please choose a color:",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {}
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "interaction_d72aa2aa",
+      "name": "Please choose a color:",
+      "title": "Please choose a color:",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {},
+      "output": "Response received"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "blue"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": "blue"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 5662,
+      "output": 60,
+      "total": 29984,
+      "reasoning": 0,
+      "cacheRead": 24262,
+      "cacheWrite": 0
+    }
+  }
+]

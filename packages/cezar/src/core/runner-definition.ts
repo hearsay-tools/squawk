@@ -226,8 +226,8 @@ export interface RunnerCli {
 export interface RunnerLoginData {
   /** Args that ask the CLI whether it is logged in. */
   readonly statusArgs: readonly string[];
-  /** Args that log the CLI in. */
-  readonly loginArgs: readonly string[];
+  /** Args that log the CLI in. null means no terminal sign-in command exists. */
+  readonly loginArgs: readonly string[] | null;
   /** Shown when the CLI is not installed. */
   readonly installHint: string;
   /** A larger output ceiling for a status command whose output grows with the user's setup. */

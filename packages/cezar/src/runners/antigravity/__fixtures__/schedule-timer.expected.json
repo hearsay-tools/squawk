@@ -1,0 +1,300 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " me to:\n1. Use the `schedule` tool to set a one-shot"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " timer that fires 20 seconds from now with the message: `say TIMER-FIRED`.\n2. Then"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " reply with: `scheduled`.\n\nLet's check the parameters for `schedule`:\n- `DurationSeconds`: "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`20`\n- `Prompt`: `say TIMER-FIRED`\n- `TimerCondition`: `'never'` (default"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ")\n- `toolSummary`: `Schedule timer`\n- `toolAction`: `Scheduling one-shot timer`\n\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "'s do this tool call."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14377,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Now the user"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " specifically requested: \"Then reply with: scheduled\".\nLet's output "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`scheduled`. Note the instructions about background tasks and communication style: we scheduled a timer, but the user explicitly requested: \"Then"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " reply with: scheduled\". Let's provide the reply as requested."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to:\n1. Use the `schedule` tool to set a one-shot timer that fires 20 seconds from now with the message: `say TIMER-FIRED`.\n2. Then reply with: `scheduled`.\n\nLet's check the parameters for `schedule`:\n- `DurationSeconds`: `20`\n- `Prompt`: `say TIMER-FIRED`\n- `TimerCondition`: `'never'` (default)\n- `toolSummary`: `Schedule timer`\n- `toolAction`: `Scheduling one-shot timer`\n\nLet's do this tool call.Now the user specifically requested: \"Then reply with: scheduled\".\nLet's output `scheduled`. Note the instructions about background tasks and communication style: we scheduled a timer, but the user explicitly requested: \"Then reply with: scheduled\". Let's provide the reply as requested."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "scheduled"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14684,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "scheduled"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "The timer fired and the system sent a message containing `say TIMER-FIRED`.\nLet'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "s respond to this message / event appropriately. The user's original request was testing the schedule tool and having the timer"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": " fire. Now that it fired, we can acknowledge it or state that the timer has fired."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": "The timer fired and the system sent a message containing `say TIMER-FIRED`.\nLet's respond to this message / event appropriately. The user's original request was testing the schedule tool and having the timer fire. Now that it fired, we can acknowledge it or state that the timer has fired."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "The timer has fired"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": " with the message: `say TIMER-FIRED`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14945,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "The timer has fired with the message: `say TIMER-FIRED`."
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 19267,
+      "output": 308,
+      "total": 44006,
+      "reasoning": 249,
+      "cacheRead": 24431,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-6"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-7",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": "The user asks"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": ": \"Did your timer fire? Reply yes or no.\"\nYes, it"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "reasoning",
+    "delta": " did fire (we received the message `say TIMER-FIRED` from task-2).\nLet's reply with `yes`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-7",
+      "text": "The user asks: \"Did your timer fire? Reply yes or no.\"\nYes, it did fire (we received the message `say TIMER-FIRED` from task-2).\nLet's reply with `yes`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "yes"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15132,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": "yes"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-6",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2807,
+      "output": 48,
+      "total": 15132,
+      "reasoning": 47,
+      "cacheRead": 12277,
+      "cacheWrite": 0
+    }
+  }
+]

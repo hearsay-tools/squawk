@@ -453,7 +453,7 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
 
         {/* Public account actions stay separate from the opt-in identity details below. */}
         <div className="settings-account-actions">
-          {status?.status !== 'connected' ? (
+          {status?.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
             <Button
               type="button"
               size="sm"

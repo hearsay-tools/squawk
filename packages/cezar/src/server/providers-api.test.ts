@@ -60,6 +60,9 @@ describe('workspace provider API', () => {
   const savedRemote = process.env.CEZ_REMOTE;
 
   beforeEach(() => {
+    for (const golden of Object.values(GOLDENS)) {
+      for (const [name, value] of Object.entries(golden.connectedEnv ?? {})) vi.stubEnv(name, value);
+    }
     root = mkdtempSync(join(tmpdir(), 'cez-providers-api-'));
     store = RunStore.open(join(root, '.ai/cezar'));
     delete process.env.CEZ_AGENT_MODELS_LOCKED;
@@ -68,6 +71,7 @@ describe('workspace provider API', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     store.flush();
     rmSync(root, { recursive: true, force: true });
     if (savedModelsLocked === undefined) delete process.env.CEZ_AGENT_MODELS_LOCKED;

@@ -50,9 +50,10 @@ describe('parity expectations follow the runner facts rows', () => {
 
   it('exempts the native permission rows by the declared nativePermission', () => {
     const none = where(facts => facts.nativePermission === 'none');
-    for (const criterion of ['P1', 'P3', 'P4', 'P6']) expect(exempted(criterion), criterion).toEqual(none);
-    // P2, P5 and P7 keep the exemptions a runner declares in its mock part beside the declared ones.
-    for (const criterion of ['P2', 'P5', 'P7']) {
+    for (const criterion of ['P1', 'P4', 'P6']) expect(exempted(criterion), criterion).toEqual(none);
+    // These rows also keep named wire gaps from the mock part, including ACP's lack of a
+    // notification that settles a native permission without the client's response (P3).
+    for (const criterion of ['P2', 'P3', 'P5', 'P7']) {
       const named = runners.filter(id => mockRows()[id]!.parityExemptions?.[criterion] !== undefined);
       expect(named, criterion).not.toEqual([]);
       expect(exempted(criterion), criterion).toEqual(runners.filter(id => none.includes(id) || named.includes(id)));

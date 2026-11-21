@@ -1329,7 +1329,7 @@ export function createApp(deps: ServerDeps) {
       // safe degradation. Running the bare command would sign the user into a DIFFERENT account
       // than the one they clicked, and nothing in the terminal would say so.
       if (command === null) {
-        return c.json({ error: `This account's folder cannot be used in a terminal command: ${profile.configDir}` }, 409);
+        return c.json({ error: providerAuth.loginRefusalHint(provider, profile.configDir) }, 409);
       }
       // BOTH branches must mean "is this account signed in NOW". The default branch refreshes; the
       // account branch has to evict first, because `profileStatus` serves the per-account cache and

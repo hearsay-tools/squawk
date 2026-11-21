@@ -1,0 +1,96 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "71afe14db29c4fcf86da9af63ad2441c",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo probe-42",
+        "cwd": "/work/project"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "71afe14db29c4fcf86da9af63ad2441c",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo probe-42",
+        "cwd": "/work/project"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "71afe14db29c4fcf86da9af63ad2441c",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "echo probe-42",
+        "cwd": "/work/project"
+      },
+      "output": "probe-42\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "probe-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "42"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": "probe-42"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 7289,
+      "output": 76,
+      "total": 27672,
+      "reasoning": 0,
+      "cacheRead": 20307,
+      "cacheWrite": 0
+    }
+  }
+]

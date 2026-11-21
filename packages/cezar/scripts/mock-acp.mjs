@@ -90,6 +90,8 @@ async function prompt(frame) {
   finally { active = undefined; }
 }
 async function runPrompt(text, turn) {
+  // The managed recovery prompt is supplied as the resumed system prompt.
+  if (sessionParams._meta?.antigravity?.systemPrompt?.append?.includes('mock:approval')) return permissionPrompt('mock:approval', turn);
   if (text.includes('mock:acp-late-steer')) {
     turn.late = true;
     const released = new Promise(resolve => { turn.releaseLate = resolve; });
