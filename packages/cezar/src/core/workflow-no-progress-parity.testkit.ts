@@ -26,7 +26,7 @@ function controlDeadlines(killEscalation: boolean, onDeadlineArmed?: () => void)
   vi.spyOn(globalThis, 'setTimeout').mockImplementation(((...params: Parameters<typeof setTimeout>) => {
     const [callback, ms, ...args] = params;
     // OpenCode keeps its own 4 s kill grace; the other runners
-    // use the injected 150 ms grace below.
+    // use the injected 150 ms grace below, including native cancellation/EOF phases.
     if (ms !== 800 && !(killEscalation && (ms === 150 || ms === 4_000))) {
       return realSetTimeout(callback, ms, ...args);
     }
@@ -149,6 +149,8 @@ export const describeWorkflowNoProgressParity = workflowNoProgressParity({
         expect(run.error).toContain('no progress');
         expect(store.readEvents(runId).some(e => e.type === 'check-output')).toBe(false);
       }
-    }, { workflowDef, timings: { noProgressTimeoutMs: 800, killGraceMs: 150 } });
+    }, { workflowDef, timings: { noProgressTimeoutMs: 800, killGraceMs: 150,
+      ...(row.id === 'N5' ? { eofTermGraceMs: 150, eofKillGraceMs: 150 } : {}),
+    } });
   },
 });
