@@ -1,27 +1,97 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { setRunStatus } from './run-store.testkit.ts';
 import {
+  makeRunRecord,
+  makeStepState,
   RUN_STATUS,
   STEP_KIND,
+  STEP_STATUS,
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
 } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunStore } from './store.ts';
+import { historyPaths } from './history-file.ts';
+import { publishRunWrite, RunLifecycle, snapshotRun } from './lifecycle.ts';
+import type { Wait } from '@open-mercato/cezar-contract';
+import type { RunEvent, RunRecord } from './store.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
 import * as registry from '../workspace/registry-entry.ts';
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
-import { sendAgentReport, TaskWebhook, TaskWebhooks, WEBHOOK_ATTEMPTS, type TaskWebhookOptions, type TaskWebhookTarget } from './webhook.ts';
+import { sendAgentReport, TaskWebhook, TaskWebhooks, WEBHOOK_ATTEMPTS, type TaskWebhookOptions, type TaskWebhookStore, type TaskWebhookTarget } from './webhook.ts';
 
-/** The task webhook (#589): what a store transition turns into on the wire, and what a failing
- *  endpoint is allowed to change (the record's `webhook` outcome and one thread event — never
- *  the run's status). */
+/** The task webhook (#589): what a run lifecycle transition turns into on the wire, and what a
+ *  failing endpoint is allowed to change (the record's `webhook` outcome and one thread event —
+ *  never the run's status). No run store: a fake publishes each write as the store does. */
+
+type RecordPatch = Partial<Omit<RunRecord, 'id'>>;
+
+/**
+ * The webhook's store dependency over records in a map, with the lifecycle it publishes to. Each
+ * write snapshots the record, patches it in place and publishes it (`publishRunWrite`), as the
+ * store's write paths do; `appendEvent` writes the run's NDJSON history, which the pending
+ * question is read from. Nothing publishes for a record `seed` adds: a store load publishes nothing.
+ */
+type FakeRuns = ReturnType<typeof fakeRuns>;
+
+function setRunStatus(store: FakeRuns, id: string, status: RunRecord['status'], extras: RecordPatch = {}): RunRecord | undefined {
+  return store.setStatus(id, status, extras);
+}
+
+function fakeRuns(dataDir: string) {
+  const lifecycle = new RunLifecycle();
+  const runs = new Map<string, RunRecord>();
+  const events = new Map<string, RunEvent[]>();
+  let seq = 0;
+  const write = (id: string, patch: RecordPatch): RunRecord | undefined => {
+    const run = runs.get(id);
+    if (!run) return undefined;
+    const before = snapshotRun(run);
+    Object.assign(run, patch);
+    publishRunWrite(lifecycle, run, before);
+    return run;
+  };
+  const store: TaskWebhookStore = {
+    getRun: (id) => runs.get(id),
+    sourceDataDir: () => dataDir,
+    runOwnership: (id) => (runs.has(id) ? 'held' : undefined),
+    updateRun: (id, patch) => write(id, patch),
+    appendEvent: (runId, event) => {
+      const line = { ...event, seq: ++seq, ts: new Date().toISOString() } as RunEvent;
+      events.set(runId, [...(events.get(runId) ?? []), line]);
+      const file = historyPaths(dataDir, runId).plain;
+      mkdirSync(dirname(file), { recursive: true });
+      appendFileSync(file, `${JSON.stringify(line)}\n`);
+      return line;
+    },
+  };
+  return {
+    ...store,
+    lifecycle,
+    /** A queued run, published as `run.created`. */
+    create(over: { notify?: boolean | undefined; steps?: RunRecord['steps'] } = {}): RunRecord {
+      const run = makeRunRecord({ status: RUN_STATUS.queued, notify: over.notify, steps: over.steps ?? [] });
+      runs.set(run.id, run);
+      publishRunWrite(lifecycle, run, undefined);
+      return run;
+    },
+    /** A record already in the store, as a load leaves it: nothing is published. */
+    seed(over: Partial<RunRecord> = {}): RunRecord {
+      const run = makeRunRecord(over);
+      runs.set(run.id, run);
+      return run;
+    },
+    /** A status write with no exit, as `setRunStatus` in the store testkit makes. */
+    setStatus: (id: string, status: RunRecord['status'], extras: RecordPatch = {}) => write(id, { ...extras, status }),
+    /** Open `wait` beside the run's other waits, as `commitWait` does. */
+    commitWait: (id: string, wait: Wait) => write(id, { waits: [...(runs.get(id)?.waits ?? []), wait] }),
+    readEvents: (id: string) => events.get(id) ?? [],
+  };
+}
 
 const target = { id: 'bot', name: 'Bot', url: 'https://bot.example/hook' };
 
@@ -39,20 +109,19 @@ function recorder(answer: (call: Call, index: number) => Response | Promise<Resp
 
 describe('TaskWebhook', () => {
   let dataDir: string;
-  let store: RunStore;
+  let store: FakeRuns;
   let hook: TaskWebhook | undefined;
   beforeEach(() => {
     dataDir = mkdtempSync(join(tmpdir(), 'cez-webhook-'));
-    store = RunStore.open(dataDir);
+    store = fakeRuns(dataDir);
   });
   afterEach(() => {
     hook?.dispose();
-    store.flush();
     rmSync(dataDir, { recursive: true, force: true });
   });
 
   const create = (notify: boolean) =>
-    store.createRun({ title: 't', workflow: 'quick-task', task: 'do it', notify, steps: [{ id: 's', name: 's', kind: STEP_KIND.agent }] });
+    store.create({ notify, steps: [makeStepState({ id: 's', name: 's', kind: STEP_KIND.agent, status: STEP_STATUS.pending, iterations: 0 })] });
   /** Opted in AFTER creation, so a case about transitions sees no creation-time task.subscribed. */
   const optedIn = () => {
     const run = create(false);
@@ -60,7 +129,7 @@ describe('TaskWebhook', () => {
   };
 
   const attach = (fetchImpl: typeof fetch, extra: Partial<TaskWebhookOptions> = {}, triggers?: WebhookTrigger[]) => {
-    hook = new TaskWebhook(store, {
+    hook = new TaskWebhook(store.lifecycle, store, {
       resolveProject: async () => ({
         id: 'proj',
         webhooks: [{ ...target, token: 'secret-token', ...(triggers === undefined ? {} : { triggers }) }],
@@ -271,9 +340,9 @@ describe('TaskWebhook', () => {
     const run = optedIn();
     setRunStatus(store, run.id, RUN_STATUS.running);
     // No wait kind the store writes today lacks an option, so the record a later kind would
-    // produce goes straight to the subscriber, on the emission the store fires for every write.
+    // produce goes straight to the subscriber, as the `run.updated` the store publishes for a write.
     const parked = { ...store.getRun(run.id)!, status: RUN_STATUS.waiting, waitingOn: { kind: 'future-wait' } };
-    store.emit('run', parked);
+    store.lifecycle.publish('run.updated', { run: parked, before: snapshotRun(store.getRun(run.id)!) });
     await webhook.idle();
     // The store's own record is still `running`; only the emitted one parked.
     expect(calls.map((call) => call.body.state).slice(0, 2)).toEqual(['running', 'waiting-other']);
@@ -469,14 +538,38 @@ describe('TaskWebhook', () => {
     expect(calls).toEqual([]);
   });
 
-  it('does not report runs that already existed when it attached', async () => {
+  // A restart: the store publishes nothing for the runs it loads (store-lifecycle.test.ts), and the
+  // lifecycle replays nothing to a new subscriber.
+  it('does not report runs that already existed when it attached, until a write changes their state', async () => {
     const run = create(true);
     setRunStatus(store, run.id, RUN_STATUS.running);
+    const loaded = store.seed({ status: RUN_STATUS.waiting, notify: true });
     const { calls, fetchImpl } = recorder();
     const webhook = attach(fetchImpl);
     store.updateRun(run.id, { title: 'renamed' });
+    store.updateRun(loaded.id, { title: 'renamed' });
     await webhook.idle();
     expect(calls).toEqual([]);
+    setRunStatus(store, run.id, RUN_STATUS.done);
+    await webhook.idle();
+    expect(calls.map((call) => [call.body.event, call.body.runId, call.body.previousStatus, call.body.state])).toEqual([
+      ['task.status', run.id, 'running', 'done'],
+    ]);
+  });
+
+  // A run this process never saw created (another writer's row, first written or replaced here)
+  // is reported by its change, never announced with task.subscribed.
+  it('sends task.status for an unseen run only when its first update changes the derived state', async () => {
+    const { calls, fetchImpl } = recorder();
+    const webhook = attach(fetchImpl);
+    const unchanged = store.seed({ status: RUN_STATUS.running, notify: true });
+    store.updateRun(unchanged.id, { title: 'renamed' });
+    const changed = store.seed({ status: RUN_STATUS.running, notify: true });
+    setRunStatus(store, changed.id, RUN_STATUS.failed);
+    await webhook.idle();
+    expect(calls.map((call) => [call.body.event, call.body.runId, call.body.previousStatus, call.body.state])).toEqual([
+      ['task.status', changed.id, 'running', 'failed'],
+    ]);
   });
 });
 
@@ -504,14 +597,14 @@ describe('TaskWebhooks', () => {
     }, testHome());
     const resolved = await registry.registryEntry('default', root, testHome());
     const lookup = vi.spyOn(registry, 'registryEntry').mockResolvedValue(resolved);
-    const store = RunStore.open(dataDir);
+    const store = fakeRuns(dataDir);
     const { calls, fetchImpl } = recorder();
     const hooks = new TaskWebhooks({ home: testHome(), fetch: fetchImpl });
     const hook = hooks.attach({ id: 'default', root, store });
     expect(hooks.attach({ id: 'default', root, store })).toBe(hook);
 
     vi.useFakeTimers();
-    const run = store.createRun({ title: 't', workflow: 'quick-task', task: 't', notify: true, steps: [] });
+    const run = store.create({ notify: true });
     setRunStatus(store, run.id, RUN_STATUS.done);
     await vi.advanceTimersByTimeAsync(20);
     expect(lookup).not.toHaveBeenCalled();
@@ -522,26 +615,24 @@ describe('TaskWebhooks', () => {
     expect(calls.map((call) => call.body.event)).toEqual(['task.subscribed', 'task.status']);
     expect(calls[1]!.body).toMatchObject({ projectId: entry.id, url: `http://127.0.0.1:4321/p/${entry.id}/tasks/${run.id}` });
     hook.dispose();
-    store.flush();
   });
 });
 
 describe('sendAgentReport', () => {
   let dataDir: string;
-  let store: RunStore;
+  let store: FakeRuns;
   beforeEach(() => {
     dataDir = mkdtempSync(join(tmpdir(), 'cez-agent-report-'));
-    store = RunStore.open(dataDir);
+    store = fakeRuns(dataDir);
   });
   afterEach(() => {
-    store.flush();
     rmSync(dataDir, { recursive: true, force: true });
   });
 
   const report = { id: 'friction', name: 'Friction reports', url: 'https://bot.example/friction', token: 'secret-token' };
 
   it('POSTs an agent.report with the run link and records it on the thread', async () => {
-    const run = store.createRun({ title: 't', workflow: 'quick-task', task: 'do it', steps: [] });
+    const run = store.create();
     const { calls, fetchImpl } = recorder();
     const result = await sendAgentReport({
       projectId: 'proj',
@@ -575,7 +666,7 @@ describe('sendAgentReport', () => {
   });
 
   it('reports a failure after the retries without touching the run status', async () => {
-    const run = store.createRun({ title: 't', workflow: 'quick-task', task: 'do it', steps: [] });
+    const run = store.create();
     const { calls, fetchImpl } = recorder(() => new Response(null, { status: 503 }));
     const result = await sendAgentReport({
       projectId: 'proj', webhook: report, input: { runId: run.id, message: 'm' }, store, dryRun: false, fetch: fetchImpl, sleep: async () => undefined,
@@ -589,7 +680,7 @@ describe('sendAgentReport', () => {
   });
 
   it('sends nothing under dry run and never logs the token', async () => {
-    const run = store.createRun({ title: 't', workflow: 'quick-task', task: 'do it', steps: [] });
+    const run = store.create();
     const { calls, fetchImpl } = recorder();
     const result = await sendAgentReport({ projectId: 'proj', webhook: report, input: { runId: run.id, message: 'm' }, store, dryRun: true, fetch: fetchImpl });
     expect(result).toMatchObject({ ok: true, dryRun: true, attempts: 0 });
