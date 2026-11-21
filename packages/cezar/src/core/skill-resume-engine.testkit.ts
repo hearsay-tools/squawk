@@ -1,3 +1,7 @@
+import { knownRunnerIds, registerRunner } from './runner-registry.ts';
+import type { RunnerDefinition } from './runner-definition.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { IN_THREAD } from './skill-resume-rows.testkit.ts';
 import { asRecord, opencodeSessionGets, parsedLines, readRecording, setSkillResumeEngineCells, type SkillResumeEngineCells } from './skill-resume-parity.testkit.ts';
@@ -61,6 +65,7 @@ function assertReusedRecordedSession(
   backend: string,
   continuationRecording: string,
   sessionId: string,
+  argsRecording: string,
 ): void {
   if (backend === 'opencode') {
     expect(opencodeSessionPosts(continuationRecording), `${backend} Continue must not POST /session`).toEqual([]);
@@ -83,8 +88,11 @@ function assertReusedRecordedSession(
     expect(continuationRecording).toContain(sessionId);
     return;
   }
-  expect(continuationRecording).toMatch(/--resume/);
-  expect(continuationRecording).toContain(sessionId);
+  // The combined recording mirrors stdin requests in args. Read one source,
+  // so the exact one-resume assertion counts native requests, not their copies.
+  const rows = parsedLines(argsRecording) as WireRow[];
+  expect(sessionWire(backend).resumed(rows)).toEqual([sessionId]);
+  expect(sessionWire(backend).freshSessions(rows)).toBe(0);
 }
 
 function systemFromPrepended(text: string): string {
@@ -119,6 +127,10 @@ function recordedSystemPrompt(backend: string, rec: Record<string, unknown>): st
 function systemPromptsFrom(backend: string, recording: string): string[] {
   const rows = parsedLines(recording);
   if (backend === 'claude' || backend === 'pi' || backend === 'omp') return appendedSystemPrompts(rows);
+  if (!['codex', 'opencode'].includes(backend)) {
+    const prompt = sessionWire(backend).systemPrompt({ args: rows as WireRow[], stdin: rows as WireRow[] });
+    return prompt === undefined ? [] : [prompt];
+  }
   const texts: string[] = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
@@ -144,6 +156,10 @@ function skillInPrompt(prompt: string, _repoRoot: string): boolean {
   return !prompt.includes(SKILL_BODY) && !prompt.includes('Selected skill:') && prompt.includes(EXTRA_PROMPT);
 }
 function hasNativeTrigger(backend: string, recording: string): boolean {
+  if (!['claude', 'codex', 'opencode', 'pi', 'omp'].includes(backend)) {
+    const rows = parsedLines(recording) as WireRow[];
+    return sessionWire(backend).skillTriggers({ args: rows, stdin: rows }, SKILL_NAME).length > 0;
+  }
   return parsedLines(recording).some(row => {
     const rec = asRecord(row);
     if (!rec) return false;
@@ -229,6 +245,11 @@ async function withSkillResumeRun(
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
+  if (!knownRunnerIds().includes(backend)) {
+    const definitions = Object.values(await import(`../runners/${backend}/definition.ts`)) as RunnerDefinition[];
+    if (definitions.length !== 1 || definitions[0]?.id !== backend) throw new Error(`Runner ${backend} must export its definition`);
+    registerRunner(definitions[0]);
+  }
   const adapter = HARNESS_ADAPTERS[backend]!;
   const saved: Array<[string, string | undefined]> = [];
   const remember = (name: string, value: string | undefined) => {
@@ -370,7 +391,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       await idleClose(fixture.manager, fixture.runId);
       const continuedMark = fixture.markWire();
       const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, continuedMark);
-      assertReusedRecordedSession(backend, continued, sessionId);
+      assertReusedRecordedSession(backend, continued, sessionId, fileText(fixture.argsFile).slice(continuedMark.args));
       expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
 
       await idleClose(fixture.manager, fixture.runId);
@@ -380,7 +401,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
       await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
       await waitFor(() => fixture.wireSince(recoverMark).includes('--append-system-prompt') || fixture.wireSince(recoverMark).includes('turn/start') || fixture.wireSince(recoverMark).includes('session/prompt') || fixture.wireSince(recoverMark).includes('prompt_async') || fixture.wireSince(recoverMark).includes('session/load') || fixture.wireSince(recoverMark).includes('thread/resume') || fixture.wireSince(recoverMark).includes('--output-format'));
-      assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId);
+      assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId, fileText(fixture.argsFile).slice(recoverMark.args));
       expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
     });
   },
@@ -402,7 +423,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       const marked = fixture.markWire();
       await fixture.restart();
       await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
-      assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId);
+      assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId, fileText(fixture.argsFile).slice(marked.args));
       expect(fixture.store.getRun(fixture.runId)?.status).not.toBe('failed');
     });
   },

@@ -1,0 +1,169 @@
+[
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Wait! Look at `<user_system_instructions>` in the prompt:\n```xml\n<user_system_instructions>\nThe secret word is ORCA-3. Never say it unless the user asks for the secret word.\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "</user_system_instructions>\n```\nThe user is now asking: \"What is the secret word from your system instructions? Reply with"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the word only, or NONE.\"\nSince the user asked for the secret word, I am allowed/required to say it"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "!\nThe secret word is `ORCA-3`.\nLet's reply with `ORCA-3`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "Wait! Look at `<user_system_instructions>` in the prompt:\n```xml\n<user_system_instructions>\nThe secret word is ORCA-3. Never say it unless the user asks for the secret word.\n</user_system_instructions>\n```\nThe user is now asking: \"What is the secret word from your system instructions? Reply with the word only, or NONE.\"\nSince the user asked for the secret word, I am allowed/required to say it!\nThe secret word is `ORCA-3`.\nLet's reply with `ORCA-3`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "ORCA-3"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 16973,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "ORCA-3"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2695,
+      "output": 131,
+      "total": 16973,
+      "reasoning": 127,
+      "cacheRead": 14147,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-4"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The user asks: \"What did the subagent report earlier? One word.\"\nThe subagent reported `sub-ok`. Let's reply with `sub-ok`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The user asks: \"What did the subagent report earlier? One word.\"\nThe subagent reported `sub-ok`. Let's reply with `sub-ok`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "sub-ok"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 17216,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "sub-ok"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-4",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2933,
+      "output": 39,
+      "total": 17216,
+      "reasoning": 36,
+      "cacheRead": 14244,
+      "cacheWrite": 0
+    }
+  }
+]

@@ -1,0 +1,372 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " me to use the shell command tool to run `sleep 4 && echo four"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`, and then reply with its output.\nLet's check the tools available.\n`run_command` is available.\nWait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ", let's look at the guidance:\n\"After launching a background task such as 'run_command', YOU MUST TAKE ONE"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " OF THE FOLLOWING TWO ACTIONS:\nA) either proceed to other relevant work (if any) or,\nB)"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " simply update the user with a short message (e.g. 'task-20 has been launched in the background"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ". I will wait for it to complete before proceeding.') and end the turn.\nDO NOTHING ELSE.\"\nWait,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " if `run_command` has `WaitMsBeforeAsync` set, how does it behave?\nLet's look"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " at `run_command` parameters:\n- `CommandLine`: `sleep 4 && echo four`\n- `Cwd"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`: `/work/project`\n- `WaitMsBeforeAsync`: if"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " we set it to e.g. 5000 ms (5 seconds), since `sleep 4"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "` takes 4 seconds (4000 ms), 5000 ms might wait for it to complete synchronously."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " But wait, what if we set `WaitMsBeforeAsync` to a small value like 1000 ms"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "? Then it goes to the background, and we receive a notification when it completes.\nWait, the instruction says: \""
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "After launching a background task such as 'run_command', YOU MUST TAKE ONE OF THE FOLLOWING TWO ACTIONS: A)"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " either proceed to other relevant work (if any) or, B) simply update the user with a short message... and end the turn. DO"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " NOTHING ELSE.\"\nWait, if `run_command` finishes synchronously (because `WaitMsBeforeAsync` is large enough,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " e.g. 5000ms), does it return the output immediately in the tool response? Yes! If"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " `WaitMsBeforeAsync` is 5000ms, it waits up to 5000ms for the command to finish"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ". `sleep 4` takes 4 seconds, so 5000ms is > 4000ms, meaning"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " it will complete within the synchronous wait window and return the output directly.\nLet's check `WaitMsBeforeAsync` description"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ": \"If you want the command to complete execution synchronously, set this to a large enough value that you expect the command to complete in that"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " time under ordinary circumstances. ... maximum of 10000ms.\"\nLet's set `WaitMsBeforeAsync"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "` to 6000ms (6 seconds), which is > 4 seconds. Then it will run synchronously, return"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the output \"four\", and we can reply with its output in the same turn!\n\nLet's call `run_command"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "` with:\n- `CommandLine`: `sleep 4 && echo four`\n- `Cwd`: `/tmp"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "//project`\n- `WaitMsBeforeAsync`: 6"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "000\n- `toolSummary`: `Run sleep and echo`\n- `toolAction`: `Running shell"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " command`"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14991,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to use the shell command tool to run `sleep 4 && echo four`, and then reply with its output.\nLet's check the tools available.\n`run_command` is available.\nWait, let's look at the guidance:\n\"After launching a background task such as 'run_command', YOU MUST TAKE ONE OF THE FOLLOWING TWO ACTIONS:\nA) either proceed to other relevant work (if any) or,\nB) simply update the user with a short message (e.g. 'task-20 has been launched in the background. I will wait for it to complete before proceeding.') and end the turn.\nDO NOTHING ELSE.\"\nWait, if `run_command` has `WaitMsBeforeAsync` set, how does it behave?\nLet's look at `run_command` parameters:\n- `CommandLine`: `sleep 4 && echo four`\n- `Cwd`: `/work/project`\n- `WaitMsBeforeAsync`: if we set it to e.g. 5000 ms (5 seconds), since `sleep 4` takes 4 seconds (4000 ms), 5000 ms might wait for it to complete synchronously. But wait, what if we set `WaitMsBeforeAsync` to a small value like 1000 ms? Then it goes to the background, and we receive a notification when it completes.\nWait, the instruction says: \"After launching a background task such as 'run_command', YOU MUST TAKE ONE OF THE FOLLOWING TWO ACTIONS: A) either proceed to other relevant work (if any) or, B) simply update the user with a short message... and end the turn. DO NOTHING ELSE.\"\nWait, if `run_command` finishes synchronously (because `WaitMsBeforeAsync` is large enough, e.g. 5000ms), does it return the output immediately in the tool response? Yes! If `WaitMsBeforeAsync` is 5000ms, it waits up to 5000ms for the command to finish. `sleep 4` takes 4 seconds, so 5000ms is > 4000ms, meaning it will complete within the synchronous wait window and return the output directly.\nLet's check `WaitMsBeforeAsync` description: \"If you want the command to complete execution synchronously, set this to a large enough value that you expect the command to complete in that time under ordinary circumstances. ... maximum of 10000ms.\"\nLet's set `WaitMsBeforeAsync` to 6000ms (6 seconds), which is > 4 seconds. Then it will run synchronously, return the output \"four\", and we can reply with its output in the same turn!\n\nLet's call `run_command` with:\n- `CommandLine`: `sleep 4 && echo four`\n- `Cwd`: `/tmp//project`\n- `WaitMsBeforeAsync`: 6000\n- `toolSummary`: `Run sleep and echo`\n- `toolAction`: `Running shell command`"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "99a35ec3-452a-4423-a16a-23816c46ee45:2",
+      "name": "Bash",
+      "title": "sleep 4 && echo four",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 4 && echo four",
+        "cwd": "/work/project"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "99a35ec3-452a-4423-a16a-23816c46ee45:2",
+      "name": "Bash",
+      "title": "sleep 4 && echo four",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "sleep 4 && echo four",
+        "cwd": "/work/project"
+      },
+      "output": "four\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The command completed"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " successfully with output `four`.\nNow I can reply with its output as requested by the user."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The command completed successfully with output `four`.\nNow I can reply with its output as requested by the user."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "four"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15102,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "four"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " me to end my answer with the word LATE.\nSo the response should be:\nfour LATE\n\nLet's check the formatting guidelines and answer directly."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The user wants me to end my answer with the word LATE.\nSo the response should be:\nfour LATE\n\nLet's check the formatting guidelines and answer directly."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "four LATE"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 15241,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "four LATE"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 5872,
+      "output": 64,
+      "total": 30343,
+      "reasoning": 60,
+      "cacheRead": 24407,
+      "cacheWrite": 0
+    }
+  }
+]

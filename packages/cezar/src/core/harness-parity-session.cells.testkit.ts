@@ -1,4 +1,5 @@
-import { registeredRunners } from './runner-registry.ts';
+import { registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { allowProbePermissions } from './permission-policy.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,12 +26,16 @@ import { TOOL_GRANT_CASES, describeToolGrantParity } from './tool-grant-parity-c
 
 // Group 8 — #505: agent input reaches a running turn and its reading is reported.
 interface InputObservation {
+  readonly unobservable: boolean;
+  readonly acknowledged: boolean;
   readonly obs: SeamObservation;
   readonly consumed: readonly string[];
   readonly consumedBeforeTurnEnd: boolean;
   readonly unconsumed: readonly string[];
 }
 async function observeInput(backend: string, scenario: ScenarioName, id: string): Promise<InputObservation> {
+  const unobservable = inputDeliveryOf(await runnersUnderTest()(backend)).consumption === 'unobservable';
+  let acknowledged = false;
   const consumed: string[] = [];
   let consumedBeforeTurnEnd = false;
   let seenTurnEnd = false;
@@ -42,28 +47,31 @@ async function observeInput(backend: string, scenario: ScenarioName, id: string)
       let ack: false | Promise<void> = false;
       const text = `mock:agent-echo parity ${id}`;
       await waitFor(() => (ack = session.sendAgentMessage([{ type: 'text', text }], [id])) !== false || firstTurnEnd());
-      if (ack) await ack;
+      if (ack) { await ack; acknowledged = true; }
       await waitFor(() => firstTurnEnd());
       // Late input is read by a follow-on turn or reported; OpenCode reports after a grace window.
       const reported = () => v1.some(e => (e.type === 'turn-end' && !!e.unconsumedInputIds?.length) || e.type === 'input-unconsumed');
       // bound: wait for the reserved input's consumption receipt.
-      await waitFor(() => consumed.includes(id) || reported(), 10_000).catch(() => undefined);
+      if (unobservable) await waitFor(() => answeredInItsTurn(v1, id));
+      else await waitFor(() => consumed.includes(id) || reported(), 10_000).catch(() => undefined);
     },
   });
   const unconsumed = obs.v1.flatMap(e => e.type === 'input-unconsumed' ? [...e.inputIds]
     : e.type === 'turn-end' ? [...(e.unconsumedInputIds ?? [])] : []);
-  return { obs, consumed, consumedBeforeTurnEnd, unconsumed };
+  return { obs, consumed, consumedBeforeTurnEnd, unconsumed, acknowledged, unobservable };
 }
 const INPUT_CELLS: Cells<typeof INPUT_ROWS, SeamCriterion<InputObservation>> = {
   I1: {
-    assert: ({ obs, consumed, consumedBeforeTurnEnd }) => {
+    assert: ({ obs, consumed, consumedBeforeTurnEnd, unconsumed, unobservable, acknowledged }) => {
+      if (unobservable) { expect(acknowledged).toBe(true); expect(consumed).toEqual([]); expect(unconsumed).toEqual([]); expect(answeredInItsTurn(obs.v1, 'parity-I1')).toBe(true); expect(obs.v1.filter(e => e.type === 'turn-end')).toHaveLength(1); return; }
       expect(consumed).toEqual(['parity-I1']);
       expect(consumedBeforeTurnEnd).toBe(true);
       expect(obs.v1.filter(e => e.type === 'turn-end')).toHaveLength(1);
     },
   },
   I2: {
-    assert: ({ unconsumed, consumed }) => {
+    assert: ({ obs, unconsumed, consumed, unobservable, acknowledged }) => {
+      if (unobservable) { expect(acknowledged).toBe(true); expect(consumed).toEqual([]); expect(unconsumed).toEqual([]); expect(answeredInItsTurn(obs.v1, 'parity-I2')).toBe(true); return; }
       expect(unconsumed).toEqual(['parity-I2']);
       expect(consumed).toEqual([]);
     },
@@ -275,7 +283,7 @@ export const SESSION_GROUPS = {
         // that input instead (R6); the exemption pins that the seam does not.
         const s11 = exemptionFor('S11', backend);
         it(s11 ? `${backend} is exempt from S11 — ${s11.reason}` : `${backend} S11 non-human input cannot answer a native ask`, async () => {
-          const obs = await driveSeam(backend, 'ask', {
+          const obs = await driveSeam(backend, runnerDefinition(backend).mock.nativeAskScenario ?? 'ask', {
             whileOpen: async (session, { v1, v2 }) => {
               await waitFor(() => v2.some(e => e.type === 'ask.requested') || v1.some(e => e.type === 'turn-end'));
               const ends = v1.filter(e => e.type === 'turn-end').length;
@@ -502,8 +510,10 @@ export const SESSION_GROUPS = {
             let n = 0;
             for (const [key, spec] of variants) {
               const name = `probe-${n++}`;
+              const policy = runnerDefinition(backend).mock.toolGrantObservation === 'permission-policy';
               const obs = await driveSeam(backend, 'baseline', {
-                spec: { cwd: dir, sessionId: undefined, env: probeEnv(name), ...spec },
+                ...(policy ? { whileOpen: allowProbePermissions } : {}),
+                spec: { cwd: dir, sessionId: undefined, ...spec, env: { ...probeEnv(name), ...(policy ? { CEZ_MOCK_PERMISSION_PROBE: '1' } : {}), ...spec.env } },
               });
               expect(obs.v1.filter((e) => e.type === 'error')).toEqual([]);
               recordings.set(key, readRecording(dir, name));

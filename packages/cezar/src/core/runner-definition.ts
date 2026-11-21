@@ -38,6 +38,8 @@ export interface RunnerDefinition {
   /** Imports the runner's model catalog adapter, which lists the models its CLI offers. */
   loadModelCatalog(): Promise<(options: { cwd: string }) => Promise<ModelOption[]>>;
   /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
+  /** A filesystem catalog exposes only sources confirmed in the native harness. */
+  readonly skillCatalog?: { readonly source: 'filesystem'; readonly projectRoots: readonly string[]; readonly userRoots: readonly string[]; readonly plugins: false; readonly evidence: string };
   loadSkillCatalog(): Promise<(options: SkillDiscoveryOptions) => Promise<SkillCatalog>>;
   /** The native config files that Settings → Agent config shows, and the runner's pane there. */
   readonly configFiles: RunnerConfigFiles;
@@ -72,16 +74,24 @@ export interface RunnerDefinition {
 export interface RunnerMock {
   /** The mock script's file name in `packages/cezar/scripts/`. */
   readonly script: string;
+  /** Permission-policy runners prove tool admission through recorded native responses. */
+  readonly toolGrantObservation?: 'permission-policy';
+  /** ACP idle session/prompt replies are turn completion, not an independent receipt
+   * (antigravity-acp 1.5.0 prompt-*.ndjson in its recorded fixtures). */
+  readonly promptResponseEndsTurn?: true;
+  readonly defaultApprovalEcho?: string;
   /** The env var the runner reads to locate its binary; a test points it at the mock script. */
   readonly binEnv: string;
   /** Every human ask wire this runner exposes; cezar_ask when it has no native one. */
-  readonly askResumeCases: readonly { kind: string; scenario: 'ask-resume'; answer: string }[];
+  readonly askResumeCases: readonly { kind: string; scenario: 'ask-resume'; answer: string; header?: string }[];
   /**
    * Scenario name -> the prompt text this runner's mock answers it with. The names are the parity
    * kit's `ScenarioName`s; `parity-classes.test.ts` checks each. The kit adds the `cezar-ask` and
    * `cezar-wait` prompts, which every mock answers the same way.
    */
   readonly scenarios: Readonly<Record<string, string>>;
+  /** Scenario for rows that specifically require a native ask. Defaults to ask. */
+  readonly nativeAskScenario?: 'ask' | 'ask-resume';
   /** P1: the option to pick (matched case-insensitively against its label) and the text the
    *  mock echoes once that native reply arrives. Required with `scenarios.approval`. */
   readonly approvalDecisions?: readonly { pick: string; echo: string }[];
@@ -198,6 +208,8 @@ export interface RunnerDetection {
  * the cockpit's copyable resume line (hearsay-tools/squawk#3642), and where the installer gets it.
  */
 export interface RunnerCli {
+  /** false for protocol-only servers with no interactive terminal takeover. */
+  readonly interactive?: false;
   /**
    * The executable a terminal runs. `path-name`: the CLI's name on PATH. `configured`: the
    * executable the server resolves from its `HSQ_*_BIN` override, so only the server can spell it.
@@ -216,8 +228,8 @@ export interface RunnerCli {
 export interface RunnerLoginData {
   /** Args that ask the CLI whether it is logged in. */
   readonly statusArgs: readonly string[];
-  /** Args that log the CLI in. */
-  readonly loginArgs: readonly string[];
+  /** Args that log the CLI in. null means no terminal sign-in command exists. */
+  readonly loginArgs: readonly string[] | null;
   /** Shown when the CLI is not installed. */
   readonly installHint: string;
   /** A larger output ceiling for a status command whose output grows with the user's setup. */
@@ -235,6 +247,9 @@ export interface RunnerLogin extends RunnerLoginData {
 /** The code half of `login`: how a CLI's answer becomes a connection state. Loads from
  *  `runners/<id>/login-probe.ts`, so a definition module imports no parser code. */
 export interface RunnerLoginStatus {
+  /** An installed CLI may need credential presence checked outside its version output.
+   * Receives the same account environment as its native status command. Never returns secrets. */
+  inspect?(result: ProviderCommandResult, env: NodeJS.ProcessEnv): Promise<ProviderConnectionState | null>;
   parse(result: ProviderCommandResult): ProviderConnectionState | null;
 }
 

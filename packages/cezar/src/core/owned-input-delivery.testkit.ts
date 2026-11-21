@@ -1,3 +1,6 @@
+import { expect } from 'vitest';
+import { runnerDefinition } from './runner-registry.ts';
+import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,4 +50,27 @@ export function withHeldAck(runner: string, body: (release: () => void) => Promi
 export function withHeldResponse(runner: string, body: (release: () => void, held: () => boolean) => Promise<void>,
   match = 'mock:agent-echo'): Promise<void> {
   return withDeliveryControl(runner, { kind: 'hold-response', match }, control => body(control.release, control.held));
+}
+
+/** Inverse control for wires whose idle prompt response is the turn-completion frame.
+ * Antigravity evidence: __fixtures__/prompt-*.ndjson. The mock holds only that response. */
+export async function assertPromptResponseCompletion(runner: string): Promise<void> {
+  expect(runnerDefinition(runner).mock.promptResponseEndsTurn).toBe(true);
+  await withHeldAck(runner, async release => {
+    await driveSeam(runner, 'baseline', { whileOpen: async (session, { v1 }) => {
+      await waitFor(() => v1.some(event => event.type === 'turn-end'));
+      const ends = v1.filter(event => event.type === 'turn-end').length;
+      const response = session.sendAgentMessage([{ type: 'text', text: 'mock:agent-echo delay-owned-ack completion-control' }]);
+      expect(response).toBeInstanceOf(Promise);
+      if (!response) throw new Error('Completion control was not admitted');
+      let acknowledged = false;
+      void response.then(() => { acknowledged = true; }, () => {});
+      await waitFor(() => v1.some(event => event.type === 'text' && event.text.includes('completion-control')));
+      expect(acknowledged).toBe(false);
+      expect(v1.filter(event => event.type === 'turn-end')).toHaveLength(ends);
+      release(); await response;
+      expect(acknowledged).toBe(true);
+      expect(v1.filter(event => event.type === 'turn-end')).toHaveLength(ends + 1);
+    } });
+  });
 }

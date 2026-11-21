@@ -52,7 +52,7 @@ export class AcpTransport {
     this.write({ jsonrpc: '2.0', method, params });
   }
 
-  close(error = new Error('ACP transport closed')): void {
+  close(error = new Error('ACP input/output transport closed')): void {
     this.failure ??= error;
     for (const pending of this.pending.values()) pending.reject(this.failure);
     this.pending.clear();

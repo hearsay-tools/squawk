@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import type { Readable, Writable } from 'node:stream';
 import { z } from 'zod';
-import type { StopReason } from '../../core/ui-events.ts';
+import type { StopReason, TokenUsage } from '../../core/ui-events.ts';
 import { AcpEvents, type AcpEventSink } from './events.ts';
 import { AcpRpcError, AcpTransport } from './transport.ts';
 import { initializeSchema, permissionSchema, recordSchema, type AcpAsk, type AcpHooks, type AcpInitializeResult, type AcpPermissionRequest } from './protocol.ts';
@@ -34,7 +35,11 @@ export class AcpSession {
   private earlyUpdates: Array<z.infer<typeof updateSchema>> = [];
   private permissions = new Map<string, PendingPermission>();
   private permissionSerial = 0;
-  private promptActive = false;
+  private readonly permissionPrefix = randomUUID();
+  private closed = false;
+  private promptOwner: symbol | undefined;
+  private readonly prompts = new Set<symbol>();
+  private get promptActive(): boolean { return this.promptOwner !== undefined; }
   private turnCancelled = false;
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
@@ -46,7 +51,7 @@ export class AcpSession {
       notice: message => this.events.notice(message),
       ...(options.onActivity ? { activity: options.onActivity } : {}),
     });
-    void this.transport.completion.then(() => this.cancelPermissions());
+    void this.transport.completion.then(() => { this.closed = true; this.cancelPermissions(); });
   }
 
   async initialize(): Promise<AcpInitializeResult> {
@@ -98,20 +103,52 @@ export class AcpSession {
   }
 
   async prompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
-    const sessionId = this.requireSession();
     if (this.promptActive) throw new Error('ACP prompt already active');
-    this.promptActive = true;
-    this.turnCancelled = false;
+    return this.requestPrompt(content);
+  }
+
+  /** An early concurrent response acknowledges steering. If the original response
+   * arrives first, the pending prompt owns a successor turn and its permission lifetime. */
+  async steer(content: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this.promptActive) throw new Error('ACP steering requires an active prompt');
+    await this.requestPrompt(content);
+  }
+
+  private async requestPrompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
+    const sessionId = this.requireSession();
+    const token = Symbol('prompt');
+    this.prompts.add(token);
+    if (!this.promptOwner) this.beginPrompt(token);
+    let result: z.infer<typeof promptResultSchema>;
     try {
-      this.events.begin();
-      const result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
-      const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
-      this.events.finish(reason);
-      return result;
+      result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
+      if (this.promptOwner === token) {
+        const message = this.hooks.promptError?.();
+        if (message) throw new Error(message);
+      }
     } catch (error) {
-      this.events.finish('error');
+      this.finishPrompt(token, this.turnCancelled ? 'cancelled' : 'error');
       throw error;
-    } finally { this.cancelPermissions(); this.promptActive = false; }
+    }
+    const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
+    this.finishPrompt(token, reason, this.hooks.normalizeUsage?.(result.usage));
+    return result;
+  }
+
+  private beginPrompt(token: symbol): void {
+    this.promptOwner = token;
+    this.turnCancelled = false;
+    this.events.begin();
+  }
+
+  private finishPrompt(token: symbol, reason: StopReason, usage?: TokenUsage): void {
+    this.prompts.delete(token);
+    if (this.promptOwner !== token) return;
+    this.cancelPermissions();
+    this.events.finish(reason, usage);
+    this.promptOwner = undefined;
+    const next = this.prompts.values().next().value;
+    if (next && !this.closed) this.beginPrompt(next);
   }
 
   cancel(): void {
@@ -145,7 +182,7 @@ export class AcpSession {
     return true;
   }
 
-  close(): void { this.cancelPermissions(); this.transport.close(); }
+  close(): void { this.closed = true; this.turnCancelled = true; this.cancelPermissions(); this.transport.close(); }
 
   private requireSession(): string {
     if (!this.sessionId) throw new Error('ACP session is not open');
@@ -156,7 +193,7 @@ export class AcpSession {
     if (method !== 'session/update') return;
     const update = updateSchema.parse(params);
     if (this.opening) this.earlyUpdates.push(update);
-    else if (update.sessionId === this.sessionId) this.events.update(update.update);
+    else if (update.sessionId === this.sessionId && this.hooks.filterUpdate?.(update.update) !== false) this.events.update(update.update);
   }
 
   private request(method: string, params: unknown): unknown | Promise<unknown> {
@@ -168,7 +205,7 @@ export class AcpSession {
     const policy = this.hooks.permissionPolicy?.(request);
     if (policy) return { outcome: policy };
     // Native JSON-RPC string IDs have no length bound; UI permission IDs do.
-    const requestId = `acp-permission-${++this.permissionSerial}`;
+    const requestId = `acp-permission-${this.permissionPrefix}-${++this.permissionSerial}`;
     const ask = this.hooks.permissionAsk?.(request);
     return new Promise(resolve => {
       this.permissions.set(requestId, { request, resolve, ...(ask ? { ask } : {}) });

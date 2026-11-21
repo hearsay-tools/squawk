@@ -32,6 +32,7 @@ export interface GitActionState {
   forge: ForgeInfo | null
   /** `/api/health` `capabilities.localHandoff`. False (or unknown) = hosted mode: local-
    *  machine actions are HIDDEN entirely, never shown disabled. */
+  cliHandoff?: false | undefined
   localHandoff: boolean
   /** Whether any step recorded an agent session — the terminal handoff resumes it. */
   hasSession: boolean
@@ -125,7 +126,7 @@ export function gitActionPolicy(state: GitActionState): GitActionBar {
     : [pushAction(state), createPrAction(state)]
 
   const menu: GitAction[] = []
-  if (state.localHandoff) {
+  if (state.localHandoff && state.cliHandoff !== false) {
     // Same gate as the header's Terminal button (run-actions.ts): the engine must have let
     // go of the session, and there must be one to resume.
     const terminal: GitAction = !state.hasSession

@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -49,7 +50,12 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const turns = store.readEvents(runId).filter(event => event.type === 'turn-end').length;
         expect(manager.steerWorker(runId, input)).toBe('queued');
         // bound: the held-ACK turn must end before checking that DONE still waits for acceptance.
-        await waitFor(() => store.readEvents(runId).filter(event => event.type === 'turn-end').length > turns);
+        if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+          await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack finished')));
+          expect(store.readEvents(runId).filter(event => event.type === 'turn-end')).toHaveLength(turns);
+        } else {
+          await waitFor(() => store.readEvents(runId).filter(event => event.type === 'turn-end').length > turns);
+        }
         expect(manager.isActive(runId)).toBe(true);
         expect(session.open).toBe(true);
         expect(store.getRun(runId)?.agentInputs ?? []).toEqual([input]);

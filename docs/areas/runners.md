@@ -328,7 +328,7 @@ unchanged; GPU rendering does not guarantee hardware frame encoding.
 ## Coding agent backends
 
 Squawk is not married to one vendor. Every agent step runs through a single
-`AgentRunner` seam with five built-in backends:
+`AgentRunner` seam with these built-in backends:
 
 | Backend | CLI | How Squawk drives it | Tool access |
 |---|---|---|---|
@@ -337,6 +337,7 @@ Squawk is not married to one vendor. Every agent step runs through a single
 | **OpenCode** _(experimental)_ | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; OpenCode's own permission config governs. Squawk answers OpenCode's built-in asks (outside-worktree reads, `.env` reads, the repeated-call guard) once, unless your config has a rule for that permission. Any other ask shows a permission card in the cockpit, and the run waits for your answer. |
 | **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi tool names. The default list, which adds the harness extras `Subagent`, `SubagentSupervisor` and `SubagentWait`, sends no allowlist: `--no-builtin-tools` plus a bundled extension that activates those built-ins, so MCP servers (`direct`, `codemode` and `deferred` exposure) and other pi extensions' tools stay callable. The six base tools alone, the list a worker inherits from a Claude parent, take the same path. A narrowed `allowedTools`, or one that names any tool outside that default set (an `mcp__` tool, `WebFetch` or a custom tool), uses pi's `--tools` allowlist, so a step that grants named tools reaches only those; a list that maps to nothing becomes `--no-tools` (or only the Squawk tools). A configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
 | **OMP** _(experimental)_ | [`omp`](https://github.com/can1357/oh-my-pi) | Persistent `--mode rpc` over JSONL (Oh My Pi, a pi fork); models use the `provider/model` convention and are discovered from `omp models --json`. | Maps `allowedTools` onto OMP's `--tools` allowlist (`[]` becomes `--no-tools`); default sessions also pass `todo`, `lsp`, `ast_edit`, `task` and `wait`. A configured `bashAllowlist` disables `bash` because OMP cannot express command-prefix rules. `--tools` filters built-in tools only, so MCP and extension tools stay callable under a narrowed list. |
+| **Antigravity** | `agy` from the [ACP registry archive](https://antigravity.google) | `agy --uid=` over ACP stdio, using the shared ACP layer. No interactive terminal handoff. | Native permission requests follow the task grant and Bash prefixes. Granted requests proceed; ungranted requests fail, or reach the approval card with `HSQ_APPROVAL_GATE=1`. Client reads require Read. Native `interaction_` asks always reach the question card. See [Antigravity tool access](#antigravity-tool-access). |
 
 ### Minimal sessions
 
@@ -435,3 +436,19 @@ a stream of normalized events. Other CLIs — pi, aider, whatever ships next —
 can slot in the same way.
 
 ---
+
+### Antigravity tool access
+
+Antigravity ACP 1.5.0 runs in `default` mode on every fresh or resumed session. Squawk
+answers native permission requests from the tool grant and Bash command prefixes. Granted
+requests proceed; ungranted requests fail. With `HSQ_APPROVAL_GATE=1`, ungranted requests
+reach the native approval card instead. This matches Claude's approval gate. Native
+`interaction_` questions always reach the question card. Client file reads require Read;
+they cannot request interactive approval. The wire's `ask_question`, `schedule`, and `finish`
+need no tool admission. Read/search built-ins that have no separate native tool are not invented.
+See [the recorded wire](../runners/antigravity-wire.md).
+
+
+Antigravity status reports credential presence. It checks `GEMINI_API_KEY` or `GOOGLE_API_KEY`,
+or a stored OAuth sign-in under `GEMINI_HOME` (default `~/.gemini`) with the harness credential
+file present. It does not validate a key with the model API. Credential file contents stay unread.

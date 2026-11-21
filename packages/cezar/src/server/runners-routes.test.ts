@@ -53,7 +53,7 @@ it('GET /api/v1/runners lists the registered runners in display order with their
 it('sends plain JSON only: no function, RegExp or other part a JSON round trip changes', () => {
   const runners = readRunners();
   expect(JSON.parse(JSON.stringify(runners))).toEqual(runners);
-  for (const entry of runners.runners) expect(Object.keys(entry).sort()).toEqual(['accountFolderExample', 'agentConfig', 'displayName', 'icon', 'id', 'installHint', 'loginCommand', 'modelIdScope', 'modelListName', 'models', 'pickerDescription', 'pickerLabel'].filter((key) => key !== 'accountFolderExample' || entry.accountFolderExample !== undefined));
+  for (const entry of runners.runners) expect(Object.keys(entry).sort()).toEqual(['accountFolderExample', 'agentConfig', 'displayName', 'icon', 'id', 'installHint', 'loginCommand', 'modelIdScope', 'modelListName', 'models', 'pickerDescription', 'pickerLabel', ...(entry.terminalLogin === false ? ['terminalLogin'] : [])].filter((key) => key !== 'accountFolderExample' || entry.accountFolderExample !== undefined));
 });
 
 it('sends each runner’s Agent config pane: three groups, the MCP note, and who shows the user-level MCP listing or an empty state', () => {

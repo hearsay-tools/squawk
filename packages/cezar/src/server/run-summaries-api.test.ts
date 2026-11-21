@@ -1,3 +1,4 @@
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -20,6 +21,7 @@ import { createApp } from './server.ts';
  * detail-only fields.
  */
 describe('run summaries API', () => {
+  registerBuiltInRunners();
   const savedHome = process.env.CEZ_HOME;
   let home: string;
   let repoRoot: string;

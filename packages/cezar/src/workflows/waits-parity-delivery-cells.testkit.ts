@@ -1,3 +1,4 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
 import { waitPartDescribers, inputsFor, retryClock, nativeWire, askPrompt, pendingQuestion, asks, answered, expectAdmissionRetryCleared, settled, prompted, fireTimer, flushMicrotasks, humanOpen, answerOf, retryAtOnce, observeAdmissionRetries, timerWaits, sessionOf, agentWaits, turnEnds, parkedOn, waitOfKind, blockedDone, liveRefusal, expectPoolCapacity, github, pr } from './waits-parity-fixture.testkit.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, MAX_AUTO_CONTINUES, WAKE_SESSION_CLOSED_ERROR, WAITS_DISCARDED_NOTE, COMPLETION_NUDGE_NOTE } from './run.ts';
 import { join } from 'node:path';
@@ -124,7 +125,13 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         const ends = turnEnds(run.id);
         fireTimer(timer.id);
-        await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
+        const completesWithAck = runnerDefinition(runner).mock.promptResponseEndsTurn;
+        if (completesWithAck) {
+          await until(() => store.readEvents(run.id).some(event => event.type === 'text' && String(event.text).includes(`Timer ${timer.id} fired`)));
+          expect(turnEnds(run.id)).toBe(ends);
+        } else {
+          await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
+        }
         expect(settled(run.id, timer.id)).toBeUndefined();
         expect(store.getRun(run.id)?.status).toBe('waiting');
         const statuses = publishedStatuses(run.id);
@@ -149,12 +156,18 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         const statuses = publishedStatuses(run.id);
         fireTimer(timer.id);
         await until(held);
-        await until(() => settled(run.id, timer.id)?.phase === 'delivered');
-        expect(turnEnds(run.id)).toBe(ends);
-        expect(store.getRun(run.id)?.status).toBe('running');
+        if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
+          expect(settled(run.id, timer.id)).toBeUndefined();
+          expect(turnEnds(run.id)).toBe(ends);
+        } else {
+          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
+          expect(turnEnds(run.id)).toBe(ends);
+          expect(store.getRun(run.id)?.status).toBe('running');
+        }
         release();
         await until(() => settled(run.id, timer.id)?.phase === 'delivered' && turnEnds(run.id) > ends);
-        expect(statuses).toContain('running');
+        if (!runnerDefinition(runner).mock.promptResponseEndsTurn) expect(statuses).toContain('running');
+        else expect(settled(run.id, timer.id)?.phase).toBe('delivered');
         await answerQuestion(run.id, askSeq);
       }, 'hold-wake-response');
     });

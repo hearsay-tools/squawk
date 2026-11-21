@@ -1,3 +1,4 @@
+import { mockRows } from './runner-mock-rows.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 /**
  * Backend-parity roll-up — the spec's hard rule made executable.
@@ -62,10 +63,11 @@ const BACKGROUND_ROW = 'background sub-agent task items (task_notification / sub
 
 /** The parity matrix (spec §"Backend parity requirement"): capability →
  *  predicate over a backend's full v2 fixture output. */
-const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) => boolean]> = [
+const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) => boolean, criterion?: string]> = [
   [
     'plan.updated with entries (TodoWrite / todoList / todowrite)',
     (events) => events.some((e) => e.type === 'plan.updated' && e.entries.length > 0),
+    'UI1',
   ],
   ['tool status: running', (events) => hasToolStatus(events, 'running')],
   ['tool status: completed', (events) => hasToolStatus(events, 'completed')],
@@ -123,7 +125,15 @@ const NO_BACKGROUND_SUBAGENTS = new Set(runnersWhere(facts => facts.nativeSubage
 describe('protocol v2 backend parity (every mapper emits every matrix capability)', () => {
   for (const backend of BACKENDS) {
     const events = fixtureEvents(backend);
-    for (const [name, produced] of CAPABILITIES) {
+    for (const [name, produced, criterion] of CAPABILITIES) {
+      const planGap = criterion ? mockRows()[backend]!.parityExemptions?.[criterion] : undefined;
+      if (planGap) {
+        it(`${backend} explicitly lacks ${name} (${planGap.reason})`, () => {
+          expect(planGap.kind).toBe('capability-absent');
+          expect(produced(events)).toBe(false);
+        });
+        continue;
+      }
       if (name === HOOK_ROW && NO_HOOK_TELEMETRY.has(backend)) {
         it(`${backend} explicitly lacks ${name} (its wire reports no hook lifecycle)`, () => {
           expect(produced(events)).toBe(false);

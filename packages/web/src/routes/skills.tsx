@@ -27,7 +27,7 @@ export function SkillsRoute() {
   const refresh = useRereadSkills(runner, query.account)
   const skills = query.data ?? []
   return (
-    <div data-route="skills" className="mx-auto grid min-h-full w-full max-w-[1100px] content-start gap-5 px-[18px] py-6 md:p-9 max-md:[padding-block-end:5rem]">
+    <div data-route="skills" className="mx-auto grid min-h-full w-full max-w-[1100px] grid-cols-1 content-start gap-5 px-[18px] py-6 md:p-9 max-md:[padding-block-end:5rem]">
       <header>
         <h1 className="text-[25px] font-semibold tracking-tight md:text-[30px]">Skills</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">The skills each agent loads in this project, as its runner reports them.</p>

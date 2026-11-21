@@ -257,6 +257,12 @@ describe('selection and control states (#171)', () => {
       const row = '[data-slot="skill-row"][data-skill="review"][open]'
       browser.waitForFunction(`document.querySelector('${row}') !== null`)
       applyContrastQaVariant(browser, variant)
+      // A wider runner roster must scroll inside its switch, not widen every skill row.
+      const inventory = waitForSettledSample<{ content: number; available: number }>(browser, `(() => {
+        const route = document.querySelector('[data-route="skills"]')
+        return route && { content: route.scrollWidth, available: route.clientWidth }
+      })()`)
+      expect(inventory.content).toBeLessThanOrEqual(inventory.available)
       focus(`${row} summary`)
       expect((colorSample(contrastSampleExpression(`${row} summary`)) as ContrastSample).ratio).toBeGreaterThanOrEqual(4.5)
       browser.screenshot(`${artifacts}/states-skills-${variant.id}.png`, { viewport: true })

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
-import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
+import { RUNNER_IDS, RUNNERS_RESPONSE, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { applyProviderStatusRow } from '@/lib/provider-status'
 import { workspaceQueryKeys } from '@/api/queries'
@@ -86,8 +86,8 @@ function serve({
   )
 }
 
-function renderSettings() {
-  const client = seedRunners(createQueryClient())
+function renderSettings(runnerData = RUNNERS_RESPONSE) {
+  const client = seedRunners(createQueryClient(), runnerData)
   client.setDefaultOptions({
     queries: { ...client.getDefaultOptions().queries, retry: false },
   })
@@ -107,6 +107,14 @@ function card(provider: string): HTMLElement {
   if (!found) throw new Error(`provider card ${provider} did not render`)
   return found
 }
+
+it('keeps credential checks but hides terminal sign-in when the definition has no command', async () => {
+  serve()
+  renderSettings({ runners: RUNNERS_RESPONSE.runners.map(row => row.id === 'codex' ? { ...row, terminalLogin: false } : row) })
+  await within(card('codex')).findByText('Not connected')
+  expect(within(card('codex')).queryByRole('button', { name: 'Connect' })).toBeNull()
+  expect(within(card('codex')).getByRole('button', { name: 'Check again' })).toBeTruthy()
+})
 
 afterEach(() => {
   act(() => resetToasts())

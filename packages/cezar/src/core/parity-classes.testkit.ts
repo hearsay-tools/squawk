@@ -72,7 +72,7 @@ const FACT_VALUES = 'workflows/turn-path-fact-values.test.ts';
  */
 export const FACT_VALUE_TESTS: Readonly<Record<TurnPathFact, Readonly<Record<string, readonly string[]>>>> = {
   'inputDelivery.mode': {},
-  'inputDelivery.consumption': {},
+  'inputDelivery.consumption': { unobservable: [FACT_VALUES] },
   'inputDelivery.acknowledgement': { response: [FACT_VALUES] },
   'inputDelivery.humanInputAtTurnEnd': { 'never-held': [FACT_VALUES], 'always-held': [FACT_VALUES] },
   systemPromptOnResume: { 'in-thread': ['workflows/launch-system-prompt.test.ts'] },

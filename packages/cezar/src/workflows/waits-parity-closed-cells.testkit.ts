@@ -1,3 +1,5 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
+import { assertPromptResponseCompletion } from '../core/owned-input-delivery.testkit.ts';
 import { waitPartDescribers, prompted, workerWaits, parkedOn, viaOf, gated, retryAtOnce, parentWithWorker, sessionOf, nudgeNotes, retryClock, silenceRefusals, noReplyNotes, humanOpen, nativeWire, asks, delivered, ASK_CONTEXT, questions, settled } from './waits-parity-fixture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_SESSION_CLOSED_ERROR, WAKE_DELIVERY_CAP_NOTE, COMPLETION_NUDGE_NOTE, REFUSAL_DISCARDED_NOTE, WORKER_FALLBACK_QUESTION, NO_WAIT_NUDGE_NOTE, WORKER_FALLBACK_HEADER, WORKER_FALLBACK_REPLY_NOTE, MAX_AUTO_CONTINUES } from './run.ts';
@@ -185,6 +187,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       const cell = async (release: () => void) => {
         if (variant === 'silent' && exemptionFor('U22s', runner)) {
           expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
+          if (runnerDefinition(runner).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(runner);
           return;
         }
         retryAtOnce();
@@ -245,6 +248,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
         const exercise = async (releaseAck: () => void) => {
           if (variant === 'silent' && exemptionFor('U22s', runner)) {
             expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
+            if (runnerDefinition(runner).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(runner);
             return;
           }
           let silence = variant === 'silent' ? silenceRefusals() : undefined;

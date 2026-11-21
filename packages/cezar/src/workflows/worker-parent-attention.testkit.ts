@@ -1,3 +1,4 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -71,8 +72,16 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
                 release();
               }
             }
+            const completesWithAck = runnerDefinition(backend).mock.promptResponseEndsTurn;
+            if (transport === 'protocol' && completesWithAck) {
+              await until(() => store.readEvents(p.id).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack')));
+              expect(store.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
+              expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
+              expect(semaphore.busy()).toBe(1);
+              release();
+            }
             await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
-            if (transport === 'protocol') {
+            if (transport === 'protocol' && !completesWithAck) {
               expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
               expect(semaphore.busy()).toBe(1);
             }

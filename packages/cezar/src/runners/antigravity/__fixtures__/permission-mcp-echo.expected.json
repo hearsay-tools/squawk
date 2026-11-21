@@ -1,0 +1,297 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user requests: \"Call the echo tool of the probe MCP server with text"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " hi. Reply with its output only.\"\n\nLet's check the MCP server `probe` and its tool `echo`."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "\nIn the system prompt / MCP servers section:\n```\n# probe\nLazy:\necho\n```\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`echo` is a lazy-loaded MCP tool under server `probe`.\nLet's check how to call lazy MCP tools:"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " `call_mcp_tool`.\nLet's check the schema or call `call_mcp_tool` for `Server"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Name: \"probe\"`, `ToolName: \"echo\"`, and appropriate `Arguments` (likely `{\"text\": \"hi\""
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "}` or similar — let's check if there's a resource or schema file for `probe` tool `echo`).\nWait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ", where are MCP schemas stored?\n`<appDataDir>/brain/<conversation-id>/mcp/<serverName>` containing"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " tool schemas (`<toolName>.json`).\nLet's read the schema for `probe` `echo` or"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " use `read_resource` / `view_file` to inspect `/work/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "/gem/antigravity-acp/brain/61d2e588-427b-410"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "e-9cc5-00009c3ea2bc/mcp/probe/echo."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "json`.\nLet's view that file using `view_file`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 20599,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The parameter is `text` (string).\nNow let's call `call"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "_mcp_tool` with `ServerName: \"probe\"`, `ToolName: \"echo\"`, `Arguments: {\"text"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "\": \"hi\"}`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user requests: \"Call the echo tool of the probe MCP server with text hi. Reply with its output only.\"\n\nLet's check the MCP server `probe` and its tool `echo`.\nIn the system prompt / MCP servers section:\n```\n# probe\nLazy:\necho\n```\n`echo` is a lazy-loaded MCP tool under server `probe`.\nLet's check how to call lazy MCP tools: `call_mcp_tool`.\nLet's check the schema or call `call_mcp_tool` for `ServerName: \"probe\"`, `ToolName: \"echo\"`, and appropriate `Arguments` (likely `{\"text\": \"hi\"}` or similar — let's check if there's a resource or schema file for `probe` tool `echo`).\nWait, where are MCP schemas stored?\n`<appDataDir>/brain/<conversation-id>/mcp/<serverName>` containing tool schemas (`<toolName>.json`).\nLet's read the schema for `probe` `echo` or use `read_resource` / `view_file` to inspect `/work//gem/antigravity-acp/brain/61d2e588-427b-410e-9cc5-00009c3ea2bc/mcp/probe/echo.json`.\nLet's view that file using `view_file`.The parameter is `text` (string).\nNow let's call `call_mcp_tool` with `ServerName: \"probe\"`, `ToolName: \"echo\"`, `Arguments: {\"text\": \"hi\"}`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "ff854eb1f70b40c6913358dc3107c421",
+      "name": "probe_echo",
+      "title": "probe_echo",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "arguments": {
+          "text": "hi"
+        },
+        "text": "hi"
+      },
+      "output": "",
+      "diffs": []
+    }
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 20976,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "ff854eb1f70b40c6913358dc3107c421",
+      "name": "probe_echo",
+      "title": "probe_echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "arguments": {
+          "text": "hi"
+        },
+        "text": "hi"
+      },
+      "output": "",
+      "diffs": []
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "ff854eb1f70b40c6913358dc3107c421",
+      "name": "probe_echo",
+      "title": "probe_echo",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "arguments": {
+          "text": "hi"
+        },
+        "text": "hi"
+      },
+      "output": "Call MCP tool echo",
+      "diffs": []
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " output of `call_mcp_tool` is `echo: hi`.\nWait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": ", the user requested: \"Reply with its output only.\"\nWhat is the exact output of the tool? `echo: hi"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "` or `hi`?\nLet's check the tool output: `echo: hi`.\nLet's review"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " the output text returned by `call_mcp_tool`: `echo: hi`.\nWait, let's check"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": " if the output value itself is `hi` or `echo: hi`. The tool response says `echo: hi`.\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "'s reply with `echo: hi`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The output of `call_mcp_tool` is `echo: hi`.\nWait, the user requested: \"Reply with its output only.\"\nWhat is the exact output of the tool? `echo: hi` or `hi`?\nLet's check the tool output: `echo: hi`.\nLet's review the output text returned by `call_mcp_tool`: `echo: hi`.\nWait, let's check if the output value itself is `hi` or `echo: hi`. The tool response says `echo: hi`.\nLet's reply with `echo: hi`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "echo: hi"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 21188,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "echo: hi"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 11162,
+      "output": 660,
+      "total": 62763,
+      "reasoning": 500,
+      "cacheRead": 50941,
+      "cacheWrite": 0
+    }
+  }
+]

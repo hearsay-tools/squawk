@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { createFailureControl, type FailureControlOptions } from '../../scripts/mock-failure-control.mjs';
 import { expect } from 'vitest';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 
 // hearsay-tools/cezarion#1233: the wait list's BUILT_IN_RUNNER_IDS cells. U0 (tool admission) lives in
@@ -145,7 +146,7 @@ export const MESSAGE_WAKE_OPENING = 'Resume to receive queued messages.';
 export function persistentWakeFailure(root: string, runner: string, { usageLimit = false, opening = TIMER_WAKE_OPENING, unread = false } = {}) {
   if (usageLimit) expect(runner).toBe('claude');
   const { lift } = nativeFailureControl(root, runner, { mode: 'persistent', opening,
-    failure: unread && runner === 'claude' ? 'unread' : usageLimit ? 'usage-limit' : 'provider' });
+    failure: unread && (runner === 'claude' || RUNNER_FACTS[runner]!.inputDelivery.consumption === 'unobservable') ? 'unread' : usageLimit ? 'usage-limit' : 'provider' });
   return { lift };
 }
 

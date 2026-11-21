@@ -32,7 +32,7 @@ export function lastSessionBackend(run: RunRecord): Runner {
  *  session id (open-mercato/cezar#431), and without it there is no hint. Prefixes the `cd` when
  *  the run has its own worktree, because the resume only makes sense from in there. */
 export function resumeHint(run: ApiRun): string | undefined {
-  if (engineOwnsRun(run)) return undefined
+  if (engineOwnsRun(run) || run.cliHandoff === false) return undefined
   const command = run.cliResumeCommand
   if (command === undefined) return undefined
   return run.worktreePath ? `cd ${run.worktreePath} && ${command}` : command
@@ -115,7 +115,7 @@ export function hasLiveSession(run: RunRecord): boolean {
   return isSessionOpen(run) && run.removedRunner === undefined
 }
 
-export function runActionFlags(run: RunRecord, workersLive = false): RunActionFlags {
+export function runActionFlags(run: ApiRun, workersLive = false): RunActionFlags {
   const active = engineOwnsRun(run)
   const hasSession = lastSessionId(run) !== undefined
   return {
@@ -125,7 +125,7 @@ export function runActionFlags(run: RunRecord, workersLive = false): RunActionFl
       !(run.delegation?.role === 'worker' && run.delegation.destroy) &&
       // A task saved on a removed runner keeps no session; it continues on a live runner (hearsay-tools/squawk#3715).
       (hasSession || isStoppedBeforeStarting(run) || run.removedRunner !== undefined),
-    terminal: !active && hasSession,
+    terminal: terminalActionAllowed(run, active, hasSession),
     notes: true,
     archive: !active,
     pin: !run.archived && !isOwnedWorker(run),
@@ -188,4 +188,8 @@ export function queuePosition(runs: readonly Pick<RunRecord, 'id' | 'archived' |
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const index = queued.findIndex((run) => run.id === runId)
   return index >= 0 ? index + 1 : undefined
+}
+
+function terminalActionAllowed(run: ApiRun, active: boolean, hasSession: boolean): boolean {
+  return run.cliHandoff !== false && !active && hasSession
 }

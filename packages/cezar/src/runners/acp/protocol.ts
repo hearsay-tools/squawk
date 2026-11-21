@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { UiAskRequestedEvent, UiToolItem } from '../../core/ui-events.ts';
+import type { TokenUsage, UiAskRequestedEvent, UiToolItem } from '../../core/ui-events.ts';
 
 export const recordSchema = z.record(z.string(), z.unknown());
 export const initializeSchema = z.object({
@@ -22,6 +22,11 @@ export interface AcpAsk {
   answer(value: unknown): unknown;
 }
 export interface AcpHooks {
+  /** Some ACP agents report execution failures as text followed by end_turn. */
+  promptError?(): string | undefined;
+  normalizeUsage?(usage: unknown): TokenUsage | undefined;
+  /** Provider diagnostics or updates the adapter consumes itself. */
+  filterUpdate?(update: Record<string, unknown>): boolean;
   selectAuthMethod?(hello: AcpInitializeResult): string | undefined;
   /** Return additional session/new, resume or load fields, including _meta. */
   sessionParams?(method: 'new' | 'resume' | 'load', params: Record<string, unknown>): Record<string, unknown>;

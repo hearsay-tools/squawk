@@ -1,0 +1,1042 @@
+[
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-1",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-1",
+    "field": "text",
+    "delta": "hello"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-1",
+      "role": "assistant",
+      "text": "hello"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_13838565645592091164",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo probe-42\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo probe-42\",\"toolSummary\":\"Run echo command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_13838565645592091164",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo probe-42\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo probe-42\",\"toolSummary\":\"Run echo command\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_13838565645592091164",
+      "name": "Bash",
+      "title": "echo probe-42",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo probe-42\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo probe-42\",\"toolSummary\":\"Run echo command\"}",
+      "output": "probe-42\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "text",
+    "delta": "probe-42"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-2",
+      "role": "assistant",
+      "text": "probe-42"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_9669665411146399823",
+      "name": "Read",
+      "title": "Running client_view_file",
+      "toolKind": "read",
+      "status": "completed",
+      "input": "{\"absolute_path\":\"/work/project/notes.txt\",\"toolAction\":\"Viewing notes.txt\",\"toolSummary\":\"View notes.txt\"}",
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_9669665411146399823",
+      "name": "Read",
+      "title": "Running client_view_file",
+      "toolKind": "read",
+      "status": "completed",
+      "input": "{\"absolute_path\":\"/work/project/notes.txt\",\"toolAction\":\"Viewing notes.txt\",\"toolSummary\":\"View notes.txt\"}",
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_9669665411146399823",
+      "name": "Read",
+      "title": "Running client_view_file",
+      "toolKind": "read",
+      "status": "completed",
+      "input": "{\"absolute_path\":\"/work/project/notes.txt\",\"toolAction\":\"Viewing notes.txt\",\"toolSummary\":\"View notes.txt\"}",
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ],
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_2290146896331666724",
+      "name": "Running replace_file_content",
+      "title": "Running replace_file_content",
+      "toolKind": "edit",
+      "status": "completed",
+      "input": "{\"AllowMultiple\":false,\"Description\":\"Replace alpha with beta in notes.txt\",\"EndLine\":1,\"Instruction\":\"Replace alpha with beta\",\"ReplacementContent\":\"beta\",\"StartLine\":1,\"TargetContent\":\"alpha\",\"TargetFile\":\"/work/project/notes.txt\",\"toolAction\":\"Replacing alpha with beta\",\"toolSummary\":\"Edit notes.txt\"}",
+      "output": "",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt",
+          "line": 1
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_2290146896331666724",
+      "name": "Running replace_file_content",
+      "title": "Running replace_file_content",
+      "toolKind": "edit",
+      "status": "completed",
+      "input": "{\"AllowMultiple\":false,\"Description\":\"Replace alpha with beta in notes.txt\",\"EndLine\":1,\"Instruction\":\"Replace alpha with beta\",\"ReplacementContent\":\"beta\",\"StartLine\":1,\"TargetContent\":\"alpha\",\"TargetFile\":\"/work/project/notes.txt\",\"toolAction\":\"Replacing alpha with beta\",\"toolSummary\":\"Edit notes.txt\"}",
+      "output": "",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt",
+          "line": 1
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_2290146896331666724",
+      "name": "Running replace_file_content",
+      "title": "Running replace_file_content",
+      "toolKind": "edit",
+      "status": "completed",
+      "input": "{\"AllowMultiple\":false,\"Description\":\"Replace alpha with beta in notes.txt\",\"EndLine\":1,\"Instruction\":\"Replace alpha with beta\",\"ReplacementContent\":\"beta\",\"StartLine\":1,\"TargetContent\":\"alpha\",\"TargetFile\":\"/work/project/notes.txt\",\"toolAction\":\"Replacing alpha with beta\",\"toolSummary\":\"Edit notes.txt\"}",
+      "output": "",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha",
+          "newText": "beta"
+        }
+      ],
+      "locations": [
+        {
+          "path": "/work/project/notes.txt",
+          "line": 1
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "edited"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "edited"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_16100160068398511255",
+      "name": "Bash",
+      "title": "touch rejected.txt",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"touch rejected.txt\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running touch rejected.txt\",\"toolSummary\":\"Run touch command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_16100160068398511255",
+      "name": "Bash",
+      "title": "touch rejected.txt",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"touch rejected.txt\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running touch rejected.txt\",\"toolSummary\":\"Run touch command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_16100160068398511255",
+      "name": "Bash",
+      "title": "touch rejected.txt",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": "{\"CommandLine\":\"touch rejected.txt\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running touch rejected.txt\",\"toolSummary\":\"Run touch command\"}",
+      "output": "Denied by user (*)."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "refused"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "refused"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_8003587201104653419",
+      "name": "Running ask_question",
+      "title": "Running ask_question",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"questions\":[{\"is_multi_select\":false,\"options\":[\"red\",\"blue\"],\"question\":\"Please choose a color:\"}],\"toolAction\":\"Asking color preference\",\"toolSummary\":\"Ask color preference\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_8003587201104653419",
+      "name": "Running ask_question",
+      "title": "Running ask_question",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"questions\":[{\"is_multi_select\":false,\"options\":[\"red\",\"blue\"],\"question\":\"Please choose a color:\"}],\"toolAction\":\"Asking color preference\",\"toolSummary\":\"Ask color preference\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8003587201104653419",
+      "name": "Running ask_question",
+      "title": "Running ask_question",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"questions\":[{\"is_multi_select\":false,\"options\":[\"red\",\"blue\"],\"question\":\"Please choose a color:\"}],\"toolAction\":\"Asking color preference\",\"toolSummary\":\"Ask color preference\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "blue"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "PELICAN-7"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "probe-alpha, probe-beta, run-workflow"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "bluePELICAN-7probe-alpha, probe-beta, run-workflow"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_18195430071911403262",
+      "name": "Bash",
+      "title": "sleep 15 && echo slow-done",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 15 \\u0026\\u0026 echo slow-done\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":20,\"WaitMsBeforeAsync\":20000,\"toolAction\":\"Running sleep 15\",\"toolSummary\":\"Run sleep command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_18195430071911403262",
+      "name": "Bash",
+      "title": "sleep 15 && echo slow-done",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 15 \\u0026\\u0026 echo slow-done\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":20,\"WaitMsBeforeAsync\":20000,\"toolAction\":\"Running sleep 15\",\"toolSummary\":\"Run sleep command\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_18195430071911403262",
+      "name": "Bash",
+      "title": "sleep 15 && echo slow-done",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 15 \\u0026\\u0026 echo slow-done\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":20,\"WaitMsBeforeAsync\":20000,\"toolAction\":\"Running sleep 15\",\"toolSummary\":\"Run sleep command\"}",
+      "output": "slow-done\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_16794003850850508649",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_16794003850850508649",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_16794003850850508649",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_11608935962492397187",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11608935962492397187",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11608935962492397187",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_6018946836683832910",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_6018946836683832910",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_6018946836683832910",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_14101747580885899200",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status again\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_14101747580885899200",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status again\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_14101747580885899200",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":5,\"Prompt\":\"Check task-26 status again\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_11162269624933410633",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11162269624933410633",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11162269624933410633",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_11135518559881624168",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":3,\"Prompt\":\"Check task-26 final status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11135518559881624168",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":3,\"Prompt\":\"Check task-26 final status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11135518559881624168",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":3,\"Prompt\":\"Check task-26 final status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_14496481195744477764",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_14496481195744477764",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_14496481195744477764",
+      "name": "Running manage_task",
+      "title": "Running manage_task",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"Action\":\"status\",\"TaskId\":\"b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-26\",\"toolAction\":\"Checking task status\",\"toolSummary\":\"Check task status\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "slow-done"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "slow-done"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_7328693636662612236",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":2,\"Prompt\":\"Acknowledge notification\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_7328693636662612236",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":2,\"Prompt\":\"Acknowledge notification\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_7328693636662612236",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":2,\"Prompt\":\"Acknowledge notification\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "The following is a <SYSTEM_MESSAGE> not actually sent by the user. It is provided by the system as important information to pay attention to.\n\n<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-20T23:58:20Z sender=b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-45 priority=MESSAGE_PRIORITY_HIGH content=Acknowledge notification\n</SYSTEM_MESSAGE>"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "Acknowledged."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "Understood."
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "STEERED"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": "The following is a <SYSTEM_MESSAGE> not actually sent by the user. It is provided by the system as important information to pay attention to.\n\n<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-20T23:58:20Z sender=b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-45 priority=MESSAGE_PRIORITY_HIGH content=Acknowledge notification\n</SYSTEM_MESSAGE>Acknowledged.Understood.STEERED"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_1962326226261748869",
+      "name": "Bash",
+      "title": "sleep 40 && echo never",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 40 \\u0026\\u0026 echo never\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":45,\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running sleep 40\",\"toolSummary\":\"Run sleep command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_1962326226261748869",
+      "name": "Bash",
+      "title": "sleep 40 && echo never",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 40 \\u0026\\u0026 echo never\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":45,\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running sleep 40\",\"toolSummary\":\"Run sleep command\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_1962326226261748869",
+      "name": "Bash",
+      "title": "sleep 40 && echo never",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"sleep 40 \\u0026\\u0026 echo never\",\"Cwd\":\"/work/project\",\"NotificationTimeoutSeconds\":45,\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running sleep 40\",\"toolSummary\":\"Run sleep command\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_11449595112285054647",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":35,\"Prompt\":\"Check task-56 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11449595112285054647",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":35,\"Prompt\":\"Check task-56 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11449595112285054647",
+      "name": "Running schedule",
+      "title": "Running schedule",
+      "toolKind": "other",
+      "status": "completed",
+      "input": "{\"DurationSeconds\":35,\"Prompt\":\"Check task-56 status\",\"TimerCondition\":\"never\",\"toolAction\":\"Scheduling timer\",\"toolSummary\":\"Schedule timer\"}",
+      "output": ""
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "The following is a <SYSTEM_MESSAGE> not actually sent by the user. It is provided by the system as important information to pay attention to.\n\n<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-20T23:59:04Z sender=b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-58 priority=MESSAGE_PRIORITY_HIGH content=Check task-56 status\n</SYSTEM_MESSAGE>"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "text",
+    "delta": "after-cancel"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": "The following is a <SYSTEM_MESSAGE> not actually sent by the user. It is provided by the system as important information to pay attention to.\n\n<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-20T23:59:04Z sender=b46d2e2a-dd02-4e48-a1a2-81ec0f9be4ee/task-58 priority=MESSAGE_PRIORITY_HIGH content=Check task-56 status\n</SYSTEM_MESSAGE>after-cancel"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_2921243196760292948",
+      "name": "Bash",
+      "title": "echo yolo-ok",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo yolo-ok\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo yolo-ok\",\"toolSummary\":\"Run echo command\"}"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_2921243196760292948",
+      "name": "Bash",
+      "title": "echo yolo-ok",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo yolo-ok\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo yolo-ok\",\"toolSummary\":\"Run echo command\"}"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_2921243196760292948",
+      "name": "Bash",
+      "title": "echo yolo-ok",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": "{\"CommandLine\":\"echo yolo-ok\",\"Cwd\":\"/work/project\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running echo yolo-ok\",\"toolSummary\":\"Run echo command\"}",
+      "output": "yolo-ok\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-9",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "yolo-ok"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "PELICAN-7"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "blue"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "PELICAN-7"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "blue"
+  }
+]

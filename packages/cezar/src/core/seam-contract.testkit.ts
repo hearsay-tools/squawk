@@ -385,7 +385,8 @@ async function observeAcknowledgement(backend: string): Promise<ContractObservat
       const reported = (id: string) => consumed.includes(id) || reportedUnread(rec.timeline, id);
       if (delivery.consumption === 'unobservable') {
         // Nothing reports the read: the input's own turn ending is the last signal.
-        await until(rec, () => turnEnds(rec) >= 2);
+        await until(rec, () => turnEnds(rec) >= (delivery.mode === 'steer' ? 1 : 2));
+        expect(turnEnds(rec)).toBe(delivery.mode === 'steer' ? 1 : 2);
         return;
       }
       // bound: an observable runner reports each input read or unread; a missing report fails the row.

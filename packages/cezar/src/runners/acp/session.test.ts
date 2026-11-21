@@ -137,3 +137,30 @@ describe('shared ACP session over the native mock wire', () => {
     expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"allow-once"}}' });
   });
 });
+
+
+it('starts a successor turn for a late steer and keeps its native permission live', async () => {
+  let steer: Promise<void> | undefined;
+  const { session, ui } = start({ event: event => {
+    if (event.type === 'tool-call' && event.id === 'steer-now') steer = session.steer([{ type: 'text', text: 'late input' }]);
+  }, uiEvent: event => {
+    if (event.type === 'permission.requested') expect(session.respondPermission(event.requestId, 'allow-once')).toBe(true);
+  } });
+  await session.initialize(); await session.open({ cwd: tmpdir() });
+  await session.prompt([{ type: 'text', text: 'mock:acp-late-steer' }]);
+  expect(steer).toBeDefined(); await steer;
+  expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(2);
+  expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
+  expect(ui).toContainEqual(expect.objectContaining({ type: 'permission.resolved', optionId: 'allow-once' }));
+});
+
+it('applies update filtering and provider usage to a prompt without mutating mapper state', async () => {
+  const { session, events, ui } = start({ hooks: {
+    filterUpdate: update => update.sessionUpdate !== 'agent_message_chunk',
+    normalizeUsage: () => ({ input: 3, output: 4, total: 7 }),
+  } });
+  await session.initialize(); await session.open({ cwd: tmpdir() });
+  await session.prompt([{ type: 'text', text: 'a filtered message' }]);
+  expect(events.filter(event => event.type === 'text')).toEqual([]);
+  expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', usage: { input: 3, output: 4, total: 7 } }));
+});

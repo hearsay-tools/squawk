@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AgentEvent } from '../../core/agent-runner.ts';
-import type { UiEvent, UiMessageItem, UiReasoningItem, UiToolItem, StopReason } from '../../core/ui-events.ts';
+import type { UiEvent, UiMessageItem, UiReasoningItem, UiToolItem, StopReason, TokenUsage } from '../../core/ui-events.ts';
 import type { AcpHooks } from './protocol.ts';
 
 const toolSchema = z.object({
@@ -33,10 +33,10 @@ export class AcpEvents {
     return this.turnId;
   }
 
-  finish(stopReason: StopReason): void {
+  finish(stopReason: StopReason, usage?: TokenUsage): void {
     this.flush();
     if (!this.turnId) return;
-    this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason });
+    this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason, ...(usage ? { usage } : {}) });
     this.turnId = undefined;
     this.sink.event?.({ type: 'turn-end' });
   }
@@ -49,6 +49,16 @@ export class AcpEvents {
   notice(message: string): void {
     this.sink.event?.({ type: 'note', message });
     this.sink.uiEvent?.({ type: 'session.error', message, fatal: false });
+  }
+
+  /** A mapper can fold one frame without mutating its caller's state. */
+  fork(sink: AcpEventSink): AcpEvents {
+    const next = new AcpEvents(sink, this.hooks);
+    next.serial = this.serial; next.turnId = this.turnId;
+    next.block = this.block ? { ...this.block } : undefined;
+    // Updates replace tool snapshots; their nested input/output values are never mutated.
+    next.tools = new Map(this.tools);
+    return next;
   }
 
   private mapUpdate(update: Record<string, unknown>): void {

@@ -1,3 +1,4 @@
+import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
@@ -27,6 +28,7 @@ registerRunner(codexRunner);
 registerRunner(opencodeRunner);
 registerRunner(piRunner);
 registerRunner(ompRunner);
+registerRunner(antigravityRunner);
 
 // The cases span the Claude, Codex, OpenCode and OMP take-over commands.
 
@@ -144,6 +146,18 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
   const openInCli = (runId: string, options: { disabled?: ProviderId[]; disconnected?: ProviderId[] } = {}) =>
     apiRequest(app(options), `/api/v1/runs/${runId}/open-in-cli`, { method: 'POST' });
+
+  it('omits terminal actions and refuses a direct handoff for a protocol-only runner', async () => {
+    const run = makeRun('antigravity', 'saved-session');
+    const detail = await apiRequest(app(), `/api/v1/runs/${run.id}`);
+    const data = await detail.json();
+    expect(data).toMatchObject({ cliHandoff: false });
+    expect(data).not.toHaveProperty('cliResumeCommand');
+    const response = await openInCli(run.id);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'this runner has no interactive CLI' });
+    expect(mockOpenInTerminal).not.toHaveBeenCalled();
+  });
 
   it.each(['queued', 'running', 'waiting'] as const)(
     'open-in-cli opens a fresh CLI for an engine-owned %s run with a session', async (status) => {

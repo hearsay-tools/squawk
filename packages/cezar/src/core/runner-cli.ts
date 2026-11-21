@@ -4,7 +4,9 @@ import { quoteExecutable } from './shell-env.ts';
 /** The terminal executable of a runner as a shell word; null when the configured one cannot be
  *  spelled safely on this platform. */
 export function terminalExecutable(runner: string, platform: NodeJS.Platform = process.platform): string | null {
-  const executable = runnerDefinition(runner).cli.terminalExecutable;
+  const cli = runnerDefinition(runner).cli;
+  if (cli.interactive === false) return null;
+  const executable = cli.terminalExecutable;
   return executable.kind === 'path-name' ? executable.name : quoteExecutable(executable.resolve(), platform);
 }
 

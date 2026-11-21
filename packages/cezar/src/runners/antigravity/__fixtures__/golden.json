@@ -1,0 +1,52 @@
+{
+  "resumeCommand": null,
+  "toolActivity": {
+    "fixture": "prompt-command",
+    "calls": 1,
+    "latest": { "title": "echo probe-42", "toolKind": "execute", "status": "completed" }
+  },
+  "providerAuth": {
+    "connectedEnv": { "GEMINI_API_KEY": "fixture-present" },
+    "command": { "executable": "agy", "args": ["--version"] },
+    "connected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 },
+    "disconnected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 }
+  },
+  "installerDryRun": "note antigravity: Install Antigravity ACP registry archive from https://antigravity.google, then re-run.",
+  "plannerModels": {},
+  "workerAccountBinding": { "provider": "antigravity", "profileId": "default" },
+  "runnerEntry": {
+    "displayName": "Antigravity",
+    "modelListName": "Antigravity",
+    "modelIdScope": "own",
+    "pickerLabel": "Antigravity",
+    "pickerDescription": "Google Antigravity over ACP",
+    "icon": "bot",
+    "installHint": "https://antigravity.google",
+    "loginCommand": "Set GEMINI_API_KEY or GOOGLE_API_KEY, or use your Antigravity sign-in in GEMINI_HOME (default ~/.gemini)",
+    "accountFolderExample": "~/.gemini",
+    "suggested": [""],
+    "retired": [],
+    "paneLabel": "Antigravity",
+    "paneNote": "Uses your existing Antigravity setup.",
+    "showsUserMcp": false,
+    "emptyGroups": ["settings", "mcp", "memory"]
+  },
+  "askKinds": ["interaction"],
+  "toolGrant": {
+    "wire": "permission-policy",
+    "cases": {
+      "unset": ["allow", "allow", "allow"],
+      "step-default": ["allow", "allow", "allow"],
+      "inherited": ["allow", "allow", "allow"],
+      "explicit-copy": ["allow", "allow", "allow"],
+      "extra-built-in": ["allow", "allow", "allow"],
+      "extra-mcp": ["allow", "allow", "allow"],
+      "narrowed": ["allow", "deny", "deny"],
+      "empty": ["deny", "deny", "deny"],
+      "bash-allowlist": ["allow", "allow", "deny"],
+      "unset-bash-allowlist": ["allow", "allow", "deny"]
+    }
+  },
+  "rejectedAgentInput": "keeps-session",
+  "systemPromptOnResume": "resent"
+}

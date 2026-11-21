@@ -5,4 +5,4 @@
  * definition and no adapter, which is why the global test setup reads it (`vitest.setup.ts`)
  * and why the closure guard (`core/runner-closure.test.ts`) keeps it free of runner code.
  */
-export const BUILT_IN_RUNNER_IDS: readonly string[] = ['claude', 'codex', 'opencode', 'pi', 'omp'];
+export const BUILT_IN_RUNNER_IDS: readonly string[] = ['claude', 'codex', 'opencode', 'pi', 'omp', 'antigravity'];

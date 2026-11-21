@@ -4,6 +4,7 @@ import { publishFile } from './mock-publish.mjs';
 import { basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 export async function probeCiTool(backend, wire, pr = process.env.CEZ_MOCK_CI_PR) {
@@ -45,6 +46,8 @@ const expandEnv = (env) => Object.fromEntries(Object.entries(env ?? {}).map(([ke
 
 /** The Squawk MCP server a runner's wire names, with the environment it starts under. */
 function mcpServerOf(backend, wire) {
+  const http = wire?.mcpServers?.find(server => server.type === 'http');
+  if (http) return { server: http };
   if (backend === 'claude') {
     const server = Object.values(JSON.parse(wire[wire.indexOf('--mcp-config') + 1]).mcpServers)[0];
     return { server, env: expandEnv(server.env) };
@@ -61,7 +64,9 @@ async function probeMcpTool({ server, env }, name, args) {
   if (!server) throw new Error('CI server absent');
   const client = new Client({ name: 'offline-harness', version: '1' });
   try {
-    await client.connect(new StdioClientTransport({ command: server.command, args: server.args, env, stderr: 'pipe' }));
+    await client.connect(server.type === 'http'
+      ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: Object.fromEntries(server.headers.map(header => [header.name, header.value])) } })
+      : new StdioClientTransport({ command: server.command, args: server.args, env, stderr: 'pipe' }));
     const list = await client.listTools();
     return { names: list.tools.map(tool => tool.name), response: await client.callTool({ name, arguments: args }) };
   } finally { await client.close(); }

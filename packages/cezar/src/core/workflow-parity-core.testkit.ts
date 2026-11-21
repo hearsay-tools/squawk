@@ -69,6 +69,10 @@ function optionalSemaphore(semaphore: WorkspaceSemaphore | undefined): { semapho
  * Modelled on the #565 suite in `workflows/run.test.ts`: a temp git repo, a
  * store, a manager, and the built-in single-step workflow with `worktree: false`.
  */
+function scenarioEnvironment(adapter: (typeof HARNESS_ADAPTERS)[string], scenario: ScenarioName | { prompt: string }): Record<string, string> {
+  return typeof scenario === 'string' ? { ...adapter?.scenarioEnv?.[scenario] } : {};
+}
+
 export async function driveRun(
   backend: string,
   scenario: ScenarioName | { prompt: string },
@@ -104,7 +108,7 @@ export async function driveRun(
   // The mock answers Squawk's no-wait nudge in plain text (hearsay-tools/cezarion#1234), so a row
   // that ends a turn with no wait reaches Squawk's own wait rather than a question the mock made
   // up. `options.env` may opt back in to the card.
-  const env = { CEZ_MOCK_NUDGE_REPLY: 'plain', ...extraEnv };
+  const env = { CEZ_MOCK_NUDGE_REPLY: 'plain', ...scenarioEnvironment(adapter, scenario), ...extraEnv };
   const savedEnv = Object.keys(env).map(name => [name, process.env[name]] as const);
   const restoreEnvironment = () => {
     if (savedBin === undefined) delete process.env[adapter.binEnv];
@@ -239,7 +243,7 @@ function readOptional(path: string): string | undefined {
 
 type OwnedInputOptions = NonNullable<Parameters<typeof withOwnedInputRun>[3]>;
 
-function prepareOwnedInputEnvironment(backend: string, options: OwnedInputOptions): () => void {
+function prepareOwnedInputEnvironment(backend: string, scenario: ScenarioName, options: OwnedInputOptions): () => void {
   const adapter = HARNESS_ADAPTERS[backend]!;
   const savedBin = process.env[adapter.binEnv]!;
   const savedExtraBins = (options.extraBackends ?? []).map(extra => [HARNESS_ADAPTERS[extra]!.binEnv, process.env[HARNESS_ADAPTERS[extra]!.binEnv]] as const);
@@ -248,7 +252,7 @@ function prepareOwnedInputEnvironment(backend: string, options: OwnedInputOption
   const savedAutoName = process.env.CEZ_AUTONAME;
   // The worker ignores Squawk's no-wait nudge (hearsay-tools/cezarion#1234) and reaches its plain
   // park, so input delivery is what these fixtures decide. `options.env` may opt back in.
-  const env = { CEZ_MOCK_NUDGE_REPLY: 'plain', ...options.env };
+  const env = { CEZ_MOCK_NUDGE_REPLY: 'plain', ...adapter.scenarioEnv?.[scenario], ...options.env };
   const savedEnv = Object.keys(env).map(name => [name, process.env[name]] as const);
   Object.assign(process.env, env);
   // Naming is a separate auxiliary invocation, not part of input delivery.
@@ -403,7 +407,7 @@ export async function withOwnedInputRun(
     semaphore?: WorkspaceSemaphore;
   } = {},
 ): Promise<void> {
-  const restoreEnvironment = prepareOwnedInputEnvironment(backend, options);
+  const restoreEnvironment = prepareOwnedInputEnvironment(backend, scenario, options);
   const repoRoot = mkdtempSync(join(tmpdir(), `cez-owned-input-${backend}-`));
   // This fixture owns every native mock process; ambient host daemons cannot hold its new repo.
   const restoreProcesses = scopeFixtureProcesses();

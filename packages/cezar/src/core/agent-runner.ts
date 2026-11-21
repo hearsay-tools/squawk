@@ -247,6 +247,7 @@ export interface AgentSession {
    *  that the model has not consumed and that the runner will still deliver (#486).
    *  A held input releases only when (a) the normalized `turn.started` of the turn
    *  that carries it has been emitted, (b) it is read inside an open normalized turn,
+   *  or, when input consumption is unobservable, at that carrying turn's completion,
    *  or (c) a rejection or a close means it can never start, or a
    *  `discardQueuedMessages` drops it. A discard cannot retract an input the wire
    *  already wrote or spawned: the runner then either drops only the hold, and the

@@ -1,3 +1,4 @@
+import { runnerDefinition } from '../core/runner-registry.ts';
 import { waitPartDescribers, pendingQuestion, humanOpen, asks, answerOf, settled, answered, nativeWire, questions, ASK_CONTEXT, sessionOf, turnEnds, prompted, gated, parkedOn, waitOfKind, stepStatus, viaOf } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NOTE, MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
@@ -76,7 +77,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
 
     it(`${runner} U7h a native ask opens a human wait in the same wait list`, async () => {
       nativeWire(runner);
-      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.ask!, runner });
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios[runnerDefinition(runner).mock.nativeAskScenario ?? 'ask']!, runner });
       if (exemptionFor('U7h', runner)) {
         // capability-absent: this wire has no native ask; its ask scenario calls cezar_ask.
         expect(exemptionFor('U7h', runner)?.kind).toBe('capability-absent');

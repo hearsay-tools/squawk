@@ -118,6 +118,7 @@ export async function openRunCli(
 export async function freshCliHandoff(cliRunner: string, repoRoot: string, home: Home): Promise<
   { command: string; env: Record<string, string> } | { error: string }
 > {
+  if (runnerDefinition(cliRunner).cli.interactive === false) return { error: 'this runner has no interactive CLI' };
   // Only a configured executable can fail to quote; a PATH name always can.
   const command = terminalExecutable(cliRunner);
   if (command === null) {

@@ -9,6 +9,8 @@ import { driveSeam } from './harness-parity-core.testkit.ts';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
 import { extraToolRows } from './runner-fact-rows.testkit.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { allowProbePermissions, policyResponses } from './permission-policy.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 /**
@@ -81,6 +83,7 @@ type ToolFlags = { readonly values: readonly string[]; readonly switches: readon
 /** Today's flags, from the runner's own golden. A gap a case shows stays pinned until its issue changes it. */
 function expectedGrants(backend: string): { flags?: ToolFlags; cases: Readonly<Record<ToolGrantCaseId, Expected>> } {
   const golden = runnerGolden(backend, 'toolGrant');
+  if (typeof golden === 'object' && 'wire' in golden) return { cases: golden.cases as Record<ToolGrantCaseId, Expected> };
   if (golden === SAME_AS_UNSET) return { cases: Object.fromEntries(TOOL_GRANT_CASES.map(entry => [entry.id, SAME_AS_UNSET])) as Record<ToolGrantCaseId, Expected> };
   const expand = (flag: string) => flag.replace(/\{squawk(?:-mcp)?\}/g, name => SQUAWK_NAMES[name as keyof typeof SQUAWK_NAMES]);
   const cases = Object.fromEntries(Object.entries(golden.cases).map(([id, flags]) => [id, flags === SAME_AS_UNSET ? flags : flags.map(expand)]));
@@ -131,9 +134,10 @@ export function describeToolGrantParity(scope: string | 'once'): void {
       dir = mkdtempSync(join(tmpdir(), `cez-tool-grant-${backend}-`));
       for (const entry of TOOL_GRANT_CASES) {
         // Relative recording paths: the mock resolves them against its cwd, which is `dir`.
-        const obs = await driveSeam(backend, 'baseline', { spec: {
+        const policy = runnerDefinition(backend).mock.toolGrantObservation === 'permission-policy';
+        const obs = await driveSeam(backend, 'baseline', { ...(policy ? { whileOpen: allowProbePermissions } : {}), spec: {
           cwd: dir, sessionId: undefined, toolGrant: entry.grant(backend), squawkTools: DESCRIPTOR,
-          env: { CEZ_MOCK_ARGS_FILE: `${entry.id}.args.ndjson`, CEZ_MOCK_STDIN_FILE: `${entry.id}.stdin.ndjson`, CEZ_HANDOFF_FILE: '', ...entry.env },
+          env: { CEZ_MOCK_ARGS_FILE: `${entry.id}.args.ndjson`, CEZ_MOCK_STDIN_FILE: `${entry.id}.stdin.ndjson`, CEZ_HANDOFF_FILE: '', ...(policy ? { CEZ_MOCK_PERMISSION_PROBE: '1' } : {}), ...entry.env },
         } });
         errors.set(entry.id, obs.v1.filter(event => event.type === 'error'));
         recordings.set(entry.id, readRecording(dir, entry.id));
@@ -151,7 +155,9 @@ export function describeToolGrantParity(scope: string | 'once'): void {
         expect(recording.length).toBeGreaterThan(0);
         const { flags, cases } = expectedGrants(backend);
         const expected = cases[entry.id];
-        if (expected === SAME_AS_UNSET) {
+        if (runnerDefinition(backend).mock.toolGrantObservation === 'permission-policy') {
+          expect(policyResponses(recording)).toEqual(expected);
+        } else if (expected === SAME_AS_UNSET) {
           expect(recording).toEqual(recordings.get('unset'));
         } else {
           expect(toolFlags(flags, JSON.parse(recording[0]!) as string[])).toEqual(expected);

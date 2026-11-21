@@ -233,6 +233,16 @@ per-runner file and for regression coverage. Rules that no check holds:
 Autosave process attribution is observation, not OS containment: `autosave-holders.ts` and
 `autosave-windows.ts` say what it cannot see.
 
+### Human input holds
+
+`AgentSession.holdsHumanInput` releases a follow-up when its carrying normalized turn
+starts, when the wire reports a read inside an open turn, or on rejection, close or discard.
+For `inputDelivery.consumption: unobservable`, an early steering acknowledgement keeps the
+hold until the carrying `turn.completed`. A late steer keeps its hold until the successor
+`turn.started`. An acknowledgement alone never proves consumption. Observable wires keep
+their existing release points. The Antigravity runner tests cover both steering orders and
+rejection, close and discard.
+
 ### Continue: session and step (hearsay-tools/cezarion#2991)
 
 `continuedSessionId` and `resumableSessionId` in `workflows/run/launch-read-resolver.ts` own
@@ -343,7 +353,11 @@ What a new runner's folder holds:
   `missingSession`;
 - `session-wire.testkit.ts`, which says how the mock's recorded wire shows a session, a turn, its
   effort, prompts, steers, the system prompt and skill triggers, and `ui-mapper-row.testkit.ts`,
-  the runner's row of the mapper robustness test;
+  the runner's row of the mapper robustness test, and its thin wrappers:
+  `ui-mapper-robustness.test.ts` calls `describeUiMapperRobustness('<id>', "hostile")`;
+  `ui-mapper-robustness-mutations-<part>.test.ts` calls the same shared testkit for each
+  numeric part returned by `robustnessParts('<id>')`: up to four groups, capped by fixture
+  count. They split the sorted fixtures by index modulo the number of groups;
 - `__fixtures__/golden.json`, the runner's own expected values for tests outside its code (the
   keys are in `core/runner-golden.testkit.ts`), and the golden wire fixtures;
 - the per-runner parity files (`harness-<id>-*`, `waits-<id>-*`, `automation-tools-<id>-*`,

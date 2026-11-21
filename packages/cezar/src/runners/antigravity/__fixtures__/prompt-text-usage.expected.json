@@ -1,0 +1,254 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user says:\n<USER_REQUEST>\nReply with exactly: ok\n</USER_REQUEST>\n\nLet"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "'s check instructions:\n\"Reply with exactly: ok\"\nNo tool calls needed. Just output \"ok\"."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user says:\n<USER_REQUEST>\nReply with exactly: ok\n</USER_REQUEST>\n\nLet's check instructions:\n\"Reply with exactly: ok\"\nNo tool calls needed. Just output \"ok\"."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "ok"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14264,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "ok"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 14215,
+      "output": 49,
+      "total": 14264,
+      "reasoning": 48,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-4"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The user wants me to use the shell command tool to run `echo usage-two`, and then reply with"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " its output only (`usage-two`).\nLet's check the tools available: `run_command`.\nLet's execute "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "`run_command` with `CommandLine: \"echo usage-two\"`, `Cwd: \"/work"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "/project\"`, `WaitMsBeforeAsync: 5000`, `toolSummary: \"Run"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " echo command\"`, `toolAction: \"Running echo command\"`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The user wants me to use the shell command tool to run `echo usage-two`, and then reply with its output only (`usage-two`).\nLet's check the tools available: `run_command`.\nLet's execute `run_command` with `CommandLine: \"echo usage-two\"`, `Cwd: \"/work/project\"`, `WaitMsBeforeAsync: 5000`, `toolSummary: \"Run echo command\"`, `toolAction: \"Running echo command\"`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "c66f68c9edcd4ce38cda4014d3f0fe32",
+      "name": "Bash",
+      "title": "echo usage-two",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo usage-two",
+        "cwd": "/work/project"
+      }
+    }
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14585,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "c66f68c9edcd4ce38cda4014d3f0fe32",
+      "name": "Bash",
+      "title": "echo usage-two",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo usage-two",
+        "cwd": "/work/project"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "c66f68c9edcd4ce38cda4014d3f0fe32",
+      "name": "Bash",
+      "title": "echo usage-two",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "echo usage-two",
+        "cwd": "/work/project"
+      },
+      "output": "usage-two\r\n",
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "The output is `usage-two`.\nThe user requests: \"Then reply with its output only.\"\nSo I should reply with `usage-two`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": "The output is `usage-two`.\nThe user requests: \"Then reply with its output only.\"\nSo I should reply with `usage-two`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "usage-two"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14709,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": "usage-two"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-4",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 4614,
+      "output": 221,
+      "total": 29294,
+      "reasoning": 150,
+      "cacheRead": 24459,
+      "cacheWrite": 0
+    }
+  }
+]

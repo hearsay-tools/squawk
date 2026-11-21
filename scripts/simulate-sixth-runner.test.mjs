@@ -60,8 +60,8 @@ test('adds the sixth runner in the four places only and lists the roster-reading
   assert.match(readFileSync(join(runner, 'definition.ts'), 'utf8'), /new \(await import\('\.\/sixth-runner\.ts'\)\)\.SixthRunner\(\)/);
   assert.match(readFileSync(join(runner, 'sixth-runner.ts'), 'utf8'), /class SixthRunner implements AgentRunner/);
   assert.match(readFileSync(join(runner, 'facts.ts'), 'utf8'), /^export const SIXTH_FACTS = /m);
-  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'omp', 'sixth'\]/);
-  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /ompRunner, sixthRunner\]/);
+  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'antigravity', 'sixth'\]/);
+  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /antigravityRunner, sixthRunner\]/);
   const tests = rosterTests(root);
   assert.ok(tests.includes(ROSTER_TEST));
   assert.ok(tests.includes(`${SRC}/runners/sixth/harness-sixth-startup-parity.test.ts`));
@@ -113,8 +113,8 @@ test('--complete copies the opencode runner as hexacode in its places only, with
   assert.ok(statSync(join(root, SCRIPTS, 'hexacode-task-scope.d.mts')).isFile());
   assert.match(readFileSync(join(runner, 'hexacode-task-scope.ts'), 'utf8'), /'\.\.\/\.\.\/\.\.\/scripts\/hexacode-task-scope\.mjs'/);
   assert.ok(!shared.some(line => line.includes('task-scope')));
-  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'omp', 'hexacode'\]/);
-  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /import \{ hexacodeRunner \} from '\.\/hexacode\/definition\.ts';\n[^]*ompRunner, hexacodeRunner\]/);
+  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'antigravity', 'hexacode'\]/);
+  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /import \{ hexacodeRunner \} from '\.\/hexacode\/definition\.ts';\n[^]*antigravityRunner, hexacodeRunner\]/);
   // Only what the copy takes from outside the copied files keeps the old spelling, and each one is reported.
   assert.ok(shared.includes(`${SRC}/runners/opencode/definition.ts: '../../agent-config/model-settings/opencode.ts'`));
   const keptBy = (path) => shared.filter(line => line.startsWith(`${path}: `)).map(line => line.slice(path.length + 2));

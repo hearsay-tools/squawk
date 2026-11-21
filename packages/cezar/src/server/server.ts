@@ -1,3 +1,4 @@
+import { allocateAgentProfileId } from './agent-profile-id.ts';
 import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
 import { readRunnerSkills } from './runner-skills.ts';
@@ -112,7 +113,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId } from '../core/runner-registry.ts';
+import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -231,7 +232,6 @@ import { profileCapableProviders, profileEnv, supportsProfiles } from '../core/a
 import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resumeCommand } from '../core/runner-cli.ts';
 import {
-  allocateProjectSlug,
   normalizeProjectTags,
   probeProjectStatus,
   toProjectListEntry,
@@ -414,19 +414,6 @@ const HOSTED_GITHUB_OWNERS_REASON = 'GitHub repositories can be created from a l
 const hostedProfileRefusal = {
   error: 'agent accounts are managed from the machine that owns the checkout (this cockpit runs in hosted mode)',
 };
-
-/**
- * Allocate a profile id from the label (or, with no label, the folder name).
- *
- * Reuses the project allocator's shape, and deliberately its reserved set too: `default` is the
- * discovered profile here exactly as it is the boot alias there, so a folder called `default/`
- * becomes `default-2` and can never shadow it.
- */
-function allocateAgentProfileId(source: string, taken: Iterable<string>): string {
-  // `allocateProjectSlug` already basenames its argument and enforces the shared
-  // `^[a-z0-9][a-z0-9-]{0,63}$` shape, so `~/.claude-klaudiusz` slugs to `claude-klaudiusz`.
-  return allocateProjectSlug(source, taken);
-}
 
 /** One row of the mirrored project-route table. */
 export interface ProjectRouteInfo {
@@ -1342,7 +1329,7 @@ export function createApp(deps: ServerDeps) {
       // safe degradation. Running the bare command would sign the user into a DIFFERENT account
       // than the one they clicked, and nothing in the terminal would say so.
       if (command === null) {
-        return c.json({ error: `This account's folder cannot be used in a terminal command: ${profile.configDir}` }, 409);
+        return c.json({ error: providerAuth.loginRefusalHint(provider, profile.configDir) }, 409);
       }
       // BOTH branches must mean "is this account signed in NOW". The default branch refreshes; the
       // account branch has to evict first, because `profileStatus` serves the per-account cache and
@@ -2785,6 +2772,7 @@ export function createApp(deps: ServerDeps) {
     const { sessionId, backend } = latestSession(run);
     const command = sessionId ? resumeCommand(resolveRunnerId(backend), sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
+      ...(runnerDefinition(resolveRunnerId(backend)).cli.interactive === false ? { cliHandoff: false as const } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
   };
 
@@ -3256,6 +3244,7 @@ export function createApp(deps: ServerDeps) {
       if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
       const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
+      if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
       const blocked = await providerActionError([backend]);
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();

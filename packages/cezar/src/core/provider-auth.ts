@@ -448,6 +448,7 @@ export class ProviderAuthService {
    */
   loginCommand(provider: ProviderId, configDir?: string | null): string | null {
     const login = loginFor(provider);
+    if (login.loginArgs === null) return null;
     const command = [quoteExecutable(login.executable(), this.platform), ...login.loginArgs].join(' ');
     const env = configDir ? profileEnv(provider, configDir) : {};
     return withEnvPrefix(command, env, this.platform);
@@ -455,6 +456,12 @@ export class ProviderAuthService {
 
   installHint(provider: ProviderId): string {
     return loginFor(provider).installHint;
+  }
+
+  /** Explain a refused terminal sign-in without offering a different account's command. */
+  loginRefusalHint(provider: ProviderId, configDir: string): string {
+    return loginFor(provider).loginArgs === null ? runnerDefinition(provider).display.loginCommand
+      : `This account's folder cannot be used in a terminal command: ${configDir}`;
   }
 
   private withRuntimeFailures(response: ProviderStatusResponse): ProviderStatusResponse {
@@ -600,8 +607,10 @@ export class ProviderAuthService {
     if (result.errorCode) {
       return { provider, status: 'unknown', hint: UNKNOWN_HINT };
     }
-    const { parse } = await runnerDefinition(provider).loadLogin();
-    const status = parse(result);
+    const parser = await runnerDefinition(provider).loadLogin();
+    const status = parser.inspect
+      ? await parser.inspect(result, { ...process.env, ...env }).catch(() => null)
+      : parser.parse(result);
     if (status !== null) return { provider, status };
     return { provider, status: 'unknown', hint: UNKNOWN_HINT };
   }

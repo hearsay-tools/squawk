@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -211,8 +212,8 @@ export const RUN_GROUPS = {
               expect(hasPendingAsk(store, runId)).toBe(true);
               // Check the real ask card too: relabelling the question fixture as a
               // plan fixture must not silently remove create_plan coverage.
-              const expectedHeader = ask.kind === 'cursor/create_plan' ? 'Plan'
-                : ask.kind === 'cursor/ask_question' ? 'Tests' : 'Library';
+              const expectedHeader = runnerDefinition(backend).mock.askResumeCases.find(entry => entry.kind === ask.kind)?.header ?? (ask.kind === 'cursor/create_plan' ? 'Plan'
+                : ask.kind === 'cursor/ask_question' ? 'Tests' : 'Library');
               expect(store.readEvents(runId).find(event => event.type === 'ask.requested')?.questions)
                 .toMatchObject([{ header: expectedHeader }]);
               const statuses: string[] = [];
