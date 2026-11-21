@@ -838,7 +838,8 @@ main commit can import those passes instead of running the same test files again
   `NODE_OPTIONS`: `squeal ci export` leaves out a suite whose Node, flags or `NODE_OPTIONS`
   differ (spec 018 D26). The parts upload as `squeal-parts-node-test`, kept 3 days, also
   when tests failed (the export leaves out failed files). The `unit-tests` job on Node
-  24.21.0 stays as it is; this job is not in `verify.needs` or the merge-queue roster.
+  24.21.0 stays as it is; this job is not in the merge-queue roster, and `verify` waits for
+  it only through `squeal-export`.
 - A shard that reruns after a failed first run (§ Rerun of a failed queue shard) records
   the rerun into `$RUNNER_TEMP/squeal-parts-rerun`, and only those parts upload. Each shard
   so has one complete part, which `squeal ci export` needs: it refuses two parts for one
@@ -864,8 +865,12 @@ main commit can import those passes instead of running the same test files again
   through the Git API. A missing ref shows a warning annotation and a warning in the run
   summary; a present ref shows a one-line note. An unreadable ref also warns. The job never
   fails, and it is outside `verify.needs`.
-- Neither job is in `verify.needs` or the merge-queue roster: their failure never blocks a
-  merge. With `shared.ref` in `squeal.config.json`, developers' Squeal daemons fetch the
+- `verify` (`Unit, build, E2E, and package`) needs both jobs, so it waits for them in a merge
+  group, but it never reads their results, and neither job is in the merge-queue roster:
+  their failure never blocks a merge. The wait makes `refs/squeal/<sha>` exist before `main`
+  moves to the group's commit, so a worktree that fast-forwards or rebases onto the new
+  `main` finds the results to import. It adds the export and publish time, about 2 minutes
+  at 0.1.582, to each queue run. With `shared.ref` in `squeal.config.json`, developers' Squeal daemons fetch the
   nearest published ref.
 - The shards and both Squeal jobs read Node from `.node-version` (one exact version), so the
   published results carry the environment developers run. Recording assumes nothing changes
@@ -1384,8 +1389,8 @@ Each must appear once and succeed. The run's conclusion may be `success` or
 does not cost `main` a full run (hearsay-tools/squawk#3701). A `cancelled` or other
 conclusion is not proof.
 The queue run does not have to be complete. The merge, and so the `main` push run,
-starts when `Unit, build, E2E, and package` passes, but `Export Squeal shared results`
-and `Publish Squeal shared results` end 1.5 to 2.5 minutes later. While the run is
+starts when `Unit, build, E2E, and package` passes, after `Export Squeal shared results`
+and `Publish Squeal shared results` end. While the run is
 still running (no conclusion yet), the probe reads its jobs on each poll and reuses it
 as soon as every job in the list above has succeeded (hearsay-tools/squawk#3754). It does not wait
 for jobs outside the list. A failed, missing or running gate job keeps the probe
