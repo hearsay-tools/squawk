@@ -13,7 +13,7 @@ import { literal } from './ast-syntax.ts';
  *
  * Static scope: JS and TS files under `packages/` whose name contains `parity`. The rule reports an
  * array literal whose elements are all runner-id strings and that names two or more runner ids,
- * but not every id of the roster (`runners/built-in.ts`).
+ * but not every id of the roster (`runners/ids.ts`).
  *
  * It leaves out a list of one runner (a named single-runner exemption, or the runner of a
  * per-runner shard), an array that pairs a runner id with other values (a per-runner reason
