@@ -46,7 +46,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
-| 2 | A typed run lifecycle, and a narrower run store | Not filed |
+| 2 | A typed run lifecycle, and a narrower run store | Filed on 2026-11-21: epic hearsay-tools/squawk#4007 |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Not filed |
 | 4 | Loader and package format | Not filed |
 | 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
@@ -87,6 +87,11 @@ Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its scripts
 Both halves belong to one step, because the typed events replace the emitter on `RunStore` and
 so touch the same code as the ports. The store stays one store in one SQLite file. It is not a
 plugin.
+
+The epic names the first-party need for a hook that is more than an observer: `runs/` imports
+feature code to decide whether a run may be deleted and to clean up after it. One deletion hook
+replaces those imports. The epic's Agent context comment has the measurement, the listener
+files and a proposal for each open point.
 
 ### Step 3: open the small tables
 
