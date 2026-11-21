@@ -192,14 +192,18 @@ test('the publish step hands git the token as an extra header and masks it', () 
   }
 });
 
-test('the Squeal jobs never gate a merge', () => {
+test('verify waits for the Squeal jobs but never reads their results', () => {
   const { jobs } = ci();
   const { REQUIRED_QUEUE_JOBS } = require('./queue-ci-proof.cjs');
+  // The ref for a merge group's commit exists before main moves to it, so a worktree that
+  // fast-forwards or rebases onto the new main finds results to import.
+  for (const id of ['squeal-export', 'squeal-publish']) assert.ok(jobs.verify.needs.includes(id), `verify waits for ${id}`);
+  const verify = JSON.stringify(jobs.verify.steps);
   for (const id of SQUEAL_JOBS) {
     for (const [other, job] of Object.entries(jobs)) {
-      if (!SQUEAL_JOBS.includes(other)) assert.equal([job.needs ?? []].flat().includes(id), false, `${other} needs ${id}`);
+      if (![...SQUEAL_JOBS, 'verify'].includes(other)) assert.equal([job.needs ?? []].flat().includes(id), false, `${other} needs ${id}`);
     }
-    assert.equal(jobs.verify.needs.includes(id), false);
+    assert.ok(!verify.includes(id) && !verify.includes(`needs['${id}']`), `verify reads ${id}`);
     assert.equal(REQUIRED_QUEUE_JOBS.includes(jobs[id].name), false);
   }
 });
