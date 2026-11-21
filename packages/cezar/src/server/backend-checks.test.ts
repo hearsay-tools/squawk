@@ -74,6 +74,18 @@ describe('createBackendChecks', () => {
     expect(f.detect).toHaveBeenCalledTimes(2);
   });
 
+  it('finishes reading the stamp before it starts detection', async () => {
+    const f = fixture();
+    let release!: (stamp: string) => void;
+    f.stampReader.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+    const read = f.checks.read();
+    await f.settle();
+    expect(f.detect).not.toHaveBeenCalled();
+    release('a');
+    await read;
+    expect(f.detect).toHaveBeenCalledOnce();
+  });
+
   it('retries after a failed detection and keeps the last checks meanwhile', async () => {
     const f = fixture();
     await f.checks.read();

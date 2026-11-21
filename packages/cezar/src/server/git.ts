@@ -2,7 +2,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { isSafeGitRef } from '../git-refs.ts';
 import { runGit } from '../git-command.ts';
-import { readGitDirStamp } from './git-dir-stamp.ts';
+import { configFilesFromListing, configFilesKey, readGitDirStamp, type GitDirStamp } from './git-dir-stamp.ts';
 
 export interface RepoInfo {
   root: string;
@@ -45,66 +45,95 @@ async function git(root: string, args: string[]): Promise<string> {
 
 /** Entries kept by `getRepoInfo`: one per directory asked about (project roots, the boot root). */
 const REPO_INFO_CACHE_MAX = 512;
-const repoInfoCache = new Map<string, { stamp: string; info: Promise<RepoInfo | null> }>();
+
+/** One Git answer with what it depends on: the config files Git read, and their signatures then. */
+interface RepoInfoRead { info: RepoInfo | null; configs: string[]; configsKey: string; keep: boolean }
+const repoInfoCache = new Map<string, { stamp: string; read: Promise<RepoInfoRead> }>();
+
+const stampKey = (stamp: GitDirStamp | undefined) => stamp && `${stamp.kind}:${stamp.key}`;
+const copy = (info: RepoInfo | null) => info && { ...info };
 
 /**
- * Null when `dir` isn't inside a git repository. The answer is kept per directory and keyed on
- * `readGitDirStamp`: while `HEAD`, the `.git` entry and the config files keep their metadata, a
- * repeat call reads only that metadata and starts no `git` process. Each process start forks this
- * large server process (hearsay-tools/squawk#3651, hearsay-tools/squawk#3658). A branch switch or
- * a remote change rewrites one of those files, so the next call asks Git again.
+ * Null when `dir` isn't inside a git repository. The answer is kept per directory while
+ * `readGitDirStamp` and the signatures of every config file Git read stay the same: a repeat call
+ * reads only file metadata and starts no `git` process. Each process start forks this large
+ * server process (hearsay-tools/squawk#3651, hearsay-tools/squawk#3658). A branch switch or a
+ * remote change rewrites one of those files, so the next call asks Git again.
  */
 export async function getRepoInfo(dir: string): Promise<RepoInfo | null> {
   const stamp = await readGitDirStamp(dir);
-  if (!stamp) return readRepoInfo(dir);
-  const key = `${stamp.kind}:${stamp.key}`;
+  if (!stamp) return (await readRepoInfo(dir)).info;
+  const key = stampKey(stamp)!;
   const cached = repoInfoCache.get(dir);
-  // A copy for each caller, so one caller's edit never reaches the next.
-  if (cached?.stamp === key) return cached.info.then((info) => info && { ...info });
-  const info = readRepoInfo(dir);
-  const entry = { stamp: key, info };
+  if (cached?.stamp === key) {
+    const hit = await cached.read;
+    if (hit.keep && await configFilesKey(hit.configs) === hit.configsKey) return copy(hit.info);
+  }
+  const entry = { stamp: key, read: readKeepable(dir, stamp) };
   repoInfoCache.delete(dir);
   if (repoInfoCache.size >= REPO_INFO_CACHE_MAX) repoInfoCache.delete(repoInfoCache.keys().next().value!);
   repoInfoCache.set(dir, entry);
-  // Keep only an answer the metadata explains: a repository where a `.git` was found, or null
-  // where none exists. Null beside a `.git` (an unborn HEAD before its first commit, a missing
-  // `git`) can change with no file above changing, so that call is asked again next time. A file
-  // rewritten while Git ran may hold a value Git did not read, so the stamp is read again.
-  void info.then(async (result) => {
-    const explained = (result === null) === (stamp.kind === 'none');
-    const after = explained ? await readGitDirStamp(dir) : undefined;
-    if (after && `${after.kind}:${after.key}` === key) return;
-    if (repoInfoCache.get(dir) === entry) repoInfoCache.delete(dir);
-  });
-  return info.then((result) => result && { ...result });
+  const read = await entry.read;
+  if (!read.keep && repoInfoCache.get(dir) === entry) repoInfoCache.delete(dir);
+  return copy(read.info);
 }
 
-async function readRepoInfo(dir: string): Promise<RepoInfo | null> {
+/** The config files Git reads in `root`, as `git config --list --show-origin` reports them. */
+async function gitConfigFiles(root: string): Promise<string[] | undefined> {
+  try {
+    return configFilesFromListing(await git(root, ['config', '--list', '--show-origin', '-z']), root);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Ask Git, and decide whether the answer may be kept. It may when the metadata explains it (a
+ * repository where a `.git` was found, or null where none exists), remote discovery finished, and
+ * no watched file changed while Git ran. Null beside a `.git` (an unborn HEAD before its first
+ * commit, a missing `git`) can change with no watched file changing, so it is asked again.
+ */
+async function readKeepable(dir: string, stamp: GitDirStamp): Promise<RepoInfoRead> {
+  const reported = stamp.kind === 'repo' ? await gitConfigFiles(stamp.root) : [];
+  const configs = [...new Set([...(stamp.kind === 'repo' ? stamp.configs : []), ...(reported ?? [])])].sort();
+  const configsKey = await configFilesKey(configs);
+  const { info, complete } = await readRepoInfo(dir);
+  const explained = (info === null) === (stamp.kind === 'none');
+  const keep = reported !== undefined && complete && explained
+    && stampKey(await readGitDirStamp(dir)) === stampKey(stamp)
+    && await configFilesKey(configs) === configsKey;
+  return { info, configs, configsKey, keep };
+}
+
+/** Git's answer, and whether remote discovery finished (a failed `git remote` is not "no remote"). */
+async function readRepoInfo(dir: string): Promise<{ info: RepoInfo | null; complete: boolean }> {
   try {
     const output = (await git(dir, ['rev-parse', '--show-toplevel', '--abbrev-ref', 'HEAD'])).trim();
     const split = output.lastIndexOf('\n');
-    if (split < 0) return null;
+    if (split < 0) return { info: null, complete: true };
     const root = output.slice(0, split);
     const branch = output.slice(split + 1);
     let remote: string | undefined;
+    let complete = true;
     try {
       remote = (await git(root, ['remote', 'get-url', 'origin'])).trim() || undefined;
     } catch {
       // No remote named `origin` — fall back to the first configured remote,
       // so repos whose only remote is named e.g. `github` or `upstream` still
-      // get forge detection. Truly remote-less repos land in the inner catch.
+      // get forge detection. A repo with no remote lists none.
       try {
         const names = (await git(root, ['remote'])).split('\n').map((n) => n.trim()).filter(Boolean);
         if (names[0]) {
           remote = (await git(root, ['remote', 'get-url', names[0]])).trim() || undefined;
         }
       } catch {
-        // no remotes at all — local-only repo
+        // `git remote` itself failed: the remote is unknown, not absent.
+        complete = false;
       }
     }
-    return { root, branch, remote };
+    return { info: { root, branch, remote }, complete };
   } catch {
-    return null;
+    return { info: null, complete: true };
   }
 }
 

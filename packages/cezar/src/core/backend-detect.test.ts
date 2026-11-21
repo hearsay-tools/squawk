@@ -1,7 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -226,6 +226,18 @@ describe('environmentStamp', () => {
     expect(set).not.toContain('secret-token-value');
     expect(await environmentStamp({ ...base, GITHUB_TOKEN: 'secret-token-value' })).not.toBe(set);
     expect(await environmentStamp(base)).toBe(none);
+  });
+
+  it.skipIf(process.platform === 'win32')('skips a non-executable file earlier on PATH, as the process lookup does', async () => {
+    const first = join(root, 'first');
+    const second = join(root, 'second');
+    mkdirSync(first); mkdirSync(second);
+    writeFileSync(join(first, 'gh'), 'not a program\n');
+    const PATH = `${first}:${second}`;
+    const shadowed = await environmentStamp({ PATH });
+    writeFileSync(join(second, 'gh'), '#!/bin/sh\necho 1\n');
+    chmodSync(join(second, 'gh'), 0o755);
+    expect(await environmentStamp({ PATH })).not.toBe(shadowed);
   });
 
   it('changes when a probed CLI appears on PATH or is replaced', async () => {

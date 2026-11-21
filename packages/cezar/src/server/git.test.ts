@@ -188,6 +188,30 @@ describe('getRepoInfo — change-keyed cache', () => {
     expect((await getRepoInfo(dir))?.remote).toBe('https://example.com/acme/demo.git');
   });
 
+  it('follows an include path written across a continuation line', async () => {
+    const included = join(dir, '.git', 'remote.inc');
+    writeFileSync(included, '[url "https://github.com/"]\n\tinsteadOf = fixture:\n');
+    writeFileSync(join(dir, '.git', 'config'), '[include]\n\tpath = remote.\\\ninc\n', { flag: 'a' });
+    g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
+    writeFileSync(included, '[url "https://example.com/"]\n\tinsteadOf = fixture:\n');
+    expect((await getRepoInfo(dir))?.remote).toBe('https://example.com/acme/demo.git');
+  });
+
+  it('follows a file included through config in the environment', async () => {
+    const included = join(dir, 'env.inc');
+    writeFileSync(included, '[url "https://github.com/"]\n\tinsteadOf = fixture:\n');
+    g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
+    vi.stubEnv('GIT_CONFIG_COUNT', '1');
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'include.path');
+    vi.stubEnv('GIT_CONFIG_VALUE_0', included);
+    try {
+      expect((await getRepoInfo(dir))?.remote).toBe('https://github.com/acme/demo.git');
+      writeFileSync(included, '[url "https://example.com/"]\n\tinsteadOf = fixture:\n');
+      expect((await getRepoInfo(dir))?.remote).toBe('https://example.com/acme/demo.git');
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it('shows a remote rewritten through config in the environment', async () => {
     g(dir, 'remote', 'set-url', 'origin', 'fixture:acme/demo.git');
     vi.stubEnv('GIT_CONFIG_COUNT', '1');

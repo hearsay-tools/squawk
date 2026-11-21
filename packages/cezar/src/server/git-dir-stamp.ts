@@ -8,10 +8,12 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
  * Reading the stamp starts no process (hearsay-tools/squawk#3651, hearsay-tools/squawk#3658).
  */
 export type GitDirStamp =
-  /** `dir` is inside a work tree whose `.git` was found; the string changes when its branch or remote can. */
-  | { kind: 'repo'; key: string }
+  /** `dir` is inside a work tree whose `.git` was found; `key` changes when its branch or remote can. */
+  | { kind: 'repo'; key: string; root: string; configs: string[] }
   /** No `.git` exists in `dir` or any ancestor, so Git finds no work tree either. */
   | { kind: 'none'; key: string };
+
+const MISSING = new Set(['ENOENT', 'ENOTDIR']);
 
 /** One file's identity and last change; `-` when it does not exist. */
 async function fileSignature(path: string): Promise<string> {
@@ -19,7 +21,7 @@ async function fileSignature(path: string): Promise<string> {
     const s = await stat(path, { bigint: true });
     return `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') return '-';
+    if (MISSING.has((error as NodeJS.ErrnoException).code ?? '')) return '-';
     throw error;
   }
 }
@@ -28,21 +30,30 @@ async function readOptional(path: string): Promise<string | undefined> {
   try {
     return await readFile(path, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') return undefined;
+    if (MISSING.has((error as NodeJS.ErrnoException).code ?? '')) return undefined;
     throw error;
   }
 }
 
-/** The global and system config files Git reads for `url.<base>.insteadOf` and `safe.directory`. */
+/** The signature of each file, joined: it changes when any of them is created, removed or rewritten. */
+export async function configFilesKey(files: readonly string[]): Promise<string> {
+  return (await Promise.all(files.map(async (file) => `${file}=${await fileSignature(file)}`))).join('|');
+}
+
+/**
+ * The global and system config files Git may read. A superset is safe: a file Git skips only
+ * adds a `stat`, so `GIT_CONFIG_NOSYSTEM` is not interpreted here.
+ */
 function sharedConfigFiles(env: NodeJS.ProcessEnv): string[] {
   // Git itself finds these through `$HOME`; without it Git reads no global file either.
   const home = env.HOME;
   const xdg = env.XDG_CONFIG_HOME || (home ? join(home, '.config') : undefined);
-  const global = env.GIT_CONFIG_GLOBAL
-    ? [env.GIT_CONFIG_GLOBAL]
-    : [...(xdg ? [join(xdg, 'git', 'config')] : []), ...(home ? [join(home, '.gitconfig')] : [])];
-  const system = env.GIT_CONFIG_NOSYSTEM ? [] : [env.GIT_CONFIG_SYSTEM || '/etc/gitconfig'];
-  return [...global, ...system];
+  return [
+    ...(env.GIT_CONFIG_GLOBAL ? [env.GIT_CONFIG_GLOBAL] : []),
+    ...(xdg ? [join(xdg, 'git', 'config')] : []),
+    ...(home ? [join(home, '.gitconfig')] : []),
+    env.GIT_CONFIG_SYSTEM || '/etc/gitconfig',
+  ];
 }
 
 /** Config Git takes from the environment (`git -c`, `GIT_CONFIG_COUNT`): no file records it. */
@@ -50,65 +61,35 @@ function envConfig(env: NodeJS.ProcessEnv): string {
   const pairs = Object.entries(env)
     .filter(([name]) => /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name))
     .sort(([a], [b]) => a.localeCompare(b));
-  return JSON.stringify([env.GIT_CONFIG_PARAMETERS ?? '', env.GIT_CONFIG_COUNT ?? '', ...pairs]);
+  return JSON.stringify([env.GIT_CONFIG_PARAMETERS ?? '', env.GIT_CONFIG_COUNT ?? '', env.GIT_CONFIG_NOSYSTEM ?? '', ...pairs]);
 }
 
-/** A config value as Git reads it: quotes removed, `\\` escapes applied, a `#` or `;` comment cut. */
-function configValue(raw: string): string {
-  let value = '';
-  let quoted = false;
-  for (let i = 0; i < raw.length; i++) {
-    const char = raw[i]!;
-    if (char === '\\') value += raw[++i] ?? '';
-    else if (char === '"') quoted = !quoted;
-    else if (!quoted && (char === '#' || char === ';')) break;
-    else value += char;
-  }
-  return value.trim();
+/** Where an include value points, as Git resolves it: `~/` from `$HOME`, relative from the including file. */
+function includeTarget(value: string, from: string, env: NodeJS.ProcessEnv): string | undefined {
+  if (value.startsWith('~/')) return env.HOME ? join(env.HOME, value.slice(2)) : undefined;
+  return value ? resolve(from, value) : undefined;
 }
 
-/** The `path` values of a config file's `[include]` and `[includeIf]` sections, as Git resolves them. */
-function includePaths(text: string, file: string, env: NodeJS.ProcessEnv): string[] {
-  const paths: string[] = [];
-  let including = false;
-  for (const raw of text.split('\n')) {
-    let line = raw.trim();
-    const header = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"(?:[^"\\]|\\.)*")?\s*\]/.exec(line);
-    if (header) {
-      including = /^include(if)?$/i.test(header[1]!);
-      line = line.slice(header[0].length).trim();
-    }
-    const entry = including ? /^path\s*=\s*(.*)$/i.exec(line) : null;
-    if (!entry) continue;
-    const value = configValue(entry[1]!);
-    if (!value) continue;
-    if (value.startsWith('~/')) {
-      if (env.HOME) paths.push(join(env.HOME, value.slice(2)));
-    } else {
-      paths.push(isAbsolute(value) ? value : resolve(dirname(file), value));
-    }
+/**
+ * The files `git config --list --show-origin -z` (run in `root`) names: every file Git read, and
+ * every `include.path` / `includeIf.<condition>.path` target, read or not, so an include that is
+ * empty, missing or inactive today still counts when it changes. Git parses its own syntax
+ * (quotes, continuations, comments, includes from the environment), so no file is parsed here.
+ */
+export function configFilesFromListing(listing: string, root: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const files = new Set<string>();
+  const tokens = listing.split('\0');
+  for (let i = 0; i + 1 < tokens.length; i += 2) {
+    const origin = tokens[i]!;
+    const entry = tokens[i + 1]!;
+    const file = origin.startsWith('file:') ? resolve(root, origin.slice('file:'.length)) : undefined;
+    if (file) files.add(file);
+    const newline = entry.indexOf('\n');
+    if (newline < 0 || !/^include(?:if\..*)?\.path$/is.test(entry.slice(0, newline))) continue;
+    const target = includeTarget(entry.slice(newline + 1), file ? dirname(file) : root, env);
+    if (target) files.add(isAbsolute(target) ? target : resolve(root, target));
   }
-  return paths;
-}
-
-/** Each config file and every file it includes, conditional or not, with its signature. */
-async function configSignatures(files: string[], env: NodeJS.ProcessEnv): Promise<string[]> {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  // Git stops at 10 levels of nested includes.
-  let level = files;
-  for (let depth = 0; depth <= 10 && level.length > 0; depth++) {
-    const next: string[] = [];
-    for (const file of level) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      out.push(`${file}=${await fileSignature(file)}`);
-      const text = await readOptional(file);
-      if (text && /\[\s*include/i.test(text)) next.push(...includePaths(text, file, env));
-    }
-    level = next;
-  }
-  return out;
+  return [...files].sort();
 }
 
 /**
@@ -135,8 +116,7 @@ async function findDotGit(dir: string): Promise<{ path: string; isFile: boolean 
       const s = await stat(path);
       if (s.isDirectory() || s.isFile()) return { path, isFile: s.isFile() };
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+      if (!MISSING.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
     }
     const parent = dirname(current);
     if (parent === current) return undefined;
@@ -155,13 +135,14 @@ async function resolveGitDir(dotGit: { path: string; isFile: boolean }): Promise
 /**
  * The stamp of `dir`, or undefined when it cannot be read with confidence (a `.git` file without a
  * `gitdir:` line, a Git directory without `HEAD`, a symbolic branch ref, an unreadable path).
- * Undefined means: ask Git.
+ * Undefined means: ask Git. `configs` lists the config files known without Git; the caller adds
+ * the ones Git reports (`configFilesFromListing`).
  */
 export async function readGitDirStamp(dir: string, env: NodeJS.ProcessEnv = process.env): Promise<GitDirStamp | undefined> {
   try {
     const environment = envConfig(env);
     const dotGit = await findDotGit(dir);
-    if (!dotGit) return { kind: 'none', key: [environment, ...await configSignatures(sharedConfigFiles(env), env)].join('|') };
+    if (!dotGit) return { kind: 'none', key: environment };
     const resolved = await resolveGitDir(dotGit);
     if (!resolved) return undefined;
     const { gitDir, pointer } = resolved;
@@ -171,9 +152,9 @@ export async function readGitDirStamp(dir: string, env: NodeJS.ProcessEnv = proc
     if (head === '-') return undefined;
     const target = await headTarget(gitDir, commonDir);
     if (target === undefined) return undefined;
-    const configs = await configSignatures([join(commonDir, 'config'), join(gitDir, 'config.worktree'), ...sharedConfigFiles(env)], env);
-    const parts = [dotGit.path, await fileSignature(dotGit.path), pointer, gitDir, commonDir, head, target, environment, ...configs];
-    return { kind: 'repo', key: parts.join('|') };
+    const configs = [join(commonDir, 'config'), join(gitDir, 'config.worktree'), ...sharedConfigFiles(env)];
+    const parts = [dotGit.path, await fileSignature(dotGit.path), pointer, gitDir, commonDir, head, target, environment];
+    return { kind: 'repo', key: parts.join('|'), root: dirname(dotGit.path), configs };
   } catch {
     return undefined;
   }

@@ -4,7 +4,8 @@ import { registeredRunners } from './runner-registry.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { realpath, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, realpath, stat } from 'node:fs/promises';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { runGit } from '../git-command.ts';
@@ -47,6 +48,8 @@ async function binarySignature(bin: string, env: NodeJS.ProcessEnv): Promise<str
       try {
         const s = await stat(path, { bigint: true });
         if (!s.isFile()) continue;
+        // The process lookup skips a file it may not execute and goes on along PATH.
+        if (process.platform !== 'win32') await access(path, constants.X_OK);
         const target = await realpath(path);
         const t = await stat(target, { bigint: true });
         return `${path}>${target}:${t.dev}:${t.ino}:${t.size}:${t.mtimeNs}:${t.ctimeNs}:${t.mode}`;

@@ -11,8 +11,8 @@ export const BACKEND_MAX_AGE_MS = 15 * 60_000;
 
 export interface BackendChecks {
   /**
-   * The last detected checks. Waits for the stamp comparison (file metadata), never for the
-   * detection it may start: a cold read answers `[]` while the CLIs are still probed.
+   * The last detected checks. Waits for the stamp read (file metadata), never for the detection
+   * it may start: a cold read answers `[]` while the CLIs are still probed.
    */
   read(): Promise<BackendCheck[]>;
 }
@@ -30,15 +30,16 @@ export function createBackendChecks(options: {
   onChange: (checks: BackendCheck[]) => void;
   now?: () => number;
 }): BackendChecks {
-  const now = options.now ?? Date.now;
+  // Read the clock at each call, so a test's fake Date reaches a gate built before it.
+  const now = options.now ?? (() => Date.now());
   let checks: BackendCheck[] = [];
   let checkedAt = -Infinity;
   /** The last good detection: when it settled, and the stamp read before it started. */
-  let detected: { stamp: Promise<string | undefined>; at: number } | undefined;
+  let detected: { stamp: string | undefined; at: number } | undefined;
   let detecting: Promise<void> | undefined;
   let checking: Promise<void> | undefined;
 
-  const detect = (stamp: Promise<string | undefined>) => {
+  const detect = (stamp: string | undefined) => {
     detecting = options.detect().then((next) => {
       detected = { stamp, at: now() };
       const changed = JSON.stringify(next) !== JSON.stringify(checks);
@@ -48,15 +49,10 @@ export function createBackendChecks(options: {
       .finally(() => { checkedAt = now(); detecting = undefined; });
   };
 
-  const unchanged = async (last: Promise<string | undefined>, current: Promise<string | undefined>) => {
-    const [before, after] = await Promise.all([last, current]);
-    return before !== undefined && before === after;
-  };
-
   const check = async () => {
-    // Read before detecting, so a change during detection gives a different stamp next time.
-    const stamp = options.stamp().catch(() => undefined);
-    if (detected && now() - detected.at < BACKEND_MAX_AGE_MS && await unchanged(detected.stamp, stamp)) {
+    // Finish reading before detecting, so a change during detection gives a different stamp next time.
+    const stamp = await options.stamp().catch(() => undefined);
+    if (detected && now() - detected.at < BACKEND_MAX_AGE_MS && stamp !== undefined && stamp === detected.stamp) {
       checkedAt = now();
       return;
     }

@@ -9,8 +9,14 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { HEALTH_TTL_MS } from './health-cache.ts';
+import { BACKEND_MAX_AGE_MS } from './backend-checks.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The environment stamp reads each registered runner's binary, as the live server does.
+registerRunner(claudeRunner);
 
 /** Hang guard for the cold detection below: the wait ends the moment its checks arrive. */
 const HANG_GUARD_MS = 15_000;
@@ -36,10 +42,11 @@ it('starts no process on a health refresh while nothing changed, and still shows
     const { stdout } = await runGit(['--version']);
     return [{ name: 'git', available: true, version: stdout.trim() }];
   });
+  // Before the app: its gates read the clock, and the ticks below must reach them.
+  vi.useFakeTimers({ toFake: ['Date'] });
   const app = createApp({ home: testHome(), repoRoot: root, store: RunStore.open(join(root, '.ai/cezar')), manager: {} as RunManager, version: 'test', detectEnvironment });
   const health = async () => await (await apiRequest(app, '/api/v1/health')).json() as { checks: BackendCheck[]; repo: { branch: string } };
 
-  vi.useFakeTimers({ toFake: ['Date'] });
   await health();
   await vi.waitFor(async () => expect((await health()).checks).toHaveLength(1), { timeout: HANG_GUARD_MS });
 
@@ -48,10 +55,15 @@ it('starts no process on a health refresh while nothing changed, and still shows
     vi.setSystemTime(Date.now() + HEALTH_TTL_MS + 1);
     expect(await health()).toMatchObject({ repo: { branch: 'main' }, checks: [{ name: 'git', available: true }] });
   }
-  expect(spawn).not.toHaveBeenCalled();
+  expect(spawn.mock.calls.map(([options]) => (options as { args: string[] }).args.join(' '))).toEqual([]);
   expect(detectEnvironment).toHaveBeenCalledOnce();
 
   git(root, 'checkout', '-q', '-b', 'moved');
   vi.setSystemTime(Date.now() + HEALTH_TTL_MS + 1);
   expect((await health()).repo.branch).toBe('moved');
+
+  // The simulated clock reaches the detection gate: at its age ceiling it detects again.
+  vi.setSystemTime(Date.now() + BACKEND_MAX_AGE_MS);
+  await health();
+  expect(detectEnvironment).toHaveBeenCalledTimes(2);
 });
