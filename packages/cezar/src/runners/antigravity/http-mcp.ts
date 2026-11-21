@@ -5,6 +5,7 @@ import type { AgentRunSpec } from '../../core/agent-runner.ts';
 import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
 import { boundOutputDrainAfterExit } from '../../core/runner-runtime.ts';
 import { AcpTransport, AcpRpcError } from '../acp/transport.ts';
+import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 
 /** Antigravity accepts HTTP MCP only. The private stdio command stays caller-owned. */
 export async function antigravityMcp(spec: AgentRunSpec, env: NodeJS.ProcessEnv) {
@@ -37,7 +38,7 @@ export async function antigravityMcp(spec: AgentRunSpec, env: NodeJS.ProcessEnv)
   if (!address || typeof address === 'string') throw new Error('MCP bridge has no address');
   let closing: Promise<void> | undefined;
   return {
-    descriptor: { type: 'http', name: command.name, url: `http://127.0.0.1:${address.port}/mcp`, headers: [{ name: 'Authorization', value: `Bearer ${token}` }] },
+    descriptor: { type: 'http', name: ANTIGRAVITY_MCP_NAME, url: `http://127.0.0.1:${address.port}/mcp`, headers: [{ name: 'Authorization', value: `Bearer ${token}` }] },
     close(): Promise<void> {
       return closing ??= (async () => {
         rpc.close(); server.closeAllConnections(); server.close(); child.stdin.end();

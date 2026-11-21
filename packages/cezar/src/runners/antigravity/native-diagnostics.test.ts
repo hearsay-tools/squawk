@@ -22,9 +22,11 @@ it('logs bounded INFO/ERROR tails with native URL/token and per-run credential r
   await writeFile(join(dir, 'agy.log.INFO.1'), 'refresh_token=' + 'private-cut-token'.repeat(1_500) + '\nINFO retained\nrefresh_token=private-refresh\n');
   await writeFile(join(dir, 'harness.log.ERROR.1'), 'ERROR unexpected end of JSON input\nhttps://accounts.google.com/auth?state=private-state\nBearer private-bearer\nper-run-private-key\n');
   await writeFile(join(dir, 'settings.json'), 'private-non-log');
-  await logAntigravityFailure(dir, 'probe', new Error('access_token=private-access'), { GEMINI_API_KEY: 'per-run-private-key' });
+  await logAntigravityFailure(dir, 'probe', new Error('access_token=private-access'), { GEMINI_API_KEY: 'per-run-private-key' },
+    'refresh_token=' + 'private-cut-token'.repeat(1_500) + '\nRAW WS MSG native stderr trace\nBearer private-stderr\n');
   const shown = JSON.stringify(log.mock.calls);
   expect(shown).toContain('INFO retained'); expect(shown).toContain('unexpected end of JSON input');
+  expect(shown).toContain('RAW WS MSG native stderr trace');
   expect(shown).not.toMatch(/private-|https:|x{100}/);
   expect(shown.length).toBeLessThan(70_000);
 });
@@ -69,22 +71,26 @@ it.runIf(process.platform !== 'win32')('does not read log aliases or symlinks ou
   expect(log).toHaveBeenCalledWith('Antigravity session failed:', expect.any(String), 'No native INFO/ERROR log tail available.');
 });
 
-it.each(['session', 'catalog'].flatMap(kind => [false, true].map(fails => ({ kind, fails }))))('retains native evidence only for failed $kind cleanup (failure=$fails)', async ({ kind, fails }) => {
+it.each(['session', 'catalog'].flatMap(kind => ['file', 'stderr'].flatMap(output => [false, true].map(fails => ({ kind, output, fails })))))('retains native $output evidence only for failed $kind cleanup (failure=$fails)', async ({ kind, output, fails }) => {
   const dir = await workspace(); const receipt = join(dir, 'temp-path'); const executable = join(dir, 'agy');
   const mock = join(import.meta.dirname, '../../../scripts', kind === 'session' ? 'mock-acp.mjs' : 'mock-antigravity-auth.mjs');
   await writeFile(executable, `#!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 writeFileSync(${JSON.stringify(receipt)}, process.env.TMPDIR);
-writeFileSync(join(process.env.TMPDIR, 'agy.log.INFO.1'), 'native failure trace\\nrefresh_token=private-refresh\\n');
+if (!process.argv.includes('--debug')) throw new Error('native debug flag missing');
+${output === 'file' ? "writeFileSync(join(process.env.TMPDIR, 'agy.log.INFO.1'), 'native failure trace\\nrefresh_token=private-refresh\\n');" : "process.stderr.write('native failure trace\\nrefresh_token=private-refresh\\n');"}
 await import(${JSON.stringify(mock)});
 `, { mode: 0o700 });
   vi.stubEnv('HSQ_ANTIGRAVITY_BIN', executable); vi.stubEnv('GEMINI_API_KEY', 'fixture-key');
+  vi.stubEnv('HSQ_ANTIGRAVITY_DEBUG', '1');
   vi.stubEnv('AGY_MOCK_BAD_MODELS', fails ? '1' : '');
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const result = kind === 'catalog'
     ? discoverAntigravityModels({ cwd: dir, accountHome: join(dir, 'account') })
-    : new AntigravityRunner({ bin: executable }).run({ cwd: dir, toolGrant: { kind: 'unset' }, userPrompt: fails ? 'mock:provider-unavailable' : 'hello' });
+    : new AntigravityRunner({ bin: executable }).run({ cwd: dir, toolGrant: { kind: 'unset' }, userPrompt: fails ? 'mock:provider-unavailable' : 'hello' }, event => {
+      expect(JSON.stringify(event)).not.toContain('private-refresh');
+    });
   if (fails) {
     await expect(result).rejects.toThrow(kind === 'catalog' ? 'Antigravity returned no models' : 'Agent execution error:');
     expect(JSON.stringify(log.mock.calls)).toContain('native failure trace');

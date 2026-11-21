@@ -52,11 +52,11 @@ function commandAllowed(input: unknown, prefixes: readonly string[]): boolean {
 /** Every process is returned to default mode before prompting: saved yolo must not bypass policy. */
 export function permissionPolicy(grant: ToolGrant, request: AcpPermissionRequest, approvalGate = false, trustedNames: readonly string[] = []): AcpPermissionOutcome | undefined {
   if (request.toolCall.toolCallId.startsWith('interaction_')) return undefined;
-  if (trustedNames.includes(request.toolCall.title ?? '')) return selected(request, true);
+  const mcp = antigravityMcpTool(request.toolCall);
+  if (mcp && trustedNames.includes(`${mcp.server}_${mcp.tool}`)) return selected(request, true);
   const tool = antigravityTool(request.toolCall);
   const names = allowedTools(grant);
   const prefixes = grant.bashAllowlist ?? [];
-  const mcp = antigravityMcpTool(request.toolCall);
   const native = mcp ? `${mcp.server}_${mcp.tool}` : antigravityNativeToolName(request.toolCall);
   const name = mcp ? native : tool.name ?? native;
   const named = names === undefined || names.some(allowed => allowed === name || allowed === native || (!!mcp && allowed === `mcp__${mcp.server}__${mcp.tool}`));

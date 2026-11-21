@@ -25,7 +25,7 @@ export class AntigravityProbe {
   constructor(bin: string, env: Record<string, string>, timeoutMs: number, hooks: AcpHooks = {}) {
     const runtime = antigravityEnv(bin, { cwd: process.cwd(), userPrompt: '', toolGrant: { kind: 'unset' }, env });
     this.cwd = runtime.temp; this.env = runtime.env;
-    try { this.child = spawnSessionLeader(bin, antigravityLaunchArgs(), { cwd: this.cwd, env: this.env }); }
+    try { this.child = spawnSessionLeader(bin, antigravityLaunchArgs(process.platform, this.env), { cwd: this.cwd, env: this.env }); }
     catch (error) { rmSync(this.cwd, { recursive: true, force: true }); throw error; }
     this.descendants = new SessionDescendants(this.child);
     this.acp = new AcpSession({ input: this.child.stdin, output: this.child.stdout }, {
@@ -33,7 +33,7 @@ export class AntigravityProbe {
       hooks: { ...hooks, sessionParams: () => ({ _meta: { antigravity: { disabledTools: ['run_workflow'] } } }) },
     });
     this.child.stderr.setEncoding('utf8');
-    this.child.stderr.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(0, 16_384); });
+    this.child.stderr.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-32_768); });
     this.child.on('error', error => { this.spawnError = error; this.acp.transport.close(error); });
     this.exited = new Promise(resolve => this.child.once('close', () => resolve()));
     this.deadline = setTimeout(() => { void this.close(new Error(`Probe timed out after ${timeoutMs}ms`)).catch(() => {}); }, timeoutMs);
@@ -56,7 +56,7 @@ export class AntigravityProbe {
     try { await this.exited; }
     finally {
       clearTimeout(term); clearTimeout(kill);
-      if (failure !== undefined) await logAntigravityFailure(this.cwd, 'probe', failure, this.env);
+      if (failure !== undefined) await logAntigravityFailure(this.cwd, 'probe', failure, this.env, this.stderr);
       await rm(this.cwd, { recursive: true, force: true });
     }
   }

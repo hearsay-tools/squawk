@@ -8,6 +8,18 @@ import { collectSecretValues, redactSecrets } from '../../core/secret-redaction.
 const MAX_FILES = 4;
 const TAIL_BYTES = 16_384;
 
+export function redactAntigravityDiagnostics(value: string, env: NodeJS.ProcessEnv): string {
+  return redactBrowserSignInDetails(redactSecrets(value, collectSecretValues(env)));
+}
+
+function completeTail(buffer: Buffer, cut: boolean): string {
+  const tail = buffer.toString('utf8');
+  // A cut could remove a credential's field name. Keep only complete lines.
+  if (!cut) return tail;
+  const newline = tail.indexOf('\n');
+  return newline < 0 ? '' : tail.slice(newline + 1);
+}
+
 async function nativeLogTail(path: string): Promise<string> {
   // Do not follow native log aliases or a symlink substituted after readdir.
   const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -17,19 +29,18 @@ async function nativeLogTail(path: string): Promise<string> {
     const start = Math.max(0, stat.size - TAIL_BYTES);
     const buffer = Buffer.alloc(Math.min(stat.size, TAIL_BYTES));
     const { bytesRead } = await file.read(buffer, 0, buffer.length, start);
-    const tail = buffer.subarray(0, bytesRead).toString('utf8');
-    // A cut could remove a credential's field name. Keep only complete lines.
-    if (start === 0) return tail;
-    const newline = tail.indexOf('\n');
-    return newline < 0 ? '' : tail.slice(newline + 1);
+    return completeTail(buffer.subarray(0, bytesRead), start > 0);
   } finally { await file.close(); }
 }
 
 /** Preserve bounded native evidence in the server log before its private TMPDIR is removed. */
-export async function logAntigravityFailure(temp: string, context: string, cause: unknown, env: NodeJS.ProcessEnv): Promise<void> {
-  const secrets = collectSecretValues(env);
-  const safe = (value: string) => redactBrowserSignInDetails(redactSecrets(value, secrets));
+export async function logAntigravityFailure(temp: string, context: string, cause: unknown, env: NodeJS.ProcessEnv, stderr = ''): Promise<void> {
+  const safe = (value: string) => redactAntigravityDiagnostics(value, env);
   const tails: string[] = [];
+  if (stderr) {
+    const bytes = Buffer.from(stderr);
+    tails.push(safe(`stderr:\n${completeTail(bytes.subarray(-TAIL_BYTES), bytes.length > TAIL_BYTES)}`));
+  }
   try {
     const entries = await readdir(temp, { withFileTypes: true });
     const files = entries.filter(entry => entry.isFile() && /\.log\.(?:INFO|ERROR)\./.test(entry.name))

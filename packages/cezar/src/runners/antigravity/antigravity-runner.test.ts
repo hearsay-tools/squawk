@@ -13,6 +13,7 @@ import { pidExists } from '../../core/process-stat.ts';
 import { permissionPolicy, antigravityAsk } from './permissions.ts';
 import { antigravityTool } from './tool-normalization.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
+import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 registerRunner(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
@@ -100,7 +101,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     squawkTools: { name, command: process.execPath, args: [server, receipt] }, env: { CEZ_MOCK_STDIN_FILE: wire } });
   expect(await readFile(receipt, 'utf8')).toBe('cezar_done');
   const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
-  expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.eagerMcpServers).toEqual([name]);
+  expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.eagerMcpServers).toEqual([ANTIGRAVITY_MCP_NAME]);
 });
 
 it.each([false, true])('uses the task cwd and disables native workflow skill writes (resume=%s)', async resume => {
