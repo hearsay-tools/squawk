@@ -124,11 +124,25 @@ describe('createTopicSocket', () => {
       expect(onRefused).toHaveBeenCalledTimes(1)
     })
 
-    it('reconnects without a limit once an attempt opened (a server restart)', () => {
+    it('counts an upgrade that opens but closes before any frame (a proxy that accepts, then drops)', () => {
+      const onRefused = vi.fn()
+      const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
+      socket.subscribe('health', () => undefined)
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        instance(attempt).open()
+        instance(attempt).drop()
+        vi.advanceTimersByTime(RECONNECT_DELAY_MS)
+      }
+      expect(FakeWebSocket.instances).toHaveLength(ATTEMPTS)
+      expect(onRefused).toHaveBeenCalledTimes(1)
+    })
+
+    it('reconnects without a limit once an attempt carried a frame (a server restart)', () => {
       const onRefused = vi.fn()
       const socket = createTopicSocket(URL, { connectAttempts: ATTEMPTS, onRefused })
       socket.subscribe('health', () => undefined)
       instance(0).open()
+      instance(0).message({ type: 'event', topic: 'health', data: {} })
       for (let attempt = 0; attempt < ATTEMPTS + 2; attempt++) {
         instance(attempt).drop()
         vi.advanceTimersByTime(RECONNECT_DELAY_MS)

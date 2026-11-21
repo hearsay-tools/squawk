@@ -173,10 +173,12 @@ export function createLiveCoordinator() {
         if (!parsed.success) { failWorker(); return }
         const message = parsed.data
         if (message.type === 'hello') { lastAlive = Date.now(); sync(); return }
+        // Session-wide, not per subscription: the worker has already released this document, so
+        // an epoch that moved since must not hide it.
+        if (message.type === 'unavailable') { channelsRefused = true; failWorker(); return }
         if (message.epoch !== epoch) return
         lastAlive = Date.now()
         if (message.type === 'alive') return
-        if (message.type === 'unavailable') { channelsRefused = true; failWorker(); return }
         const entry = subscriptions.get(message.id)
         if (!entry || entry.recovering) return
         if (message.type === 'reset') {

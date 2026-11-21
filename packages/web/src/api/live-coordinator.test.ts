@@ -95,6 +95,21 @@ describe('document live demand', () => {
     coordinator.configure(local)
     expect(Worker.all).toHaveLength(2)
   })
+  it('honours an unavailable that carries an earlier epoch: demand moved while the worker gave up', async () => {
+    coordinator.configure(local)
+    coordinator.subscribe({ kind: 'workspace' }, {})
+    const worker = Worker.all[0]!
+    const before = lastEpoch(worker)
+    coordinator.subscribe({ kind: 'topic', topic: 'health' }, {})
+    expect(lastEpoch(worker)).toBeGreaterThan(before)
+    worker.reply({ type: 'unavailable', version: LIVE_PROTOCOL, epoch: before, reason: LIVE_CHANNEL_REFUSED })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.transport()).toBe('finite')
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(Worker.all).toHaveLength(1)
+  })
   it('retries the worker after a visibility restore when the worker itself failed', async () => {
     coordinator.configure(local)
     coordinator.subscribe({ kind: 'workspace' }, {})

@@ -60,7 +60,8 @@ export function createTopicSocket(url?: string, options: TopicSocketOptions = {}
   const pendingSnapshots = new Set<string>()
   const id = {}
   let connecting = false
-  /** An attempt of the current demand opened: the path carries the socket. */
+  /** A frame arrived on an attempt of the current demand: the path carries the socket. An upgrade
+   *  alone is no proof, since a proxy may accept it and close before forwarding anything. */
   let opened = false
   let failedOpens = 0
   let refused = false
@@ -109,8 +110,6 @@ export function createTopicSocket(url?: string, options: TopicSocketOptions = {}
     ws.addEventListener('open', () => {
       if (ws !== socket) return
       connecting = false
-      opened = true
-      failedOpens = 0
       for (const topic of listeners.keys()) pendingSnapshots.add(topic)
       syncIdle()
       petWatchdog() // arm liveness detection the moment the socket is usable
@@ -123,6 +122,8 @@ export function createTopicSocket(url?: string, options: TopicSocketOptions = {}
     ws.addEventListener('message', (event) => {
       if (ws !== socket) return
       petWatchdog() // ANY inbound frame — event, error, or heartbeat ping — proves the socket lives
+      opened = true
+      failedOpens = 0
       let frame: unknown
       try {
         frame = JSON.parse((event as MessageEvent<string>).data)

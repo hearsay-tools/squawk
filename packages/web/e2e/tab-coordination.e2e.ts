@@ -219,13 +219,17 @@ it('blocked SharedWorker uses finite HTTP in ten visible windows and aborts on p
  *  open, WebSockets still open, and every shared worker target seen. */
 const watchSharedWorkers = async (request: Request, subscribe: Parameters<Parameters<AgentBrowser['withCdp']>[0]>[1]) => {
   const streams = new Set<string>(), sockets = new Set<string>(), workers = new Set<string>(), setupErrors: unknown[] = []
+  // Only the workers' own sessions count: the page enables its Network domain too.
+  const workerSessions = new Set<string>()
   const off = subscribe(event => {
     if (event.method === 'Target.attachedToTarget' && event.params.targetInfo.type === 'shared_worker') {
       workers.add(event.params.targetInfo.targetId)
+      workerSessions.add(event.params.sessionId)
       void request('Network.enable', {}, event.params.sessionId)
         .then(() => request('Runtime.runIfWaitingForDebugger', {}, event.params.sessionId))
         .catch(error => { setupErrors.push(error) })
     }
+    if (!event.sessionId || !workerSessions.has(event.sessionId)) return
     const key = `${event.sessionId}:${event.params.requestId}`
     if (event.method === 'Network.responseReceived' && event.params.response.mimeType === 'text/event-stream') streams.add(key)
     if (event.method === 'Network.loadingFinished' || event.method === 'Network.loadingFailed') streams.delete(key)
