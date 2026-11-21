@@ -56,3 +56,43 @@ Skill-list parity retains native-wire assertions by default. A declared filesyst
 only confirmed project/user roots and asserts no invented plugin metadata. Tool-grant parity
 retains argv assertions by default; permission-policy runners instead pin recorded native replies.
 The scratch-runner simulation appends to the current roster, without naming its last runner.
+
+## Live acceptance fixes
+
+The follow-up fixes for hearsay-tools/squawk#4004 preserve native model ids, extract the
+build label from the version banner, and send only the task checkout as an ACP workspace.
+Lifecycle MCP tools load eagerly. Squawk disables native `run_workflow` on new and resume
+because it owns workflows and the native tool writes a skill into the checkout. Native
+`start_subagent` remains. Known command updates are silent; terminal turns close open tools.
+Native option questions set `allowFreeText=false`; unsupported counts cancel visibly.
+
+### Worktree cases
+
+| Case | Files written, kept or removed | Next step, Continue and restart |
+| --- | --- | --- |
+| Native catalog not loaded | Native workflow tool disabled before session setup; no generated skill | Same filter sent on new and resume |
+| User already owns skills/system/run-workflow | Leave the file unchanged; never delete or ignore it | User content remains visible to git |
+| Same skill name from two sources | Existing native catalog precedence; this fix installs no skill | Existing catalog behavior remains |
+| Old runner already wrote a generated skill | Do not remove existing content automatically | Existing tracked or untracked file stays user-owned |
+| Crash during native startup | No Squawk skill writes or two-write transaction | Fresh session resends the filter |
+| Source removes a user skill | No cleanup writer in this fix | Native catalog sees its current sources |
+| Handoff or TMPDIR outside workspace | Shell writes to absolute task paths remain usable; proved live | Paths come from the resumed task spec |
+
+### Process exits
+
+| Case | What stops it | Behavior at shipped defaults |
+| --- | --- | --- |
+| Normal end | EOF, then existing TERM/KILL deadline | Snapshot descendants before EOF; reap observed detached children |
+| Stop or timeout during a command | session/cancel, cancellation response or bounded grace, then EOF/TERM/KILL | Keep ACP open for failed tool updates; fail unfinished tool rows |
+| Harness exits before command | Captured descendant identity, then TERM/KILL | Reparenting does not remove the captured identity |
+| Member ignores TERM | Bounded KILL timer survives leader exit | Same process incarnation required before signalling |
+| Parent command interrupted before spawn | Existing owned process scope | No child exists |
+| Parent command interrupted after spawn | Existing owned process scope | This fix adds in-process Stop cleanup, not persistent containment |
+| Parent killed with SIGKILL | Existing owned process scope | In-memory snapshots cannot run after owner death; no new guarantee |
+| Missing or forged stop handle | No new durable handle; only observed descendants | Refuse unreadable or changed process identities; never signal an unrelated PID |
+| Zombie, unreadable or reused identity | Ignore dead entries; compare live start identities | Skip an identity that cannot be proved |
+
+Existing Continue admission, workflow cursors and run exit triggers remain unchanged. The
+only session-resume changes are resending the workflow filter and eager MCP server name.
+
+Explicit shutdown parity (S27/S28/S30) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30 calls end and captures before EOF; S31 abrupt external exit remains unchanged because no pre-shutdown snapshot is guaranteed.

@@ -40,6 +40,8 @@ export class ModelIdentityError extends Error {
 
 /** How one runner maps a model id: its definition's `models.idMap` (`runners/<id>/models.ts`). */
 export interface BackendModelMap {
+  /** Opaque native ids, including slashes. The value namespaces stored identities, not wire ids. */
+  readonly nativeIdNamespace?: string;
   /**
    * The provider a bare (provider-less) model id belongs to for this backend.
    * `undefined` marks a backend that spans providers and therefore requires an
@@ -114,6 +116,7 @@ export function resolveModelIdentity(
 ): ModelIdentity | undefined {
   if (!raw || !raw.trim()) return undefined;
   const map = backendModelMap(backend) ?? {};
+  if (map.nativeIdNamespace) return { provider: map.nativeIdNamespace, model: raw.trim() };
   const configuredProvider = options.configuredProvider?.trim().toLowerCase() || undefined;
   const effectiveProvider = configuredProvider ?? map.defaultProvider;
   const explicit = parseModelIdentity(raw);
@@ -153,6 +156,7 @@ export function resolveModelIdentity(
  */
 export function toBackendModel(backend: string, id: ModelIdentity): string {
   const map = backendModelMap(backend) ?? {};
+  if (map.nativeIdNamespace) return id.model;
   if (map.defaultProvider === undefined) return formatModelIdentity(id);
   if (
     map.allowExplicitProvider &&

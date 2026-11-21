@@ -1,6 +1,7 @@
 import type { RunnerFacts } from '../../core/runner-facts.ts';
 // Live Google antigravity-acp 1.5.0 probes: hearsay-tools/squawk#4000.
 export const ANTIGRAVITY_FACTS = {
+  shutdownDescendants: 'observed-tree',
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'live',
   transport: 'stdio', sessionIdSource: 'native', systemPromptOnResume: 'resent',
   inputDelivery: { mode: 'steer', consumption: 'unobservable', acknowledgement: 'response',

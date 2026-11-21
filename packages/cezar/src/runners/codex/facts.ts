@@ -3,6 +3,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 /** What the Codex runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */
 export const CODEX_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'live',
   // childWork: a child thread's items nest under its spawnAgent item through collabParentItemId
   // (codex-hook-mapper.ts).

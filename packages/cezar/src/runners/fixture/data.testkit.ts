@@ -12,6 +12,7 @@ import type { RunnerAccountsData, RunnerCli, RunnerDetection, RunnerDisplay, Run
 
 /** What the fixture mock's wire can do: one prompt per stdin line, one turn at a time. */
 export const FIXTURE_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   childWork: 'none', hookEvents: 'none', nativePermission: 'none', transport: 'stdio', humanPromptHold: 'none',
   inputDelivery: {

@@ -10,6 +10,11 @@
 
 Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/` reads a runner's declared facts (`RUNNER_FACTS`, `inputDelivery`, `systemPromptOnResume`; `AGENT_PROTOCOL.md` §1) to decide what a runner can do, never a runner id. Every backend implements `AgentRunner`/`AgentSession` and must pass both parity matrices: `ui-parity.test.ts` (mappers) and `harness-parity.test.ts` (runners, including each runner's `specSupport`). Runner prose never counts runners. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) must keep working. The zero-config default includes unrestricted `Bash`, and each runner's `specSupport.toolGrant` says whether its wire honors the list (open-mercato/cezar#430).
 
+Explicit-shutdown parity reads the declared `shutdownDescendants` scope: `process-group` retains
+the detached-survivor checks, while `observed-tree` requires observed detached children to die
+after Stop, end escalation and EOF exit after end (S27/S28/S30). It makes no wider claim
+about abrupt leader exits before a snapshot (S31). Antigravity declares `observed-tree`.
+
 ## Runner definitions
 
 Each runner is one definition, registered with one call
@@ -446,6 +451,12 @@ reach the native approval card instead. This matches Claude's approval gate. Nat
 `interaction_` questions always reach the question card. Client file reads require Read;
 they cannot request interactive approval. The wire's `ask_question`, `schedule`, and `finish`
 need no tool admission. Read/search built-ins that have no separate native tool are not invented.
+Squawk loads its lifecycle MCP server eagerly and disables only agy's native `run_workflow`
+on new and resumed sessions. Squawk owns workflows; the native tool would also write its
+built-in skill into the task checkout. Native `start_subagent` stays available. Squawk sends
+only the task checkout as a workspace, because agy sorts workspace roots to choose the shell
+cwd. Absolute handoff and temp paths remain usable through shell tools. Native option
+questions allow only the offered answers; unsupported option counts cancel with a notice.
 See [the recorded wire](../runners/antigravity-wire.md).
 
 

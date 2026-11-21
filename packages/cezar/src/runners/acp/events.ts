@@ -36,6 +36,7 @@ export class AcpEvents {
   finish(stopReason: StopReason, usage?: TokenUsage): void {
     this.flush();
     if (!this.turnId) return;
+    this.finishTools(stopReason);
     this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason, ...(usage ? { usage } : {}) });
     this.turnId = undefined;
     this.sink.event?.({ type: 'turn-end' });
@@ -69,6 +70,7 @@ export class AcpEvents {
       case 'plan': this.plan(update.entries); break;
       case 'usage_update': this.usage(update); break;
       case 'config_option_update': this.hooks.normalizeOptions?.(update.configOptions); break;
+      case 'available_commands_update': break; // Native command catalog, not a fault.
       default: this.notice('ACP ignored unsupported session/update');
     }
   }
@@ -107,6 +109,16 @@ export class AcpEvents {
   private flush(): void {
     if (this.block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...this.block } });
     this.block = undefined;
+  }
+
+  private finishTools(reason: StopReason): void {
+    for (const [id, tool] of this.tools) {
+      if (tool.status === 'completed' || tool.status === 'failed') continue;
+      const item: UiToolItem = { ...tool, status: 'failed', output: tool.output || (reason === 'cancelled' ? 'Cancelled' : 'Turn ended before the tool completed') };
+      this.tools.set(id, item);
+      this.sink.event?.({ type: 'tool-result', toolCallId: id, result: item.output!, isError: true });
+      this.sink.uiEvent?.({ type: 'item.completed', item });
+    }
   }
 
   private usage(update: Record<string, unknown>): void {

@@ -3,6 +3,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 /** What the OpenCode runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */
 export const OPENCODE_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: false, skillUnknownName: 'error', skillsSeenBySession: 'at-start',
   // childWork: a subtask's child-session parts nest under the subtask part (opencode-ui-mapper.ts).
   // hookEvents: OpenCode 1.18.35 runs plugin hooks in-process; its SSE wire carries no hook event.

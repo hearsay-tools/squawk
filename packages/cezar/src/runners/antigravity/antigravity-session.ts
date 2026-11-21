@@ -6,6 +6,7 @@ import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlo
 import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { openingContent, validSkillMessage } from '../../core/skill-trigger.ts';
 import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
+import { SessionDescendants } from '../../core/session-descendants.ts';
 import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
 import { AcpSession } from '../acp/session.ts';
 import { antigravityEnv } from './runtime-env.ts';
@@ -32,6 +33,7 @@ export class AntigravitySession implements AgentSession {
   readonly result: Promise<AgentRunResult>;
   private readonly runtime;
   private readonly child;
+  private readonly descendants;
   private readonly acp: AcpSession;
   private readonly exited: Promise<number | null>;
   private readonly output: AgentRunResult = { text: '', toolCalls: [], tokensUsed: 0 };
@@ -44,6 +46,7 @@ export class AntigravitySession implements AgentSession {
   private providerError: string | undefined;
   private accepting = true;
   private requestedClose = false;
+  private interrupted = false;
   private timedOut = false;
   private failure: Error | undefined;
   private pendingAsk: string | undefined;
@@ -63,6 +66,7 @@ export class AntigravitySession implements AgentSession {
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(bin, spec);
     this.child = spawnSessionLeader(bin, ['--uid='], { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.descendants = new SessionDescendants(this.child);
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
     this.child.stderr.setEncoding('utf8'); this.child.stderr.on('data', (chunk: string) => this.stderr.push(chunk));
@@ -113,8 +117,11 @@ export class AntigravitySession implements AgentSession {
         normalizeOptions: value => { this.configOptions = value; },
         permissionAsk: antigravityAsk, permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${spec.squawkTools!.name}_${name}`) : []),
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
-        sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } },
-          ...(spec.additionalDirectories ? { additionalDirectories: spec.additionalDirectories } : {}) }),
+        // agy sorts active workspaces to choose its command cwd. Extra roots can displace
+        // the task checkout. Absolute handoff/temp paths remain available to shell tools.
+        sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' },
+          // Squawk owns workflows. The native tool also writes a built-in skill into cwd.
+          disabledTools: ['run_workflow'], eagerMcpServers: spec.squawkTools ? [spec.squawkTools.name] : [] } } }),
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
           this.providerError = failure ?? this.providerError;
@@ -151,6 +158,7 @@ export class AntigravitySession implements AgentSession {
     return operation.then(() => {}).finally(() => {
       this.inflight--;
       if (this.busy) return;
+      if (this.interrupted) this.closeInput();
       this.pendingAsk = undefined;
       if (this.open && this.queue.length) void this.submit(this.queue.shift()!).catch(error => this.fail(error));
       else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
@@ -198,19 +206,27 @@ export class AntigravitySession implements AgentSession {
   heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size; }
   end(): void {
     if (!this.open) return;
-    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
-    this.acp.close(); this.child.stdin.end();
+    this.beginClose(); this.closeInput();
     this.term = setTimeout(() => this.terminate(), this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
   }
+  private beginClose(): void {
+    this.descendants.capture();
+    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
+  }
+  private closeInput(): void { this.acp.close(); this.child.stdin.end(); }
   private terminate(): void {
+    this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     signalSession(this.child, 'SIGTERM');
     this.kill = setTimeout(() => signalSession(this.child, 'SIGKILL'), this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
   }
   interrupt(): void {
     if (!this.open) return;
-    if (this.ready && this.busy) { try { this.acp.cancel(); } catch { /* Exit owns cleanup. */ } }
-    this.end(); clearTimeout(this.term);
-    this.terminate();
+    this.interrupted = true; this.beginClose();
+    if (this.ready && this.busy) {
+      try { this.acp.cancel(); } catch { /* The shutdown deadline still owns cleanup. */ }
+      // Leave the transport open for failed tool updates and the cancelled prompt response.
+      this.term = setTimeout(() => { this.closeInput(); this.terminate(); }, this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
+    } else { this.closeInput(); this.terminate(); }
   }
   private fail(error: unknown): void {
     if (!this.open) return;
@@ -234,6 +250,7 @@ export class AntigravitySession implements AgentSession {
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
     this.accepting = false; this.acp.close(); this.clearAutoEnd(); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
+    this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     await boot;
     await this.bridge?.close();
     await rm(this.runtime.temp, { recursive: true, force: true });

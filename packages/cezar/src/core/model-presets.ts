@@ -40,9 +40,10 @@ function namesAnotherKnownProvider(model: string, runner: string): boolean {
 
 /** True when `model` is recognizably a preset of a runner OTHER than `runner` (and not also one
  *  of `runner`'s own presets), or when its provider prefix is one this runner is known not to
- *  serve. `''`/unknown/custom ids never conflict. */
+ *  serve. `''`/unknown/custom ids never conflict. A native-ID namespace owns every opaque
+ *  id it exposes, including IDs another runner also lists. */
 export function modelConflictsWithRunner(model: string, runner: string): boolean {
-  if (!model) return false;
+  if (!model || backendModelMap(runner)?.nativeIdNamespace) return false;
   if (knownPresets(runner)?.includes(model)) return false;
   // The provider half of the guard needs no vendor model knowledge, so — unlike the preset
   // lists — it keeps holding for models that do not exist yet. That is what lets OpenCode's

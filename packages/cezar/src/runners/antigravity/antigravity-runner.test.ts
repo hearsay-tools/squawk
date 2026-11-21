@@ -1,6 +1,6 @@
 import { waitFor } from '../../core/harness-parity-core.testkit.ts';
 import { withRejectedInput } from '../../core/owned-input-delivery.testkit.ts';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -9,7 +9,9 @@ import type { UiEvent } from '../../core/ui-events.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
 import { antigravityRunner } from './definition.ts';
+import { pidExists } from '../../core/process-stat.ts';
 import { permissionPolicy, antigravityAsk } from './permissions.ts';
+import { antigravityTool } from './tool-normalization.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
 registerRunner(antigravityRunner);
 const dirs: string[] = [];
@@ -24,7 +26,9 @@ it('resends system instructions on resume and sets native options before prompti
     additionalDirectories: ['/extra'], env: { CEZ_MOCK_STDIN_FILE: wire } });
   expect(result).toMatchObject({ sessionId: 'saved-session', tokensUsed: 7 });
   const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
-  expect(frames.find(frame => frame.method === 'session/resume').params).toMatchObject({ sessionId: 'saved-session', additionalDirectories: ['/extra'], _meta: { antigravity: { systemPrompt: { append: 'Follow these instructions' } } } });
+  const opening = frames.find(frame => frame.method === 'session/resume').params;
+  expect(opening).toMatchObject({ sessionId: 'saved-session', cwd, _meta: { antigravity: { systemPrompt: { append: 'Follow these instructions' } } } });
+  expect(opening).not.toHaveProperty('additionalDirectories');
   expect(frames.filter(frame => frame.method === 'session/set_config_option').map(frame => frame.params)).toEqual([
     { sessionId: 'saved-session', configId: 'mode', value: 'default' },
     { sessionId: 'saved-session', configId: 'model', value: 'custom-model' },
@@ -42,6 +46,81 @@ it('routes a native interaction answer to its opaque option id', async () => {
   });
   await session.result;
   expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"1"}}' });
+});
+
+it.each(['free text', 'one-option'])('refuses a native %s answer without leaving the question blocked', async variant => {
+  const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: `mock:ask-native ${variant}` }, event => events.push(event), {
+    autoEndAfterFirstTurn: true, onUiEvent: event => {
+      ui.push(event);
+      if (event.type === 'ask.requested') expect(session.sendMessage([{ type: 'text', text: 'Question: arbitrary free text' }])).toBe(true);
+    },
+  });
+  await session.result;
+  expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"cancelled"}}' });
+  expect(events).toContainEqual(expect.objectContaining({ type: 'note', message: expect.stringContaining(variant === 'free text' ? 'requires one of the offered answers' : 'requires two to four') }));
+  if (variant === 'one-option') expect(ui.filter(event => event.type === 'ask.requested')).toEqual([]);
+});
+
+it.each([false, true])('loads the exact lifecycle server eagerly and calls done over its MCP bridge (resume=%s)', async resume => {
+  const cwd = await workspace(); const receipt = join(cwd, 'done-called'); const wire = join(cwd, 'wire');
+  const server = join(cwd, 'mcp.mjs');
+  await writeFile(server, `import readline from 'node:readline';
+import { writeFileSync } from 'node:fs';
+readline.createInterface({ input: process.stdin }).on('line', line => {
+ const frame = JSON.parse(line); if (frame.id === undefined) return;
+ let result = {};
+ if (frame.method === 'initialize') result = { protocolVersion: frame.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'test', version: '1' } };
+ if (frame.method === 'tools/list') result = { tools: [{ name: 'cezar_done', inputSchema: { type: 'object', properties: {} } }] };
+ if (frame.method === 'tools/call') { writeFileSync(process.argv[2], frame.params.name); result = { content: [{ type: 'text', text: 'accepted' }] }; }
+ console.log(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result }));
+});`);
+  const name = 'cezar_ci_fixture';
+  await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:acp-eager-done',
+    ...(resume ? { resume: true, sessionId: 'saved' } : {}),
+    squawkTools: { name, command: process.execPath, args: [server, receipt] }, env: { CEZ_MOCK_STDIN_FILE: wire } });
+  expect(await readFile(receipt, 'utf8')).toBe('cezar_done');
+  const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.eagerMcpServers).toEqual([name]);
+});
+
+it.each([false, true])('uses the task cwd and disables native workflow skill writes (resume=%s)', async resume => {
+  const cwd = await workspace(); const wire = join(cwd, 'wire'); const ui: UiEvent[] = [];
+  await new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:acp-runtime-workspace',
+    ...(resume ? { resume: true, sessionId: 'saved' } : {}),
+    additionalDirectories: ['/repo/.ai/squawk/runs', '/repo/.ai/squawk/t/task'], env: { CEZ_MOCK_STDIN_FILE: wire } }, undefined, { autoEndAfterFirstTurn: true, onUiEvent: event => ui.push(event) }).result;
+  const proof = JSON.parse(await readFile(join(cwd, 'workspace-proof'), 'utf8'));
+  expect(proof.sessionCwd).toBe(cwd);
+  expect(proof).not.toHaveProperty('additionalDirectories');
+  expect(proof.processCwd).toBe(cwd);
+  const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.disabledTools).toEqual(['run_workflow']);
+  await expect(access(join(cwd, 'skills/system/run-workflow/SKILL.md'))).rejects.toThrow();
+  expect(ui.filter(event => event.type === 'session.error')).toEqual([]);
+});
+
+it.runIf(process.platform !== 'win32')('waits for native cancellation and reaps a detached foreground command after its harness exits', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
+  let commandPid: number | undefined;
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:acp-detached-command',
+    timings: { eofTermGraceMs: 1_000, eofKillGraceMs: 50 } }, event => {
+    events.push(event);
+    if (event.type === 'tool-call') commandPid = (event.input as { pid: number }).pid;
+  }, { onUiEvent: event => ui.push(event) });
+  try {
+    await waitFor(() => commandPid !== undefined);
+    expect(pidExists(commandPid!)).toBe(true);
+    session.interrupt();
+    await session.result;
+    await waitFor(() => !pidExists(commandPid!));
+    expect(events).toContainEqual({ type: 'tool-result', toolCallId: 'foreground', result: 'Cancelled by agent', isError: true });
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'cancelled' }));
+    // oxlint-disable-next-line cez/test-enum-literal -- UI tool status is independent of run status.
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'item.completed', item: expect.objectContaining({ id: 'foreground', status: 'failed' }) }));
+  } finally {
+    session.interrupt(); await session.result.catch(() => undefined);
+    if (commandPid && pidExists(commandPid)) process.kill(commandPid, 'SIGKILL');
+  }
 });
 
 it('acknowledges steering without ending the active turn or showing its provider diagnostic', async () => {
@@ -165,9 +244,32 @@ it('maps distinct shortened native ask labels back to their opaque option IDs', 
   const prefix = 'A'.repeat(70);
   const ask = antigravityAsk({ sessionId: 'session', toolCall: { toolCallId: 'interaction_long', title: 'Choose' },
     options: [{ optionId: 'red', name: `${prefix} red`, kind: 'allow_once' }, { optionId: 'blue', name: `${prefix} blue`, kind: 'allow_once' }] })!;
+  if ('refused' in ask) throw new Error(ask.refused);
   const labels = ask.questions[0]!.options!.map(option => option.label);
   expect(new Set(labels).size).toBe(2);
   expect(labels.every(label => label.length <= 60)).toBe(true);
   expect(ask.answer(`Question: ${labels[0]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'red' } });
   expect(ask.answer(`Question: ${labels[1]}`)).toEqual({ outcome: { outcome: 'selected', optionId: 'blue' } });
+});
+
+it.each(['Read', 'Bash'])('requires a server-qualified grant for an MCP tool named %s', name => {
+  const request: AcpPermissionRequest = { sessionId: 'session',
+    toolCall: { toolCallId: 'external-call', title: `external_${name}`, kind: 'execute', rawInput: {},
+      _meta: { mcp: { server: 'external', tool: name } } },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] };
+  expect(antigravityTool(request.toolCall)).toMatchObject({ name, title: name });
+  expect(permissionPolicy({ kind: 'explicit', tools: [name] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  expect(permissionPolicy({ kind: 'explicit', tools: [`other_${name}`] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  expect(permissionPolicy({ kind: 'explicit', tools: [`external_${name}`], bashAllowlist: ['git status'] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+  expect(permissionPolicy({ kind: 'inherited', tools: [`mcp__external__${name}`] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+});
+
+it('never lets an MCP grant authorize a colliding native shell name', () => {
+  const request: AcpPermissionRequest = { sessionId: 'session',
+    toolCall: { toolCallId: 'cmd', title: 'run_command', kind: 'execute', rawInput: { CommandLine: 'git status' } },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] };
+  expect(permissionPolicy({ kind: 'explicit', tools: ['mcp__run__command'] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  for (const name of ['run_command', 'Bash']) {
+    expect(permissionPolicy({ kind: 'explicit', tools: [name] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+  }
 });

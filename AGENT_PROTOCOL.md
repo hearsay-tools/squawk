@@ -174,6 +174,11 @@ holds for every runner, or carries a `PARITY_EXEMPTIONS` entry whose reason name
 limitation. A row that tests Squawk's shared logic above the seam runs on one runner,
 `SCENARIO_RUNNER`, instead (docs/adr/0063-one-scenario-runner.md).
 
+Shutdown rows S27/S28/S30 retain process-group cleanup for every runner. A runner declaring
+`facts.shutdownDescendants = observed-tree` must also reap the observed detached command;
+`process-group` retains the detached-survivor assertion. Abrupt-exit row S31 makes no
+snapshot assumption and retains its original checks.
+
 Print every row with its exemptions:
 
 ```bash

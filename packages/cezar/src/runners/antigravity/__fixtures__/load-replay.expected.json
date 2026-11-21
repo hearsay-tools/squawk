@@ -5,11 +5,6 @@
     "fatal": false
   },
   {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
-  },
-  {
     "type": "item.started",
     "item": {
       "kind": "message",

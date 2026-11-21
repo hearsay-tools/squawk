@@ -246,6 +246,41 @@ These are not parity gaps, but the runner must handle them:
    moves to the background; its `tool_call` stays `in_progress` and closes when it ends, still
    inside the held turn (`background-command.ndjson`).
 
+## Runner integration choices verified live
+
+A follow-up on the same 1.5.0 build verified the runner fixes for
+hearsay-tools/squawk#4004 with isolated `HOME`, `GEMINI_HOME` and `TMPDIR` on the host:
+
+- `agy --version` prints a multi-line banner. `Build label:` supplies the version.
+- Model ids are opaque. A bare `gemini-3-flash` id passed unchanged through the runner and
+  completed a turn through CLI Proxy. Slashes inside an id also belong to the native id.
+- The harness sorts active workspaces and chooses the first as its default command cwd.
+  Squawk omits `additionalDirectories` so the task checkout remains that directory. A live
+  command without `Cwd` returned the task worktree. The same turn appended to the absolute
+  handoff path under `.ai/squawk/runs` and wrote to `.ai/squawk/t/<task>` and `$TMPDIR` through
+  shell tools. Native `view_file` outside-workspace restrictions still apply.
+- `_meta.antigravity.eagerMcpServers` takes exact MCP server names (`mcp_servers.py`). Squawk
+  sends its bridge name on new and resume so lifecycle tools are available without first
+  reading the lazy tool files. The live model called `cezar_done` through that bridge.
+- The harness writes `skills/system/run-workflow/SKILL.md` in the ACP workspace when native
+  `run_workflow` is enabled. Moving the outer process cwd does not prevent this. A three-way
+  session-opening probe found the file with defaults and no file with either
+  `disabledTools: ["run_workflow"]` or `disabledTools: ["run_workflow", "start_subagent"]`.
+  Squawk deliberately sends only `disabledTools: ["run_workflow"]` on new and resume:
+  Squawk owns workflows, while native `start_subagent` remains available. This prevents the
+  generated skill from entering autosave without deleting or ignoring user files.
+- `available_commands_update` is a benign command catalog update. The mapper ignores it.
+  MCP tool display names come from `_meta.mcp.tool`, while permission matching retains the
+  native server-qualified name too.
+- Cancellation must keep ACP open for failed tool updates and the cancelled prompt response.
+  Native command processes can use detached sessions and survive harness exit. The runner
+  captures descendant process identities before shutdown and reaps observed descendants
+  even after reparenting. This is bounded cleanup, not containment of processes that escape
+  before the snapshot. Open tool items also close as failed at a terminal turn boundary.
+- Native `interaction_` answers accept only an offered `optionId`. Squawk hides free-text
+  answers for these questions. Unsupported option counts cancel visibly; an invalid answer
+  cancels the native request with a notice so the question cannot hang.
+
 ## Gaps that need a parity exemption
 
 Wire gaps, each a `mock.parityExemptions` entry or a named exemption in `ui-parity.test.ts`:

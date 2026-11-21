@@ -14,6 +14,14 @@ import {
  * the same for every transcript.
  */
 const choice = [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner', description: 'The executor' }] }];
+
+it('carries the option-only flag to the status, webhook, parent and cockpit projections', () => {
+  const questions = [{ ...choice[0]!, allowFreeText: false }];
+  const pending = { requestId: 'native', seq: 1, questions };
+  expect(askStatusFields(pending).question).toEqual(questions);
+  expect(askRequestOf(pending)?.questions).toEqual(questions);
+  expect(askCardOf(pending)?.questions).toEqual(questions);
+});
 const open = [{ header: 'Name', question: 'What should it be called?' }, { header: 'Tags', question: 'Which tags?', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }];
 const rejected = [{ header: 'A header over twelve characters', question: 'Which?' }];
 
