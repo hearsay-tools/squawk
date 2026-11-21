@@ -66,4 +66,16 @@ describe('reported cost follows the runner\'s declared cost report', () => {
     report(run.id, 'continue', second, 'codex', 5);
     expect(store.getRun(run.id)!.steps.map(step => step.costUsd)).toEqual([2, 3]);
   });
+
+  it('keeps the cost a restart restores on the same step before it adds the new report', () => {
+    const run = store.createRun({ title: 'cost', task: 'cost', workflow: 'quick-task',
+      steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }] });
+    store.updateStep(run.id, 'work', { backend: 'codex', sessionId: 'session-1' });
+    // The process logged a report of 2 and exited before the step total was written.
+    store.appendEvent(run.id, { type: 'cost', stepId: 'work', usd: 2 });
+    const restarted = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
+    beginUsageInvocation(store, run.id, restarted, 'work');
+    report(run.id, 'work', restarted, 'codex', 5);
+    expect(store.getRun(run.id)!.steps[0]!.costUsd).toBe(5);
+  });
 });

@@ -82,6 +82,8 @@ export interface StagedOutcome {
   answered: string[];
   /** Every wait the outcomes settled, as committed to `lastWaits`, in the order they settled. */
   settled: Wait[];
+  /** The exit `next` applied, for the store's `run.status-changed` (runs/lifecycle.ts). */
+  exit?: RunExitId;
 }
 
 /** An answer to the question at `askSeq` settles the agent's waits shown up to it, the waits not
@@ -247,5 +249,5 @@ export function applyOutcomes(run: RunRecord, outcomes: readonly RunOutcome[], d
     next = { ...next, steps: next.steps.map((step) => step.id === resumeStepId && step.status === 'waiting' ? { ...step, status: 'running' as const } : step) };
     changed = true;
   }
-  return { next, changed, ...out };
+  return { next, changed, ...out, ...(deps.exit ? { exit: deps.exit } : {}) };
 }
