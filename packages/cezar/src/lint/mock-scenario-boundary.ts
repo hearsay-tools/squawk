@@ -15,7 +15,9 @@ export function mockScript(id: string, source: string): string {
       const object: Node | undefined = init ? unwrapped(init) : undefined;
       if (object?.type !== 'ObjectExpression') continue;
       for (const property of object.properties) {
-        if (property.type !== 'ObjectProperty' || property.computed || property.key.type !== 'Identifier' || property.key.name !== 'script') continue;
+        if (property.type !== 'ObjectProperty' || property.computed) continue;
+        const key = property.key.type === 'Identifier' ? property.key.name : literalText(property.key);
+        if (key !== 'script') continue;
         const script = literalText(property.value);
         if (script !== undefined) return script;
       }

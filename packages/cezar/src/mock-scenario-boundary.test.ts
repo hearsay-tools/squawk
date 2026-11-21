@@ -19,6 +19,7 @@ describe('shared scenario boundary', () => {
   it.each([
     ["export const X_MOCK = { script: 'mock-x.mjs' } satisfies RunnerMock;", 'mock-x.mjs'],
     ['const s = 1;\nexport const X_MOCK = { binEnv: `X`, script: `mock-x.mjs` };', 'mock-x.mjs'],
+    ["export const X_MOCK = { 'script': 'mock-x.mjs' };", 'mock-x.mjs'],
   ])('reads the literal script of the exported mock: %s', (source, script) => {
     expect(mockScript('x', source)).toBe(script);
   });
