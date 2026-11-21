@@ -1,7 +1,6 @@
 import { filterAntigravityUpdate, antigravityUpdateError } from './wire-updates.ts';
 import { askPayloadOf } from '@open-mercato/cezar-contract/pending-ask';
 import { rm } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlock, SessionOptions } from '../../core/agent-runner.ts';
 import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
@@ -66,9 +65,7 @@ export class AntigravitySession implements AgentSession {
   constructor(bin: string, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(bin, spec);
-    const executable = bin.includes('/') || bin.includes('\\') ? resolve(spec.cwd, bin) : bin;
-    // agy writes its built-in skills beneath the process cwd, independently of ACP cwd.
-    this.child = spawnSessionLeader(executable, ['--uid='], { cwd: this.runtime.temp, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(bin, ['--uid='], { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     this.descendants = new SessionDescendants(this.child);
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
@@ -123,7 +120,8 @@ export class AntigravitySession implements AgentSession {
         // agy sorts active workspaces to choose its command cwd. Extra roots can displace
         // the task checkout. Absolute handoff/temp paths remain available to shell tools.
         sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' },
-          eagerMcpServers: spec.squawkTools ? [spec.squawkTools.name] : [] } } }),
+          // Squawk owns workflows. The native tool also writes a built-in skill into cwd.
+          disabledTools: ['run_workflow'], eagerMcpServers: spec.squawkTools ? [spec.squawkTools.name] : [] } } }),
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
           this.providerError = failure ?? this.providerError;

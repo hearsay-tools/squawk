@@ -446,6 +446,12 @@ reach the native approval card instead. This matches Claude's approval gate. Nat
 `interaction_` questions always reach the question card. Client file reads require Read;
 they cannot request interactive approval. The wire's `ask_question`, `schedule`, and `finish`
 need no tool admission. Read/search built-ins that have no separate native tool are not invented.
+Squawk loads its lifecycle MCP server eagerly and disables only agy's native `run_workflow`
+on new and resumed sessions. Squawk owns workflows; the native tool would also write its
+built-in skill into the task checkout. Native `start_subagent` stays available. Squawk sends
+only the task checkout as a workspace, because agy sorts workspace roots to choose the shell
+cwd. Absolute handoff and temp paths remain usable through shell tools. Native option
+questions allow only the offered answers; unsupported option counts cancel with a notice.
 See [the recorded wire](../runners/antigravity-wire.md).
 
 

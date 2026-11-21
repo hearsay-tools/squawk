@@ -115,8 +115,6 @@ async function runtimeProbe(text, turn) {
     return true;
   }
   if (text === 'mock:acp-runtime-workspace') {
-    mkdirSync('skills/system/run-workflow', { recursive: true });
-    writeFileSync('skills/system/run-workflow/SKILL.md', 'Native generated skill');
     writeFileSync(join(sessionParams.cwd, 'workspace-proof'), JSON.stringify({ processCwd: process.cwd(), sessionCwd: sessionParams.cwd, additionalDirectories: sessionParams.additionalDirectories }));
     return true;
   }
@@ -217,9 +215,17 @@ function recorded(frame) {
   return JSON.stringify(copy);
 }
 
+function mountBuiltinSkills(params) {
+  if (!antigravity || params._meta?.antigravity?.disabledTools?.includes('run_workflow')) return;
+  // The real harness mounts this built-in skill in ACP cwd when its tool is enabled.
+  const folder = join(params.cwd, 'skills/system/run-workflow');
+  mkdirSync(folder, { recursive: true }); writeFileSync(join(folder, 'SKILL.md'), 'Native generated skill');
+}
+
 async function handle(frame) {
   if (process.env.CEZ_MOCK_STDIN_FILE) appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${recorded(frame)}\n`);
   if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${recorded(frame)}\n`);
+  if (['session/new', 'session/resume', 'session/load'].includes(frame.method)) mountBuiltinSkills(frame.params);
   if (!frame.method) { pending.get(frame.id)?.(frame.result); pending.delete(frame.id); return; }
   switch (frame.method) {
     case 'initialize': reply(frame.id, { protocolVersion: 1, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, mcpCapabilities: { http: true, sse: true } }, authMethods: [{ id: 'mock-key', name: 'Mock key' }], agentInfo: { name: 'mock-acp', version: '1.0.0' } }); break;

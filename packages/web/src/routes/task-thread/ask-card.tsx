@@ -34,8 +34,8 @@ function formatAnswer(question: UiAskQuestion, labels: string[], otherAnswer?: s
  * single-select question resolves on one tap; any other shape (multiple questions, a
  * multi-select question, or an open one) collects every answer and resolves on one **Send**
  * that posts a single combined message — the reducer resolves the whole card on that one user
- * message, so partial answers can never leak. Each question with options also offers an
- * optional Other answer that can be mixed with chip answers from the other questions. Either
+ * message, so partial answers can never leak. Unless allowFreeText is false, a question
+ * with options also offers an optional Other answer that can be mixed with chip answers from the other questions. Either
  * way the answer rides `useAskAnswer`, which picks the seam the run's state
  * allows: the live reply while the engine owns a session, and a resume once it
  * has closed — a question outlives its session, so answering one that the agent

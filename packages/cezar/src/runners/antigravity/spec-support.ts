@@ -8,7 +8,7 @@ export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   skill: { honored: true, via: 'leading /id args in session/prompt' },
   resumeFallbackSkill: { honored: true, via: 'leading /id args when opening a fresh session' },
   images: { honored: true, via: 'session/prompt image content' },
-  cwd: { honored: true, via: 'session/new cwd; process cwd is a private runtime directory' },
+  cwd: { honored: true, via: 'session/new cwd and the only active workspace; native command cwd is the task checkout' },
   toolGrant: { honored: true, via: 'default mode plus fail-closed session/request_permission policy' },
   restrictCrossSessionMessaging: { honored: false, reason: 'Antigravity 1.5.0 has no cross-session messaging tool' },
   minimal: { honored: false, reason: 'Antigravity 1.5.0 offers no minimal or no-context launch mode' },

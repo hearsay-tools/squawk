@@ -83,16 +83,18 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.eagerMcpServers).toEqual([name]);
 });
 
-it('uses the task cwd without extra workspace roots and keeps generated skills outside the checkout', async () => {
+it.each([false, true])('uses the task cwd and disables native workflow skill writes (resume=%s)', async resume => {
   const cwd = await workspace(); const wire = join(cwd, 'wire'); const ui: UiEvent[] = [];
   await new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:acp-runtime-workspace',
+    ...(resume ? { resume: true, sessionId: 'saved' } : {}),
     additionalDirectories: ['/repo/.ai/squawk/runs', '/repo/.ai/squawk/t/task'], env: { CEZ_MOCK_STDIN_FILE: wire } }, undefined, { autoEndAfterFirstTurn: true, onUiEvent: event => ui.push(event) }).result;
   const proof = JSON.parse(await readFile(join(cwd, 'workspace-proof'), 'utf8'));
   expect(proof.sessionCwd).toBe(cwd);
   expect(proof).not.toHaveProperty('additionalDirectories');
-  expect(proof.processCwd).not.toBe(cwd);
+  expect(proof.processCwd).toBe(cwd);
+  const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  expect(frames.find(frame => frame.method === (resume ? 'session/resume' : 'session/new')).params._meta.antigravity.disabledTools).toEqual(['run_workflow']);
   await expect(access(join(cwd, 'skills/system/run-workflow/SKILL.md'))).rejects.toThrow();
-  await expect(access(proof.processCwd)).rejects.toThrow();
   expect(ui.filter(event => event.type === 'session.error')).toEqual([]);
 });
 
