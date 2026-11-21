@@ -95,4 +95,4 @@ Native option questions set `allowFreeText=false`; unsupported counts cancel vis
 Existing Continue admission, workflow cursors and run exit triggers remain unchanged. The
 only session-resume changes are resending the workflow filter and eager MCP server name.
 
-Explicit shutdown parity (S27/S28) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30/S31 abrupt exits remain unchanged because no pre-shutdown snapshot is guaranteed.
+Explicit shutdown parity (S27/S28/S30) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30 calls end and captures before EOF; S31 abrupt external exit remains unchanged because no pre-shutdown snapshot is guaranteed.

@@ -12,8 +12,8 @@ Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/`
 
 Explicit-shutdown parity reads the declared `shutdownDescendants` scope: `process-group` retains
 the detached-survivor checks, while `observed-tree` requires observed detached children to die
-after Stop and end escalation (S27/S28). It makes no wider claim about abrupt leader exits
-before a snapshot (S30/S31). Antigravity declares `observed-tree`.
+after Stop, end escalation and EOF exit after end (S27/S28/S30). It makes no wider claim
+about abrupt leader exits before a snapshot (S31). Antigravity declares `observed-tree`.
 
 ## Runner definitions
 

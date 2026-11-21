@@ -293,7 +293,10 @@ function exitReaping(backend: string, it: typeof registerTest = registerTest): v
         // bound: the exit drain, the grace, then signal delivery and reaping by the subreaper.
 
         await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        expect(alive(setsid)).toBe(true);
+        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree') {
+          // bound: end() captured the detached child before EOF; its delayed KILL survives leader exit.
+          await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
+        } else expect(alive(setsid)).toBe(true);
       }, 'no-progress-leftover', signalsOnEnd ? 100 : 10_000);
     }, 50_000);
 
