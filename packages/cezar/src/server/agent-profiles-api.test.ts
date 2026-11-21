@@ -103,7 +103,7 @@ describe('agent profiles API', () => {
 
     it('names the providers that can carry an account at all — OpenCode and omp cannot', async () => {
       const body = await list();
-      expect(body.profileCapableProviders).toEqual(['claude', 'codex', 'pi']);
+      expect(body.profileCapableProviders).toEqual(['claude', 'codex', 'pi', 'antigravity']);
       expect(body).not.toHaveProperty('defaults');
       expect(body.profiles.every((p) => !Object.hasOwn(p, 'files'))).toBe(true);
     });

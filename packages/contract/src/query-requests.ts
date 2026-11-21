@@ -31,7 +31,7 @@ export const waitQuery = z.object({ wait: queryValue });
  *  array (hono types it `string | string[]`); a repeated key takes its first value. */
 export const queryRunnerSchema = z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(modelDiscoveryRunnerSchema);
 
-export const modelDiscoveryQuerySchema = z.object({ runner: queryRunnerSchema });
+export const modelDiscoveryQuerySchema = z.object({ runner: queryRunnerSchema, profileId: z.string().max(64).optional() });
 
 export const strictRefreshQuerySchema = z.object({ refresh: queryValue.refine((v) => v === undefined || v === '1') });
 

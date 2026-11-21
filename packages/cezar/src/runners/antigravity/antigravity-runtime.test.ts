@@ -53,7 +53,7 @@ it('enforces Read admission before client file access and honors line slices', a
 });
 
 
-it('reports credential presence without reading the harness credential contents', async () => {
+it('reports personal OAuth token presence without reading credential contents', async () => {
   const cwd = await workspace(); const env = { HOME: cwd, GEMINI_HOME: join(cwd, 'gemini') };
   const version = { stdout: 'antigravity_extensions/acp_server 1.5.0', stderr: '', exitCode: 0 };
   await expect(antigravityLogin.inspect!(version, env)).resolves.toBe('disconnected');
@@ -64,5 +64,7 @@ it('reports credential presence without reading the harness credential contents'
   await expect(antigravityLogin.inspect!(version, env)).resolves.toBe('disconnected');
   await mkdir(join(cwd, '.config/antigravity'), { recursive: true });
   await writeFile(join(cwd, '.config/antigravity/plugin-secrets.json'), 'credential content is not JSON and must not be parsed');
+  await expect(antigravityLogin.inspect!(version, env)).resolves.toBe('disconnected');
+  await writeFile(join(env.GEMINI_HOME, 'antigravity-acp/acp_token.json'), 'credential content is not JSON and must not be parsed');
   await expect(antigravityLogin.inspect!(version, env)).resolves.toBe('connected');
 });

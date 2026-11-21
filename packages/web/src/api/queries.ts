@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { projectAddress, runAddress, type RunAddress, type ProjectAddress } from './run-address'
 import type { ReadPatch } from './run-cache'
 import { useRunCacheWriter } from './use-run-cache-writer'
@@ -255,7 +256,9 @@ export const queryKeys = {
  * scope changes → key changes → data gone → provider unmounts).
  */
 export const workspaceQueryKeys = {
-  models: (runner: string) => ['workspace', 'models', runner] as const,
+  models: (runner: string, profileId?: string | null) => profileId && profileId !== DEFAULT_AGENT_ACCOUNT_ID
+    ? ['workspace', 'models', runner, profileId] as const
+    : ['workspace', 'models', runner] as const,
   providerStatus: ['workspace', 'providers', 'status'] as const,
   projects: ['workspace', 'projects'] as const,
   /** The accounts a new GitHub repository may belong to — read only while the New project dialog
@@ -308,13 +311,13 @@ export function invalidateRunnerModels(
  * `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue — hooks
  * cannot be called conditionally) skip the fetch when it definitely won't.
  */
-export function useRunnerModels(runner: Runner, enabled = true) {
-  return useQuery({ ...runnerModelsQuery(runner), enabled })
+export function useRunnerModels(runner: Runner, enabled = true, profileId?: string | null) {
+  return useQuery({ ...runnerModelsQuery(runner, profileId), enabled })
 }
 
-const runnerModelsQuery = (runner: string) => ({
-  queryKey: workspaceQueryKeys.models(runner),
-  queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels(runner, { signal }),
+const runnerModelsQuery = (runner: string, profileId?: string | null) => ({
+  queryKey: workspaceQueryKeys.models(runner, profileId),
+  queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels(runner, { signal }, profileId),
   staleTime: 5 * 60 * 1_000,
 })
 

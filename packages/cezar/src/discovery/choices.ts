@@ -1,6 +1,6 @@
 import type { ProviderStatusResponse } from '@open-mercato/cezar-contract/workspace';
 
-import { registeredRunners } from '../core/runner-registry.ts';
+import { registeredRunners, runnerDefinition } from '../core/runner-registry.ts';
 import type { ModelChoices, DiscoveredRunners } from '@open-mercato/cezar-contract';
 import type { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 
@@ -15,12 +15,13 @@ export function discoveredRunners(status: ProviderStatusResponse): DiscoveredRun
 
 /** A fresh nonempty host catalog can disprove an explicit selection; unavailable data cannot. */
 export async function missingModelChoices(source: HostDiscovery, runner: string, model: string, effectiveModel?: string, modelIdentity?: string): Promise<ModelChoices | undefined> {
+  if (runnerDefinition(runner).models.catalogAtAdmission === false) return;
   // Reuse account-aware normalization from execution selection, including custom providers.
   // Compare complete IDs only: never strip another runner's provider prefix speculatively.
   const ids = new Set([model, effectiveModel, modelIdentity].filter((id): id is string => id !== undefined));
   const catalog = await source.models.get(runner);
   if (catalog.source === 'unavailable' || catalog.stale || !catalog.models.length || catalog.models.some(row => ids.has(row.id))) return;
-  const alternatives = await Promise.all(registeredRunners().map(({ id }) => id).filter(id => id !== runner).map(async id => {
+  const alternatives = await Promise.all(registeredRunners().filter(definition => definition.models.catalogAtAdmission !== false).map(({ id }) => id).filter(id => id !== runner).map(async id => {
     const other = await source.models.get(id);
     return other.source !== 'unavailable' && !other.stale && other.models.some(row => ids.has(row.id)) ? id : undefined;
   }));

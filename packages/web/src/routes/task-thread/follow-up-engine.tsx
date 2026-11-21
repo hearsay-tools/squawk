@@ -175,7 +175,8 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   // runner pill re-reads that backend's own models. Only a run that can actually be continued
   // fetches at all — every other thread (running, queued, closed with no session) would be
   // fetching it to render nothing.
-  const catalog = useRunnerModels(runner, available)
+  const { sessionStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
+  const catalog = useRunnerModels(runner, available, account)
   const registered = useRunners()
   const modelsLocked = config.data?.modelsLocked === true
   const runnerChanged = runner !== currentRunner
@@ -184,7 +185,6 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   )
   const { models, model, effortOptions, effort } = modelSelection
   const { modelLabel, effortLabel } = continueLabels(modelSelection)
-  const { sessionStep, account } = resolveContinueAccount(run, runner, runnerChanged, useAgentAccounts().repoAccount)
 
   const mutation = useMutation({
     mutationFn: ({ text, images }: { text: string; images: AttachmentInput[] }) => {

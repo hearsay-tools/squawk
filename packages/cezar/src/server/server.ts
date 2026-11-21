@@ -145,6 +145,7 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-mode
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
+import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
 import { allUsage, currentUsage, onUsage } from '../core/process-usage.ts';
 import { loadWorkflows } from '../workflows/load.ts';
 import {
@@ -1167,7 +1168,13 @@ export function createApp(deps: ServerDeps) {
     .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['runner'] } }), async (c) => {
       const query = { data: c.req.valid('query') };
       const runner = registeredRunnerId(query.data.runner);
-      return c.json(await modelCatalog.get(runner));
+      if (query.data.profileId === undefined || query.data.profileId === DEFAULT_AGENT_ACCOUNT_ID) {
+        return c.json(await modelCatalog.get(runner));
+      }
+      if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
+      const resolved = await resolveWorkspaceProfile(runner, query.data.profileId);
+      if ('error' in resolved) return c.json({ error: resolved.error }, 400);
+      return c.json(await modelCatalog.get(runner, { accountHome: resolved.profile.path }));
     });
 
   /**
@@ -4584,6 +4591,7 @@ export function createApp(deps: ServerDeps) {
     .route('/', healthRoutes).route('/', createRunnersRoutes())
     .route('/', modelsRoutes)
     .route('/', providersRoutes)
+    .route('/', createProviderSignInRoutes({ localHandoff: () => capabilities().localHandoff, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))
     .route('/', projectsRoutes)
     .route('/', agentProfilesRoutes)
     .route('/', workspaceConfigRoutes)

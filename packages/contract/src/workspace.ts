@@ -433,6 +433,7 @@ export type ProviderConnectionState = z.infer<typeof providerConnectionStateSche
  * the key optional. The hand-written DTO declared it required — narrower than the route.
  */
 export const providerStatusSchema = z.object({
+  requiresAccountHome: z.boolean().optional(),
   provider: providerIdSchema,
   status: providerConnectionStateSchema,
   enabled: z.boolean().optional(),
@@ -460,6 +461,14 @@ export const providerConnectResponseSchema = z.discriminatedUnion('opened', [
   z.object({ opened: z.literal(false), connected: z.literal(true), command: z.string() }),
 ]);
 export type ProviderConnectResponse = z.infer<typeof providerConnectResponseSchema>;
+
+/** Ephemeral browser sign-in. Only the consent URL is returned; redirect codes are write-only. */
+export const providerSignInSchema = z.discriminatedUnion('state', [
+  z.object({ id: z.uuid(), state: z.literal('waiting'), url: z.string().url() }),
+  z.object({ id: z.uuid(), state: z.enum(['connected', 'cancelled']) }),
+  z.object({ id: z.uuid(), state: z.literal('failed'), error: z.string() }),
+]);
+export type ProviderSignIn = z.infer<typeof providerSignInSchema>;
 
 // ---- host model catalog (`GET /api/v1/models`) -----------------------------------------------
 

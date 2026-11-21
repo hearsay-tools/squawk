@@ -8,6 +8,7 @@ import type { RunnerModelCatalogAdapter } from './runner-model-catalog.ts';
  */
 export function hostModelCatalogAdapters(cwd: string): Record<ModelDiscoveryRunner, RunnerModelCatalogAdapter> {
   return Object.fromEntries(knownRunnerIds().map(id => [id, {
-    discover: async () => (await runnerDefinition(id).loadModelCatalog())({ cwd }),
+    discover: async (options = {}) => (await runnerDefinition(id).loadModelCatalog())({ cwd, ...options }),
+    ...(runnerDefinition(id).loadModelCatalogKey ? { cacheKey: async (options) => (await runnerDefinition(id).loadModelCatalogKey!())(options) } : {}),
   }])) as Record<ModelDiscoveryRunner, RunnerModelCatalogAdapter>;
 }

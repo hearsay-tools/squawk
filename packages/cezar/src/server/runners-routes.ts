@@ -10,10 +10,11 @@ import { registeredRunners } from '../core/runner-registry.ts';
  */
 export function readRunners(): RunnersResponse {
   return {
-    runners: registeredRunners().map(({ id, display, models, configFiles, login }) => ({
+    runners: registeredRunners().map(({ id, display, models, configFiles, login, loadBrowserSignIn }) => ({
       id,
       ...display,
       ...(login.loginArgs === null ? { terminalLogin: false } : {}),
+      ...(loadBrowserSignIn ? { browserLogin: true } : {}),
       models: { suggested: [...models.suggested], retired: [...models.retired] },
       agentConfig: configFiles.agentConfig,
     })),

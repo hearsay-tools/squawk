@@ -20,6 +20,7 @@ export interface ProviderStatus {
   status: ProviderConnectionState;
   enabled?: boolean;
   hint?: string;
+  requiresAccountHome?: boolean;
   authFailureId?: string;
   /** Which agent account this row describes (spec 2026-07-29-agent-profiles). Absent on the rows
    *  `status()` builds — that route answers for the discovered default only, and stays exactly
@@ -611,7 +612,11 @@ export class ProviderAuthService {
     const status = parser.inspect
       ? await parser.inspect(result, { ...process.env, ...env }).catch(() => null)
       : parser.parse(result);
-    if (status !== null) return { provider, status };
+    if (status !== null) {
+      const hint = parser.hint?.({ ...process.env, ...env }, status);
+      const requiresAccountHome = parser.requiresAccountHome?.({ ...process.env, ...env });
+      return { provider, status, ...(hint ? { hint } : {}), ...(requiresAccountHome !== undefined ? { requiresAccountHome } : {}) };
+    }
     return { provider, status: 'unknown', hint: UNKNOWN_HINT };
   }
 }

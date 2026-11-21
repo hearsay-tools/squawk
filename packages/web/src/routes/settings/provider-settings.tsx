@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/r
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError, connectProvider, setProviderEnabled } from '@/api/client'
+import { BrowserSignInButton } from './browser-sign-in'
 import {
   invalidateRunnerModels,
   useProviderStatus,
@@ -140,6 +141,7 @@ function ProviderActions({
           Check again
         </Button>
       ) : null}
+      {state === 'disconnected' && provider.browserLogin ? <BrowserSignInButton provider={provider.id} label={provider.displayName} /> : null}
       {state === 'disconnected' && provider.terminalLogin !== false ? (
         <Button
           type="button"

@@ -119,8 +119,8 @@ function serve(
         }
         return json({ runner: 'claude', skills: [{ id: 'check', name: 'Check' }], problems: [], source: 'live' })
       }
-      if (url === '/api/v1/models?runner=claude') return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
-      if (url === '/api/v1/models?runner=codex') {
+      if (url.startsWith('/api/v1/models?runner=claude')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
+      if (url.startsWith('/api/v1/models?runner=codex')) {
         return typeof modelCatalog === 'function' ? modelCatalog() : json(modelCatalog)
       }
       if (url === '/api/v1/config' && method === 'GET')
