@@ -24,8 +24,16 @@ describe('pi degraded-service retry adapter (#276)', () => {
     });
   });
 
+  it.each(['cliproxy-grok', 'openai'])('makes a stream closed without finish_reason match pi-ai retry classification: %s', (provider) => {
+    const errorMessage = 'upstream stream closed before any chunk carried finish_reason';
+    expect(adapt({ role: 'assistant', provider, stopReason: 'error', errorMessage })).toMatchObject({
+      errorMessage: `[cezar:retry-stream-closed] stream was interrupted: ${errorMessage}`,
+    });
+  });
+
   it.each([
     { role: 'assistant', provider: 'xai', stopReason: 'error', errorMessage: 'Internal error during token generation' },
+    { role: 'assistant', provider: 'cliproxy-grok', stopReason: 'end_turn', errorMessage: 'upstream stream closed before any chunk carried finish_reason' },
     { role: 'assistant', provider: 'openai', stopReason: 'error', errorMessage: 'Service temporarily unavailable' },
     { role: 'assistant', provider: 'xai', stopReason: 'end_turn', errorMessage: 'Service temporarily unavailable' },
   ])('leaves non-target provider messages unchanged: %j', (message) => {

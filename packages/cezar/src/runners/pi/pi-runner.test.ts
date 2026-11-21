@@ -728,6 +728,23 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
     );
   });
 
+  it('reports the original wording after stream-closed retries are exhausted', async () => {
+    const original = 'upstream stream closed before any chunk carried finish_reason';
+    const mockPath = writePiRpcMock(
+      cwd,
+      'mock-pi-stream-closed-exhausted.mjs',
+      `    send({ type: 'message_end', message: {
+      role: 'assistant', content: [], provider: 'cliproxy-grok', model: 'grok-4.7',
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } },
+      stopReason: 'error', errorMessage: ${JSON.stringify(`[cezar:retry-stream-closed] stream was interrupted: ${original}`)},
+    } });`,
+    );
+    const { events } = await runPiMock(cwd, mockPath);
+    expect(events.find((event) => event.type === 'error')?.message).toBe(
+      `pi: cliproxy-grok/grok-4.7 request failed: ${original}`,
+    );
+  });
+
   it('preserves an unrelated provider error that naturally starts with the retryable wording', async () => {
     const original = 'Service unavailable: upstream certificate rejected';
     const mockPath = writePiRpcMock(
