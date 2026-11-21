@@ -58,7 +58,7 @@ Each value is what agy 1.5.0 did, with the fixture or code that shows it. `Runne
 | `turnStart` | `on-write` | No frame starts a turn; the turn is the `session/prompt` request. The runner reports `turn.started` when it writes the request. |
 | `skillTriggerMidTurn` | `true` | `/probe-alpha` steered into a running turn ran the skill in that turn (`skill-midturn.ndjson`). |
 | `skillUnknownName` | `silent` | `/no-such-skill` gets a model reply that names the known skills; no error frame (`skill-slash.ndjson`). |
-| `skillsSeenBySession` | `live` | The probe created `probe-alpha` before `session/new` and `probe-beta` on disk after six turns of the same session; the next turn listed both (`skills-live.ndjson`, that turn only: a folder change sends no frame). That turn read 0 cached tokens, while the turns before it read 12,000 or more. |
+| `skillsSeenBySession` | `live` | The probe created `probe-alpha` before `session/new` and `probe-beta` on disk after several turns of the same session; the next turn listed both (`skills-live.ndjson`, that turn only: a folder change sends no frame). That turn read 0 cached tokens. Earlier turns of the same session (`prompt-command.ndjson`, `prompt-edit.ndjson`, `permission-reject.ndjson`, `interaction-question.ndjson`) read 20,307 to 34,466 cached tokens. |
 
 ## Launch, detection and the host probe
 
@@ -300,7 +300,7 @@ in them. Frame order and timing are as recorded.
 | `schedule-timer.ndjson` | A `schedule` timer that holds the turn; no frame in the 45 s before the next prompt |
 | `mode-yolo.ndjson` | `session/set_mode yolo`, then a command with no permission request |
 | `config-options.ndjson` | `session/set_config_option` for effort, model and an unknown model |
-| `skills-live.ndjson` | A skill added after `session/new`, listed next turn |
+| `skills-live.ndjson` | The turn after a skill folder was added on disk mid-session: the listing names it (the addition itself sends no frame) |
 | `skill-slash.ndjson` | `/probe-alpha` and `/no-such-skill` |
 | `skill-midturn.ndjson` | `/probe-alpha` steered into a running turn |
 | `skill-folders.ndjson` | The skill folders agy reads |
