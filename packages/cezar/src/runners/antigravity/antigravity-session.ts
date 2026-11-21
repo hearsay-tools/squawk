@@ -20,6 +20,7 @@ import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityStderr } from './stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
+import { logAntigravityFailure } from './native-diagnostics.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
@@ -256,10 +257,13 @@ export class AntigravitySession implements AgentSession {
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     await boot;
     await this.bridge?.close();
+    const unexpected = !this.requestedClose && (code !== 0 || this.busy);
+    if (this.timedOut || this.failure || unexpected || this.reportedFailure) {
+      await logAntigravityFailure(this.runtime.temp, 'session', this.failure ?? this.providerError ?? `Agent exited code ${code}`, this.runtime.env);
+    }
     await rm(this.runtime.temp, { recursive: true, force: true });
     if (this.timedOut) throw new Error(`Antigravity timed out after ${this.limit}ms`);
     const stderr = antigravityStderr(this.stderr.join(''));
-    const unexpected = !this.requestedClose && (code !== 0 || this.busy);
     if (this.failure || unexpected) {
       const message = [this.failure?.message, `Antigravity exited code ${code}`, summarizeRunnerStderr(stderr)].filter(Boolean).join(': ');
       const error = new Error(message);

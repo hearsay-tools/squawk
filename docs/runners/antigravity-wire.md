@@ -129,6 +129,9 @@ CLI Proxy answers `gemini-3-flash` but refuses every base name in that table wit
 
 An API error does not become a JSON-RPC error. It becomes an `agent_message_chunk` starting
 "Agent execution error:" and the turn ends with `stopReason: "end_turn"` (`model-error.ndjson`).
+On task or catalog failure, Squawk captures a bounded, redacted tail of native glog INFO/ERROR
+files from the process's private TMPDIR in the server log before removing that directory.
+This preserves native failure details that the ACP error message can omit.
 
 ## Usage
 

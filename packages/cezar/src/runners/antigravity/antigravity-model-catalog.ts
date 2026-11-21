@@ -62,6 +62,9 @@ export async function discoverAntigravityModels(options: { cwd: string } & Model
       result.push({ id: model.value, label: model.name, description: 'From Antigravity', effortLevels });
     }
     return result;
+  } catch (error) {
+    await probe?.close(error);
+    throw error;
   } finally {
     try { await probe?.close(); }
     finally { await rm(home, { recursive: true, force: true }); }

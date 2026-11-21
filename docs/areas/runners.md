@@ -505,5 +505,9 @@ the runner skips it with a notice.
 Library `SyntaxWarning` startup noise is excluded from task failures. The memory cache separates accounts and
 rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
 auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.
+Before cleaning a failed task or catalog probe's private temporary folder, Squawk writes a
+bounded native INFO/ERROR log tail to the server log. It reads at most four regular log files,
+up to 16 KiB from each, and redacts URLs and credentials with the sign-in diagnostic redaction.
+Successful sessions remove their temporary logs without retaining a tail.
 The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same
 selected account home (ADR 0066).
