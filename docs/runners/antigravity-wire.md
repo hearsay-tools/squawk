@@ -163,6 +163,32 @@ An API error does not become a JSON-RPC error. It becomes an `agent_message_chun
   `logout`, `usage`) come before the response.
 - **MCP**: `mcpCapabilities` offers `http` and `sse`, not `stdio`.
 
+## Permissions in default mode
+
+In the `default` mode agy allows its read-only tools and asks for every other tool
+(`policy.safe_defaults` in the SDK: `allow` for the read-only set, then `ask_user("*")`).
+`server.py` adds an explicit allow for `ask_question`, an explicit ask for `read_url_content`,
+and a pre-tool hook that denies file access outside the allowed folders. A live probe with
+`fs.readTextFile` and `fs.writeTextFile` both `false` and one HTTP MCP server gave:
+
+| Tool | Asks | Evidence |
+| --- | --- | --- |
+| `view_file` in the workspace | No | `tool_call` `Running view_file`, kind `read`, no request (`permission-view-list-search.ndjson`) |
+| `view_file` outside the workspace | No: denied | The pre-tool hook denies it ("Access to path … is denied. It is outside the allowed workspace directories") with no frame and no request. The model then ran `cat` through `run_command`, which asked (`view-file-outside-workspace.ndjson`). An allowed `run_command` therefore reaches files outside the workspace. |
+| `list_directory`, `search_directory`, `find_file` | Not offered | Off by default in the SDK; the model answered that it had no such tool (`permission-view-list-search.ndjson`). There is no grep tool; a search runs through `run_command`. |
+| `run_command` | Yes | `prompt-command.ndjson` |
+| `create_file` | Yes | `Run create_file?`, kind `edit`, options `allow` and `deny` (`permission-create-file.ndjson`) |
+| `edit_file` | Yes | `prompt-edit.ndjson` |
+| `invoke_subagent` | Yes | `Run invoke_subagent?`, kind `other`; the child's own tools ask again (`subagent.ndjson`) |
+| `search_web` | Yes | `Run search_web?`, kind `search`; it then called `read_url_content`, which asked too (`permission-search-web.ndjson`) |
+| `read_url_content` | Yes | `Run read_url_content?`, kind `fetch` (`permission-read-url.ndjson`) |
+| MCP tool | Yes | Title `<server>_<tool>` (`probe_echo`), kind `other` (`permission-mcp-echo.ndjson`; the HTTP server is in `permission-handshake-mcp.ndjson`) |
+| `generate_image` | Yes | `Run generate_image?`, kind `other`; the image call itself failed at CLI Proxy (`permission-generate-image.ndjson`) |
+| `ask_question` | No | The question is itself the request (`interaction-question.ndjson`) |
+| `schedule`, `finish` | No | Read-only set; `schedule` sends no `tool_call` at all (`schedule-timer.ndjson`) |
+
+In `yolo` mode nothing asks (`mode-yolo.ndjson`). `auto_edit` was not probed.
+
 ## Session lifecycle
 
 - **Cancel** (`cancel.ndjson`): after the `session/cancel` notification, agy sends the chunks
@@ -281,3 +307,11 @@ in them. Frame order and timing are as recorded.
 | `session-list.ndjson` | `session/list` |
 | `model-error.ndjson` | A provider 400 as message text and `end_turn` |
 | `harness-missing.ndjson` | `session/new` through a bare `agy` symlink |
+| `permission-handshake-mcp.ndjson` | `initialize` with `fs.readTextFile: false` and `session/new` with one HTTP MCP server |
+| `permission-view-list-search.ndjson` | `view_file` with no request; no list or search tool |
+| `permission-create-file.ndjson` | `create_file` with its request |
+| `permission-search-web.ndjson` | `search_web` and the `read_url_content` it calls, both with requests |
+| `permission-read-url.ndjson` | `read_url_content` with its request |
+| `permission-mcp-echo.ndjson` | An MCP tool call with its request |
+| `permission-generate-image.ndjson` | `generate_image` with its requests |
+| `view-file-outside-workspace.ndjson` | A denied outside read, then `cat` through `run_command` |
