@@ -481,8 +481,14 @@ URLs and tokens are not logged or saved by Squawk. Only agy writes credentials i
 The flow expires after five minutes and closes on Cancel. Hosted mode refuses these endpoints.
 
 Model discovery is lazy: a picker request opens one bounded ACP session in a temporary working
-folder, authenticates using the selected account, and reads `model` plus each model's
-`thinking_level` options. No prompt/model turn runs. The memory cache separates accounts and
+folder and disposable Gemini home. It copies only the selected account's native OAuth settings
+and token files when needed, then removes the copy and every probe conversation on exit.
+The account's settings, credentials and conversation list stay unchanged. The probe reads `model`
+plus each model's `thinking_level` options. No prompt/model turn runs. An explicit empty effort
+list means auto only in every picker; missing metadata keeps the generic fallback. If a caller
+still requests effort for a model without `thought_level`, or a level its options exclude,
+the runner skips it with a notice.
+Library `SyntaxWarning` startup noise is excluded from task failures. The memory cache separates accounts and
 rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
 auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.
 The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same

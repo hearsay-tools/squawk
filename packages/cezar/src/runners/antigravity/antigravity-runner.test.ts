@@ -48,6 +48,25 @@ it('routes a native interaction answer to its opaque option id', async () => {
   expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"1"}}' });
 });
 
+it.each([false, true].flatMap(resume => ['mock-no-thinking', 'mock-low-thinking'].map(model => ({ resume, model }))))('ignores an effort absent from $model options and completes (resume=$resume)', async ({ resume, model }) => {
+  const cwd = await workspace(); const wire = join(cwd, 'wire'); const events: AgentEvent[] = [];
+  const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'inspect the working tree',
+    model, effort: 'high', ...(resume ? { resume: true, sessionId: 'saved' } : {}), env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
+  expect(result.text).not.toBe('');
+  expect(events).toContainEqual({ type: 'note', message: `Antigravity model ${model} ${model === 'mock-no-thinking' ? 'has no effort setting' : 'does not offer effort high'}; ignoring requested effort high.` });
+  expect(events.some(event => event.type === 'error')).toBe(false);
+  const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  expect(frames.some(frame => frame.method === 'session/prompt')).toBe(true);
+  expect(frames.some(frame => frame.params?.configId === 'thinking_level')).toBe(false);
+});
+
+it('keeps the model failure visible without library SyntaxWarning noise', async () => {
+  const cwd = await workspace(); const events: AgentEvent[] = [];
+  await expect(new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'inspect', model: 'mock-invalid-model' }, event => events.push(event)))
+    .rejects.toThrow(/^Requested model is unavailable: Antigravity exited code 0$/);
+  expect(JSON.stringify(events)).not.toContain('SyntaxWarning');
+});
+
 it.each(['free text', 'one-option'])('refuses a native %s answer without leaving the question blocked', async variant => {
   const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
   const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: `mock:ask-native ${variant}` }, event => events.push(event), {

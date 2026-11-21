@@ -9,7 +9,14 @@ import { antigravityHarness } from './runtime-env.ts';
 import { discoverAntigravitySkills } from './antigravity-skill-catalog.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { ProviderAuthService } from '../../core/provider-auth.ts';
+import { antigravityStderr } from './stderr.ts';
 registerRunner(antigravityRunner);
+
+it('removes library warning context while keeping real stderr diagnostics', () => {
+  expect(antigravityStderr('/genai/types.py:5: SyntaxWarning: escape\n  sample = "\\\\/"\nFatal error: unavailable\n'))
+    .toBe('Fatal error: unavailable');
+  expect(antigravityStderr('')).toBe('');
+});
 
 it('refuses terminal sign-in and explains how to supply credentials', () => {
   const auth = new ProviderAuthService();

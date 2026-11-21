@@ -74,7 +74,7 @@ export function effortOptionsForModel(
 ): readonly EffortOption[] {
   const fallback = EFFORT_OPTIONS
   const levels = catalog?.models.find((entry) => entry.id === model)?.effortLevels
-  if (!levels?.length) return fallback
+  if (levels === undefined) return fallback
 
   const options: EffortOption[] = [EFFORT_OPTIONS[0]]
   const seen = new Set<string>()
@@ -85,7 +85,7 @@ export function effortOptionsForModel(
     seen.add(level)
     options.push(option)
   }
-  return options.length > 1 ? options : fallback
+  return options
 }
 
 /** Resolve stale or inherited effort through the same options the picker displays. */

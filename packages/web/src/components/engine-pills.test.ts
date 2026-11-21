@@ -62,6 +62,7 @@ function stubResolverFetch({
   providerPending = false,
   bootDefault = 'claude',
   projectDefault = 'claude',
+  models = [],
   profiles = [],
   selections = {},
   repoRoot = '/repo',
@@ -71,6 +72,7 @@ function stubResolverFetch({
   providerPending?: boolean
   bootDefault?: Runner
   projectDefault?: Runner
+  models?: Array<{ id: string; label: string; description: string; effortLevels: string[] }>
   profiles?: ReturnType<typeof profile>[]
   selections?: Record<string, Partial<Record<Runner, string>>>
   repoRoot?: string
@@ -95,7 +97,7 @@ function stubResolverFetch({
       }
       if (path.startsWith('/api/v1/models?runner=claude')) return jsonResponse({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (path.startsWith('/api/v1/models?runner=codex')) {
-        return jsonResponse({ runner: 'codex', models: [], source: 'live', stale: false })
+        return jsonResponse({ runner: 'codex', models, source: 'live', stale: false })
       }
       if (path.endsWith('/workspace/agent-profiles')) {
         return jsonResponse({
@@ -402,6 +404,20 @@ describe('useResolvedEngine agent accounts', () => {
 })
 
 describe('EnginePills presentation and choices', () => {
+  it('clears a carried effort when choosing a model that advertises no effort levels', async () => {
+    stubResolverFetch({ providers: { providers: [{ provider: 'codex', status: 'connected', enabled: true }] },
+      projectDefault: 'codex', models: [{ id: 'no-thinking', label: 'No thinking', description: '', effortLevels: [] }] })
+    const onChange = vi.fn()
+    render(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(EnginePills, {
+      pick: { runner: 'codex', model: 'gpt-future', effort: 'high', account: null }, onChange,
+    })))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Model · / }).hasAttribute('disabled')).toBe(false))
+    const model = screen.getByRole('button', { name: /^Model · / })
+    fireEvent.pointerDown(model)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /No thinking/ }))
+    expect(onChange).toHaveBeenCalledWith({ runner: 'codex', model: 'no-thinking', effort: '', account: null })
+  })
+
   it('keeps runner switching and effort intact', async () => {
     stubResolverFetch({ providers: { providers: [
       { provider: 'claude', status: 'connected', enabled: true },

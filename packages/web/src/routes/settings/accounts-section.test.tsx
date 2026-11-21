@@ -435,6 +435,23 @@ describe('the agent accounts section', () => {
   })
 
   describe('auth status arrives per row (perf split)', () => {
+    it('shows neutral checking without sign-in or folder claims until the account status is known', async () => {
+      serve({ editable: true, profileCapableProviders: ['claude'], selections: {}, profiles: [
+        profile({ id: 'new', exists: false, looksValid: false, status: undefined }),
+      ] } as never)
+      const fetchNow = globalThis.fetch
+      let answer!: (response: Response) => void
+      vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).includes('/agent-profiles/new/status')
+        ? new Promise<Response>(resolve => { answer = resolve }) : fetchNow(input, init)))
+      renderAccounts()
+      await waitFor(() => expect(rowFor('new')?.querySelector('[data-slot="account-status"]')?.textContent).toBe('Checking…'))
+      expect(rowFor('new')?.querySelector('[data-slot="account-missing"]')).toBeNull()
+      expect(rowFor('new')?.querySelector('[data-action="account-connect"]')).toBeNull()
+      await act(async () => answer(new Response(JSON.stringify({ status: { provider: 'claude', status: 'disconnected' } }), { headers: { 'content-type': 'application/json' } })))
+      await waitFor(() => expect(rowFor('new')?.querySelector('[data-action="account-connect"]')).not.toBeNull())
+      expect(rowFor('new')?.querySelector('[data-slot="account-missing"]')?.textContent).toContain('Connect will make it')
+    })
+
     it('renders immediately with Checking…, then fills each dot in', async () => {
       // The listing deliberately carries no `status`: probing it cost a CLI spawn per provider and
       // per account, ~2.5s on a real machine. The row says "Checking…" until its own answer lands,

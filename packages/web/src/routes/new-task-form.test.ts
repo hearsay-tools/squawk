@@ -262,9 +262,14 @@ describe('effort option resolution (#55)', () => {
     expect(effortOptionsForModel('opus').map((option) => option.value)).toEqual(full)
     expect(effortOptionsForModel('gpt-future').map((option) => option.value)).toEqual(full)
     expect(effortOptionsForModel('openai/legacy', catalog).map((option) => option.value)).toEqual(full)
-    expect(effortOptionsForModel('openai/empty', catalog).map((option) => option.value)).toEqual(full)
     expect(effortOptionsForModel('provider/custom', catalog).map((option) => option.value)).toEqual(full)
     expect(effortOptionsForModel('xai/grok')).toHaveLength(full.length)
+  })
+
+  it('offers only auto and resets inherited effort when discovery explicitly reports no levels', () => {
+    const options = effortOptionsForModel('openai/empty', catalog)
+    expect(options.map(option => option.value)).toEqual([''])
+    expect(resolveEffort('high', options)).toBe('')
   })
 
   it('does not let one model metadata entry affect another', () => {
