@@ -73,7 +73,7 @@ export interface RunnerDefinition {
  * A runner's native mock (the `mock` part): the script in `packages/cezar/scripts/`, the variable
  * that points the runner at it, and the prompt each shared parity scenario sends it. Plain data in
  * `runners/<id>/mock.ts`. `core/skill-probe.ts` and the parity kit read it from the registry, and
- * `lint/mock-scenario-boundary.ts` reads it from the built-in list.
+ * `lint/mock-scenario-boundary.ts` parses `script` from the source of `runners/<id>/mock.ts`.
  */
 export interface RunnerMock {
   /** The mock script's file name in `packages/cezar/scripts/`. */

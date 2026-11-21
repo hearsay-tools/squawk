@@ -94,4 +94,12 @@ describe('per-runner test closures', () => {
     ].filter(path => closure.has(path));
     expect(banned).toEqual([]);
   }, 60_000);
+
+  it('keep the oxlint plugin off every runner module but runners/ids.ts', async () => {
+    // Squeal relints the whole project when a file in the plugin's import closure changes. A
+    // runner module in that closure would make every runner edit a full-project lint.
+    const closure = (await closures(['lint/plugin.ts'])).get('lint/plugin.ts') ?? new Set();
+    expect(closure.has('lint/plugin.ts')).toBe(true);
+    expect([...closure].filter(path => path.startsWith('runners/') && path !== 'runners/ids.ts')).toEqual([]);
+  }, 60_000);
 });

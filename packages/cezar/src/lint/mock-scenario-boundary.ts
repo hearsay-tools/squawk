@@ -1,12 +1,37 @@
-import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parse } from '@babel/parser';
+import type { Node } from '@babel/types';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { child, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
+import { literalText, unwrapped } from './runner-id-branch.ts';
+import { repoRoot } from './source-rule.ts';
+
+/** The `script` of the object that `runners/<id>/mock.ts` exports: the runner's mock script. */
+export function mockScript(id: string, source: string): string {
+  for (const statement of parse(source, { sourceType: 'module', plugins: ['typescript'] }).program.body) {
+    if (statement.type !== 'ExportNamedDeclaration' || statement.declaration?.type !== 'VariableDeclaration') continue;
+    for (const { init } of statement.declaration.declarations) {
+      const object: Node | undefined = init ? unwrapped(init) : undefined;
+      if (object?.type !== 'ObjectExpression') continue;
+      for (const property of object.properties) {
+        if (property.type !== 'ObjectProperty' || property.computed || property.key.type !== 'Identifier' || property.key.name !== 'script') continue;
+        const script = literalText(property.value);
+        if (script !== undefined) return script;
+      }
+    }
+  }
+  throw new Error(`runners/${id}/mock.ts exports no object with a literal script.`);
+}
 
 /**
- * The mock script of every built-in runner, read from its definition's `mock` part, so a new
- * built-in runner cannot bypass the import guard. The rule reads the list directly: a lint run has
- * no registry, and a definition module imports only types and data.
+ * The mock script of every built-in runner, read from the source of its `runners/<id>/mock.ts`,
+ * so a new built-in runner cannot bypass the import guard. The rule parses the files instead of
+ * importing them: an import of a definition or `runners/built-in.ts` puts every runner into the
+ * lint plugin's import closure, and an edit to any runner file then relints the whole project.
  */
-export const RUNNER_MOCKS: ReadonlyMap<string, string> = new Map(BUILT_IN_RUNNERS.map(definition => [definition.id, definition.mock.script]));
+export const RUNNER_MOCKS: ReadonlyMap<string, string> = new Map(BUILT_IN_RUNNER_IDS.map(id =>
+  [id, mockScript(id, readFileSync(join(repoRoot, 'packages/cezar/src/runners', id, 'mock.ts'), 'utf8'))]));
 const REQUIRED_MOCKS = new Set([...RUNNER_MOCKS.values()].map(name => `packages/cezar/scripts/${name}`));
 
 const SHARED = ['agent-echo', 'autonomous', 'cezar-ask', 'cezar-done', 'cezar-tool', 'ci-wait',
