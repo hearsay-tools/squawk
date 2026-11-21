@@ -185,11 +185,9 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       // and the session closes at that park.
       const heldOpening = httpAck && variant === 'silent';
       const cell = async (release: () => void) => {
-        if (variant === 'silent' && runnerDefinition(runner).mock.promptResponseEndsTurn) {
-          await assertPromptResponseCompletion(runner); return;
-        }
         if (variant === 'silent' && exemptionFor('U22s', runner)) {
           expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
+          if (runnerDefinition(runner).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(runner);
           return;
         }
         retryAtOnce();
@@ -248,11 +246,9 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
 
       it(`${runner} U22r after a restart, a refusal queued for a closed session is delivered ${how}`, async () => {
         const exercise = async (releaseAck: () => void) => {
-        if (variant === 'silent' && runnerDefinition(runner).mock.promptResponseEndsTurn) {
-          await assertPromptResponseCompletion(runner); return;
-        }
           if (variant === 'silent' && exemptionFor('U22s', runner)) {
             expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
+            if (runnerDefinition(runner).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(runner);
             return;
           }
           let silence = variant === 'silent' ? silenceRefusals() : undefined;

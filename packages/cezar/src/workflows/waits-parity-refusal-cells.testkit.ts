@@ -80,10 +80,8 @@ export function refusalCells(runners: string[], it: typeof registerTest = regist
       it(`${runner} U20h a human message after an unanswered refusal nudge starts a fresh cycle (${path})`, async () => {
         if (exemptionFor('U20h', runner)) {
           expect(exemptionFor('U20h', runner)?.kind).toBe('capability-absent');
+          if (runnerDefinition(runner).mock.promptResponseEndsTurn) await assertPromptResponseCompletion(runner);
           return;
-        }
-        if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
-          await assertPromptResponseCompletion(runner); return;
         }
         const silence = silenceRefusals();
         const p = await workerParent(runner);

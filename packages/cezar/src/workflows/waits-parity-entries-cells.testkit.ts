@@ -90,9 +90,9 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
     const continued = (id: string) => (prompt: string) => expect(manager.continueRun(id, { text: prompt }).ok).toBe(true);
     /** A late acknowledgement needs a wire whose turn can end before its input is acknowledged. */
     const lateAck = (body: (release: () => void) => Promise<void>, match?: string) => {
-      if (runnerDefinition(runner).mock.promptResponseEndsTurn) return assertPromptResponseCompletion(runner);
       if (exemptionFor('U27', runner)) {
         expect(exemptionFor('U27', runner)?.kind).toBe('capability-absent');
+        if (runnerDefinition(runner).mock.promptResponseEndsTurn) return assertPromptResponseCompletion(runner);
         return Promise.resolve();
       }
       return withHeldAck(runner, body, match);

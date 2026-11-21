@@ -1,4 +1,5 @@
 import { runnerDefinition } from './runner-registry.ts';
+import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 /**
  * A15: an autonomous nudge whose acknowledgement never arrives is bounded at the no-wait nudge's
@@ -72,7 +73,9 @@ async function assertAcknowledged({ store, runId }: Fixture, cell: Cell): Promis
 
 /** Drive A15 on `backend`. `heldAck` is false on a wire whose acknowledgement is its own write. */
 export async function unacknowledgedNudgeBound(backend: string, { heldAck }: { heldAck: boolean }): Promise<void> {
-  if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+  const exemption = exemptionFor('A15', backend);
+  if (exemption && runnerDefinition(backend).mock.promptResponseEndsTurn) {
+    expect(exemption.kind).toBe('capability-absent');
     await assertPromptResponseCompletion(backend); return;
   }
   const semaphore = new WorkspaceSemaphore({ home: testHome() });

@@ -1,4 +1,5 @@
 import { runnerDefinition } from './runner-registry.ts';
+import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 /**
  * A13/A14: a refused autonomous nudge keeps its slot until the idle bound, then settles `waiting`
@@ -105,7 +106,9 @@ async function assertNudgeAdmitted({ store, runId }: Fixture, start: Start, cell
  *  `heldAck` is false on a wire whose held acknowledgement cannot leave a turn end behind it:
  *  Claude's stdin write is the acknowledgement, so holding it holds the turn itself. */
 export async function refusedNudgeIdleClose(backend: string, continuation: boolean, { refuses, heldAck }: { refuses: boolean; heldAck: boolean }): Promise<void> {
-  if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
+  const exemption = exemptionFor(continuation ? 'A14' : 'A13', backend);
+  if (exemption && runnerDefinition(backend).mock.promptResponseEndsTurn) {
+    expect(exemption.kind).toBe('capability-absent');
     await assertPromptResponseCompletion(backend); return;
   }
   const semaphore = new WorkspaceSemaphore({ home: testHome() });

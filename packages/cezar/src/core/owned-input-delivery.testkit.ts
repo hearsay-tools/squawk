@@ -1,4 +1,5 @@
 import { expect } from 'vitest';
+import { runnerDefinition } from './runner-registry.ts';
 import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -54,6 +55,7 @@ export function withHeldResponse(runner: string, body: (release: () => void, hel
 /** Inverse control for wires whose idle prompt response is the turn-completion frame.
  * Antigravity evidence: __fixtures__/prompt-*.ndjson. The mock holds only that response. */
 export async function assertPromptResponseCompletion(runner: string): Promise<void> {
+  expect(runnerDefinition(runner).mock.promptResponseEndsTurn).toBe(true);
   await withHeldAck(runner, async release => {
     await driveSeam(runner, 'baseline', { whileOpen: async (session, { v1 }) => {
       await waitFor(() => v1.some(event => event.type === 'turn-end'));
