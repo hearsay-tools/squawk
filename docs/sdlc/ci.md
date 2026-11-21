@@ -869,8 +869,9 @@ main commit can import those passes instead of running the same test files again
   group, but it never reads their results, and neither job is in the merge-queue roster:
   their failure never blocks a merge. The wait makes `refs/squeal/<sha>` exist before `main`
   moves to the group's commit, so a worktree that fast-forwards or rebases onto the new
-  `main` finds the results to import. It adds the export and publish time, about 2 minutes
-  at 0.1.582, to each queue run. With `shared.ref` in `squeal.config.json`, developers' Squeal daemons fetch the
+  `main` finds the results to import. It adds the export and publish time to each queue run:
+  about 2 minutes at 0.1.582; Squeal 0.1.588 cut `squeal ci export` on this repository's parts
+  from about 78 s to about 25 s (measured on a sandbox, not on a runner). With `shared.ref` in `squeal.config.json`, developers' Squeal daemons fetch the
   nearest published ref.
 - The shards and both Squeal jobs read Node from `.node-version` (one exact version), so the
   published results carry the environment developers run. Recording assumes nothing changes
