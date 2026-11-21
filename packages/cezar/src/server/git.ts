@@ -47,10 +47,12 @@ async function git(root: string, args: string[]): Promise<string> {
 const REPO_INFO_CACHE_MAX = 512;
 
 /** One Git answer with what it depends on: the config files Git read, and their signatures then. */
-interface RepoInfoRead { info: RepoInfo | null; configs: string[]; configsKey: string; keep: boolean }
+interface RepoInfoRead { info: RepoInfo | null; configs: string[]; configsKey: string | undefined; keep: boolean }
 const repoInfoCache = new Map<string, { stamp: string; read: Promise<RepoInfoRead> }>();
 
 const stampKey = (stamp: GitDirStamp | undefined) => stamp && `${stamp.kind}:${stamp.key}`;
+/** The config files' key, or undefined when one cannot be read (EACCES, EIO): then nothing is kept. */
+const readConfigsKey = (configs: readonly string[]) => configFilesKey(configs).catch(() => undefined);
 const copy = (info: RepoInfo | null) => info && { ...info };
 
 /**
@@ -67,7 +69,7 @@ export async function getRepoInfo(dir: string): Promise<RepoInfo | null> {
   const cached = repoInfoCache.get(dir);
   if (cached?.stamp === key) {
     const hit = await cached.read;
-    if (hit.keep && await configFilesKey(hit.configs) === hit.configsKey) return copy(hit.info);
+    if (hit.keep && await readConfigsKey(hit.configs) === hit.configsKey) return copy(hit.info);
   }
   const entry = { stamp: key, read: readKeepable(dir, stamp) };
   repoInfoCache.delete(dir);
@@ -96,12 +98,12 @@ async function gitConfigFiles(root: string): Promise<string[] | undefined> {
 async function readKeepable(dir: string, stamp: GitDirStamp): Promise<RepoInfoRead> {
   const reported = stamp.kind === 'repo' ? await gitConfigFiles(stamp.root) : [];
   const configs = [...new Set([...(stamp.kind === 'repo' ? stamp.configs : []), ...(reported ?? [])])].sort();
-  const configsKey = await configFilesKey(configs);
+  const configsKey = await readConfigsKey(configs);
   const { info, complete } = await readRepoInfo(dir);
   const explained = (info === null) === (stamp.kind === 'none');
-  const keep = reported !== undefined && complete && explained
+  const keep = reported !== undefined && configsKey !== undefined && complete && explained
     && stampKey(await readGitDirStamp(dir)) === stampKey(stamp)
-    && await configFilesKey(configs) === configsKey;
+    && await readConfigsKey(configs) === configsKey;
   return { info, configs, configsKey, keep };
 }
 

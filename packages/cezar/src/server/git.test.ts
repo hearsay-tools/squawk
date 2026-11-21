@@ -1,5 +1,5 @@
 import { ChildProcess, execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -231,6 +231,28 @@ describe('getRepoInfo — change-keyed cache', () => {
     expect((await getRepoInfo(dir))?.branch).toBe('main');
     g(dir, 'symbolic-ref', 'refs/heads/alias', 'refs/heads/other');
     expect((await getRepoInfo(dir))?.branch).toBe('other');
+  });
+
+  // A root user reads every file, so the unreadable path below needs an ordinary user.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('answers without keeping it when a watched config file cannot be read', async () => {
+    const locked = join(dir, 'locked');
+    mkdirSync(locked);
+    vi.stubEnv('GIT_CONFIG_SYSTEM', join(locked, 'gitconfig'));
+    chmodSync(locked, 0o000);
+    try {
+      expect((await getRepoInfo(dir))?.branch).toBe('main');
+      const spawn = spawned();
+      expect((await getRepoInfo(dir))?.branch).toBe('main');
+      expect(spawn).toHaveBeenCalled();
+      chmodSync(locked, 0o755);
+      expect((await getRepoInfo(dir))?.branch).toBe('main');
+      spawn.mockClear();
+      expect((await getRepoInfo(dir))?.branch).toBe('main');
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      chmodSync(locked, 0o755);
+      vi.unstubAllEnvs();
+    }
   });
 
   it('keeps null for a directory outside any repository until a repository appears', async () => {
