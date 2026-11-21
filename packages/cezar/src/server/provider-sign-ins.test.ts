@@ -25,7 +25,7 @@ it.each([true, false])('shows only sanitized startup causes through the API (saf
     expect(response.status).toBe(409);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.error).toBe(safe ? 'Antigravity personal sign-in could not start. Agent exited (code 1): Unknown flag uid [URL redacted] token=[redacted]' : 'Browser sign-in could not start. Check the installation and try again.');
+    expect(body).toEqual({ error: safe ? 'Antigravity personal sign-in could not start. Agent exited (code 1): Unknown flag uid [URL redacted] token=[redacted]' : 'Browser sign-in could not start. Check the installation and try again.' });
     expect(JSON.stringify(body)).not.toMatch(/accounts\.google|private-state|private-token/);
   } finally { loader.mockRestore(); }
 });
