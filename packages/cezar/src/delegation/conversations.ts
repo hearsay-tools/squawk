@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, DelegationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import { deliveryReceipts } from '../runs/outcome-commit.ts';
 import { ConversationIdInUseError, RunWriteRefusedError, type RunRecord, type RunStore } from '../runs/store.ts';
-import type { RunAccess, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
+import type { RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { reservedReplies } from './questions.ts';
@@ -92,7 +92,7 @@ function projectDelivery(store: RunStore, runId: string, message: ConversationMe
 }
 
 /** A request's outcome on one participant's transcript, once; a late reply gets its own projection. */
-function projectOutcome(store: Pick<import('../runs/store.ts').RunStore, 'appendEvent' | 'hasProjection'>, runId: string, outcome: RequestOutcome | undefined): void {
+function projectOutcome(store: RunEventLog, runId: string, outcome: RequestOutcome | undefined): void {
   if (!outcome) return;
   const projectionId = `request-outcome:${outcome.requestId}${outcome.status === 'replied-late' ? ':replied-late' : ''}`;
   if (!store.hasProjection(runId, projectionId)) store.appendEvent(runId, { type: 'request-outcome', projectionId, outcome });

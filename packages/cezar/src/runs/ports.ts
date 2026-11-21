@@ -162,6 +162,11 @@ export interface RunStoreEvents {
   off: EventEmitter['off'];
 }
 
+/** The repository identity a store learns after it opens. */
+export interface RunRepoHandle {
+  setRepoHandle: RunStore['setRepoHandle'];
+}
+
 /** Closing the store and writing it out. */
 export interface StoreHandle {
   close: RunStore['close'];
