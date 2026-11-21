@@ -532,9 +532,15 @@ function restorePiMessageEndError(value: unknown): void {
   }
 }
 
+/** The hints scripts/pi-retry-degraded-service.mjs prefixes so pi-ai retries the error. */
+const PI_RETRY_HINTS = [
+  '[cezar:retry-xai-degraded] Service unavailable: ',
+  '[cezar:retry-stream-closed] stream was interrupted: ',
+] as const;
+
 function restorePiDegradedServiceError(errorMessage: string): string {
-  const retryHint = '[cezar:retry-xai-degraded] Service unavailable: ';
-  return errorMessage.startsWith(retryHint) ? errorMessage.slice(retryHint.length) : errorMessage;
+  const retryHint = PI_RETRY_HINTS.find((hint) => errorMessage.startsWith(hint));
+  return retryHint ? errorMessage.slice(retryHint.length) : errorMessage;
 }
 
 function piTools(tools: readonly string[], bashAllowlist: readonly string[] | undefined): string[] {
