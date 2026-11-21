@@ -21,13 +21,13 @@
     "type": "item.delta",
     "itemId": "acp-item-2",
     "field": "reasoning",
-    "delta": "SKILL.md)\n- sk-cwd-agents (/work/"
+    "delta": "SKILL.md)\n- sk-cwd-agents (/work/project"
   },
   {
     "type": "item.delta",
     "itemId": "acp-item-2",
     "field": "reasoning",
-    "delta": "p5/project/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-"
+    "delta": "/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-"
   },
   {
     "type": "item.delta",
@@ -51,13 +51,13 @@
     "type": "item.delta",
     "itemId": "acp-item-2",
     "field": "reasoning",
-    "delta": "sk-gem-config/SKILL.md)\n- sk-gem-root (/tmp/agy-4"
+    "delta": "sk-gem-config/SKILL.md)\n- sk-gem-root (/work/gemini"
   },
   {
     "type": "item.delta",
     "itemId": "acp-item-2",
     "field": "reasoning",
-    "delta": "058/run/p5/gemini/skills/sk-gem-root/SKILL.md"
+    "delta": "/skills/sk-gem-root/SKILL.md"
   },
   {
     "type": "item.delta",
@@ -118,7 +118,7 @@
     "item": {
       "kind": "reasoning",
       "id": "acp-item-2",
-      "text": "Let's check the available skills listed in the system prompt:\n- sk-cwd-agent (/work/project/.agent/skills/sk-cwd-agent/SKILL.md)\n- sk-cwd-agents (/work/p5/project/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-gem-acp (/work/gemini/antigravity-acp/skills/sk-gem-acp/SKILL.md)\n- sk-gem-config (/work/gemini/config/skills/sk-gem-config/SKILL.md)\n- sk-gem-root (/tmp/agy-4058/run/p5/gemini/skills/sk-gem-root/SKILL.md)\n\nLet's check their names:\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n\nThe user request: \"List the names of every skill available to you whose name starts with \"sk-\", one per line, nothing else.\"\n\nLet's double-check all skills listed in the prompt:\n- agy-customizations\n- antigravity-guide\n- run-workflow\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n- swarm_monitor\n- swarm_pane\n\nSo the ones starting with \"sk-\" are:\nsk-cwd-agent\nsk-cwd-agents\nsk-gem-acp\nsk-gem-config\nsk-gem-root\n\nLet's output them one per line, nothing else."
+      "text": "Let's check the available skills listed in the system prompt:\n- sk-cwd-agent (/work/project/.agent/skills/sk-cwd-agent/SKILL.md)\n- sk-cwd-agents (/work/project/.agents/skills/sk-cwd-agents/SKILL.md)\n- sk-gem-acp (/work/gemini/antigravity-acp/skills/sk-gem-acp/SKILL.md)\n- sk-gem-config (/work/gemini/config/skills/sk-gem-config/SKILL.md)\n- sk-gem-root (/work/gemini/skills/sk-gem-root/SKILL.md)\n\nLet's check their names:\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n\nThe user request: \"List the names of every skill available to you whose name starts with \"sk-\", one per line, nothing else.\"\n\nLet's double-check all skills listed in the prompt:\n- agy-customizations\n- antigravity-guide\n- run-workflow\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n- swarm_monitor\n- swarm_pane\n\nSo the ones starting with \"sk-\" are:\nsk-cwd-agent\nsk-cwd-agents\nsk-gem-acp\nsk-gem-config\nsk-gem-root\n\nLet's output them one per line, nothing else."
     }
   },
   {

@@ -113,8 +113,10 @@ keyring timeout was recorded within …"). t3code reports that 1.5 ignores
   come with the first prompt. Modes are `default`, `accept-edits` and `plan`; `auto_edit` and
   `yolo` are gone, and `session/set_mode yolo` returns -32602 "Unknown mode: yolo"
   (`cli-modes.ndjson`). `configOptions` are `model`, `thought_level` (1.5.0: `thinking_level`)
-  and `mode`. The default model is `gemini-3.1-pro` with thinking `low`; the table adds
-  `gemini-4-neon`, `-carbon`, `-hydrogen` and `-argon`.
+  and `mode`. `models.currentModelId` is `gemini-3.1-pro-low` (the `model` option
+  `gemini-3.1-pro`, thinking `low`). The table offers `gemini-4-neon`, `-carbon`, `-hydrogen`
+  and `-argon`, `gemini-3.8-flash`, `3.7-flash` and `3.6-flash`, and `gemini-3.1-pro`; 1.5.0
+  also offered `3.5-flash` and no `gemini-4` model.
 - **Options** (`cli-config-options.ndjson`): `session/set_config_option` and `session/set_model`
   refuse an id outside the table with -32602 "Unknown model ID: …". A change also sends a
   `config_option_update` notification.
@@ -140,7 +142,7 @@ starts "⚠ agent executor error:" (1.5.0: "Agent execution error:") (`cli-confi
 | --- | --- | --- | --- |
 | `transport` | `stdio` | same | every `cli-*` fixture |
 | `sessionIdSource` | `native` | same | `session/new` returns an agent UUID (`cli-handshake.ndjson`) |
-| `systemPromptOnResume` | `resent` | **changes**: the prompt is saved with the session, and a resent one is added to it. `in-thread` describes this. | A plain `session/resume` in a new process answered the secret word; the word was only in the `session/new` request (`cli-resume-without-system-prompt.ndjson`). A resume that sent a different prompt answered both words, "ORCA-3, ORCA-4" (`cli-resume-changed-system-prompt.ndjson`). |
+| `systemPromptOnResume` | `resent` | **changes**: the prompt is saved with the session, and a resent one is added to the saved one, not put in its place. Neither value names this exactly. Resending duplicates the prompt, which is the case `in-thread` guards against: with `in-thread`, Squawk does not resend the skill prefix on a same-session resume. A changed prompt cannot replace the saved one; hearsay-tools/squawk#4060 chooses the value. | A plain `session/resume` in a new process answered the secret word; the word was only in the `session/new` request (`cli-resume-without-system-prompt.ndjson`). A resume that sent a different prompt answered both words, "ORCA-3, ORCA-4" (`cli-resume-changed-system-prompt.ndjson`). |
 | `inputDelivery.mode` | `steer` | same, with a new acknowledgement order | A second `session/prompt` during a command ends the **first** prompt with `end_turn` 4 ms later. The running work goes on, and the second prompt's response ends the turn; the answer obeyed the steer (`cli-midturn-prompt.ndjson`). 1.5.0 answered the steer early instead. |
 | `inputDelivery.consumption` | `unobservable` | same | no frame echoes the steer |
 | `inputDelivery.acknowledgement` | `response` | same field, other prompt: the steer's response is the end of the turn | `cli-midturn-prompt.ndjson` |
@@ -198,12 +200,13 @@ starts "⚠ agent executor error:" (1.5.0: "Agent execution error:") (`cli-confi
   `tools/call` carries `_meta` with the conversation's artifacts folder.
 - A server named `squawk` and one named `cezar_ci_<32 hex>` both completed calls, in two
   turns of one session (`cli-mcp-two-turn.ndjson`).
-- **The 64-character limit holds.** The server log said `encountered invalid tool
-  t65_aaaaaaaaaaaaaaa: tool name mcp_cezar_ci_<32 hex>_t65_aaaaaaaaaaaaaaa violates
-  ^[a-zA-Z0-9_-]{1,64}$` for the 65-character name. The CLI dropped that tool only. Its
-  64-character sibling (`mcp_cezar_ci_<32 hex>_t64_aaaaaaaaaaaaaa`) completed a call, and the
-  next turn worked. The 1.5.0 failure of the second prompt (`unexpected end of JSON input`) did
-  not occur with three tools and an API key; the personal OAuth, full-tool-list case was not
+- **The 64-character limit holds** (`cli-mcp-name-limit.ndjson`). The server log said
+  `encountered invalid tool t65_aaaaaaaaaaaaaaa: tool name mcp_cezar_ci_<32 hex>_t65_aaaaaaaaaaaaaaa
+  violates ^[a-zA-Z0-9_-]{1,64}$` for the 65-character name. The wire carries no error. The CLI
+  drops that tool only: asked to call it, the model answered "MISSING" and listed `echo` and
+  `t64_aaaaaaaaaaaaaa`, and no `tools/call` reached the server. The 64-character name
+  (`mcp_cezar_ci_<32 hex>_t64_aaaaaaaaaaaaaa`) completed a call in the next turn. The 1.5.0 failure of the second prompt
+  (`unexpected end of JSON input`) did not occur with three tools and an API key; the personal OAuth, full-tool-list case was not
   rerun. Keep the `squawk` alias.
 
 ### `_meta.antigravity`
@@ -650,6 +653,7 @@ what today's mapper makes of the frames (see
 | `cli-config-options.ndjson` | An unknown model refused by `session/set_config_option` and `session/set_model`, a valid change, and a provider 400 as "⚠ agent executor error:" text |
 | `cli-modes.ndjson` | `session/set_mode yolo` refused, `accept-edits` accepted |
 | `cli-mcp-two-turn.ndjson` | Two turns with MCP calls through `squawk` and `cezar_ci_<32 hex>` |
+| `cli-mcp-name-limit.ndjson` | A 65-character tool name dropped with no wire error; the 64-character one works |
 | `cli-prompt-command.ndjson` | A command with its permission request |
 | `cli-permission-reject.ndjson` | A denied command; the turn ends at once |
 | `cli-prompt-edit.ndjson` | `read_file` with no request, then `edit_file` with its request and diff |
