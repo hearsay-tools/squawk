@@ -13,6 +13,15 @@
          the light mark before first paint when the resolved theme is light. ThemeProvider keeps
          it in sync after that (applyFaviconTheme) — the swap must not need a reload. -->
     <link rel="icon" href="/cezarion-mark-dark.svg" />
+    <!-- Home-screen install. The manifest scopes the app to `/`, so opening another project stays
+         inside the app instead of showing browser chrome. iOS reads the apple-* tags and takes
+         its touch icon only from a PNG. theme-color paints the status bar area; the script below
+         sets a first guess and applyThemeColor() in src/lib/theme.ts sets the `--card` token. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/app-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#202224" />
     <title>cezar</title>
     <!-- Theme before first paint — no flash. Mirrors resolveTheme()/applyResolvedTheme() +
          applyFaviconTheme() in src/lib/theme.ts; keep the two in sync. Shares the legacy
@@ -30,6 +39,9 @@
           // The themed tab icon (#143) — same resolved value as the class above.
           var icon = document.querySelector('link[rel="icon"]')
           if (icon) icon.href = light ? '/cezarion-mark-light.svg' : '/cezarion-mark-dark.svg'
+          // The status bar color: --card in src/styles/index.css, until applyThemeColor() runs.
+          var themeColor = document.querySelector('meta[name="theme-color"]')
+          if (themeColor) themeColor.content = light ? '#ffffff' : '#202224'
         } catch (e) {
           // Storage or matchMedia unavailable — the default dark tokens already apply.
         }

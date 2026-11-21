@@ -295,6 +295,7 @@ import {
   isSafeAssetFilename,
   resolveGetRequest,
 } from './static-ui.ts';
+import { registerBrandFileRoutes } from './brand-file-routes.ts';
 export interface ServerDeps extends ActivityServerDeps {
   home: Home;
   /** Per-repository forge injection for embedded servers and tests. */
@@ -976,13 +977,7 @@ export function createApp(deps: ServerDeps) {
     });
   });
 
-  // The themed brand SVGs (#143): the sidebar lockup pair and the favicon pair. The cockpit
-  // picks light or dark by its RESOLVED theme, so both files of each pair must be served —
-  // a `<link media>` pair would follow the OS, which the stored theme can disagree with.
-  app.get('/cezarion-lockup-light.svg', staticFile('cezarion-lockup-light.svg', 'image/svg+xml'));
-  app.get('/cezarion-lockup-dark.svg', staticFile('cezarion-lockup-dark.svg', 'image/svg+xml'));
-  app.get('/cezarion-mark-light.svg', staticFile('cezarion-mark-light.svg', 'image/svg+xml'));
-  app.get('/cezarion-mark-dark.svg', staticFile('cezarion-mark-dark.svg', 'image/svg+xml'));
+  registerBrandFileRoutes(app, staticFile);
 
   // ---- meta ----------------------------------------------------------------
   // CORS — deliberately for /api/health ONLY. Health exposes no secrets beyond

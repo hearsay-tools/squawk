@@ -3,6 +3,7 @@ import * as React from 'react'
 import {
   LIGHT_MEDIA_QUERY,
   applyFaviconTheme,
+  applyThemeColor,
   applyResolvedTheme,
   readStoredTheme,
   resolveTheme,
@@ -46,6 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyResolvedTheme(document.documentElement, resolvedTheme)
     // Same resolved value drives the tab icon (#143), so ThemeToggle swaps it without a reload.
     applyFaviconTheme(resolvedTheme)
+    applyThemeColor(document.documentElement)
   }, [resolvedTheme])
 
   const setTheme = React.useCallback((next: Theme) => {

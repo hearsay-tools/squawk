@@ -81,3 +81,13 @@ export function applyFaviconTheme(resolved: ResolvedTheme): void {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (link) link.href = faviconHrefFor(resolved)
 }
+
+/** The phone's status bar area, from `<meta name="theme-color">`. It takes the resolved theme's
+ *  `--card` token: the color of the mobile top bar under the status bar, so the two read as one
+ *  surface. Call it after the root carries the theme class. index.html's pre-paint script sets a
+ *  first guess before the stylesheet loads. No-op without the meta tag or the token. */
+export function applyThemeColor(root: HTMLElement): void {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  const card = getComputedStyle(root).getPropertyValue('--card').trim()
+  if (meta && card) meta.content = card
+}
