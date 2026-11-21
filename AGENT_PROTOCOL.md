@@ -344,7 +344,7 @@ turn-path fact value also adds a shared unit test):
   definition's `mock` part names the mock script.
 - **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
 - **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
-  when the two lists differ. Only tests, testkits and dev scripts read `runners/ids.ts`.
+  when the two lists differ. Only tests, testkits, dev scripts and lint rules read `runners/ids.ts`.
   `cez/runner-ids-import` fails a production file that names it with a literal path (a static
   import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope.
 

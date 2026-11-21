@@ -442,7 +442,8 @@ runner does.
   (`completion-controls`); C2 fixed it.
 - **`runners/ids.ts`** (C3 review, then the owner on 2026-11-20). See decision 5 as amended. The
   lint rule `cez/runner-ids-import` covers non-test files in `packages/cezar/src`, except the
-  two runner-id lint rules, and catches literal paths only (see decision 5). The dev scripts `packages/cezar/scripts/parity-rows.ts` and
+  lint rules that read the ids (`runner-roster-literal`, `runner-id-branch`,
+  `mock-scenario-boundary`), and catches literal paths only (see decision 5). The dev scripts `packages/cezar/scripts/parity-rows.ts` and
   `.ai/scripts/mock-wire-evidence.ts` read the file and are outside the rule.
 - **Fixture runner** (D1 part 2). See [The parity kit](#the-parity-kit).
 - **The guard lists follow the folders** (D2a to D2c, after review round 1 of D2 found that a new
