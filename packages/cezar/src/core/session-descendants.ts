@@ -1,6 +1,6 @@
 import { ChildProcess, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { linuxBootId, parseProcStat, pidExists, processStartToken, statFields } from './process-stat.ts';
+import { exitedStat, linuxBootId, parseProcStat, pidExists, processStartToken, statFields } from './process-stat.ts';
 
 interface ProcessRow { pid: number; parent: number; token: string }
 
@@ -13,7 +13,7 @@ function processRows(): ProcessRow[] {
       try {
         const stat = readFileSync(`/proc/${name}/stat`, 'utf8');
         const parsed = parseProcStat(stat);
-        return parsed && parsed.state !== 'Z' ? [{ pid: Number(name), parent: Number(statFields(stat)[1]), token: boot ? `${boot}:${parsed.startToken}` : parsed.startToken }] : [];
+        return parsed && !exitedStat(statFields(stat)) ? [{ pid: Number(name), parent: Number(statFields(stat)[1]), token: boot ? `${boot}:${parsed.startToken}` : parsed.startToken }] : [];
       } catch { return []; } // A process can exit during the snapshot.
     });
   }

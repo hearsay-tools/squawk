@@ -3,6 +3,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 /** What the OMP runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */
 export const OMP_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   // childWork: subagent_event frames carry subagent_lifecycle.parentToolCallId of their task call
   // (omp-subagent-rows.ts).

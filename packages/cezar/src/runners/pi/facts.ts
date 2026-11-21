@@ -3,6 +3,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 /** What the Pi runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */
 export const PI_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   // childWork: Pi RPC has no child session; a task tool is a plain tool call on the parent
   // session (__fixtures__/rpc-lifecycle.expected.json).

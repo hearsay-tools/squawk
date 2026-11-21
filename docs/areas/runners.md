@@ -10,6 +10,11 @@
 
 Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/` reads a runner's declared facts (`RUNNER_FACTS`, `inputDelivery`, `systemPromptOnResume`; `AGENT_PROTOCOL.md` §1) to decide what a runner can do, never a runner id. Every backend implements `AgentRunner`/`AgentSession` and must pass both parity matrices: `ui-parity.test.ts` (mappers) and `harness-parity.test.ts` (runners, including each runner's `specSupport`). Runner prose never counts runners. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) must keep working. The zero-config default includes unrestricted `Bash`, and each runner's `specSupport.toolGrant` says whether its wire honors the list (open-mercato/cezar#430).
 
+Explicit-shutdown parity reads the declared `shutdownDescendants` scope: `process-group` retains
+the detached-survivor checks, while `observed-tree` requires observed detached children to die
+after Stop and end escalation (S27/S28). It makes no wider claim about abrupt leader exits
+before a snapshot (S30/S31). Antigravity declares `observed-tree`.
+
 ## Runner definitions
 
 Each runner is one definition, registered with one call

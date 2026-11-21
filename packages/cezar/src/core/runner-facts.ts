@@ -59,6 +59,9 @@ export interface RunnerFacts {
    * (hearsay-tools/squawk#1680).
    */
   readonly nativePermission: 'none' | 'in-turn' | 'after-turn';
+  /** Explicit shutdown reaps the process group, or also observed detached descendants.
+   * Abrupt leader exit before capture makes no detached-child guarantee. */
+  readonly shutdownDescendants: 'process-group' | 'observed-tree';
   /** How Squawk reaches the native wire. `stdio`: the stdin and stdout of the spawned process
    *  carry it. `http`: Squawk spawns a server, waits for it to listen, and talks to it over HTTP. */
   readonly transport: 'stdio' | 'http';

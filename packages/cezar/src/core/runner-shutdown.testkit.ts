@@ -251,7 +251,10 @@ function processGroups(backend: string, it: typeof registerTest = registerTest):
         await settled;
         // bound: wait for process-group cleanup and reaping on a loaded host.
         await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        expect(alive(setsid)).toBe(true);
+        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree') {
+          // bound: observed detached children have a separate TERM/KILL escalation after leader exit.
+          await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
+        } else expect(alive(setsid)).toBe(true);
       }, 'no-progress-leftover');
     }, 40_000);
 
@@ -265,7 +268,10 @@ function processGroups(backend: string, it: typeof registerTest = registerTest):
         await settled;
         // bound: wait for process-group cleanup and reaping on a loaded host.
         await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        expect(alive(setsid)).toBe(true);
+        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree') {
+          // bound: observed detached children have a separate TERM/KILL escalation after leader exit.
+          await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
+        } else expect(alive(setsid)).toBe(true);
       }, 'no-progress-leftover');
     }, 50_000);
 }

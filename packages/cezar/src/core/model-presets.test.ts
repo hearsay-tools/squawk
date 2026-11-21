@@ -12,6 +12,12 @@ describe('modelConflictsWithRunner', () => {
     expect(modelConflictsWithRunner('gpt-5.1-codex', 'codex')).toBe(false);
   });
 
+  it('accepts opaque native IDs even when they overlap another runner preset', () => {
+    for (const model of ['claude-opus-4-8', 'gpt-5.1-codex', 'anthropic/claude-opus-4-8', 'custom/model']) {
+      expect(modelConflictsWithRunner(model, 'antigravity')).toBe(false);
+    }
+  });
+
   it('rejects another runner\'s preset', () => {
     expect(modelConflictsWithRunner('opus', 'codex')).toBe(true);
     expect(modelConflictsWithRunner('gpt-5.1-codex', 'claude')).toBe(true);

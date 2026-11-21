@@ -3,6 +3,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 /** What the Claude runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */
 export const CLAUDE_FACTS = {
+  shutdownDescendants: 'process-group',
   skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   // childWork: a subagent's stream-json messages carry parent_tool_use_id (claude-ui-mapper.ts).
   // hookEvents: --include-hook-events streams each hook run (claude-cli-runner.ts).

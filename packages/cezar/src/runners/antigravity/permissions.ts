@@ -59,7 +59,7 @@ export function permissionPolicy(grant: ToolGrant, request: AcpPermissionRequest
   const mcp = antigravityMcpTool(request.toolCall);
   const native = mcp ? `${mcp.server}_${mcp.tool}` : antigravityNativeToolName(request.toolCall);
   const name = mcp ? native : tool.name ?? native;
-  const named = names === undefined || names.some(allowed => allowed === name || allowed === native || allowed.replace(/^mcp__/, '').replaceAll('__', '_') === native);
+  const named = names === undefined || names.some(allowed => allowed === name || allowed === native || (!!mcp && allowed === `mcp__${mcp.server}__${mcp.tool}`));
   const permitted = named && (!!mcp || tool.name !== 'Bash' || commandAllowed(tool.input, prefixes));
   // An unset grant leaves native approvals in control, as on the other adapters.
   if ((names === undefined && !prefixes.length) || (!permitted && approvalGate)) return undefined;

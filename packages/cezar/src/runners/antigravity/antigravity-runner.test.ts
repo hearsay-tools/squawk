@@ -263,3 +263,13 @@ it.each(['Read', 'Bash'])('requires a server-qualified grant for an MCP tool nam
   expect(permissionPolicy({ kind: 'explicit', tools: [`external_${name}`], bashAllowlist: ['git status'] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
   expect(permissionPolicy({ kind: 'inherited', tools: [`mcp__external__${name}`] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
 });
+
+it('never lets an MCP grant authorize a colliding native shell name', () => {
+  const request: AcpPermissionRequest = { sessionId: 'session',
+    toolCall: { toolCallId: 'cmd', title: 'run_command', kind: 'execute', rawInput: { CommandLine: 'git status' } },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] };
+  expect(permissionPolicy({ kind: 'explicit', tools: ['mcp__run__command'] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
+  for (const name of ['run_command', 'Bash']) {
+    expect(permissionPolicy({ kind: 'explicit', tools: [name] }, request)).toEqual({ outcome: 'selected', optionId: 'allow' });
+  }
+});
