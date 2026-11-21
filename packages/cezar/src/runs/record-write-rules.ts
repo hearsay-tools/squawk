@@ -30,7 +30,7 @@ import type { AgentInput, ConversationState, DelegationState, RunPullRequest } f
 import { redactSecrets } from '../core/secret-redaction.ts';
 import { ConversationIdInUseError } from './conversation-identity.ts';
 import { mergePullRequests } from './pull-requests.ts';
-import { applyExit } from './run-exits.ts';
+import { applyExit, type RunExitId } from './run-exits.ts';
 import {
   ISSUE_URL_RE, PR_URL_RE, refUrlNumber, referencedPrDeclaration, rescopeRun, resolveIssueReference, resolveReferencedRef,
   trackReferencedIssues, trackReferencedPrs,
@@ -78,12 +78,13 @@ interface Writes {
     peek(id: string): RunRecord | undefined; redact(text: string): string;
   };
   pullRequests: { path: 'pullRequests'; run: RunRecord; entries: readonly RunPullRequest[]; handle: RepoHandle | null | undefined; changed: boolean };
-  archiveFields: { path: 'archiveFields'; run: RunRecord; archived: boolean; now: string };
+  archiveFields: { path: 'archiveFields'; run: RunRecord; archived: boolean; now: string; exit?: RunExitId };
   stepUpdate: { path: 'stepUpdate'; patch: StepPatch; redact(text: string): string };
 }
 /** An update: `run` is the held record, and on a durable save the staged copy from `assign` on.
- *  `archived` is the archive flag `restore` takes off the patch. */
-type UpdateWrite = { path: 'durableUpdate' | 'debouncedUpdate'; run: RunRecord; patch: RecordPatch; archived: boolean | undefined; hooks: UpdateHooks };
+ *  `archived` is the archive flag `restore` takes off the patch. `exit` is the run exit the write
+ *  applies, if any: the caller's, or `withdraw-hold` when the durable archive withdraws a hold. */
+type UpdateWrite = { path: 'durableUpdate' | 'debouncedUpdate'; run: RunRecord; patch: RecordPatch; archived: boolean | undefined; hooks: UpdateHooks; exit?: RunExitId | undefined };
 
 type RecordWriteRule = {
   id: string;
@@ -147,8 +148,8 @@ export const RECORD_WRITE_RULES: readonly RecordWriteRule[] = [
     'Only a commit creates an action, because the action and its archive must be durable: updateRun routes an opted-in Done and option changes to a commit (hearsay-tools/cezarion#2324). The debounced save only retires one (retire-completion-action).'),
   // Both update saves resolve an edited task alike (hearsay-tools/cezarion#2323).
   rule('task-references', UPDATES, ({ run, patch, hooks }) => { if (patch.task !== undefined) resolveEditedTaskRefs(run, hooks.repoHandle); }),
-  rule('archive-fields', ['durableUpdate'], ({ run, archived }) => {
-    if (archived !== undefined) stageArchiveFields(run, archived, new Date().toISOString());
+  rule('archive-fields', ['durableUpdate'], (write) => {
+    if (write.archived !== undefined) write.exit = stageArchiveFields(write.run, write.archived, new Date().toISOString()) ?? write.exit;
   }, 'The durable save sets the archive fields on its copy, and its commit queues the transcript compression. The debounced save archives through archive-or-touch.'),
   rule('archive-or-touch', ['debouncedUpdate'], ({ run, archived, hooks }) => {
     if (archived !== undefined) hooks.archive(run, archived);
@@ -166,7 +167,7 @@ export const RECORD_WRITE_RULES: readonly RecordWriteRule[] = [
     run.archivedAt = archived ? now : undefined;
     if (!archived) run.manualUnarchivedAt = now;
   }),
-  rule('withdraw-hold', ['archiveFields'], ({ run, archived }) => { if (archived) withdrawHold(run); }),
+  rule('withdraw-hold', ['archiveFields'], (write) => { if (write.archived && withdrawHold(write.run)) write.exit = 'withdraw-hold'; }),
   rule('clear-pin', ['archiveFields'], ({ run, archived }) => { if (archived) clearPin(run); }),
   // The ledger is staged before its recipient input, also when both are the same run.
   rule('redact-messages', ['conversation'], (write) => {
@@ -219,8 +220,10 @@ export function stageLoaded(run: RunRecord): void {
   runRules<'loaded'>({ path: 'loaded', run });
 }
 
-export function stageDurableUpdate(run: RunRecord, patch: RecordPatch, hooks: UpdateHooks): RunRecord {
-  return runRules<'durableUpdate'>({ path: 'durableUpdate', run, patch, archived: undefined, hooks }).run;
+/** The staged record, and the exit it applied: `exit`, or `withdraw-hold` (UpdateWrite). */
+export function stageDurableUpdate(run: RunRecord, patch: RecordPatch, hooks: UpdateHooks, exit?: RunExitId): { run: RunRecord; exit: RunExitId | undefined } {
+  const write = runRules<'durableUpdate'>({ path: 'durableUpdate', run, patch, archived: undefined, hooks, exit });
+  return { run: write.run, exit: write.exit };
 }
 
 export function stageDebouncedUpdate(run: RunRecord, patch: RecordPatch, hooks: UpdateHooks): void {
@@ -229,6 +232,34 @@ export function stageDebouncedUpdate(run: RunRecord, patch: RecordPatch, hooks: 
 
 export function stageStepUpdate(patch: StepPatch, redact: (text: string) => string): StepPatch {
   return runRules<'stepUpdate'>({ path: 'stepUpdate', patch, redact }).patch;
+}
+
+/** The run totals its steps add up to after a step update: tokens, the directional token split
+ *  once every started agent step reported both sides, and the cost. */
+export function stepTotals(steps: readonly StepState[]): Pick<RunRecord, 'tokensUsed' | 'inputTokens' | 'outputTokens' | 'costUsd'> {
+  const startedAgentSteps = steps.filter((candidate) => candidate.kind === 'agent' && candidate.iterations > 0);
+  const directionalComplete =
+    startedAgentSteps.length > 0 &&
+    startedAgentSteps.every(
+      (candidate) =>
+        candidate.usageInvocationsStarted !== undefined &&
+        candidate.usageInvocationsObserved !== undefined &&
+        candidate.usageInvocationsObserved > 0 &&
+        candidate.usageInvocationsStarted === candidate.usageInvocationsObserved &&
+        candidate.usageTurnsStarted !== undefined &&
+        candidate.usageTurnsRecorded !== undefined &&
+        candidate.usageTurnsStarted > 0 &&
+        candidate.usageTurnsStarted === candidate.usageTurnsRecorded &&
+        candidate.inputTokens !== undefined &&
+        candidate.outputTokens !== undefined,
+    );
+  const cost = steps.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
+  return {
+    tokensUsed: steps.reduce((sum, s) => sum + s.tokensUsed, 0),
+    inputTokens: directionalComplete ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.inputTokens ?? 0), 0) : undefined,
+    outputTokens: directionalComplete ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.outputTokens ?? 0), 0) : undefined,
+    costUsd: steps.some((step) => step.costUsd !== undefined) ? cost : undefined,
+  };
 }
 
 export function stageConversation(staged: Map<string, RunRecord>, root: RunRecord, state: ConversationState,
@@ -240,8 +271,9 @@ export function stagePullRequests(run: RunRecord, entries: readonly RunPullReque
   return runRules<'pullRequests'>({ path: 'pullRequests', run, entries, handle, changed: false }).changed;
 }
 
-export function stageArchiveFields(run: RunRecord, archived: boolean, now: string): void {
-  runRules<'archiveFields'>({ path: 'archiveFields', run, archived, now });
+/** The exit the archive applied: `withdraw-hold` when it withdrew a usage-limit hold. */
+export function stageArchiveFields(run: RunRecord, archived: boolean, now: string): RunExitId | undefined {
+  return runRules<'archiveFields'>({ path: 'archiveFields', run, archived, now }).exit;
 }
 
 /** The one stale-resume rule, on every write path (hearsay-tools/cezarion#2322): a resume time is
@@ -346,15 +378,17 @@ export function redactPatch(
  * that route, and a user who archives fifty finished tasks has resigned from all fifty.
  *
  * The engine needs no telling: its timer re-reads the record before it fires and no sweep re-arms
- * an archived run, so a cleared field is the whole cancellation.
+ * an archived run, so a cleared field is the whole cancellation. True when it withdrew a hold.
  */
-function withdrawHold(run: RunRecord): void {
+function withdrawHold(run: RunRecord): boolean {
   // A withdrawn appointment settles the run failed with its kept error (hearsay-tools/cezarion#1236),
   // the state a usage-limited run was in before it waited.
-  if (isUsageLimitHold(run)) Object.assign(run, applyExit(run, 'withdraw-hold'));
+  const held = isUsageLimitHold(run);
+  if (held) Object.assign(run, applyExit(run, 'withdraw-hold'));
   run.autoResumeAt = undefined;
   run.autoResumeAttempts = undefined;
   run.autoResumeReason = undefined;
+  return held;
 }
 
 /**

@@ -27,6 +27,12 @@ function commit(run: RunRecord, previous?: RunRecord, blocker?: string) {
   }).get(run.id)!;
 }
 
+/** The two update saves, each answering the record it wrote: the durable save's staged copy, or
+ *  the held record the debounced save changed. */
+type Update = (run: RunRecord, patch: Parameters<typeof stageDurableUpdate>[1], callbacks: Parameters<typeof stageDurableUpdate>[2]) => RunRecord;
+const durableUpdate: Update = (run, patch, callbacks) => stageDurableUpdate(run, patch, callbacks).run;
+const debouncedUpdate: Update = (run, patch, callbacks) => { stageDebouncedUpdate(run, patch, callbacks); return run; };
+
 afterEach(() => vi.unstubAllEnvs());
 
 describe('record write paths without a database', () => {
@@ -82,15 +88,15 @@ describe('record write paths without a database', () => {
     expect(commit(run).completionAction).toBeUndefined();
   });
 
-  it.each([stageDurableUpdate, stageDebouncedUpdate])('redacts patches and accumulates PRs on %s', stage => {
+  it.each([['durable', durableUpdate], ['debounced', debouncedUpdate]] as const)('redacts patches and accumulates PRs on the %s update', (_save, stage) => {
     const run = makeRunRecord({ referencedIssueNumberSeeded: true });
-    const next = stage(run, { title: 'secret', titleSummary: 'secret', error: 'secret', issueNumber: 7, pullRequestUrl: url }, hooks()) ?? run;
+    const next = stage(run, { title: 'secret', titleSummary: 'secret', error: 'secret', issueNumber: 7, pullRequestUrl: url }, hooks());
     expect(next).toMatchObject({ title: '[REDACTED]', titleSummary: '[REDACTED]', error: '[REDACTED]', issueNumber: 7 });
     expect(next.referencedIssueNumberSeeded).toBeUndefined();
     expect(next.pullRequests).toEqual([{ number: 42, url, source: 'created' }]);
   });
 
-  it.each([stageDurableUpdate, stageDebouncedUpdate])('restores before patch mutation on %s', stage => {
+  it.each([['durable', durableUpdate], ['debounced', debouncedUpdate]] as const)('restores before patch mutation on the %s update', (_save, stage) => {
     const run = makeRunRecord({ archived: true });
     const before = { ...run };
     const callbacks = hooks();
@@ -103,8 +109,8 @@ describe('record write paths without a database', () => {
     const run = makeRunRecord({ referencedPrCandidates: [url], referencedIssueCandidates: [issue], autoResumeAt: at });
     const before = structuredClone(run);
     const log: string[] = [];
-    const stage = debounced ? stageDebouncedUpdate : stageDurableUpdate;
-    const next = stage(run, { task: `edited ${url} ${issue}`, status: RUN_STATUS.running }, hooks(log)) ?? run;
+    const stage = debounced ? debouncedUpdate : durableUpdate;
+    const next = stage(run, { task: `edited ${url} ${issue}`, status: RUN_STATUS.running }, hooks(log));
     expect(log).toEqual(debounced ? ['touch'] : []);
     expect(next.referencedPullRequestUrl).toBe(url);
     expect(next.referencedIssueUrl).toBe(issue);

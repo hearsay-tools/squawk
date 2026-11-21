@@ -3,7 +3,8 @@ import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
 import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
-import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
+import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, stepTotals, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
+import { publishRunWrite, RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
 import { workerDeletionProof } from './worker-deletion-proof.ts';
 import { recordedHolders, workerResourceAuthorized } from './worker-resource-holders.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
@@ -538,6 +539,9 @@ export class RunStore extends EventEmitter {
   private persistence: RunStorePersistence | undefined;
   /** Runs whose held record is ahead of its row; the next save or commit writes them. */
   private readonly dirty = new Set<string>();
+  /** The typed lifecycle events, published beside each emitter event (lifecycle.ts). */
+  private readonly published = new RunLifecycle();
+  readonly lifecycle: RunLifecycleSource = this.published;
   /** The lifecycle events run exits write (B12). */
   private readonly exitEvents = new ExitEvents((id, event) => this.appendEvent(id, event));
   /** Every worker's process scope (ADR 0032): spawn sites, Continue and destroy reach it here. */
@@ -1025,7 +1029,7 @@ export class RunStore extends EventEmitter {
    *  verdict reads (hearsay-tools/cezarion#1301). */
   republish(id: string): void {
     const run = this.peek(id);
-    if (run) this.emit('run', run, 'live-release');
+    if (run) { this.published.publish('run.updated', { run, before: snapshotRun(run), source: 'live-release' }); this.emit('run', run, 'live-release'); }
   }
 
   /** Release `holder`'s pin. The run leaves memory at the next sweep once nothing else holds it. */
@@ -1052,8 +1056,9 @@ export class RunStore extends EventEmitter {
       return !summary || namesForeignReference(summary, handle);
     }) ?? [];
     for (const run of [...this.held.values()]) {
+      const before = snapshotRun(run);
       if (rescopeRun(run, this.repoHandle)) {
-        this.touch(run);
+        this.touch(run, before);
         healed = true;
       }
     }
@@ -1065,7 +1070,7 @@ export class RunStore extends EventEmitter {
       // `decodeCold` already scoped it with the handle just armed; write it when that changed it.
       if (!run || !this.storedScopeDiffers(row, run)) continue;
       this.holdDecoded(run);
-      this.touch(run);
+      this.touch(run, snapshotRun(decodeRunRow(row.data)?.run ?? run));
       healed = true;
     }
     // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
@@ -1517,7 +1522,7 @@ export class RunStore extends EventEmitter {
     if (this.db && !this.claimFamilies([run.id]).has(run.id)) throw new RunWriteRefusedError(run.id, 'foreign');
     this.held.set(run.id, run);
     this.pruneOldRuns();
-    this.touch(run);
+    this.touch(run, undefined);
     return run;
   }
 
@@ -1756,15 +1761,15 @@ export class RunStore extends EventEmitter {
     if (!run) return { committed: false, answered: [], settled: [] };
     const staged = applyOutcomes(run, Array.isArray(outcomes) ? outcomes : [outcomes as RunOutcome], deps);
     if (!staged.changed) return { committed: false, answered: [], settled: [] };
-    try { this.commitIndex(new Map([[id, staged.next]])); }
+    try { this.commitIndex(new Map([[id, staged.next]]), undefined, { exits: new Map([[id, staged.exit]]) }); }
     catch (error) {
       if (!opts.bestEffort) throw error;
       console.warn(`[hsq] outcome checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
       const live = this.record(id);
       if (!live) return { committed: false, answered: staged.answered, settled: staged.settled };
-      for (const key of Object.keys(live) as Array<keyof RunRecord>) if (!(key in staged.next)) delete live[key];
-      Object.assign(live, staged.next);
-      this.touch(live);
+      const before = snapshotRun(live);
+      replaceRecord(live, staged.next);
+      this.touch(live, before, staged.exit);
       return { committed: false, answered: staged.answered, settled: staged.settled };
     }
     return { committed: true, answered: staged.answered, settled: staged.settled };
@@ -1828,7 +1833,7 @@ export class RunStore extends EventEmitter {
       stageConversation(staged, root, conversation.state, { recipientRunId: id, input: conversation.input },
         runId => this.peek(runId), text => this.redactText(text));
     }
-    this.commitIndex(staged);
+    this.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
   }
 
   private workerResultsDir(parentId: string, write = false): string { return workerResultsDirectory(write ? this.writeDir(parentId) : this.sourceDataDir(parentId), parentId, write); }
@@ -1901,12 +1906,15 @@ export class RunStore extends EventEmitter {
    * changing held objects or notifying subscribers. On failure retain all pending state; flush()
    * remains best-effort.
    */
-  private commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: CommitSource): void {
+  private commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: CommitSource,
+    write: { before?: ReadonlyMap<string, Readonly<RunRecord>>; exits?: ReadonlyMap<string, RunExitId | undefined> } = {}): void {
+    const exits = new Map(write.exits);
     const staged = stageCommit(input, {
       peek: id => this.peek(id),
       completionArchiveBlocker: run => this.completionArchiveBlocker(run),
-      stageArchive: (staged, run, archived) => this.stageArchive(staged, run, archived),
+      stageArchive: (staged, run, archived) => this.stageArchive(staged, run, archived, exits),
     });
+    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined]));
     if (!this.db) throw this.openFailure ?? new Error('runs database unavailable: nothing can be saved');
     this.assertWritable(staged);
     this.persist(staged);
@@ -1917,18 +1925,14 @@ export class RunStore extends EventEmitter {
       if (!next) { this.held.delete(id); continue; }
       this.committing.add(id);
       const current = this.held.get(id);
-      if (current) {
-        for (const key of Object.keys(current) as Array<keyof RunRecord>) {
-          if (!(key in next)) delete current[key];
-        }
-        Object.assign(current, next);
-      }
+      if (current) replaceRecord(current, next);
       else this.held.set(id, next);
     }
     try {
       for (const id of staged.keys()) {
         const run = this.held.get(id);
-        if (run) this.emit('run', run, source); else this.emit('deleted', id);
+        if (run) { publishRunWrite(this.published, run, before.get(id), source, exits.get(id)); this.emit('run', run, source); }
+        else { this.published.publish('run.deleted', { runId: id }); this.emit('deleted', id); }
       }
     } finally {
       for (const id of staged.keys()) this.committing.delete(id);
@@ -1952,7 +1956,7 @@ export class RunStore extends EventEmitter {
 
   /** One archive write for manual actions, merge observations, completion, and sweeps.
    * Archiving files history away; it never stops a process or removes a worktree. */
-  private stageArchive(staged: Map<string, RunRecord | null>, root: RunRecord, archived: boolean): void {
+  private stageArchive(staged: Map<string, RunRecord | null>, root: RunRecord, archived: boolean, exits?: Map<string, RunExitId | undefined>): void {
     const ids = root.delegation?.role === 'worker' ? [root.id] :
       [root.id, ...new Set([...(this.db?.listIdsByParent(root.id) ?? []), ...this.listWorkersOf(root.id).map(run => run.id)])];
     const now = new Date().toISOString();
@@ -1961,7 +1965,8 @@ export class RunStore extends EventEmitter {
       if (!member) continue;
       if (!archived) { this.compressor.cancel(id); restoreHistory(this.dataDir, id); }
       const next = { ...member, archiveBlocker: undefined };
-      archiveFields(next, archived, now);
+      const exit = archiveFields(next, archived, now);
+      if (exit) exits?.set(id, exit);
       staged.set(id, next);
     }
   }
@@ -2058,10 +2063,10 @@ export class RunStore extends EventEmitter {
     // Redacted first: a step the exit settles takes the run's error.
     const redacted = this.redactPatch(extras) as RunPatch;
     let moved: RunRecord | undefined;
-    if (!guarded) moved = this.writeRun(id, run, applyExit(run, exit, redacted, call), exitDurability(exit, run));
+    if (!guarded) moved = this.writeRun(id, run, applyExit(run, exit, redacted, call), exitDurability(exit, run), exit);
     else {
       const input = { ...run, ...redacted };
-      this.commitIndex(new Map([[id, { ...(spec.settle?.(input, { ...call, now: new Date().toISOString() }) ?? input), ...applyExit(run, exit, {}, call) }]]));
+      this.commitIndex(new Map([[id, { ...(spec.settle?.(input, { ...call, now: new Date().toISOString() }) ?? input), ...applyExit(run, exit, {}, call) }]]), undefined, { exits: new Map([[id, exit]]) });
       moved = this.peek(id);
     }
     if (event) this.exitEvents.write(id, event);
@@ -2081,16 +2086,18 @@ export class RunStore extends EventEmitter {
 
   /** One update of the held record `run`: committed at once, or written to the record for the next
    *  save. A debounced write is best-effort, so a locked database cannot stop cleanup. */
-  private writeRun(id: string, run: RunRecord, patch: RecordPatch, durability: ExitDurability): RunRecord | undefined {
+  private writeRun(id: string, run: RunRecord, patch: RecordPatch, durability: ExitDurability, exit?: RunExitId): RunRecord | undefined {
+    const before = snapshotRun(run);
     const hooks = {
       redact: (text: string) => this.redactText(text),
       repoHandle: this.repoHandle,
       restore: () => restoreHistory(this.dataDir, id),
-      archive: (record: RunRecord, archived: boolean) => this.applyArchived(record, archived),
-      touch: (record: RunRecord) => this.touch(record),
+      archive: (record: RunRecord, archived: boolean) => this.applyArchived(record, archived, before, exit),
+      touch: (record: RunRecord) => this.touch(record, before, exit),
     };
     if (durability === 'committed') {
-      this.commitIndex(new Map([[id, stageDurableUpdate(run, patch, hooks)]]));
+      const staged = stageDurableUpdate(run, patch, hooks, exit);
+      this.commitIndex(new Map([[id, staged.run]]), undefined, { before: new Map([[id, before]]), exits: new Map([[id, staged.exit]]) });
       return this.record(id);
     }
     stageDebouncedUpdate(run, patch, hooks);
@@ -2104,40 +2111,19 @@ export class RunStore extends EventEmitter {
   addStep(runId: string, step: Pick<StepState, 'id' | 'name' | 'kind' | 'synthetic' | 'continuesStepId'>): void {
     const run = this.record(runId);
     if (!run || run.steps.some((s) => s.id === step.id)) return;
-    run.steps.push({ ...step, status: 'pending', iterations: 0, tokensUsed: 0 });
-    this.touch(run);
+    const before = snapshotRun(run);
+    run.steps = [...run.steps, { ...step, status: 'pending', iterations: 0, tokensUsed: 0 }];
+    this.touch(run, before);
   }
   updateStep(runId: string, stepId: string, patch: Partial<Omit<StepState, 'id'>>): void {
     const run = this.record(runId);
     const step = run?.steps.find((s) => s.id === stepId);
     if (!run || !step) return;
-    Object.assign(step, stageStepUpdate(patch, text => this.redactText(text)));
-    run.tokensUsed = run.steps.reduce((sum, s) => sum + s.tokensUsed, 0);
-    const startedAgentSteps = run.steps.filter((candidate) => candidate.kind === 'agent' && candidate.iterations > 0);
-    const directionalComplete =
-      startedAgentSteps.length > 0 &&
-      startedAgentSteps.every(
-        (candidate) =>
-          candidate.usageInvocationsStarted !== undefined &&
-          candidate.usageInvocationsObserved !== undefined &&
-          candidate.usageInvocationsObserved > 0 &&
-          candidate.usageInvocationsStarted === candidate.usageInvocationsObserved &&
-          candidate.usageTurnsStarted !== undefined &&
-          candidate.usageTurnsRecorded !== undefined &&
-          candidate.usageTurnsStarted > 0 &&
-          candidate.usageTurnsStarted === candidate.usageTurnsRecorded &&
-          candidate.inputTokens !== undefined &&
-          candidate.outputTokens !== undefined,
-      );
-    run.inputTokens = directionalComplete
-      ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.inputTokens ?? 0), 0)
-      : undefined;
-    run.outputTokens = directionalComplete
-      ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.outputTokens ?? 0), 0)
-      : undefined;
-    const cost = run.steps.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
-    run.costUsd = run.steps.some((step) => step.costUsd !== undefined) ? cost : undefined;
-    this.touch(run);
+    const before = snapshotRun(run), next = { ...step, ...stageStepUpdate(patch, text => this.redactText(text)) };
+    // Replaced, never changed in place, so `before` keeps the steps as they were.
+    run.steps = run.steps.map((candidate) => candidate === step ? next : candidate);
+    Object.assign(run, stepTotals(run.steps));
+    this.touch(run, before);
   }
 
   listArchiveOnMergeCandidates(afterSeq = 0, limit = 32): Array<{ id: string; seq: number }> {
@@ -2222,10 +2208,10 @@ export class RunStore extends EventEmitter {
     if (restoredAt && merged.every(pr => Date.parse(pr.mergedAt) <= restoredAt)) return false;
     const now = new Date().toISOString();
     if (merged.some(pr => Date.parse(pr.mergedAt) > Date.parse(now))) return false;
-    const staged = new Map<string, RunRecord | null>();
-    this.stageArchive(staged, family[0]!, true);
+    const staged = new Map<string, RunRecord | null>(), exits = new Map<string, RunExitId | undefined>();
+    this.stageArchive(staged, family[0]!, true, exits);
     staged.get(snapshot.rootId)!.autoArchive = { reason: 'pull-requests-merged', archivedAt: now, fingerprint: current.fingerprint, pullRequests: merged };
-    this.commitIndex(staged);
+    this.commitIndex(staged, undefined, { exits });
     for (const id of staged.keys()) this.compressor.enqueue(id);
     return true;
   }
@@ -2239,23 +2225,22 @@ export class RunStore extends EventEmitter {
 
   /** Parent + owned workers; returns how many records flipped `archived`. */
   private applyArchivedCascade(run: RunRecord, archived: boolean): number {
-    const staged = new Map<string, RunRecord | null>();
-    this.stageArchive(staged, run, archived);
+    const staged = new Map<string, RunRecord | null>(), exits = new Map<string, RunExitId | undefined>();
+    this.stageArchive(staged, run, archived, exits);
     let changed = 0;
     for (const [id, next] of staged) {
       if (next && this.peek(id)?.archived !== archived) changed++;
       if (next) next.completionAction = undefined; // an explicit filing/restoration retires pending work
     }
-    this.commitIndex(staged);
+    this.commitIndex(staged, undefined, { exits });
     return changed;
   }
 
-  private applyArchived(run: RunRecord, archived: boolean): boolean {
+  private applyArchived(run: RunRecord, archived: boolean, before = snapshotRun(run), exit?: RunExitId): boolean {
     const changed = run.archived !== archived;
     // Transcript first: a restore throw aborts with the record unchanged (#818 S3).
     this.syncTranscriptForm(run.id, archived);
-    archiveFields(run, archived, new Date().toISOString());
-    this.touch(run);
+    this.touch(run, before, archiveFields(run, archived, new Date().toISOString()) ?? exit);
     return changed;
   }
 
@@ -2329,16 +2314,14 @@ export class RunStore extends EventEmitter {
    *  Every active status is pinnable. Archived requests clear stale metadata instead, so a
    *  late click racing archive cannot leave a hidden pin that reappears on unarchive. */
   setPinned(id: string, pinned: boolean): RunRecord | undefined {
-    const run = this.record(id);
-    if (!run) return undefined;
-    if (pinned && !run.archived) {
-      run.pinned = true;
-      run.pinnedAt = new Date().toISOString();
-    } else {
-      clearPin(run);
-    }
-    this.touch(run);
-    return run;
+    return this.change(id, (run) => {
+      if (pinned && !run.archived) {
+        run.pinned = true;
+        run.pinnedAt = new Date().toISOString();
+      } else {
+        clearPin(run);
+      }
+    });
   }
 
   /** Bulk-archive finished runs (#780). `isSweepable` decides which; `archived` counts every
@@ -2377,11 +2360,7 @@ export class RunStore extends EventEmitter {
    *  updated record rides the existing `run` SSE with no new event. Idempotent by
    *  design: opening an already-read thread just re-stamps a later `seenAt`. */
   setRead(id: string): RunRecord | undefined {
-    const run = this.record(id);
-    if (!run) return undefined;
-    run.seenAt = new Date().toISOString();
-    this.touch(run);
-    return run;
+    return this.change(id, (run) => { run.seenAt = new Date().toISOString(); });
   }
 
   /** Mark one run as UNread (#775): drop the read receipt so the run rejoins the unread
@@ -2398,10 +2377,16 @@ export class RunStore extends EventEmitter {
    *  the marker. WHETHER the action means anything for a given run is UI policy, and lives
    *  in the cockpit's `runActionFlags` — the same split the rest of the store keeps. */
   setUnread(id: string): RunRecord | undefined {
+    return this.change(id, (run) => { delete run.seenAt; });
+  }
+
+  /** A debounced write of the held record `id`: `apply` changes it in place, then `touch` saves it. */
+  private change(id: string, apply: (run: RunRecord) => void): RunRecord | undefined {
     const run = this.record(id);
     if (!run) return undefined;
-    delete run.seenAt;
-    this.touch(run);
+    const before = snapshotRun(run);
+    apply(run);
+    this.touch(run, before);
     return run;
   }
 
@@ -2428,8 +2413,9 @@ export class RunStore extends EventEmitter {
       const unread = UNREAD_RUN_RULE.matches(run);
       if (!unread) continue;
       if (automation !== undefined && (automationIdOf(run) !== undefined) !== automation) continue;
+      const before = snapshotRun(run);
       run.seenAt = now;
-      this.touch(run);
+      this.touch(run, before);
       count++;
     }
     return count;
@@ -2456,14 +2442,16 @@ export class RunStore extends EventEmitter {
     this.facts.append(runId, full, Buffer.byteLength(line));
     this.maybeEnqueueHistoryCompress(run);
     this.liveItems.observe(runId, full, false);
+    this.published.publish('run.event', { runId, event: full });
     this.emit('event', { runId, event: full });
 
     // Reference discovery runs last, after the event is persisted, indexed and
     // published: the janitor reads the event text and may still update the run.
+    const before = snapshotRun(run);
     scanEventReferences(
       run, full, this.repoHandle,
       (target, entries) => this.accumulatePullRequests(target, entries),
-      (target) => this.touch(target),
+      (target) => this.touch(target, before),
     );
     return full;
   }
@@ -2483,6 +2471,7 @@ export class RunStore extends EventEmitter {
   applyMarkerRefs(runId: string, refs: { pr?: number | undefined; prs?: readonly number[] | undefined; issue?: number | undefined }): RunRecord | undefined {
     const run = this.record(runId);
     if (!run || (refs.pr === undefined && refs.issue === undefined)) return run;
+    const before = snapshotRun(run);
     const numbers = [...new Set([...(run.markerRefs?.pr === undefined ? [] : [run.markerRefs.pr]),
       ...(refs.prs ?? (refs.pr === undefined ? [] : [refs.pr]))])];
     if (numbers.length) this.accumulatePullRequests(run, numbers.flatMap((number) => {
@@ -2519,7 +2508,7 @@ export class RunStore extends EventEmitter {
     if (run.markerRefs.issue !== undefined) {
       run.referencedIssueUrl = resolveIssueReference(run, this.repoHandle);
     }
-    this.touch(run);
+    this.touch(run, before);
     return run;
   }
 
@@ -2528,9 +2517,10 @@ export class RunStore extends EventEmitter {
     const run = this.record(runId);
     const parsed = runPullRequestSchema.safeParse({ number: refUrlNumber(url), url, source: 'created' });
     if (!run || !parsed.success) return run;
+    const before = snapshotRun(run);
     let changed = this.accumulatePullRequests(run, [parsed.data]);
     if (!run.pullRequestUrl) { run.pullRequestUrl = url; changed = true; }
-    if (changed) this.touch(run);
+    if (changed) this.touch(run, before);
     return run;
   }
   private accumulatePullRequests(run: RunRecord, entries: readonly RunPullRequest[]): boolean {
@@ -2549,6 +2539,7 @@ export class RunStore extends EventEmitter {
   emitEphemeral(runId: string, event: { type: string; stepId?: string; [key: string]: unknown }): RunEvent {
     const full: RunEvent = this.redact({ ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() });
     this.liveItems.observe(runId, full, true);
+    this.published.publish('run.event', { runId, event: full });
     this.emit('event', { runId, event: full });
     return full;
   }
@@ -2860,7 +2851,9 @@ export class RunStore extends EventEmitter {
           resourceId: run.delegation.workspace.resourceId, path: run.delegation.workspace.path } } : {}) });
       // The earlier index event cannot attest exit: subscribers must observe the
       // durable private proof before a terminal worker can satisfy a lifecycle wait.
-      this.emit('run', this.peek(id)!);
+      const settled = this.peek(id)!;
+      this.published.publish('run.updated', { run: settled, before: snapshotRun(settled) });
+      this.emit('run', settled);
       return true;
     } catch { return false; }
   }
@@ -3005,6 +2998,7 @@ export class RunStore extends EventEmitter {
       removeAgentTmpDir(this.dataDir, id);
       this.seqs.delete(id);
       this.scheduleSave();
+      this.published.publish('run.deleted', { runId: id });
       this.emit('deleted', id);
     }
     return existed;
@@ -3053,9 +3047,11 @@ export class RunStore extends EventEmitter {
     return join(this.sourceDataDir(runId), 'runs', `${runId}-images`);
   }
 
-  private touch(run: RunRecord): void {
+  /** Save `run` debounced and publish it; `before` is the record at the write's entry (none: created). */
+  private touch(run: RunRecord, before: Readonly<RunRecord> | undefined, exit?: RunExitId): void {
     this.dirty.add(run.id);
     this.scheduleSave();
+    publishRunWrite(this.published, run, before, undefined, exit);
     this.emit('run', run);
     this.maybeEnqueueHistoryCompress(run);
   }
@@ -3296,16 +3292,19 @@ export class RunStore extends EventEmitter {
       const current = decoded?.run;
       if (this.isFallbackRun(conflict.id)) this.held.delete(conflict.id);
       const held = this.held.get(conflict.id);
+      const before = snapshotRun(held ?? staged.get(conflict.id) ?? undefined);
       if (current && conflict.current) {
         // The other writer's record as it stands, normalized only as a live owner's run would be.
         reconcileLoadedRun(current, { keepLive: true });
         rescopeRun(current, this.repoHandle);
         if (held) replaceRecord(held, current);
         this.base.set(conflict.id, { revision: conflict.current.revision, seq: conflict.current.seq, data: conflict.current.data, extras: decoded!.extras });
+        publishRunWrite(this.published, held ?? current, before ?? current, 'conflict');
         this.emit('run', held ?? current);
       } else {
         this.held.delete(conflict.id);
         this.base.delete(conflict.id);
+        this.published.publish('run.deleted', { runId: conflict.id });
         this.emit('deleted', conflict.id);
       }
       console.error(`[hsq] run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until Squawk restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
@@ -3344,6 +3343,7 @@ export class RunStore extends EventEmitter {
   close(): void {
     this.liveItems.clear();
     // Demand-bound feeds stop before storage disappears during project removal/shutdown.
+    this.published.publish('store.closed', {});
     this.emit('closed');
     this.compressor.stop();
     this.fallbackFacts?.stop();
@@ -3376,6 +3376,6 @@ export interface ArchiveOnMergeSnapshot {
 function archiveDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
-function archiveFields(run: RunRecord, archived: boolean, now: string): void {
-  stageArchiveFields(run, archived, now);
+function archiveFields(run: RunRecord, archived: boolean, now: string): RunExitId | undefined {
+  return stageArchiveFields(run, archived, now);
 }
