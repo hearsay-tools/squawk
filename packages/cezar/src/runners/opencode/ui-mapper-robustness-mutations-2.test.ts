@@ -1,0 +1,3 @@
+import { describeUiMapperRobustness } from '../../core/ui-mapper-robustness.testkit.ts';
+
+describeUiMapperRobustness('opencode', 2);

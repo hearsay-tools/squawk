@@ -240,9 +240,14 @@ function expectNoFailures(report: Report): void {
   expect({ failed: report.failures.length, first: report.failures.slice(0, FAILURES_SHOWN) }).toEqual({ failed: 0, first: [] });
 }
 
-export const ROBUSTNESS_PARTS = ['hostile', 0, 1] as const;
+const MUTATION_PARTS = [0, 1, 2, 3] as const;
+type RobustnessPart = 'hostile' | typeof MUTATION_PARTS[number];
 
-export function describeUiMapperRobustness(runner: string, part: typeof ROBUSTNESS_PARTS[number]): void {
+export function robustnessParts(runner: string): RobustnessPart[] {
+  return ['hostile', ...MUTATION_PARTS.slice(0, fixtureFrames(runner).length)];
+}
+
+export function describeUiMapperRobustness(runner: string, part: RobustnessPart): void {
   describe(`${runner} UI mapper robustness`, () => {
     const row = MAPPERS[runner]!;
 
@@ -267,8 +272,9 @@ export function describeUiMapperRobustness(runner: string, part: typeof ROBUSTNE
       return;
     }
 
-    // The two mutation files form an exhaustive, disjoint partition of sorted fixtures.
-    const fixtures = fixtureFrames(runner).filter((_, index) => index % 2 === part)
+    // Mutation files form an exhaustive, disjoint partition of sorted fixtures.
+    const groups = robustnessParts(runner).length - 1;
+    const fixtures = fixtureFrames(runner).filter((_, index) => index % groups === part)
       .map(frames => ({ fixture: frames[0]?.at.split(':')[0] ?? 'empty fixture', frames }));
     it.each(fixtures)('$fixture never throws or mutates its state when one field is broken', ({ frames: corpus }) => {
       const result = replay(runner, ({ report, frames, index, held }) => {
