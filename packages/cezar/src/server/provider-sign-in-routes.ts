@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { providerConnectSchema, providerSignInParamsSchema, providerSignInRedirectSchema } from '@open-mercato/cezar-contract/provider-requests';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
+import { productIdentity } from '../home/identity.ts';
 import { registeredRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import type { ProviderAuthService } from '../core/provider-auth.ts';
@@ -8,7 +9,7 @@ import { jsonZodValidator, paramZodValidator } from './validators.ts';
 import { ProviderSignIns } from './provider-sign-ins.ts';
 
 export function createProviderSignInRoutes(options: {
-  localHandoff(): boolean;
+  settingsAdmin(): boolean;
   resolve(provider: string, profileId?: string): Promise<{ profile: ResolvedAgentProfile } | { error: string }>;
   auth: ProviderAuthService;
   invalidateModels(provider: string): void;
@@ -18,7 +19,7 @@ export function createProviderSignInRoutes(options: {
   return new Hono()
     .use('/providers/sign-in/*', async (c, next) => {
       c.header('Cache-Control', 'no-store');
-      if (!options.localHandoff()) return c.json({ error: 'Sign-in is available only on the machine hosting Squawk.' }, 409);
+      if (!options.settingsAdmin()) return c.json({ error: `Browser sign-in is disabled on this remote cockpit. Run \`${productIdentity().command} remote-settings enable\` on the host to allow it.` }, 409);
       await next();
     })
     .post('/providers/sign-in/start', jsonZodValidator(providerConnectSchema, { runners: { ids: ['provider'] } }), async c => {

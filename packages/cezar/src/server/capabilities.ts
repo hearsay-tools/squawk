@@ -26,7 +26,8 @@ import { automationsEnabled } from '../automations/enabled.ts';
  * A browser cannot set the switch, a grant for another port (another cockpit sharing this home)
  * grants nothing here, and a non-loopback bind never takes it, because direct backend access would
  * skip the deployment's authentication. `remoteSettingsAdmin` is the remote half, which the cockpit warns
- * about. Neither widens `localHandoff`: host application launches stay local-only.
+ * about. Browser sign-in also requires `settingsAdmin`, because it writes host credentials;
+ * account creation, editing and listing still require `localHandoff`. Neither widens `localHandoff`: host application launches stay local-only.
  *
  * Usage presentation: token counts and monetary cost stay visible by default.
  * `CEZ_HIDE_TOKEN_USAGE=1` and `CEZ_HIDE_COST=1` hide them independently;

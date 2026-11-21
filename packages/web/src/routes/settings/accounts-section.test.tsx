@@ -122,12 +122,13 @@ function serve(
   )
 }
 
-function renderAccounts(runners = RUNNERS_RESPONSE) {
+function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localHandoff = true) {
   const client = createQueryClient()
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
   seedRunners(client, runners)
   client.setQueryData(queryKeys.health, {
     bootProject: 'boot',
+    capabilities: { settingsAdmin, localHandoff },
     // The install/version rows come from the health probe — the one place a version can honestly
     // come from. Codex is present but UNAVAILABLE, which is "not installed"; an agent missing
     // from `checks` entirely is a different state ("Checking…") and must not be conflated.
@@ -525,7 +526,7 @@ describe('the agent accounts section', () => {
   it('withholds every path in hosted mode', async () => {
     serve({ editable: false, profileCapableProviders: ['claude', 'codex'],
       selections: {}, profiles: [] })
-    renderAccounts()
+    renderAccounts(RUNNERS_RESPONSE, false, false)
 
     await waitFor(() =>
       expect(document.querySelector('[data-slot="accounts-hosted"]')?.textContent).toContain(
@@ -533,6 +534,17 @@ describe('the agent accounts section', () => {
       ),
     )
     expect(rows()).toHaveLength(0)
+    expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+  })
+
+  it('offers hosted browser sign-in with the host grant while withholding account paths', async () => {
+    serve({ editable: false, profileCapableProviders: ['claude'], selections: {}, profiles: [] })
+    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', displayName: 'Antigravity', terminalLogin: false, browserLogin: true }] }, true, false)
+    expect(await screen.findByText('Antigravity · discovered account')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy()
+    expect(rows()).toHaveLength(0)
+    expect(document.querySelector('[data-slot="account-path"]')).toBeNull()
     expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
   })
 

@@ -38,13 +38,15 @@ With a grant, every user that cockpit admits can:
 
 - read and save every Agent config file, including the files in the agent's home directory, and
   see the user MCP servers in `~/.claude.json`;
-- save the project's worktree setup commands.
+- save the project's worktree setup commands;
+- complete browser sign-in to a runner's discovered account or an existing named account, which
+  writes credentials on the host. Hosted sign-in uses the consent link and pasted redirect.
 
 That is **host command execution as the cockpit's user**. Enable it only when the deployment admits
 the people you would trust with a shell on this machine.
 
 It does not grant anything else. The terminal, file manager and editor buttons stay unavailable,
-and so do agent account administration and project browsing outside the projects folder.
+and so do agent account creation, editing, listing and project browsing outside the projects folder.
 The cockpit shows a warning above both editors while it has a grant.
 
 ## When it applies

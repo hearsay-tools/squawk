@@ -123,7 +123,7 @@ build and credential digest. Other runners keep their existing login and admissi
 | Cancel races native completion | Cancelled state wins; close process and erase the exposed URL |
 | Expired flow or server restart | No saved consent/code/flow; start another flow |
 | Business/platform credentials | Unsupported; never shown as a supported personal login |
-| Hosted cockpit | Refuse browser endpoints and named-account model queries before resolving paths |
+| Hosted cockpit | Browser sign-in requires `settingsAdmin` (host port grant); use the consent link and pasted redirect. Refuse without the grant before resolving paths. Named-account model queries still require `localHandoff` |
 
 ### Probe process exits
 

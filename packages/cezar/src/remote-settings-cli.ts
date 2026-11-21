@@ -14,15 +14,15 @@ import { COCKPIT_PORTS } from './task-cli/discovery.ts';
 
 /**
  * `cez remote-settings enable | status | disable` (hearsay-tools/cezarion#2428): the host operator's
- * grant for editing Agent config and worktree setup from one remote cockpit, named by its listen
+ * grant for editing Agent config and worktree setup, and browser sign-in, from one remote cockpit, named by its listen
  * port. It runs on the machine that runs Squawk, as the same user (and the same `CEZ_HOME`) as the
  * cockpit service. One JSON object per invocation; exit 0 ok, 2 refused, 64 usage.
  */
 
 export const REMOTE_SETTINGS_WARNING =
-  'Anyone this cockpit admits can now save agent hooks, MCP servers and worktree setup commands that run on this machine as this user. Keep the cockpit behind owner-only Tailscale access or an authenticated HTTPS proxy, bound to loopback.';
+  'Anyone this cockpit admits can now save agent hooks, MCP servers and worktree setup commands that run on this machine as this user, and sign in to runner accounts on this machine. Keep the cockpit behind owner-only Tailscale access or an authenticated HTTPS proxy, bound to loopback.';
 
-const USAGE = commandText(`cez remote-settings — let a remote cockpit (CEZ_REMOTE=1) edit Agent config and worktree setup.
+const USAGE = commandText(`cez remote-settings — let a remote cockpit (CEZ_REMOTE=1) edit Agent config and worktree setup, and sign in to runner accounts.
 One JSON object per invocation; exit 0 ok, 2 refused, 64 usage.
 
   enable [--port <n>]    allow remote edits on the cockpit listening on that port. Without --port,
