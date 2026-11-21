@@ -2,6 +2,7 @@ import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { runnerGolden } from '../core/runner-golden.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
+import { runnerDefinition } from '../core/runner-registry.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoUi } from './ui.ts';
 import { aptInstallTool, brewInstallTool, brewRemoveHint, depCheckStep, generatePassword, sudoStep, StepAborted, StepSkipped, verifyCommand } from './steps.ts';
@@ -256,7 +257,12 @@ describe('agent CLI installers', () => {
     } };
   }
 
-  const EXPECTED = (runner: string): string => runnerGolden(runner, 'installerDryRun');
+  const EXPECTED = (runner: string): string => {
+    const source = runnerDefinition(runner).cli.installSource;
+    return source && 'managed' in source
+      ? `note ${runner}: Install ${runner} from Settings → Agent accounts in the cockpit.`
+      : runnerGolden(runner, 'installerDryRun');
+  };
 
   it.each(BUILT_IN_RUNNER_IDS)('brew installer handles %s', async (runner) => {
     const { ui, lines } = recordingUi();

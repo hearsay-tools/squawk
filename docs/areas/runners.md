@@ -87,6 +87,22 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
 
+### Managed CLI installation
+
+A `cli.installSource.managed` declares a host-target manifest and an HTTPS download
+prefix. Settings → Agent accounts installs, updates and removes it through
+`/api/v1/runner-install/:runner`, gated by `settingsAdmin`. Reads return progress
+without awaiting the network; manifests refresh at most hourly while the pane is
+open, or on demand. Boot and task start never fetch a manifest. The managed CLI
+is stored under `<data>/tools/<runner>/<target>/versions/`, with sealed releases
+and an atomic `active.json`. See [the install design](../../.ai/specs/2026-11-22-managed-runner-cli.md).
+
+`managedCliExecutable(home, runner, source)` from `managed-install/cli-installation.ts`
+reads the active path without installing anything. A process caller uses
+`leaseManagedCli(home, runner, source)` before spawn, then `bindProcess(pid)` and
+`release()` after exit. Lease acquisition and pruning share the short data-root
+lock. An update or removal retains a release until every live lease ends.
+
 ### The runners route
 
 `GET /api/v1/runners` (`server/runners-routes.ts`, schema `runnersResponseSchema` in

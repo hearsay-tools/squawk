@@ -51,6 +51,7 @@ import { agentPickerRows } from '@/components/default-agent-picker'
 import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
 import { BrowserSignInButton } from './browser-sign-in'
+import { ManagedCli } from './managed-cli'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
 
@@ -151,6 +152,12 @@ function AccountsPane({ data, runners }: { data: AgentProfilesResponse; runners:
             <BrowserSignInButton provider={entry.id} label={entry.displayName} />
           </div>
         )) : null}
+        {runners.runners.filter(entry => entry.managedInstall).map(entry => (
+          <div key={entry.id}>
+            <h3>{entry.displayName}</h3>
+            <ManagedCli runner={entry.id} />
+          </div>
+        ))}
       </div>
     )
   }
@@ -265,6 +272,7 @@ function AgentTab({
   onRemove: (account: AgentProfile) => void
 }) {
   const installed = check?.available === true
+  const managedInstall = runnerEntry(runners, provider)?.managedInstall === true
   const discoveredCount = accounts.filter((account) => account.isDefault).length
 
   return (
@@ -272,13 +280,14 @@ function AgentTab({
       {/* Facts about the BINARY, not about any one account: a version and an install are shared by
           every login of the same CLI, so they belong here rather than repeated on each row. */}
       <h3 className="settings-account-provider-title">{runnerDisplayName(runners, provider)}</h3>
+      {managedInstall ? <ManagedCli runner={provider} /> : null}
       <div className="settings-account-installation settings-readout">
-        {check === undefined ? <span>Checking…</span> : installed ? (
+        {managedInstall ? null : check === undefined ? <span>Checking…</span> : installed ? (
           <span data-slot="agent-installed">Installed</span>
         ) : (
           <span data-slot="agent-installed">Not installed — <code>{runnerEntry(runners, provider)?.installHint}</code></span>
         )}
-        {installed && check?.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
+        {!managedInstall && installed && check?.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
         <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
       </div>
 

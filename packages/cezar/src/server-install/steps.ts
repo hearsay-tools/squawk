@@ -390,6 +390,10 @@ export const brewInstallTool: ToolInstaller = async (ctx, name) => {
 
 async function installViaNpmOrNote(ctx: InstallContext, name: string, sudo: boolean): Promise<void> {
   const source = agentCliSource(name);
+  if (source !== null && 'managed' in source) {
+    ctx.ui.note(`Install ${name} from Settings → Agent accounts in the cockpit.`, name);
+    return;
+  }
   if (source !== null && 'site' in source) {
     ctx.ui.note(`Install ${source.label} from ${source.site}, then re-run.`, name);
     return;
