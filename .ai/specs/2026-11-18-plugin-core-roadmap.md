@@ -42,11 +42,11 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-20 |
+| Step | What | State on 2026-11-21 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
-| 2 | A typed run lifecycle, and a narrower run store | Filed on 2026-11-21: epic hearsay-tools/squawk#4007 |
+| 2 | A typed run lifecycle, and a narrower run store | Active: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Not filed |
 | 4 | Loader and package format | Not filed |
 | 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
@@ -75,10 +75,12 @@ Done on 2026-11-20. A built-in runner is its folder `runners/<id>/`, its scripts
 
 ### Step 2: typed lifecycle and store ports
 
-- Name the events: run created, step started, turn ended, wait resolved, run finished. Start
-  with listeners that only observe; they cannot change a run.
+- Name the events that a first-party listener uses: run created, run updated, status changed,
+  run deleted, the per-run event stream and store closed. Step, turn and wait events wait for a
+  listener (spec decision 1). Listeners only observe; they cannot change a run.
 - Move the current listeners on `RunStore` onto the typed events. Webhooks go first.
-- Add a hook that can change an outcome only when a first-party feature needs one.
+- Add a hook that can change an outcome only when a first-party feature needs one. Run removal
+  is the one such need: three removal slots.
 - Give the run store a few named ports (read runs, write runs, event log, worker results,
   retention) and move one topic at a time out of the `RunStore` class behind its port. The
   split of `workflows/run.ts` under
@@ -89,9 +91,11 @@ so touch the same code as the ports. The store stays one store in one SQLite fil
 plugin.
 
 The epic names the first-party need for a hook that is more than an observer: `runs/` imports
-feature code to decide whether a run may be deleted and to clean up after it. One deletion hook
-replaces those imports. The epic's Agent context comment has the measurement, the listener
-files and a proposal for each open point.
+feature code to decide whether a run may be deleted and to clean up after it. The
+[spec](2026-11-21-run-lifecycle-and-store-ports.md) records the owner's decisions of 2026-11-21:
+six lifecycle events, each with a first-party listener; three removal slots (a deletion gate, a
+reclaim preparation and a removal cleanup) in place of those imports; and topic objects behind
+named ports, until `runs/store.ts` is 1,000 lines or fewer.
 
 ### Step 3: open the small tables
 
