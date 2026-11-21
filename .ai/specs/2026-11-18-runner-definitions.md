@@ -301,7 +301,7 @@ As built (D1, in two parts):
   static test table reads `core/runner-fact-rows.testkit.ts`; a test that needs only the ids
   reads `runners/ids.ts`.
 - `MOCKS` (`core/skill-probe.ts`) reads the registry, and `lint/mock-scenario-boundary.ts`
-  reads the built-in list.
+  reads the ids from `runners/ids.ts` and parses `script` from each `runners/<id>/mock.ts`.
 - The fixture runner is `runners/fixture/` plus `packages/cezar/scripts/mock-fixture-runner.mjs`.
   `runners/fixture/fixture-runner.test.ts` runs a task to review and the kit rows S1, S2, S3, S4,
   S7, S10 and S20, the rows whose scenarios its mock declares. The rows that need a
