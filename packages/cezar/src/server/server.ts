@@ -112,7 +112,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId } from '../core/runner-registry.ts';
+import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -2785,6 +2785,7 @@ export function createApp(deps: ServerDeps) {
     const { sessionId, backend } = latestSession(run);
     const command = sessionId ? resumeCommand(resolveRunnerId(backend), sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
+      ...(runnerDefinition(resolveRunnerId(backend)).cli.interactive === false ? { cliHandoff: false as const } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
   };
 
@@ -3256,6 +3257,7 @@ export function createApp(deps: ServerDeps) {
       if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
       const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
+      if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
       const blocked = await providerActionError([backend]);
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();

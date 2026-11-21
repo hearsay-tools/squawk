@@ -11,7 +11,7 @@ import type { ProviderCommandResult } from './provider-auth.ts';
  */
 export interface RunnerGolden {
   /** The take-over command for session id `s1` (`test/fixtures/resume-commands.ts`). */
-  resumeCommand: string;
+  resumeCommand: string | null;
   /** The golden whose events the tool tracker sees, and what it must show after them (`activity/tool-activity-runners.test.ts`). */
   toolActivity: { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> };
   /** The status probe command, and what that command prints when the account is connected (recorded
@@ -34,7 +34,7 @@ export interface RunnerGolden {
    * basename), and `cases` gives each case's flags; `{squawk}` stands for the Squawk tool names
    * and `{squawk-mcp}` for them as MCP names. `notes` says why a case records what it does.
    */
-  toolGrant: 'same as unset' | {
+  toolGrant: 'same as unset' | { wire: 'permission-policy'; cases: Record<string, string[]> } | {
     flags: { values: string[]; switches: string[] };
     cases: Record<string, string[] | 'same as unset'>;
     notes?: Record<string, string>;

@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -431,7 +432,7 @@ export const SETTLEMENT_GROUPS = {
           const observation = await driveRun(backend, 'permission-default', run => !!run && ['done', 'review'].includes(run.status), 30_000);
           expect(observation.events.some(event => event.type === 'permission.requested')).toBe(false);
           expect(observation.record?.hasPendingPermission).toBeFalsy();
-          expect(observation.events.filter(event => event.type === 'text').map(event => event.text).join('')).toContain('Approval response: {"reply":"once"}');
+          expect(observation.events.filter(event => event.type === 'text').map(event => event.text).join('')).toContain(runnerDefinition(backend).mock.defaultApprovalEcho ?? 'Approval response: {"reply":"once"}');
           expect(observation.events).toContainEqual(expect.objectContaining({ type: 'turn.completed' }));
         }, 45_000);
       }

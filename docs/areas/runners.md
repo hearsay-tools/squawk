@@ -435,3 +435,14 @@ a stream of normalized events. Other CLIs — pi, aider, whatever ships next —
 can slot in the same way.
 
 ---
+
+### Antigravity tool access
+
+Antigravity ACP 1.5.0 runs in `default` mode on every fresh or resumed session. Squawk
+answers native permission requests from the tool grant and Bash command prefixes. Granted
+requests proceed; ungranted requests fail. With `HSQ_APPROVAL_GATE=1`, ungranted requests
+reach the native approval card instead. This matches Claude's approval gate. Native
+`interaction_` questions always reach the question card. Client file reads require Read;
+they cannot request interactive approval. The wire's `ask_question`, `schedule`, and `finish`
+need no tool admission. Read/search built-ins that have no separate native tool are not invented.
+See [the recorded wire](../runners/antigravity-wire.md).

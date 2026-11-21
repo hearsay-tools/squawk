@@ -70,6 +70,7 @@ describe('terminalExecutable — PATH name or the configured executable', () => 
     vi.stubEnv('CEZ_DRY_RUN', '1');
     for (const runner of BUILT_IN_RUNNER_IDS) {
       const executable = runnerDefinition(runner).cli.terminalExecutable;
+      if (runnerDefinition(runner).cli.interactive === false) { expect(terminalExecutable(runner)).toBeNull(); continue; }
       if (executable.kind === 'path-name') expect(terminalExecutable(runner)).toBe(executable.name);
     }
   });

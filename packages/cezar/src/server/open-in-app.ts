@@ -129,7 +129,7 @@ function editorAvailable(editor: EditorDef): boolean {
  *  otherwise. The actual command is built server-side (needs the run's session). */
 export function agentCliRunner(targetId: string): string | null {
   const match = registeredRunners().find((definition) => `cli:${definition.id}` === targetId);
-  return match ? match.id : null;
+  return match && match.cli.interactive !== false ? match.id : null;
 }
 
 /** The open targets available on this machine: the file manager, a terminal, every detected
@@ -144,6 +144,7 @@ export function detectOpenTargets(): OpenTarget[] {
   }
   // Registration order: the built-in runners register in display order.
   for (const { id, cli, detection } of registeredRunners()) {
+    if (cli.interactive === false) continue;
     const override = detection.binOverride();
     if ((override && existsSync(override)) || onPath(detection.binary)) {
       targets.push({ id: `cli:${id}`, label: cli.openTarget.label, icon: cli.openTarget.icon });

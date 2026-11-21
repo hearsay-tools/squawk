@@ -1,4 +1,5 @@
-import { registeredRunners } from './runner-registry.ts';
+import { registeredRunners, runnerDefinition } from './runner-registry.ts';
+import { allowProbePermissions } from './permission-policy.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -502,8 +503,10 @@ export const SESSION_GROUPS = {
             let n = 0;
             for (const [key, spec] of variants) {
               const name = `probe-${n++}`;
+              const policy = runnerDefinition(backend).mock.toolGrantObservation === 'permission-policy';
               const obs = await driveSeam(backend, 'baseline', {
-                spec: { cwd: dir, sessionId: undefined, env: probeEnv(name), ...spec },
+                ...(policy ? { whileOpen: allowProbePermissions } : {}),
+                spec: { cwd: dir, sessionId: undefined, ...spec, env: { ...probeEnv(name), ...(policy ? { CEZ_MOCK_PERMISSION_PROBE: '1' } : {}), ...spec.env } },
               });
               expect(obs.v1.filter((e) => e.type === 'error')).toEqual([]);
               recordings.set(key, readRecording(dir, name));

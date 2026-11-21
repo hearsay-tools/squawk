@@ -106,6 +106,7 @@ function ChangesView({ run }: { run: ApiRun }) {
 
   const bar = gitActionPolicy({
     run,
+    cliHandoff: run.cliHandoff,
     hasWorktree: Boolean(run.worktreePath) && !changesRefused,
     branch: run.branch,
     changedFiles: changes.data?.stat.files,

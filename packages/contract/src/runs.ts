@@ -414,6 +414,8 @@ export const apiRunSchema = runRecordSchema.extend({
   /** The server's take-over command for the run's latest session, with the executable the server
    *  resolves. Absent without a session or for an id the server refuses. Never persisted. */
   cliResumeCommand: z.string().optional(),
+  /** Protocol-only runners cannot hand their session to an interactive terminal. */
+  cliHandoff: z.literal(false).optional(),
   usage: processUsageSchema.optional(),
 });
 export type ApiRun = z.infer<typeof apiRunSchema>;

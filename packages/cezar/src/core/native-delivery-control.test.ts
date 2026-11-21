@@ -1,3 +1,4 @@
+import { runnerDefinition } from './runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -217,7 +218,12 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
       await waitFor(holdAck.held);
       // The turn's content and its end follow on the wire while the ACK is held, so the runner
       // has read past the point where it could settle the input.
-      await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
+      if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
+        await waitFor(() => echoed(wire, 'delay-owned-ack'));
+        expect(turnEnds(wire)).toBe(1);
+      } else {
+        await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
+      }
       expect(input.state.settled).toBe(false);
       holdAck.release();
       await input.done;
@@ -236,9 +242,13 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
     await seam(runner, holdResponse.path, async (session, wire) => {
       const input = send(session, 'mock:agent-echo hold-owned-response');
       await waitFor(holdResponse.held);
-      // The input is admitted while its content is held.
-      await input.done;
-      expect(input.state.rejected).toBe(false);
+      // ACP acknowledges an idle prompt only when its turn completes.
+      if (runnerDefinition(runner).mock.promptResponseEndsTurn) expect(input.state.settled).toBe(false);
+      else {
+        // The input is admitted while its content is held.
+        await input.done;
+        expect(input.state.rejected).toBe(false);
+      }
       // bound: proves an absence; unheld content would arrive within a few ms.
       await new Promise(resolve => setTimeout(resolve, 100));
       expect(echoed(wire, 'hold-owned-response')).toBe(false);

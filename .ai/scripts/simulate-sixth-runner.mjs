@@ -154,8 +154,8 @@ function register(target, id) {
   const [builtIn, ids] = REGISTRATION;
   writeFileSync(join(target, builtIn), replaceOnce(replaceOnce(read(builtIn),
     "import { ompRunner } from './omp/definition.ts';\n", `import { ompRunner } from './omp/definition.ts';\nimport { ${id}Runner } from './${id}/definition.ts';\n`),
-  'piRunner, ompRunner];', `piRunner, ompRunner, ${id}Runner];`));
-  writeFileSync(join(target, ids), replaceOnce(read(ids), "'pi', 'omp'];", `'pi', 'omp', '${id}'];`));
+  '];', `, ${id}Runner];`));
+  writeFileSync(join(target, ids), replaceOnce(read(ids), '];', `, '${id}'];`));
 }
 
 const COMPLETE_SPELLINGS = [['opencode', 'hexacode'], ['Opencode', 'Hexacode'], ['OpenCode', 'HexaCode'], ['OPENCODE', 'HEXACODE'], ['openCode', 'hexaCode']];

@@ -106,12 +106,19 @@ export class AcpSession {
       this.events.begin();
       const result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
       const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
-      this.events.finish(reason);
+      this.events.finish(reason, this.hooks.normalizeUsage?.(result.usage));
       return result;
     } catch (error) {
       this.events.finish('error');
       throw error;
     } finally { this.cancelPermissions(); this.promptActive = false; }
+  }
+
+  /** A provider that supports concurrent prompts acknowledges steering separately.
+   * Its response does not finish the original prompt or its normalized turn. */
+  async steer(content: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this.promptActive) throw new Error('ACP steering requires an active prompt');
+    promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId: this.requireSession(), prompt: content }));
   }
 
   cancel(): void {
@@ -156,7 +163,7 @@ export class AcpSession {
     if (method !== 'session/update') return;
     const update = updateSchema.parse(params);
     if (this.opening) this.earlyUpdates.push(update);
-    else if (update.sessionId === this.sessionId) this.events.update(update.update);
+    else if (update.sessionId === this.sessionId && this.hooks.filterUpdate?.(update.update) !== false) this.events.update(update.update);
   }
 
   private request(method: string, params: unknown): unknown | Promise<unknown> {
