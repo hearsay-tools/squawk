@@ -59,7 +59,8 @@ it.each([204, 304])('leaves status %s bodyless', async (status) => {
 
 it('starts compression at 1024 bytes', async () => {
   for (const size of [1023, 1024]) {
-    const response = await app(() => new Response('x'.repeat(size), { headers: { 'content-type': 'text/plain' } })).fetch(request());
+    const response = await app(() => new Response('x'.repeat(size), { headers: { 'content-type': 'text/plain', vary: 'Accept' } })).fetch(request());
+    expect(response.headers.get('vary')).toBe(size === 1024 ? 'Accept, Accept-Encoding' : 'Accept');
     expect(response.headers.get('content-encoding')).toBe(size === 1024 ? 'gzip' : null);
   }
 });

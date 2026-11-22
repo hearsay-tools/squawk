@@ -38,6 +38,8 @@ async function compressed(raw: Buffer, coding: Encoding): Promise<Buffer> {
 
 async function encode(request: Request, response: Response, asset?: Asset): Promise<Response> {
   if (!compressible(request, response)) return response;
+  const raw = asset?.raw ?? Buffer.from(await response.arrayBuffer());
+  if (raw.length < 1024) return new Response(raw, { status: response.status, headers: response.headers });
   // Vary on identity responses too: a shared cache must not hide the encoded variant.
   const headers = new Headers(response.headers);
   const vary = headers.get('vary');
@@ -45,9 +47,7 @@ async function encode(request: Request, response: Response, asset?: Asset): Prom
     headers.set('vary', vary ? `${vary}, Accept-Encoding` : 'Accept-Encoding');
   }
   const coding = encoding(request.headers.get('accept-encoding') ?? '');
-  if (!coding) return new Response(response.body, { status: response.status, headers });
-  const raw = asset?.raw ?? Buffer.from(await response.arrayBuffer());
-  if (raw.length < 1024) return new Response(raw, { status: response.status, headers });
+  if (!coding) return new Response(raw, { status: response.status, headers });
   let body = asset?.encoded.get(coding);
   if (!body) {
     body = await compressed(raw, coding);
