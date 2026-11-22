@@ -2,7 +2,7 @@ import type { AgentRunSpecSupport } from '../../core/agent-runner.ts';
 import { SQUAWK_SIDE_SPEC_SUPPORT } from '../../core/agent-runner-values.ts';
 export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
-  systemPrompt: { honored: true, via: '_meta.antigravity.systemPrompt.append on session/new; the CLI saves it with the session' },
+  systemPrompt: { honored: true, via: '_meta.antigravity.systemPrompt.append on session/new, which the CLI saves; a resume prepends it to the opening turn' },
   squawkTools: { honored: true, via: 'private loopback HTTP MCP bridge named squawk in session/new and session/resume' },
   userPrompt: { honored: true, via: 'session/prompt text content' },
   skill: { honored: true, via: 'leading /id args in session/prompt' },

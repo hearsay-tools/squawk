@@ -93,7 +93,8 @@ and a native `ask_question` keeps the free-text answer. See docs/runners/antigra
 | Zombie, unreadable or reused identity | Ignore dead entries; compare live start identities | Skip an identity that cannot be proved |
 
 Existing Continue admission, workflow cursors and run exit triggers remain unchanged. A
-session resume sends no system prompt: the CLI saved it at session/new (hearsay-tools/squawk#4060).
+session resume sends no system prompt on the native channel, which the CLI saved at session/new; it
+prepends it to the opening turn instead (hearsay-tools/squawk#4060).
 
 Explicit shutdown parity (S27/S28/S30) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30 calls end and captures before EOF; S31 abrupt external exit remains unchanged because no pre-shutdown snapshot is guaranteed.
 

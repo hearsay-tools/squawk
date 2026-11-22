@@ -2,7 +2,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 // Live Google Antigravity CLI 1.5.14 probes (hearsay-tools/squawk#4058, #4060);
 // docs/runners/antigravity-wire.md names the fixture behind each value.
 // systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends
-// a resent one, so the runner sends it only on session/new and Continue omits the skill prefix.
+// a resent one, so a resume never resends it; it prepends it to the opening turn, as Codex does.
 // humanInputAtTurnEnd: a steer sent while the final text streamed was read in the same turn.
 // nativePermission: a background command or timer wakes the idle session, which then asks.
 export const ANTIGRAVITY_FACTS = {

@@ -487,8 +487,10 @@ with the usage of both prompts. `schedule` is the native timer (`nativeTimerTool
 delay lands in the wait list like `cezar_wait`.
 
 The CLI saves the session/new system prompt with the session and appends a resent one, so
-Squawk sends it only on session/new (`systemPromptOnResume: 'in-thread'`). A Continue therefore
-keeps the instructions of the session's first launch.
+Squawk sends it on session/new only and never resends it on session/resume. A resumed session
+gets it prepended to its opening turn instead, as Codex and OpenCode do
+(`systemPromptOnResume: 'in-thread'`), so a Continue or a recovery still reads the current
+instructions.
 
 Antigravity status reports credential presence. `GEMINI_API_KEY` (or `GOOGLE_API_KEY`, mapped
 in the child) connects without an account folder; Settings names the environment source.

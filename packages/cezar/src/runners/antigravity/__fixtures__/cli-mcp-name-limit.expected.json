@@ -306,8 +306,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -321,8 +321,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -336,8 +336,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -351,8 +351,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "completed",
       "input": {

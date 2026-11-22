@@ -261,8 +261,9 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
 5. MCP items take their server and tool from `mcp_<server>_<tool>`; Squawk's `squawk` server is
    matched by name, so its tools stay trusted.
 6. An `ask_question` call becomes a question card. The answer goes as the next prompt.
-7. The system prompt goes only on `session/new` (`systemPromptOnResume: 'in-thread'`), so a
-   resume adds no copy to the saved one.
+7. The system prompt goes on `session/new` only, never on `session/resume`, so a resume adds no
+   copy to the saved one. A resumed session gets it prepended to its opening turn
+   (`systemPromptOnResume: 'in-thread'`).
 8. `_meta.antigravity.disabledTools` and `eagerMcpServers` are no longer sent: the CLI ignores
    the first, does not know the second, and `run_workflow` writes no skill into the workspace.
 

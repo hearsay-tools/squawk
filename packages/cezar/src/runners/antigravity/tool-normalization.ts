@@ -13,13 +13,14 @@ export function antigravityNativeToolName(update: Record<string, unknown>): stri
 }
 /**
  * The CLI names an MCP tool `mcp_<server>_<tool>` and sends no server field. Squawk's own server
- * is known by name; another server's name is read up to its first underscore.
+ * and the shared per-session name `cezar_ci_<32 hex>` are known by shape; another server's name is
+ * read up to its first underscore.
  */
 export function antigravityMcpTool(update: Record<string, unknown>): { server: string; tool: string } | undefined {
   const name = antigravityNativeToolName(update);
   const own = `mcp_${ANTIGRAVITY_MCP_NAME}_`;
   if (name.startsWith(own) && name.length > own.length) return { server: ANTIGRAVITY_MCP_NAME, tool: name.slice(own.length) };
-  const match = /^mcp_([A-Za-z0-9-]+)_(.+)$/.exec(name);
+  const match = /^mcp_(cezar_ci_[0-9a-f]{32}|[A-Za-z0-9-]+)_(.+)$/.exec(name);
   return match ? { server: match[1]!, tool: match[2]! } : undefined;
 }
 export function antigravityTool(update: Record<string, unknown>, previous?: UiToolItem): Partial<Omit<UiToolItem, 'id' | 'kind'>> {

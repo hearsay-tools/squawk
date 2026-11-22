@@ -376,8 +376,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -391,8 +391,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -406,8 +406,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -421,8 +421,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "completed",
       "input": {
