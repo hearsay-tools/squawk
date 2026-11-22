@@ -1,10 +1,12 @@
 # Run lifecycle and run store ports
-Status: active
+Status: done
 
 Step 2 of [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md), epic
 hearsay-tools/squawk#4007. Baseline: `main` at `8a331af92`. The owner decided the open points on
-2026-11-21 in task 59568fef. The [plan](2026-11-21-run-lifecycle-and-store-ports-plan.md) cuts the
-work into slices, one child issue each.
+2026-11-21 in task 59568fef. The work ran as slices, one child issue each; the
+[implementation record](#implementation-record) lists them, and
+[ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md)
+records the result.
 
 ## Goal
 
@@ -14,8 +16,8 @@ through named ports, and the `RunStore` class is at most 1,000 lines. After this
 
 - `RunStore` extends no `EventEmitter`, and no file outside `runs/` calls `on` or `off` on a store;
 - a test receives the lifecycle events of one run in order and opens no run store;
-- the webhook, activity and reports-index tests run against lifecycle events and ports, with no
-  real run store;
+- the webhook, activity and reports-index lifecycle listener tests run against lifecycle events
+  and ports, with no real run store;
 - `layer-import.baseline.json` holds no entry whose file is under `runs/`;
 - no `Pick<RunStore, …>` type remains; each of those callers takes a named port;
 - `runs/store.ts` has no entry in `file-length.baseline.json`.
@@ -45,8 +47,11 @@ wrote; it never writes.
   `runs/store.ts` is at most 1,000 lines.
 - **Proof:** `npm run lint` passes with no `runs/` entry in `layer-import.baseline.json` and no
   `runs/store.ts` entry in `file-length.baseline.json`; `runs/lifecycle.test.ts` receives one run's
-  events in order with no store; the webhook, activity and reports-index tests build no
-  `RunStore`; each slice's pull request lists the Squeal selection for its files before and after.
+  events in order with no store; the lifecycle listener tests of the webhook, activity and reports
+  index (`runs/webhook.test.ts`, `activity/publisher.test.ts`, `activity/tool-activity.test.ts`,
+  `server/reports-watch.test.ts`) build no `RunStore`. `activity/read-model-decodes.test.ts`
+  opens a real store, because it tests the read model's decoding of cold rows, not a listener.
+  Each slice's pull request lists the Squeal selection for its files before and after.
 - **Failure:** a deletion of a run whose autosave cleanup is not confirmed is still refused, with
   today's 409 message; a deletion in a process that registered no removal slots throws, and
   deletes nothing.
@@ -66,7 +71,7 @@ inventory. Counts of callers come from text search and are approximate.
 | `layer-import.baseline.json` | 122 entries; 17 have a file under `runs/` |
 | Test files Squeal selects for `runs/store.ts` | about 870 of 2,001 (the epic's count; the selection was `unsynced` at `8a331af92`) |
 
-### What the emitter sends today
+### What the emitter sent
 
 | Event | Payload | When |
 | --- | --- | --- |
@@ -148,8 +153,8 @@ files. `delegation/execution-identity.ts` depends on `feature:accounts`, so it c
 
 ### The lifecycle
 
-`runs/lifecycle.ts` (core) declares the event types and `RunLifecycle`. The store builds one
-instance in `RunStore.open` and exposes it as `store.lifecycle`, typed by the port
+`runs/lifecycle.ts` (core) declares the event types and `RunLifecycle`. Each store builds one
+instance when it is constructed and exposes it as `store.lifecycle`, typed by the port
 `RunLifecycleSource`. Nothing else publishes to it.
 
 | Event | Payload | Published when |
@@ -167,6 +172,11 @@ Rules:
   applies the patch, at the entry of the write path. A debounced write takes it before the first
   in-place change. A write path that changes a nested value in place must replace the value
   instead, so that `before` stays true; A1 adds a test for each write path.
+- **`run` is this write's value.** On a commit, `run` is a shallow frozen copy of what the write
+  wrote. On a debounced write, a republish or a conflict, it is the held record, which a later
+  write changes in place. `run.status-changed` reads `to` before any listener runs. A listener
+  that needs the current record re-reads it with `store.getRun(run.id) ?? run`; a listener that
+  compares `before` with `run` keeps the payload (planner decision, built in B3).
 - **Timing does not change.** A committed write publishes after the commit. A debounced write
   publishes when `touch` runs, before its SQLite write, as `run` is emitted today. The feeds keep
   their timing.
@@ -181,9 +191,16 @@ Rules:
 - **Subscription.** `subscribe(handlers)` takes a map from event type to handler and returns an
   unsubscribe function. The port `RunLifecycleSource` holds only `subscribe`. A test builds a
   `RunLifecycle` with no store and publishes to it.
+- **Teardown.** A listener's owner keeps the unsubscribe and calls it when it stops.
+  `ProviderRuntimeAuthObserver.watch` and `armPreview` return theirs. A
+  `ProjectContexts.onStoreCreated` listener may return a cleanup, which runs right after
+  `store.close()`.
+- **Tests.** The lifecycle swallows a listener's throw, so a test never asserts inside a handler:
+  it records, then asserts after the write (`runs/lifecycle-assertion-guard.test.ts`).
+  `runs/emitter-guard.test.ts` refuses the old emitter calls outside `runs/`.
 
-Webhooks compare `deriveWebhookState(before)` with `deriveWebhookState(run)`, so the `seen` map
-goes. A restart publishes nothing for the runs it loads, so the webhooks send no duplicate events.
+Webhooks subscribe to `run.created` and `run.updated` and compare `deriveWebhookState(before)`
+with `deriveWebhookState(run)`, so the `seen` map goes. A restart publishes nothing for the runs it loads, so the webhooks send no duplicate events.
 
 ### Removal slots
 
@@ -197,7 +214,7 @@ goes. A restart publishes nothing for the runs it loads, so the webhooks send no
 
 - Built-in slots: autosave (gate and cleanup), workers (preparation: worker evidence), artifacts
   (cleanup) and jobs (gate for `archive-tmp` and `scratch`). The worker checks of `canDeleteRun` and
-  `cleanupSafety` read the store's private records, so they stay in the store in today's order.
+  `cleanupSafety` read the worker records through `store.workerExecutions`, in today's order.
   Preview has no slot: its host belongs to one `serve` process, and its release runs only once a
   removal goes ahead, after the clean and HEAD-reachable checks, and never blocks it. So
   `ReclaimOptions.previewHost` is typed structurally, `{ release(runId): Promise<void> }`
@@ -205,33 +222,55 @@ goes. A restart publishes nothing for the runs it loads, so the webhooks send no
 - `registerBuiltInRunSlots()` lives in a `shell` file, because it imports the features. Each
   process entry calls it once, in `src/index.ts` before the CLI dispatch, beside
   `registerBuiltInRunners()`.
-- **Fail closed.** A deletion, a reclaim or a family archive in a process whose registry was
-  never sealed throws an error that names the missing registration, and removes nothing. Tests
-  seal the registry through a testkit, with only the slots they need.
+- **Fail closed.** A deletion, a reclaim, a family archive, a worker family end, a worker
+  admission, the terminal scratch reap or the startup orphan sweep in a process whose registry
+  was never sealed throws an error that names the missing registration, and removes nothing.
+  Tests seal the registry through a shared testkit (`runs/removal-slots.testkit.ts`,
+  `built-in-run-slots.testkit.ts`), with only the slots they need, and no global setup.
 
 ### Ports
 
-`runs/ports.ts` (core) declares the ports. Features and the shell may import it. D1 replaces each
-`Pick<RunStore, …>` and the `Partial<RunStore>` in `runs/retention.ts` with one port or an
-intersection of ports, and types the test fakes by port.
+`runs/ports.ts` (core) declares the ports. Features and the shell may import it. Each port is an
+interface whose members are `RunStore` method types (`RunStore['getRun']`) or written signatures
+of the topic that implements them. A caller takes a port, an intersection of ports, or a `Pick` of
+one port (`Pick<RunEventLog, 'appendEvent'>`), never a `Pick`, `Partial`, `Omit`, `Required` or
+`Readonly` of `RunStore`; test fakes are typed by port. `runs/ports-guard.test.ts` refuses those
+forms in every non-test file, and `RunStore[…]` (`import('…').RunStore` included) outside
+`runs/store.ts` and `runs/ports.ts`.
 
-| Port | Holds |
-| --- | --- |
-| `RunReads` | `getRun`, `isUnreadable` |
-| `RunQueries` | `listRuns`, `listRunSummaries`, `persistedLiveRunIds`, `listForeignClaimedRunIds`, `withReadCache`, `findRunByClientRequestId`, `listBranchOwners`, `listConversationRootIds` and the other list and find methods |
-| `RunFamilyReads` | `listWorkersOf`, `listOwnedWorkers` |
-| `RunWrites` | `createRun`, `move`, `updateRun`, `addStep`, `updateStep`, `commitOutcome`, `commitConversation`, `commitDelegation` and the other commits |
-| `RunEventLog` | `appendEvent`, `emitEphemeral`, `readEvents`, `readEventsAsync`, `hasProjection` |
-| `TranscriptFacts` | `transcriptFacts`, `knownTranscriptFacts` and the prepare methods |
-| `WorkerResults` | the worker result reads and `commitWorkerResult` |
-| `WorkerExecutions` | the worker execution, scope and process methods |
-| `RunRetention` | `canDeleteRun`, `deleteRun`, `fallbackDeleteError` and the archive methods |
-| `RunAccess` | `writeRefusal`, `unavailable`, `sourceDataDir`, `redactText` |
-| `RunLifecycleSource` | `subscribe` |
-| `StoreHandle` | `close`, `flush` |
+The ports on `main` at `0d92ba360`. *Added* marks a port this table did not plan; a port that the
+table planned under another name says so.
 
-D1 fixes the method list of each port from the callers. A later slice may move a method between
-ports when its topic moves.
+| Port | Holds | Implemented by |
+| --- | --- | --- |
+| `RunLookup` (added) | `getRun` | `RunStore` |
+| `RunReads` | `RunLookup`, `isUnreadable` | `RunStore` |
+| `RunQueries` | `listRuns`, `listRunSummaries`, `listPeerTaskSummaries`, `listArchivedRuns`, `searchRunSummaries`, `withReadCache`, `findRunByClientRequestId`, `listBranchOwners`, `listConversationRootIds` and the other list and find methods | `store.queries` (`runs/run-queries.ts`) |
+| `RunFamilyReads` | `listWorkersOf`, `listOwnedWorkers` | `store.queries` |
+| `RunWrites` | `createRun`, `createOwnedRun`, `move`, `updateRun`, `addStep`, `updateStep`, `commitOutcome`, `commitConversation`, `commitDelegation` and the other commits | `RunStore` |
+| `RunEventLog` | `appendEvent`, `emitEphemeral`, `readEvents`, `readEventsAsync`, `hasProjection` | `store.eventLog` (`runs/event-log.ts`) |
+| `RunMarkerRefs` (added) | `applyMarkerRefs`, `recordCreatedPr` | `store.eventLog` |
+| `RunRedaction` (added) | `redactText`, `registerSessionSecret`, `containsSessionSecret` | `store.redaction` (`runs/run-redaction.ts`) |
+| `TranscriptFactsPort` (planned as `TranscriptFacts`, the name of the facts type) | `transcriptFacts`, `knownTranscriptFacts`, `prepareTranscriptFacts`, `prepareRecoveryFacts`, `factsWarmIdle` | `store.transcriptFacts` (`runs/transcript-facts-topic.ts`) |
+| `WorkerResults` | the worker result reads, `workerResultSnapshotPath`, `commitWorkerResult` | `store.workerResults` (`runs/worker-results.ts`) |
+| `WorkerExecutions` | the worker execution, resource, scratch and process methods, `spawnScope`, `scopes` | `store.workerExecutions` (`delegation/worker-executions.ts`, through `runs/worker-executions-registry.ts`) |
+| `WorkerExecutionRecords` (added) | the identity, execution, process and scope record writes and paths, `workerDeletionEvidence`: what the store's own paths use | `store.workerExecutions` |
+| `WorkerScopeControl` (added) | `empty`, `stopped`, `kill` | `store.workerExecutions.scopes` |
+| `RunRetention` | `canDeleteRun`, `deleteRun`, `fallbackDeleteError` | `store.retention` (`runs/run-retention.ts`) |
+| `RunArchive` (added, split from `RunRetention`) | `setArchived`, `archiveFinished`, the archive-on-merge methods, `compressArchivedHistory`, `historyIdle` | `store.archive` (`runs/run-archive.ts`) |
+| `RunCompletionActions` (added) | `listCompletionCandidates`, `canCompleteAction`, `claimCompletionAction`, `completeAction` | `store.archive` |
+| `RunReadFlags` (added) | `setPinned`, `setRead`, `setUnread`, `markAllRead` | `store.readFlags` (`runs/run-read-flags.ts`) |
+| `RunAccess` | `writeRefusal`, `sourceDataDir`, `isFallbackRun`, `hasFallbackRun`, `runOwnership` | `store.claims` (`runs/run-claims-topic.ts`) |
+| `RunClaims` (added) | `adoptFamily`, `adoptFallbackFamily`, `listForeignClaimedRunIds`, `persistedLiveRunIds` | `store.claims` |
+| `RunPins` (added) | `pin`, `unpin`, `republish` | `store.runPins` (`runs/run-pins.ts`) |
+| `RunRepoHandle` (added) | `setRepoHandle` | `store.repoScope` (`runs/run-repo-scope.ts`) |
+| `RunPersistence` (added) | `flush`, `reportSource` | `store.persistence` (`runs/run-persistence.ts`) |
+| `RunLifecycleSource` | `subscribe` | `store.lifecycle` (`runs/lifecycle.ts`) |
+| `StoreHandle` | `unavailable`, `close` | `RunStore` |
+| `LiveRunReads` (added) | `queries.listRuns`, `claims.persistedLiveRunIds`, `getRun`: what `projectLiveTasks` reads | `RunStore`, or the read-only files |
+
+`runs/ports.ts` also names the inputs `RunPatchInput`, `CreateRunInput` and `RunEventInput`, so a
+caller never writes `Parameters<RunStore[…]>`.
 
 ### Topics leave the class
 
@@ -239,8 +278,10 @@ Each topic becomes one module under `runs/` that implements its port. The module
 state object from the store, as `worker-result-commit.ts` and `archive-family.ts` do today. The
 store exposes it as a field (`store.transcriptFacts`, `store.workerResults`), and callers either
 use the field or receive the port. Call sites change, with no aliases and no forwarding methods
-(AGENTS.md § Changing what already works). `getRun` and the other row reads stay methods on
-`RunStore`, because they have about 456 call sites.
+(AGENTS.md § Changing what already works). What stays on `RunStore`: `getRun` and `isUnreadable`
+(the reads with the most callers), the `RunWrites` commits, the inbox input methods, `liveReadSnapshot`, the
+private `change()`, the constructors `open` and `unavailable` (with the private `openOnce`), the
+`unavailable` getter, `close`, and the topic fields.
 
 Topics leave in this order, the topic with the fewest callers first:
 
@@ -304,3 +345,94 @@ The slots keep each path's behavior; this table is the reviewed list for C1.
 | Load or adoption that applies an exit | none | — |
 | A listener throws | The other listeners still get the event | — |
 | `close()` | `store.closed` | Before the database closes |
+
+## Implementation record
+
+Epic hearsay-tools/squawk#4007. Every slice merged as one squash commit on `main`. The result is
+[ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md).
+
+| Slice | Issue | Pull request | Commit on `main` | `runs/store.ts` lines after |
+| --- | --- | --- | --- | --- |
+| A1. The lifecycle module | hearsay-tools/squawk#4027 | hearsay-tools/squawk#4053 | `75c342f66` | |
+| A2. Webhooks move | hearsay-tools/squawk#4028 | hearsay-tools/squawk#4056 | `8fc853ad8` | |
+| D1. Port types | hearsay-tools/squawk#4035 | hearsay-tools/squawk#4062 | `65e98db10` | |
+| B3. RunManager listeners move | hearsay-tools/squawk#4031 | hearsay-tools/squawk#4065 | `8486490e5` | |
+| B1. Feature listeners move | hearsay-tools/squawk#4029 | hearsay-tools/squawk#4067 | `2256f6bf7` | |
+| B2. Shell feeds move | hearsay-tools/squawk#4030 | hearsay-tools/squawk#4068 | `3e62a1e09` | |
+| B4. The emitter goes | hearsay-tools/squawk#4032 | hearsay-tools/squawk#4070 | `ca14145ea` | 3,370 |
+| C1. Removal slots | hearsay-tools/squawk#4033 | hearsay-tools/squawk#4073 | `28b369d60` | 3,368 |
+| C2. Pure helpers to core, and parameters | hearsay-tools/squawk#4034 | hearsay-tools/squawk#4074 | `aa23e69f6` | |
+| D2. Transcript facts | hearsay-tools/squawk#4036 | hearsay-tools/squawk#4075 | `81d46a404` | 3,286 |
+| D3. Retention and deletion; scratch removal through the slots | hearsay-tools/squawk#4037 | hearsay-tools/squawk#4076 | `cec26d74a` | 3,120 |
+| D4. Worker results | hearsay-tools/squawk#4038 | hearsay-tools/squawk#4079 | `3a64a4e25` | 3,066 |
+| D5. Worker executions, processes, identity and scope to `delegation/` | hearsay-tools/squawk#4039 | hearsay-tools/squawk#4080 | `8ff2e7b13` | 2,862 |
+| D6. Event log, marker references and redaction | hearsay-tools/squawk#4040 | hearsay-tools/squawk#4082 | `83342c2e0` | 2,674 |
+| D7. Archive, merge and read flags; completion actions | hearsay-tools/squawk#4041 | hearsay-tools/squawk#4084 | `ea6e4dbdf` | 2,313 |
+| D8. Claims, ownership, pins; open helpers and sources | hearsay-tools/squawk#4042 | hearsay-tools/squawk#4088 | `13c09e5a6` | 1,942 |
+| D9. Persistence | hearsay-tools/squawk#4043 | hearsay-tools/squawk#4089 | `532821410` | 1,616 |
+| D10. List and find queries; cold reads | hearsay-tools/squawk#4044 | hearsay-tools/squawk#4090 | `0d92ba360` | 990 |
+| E1. ADR, docs, spec close-out | hearsay-tools/squawk#4045 | The pull request that set this spec to done | | |
+
+D1 ran inside phase A beside A2; phase B started after A2 and D1.
+
+### Changed moments
+
+Each change stays within owner decision 1; ADR 0068 has the table.
+
+- A2: the webhook subscribes to `run.created` and `run.updated` only. A run deleted here and
+  restored by another writer's row, and a run first seen through another writer, no longer send
+  `task.subscribed`; the second sends `task.status` only if its derived state changed. An exit
+  applied at load no longer causes a late `task.status`.
+- B1: the reports index reads `run.status-changed` for settlement. An exit applied at load or
+  adoption, and a conflict on a fallback run with no staged copy, lose the immediate settlement
+  scan; the reports-dirty mark still rescans.
+- B3: a throwing family reconciler is logged and no longer stops the other listeners or the write.
+- C1: a plain-run delete clears autosave in the cleanup after the commit, not before it; a
+  plain-run cleanup failure is logged, not silent.
+- D3: the orphan scratch sweep and the terminal scratch reap assert the seal at entry and ask the
+  `scratch` gate; in an unsealed process both throw before any side effect.
+
+### Decisions made during the work
+
+- The `run` of `run.updated` and `run.status-changed` is a frozen copy on a commit and the held
+  record otherwise; `to` is read per write before delivery (planner, phase A item 5; built in B3).
+- Removal slot signatures take their context as parameters; `scratch` is a new deletion kind, not
+  a reuse of `archive-tmp` (planner, C1 and D3).
+- Preview has no slot; `ReclaimOptions.previewHost` is structural (planner, C1).
+- A feature-owned topic registers through `runs/worker-executions-registry.ts`; it is not a fourth
+  removal slot (planner, D5).
+- `open`, `openOnce` and `unavailable` stay on `RunStore` as its constructors; open-time work moves
+  out to `runs/store-open.ts`, `store.claims` and `store.runPins` (planner, D8).
+- `close` stays on `RunStore` and calls `store.persistence.closeSave()`; `flush` left
+  `StoreHandle` for `RunPersistence` (D9).
+- `RepoHandle`, `ARCHIVED_WINDOW`, the decode helpers and the record schema stay in
+  `runs/store.ts`; moving the decode helpers alone makes an import cycle (planner, D10).
+- Saved worker sidecar files and saved runs keep their names, paths, modes and formats, proven by
+  `delegation/worker-sidecars-compat.test.ts` and `runs/run-persistence-saved-runs.test.ts`.
+
+### Numbers
+
+| Item | At `8a331af92` | At `0d92ba360` |
+| --- | --- | --- |
+| `runs/store.ts` | 3,381 lines, pinned in `file-length.baseline.json` | 990 lines, no entry |
+| Production listener files on the store emitter | 12 | 0 |
+| Test files on the store emitter | 42 (43 when B4 moved them) | 0 |
+| `runs/` entries in `layer-import.baseline.json` | 17 | 0 (11 after C1, 4 after C2, 0 after D5) |
+| `Pick<RunStore` sites | 41 | 0 |
+| `Pick<RunStore`, `Partial<RunStore` or `Parameters<RunStore` matches | 79 in 52 files | `runs/store.ts` only |
+| Test files Squeal selects for `runs/store.ts` | about 870 (epic estimate); 895 at `8ff2e7b13` | 889 |
+
+The selection barely moved. Most tests still build the store through testkits, so a port did not
+lower the count (roadmap rule 5). The ports make a narrower fixture possible; no slice built one.
+
+### Open seams
+
+- `delegation/removal-slot.ts` casts `ReclaimContext.store` to `RunStore` for
+  `collectWorkerEvidence`: hearsay-tools/squawk#4091.
+- `handleConflicts` takes `before` from the staged record for a row the store does not hold (phase
+  A item 8). A fix changes a published payload, so it waits for a decision:
+  hearsay-tools/squawk#4092.
+
+Defects found in moved code and filed outside the epic: hearsay-tools/squawk#4077,
+hearsay-tools/squawk#4078, hearsay-tools/squawk#4085, hearsay-tools/squawk#4086 and
+hearsay-tools/squawk#4087.
