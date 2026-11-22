@@ -1,3 +1,4 @@
+import { projectMovedMarker } from '../project-paths.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { chmodSync, mkdirSync, mkdtempSync, renameSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -564,6 +565,23 @@ describe('cold index cache', () => {
       expect(readRunIndexFromDisk(primary).runs.map(run => run.id)).toEqual(['primary']);
       expect(readRunIndexFromDisk(primary).runs.map(run => run.id).sort()).toEqual(['fallback', 'primary']);
     } finally { writer.close(); }
+  });
+
+
+  it('invalidates when the move marker reverses read-root order without changing source files', () => {
+    mkdirSync(join(dir, '.git'));
+    const primary = join(dir, '.ai', 'cezar'), fallback = join(dir, '.ai', 'squawk');
+    mkdirSync(primary, { recursive: true });
+    mkdirSync(fallback, { recursive: true });
+    seedRuns(primary, [record({ id: 'primary' })]);
+    seedRuns(fallback, [record({ id: 'fallback' })]);
+    readRunIndexFromDisk(primary);
+    expect(readRunIndexFromDisk(primary).runs.map(run => run.id).sort()).toEqual(['fallback', 'primary']);
+    const marker = projectMovedMarker(dir)!;
+    mkdirSync(join(dir, '.git', 'cezar-moved-projects'), { recursive: true });
+    writeFileSync(marker.path, JSON.stringify({ root: marker.root }));
+    // The caller keeps its original dataDir. Only the fallback selection changes.
+    expect(readRunIndexFromDisk(primary).runs.map(run => run.id)).toEqual(['primary']);
   });
 
 });

@@ -12,7 +12,7 @@ const MAX_ENTRIES = 64;
  * A stat failure disables caching; it must never turn a transient read error into cached history. */
 function fingerprint(dataDir: string): { all: string; content: string } | undefined {
   try {
-    const roots = [...new Set([resolve(dataDir), ...dataReadDirs(dataDir).map(dir => resolve(dir))])];
+    const roots = [resolve(dataDir), ...dataReadDirs(dataDir).map(dir => resolve(dir))];
     const stats = roots.map(dir => ({ dir, files: ['', 'runs.db', 'runs.db-wal', 'runs.db-shm', 'runs.json'].map(file => {
       const stat = statSync(join(dir, file), { bigint: true, throwIfNoEntry: false });
       return stat ? [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs, stat.mode].map(String) : null;
