@@ -10,11 +10,9 @@ import { recordedHolders, workerResourceAuthorized } from './worker-resource-hol
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
 import { defined } from '../core/defined.ts';
-import { autosaveCleanupBlocker, clearAutosaveCleanup } from '../autosave-cleanup.ts';
+import { assertRunSlotsSealed, deletionRefusal, runRemovalCleanups } from './removal-slots.ts';
 import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerEvidenceRunIds, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
-import { agentTmpDirLocations, agentTmpDirMayExist, agentTmpDirOwnershipProven, removeAgentTmpDir } from './agent-tmpdir.ts';
-import { jobRunsIn } from '../jobs/job.ts';
-import { removeArtifacts } from '../artifacts/lifecycle.ts';
+import { agentTmpDirMayExist, agentTmpDirOwnershipProven, removeAgentTmpDir } from './agent-tmpdir.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -2729,7 +2727,7 @@ export class RunStore {
   /** `workerResourcesSafe` with the refusal's live PIDs (empty when no PID explains it). */
   workerResourceHolders(id: string, generation: string, resourceId: string,
     opts: { admittingQueued?: boolean } = {}): 'safe' | number[] {
-    if (autosaveCleanupBlocker(this.dataDir, id)) return [];
+    if (deletionRefusal(id, 'worktree', this.dataDir)) return [];
     const run = this.peek(id);
     const proof = this.readWorkerExecution(id);
     if (!workerResourceAuthorized(run, proof, id, generation, resourceId, opts.admittingQueued)) return [];
@@ -2751,7 +2749,7 @@ export class RunStore {
 
   /** Cleanup can outlive its index row, but never its generation or terminal task intent. */
   workerScratchResourcesSafe(id: string, generation: string, resourceId: string): boolean {
-    if (autosaveCleanupBlocker(this.dataDir, id)) return false;
+    if (deletionRefusal(id, 'worktree', this.dataDir)) return false;
     const run = this.peek(id), proof = this.readWorkerExecution(id);
     if (proof?.phase !== 'complete' || proof.generation !== generation || proof.scratchCleanup?.resourceId !== resourceId ||
       (run && ['queued', 'running', 'waiting'].includes(run.status))) return false;
@@ -2891,7 +2889,7 @@ export class RunStore {
 
   canDeleteRun(id: string, kind: 'record' | 'worktree' = 'record'): boolean {
     if (this.fallbackDeleteError(id, kind)) return false;
-    if (autosaveCleanupBlocker(this.dataDir, id)) return false;
+    if (deletionRefusal(id, kind === 'record' ? 'history' : 'worktree', this.dataDir)) return false;
     const run = this.peek(id);
     if (run?.delegation?.role === 'invalid') return false;
     if (run?.delegation?.role === 'worker') return supervisedWorkers(this, run).length === 0 && this.workerDeletionEvidence(id);
@@ -2973,8 +2971,7 @@ export class RunStore {
     removeHistory(this.dataDir, id);
     rmSync(this.handoffPath(id), { force: true });
     rmSync(this.imagesDir(id), { recursive: true, force: true });
-    removeArtifacts(this.dataDir, id);
-    clearAutosaveCleanup(this.dataDir, id);
+    runRemovalCleanups(id, this.dataDir);
   }
 
   deleteRun(id: string): boolean {
@@ -2984,7 +2981,6 @@ export class RunStore {
     const run = this.peek(id);
     if (run && this.db && (this.quarantined.has(id) || !this.claimFamilies([familyKey(run)]).size)) return false;
     if (run?.delegation?.role === 'worker' || run?.delegation?.role === 'root') return this.deleteDelegatedRun(id);
-    if (run) clearAutosaveCleanup(this.dataDir, id);
     const existed = run !== undefined;
     this.held.delete(id);
     if (existed) {
@@ -3068,8 +3064,8 @@ export class RunStore {
     this.historyOwed.add(id);
   }
 
-  /** A deleted run's history files, once the delete of its row has committed. Best effort, as
-   *  deletion always was. */
+  /** A deleted run's history files and removal cleanups, once the delete of its row has committed.
+   *  Best effort: a failure is logged, and the row stays deleted. */
   private removeOwedHistory(id: string): void {
     if (!this.historyOwed.delete(id)) return;
     try {
@@ -3077,8 +3073,8 @@ export class RunStore {
       removeHistory(this.dataDir, id);
       rmSync(this.handoffPath(id), { force: true });
       rmSync(this.imagesDir(id), { recursive: true, force: true });
-      removeArtifacts(this.dataDir, id);
-    } catch { /* best effort */ }
+      runRemovalCleanups(id, this.dataDir);
+    } catch (error) { console.warn(`[hsq] History cleanup of run ${id} is incomplete: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /**
@@ -3122,11 +3118,12 @@ export class RunStore {
   /** Archive a root with its workers unless a member is live, mid-destroy or pinned, or a history
    *  deletion is under way. Each member is marked dirty: the next save writes the family at once. */
   private archiveSettledFamily(root: RunRecord): void {
+    assertRunSlotsSealed();
     const workers = this.listWorkersOf(root.id), family = [root, ...workers];
     if (family.some((run) => isLiveRecord(run) || run.pinned) || (root.delegation?.role === 'root' && root.delegation.historyDeletion)) return;
     for (const member of [root, ...workers.flatMap((worker) => this.record(worker.id) ?? [])].filter((run) => !run.archived)) {
       this.applyArchived(member, true);
-      if (!jobRunsIn(agentTmpDirLocations(this.dataDir, member.id))) removeAgentTmpDir(this.dataDir, member.id);
+      if (!deletionRefusal(member.id, 'archive-tmp', this.dataDir)) removeAgentTmpDir(this.dataDir, member.id);
     }
   }
 

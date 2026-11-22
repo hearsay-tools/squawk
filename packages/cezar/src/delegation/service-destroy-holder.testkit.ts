@@ -1,3 +1,5 @@
+// Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';

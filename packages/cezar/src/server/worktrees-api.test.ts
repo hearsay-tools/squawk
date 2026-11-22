@@ -23,6 +23,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { claimsManager, executedWorker, GIT_ID, removeWorktreesRepo, run, seedWorktreeRun, worktreesRepo } from './worktrees-api.testkit.ts';
+// Deletion, removal and reclaim ask the shipped autosave gate.
+import '../built-in-run-slots.testkit.ts';
 
 /**
  * The worktree management panel API (#483 Phase 2). `GET /api/v1/worktrees` lists

@@ -1,3 +1,5 @@
+// Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';

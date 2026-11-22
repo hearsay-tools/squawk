@@ -6,15 +6,13 @@ import { isFallbackProjectPath, projectPaths } from '../project-paths.ts';
 // recoverable) and the thin I/O enforcer that performs the reclaim. The selector
 // is pure and unit-testable; the enforcer never throws (helper discipline).
 import { existsSync } from 'node:fs';
-import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
+import { assertRunSlotsSealed, deletionRefusal, prepareReclaim } from './removal-slots.ts';
 import { hostsLiveSharedWorker } from './shared-hosts.ts';
-import { collectWorkerEvidence } from '../delegation/results.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
-import type { PreviewHostLike } from '../preview/registration.ts';
 import { isEndedRoot, isLiveRecord } from './run-row.ts';
 import type { RunPins, RunAccess, RunFamilyReads, WorkerExecutions, WorkerResults } from './ports.ts';
-import type { RunRecord, RunStatus, RunStore } from './store.ts';
+import type { RunRecord, RunStatus } from './store.ts';
 
 /** The "finished" status set — mirrors the statuses `RunStore.archiveFinished` sweeps. A run at the
  *  `review` gate is deliberately excluded: it still needs its worktree to render
@@ -168,33 +166,24 @@ export interface ReclaimOptions {
    *  the forced removal is about to delete. The run manager's `claimWorktreeReclaim` is the one
    *  that also blocks admission; startup sweeps run before any run can start and omit it. */
   claim?: (run: RunRecord) => (() => void) | null;
-  /** The workspace preview host (#781): the default reclaimer releases the run's preview first. */
-  previewHost?: Pick<PreviewHostLike, 'release'> | undefined;
-}
-
-/** Snapshot parent-owned worker evidence before the checkout goes.
- *  Test fakes without `commitWorkerResult` skip this. A collect/commit failure
- *  returns false so the directory is left for the next pass. */
-async function preserveWorkerResult(repoRoot: string, store: RetentionStore, run: RunRecord): Promise<boolean> {
-  if (run.delegation?.role !== 'worker') return true;
-  const commit = (store as RealStoreMembers).commitWorkerResult;
-  if (typeof commit !== 'function') return true;
-  const evidence = await collectWorkerEvidence(repoRoot, store as RunStore, run);
-  commit.call(store, run.delegation.parentRunId, evidence.result, evidence.diffSnapshot);
-  return evidence.diffSnapshot !== undefined || evidence.result.diff.state === 'available';
+  /** The workspace preview host (#781): the default reclaimer releases the run's preview once the
+   *  removal goes ahead. */
+  previewHost?: { release(runId: string): Promise<void> } | undefined;
 }
 
 /**
  * The proof a destructive step on `run`'s resources re-checks right before each step, as a
  * function that throws when it fails. Startup has no manager claim, and a terminal execution can
- * still have a retained autosave writer, so the autosave's durable proof is read each time. An
+ * still have a retained autosave writer, so the deletion gates (`runs/removal-slots.ts`) are asked
+ * each time. An
  * owned worker's generation and fresh resource holders must also be safe, including after async
  * evidence or preview work. Structural test stores have no execution machinery and skip that part.
  */
 export function cleanupSafety(repoRoot: string, store: RealStoreMembers, run: RunRecord): () => void {
   const execution = store.readWorkerExecution?.(run.id);
   return () => {
-    if (autosaveCleanupBlocker(store.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write, run.id)) throw Error('Autosave cleanup is not confirmed');
+    const refusal = deletionRefusal(run.id, 'worktree', store.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write);
+    if (refusal) throw Error(refusal);
     if (run.delegation?.role !== 'worker') return;
     if (typeof store.workerResourcesSafe === 'function' && (!execution ||
       !store.workerResourcesSafe(run.id, execution.generation, run.delegation.workspace.resourceId))) throw Error('Worker resources are not safe to reclaim');
@@ -243,6 +232,7 @@ export async function reclaimWorktree(
   run: RunRecord,
   opts: ReclaimOptions = {},
 ): Promise<string | null> {
+  assertRunSlotsSealed();
   if (readOnlyWorktree(repoRoot, store, run)) return null;
   const now = opts.now ?? (() => new Date().toISOString());
   // Branch kept, and only a clean checkout goes: uncommitted work lives only in the directory. An
@@ -264,7 +254,7 @@ export async function reclaimWorktree(
   if (!pinned) { release(); return null; }
   try {
     assertSafe();
-    if (!(await preserveWorkerResult(repoRoot, store, run).catch(() => false))) return null;
+    if (!(await prepareReclaim(run, { repoRoot, store: real }).then(() => true, () => false))) return null;
     if (opts.remove) assertSafe(); // injected reclaimer has no final callback
     await remove(repoRoot, run.worktreePath);
     if (existsSync(run.worktreePath)) return null; // reclaim failed; retry next pass

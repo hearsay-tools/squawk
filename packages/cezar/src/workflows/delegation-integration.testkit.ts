@@ -1,3 +1,5 @@
+// Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { ownedWorkspace, workerCollectedResultSchema, workerInspectionSchema } from '@open-mercato/cezar-contract/delegation';

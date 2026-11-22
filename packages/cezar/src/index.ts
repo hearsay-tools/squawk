@@ -20,6 +20,7 @@ import { workerCleanups } from './delegation/worker-cleanup.ts';
 import { onTerminal } from './serve-listener.ts';
 import { installWindowsIdentityStore } from './delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from './runners/built-in.ts';
+import { registerBuiltInRunSlots } from './built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
@@ -27,6 +28,9 @@ installWindowsIdentityStore();
 // Every command, the cockpit, a headless task and each child process that reruns this entry read
 // runner data from the registry (spec 2026-11-18-runner-definitions).
 registerBuiltInRunners();
+// A deletion, a reclaim or a family archive asks the removal slots, and throws in a process that
+// sealed none (spec 2026-11-21-run-lifecycle-and-store-ports).
+registerBuiltInRunSlots();
 
 warnLegacyEnv(process.env);
 

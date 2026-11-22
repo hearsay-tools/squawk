@@ -30,6 +30,7 @@ import { parseArgs } from 'node:util';
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { benchAt as at, median, runSizes, withSeededStore } from './benchmark-store-fixture.ts';
 import { reclaimWorktrees } from '../src/runs/retention.ts';
+import { registerBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 import type { RunRecord } from '../src/runs/store.ts';
 
 export interface RetentionBenchOptions {
@@ -123,6 +124,7 @@ export function formatRetentionTable(base: RetentionBenchArgs['base'], rows: rea
 }
 
 async function main(): Promise<void> {
+  registerBuiltInRunSlots();
   const { sizes, base, out } = parseRetentionBenchArgs(process.argv.slice(2));
   await runSizes(sizes, out, workers => measureRetention({ ...base, workers }), rows => formatRetentionTable(base, rows));
 }

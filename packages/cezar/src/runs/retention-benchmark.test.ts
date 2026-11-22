@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
 import { formatRetentionTable, measureRetention, parseRetentionBenchArgs } from '../../scripts/benchmark-worktree-retention.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// The measured passes claim no run, so no reclaim reaches a slot.
+sealTestRunSlots();
 
 /** Smoke test for the retention benchmark: its fixture is what the real store opens, and a
  *  destroyed worker is not a retention candidate, so a pass lists only the live directories. */

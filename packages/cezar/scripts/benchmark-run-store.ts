@@ -72,10 +72,12 @@ import type { RunRecord, RunStore as RunStoreInstance } from '../src/runs/store.
 import { DEFAULT_FIXTURE_SEED, FIXTURE_PROFILES, generateRunFixture, isLiveRun, pickSaveTarget, type FixtureProfile } from './benchmark-run-store-fixture.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from '../src/runners/built-in.ts';
+import { registerBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
 registerBuiltInRunners();
+registerBuiltInRunSlots();
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const WARM_UP = 3;

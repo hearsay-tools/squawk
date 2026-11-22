@@ -1,0 +1,26 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, it } from 'vitest';
+import { repoRoot } from './lint/source-rule.ts';
+
+// Each Node entry outside index.ts that opens a run store and can delete, reclaim or archive a
+// run seals the built-in removal slots at its startup (spec 2026-11-21-run-lifecycle-and-store-ports,
+// "Removal slots"). The scripts start real CLIs or many processes, so this reads their source.
+const TOP_LEVEL = /^registerBuiltInRunSlots\(\);$/m;
+const ENTRIES: ReadonlyArray<{ entry: string; call: RegExp }> = [
+  { entry: 'packages/cezar/scripts/benchmark-family-reconcile.ts', call: TOP_LEVEL },
+  { entry: 'packages/cezar/scripts/benchmark-run-store.ts', call: TOP_LEVEL },
+  { entry: 'packages/cezar/scripts/benchmark-stuck-destroys.ts', call: TOP_LEVEL },
+  { entry: 'packages/cezar/scripts/benchmark-worker-lifecycle.ts', call: TOP_LEVEL },
+  { entry: 'packages/cezar/scripts/benchmark-workspace-events.ts', call: TOP_LEVEL },
+  // Its test imports the measurement, so the entry seals in main().
+  { entry: 'packages/cezar/scripts/benchmark-worktree-retention.ts', call: /^async function main\(\): Promise<void> \{\n {2}registerBuiltInRunSlots\(\);$/m },
+  { entry: 'packages/cezar/scripts/measure-transcript-facts-health.mjs', call: /^ {2}registerBuiltInRunSlots\(\);$/m },
+  { entry: '.ai/scripts/probe-questions.ts', call: TOP_LEVEL },
+];
+
+it.each(ENTRIES)('$entry seals the built-in removal slots at its startup', ({ entry, call }) => {
+  const source = readFileSync(join(repoRoot, entry), 'utf8');
+  expect(source).toMatch(/registerBuiltInRunSlots \} = await import\(new URL\('built-in-run-slots\.js'|^import \{ registerBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
+  expect(source).toMatch(call);
+});
