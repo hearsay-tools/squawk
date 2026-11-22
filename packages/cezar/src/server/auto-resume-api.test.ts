@@ -10,6 +10,8 @@ import { RunStore, type RunRecord } from '../runs/store.js';
 import type { RunManager } from '../workflows/run.js';
 import { createApp } from './server.js';
 import { apiRequest } from './loopback-request.testkit.js';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 /**
  * The PER-TASK off switch for a usage-limit resume (spec

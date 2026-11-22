@@ -7,6 +7,10 @@ import { afterEach, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { artifactInstructions, provisionArtifactDirectory } from './lifecycle.ts';
 import { artifactDirectory } from './store.ts';
+import { sealTestRunSlots } from '../runs/removal-slots.testkit.ts';
+import { artifactsRemovalCleanup } from './removal-slot.ts';
+
+sealTestRunSlots({ cleanups: [artifactsRemovalCleanup] });
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });

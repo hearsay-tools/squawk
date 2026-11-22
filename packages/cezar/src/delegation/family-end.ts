@@ -5,13 +5,15 @@
  * branch through its compare-and-swap, which deletes nothing while the branch holds commits that
  * no other ref keeps. A deleted branch completes the worker's destroy, so the parent's slot is
  * free again. A receipt whose run this project no longer has gets the same removal, after its
- * directory is reclaimed if clean. The branch sweep runs this step. Never throws.
+ * directory is reclaimed if clean. The branch sweep runs this step. Throws only in a process that
+ * sealed no removal slots (`runs/removal-slots.ts`), before it removes anything.
  */
 import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { projectPaths } from '../project-paths.ts';
 import { cleanupSafety, workerFamilyEnded } from '../runs/retention.ts';
+import { assertRunSlotsSealed } from '../runs/removal-slots.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { RunAccess, RunFamilyReads, RunLookup, RunWrites, WorkerExecutions } from '../runs/ports.ts';
@@ -37,6 +39,8 @@ export function endedWorkerBranch(run: RunRecord, store: Pick<FamilyEndStore, 'g
  *  stops the step before its next workspace. Returns the worker ids whose branch went. */
 export async function releaseEndedWorkerBranches(repoRoot: string, store: FamilyEndStore,
   claim: (runId: string) => (() => void) | null, signal?: AbortSignal): Promise<string[]> {
+  // Outside every catch below, so a process that sealed no slots removes no orphan directory or branch.
+  assertRunSlotsSealed();
   // Without its runs every receipt would look orphaned.
   if (store.unavailable) return [];
   const released: string[] = [];

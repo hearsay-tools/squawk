@@ -44,6 +44,8 @@ import { ProjectContexts, projectLiveTasks, sweepRegisteredPreviewLeftovers } fr
 import { createApp } from './server.ts';
 import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './engine-run-manager.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 

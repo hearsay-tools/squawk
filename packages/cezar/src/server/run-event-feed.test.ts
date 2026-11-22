@@ -9,6 +9,8 @@ import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import { readFiniteRunFeed, readRunEventBatch, subscribeRunFeed } from './run-event-feed.ts';
 import { LIVE_BYTE_LIMIT } from '@open-mercato/cezar-contract/live-limits';
 import type { RunEvent } from '@open-mercato/cezar-contract';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 let dataDir: string;
 let store: RunStore;

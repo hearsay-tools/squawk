@@ -18,6 +18,10 @@ import { agentTmpDir } from './agent-tmpdir.ts';
 import { WorkerScratchCleanup } from '../delegation/scratch-cleanup.ts';
 import { RUN_IN_USE_ELSEWHERE, RunStore, RunWriteRefusedError, type RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /**
  * Two stores on one project (#779, plan step 3): `serve` and a headless `cez run` open the same

@@ -1,3 +1,5 @@
+// Its managers settle runs, which reclaims worktrees and ends worker families: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { rmSync } from 'node:fs';

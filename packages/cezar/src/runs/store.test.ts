@@ -36,6 +36,11 @@ import {
 
 import type { RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+import { jobsDeletionGate } from '../jobs/removal-slot.ts';
+
+// Retention archives settled families; a job's tmp directory outlives the archive.
+sealTestRunSlots({ gates: [jobsDeletionGate] });
 
 /** A minimal pre-#389 record, exactly as an old runs.json holds it — no
  *  titleSummary, no diffStat. Loading it must keep working (additive proof). */

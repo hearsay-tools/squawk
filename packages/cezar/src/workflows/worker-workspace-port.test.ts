@@ -12,6 +12,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RunStore } from '../runs/store.ts';
 import { createOwnedWorkspace, planOwnedWorkspace } from '../delegation/workspace.ts';
 import { durableRun, fixture, git, managers, WORKSPACE_TEST_TIMEOUT_MS } from '../delegation/workspace-fixture.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 const NO_PORT = 'Worker workspaces are unavailable: no worker workspace port is registered';
 

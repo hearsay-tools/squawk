@@ -20,6 +20,10 @@ import { encodeRunRow } from './run-row.ts';
 import { blockRunWrites, readPersistedRuns, runIds, seedRuns } from './run-store.testkit.ts';
 import { LEGACY_INDEX_BACKUP_FILE, RunStore, type RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /** RunStore on `runs.db` (#779): import, failure ordering, dirty-only saves, disposal. */
 

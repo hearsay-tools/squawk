@@ -13,6 +13,8 @@ import { UiEventSink } from '../runs/ui-event-sink.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 let root: string;
 let store: RunStore;

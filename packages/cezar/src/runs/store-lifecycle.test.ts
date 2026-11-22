@@ -11,6 +11,10 @@ import { blockRunWrites, crashStore, readPersistedRuns, seedRuns, setRunStatus }
 import type { RunLifecycleEvents, RunLifecycleEventType } from './lifecycle.ts';
 import { RunStore, type RunRecord } from './store.ts';
 import type { CreateRunInput } from './ports.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /**
  * The lifecycle a `RunStore` publishes (.ai/specs/2026-11-21-run-lifecycle-and-

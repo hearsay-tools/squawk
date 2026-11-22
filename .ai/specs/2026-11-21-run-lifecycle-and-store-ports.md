@@ -191,12 +191,17 @@ goes. A restart publishes nothing for the runs it loads, so the webhooks send no
 
 | Slot | Signature | Called by | On failure |
 | --- | --- | --- | --- |
-| Deletion gate | `refuse(runId, kind): string \| undefined`, with `kind` one of `history`, `worktree`, `archive-tmp` | `canDeleteRun`, the worker resource safety check, `cleanupSafety` in retention, the archive of a settled family | A reason refuses the deletion. The caller keeps today's message and status code |
-| Reclaim preparation | `prepare(run): Promise<void>` | `reclaimWorktree`, before the worktree goes | The reclaim stops and returns `null`; the next pass retries, as today |
+| Deletion gate | `refuse(runId, kind, dataDir): string \| undefined`, with `kind` one of `history`, `worktree`, `archive-tmp`, and `dataDir` the run's data dir | `canDeleteRun`, the worker resource safety check, `cleanupSafety` in retention, the archive of a settled family | A reason refuses the deletion. The caller keeps today's message and status code |
+| Reclaim preparation | `prepare(run, { repoRoot, store }): Promise<void>`, with `store` typed by a port from `runs/ports.ts` | `reclaimWorktree`, before the worktree goes | The reclaim stops and returns `null`; the next pass retries, as today |
 | Removal cleanup | `removed(runId, dataDir): void` | `removeRunHistoryBytes`, `removeOwedHistory` | Delegated runs: `deleteRun` returns `false` and the checkpoint stays for a retry. Plain runs: logged, as the best-effort path does today |
 
-- Built-in slots: autosave (gate and cleanup), workers (gate and preparation: worker resources,
-  worker evidence), artifacts (cleanup), jobs (gate for `archive-tmp`) and preview (preparation).
+- Built-in slots: autosave (gate and cleanup), workers (preparation: worker evidence), artifacts
+  (cleanup) and jobs (gate for `archive-tmp`). The worker checks of `canDeleteRun` and
+  `cleanupSafety` read the store's private records, so they stay in the store in today's order.
+  Preview has no slot: its host belongs to one `serve` process, and its release runs only once a
+  removal goes ahead, after the clean and HEAD-reachable checks, and never blocks it. So
+  `ReclaimOptions.previewHost` is typed structurally, `{ release(runId): Promise<void> }`
+  (planner decision, 2026-11-22).
 - `registerBuiltInRunSlots()` lives in a `shell` file, because it imports the features. Each
   process entry calls it once, in `src/index.ts` before the CLI dispatch, beside
   `registerBuiltInRunners()`.

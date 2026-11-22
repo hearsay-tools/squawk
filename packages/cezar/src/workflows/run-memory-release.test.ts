@@ -17,6 +17,8 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { type RunManager } from './run.ts';
 import { type WorkflowDef } from './types.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 /** hearsay-tools/squawk#2064: per-run memory ends with the run. */

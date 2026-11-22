@@ -15,6 +15,8 @@ import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { removeWorktreesRepo, run, seedWorktreeRun, worktreesRepo } from './worktrees-api.testkit.ts';
+// Deletion, removal and reclaim ask the shipped autosave gate.
+import '../built-in-run-slots.testkit.ts';
 
 /**
  * The worktrees API cases that need a real manager: Continue admission against the reclaim and

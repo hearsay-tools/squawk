@@ -10,6 +10,10 @@ import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants } 
 import { historyPaths, readHistoryText } from './history-file.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { RunStore } from './store.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

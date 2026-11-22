@@ -37,10 +37,12 @@ import type { RunManager as RunManagerInstance } from '../src/workflows/run.ts';
 import { noRunners } from '../src/core/runners-under-test.testkit.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from '../src/runners/built-in.ts';
+import { registerBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
 registerBuiltInRunners();
+registerBuiltInRunSlots();
 
 // The repo's own sandbox for ~/.cezar, so a benchmark never touches the user's registry; one this
 // run creates is removed with the rest of its teardown.

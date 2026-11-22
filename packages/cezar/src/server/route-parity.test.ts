@@ -19,6 +19,8 @@ import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 

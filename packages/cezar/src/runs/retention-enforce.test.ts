@@ -10,6 +10,12 @@ import { branchFor, createWorktree } from '../git-worktree.ts';
 import { clearAutosaveCleanup, retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import { reclaimWorktrees, type RetentionStore } from './retention.ts';
 import type { RunRecord } from './store.ts';
+import { autosaveDeletionGate } from '../autosave-removal-slots.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// The reclaims here check the autosave gate; no worker evidence is saved, so the worker
+// preparation is not registered.
+sealTestRunSlots({ gates: [autosaveDeletionGate] });
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -39,10 +45,14 @@ async function branchExists(repo: string, runId: string): Promise<boolean> {
   return res;
 }
 
-/** A tiny in-memory store exposing only what the enforcer touches. */
+/** A tiny in-memory store exposing only what the enforcer touches. No worker preparation is
+ *  registered here, so the worker results are never read. */
 function fakeStore(runs: RunRecord[]): RetentionStore & { runs: RunRecord[] } {
+  const unused = () => { throw new Error('worker results are not read here'); };
   return {
     runs,
+    readWorkerResult: unused, readWorkerResultDiff: unused, readDeletedWorkerResult: unused,
+    workerResultSnapshotPath: unused, commitWorkerResult: unused,
     listRunsWithWorktree: () => runs.filter((r) => r.worktreePath !== undefined && r.worktreeReclaimedAt === undefined),
     getRun: (id) => runs.find((r) => r.id === id),
     updateRun: (id, patch) => {

@@ -97,7 +97,7 @@ so it outlives the shell call, the turn and the agent session on every runner
 (hearsay-tools/cezarion#3097). `jobs/job.ts` owns the supervisor, its claim of the name and the
 `<name>.<run>.log`, `<name>.<run>.exit` and `<name>.job.db` files; they live in `$TMPDIR` unless
 `--dir` names another directory. A task's `$TMPDIR` outlives the task while a job recorded in it
-runs (`jobRunsIn`): the task-end reap, archive and the startup sweep spare it, and the next of them
+runs (`jobRunsIn`; the archive asks it through the jobs deletion gate, `jobs/removal-slot.ts`): the task-end reap, archive and the startup sweep spare it, and the next of them
 that finds no job running removes it (hearsay-tools/squawk#3138). The end-time reap marks the end it
 kept the directory for, so later run events of that end, such as a read mark, keep it too
 (`jobHoldsScratch` in `workflows/run/run-settlement.ts`); once the run is archived, the mark holds

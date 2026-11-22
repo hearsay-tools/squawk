@@ -8,6 +8,8 @@ import { __clearPrListCacheForTests, type BranchForge } from './repo-branches.ts
 import { __resetBranchSweepForTests, sweepMergedBranches, type SweepProject } from './repo-branch-sweep.ts';
 import { claimRepoGitMutation } from './repo-pull.ts';
 import { addOrigin, commit, fakeForge, git, mergedPr, owners, runRecord, taskBranch } from './repo-branches.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 /**
  * The automatic branch sweep (hearsay-tools/cezarion#2268): it deletes the refs whose work landed,

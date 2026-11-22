@@ -22,6 +22,10 @@ import { readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.t
 import { RunStore } from './store.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Deletion and reclaim run here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 registerRunner(claudeRunner);
 

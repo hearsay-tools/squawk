@@ -6,6 +6,8 @@
  * and stays free of the workflow engine, so a runner-adapter test does not load it
  * (hearsay-tools/cezarion#2938). A test that needs a run imports this kit.
  */
+// Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

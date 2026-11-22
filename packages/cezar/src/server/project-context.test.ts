@@ -20,6 +20,8 @@ import { ProjectContextError, ProjectContexts, type ProjectContextSource, type R
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { seedRuns, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 

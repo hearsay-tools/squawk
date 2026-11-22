@@ -15,6 +15,10 @@ import { RUNS_IMPORT_COMPLETE_KEY, RunDatabase } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { readRunIndexFromDisk, searchRunIndexFromDisk } from './run-index.ts';
 import { RunStore, runRecordSchema, type RunRecord } from './store.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 describe('project run sources', () => {
   let repo: string;

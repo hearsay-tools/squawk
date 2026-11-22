@@ -7,6 +7,10 @@ import type { DelegationState } from '@open-mercato/cezar-contract';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { seedRuns } from './run-store.testkit.ts';
 import { RunStore, type RunRecord } from './store.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /** Successful `decodeRunRow` calls, by run id: the store calls `collectRawExtras` once per decode. */
 const decodes = vi.hoisted(() => new Map<string, number>());

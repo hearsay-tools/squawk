@@ -12,6 +12,10 @@ import { RunStore } from './store.ts';
 import { countTranscriptReads, restoreTranscriptReads } from './transcript-reads.testkit.ts';
 import { seedSettledFamily } from '../workflows/delegation-reconcile.testkit.ts';
 import { setRunStatus, hasPendingAsk } from './run-store.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 const questions = [{ header: 'Pick', question: 'Which one?', options: [{ label: 'A' }, { label: 'B' }] }];
 const dirs: string[] = [];

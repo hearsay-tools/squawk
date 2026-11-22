@@ -134,40 +134,10 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/runs/retention.ts",
-      "target": "packages/cezar/src/autosave-cleanup.ts",
-      "count": 1,
-      "reason": "feature:autosave: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/runs/retention.ts",
-      "target": "packages/cezar/src/delegation/results.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/retention.ts",
-      "target": "packages/cezar/src/preview/registration.ts",
-      "count": 1,
-      "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
       "file": "packages/cezar/src/runs/run-claims.ts",
       "target": "packages/cezar/src/delegation/process-liveness.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/artifacts/lifecycle.ts",
-      "count": 1,
-      "reason": "feature:artifacts: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/autosave-cleanup.ts",
-      "count": 1,
-      "reason": "feature:autosave: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/runs/store.ts",
@@ -180,12 +150,6 @@
       "target": "packages/cezar/src/delegation/process-liveness.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/jobs/job.ts",
-      "count": 1,
-      "reason": "feature:jobs: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/runs/store.ts",
