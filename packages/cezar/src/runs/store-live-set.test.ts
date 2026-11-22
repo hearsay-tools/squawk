@@ -59,7 +59,7 @@ function family(rootStatus: RunRecord['status'], workerStatuses: Array<RunRecord
   })];
 }
 const ids = (runs: readonly RunRecord[]) => runs.map((run) => run.id).sort();
-const held = (store: RunStore) => store.heldIds().sort();
+const held = (store: RunStore) => store.queries.heldIds().sort();
 
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), 'cez-live-set-'));
@@ -208,14 +208,14 @@ describe('pins', () => {
     const pinned = store.runPins.pin(done.id, 'active')!;
     store.runPins.pin(done.id, 'continue');
     expect(store.getRun(done.id)).toBe(pinned);
-    expect(store.listRuns()).toEqual([pinned]);
+    expect(store.queries.listRuns()).toEqual([pinned]);
     store.runPins.unpin(done.id, 'continue');
     store.persistence.flush();
     expect(store.getRun(done.id)).toBe(pinned);
     store.runPins.unpin(done.id, 'active');
     store.persistence.flush();
     expect(held(store)).toEqual([]);
-    expect(store.listRuns()).toEqual([]);
+    expect(store.queries.listRuns()).toEqual([]);
   });
 
   it('answers nothing for a run that does not exist', () => {
@@ -242,7 +242,7 @@ describe('the live set stays in memory', () => {
     store.updateRun(run.id, { title: 'touched' });
     store.persistence.flush();
     expect(held(store)).toEqual([run.id]);
-    expect(store.listRuns().map((r) => r.id)).toEqual([run.id]);
+    expect(store.queries.listRuns().map((r) => r.id)).toEqual([run.id]);
   });
 
   it('lets a run go once it finishes and its last write settles', () => {
@@ -277,7 +277,7 @@ describe('the live set stays in memory', () => {
     seedRuns(dataDir, [root!, done!, (() => { const id = randomUUID(); return record({ id, delegation: workerDelegation(done!.id, id) }); })()]);
     const read = store.getRun(done!.id)!;
     expect(store.getRun(done!.id)).toBe(read);
-    expect(store.listWorkersOf(done!.id)).toHaveLength(1);
+    expect(store.queries.listWorkersOf(done!.id)).toHaveLength(1);
     store.persistence.flush();
     expect(held(store)).toEqual(ids([root!, done!]));
   });
@@ -294,7 +294,7 @@ describe('list rows', () => {
     const created = store.createRun({ title: 'new', workflow: 'w', task: 't', steps: [] });
     expect(store.retention.deleteRun(gone.id)).toBe(true);
 
-    const rows = store.listRunSummaries().runs;
+    const rows = store.queries.listRunSummaries().runs;
     expect(rows.map((row) => row.id)).not.toContain(gone.id);
     expect(rows[0]?.id).toBe(created.id);
     expect(rows.find((row) => row.id === kept.id)?.title).toBe('unsaved title');
@@ -308,7 +308,7 @@ describe('list rows', () => {
     const store = open();
     const db = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE))!;
     try {
-      expect(JSON.stringify(store.listRunSummaries().runs[0])).toBe(db.get(done.id)!.summary);
+      expect(JSON.stringify(store.queries.listRunSummaries().runs[0])).toBe(db.get(done.id)!.summary);
     } finally {
       db.close();
     }
@@ -319,16 +319,16 @@ describe('list rows', () => {
     const active = record();
     seedRuns(dataDir, [active, ...archived]);
     const store = open();
-    expect(store.listRunSummaries({ archivedWindow: 3 })).toMatchObject({ truncated: true });
-    expect(store.listRunSummaries({ archivedWindow: 3 }).runs.map((row) => row.id))
+    expect(store.queries.listRunSummaries({ archivedWindow: 3 })).toMatchObject({ truncated: true });
+    expect(store.queries.listRunSummaries({ archivedWindow: 3 }).runs.map((row) => row.id))
       .toEqual([active, ...archived.slice(1).reverse()].map((run) => run.id));
-    expect(store.listRunSummaries({ archivedWindow: 4 }).truncated).toBe(false);
+    expect(store.queries.listRunSummaries({ archivedWindow: 4 }).truncated).toBe(false);
   });
 
   it('list only the live set from listRuns', () => {
     const running = record({ status: RUN_STATUS.running });
     seedRuns(dataDir, [running, record(), record({ status: RUN_STATUS.review })]);
-    expect(open({ keepLive: true }).listRuns().map((run) => run.id)).toEqual([running.id]);
+    expect(open({ keepLive: true }).queries.listRuns().map((run) => run.id)).toEqual([running.id]);
   });
 });
 
@@ -343,17 +343,17 @@ describe('indexed queries reach runs not in memory', () => {
     const prOnly = record({ worktree: false, pullRequestUrl: 'https://github.com/o/r/pull/9' });
     seedRuns(dataDir, [requested, variantA, variantB, tree, reclaimed, prOnly]);
     const store = open();
-    expect(store.findRunByClientRequestId('client-1')?.id).toBe(requested.id);
-    expect(store.findRunByClientRequestId('client-2')).toBeUndefined();
-    expect(store.listRunsWithWorktree().map((run) => run.id)).toEqual([tree.id]);
-    expect(store.listBranchOwners().find((owner) => owner.id === tree.id)).toEqual({
+    expect(store.queries.findRunByClientRequestId('client-1')?.id).toBe(requested.id);
+    expect(store.queries.findRunByClientRequestId('client-2')).toBeUndefined();
+    expect(store.queries.listRunsWithWorktree().map((run) => run.id)).toEqual([tree.id]);
+    expect(store.queries.listBranchOwners().find((owner) => owner.id === tree.id)).toEqual({
       id: tree.id, title: tree.title, status: RUN_STATUS.done, archived: false, createdAt: tree.createdAt, branch: 'cez/t', baseBranch: 'main',
       pullRequestUrl: 'https://github.com/o/r/pull/1',
     });
-    expect(store.listBranchOwners().find((owner) => owner.id === prOnly.id)).toEqual({
+    expect(store.queries.listBranchOwners().find((owner) => owner.id === prOnly.id)).toEqual({
       id: prOnly.id, title: prOnly.title, status: RUN_STATUS.done, archived: false, createdAt: prOnly.createdAt, pullRequestUrl: 'https://github.com/o/r/pull/9',
     });
-    expect(store.listBranchOwners().map((owner) => owner.id)).not.toContain(variantA.id);
+    expect(store.queries.listBranchOwners().map((owner) => owner.id)).not.toContain(variantA.id);
     expect(held(store)).toEqual([]);
   });
 
@@ -361,9 +361,9 @@ describe('indexed queries reach runs not in memory', () => {
     const [root, ...workers] = family('done', ['done', 'failed']);
     seedRuns(dataDir, [root!, ...workers, record()]);
     const store = open();
-    expect(ids(store.listWorkersOf(root!.id))).toEqual(ids(workers));
-    expect(store.listWorkerIds().sort()).toEqual(ids(workers));
-    expect(store.listRunIds()).toHaveLength(4);
+    expect(ids(store.queries.listWorkersOf(root!.id))).toEqual(ids(workers));
+    expect(store.queries.listWorkerIds().sort()).toEqual(ids(workers));
+    expect(store.queries.listRunIds()).toHaveLength(4);
   });
 
   it('let archive-finished narrow to automation tasks or to the rest, held or not (#1332)', () => {
@@ -399,8 +399,8 @@ describe('indexed queries reach runs not in memory', () => {
     const own = record({ task: 'ours', referencedPullRequestUrl: 'https://github.com/me/repo/pull/6', referencedPrCandidates: ['https://github.com/me/repo/pull/6'] });
     seedRuns(dataDir, [foreign, own]);
     const store = open();
-    store.setRepoHandle({ owner: 'me', name: 'repo' });
-    expect(store.listRunSummaries().runs.find((row) => row.id === foreign.id)?.referencedPullRequestUrl).toBeUndefined();
+    store.repoScope.setRepoHandle({ owner: 'me', name: 'repo' });
+    expect(store.queries.listRunSummaries().runs.find((row) => row.id === foreign.id)?.referencedPullRequestUrl).toBeUndefined();
     expect(held(store)).toEqual([]);
     const persisted = readPersistedRuns(dataDir);
     expect(persisted.find((run) => run.id === foreign.id)?.referencedPullRequestUrl).toBeUndefined();

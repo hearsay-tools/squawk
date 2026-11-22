@@ -208,12 +208,12 @@ export class AutoResumeScheduler {
       // `isUsageLimitHold`, so a stale one is retired too.
       const pending = new Set([
         ...this.timers.runsOf('auto-resume'),
-        ...this.context.store.listRuns().filter((run) => run.autoResumeAt !== undefined).map((run) => run.id),
+        ...this.context.store.queries.listRuns().filter((run) => run.autoResumeAt !== undefined).map((run) => run.id),
       ]);
       for (const runId of pending) this.withdrawAutoResume(runId, 'automatic resume cancelled — auto-resume is switched off');
       return;
     }
-    for (const run of this.context.store.listRuns()) {
+    for (const run of this.context.store.queries.listRuns()) {
       if (!isUsageLimitHold(run)) continue;
       if (this.timers.has('auto-resume', run.id)) continue;
       const deadline = Date.parse(run.autoResumeAt);

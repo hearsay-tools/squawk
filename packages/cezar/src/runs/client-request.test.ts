@@ -51,7 +51,7 @@ describe('RunStore client request id', () => {
     store.archive.setArchived(run.id, true);
     store.persistence.flush();
     const reopened = RunStore.open(dataDir);
-    const found = reopened.findRunByClientRequestId(id);
+    const found = reopened.queries.findRunByClientRequestId(id);
     expect(found?.id).toBe(run.id);
     expect(found?.clientRequestHash).toBe('h');
     expect(found?.archived).toBe(true);
@@ -60,7 +60,7 @@ describe('RunStore client request id', () => {
   it('answers undefined for an unknown id and leaves ordinary runs without the fields', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'x', steps: [] });
-    expect(store.findRunByClientRequestId(id)).toBeUndefined();
+    expect(store.queries.findRunByClientRequestId(id)).toBeUndefined();
     expect('clientRequestId' in run).toBe(false);
   });
 

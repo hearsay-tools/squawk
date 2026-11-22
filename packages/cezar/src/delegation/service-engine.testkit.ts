@@ -28,7 +28,7 @@ export async function waitForOwnedWork(manager: RunManager, store: RunStore): Pr
   if (managerDisposed(manager)) return;
   // Root runs have no worker execution proof; fixture tracking drains those.
   // Every worker id: a manager may still hold a worker whose record already settled (#779).
-  for (const id of store.listWorkerIds().filter(id => manager.isActive(id))) {
+  for (const id of store.queries.listWorkerIds().filter(id => manager.isActive(id))) {
     manager.cancel(id);
     if (!await manager.awaitRunTermination(id, 8_000)) throw new Error(`Worker did not terminate: ${id}`);
   }
@@ -52,7 +52,7 @@ export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome())
   const service = new DelegationService(cleanup);
   const spawn = service.spawn.bind(service);
   vi.spyOn(service, 'spawn').mockImplementation(async (...args) => {
-    const existingWorkers = new Set(store.listWorkerIds());
+    const existingWorkers = new Set(store.queries.listWorkerIds());
     const readsBefore = admissionReads.mock.calls.length;
     const result = await spawn(...args);
     if (admissionHeld && store.getRun(result.workerId)?.status === 'queued') {

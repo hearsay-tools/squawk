@@ -32,7 +32,7 @@ const family = (...runs: RunRecord[]) => {
   const all = runs.length ? runs : [root(), isolated(W), isolated(S), child()];
   const getRun = (id: string) => all.find(run => run.id === id);
   const workers = () => all.filter(run => run.delegation?.role === 'worker');
-  return { getRun, listWorkersOf: (id: string) => id === R ? workers() : [], listOwnedWorkers: (id: string) => id === R ? workers() : [], workerExecutions: { readWorkerExecution: () => undefined } };
+  return { getRun, listWorkersOf: (id: string) => id === R ? workers() : [], queries: { listOwnedWorkers: (id: string) => id === R ? workers() : [] }, workerExecutions: { readWorkerExecution: () => undefined } };
 };
 const refusal = (check: () => void) => { try { check(); return undefined; } catch (error) { return (error as { code?: string }).code; } };
 
@@ -107,7 +107,7 @@ describe('a family where a worker supervises a worker', () => {
   });
 
   it('reads for a supervising worker the requests the root gate reads, and none for a worker that supervises nobody', () => {
-    const store = { ...family(), listConversationRootIds: () => [], claims: { writeRefusal: () => undefined } } as never;
+    const store = { ...family(), queries: { ...family().queries, listConversationRootIds: () => [] }, claims: { writeRefusal: () => undefined } } as never;
     const ids = (runId: string) => { const open = openCompletionRequests(store, runId); return [open.sent.map(message => message.id), open.incoming.map(message => message.id)]; };
     expect(ids(R)).toEqual([[ASKED_BY_R], []]);
     expect(ids(W)).toEqual([[ASKED_BY_W], [ASKED_BY_R]]);

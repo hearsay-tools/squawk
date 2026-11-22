@@ -104,7 +104,7 @@ export async function drainFixtureManagers(root: string, timeoutMs = 8_000): Pro
       const ids = cancelled.get(manager) ?? new Set<string>();
       cancelled.set(manager, ids);
       // Every id: a manager may still hold a run whose record already settled (#779).
-      for (const id of managerDisposed(manager) ? [] : store.listRunIds()) if (manager.isActive(id) && !ids.has(id)) {
+      for (const id of managerDisposed(manager) ? [] : store.queries.listRunIds()) if (manager.isActive(id) && !ids.has(id)) {
         ids.add(id);
         manager.cancel(id);
       }

@@ -56,11 +56,11 @@ export async function measureConversationLookup(options: ConversationBenchOption
   return withSeededStore('cez-bench-conversations-', () => rows, async (store) => {
     const time = (call: () => unknown) => { const t = performance.now(); call(); return performance.now() - t; };
     const awaiting = rootsAwaitingPeer(store, target).length;
-    store.listConversationRootIds();
+    store.queries.listConversationRootIds();
     const lookupMs: number[] = [], listMs: number[] = [];
     for (let i = 0; i < options.passes; i++) {
       lookupMs.push(time(() => rootsAwaitingPeer(store, target)));
-      listMs.push(time(() => store.listConversationRootIds()));
+      listMs.push(time(() => store.queries.listConversationRootIds()));
     }
     return { roots: options.roots, conversations, awaiting,
       lookupMs: Math.round(median(lookupMs)), listMs: Math.round(median(listMs)) };

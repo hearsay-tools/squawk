@@ -99,7 +99,7 @@ const contexts = new ProjectContexts({ home, createManager: (store, root, option
 contexts.onStoreCreated(created => { countSubscriptions(created) })
 const stores = new Map([['boot', store]])
 for (const project of projects.slice(1)) stores.set(project.id, (await contexts.context(project.id)).store)
-const runs = [...stores].flatMap(([projectId, value]) => value.listRunIds().map(runId => ({ projectId, runId })))
+const runs = [...stores].flatMap(([projectId, value]) => value.queries.listRunIds().map(runId => ({ projectId, runId })))
 let timer, published = 0, proxy, ticker, ticks = 0
 const reports = createReportFixture({ stores, projects, root, publishArtifact, artifactDirectory, dataDir: dir => projectPaths(dir).write })
 /** Index workload: one-off row updates, and token ticks at `rate` per second round-robin. */
@@ -119,7 +119,7 @@ function insertTask(command) {
   if (!command) return
   const { projectId = 'boot', title, beforeTitle } = command
   const target = stores.get(projectId)
-  const before = beforeTitle && target.listRunIds().map(id => target.getRun(id)).find(run => run.title === beforeTitle)
+  const before = beforeTitle && target.queries.listRunIds().map(id => target.getRun(id)).find(run => run.title === beforeTitle)
   const run = target.createRun({ title, task: title, workflow: 'quick-task', steps: [] })
   target.updateRun(run.id, { status: 'running', ...(before ? { createdAt: new Date(Date.parse(before.createdAt) + 500).toISOString() } : {}) })
 }
@@ -132,7 +132,7 @@ function startStreams(command) {
     }, 50)
   }
   if (command.summaryStreaming) {
-    const selected = [...stores].flatMap(([projectId, target]) => target.listRunIds().slice(0, 30).map(runId => ({ projectId, runId })))
+    const selected = [...stores].flatMap(([projectId, target]) => target.queries.listRunIds().slice(0, 30).map(runId => ({ projectId, runId })))
     if (selected.length) timer = setInterval(() => {
       const run = selected[published++ % selected.length]
       stores.get(run.projectId).updateRun(run.runId, { costUsd: published / 1000 })

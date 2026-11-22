@@ -52,7 +52,7 @@ describe('cez task', () => {
       expect(await run(argv, 'note')).toBe(64);
       expect(last()).toMatchObject({ code: 'invalid_input', error, usage: { operations: expect.any(Array) } });
       expect(ctx.discoveries).toBe(0);
-      expect(ctx.store.listRuns()).toEqual([]);
+      expect(ctx.store.queries.listRuns()).toEqual([]);
     });
   });
 });

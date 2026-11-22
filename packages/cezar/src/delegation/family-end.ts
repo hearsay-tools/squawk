@@ -21,17 +21,17 @@ import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 
-export type FamilyEndStore = RunLookup & Pick<RunFamilyReads, 'listWorkersOf'> & Pick<RunWrites, 'commitDelegation'> &
+export type FamilyEndStore = RunLookup & { readonly queries: Pick<RunFamilyReads, 'listWorkersOf'> } & Pick<RunWrites, 'commitDelegation'> &
   { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> } & Pick<StoreHandle, 'unavailable'> & { readonly claims: Pick<RunAccess, 'sourceDataDir'> };
 
 const SETTLED: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled', 'review']);
 
 /** A settled worker whose family has ended, with no member live, no destroy recorded and its
  *  directory gone. */
-export function endedWorkerBranch(run: RunRecord, store: Pick<FamilyEndStore, 'getRun' | 'listWorkersOf'>): boolean {
+export function endedWorkerBranch(run: RunRecord, store: Pick<FamilyEndStore, 'getRun' | 'queries'>): boolean {
   if (run.delegation?.role !== 'worker' || run.delegation.destroy || isLiveRecord(run) || !SETTLED.has(run.status)) return false;
   return workerFamilyEnded(run, (id) => store.getRun(id)) && !existsSync(run.delegation.workspace.path) &&
-    !store.listWorkersOf(run.delegation.parentRunId).some(isLiveRecord);
+    !store.queries.listWorkersOf(run.delegation.parentRunId).some(isLiveRecord);
 }
 
 /** Release the branch of every ended worker family in `repoRoot`. `claim` holds the worker's run

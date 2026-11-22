@@ -95,7 +95,7 @@ describe('delegation service durable authority', () => {
     await expect(f.service.spawn(f.caller, { ...input(), effort: 'nope' })).rejects.toMatchObject({ code: 'invalid_input' });
     vi.stubEnv('CEZ_AGENT_MODELS_LOCKED', '1');
     await expect(f.service.spawn(f.caller, { ...input(), backend: 'codex', effort: 'high' })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns().some(run => run.effort === 'nope')).toBe(false);
+    expect(f.store.queries.listRuns().some(run => run.effort === 'nope')).toBe(false);
   });
   it('rejects incompatible selections, unavailable accepted accounts, and model locks before acceptance', async () => {
     vi.stubEnv('CODEX_HOME', f.root);
@@ -106,7 +106,7 @@ describe('delegation service durable authority', () => {
     await expect(f.service.spawn(f.caller, { ...input(), backend: 'codex' })).rejects.toMatchObject({ code: 'invalid_input' });
     vi.stubEnv('CEZ_AGENT_MODELS_LOCKED', '1');
     await expect(f.service.spawn(f.caller, { ...input(), model: 'sonnet' })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   describe('explicit skill on spawn (#778)', () => {
     beforeEach(() => {
@@ -126,13 +126,13 @@ describe('delegation service durable authority', () => {
       await expect(rejection).rejects.toBeInstanceOf(DelegationPolicyError);
       await expect(rejection).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('claude account "default" skill "missing" is missing') });
       await expect(rejection).rejects.toMatchObject({ message: expect.stringContaining(join(f.root, '.agents/skills/worker-skill/SKILL.md')) });
-      expect(f.store.listRuns()).toHaveLength(1);
+      expect(f.store.queries.listRuns()).toHaveLength(1);
     });
     it('checks the selected worker runner and account list before creating a worker', async () => {
       const workerHome = join(f.root, 'worker-codex-home'); mkdirSync(workerHome);
       vi.stubEnv('CODEX_HOME', workerHome);
       const query = vi.spyOn(f.manager, 'runnerSkills').mockImplementation(async selected => {
-        expect(f.store.listRuns()).toHaveLength(1);
+        expect(f.store.queries.listRuns()).toHaveLength(1);
         expect(selected).toEqual({ runner: 'codex', cwd: f.root, accountHome: workerHome });
         return { runner: 'codex', source: 'live', problems: [], skills: [{ id: 'worker-skill', name: 'Worker skill', scope: 'user', path: join(workerHome, 'skills/worker-skill/SKILL.md') }] };
       });
@@ -200,7 +200,7 @@ describe('delegation service durable authority', () => {
     });
     it('rejects an unknown workflow name with invalid_input, creating nothing', async () => {
       await expect(f.service.spawn(f.caller, { ...input(), workflow: 'nope' })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('nope') });
-      expect(f.store.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
+      expect(f.store.queries.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
     });
     describe('per-step worker identity (#452)', () => {
       it('accepts a mixed-runner chain, pinning one identity entry per agent step and the first step at run level', async () => {
@@ -255,7 +255,7 @@ describe('delegation service durable authority', () => {
         expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ account: { provider: 'codex', profileId: 'work', homePath: work }, steps: [{ stepId: 'a', account: { profileId: 'work', homePath: work } }] });
         catalog('unknown-account', ['name: unknown-account', 'steps:', '  - id: a', '    prompt: "{{task}}"', '    runner: codex', '    agentProfile: nope'].join('\n'));
         await expect(f.service.spawn(f.caller, { ...input(), workflow: 'unknown-account' })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('nope') });
-        expect(f.store.listRuns()).toHaveLength(2);
+        expect(f.store.queries.listRuns()).toHaveLength(2);
       });
       it('applies the model lock per step', async () => {
         // A parent with no pin of its own: only the authored step model can trip the lock.
@@ -265,7 +265,7 @@ describe('delegation service durable authority', () => {
         vi.stubEnv('CEZ_AGENT_MODELS_LOCKED', '1');
         await expect(f.service.spawn(f.caller, { ...input(), workflow: 'plain' })).resolves.toMatchObject({ workerId: expect.any(String) });
         await expect(f.service.spawn(f.caller, { ...input(), workflow: 'pinned' })).rejects.toMatchObject({ code: 'invalid_input' });
-        expect(f.store.listRuns()).toHaveLength(2);
+        expect(f.store.queries.listRuns()).toHaveLength(2);
       });
     });
     it('hashes the workflow name into the retry identity', async () => {
@@ -300,12 +300,12 @@ describe('delegation service durable authority', () => {
     const before = readFileSync(path, 'utf8');
     vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', agentProfile: 'other', accountBinding: { provider: 'claude', profileId: 'other', homePath: '/different', claudeLayout: { kind: 'relocated' } } });
     expect(await f.service.spawn(f.caller, request)).toEqual(worker); expect(readFileSync(path, 'utf8')).toBe(before);
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(worker.workerId))).not.toContain('homePath');
+    expect(JSON.stringify(f.store.queries.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(worker.workerId))).not.toContain('homePath');
   });
   it('cannot accept a worker without a concrete account binding', async () => {
     vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', agentProfile: 'default' });
     await expect(f.service.spawn(f.caller, input())).rejects.toThrow();
-    expect(f.store.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
+    expect(f.store.queries.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
   });
   it('publishes neither receipt nor worker when private identity cannot be written', async () => {
     f.store.persistence.flush();
@@ -316,10 +316,10 @@ describe('delegation service durable authority', () => {
       write(id, identity);
     });
     await expect(f.service.spawn(f.caller, input())).rejects.toThrow();
-    expect(f.store.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
+    expect(f.store.queries.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.listRuns()).toHaveLength(1); expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [] }); reopened.persistence.flush();
+    expect(reopened.queries.listRuns()).toHaveLength(1); expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [] }); reopened.persistence.flush();
   });
   it('authorizes before replay and rejects copied caller, wrong project, and worker credentials', async () => {
     const request = input(); const worker = await f.service.spawn(f.caller, request);
@@ -594,10 +594,10 @@ describe('delegation service durable authority', () => {
   it('rejects generated credentials in agent task/steering text before persistence or delivery', async () => {
     f.store.redaction.registerSessionSecret(f.token);
     await expect(f.service.spawn(f.caller, { ...input(), task: `use ${f.token}` })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
     const { workerId } = await f.service.spawn(f.caller, input());
     await expect(f.service.steer(f.caller, { workerId }, { text: `use ${f.token}` })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
+    expect(JSON.stringify(f.store.queries.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
     expect(f.store.getRun(workerId)?.agentInputs ?? []).toEqual([]);
   });
   it('does not reveal absent or unrelated workers for any targeted operation', async () => {

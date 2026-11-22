@@ -54,7 +54,7 @@ describe('live repository identity recovery', () => {
     store.close();
     // Recovery must heal retained records too, not just runs created in this process.
     store = RunStore.open(root);
-    expect(armRepoHandle(store, root, resolveForgeRoot, controller.signal)).toBeUndefined();
+    expect(armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal)).toBeUndefined();
     await vi.advanceTimersByTimeAsync(999);
     expect(store.getRun(old.id)?.referencedPullRequestUrl).toBe(foreignPr);
     await vi.advanceTimersByTimeAsync(1);
@@ -81,7 +81,7 @@ describe('live repository identity recovery', () => {
     new Error('none of the git remotes configured for this repository point to a known GitHub host'),
   ])('does not reprobe permanent unknown: %s', async (error) => {
     execFileMock.mockImplementation(reply(error));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execFileMock).toHaveBeenCalledTimes(1);
     const run = create(store);
@@ -94,7 +94,7 @@ describe('live repository identity recovery', () => {
     new Error('no git remotes found'),
   ])('lets a later cold-index caller discover identity after local absence: %s', async (error) => {
     execFileMock.mockImplementation(reply(error));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(0);
     execFileMock.mockImplementation(reply(null)); // gh installed or a remote added
     await vi.advanceTimersByTimeAsync(60_000);
@@ -105,9 +105,9 @@ describe('live repository identity recovery', () => {
 
   it('does not retry malformed identity and reuses the permanent negative for another store', async () => {
     execFileMock.mockImplementation(reply(null, 'not/a/valid/slug'));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(60_000);
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execFileMock).toHaveBeenCalledTimes(1);
   });
@@ -115,7 +115,7 @@ describe('live repository identity recovery', () => {
   it.each(['HTTP 503', 'HTTP 401: Bad credentials', 'HTTP 404: Not Found', 'connect ETIMEDOUT'])(
     'bounds retryable failure %s to three attempts separated by 1s and 5s', async (message) => {
     execFileMock.mockImplementation(reply(new Error(message)));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(999);
     expect(execFileMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
@@ -131,7 +131,7 @@ describe('live repository identity recovery', () => {
 
   it('reuses successful discovery from another caller during retry delay', async () => {
     execFileMock.mockImplementationOnce(reply(new Error('timeout'))).mockImplementation(reply(null));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(0);
     await resolveRepoHandle(root);
     await vi.advanceTimersByTimeAsync(1000);
@@ -143,7 +143,7 @@ describe('live repository identity recovery', () => {
 
   it('cancels a pending retry when the owner exits', async () => {
     execFileMock.mockImplementation(reply(new Error('network is unreachable')));
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(0);
     controller.abort();
     expect(vi.getTimerCount()).toBe(0);
@@ -154,7 +154,7 @@ describe('live repository identity recovery', () => {
   it('does not start discovery for an already disposed owner', async () => {
     execFileMock.mockImplementation(reply(null));
     controller.abort();
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execFileMock).not.toHaveBeenCalled();
   });
@@ -167,7 +167,7 @@ describe('live repository identity recovery', () => {
     });
     const run = create(store);
     store.eventLog.appendEvent(run.id, { type: 'result', result: foreignPr });
-    armRepoHandle(store, root, resolveForgeRoot, controller.signal);
+    armRepoHandle(store.repoScope, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(1000);
     expect(release).toBeTypeOf('function');
     controller.abort();

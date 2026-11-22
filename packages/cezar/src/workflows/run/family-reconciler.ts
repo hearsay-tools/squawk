@@ -50,7 +50,7 @@ export class FamilyReconciler {
     if (run.delegation && run.delegation.role !== 'invalid' && !['queued', 'running', 'waiting'].includes(run.status)) {
       for (const id of settledRunFamilies(this.context.store, run)) this.host.reconcileWorkerWaits(id);
     }
-    this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(run, () => this.context.store.listRuns())); // never in recovery: an interrupted peer fails, then continues
+    this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(run, () => this.context.store.queries.listRuns())); // never in recovery: an interrupted peer fails, then continues
   };
 
   /** Runs whose scratch reap waits for the recovery that holds them. */
@@ -118,14 +118,14 @@ export class FamilyReconciler {
    *  `parent_run_id` query). A worker a worker started is filed under the root too, so this never recurses. */
   familyMembers(rootId: string): RunRecord[] {
     const root = this.context.store.getRun(rootId);
-    return [...(root ? [root] : []), ...this.context.store.listWorkersOf(rootId)];
+    return [...(root ? [root] : []), ...this.context.store.queries.listWorkersOf(rootId)];
   }
 
   /** Every member of every family with a live member, each once: the families the store holds
    *  in memory (#779), which is where every delegation sweep that is not about one family looks. */
   liveFamilyMembers(): RunRecord[] {
     const roots = new Set<string>();
-    for (const run of this.context.store.listRuns()) {
+    for (const run of this.context.store.queries.listRuns()) {
       if (run.delegation?.role === 'root') roots.add(run.id);
       else if (run.delegation?.role === 'worker') roots.add(run.delegation.parentRunId);
     }
@@ -141,7 +141,7 @@ export class FamilyReconciler {
    * Everything else asks `reconcileWorkerWaits()`, which covers the live families (#779).
    */
   async reconcileRecoveryWorkerFamilies(): Promise<void> {
-    for (const rootId of this.context.store.listConversationRootIds()) {
+    for (const rootId of this.context.store.queries.listConversationRootIds()) {
       if (this.context.store.claims.writeRefusal(rootId)) continue;
       this.recoveryFactsPending = true;
       await this.context.store.transcriptFacts.prepareRecoveryFacts(rootId);
@@ -176,7 +176,7 @@ export class FamilyReconciler {
   private reconcileWorkerFamily(familyRootId?: string): void {
     // As the global pass: a family this store may not write (foreign, fallback) is not repaired here.
     if (familyRootId !== undefined && this.context.store.claims.writeRefusal(familyRootId)) return;
-    this.context.store.withReadCache(() => this.reconcileFamilyPass(familyRootId));
+    this.context.store.queries.withReadCache(() => this.reconcileFamilyPass(familyRootId));
   }
 
   private reconcileFamilyPass(familyRootId?: string): void {
@@ -228,8 +228,8 @@ export class FamilyReconciler {
    *  the workers a settled worker started. */
   private endedWith(parent: RunRecord): RunRecord[] {
     const workers = isFamilyRecord(parent)
-      ? (parent.status === 'failed' ? [] : familyWorkers(this.context.store, parent))
-      : supervisedWorkers(this.context.store, parent);
+      ? (parent.status === 'failed' ? [] : familyWorkers(this.context.store.queries, parent))
+      : supervisedWorkers(this.context.store.queries, parent);
     return workers.filter(isLiveWorker);
   }
 
@@ -238,7 +238,7 @@ export class FamilyReconciler {
    *  workers it reads, and registration checked that the run may wait on each. */
   private workerObservations(parent: RunRecord, now: string) {
     const family = familyRecordOf(parent, id => this.context.store.getRun(id));
-    const outcomes = familyWorkers(this.context.store, parent).flatMap(child => {
+    const outcomes = familyWorkers(this.context.store.queries, parent).flatMap(child => {
       const outcome = workerOutcome(child, now);
       return outcome && this.context.store.workerExecutions.readWorkerExecution(child.id)?.phase === 'complete' ? [outcome] : [];
     });

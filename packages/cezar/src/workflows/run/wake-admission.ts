@@ -379,7 +379,7 @@ export class WakeAdmission {
   /** A deleted run's row is gone with its waits; only what they armed in memory is left. */
   readonly onRunDeleted = (runId: string): void => {
     this.host.waitEngine.forgetRun(runId);
-    if (!this.context.disposed()) this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(runId, () => this.context.store.listRuns()));
+    if (!this.context.disposed()) this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(runId, () => this.context.store.queries.listRuns()));
     // A peer's open requests to the deleted run settle `deleted` (spec 2026-10-27 § 5): each ledger
     // that holds one is reconciled, live or settled.
     if (this.context.disposed()) return;

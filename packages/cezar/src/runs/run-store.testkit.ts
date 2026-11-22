@@ -94,7 +94,7 @@ export function readStoredSummary(dataDir: string, id: string): string | undefin
 /** The id of every run the store knows, held or only in `runs.db`, newest first. `listRuns()` is
  *  the live set only (#779), so a test about every run reads the list rows instead. */
 export function runIds(store: RunStore): string[] {
-  return store.listRunSummaries().runs.map((run) => run.id);
+  return store.queries.listRunSummaries().runs.map((run) => run.id);
 }
 
 /**

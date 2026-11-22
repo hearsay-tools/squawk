@@ -67,7 +67,7 @@ export function observeWaitTimers(manager: RunManager, store: RunStore): void {
   const recover = manager.recover.bind(manager);
   vi.spyOn(manager, 'recover').mockImplementation(async (...args) => {
     const now = Date.now();
-    const captures = store.listRunIds().flatMap(id => { const run = store.getRun(id); return run && ['running', 'waiting', 'queued'].includes(run.status) ? run.waits ?? [] : []; })
+    const captures = store.queries.listRunIds().flatMap(id => { const run = store.getRun(id); return run && ['running', 'waiting', 'queued'].includes(run.status) ? run.waits ?? [] : []; })
       .filter((wait): wait is TimerWaitEntry => wait.kind === 'timer' && wait.phase === 'open' && Date.parse(wait.deadline) > Date.now())
       .map(wait => ({ id: wait.id, active: true, now, delay: Date.parse(wait.deadline) - now, indices: [] as number[] }));
     if (!captures.length) return recover(...args);

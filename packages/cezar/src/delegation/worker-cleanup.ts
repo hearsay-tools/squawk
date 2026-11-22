@@ -131,7 +131,7 @@ export class WorkerCleanup {
     this.armDestroyRetries(this.project.id);
     // A fail-start that settled while no controller ran is released now. `listRuns` holds only live
     // runs, and a settled failed worker is not one: read every worker.
-    for (const id of this.project.store.listWorkerIds()) {
+    for (const id of this.project.store.queries.listWorkerIds()) {
       const run = this.project.store.getRun(id);
       if (run && failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(id);
     }
@@ -163,7 +163,7 @@ export class WorkerCleanup {
     if (!project) return;
     project.manager.recoverWorkerCleanup();
     // A pending destroy keeps its worker in the live set (`isLiveRecord`), so this is every one.
-    for (const run of project.store.listRuns()) this.scheduleDestroyRetry(project, run.id);
+    for (const run of project.store.queries.listRuns()) this.scheduleDestroyRetry(project, run.id);
   }
   /** Arms the next automatic attempt of a pending destroy. A retry state written before a restart
    * resumes where it was; the fast cadence is the floor, and a little over the cap the ceiling, so
@@ -277,7 +277,7 @@ export class WorkerCleanup {
    */
   private async destroySupervised(project: DelegationProject, workerId: string, mode: 'manual' | 'scheduled', startedAt: number): Promise<string | undefined> {
     const worker = project.store.getRun(workerId);
-    for (const child of supervisedWorkers(project.store, worker)) {
+    for (const child of supervisedWorkers(project.store.queries, worker)) {
       const record = child.delegation?.role === 'worker' ? child.delegation : undefined;
       if (!record || (record.destroy?.phase === 'complete' && !record.destroy.remaining.length)) continue;
       const held = (error?: string) => `Worker ${child.id}, which this worker started, is not destroyed yet${error ? `: ${error}` : ''}`.slice(0, 2_000);
@@ -298,7 +298,7 @@ export class WorkerCleanup {
       if (result.state !== 'complete') return held(result.error);
     }
     const current = project.store.getRun(workerId);
-    return current && hostsLiveSharedWorker(current, rootId => project.store.listWorkersOf(rootId)) ? SHARED_HOST_REFUSAL : undefined;
+    return current && hostsLiveSharedWorker(current, rootId => project.store.queries.listWorkersOf(rootId)) ? SHARED_HOST_REFUSAL : undefined;
   }
 
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt

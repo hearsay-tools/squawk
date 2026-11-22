@@ -94,9 +94,9 @@ describe('open leaves another live store\'s runs alone', () => {
     serve.persistence.flush();
 
     const headless = open();
-    const heldThere = headless.heldIds();
+    const heldThere = headless.queries.heldIds();
     // Still readable there, as the owner wrote it.
-    expect(headless.listRunSummaries().runs.map((run) => run.id).sort()).toEqual([parked.id, monitoring.id].sort());
+    expect(headless.queries.listRunSummaries().runs.map((run) => run.id).sort()).toEqual([parked.id, monitoring.id].sort());
     headless.close();
 
     expect(persisted(parked.id)).toMatchObject({ status: RUN_STATUS.waiting });
@@ -139,7 +139,7 @@ describe('another store\'s runs are readable and refuse writes', () => {
     expect(other.retention.deleteRun(run.id)).toBe(false);
     other.persistence.flush();
 
-    expect(other.heldIds()).toEqual([]);
+    expect(other.queries.heldIds()).toEqual([]);
     expect(persisted(run.id)).toMatchObject({ title: 'theirs', archived: false });
     expect(owner.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
   });
@@ -156,7 +156,7 @@ describe('another store\'s runs are readable and refuse writes', () => {
 
     owner.runPins.unpin(run.id, 'active');
     owner.persistence.flush();
-    expect(owner.heldIds()).toEqual([]);
+    expect(owner.queries.heldIds()).toEqual([]);
     expect(claims()).toEqual([]);
     expect(other.claims.runOwnership(run.id)).toBe('free');
     expect(other.readFlags.markAllRead()).toBe(1);
@@ -206,7 +206,7 @@ describe('claims follow memory', () => {
     raw.close();
 
     const other = open({ keepLive: true });
-    expect(other.heldIds()).toEqual([run.id]);
+    expect(other.queries.heldIds()).toEqual([run.id]);
     expect(other.claims.runOwnership(run.id)).toBe('held');
   });
 });

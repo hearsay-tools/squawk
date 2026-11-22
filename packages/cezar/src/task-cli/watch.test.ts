@@ -164,7 +164,7 @@ describe('cez task watching', () => {
     it('chains into wait and prints the final status in one object', async () => {
       const waiting = run(['start', 'go', '--wait', '--timeout-seconds', '10']);
       const poll = setInterval(() => {
-        const created = harness.store.listRuns()[0];
+        const created = harness.store.queries.listRuns()[0];
         if (created) { setRunStatus(harness.store, created.id, RUN_STATUS.done); clearInterval(poll); }
       }, 20);
       expect(await waiting).toBe(0);
@@ -175,7 +175,7 @@ describe('cez task watching', () => {
     it('returns promptly, exit 0, once an interactive task parks for follow-up (#553)', async () => {
       const waiting = run(['start', 'go', '--wait', '--timeout-seconds', '10']);
       const poll = setInterval(() => {
-        const created = harness.store.listRuns()[0];
+        const created = harness.store.queries.listRuns()[0];
         if (created) { setRunStatus(harness.store, created.id, RUN_STATUS.waiting); clearInterval(poll); }
       }, 20);
       const started = Date.now();
@@ -187,7 +187,7 @@ describe('cez task watching', () => {
     it('--until settled keeps waiting through the park', async () => {
       const waiting = run(['start', 'go', '--wait', '--until', 'settled', '--timeout-seconds', '1']);
       const poll = setInterval(() => {
-        const created = harness.store.listRuns()[0];
+        const created = harness.store.queries.listRuns()[0];
         if (created) { setRunStatus(harness.store, created.id, RUN_STATUS.waiting); clearInterval(poll); }
       }, 20);
       expect(await waiting).toBe(3);

@@ -99,7 +99,7 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
     const service = new DelegationService(workerCleanups({ backoff: { fastMs: 200, fastCount: 10, capMs: 2_000 } }));
     const detach = service.registerProject({ home: testHome(), id: 'reopened', root: f.root, store: reopened, manager });
     try {
-      expect(reopened.listRuns().map(run => run.id)).not.toContain(workerId);
+      expect(reopened.queries.listRuns().map(run => run.id)).not.toContain(workerId);
       service.armDestroyRetries('reopened');
       await vi.waitFor(() => expect(reopened.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 15_000 });
     } finally { detach(); manager.dispose(); reopened.persistence.flush(); reopened.close(); }

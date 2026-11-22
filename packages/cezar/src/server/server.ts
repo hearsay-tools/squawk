@@ -2245,7 +2245,7 @@ export function createApp(deps: ServerDeps) {
   const activeRunCount = (projectId: string): number => {
     const ctx = contexts.peek(projectId);
     if (!ctx) return 0;
-    return ctx.store.listRuns().filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length;
+    return ctx.store.queries.listRuns().filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length;
   };
 
 
@@ -2796,14 +2796,14 @@ export function createApp(deps: ServerDeps) {
     .use('/runs/:id', adoptFallbackControl, requireRunControl)
     .use('/runs/:id/*', adoptFallbackControl, requireRunControl)
     // Legacy (older clients): every full record. The cockpit and `cez task` read `/run-summaries`.
-    .get('/runs', (c) => c.json(c.get('project').store.listAllRunsForLegacyRoute().map(run => withUsage(run))))
+    .get('/runs', (c) => c.json(c.get('project').store.queries.listAllRunsForLegacyRoute().map(run => withUsage(run))))
     // The slim list (#817): the same runs in the same order as `GET /runs`, from the stored
     // `toRunSummary` column with memory laid over it (#779), so the list decodes no record.
     // `?archived=recent` (#864) is the window the cockpit reads: every unarchived run plus the newest
     // `ARCHIVED_WINDOW` archived roots. The default stays every run, for clients that list them all.
     .get('/run-summaries', queryZodValidator(runSummariesQuerySchema), (c) => {
       const archivedWindow = c.req.valid('query').archived === 'recent' ? ARCHIVED_WINDOW : undefined;
-      return c.json(c.get('project').store.listRunSummaries({ archivedWindow }).runs.map(withLiveUsage));
+      return c.json(c.get('project').store.queries.listRunSummaries({ archivedWindow }).runs.map(withLiveUsage));
     })
     // The archived roots past that window, a page at a time, newest first (#864).
     .get('/run-summaries/archived', queryZodValidator(archivedRunsQuerySchema), (c) => {
@@ -2813,7 +2813,7 @@ export function createApp(deps: ServerDeps) {
       // name, or its recorded id while automations are off, as the cockpit's filter does (#1616).
       const automationNames = new Map(capabilities().automations
         ? project.automationStore.list().map((automation) => [automation.id, automation.name] as const) : []);
-      const page = project.store.listArchivedRuns({
+      const page = project.store.queries.listArchivedRuns({
         limit: limit ?? ARCHIVED_RUNS_PAGE_DEFAULT,
         automationNames,
         ...(before !== undefined ? { before } : {}),
@@ -2919,7 +2919,7 @@ export function createApp(deps: ServerDeps) {
       const body = c.req.valid('json');
       const clientRequest = clientRequestOf(body);
       if (clientRequest) {
-        const replay = replayedRun(store, clientRequest);
+        const replay = replayedRun(store.queries, clientRequest);
         if (replay && 'error' in replay) return c.json({ error: replay.error }, replay.status);
         if (replay) return c.json(replay.run, 200 as const);
       }
@@ -3640,12 +3640,12 @@ export function createApp(deps: ServerDeps) {
       // The keep-limit the panel reports is the one the enforcer will actually
       // apply — inherited from the workspace default when this repo sets none.
       const keep = await resolveWorktreeRetention(repoRoot, deps.home);
-      const withWorktree = store.listRunsWithWorktree();
+      const withWorktree = store.queries.listRunsWithWorktree();
       // Listing is on-disk dirs only; parent liveness for #575 reads the store by id
       // so a live `worktree: false` parent is not treated as gone (#570 honesty).
       const runs = withWorktree.filter((r) => r.worktreePath && existsSync(r.worktreePath));
       // The rows the enforcer would reclaim right now: reclaimable AND past the newest `keep`.
-      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, (id) => store.getRun(id), (id) => store.listWorkersOf(id)));
+      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, (id) => store.getRun(id), (id) => store.queries.listWorkersOf(id)));
       const worktrees = await Promise.all(
         runs.map(async (r) => ({
           runId: r.id,
@@ -3655,7 +3655,7 @@ export function createApp(deps: ServerDeps) {
           // POSIX `du` — degrades to null (Windows / du missing / error); never blocks.
           sizeBytes: await worktreeSizeBytes(r.worktreePath as string),
           finishedAt: r.finishedAt ?? null,
-          reclaimable: isReclaimable(r, (id) => store.getRun(id), (id) => store.listWorkersOf(id)),
+          reclaimable: isReclaimable(r, (id) => store.getRun(id), (id) => store.queries.listWorkersOf(id)),
           pastKeep: pastKeep.has(r.id),
         })),
       );
@@ -4062,7 +4062,7 @@ export function createApp(deps: ServerDeps) {
       ]);
       const [tracking, sources] = await Promise.all([
         getTracking(info.root, config.baseBranch ?? info.branch),
-        attributeLog(info.root, rawLog, c.get('project').store.listBranchOwners()),
+        attributeLog(info.root, rawLog, c.get('project').store.queries.listBranchOwners()),
       ]);
       // `source` is spread conditionally: absent, never `null`, when no task is known.
       const log = rawLog.map(({ parents: _parents, ...entry }, i) => {
@@ -4183,7 +4183,7 @@ export function createApp(deps: ServerDeps) {
       const result = await pullRepoCheckout(info.root, c.req.valid('json'), config.baseBranch,
         // Every id, not the live set: the manager may still hold a run whose record already
         // settled (a worker's execution winding down). Ids only, nothing decoded.
-        () => store.listRunIds().some((id) => manager.isActive(id)));
+        () => store.queries.listRunIds().some((id) => manager.isActive(id)));
       if (!result.ok) return c.json(result.value, 409);
       return c.json(result.value, 200);
     })
@@ -4491,7 +4491,7 @@ export function createApp(deps: ServerDeps) {
         // is findable while you stand in its project and vanishes the moment you leave — the
         // exact asymmetry a cross-project finder exists to remove.
         const window = readProjectRuns(project.id, () => owned
-          ? owned.listRunSummaries({ archivedWindow: RUNS_INDEX_PER_PROJECT, roots: true })
+          ? owned.queries.listRunSummaries({ archivedWindow: RUNS_INDEX_PER_PROJECT, roots: true })
           : readRunIndexFromDisk(dataDir, { handle, archivedWindow: RUNS_INDEX_PER_PROJECT, roots: true }));
         if (window.truncated) truncated.push(project.id);
         const recent = window.runs.map(withLiveUsage);
@@ -4539,7 +4539,7 @@ export function createApp(deps: ServerDeps) {
         const rest = tokens.filter((token) => !name.includes(token));
         if (rest.length === 0) continue;
         const scoped = rest.join(' ');
-        const found = readProjectRuns(project.id, () => owned ? owned.searchRunSummaries(scoped, limit) : searchRunIndexFromDisk(dataDir, scoped, { handle, limit }));
+        const found = readProjectRuns(project.id, () => owned ? owned.queries.searchRunSummaries(scoped, limit) : searchRunIndexFromDisk(dataDir, scoped, { handle, limit }));
         if (found.truncated) truncated.push(project.id);
         for (const run of found.runs) runs.push({ projectId: project.id, ...withLiveUsage(run) });
       }

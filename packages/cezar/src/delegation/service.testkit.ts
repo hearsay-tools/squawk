@@ -122,7 +122,7 @@ export function fixture(cleanup?: WorkerCleanupFactory, home: Home = testHome())
     async close() {
       unregister();
       credentials.close();
-      for (const id of store.listWorkerIds()) if (manager.isActive(id)) manager.cancel(id);
+      for (const id of store.queries.listWorkerIds()) if (manager.isActive(id)) manager.cancel(id);
       store.close();
       rmSync(root, { recursive: true, force: true });
     } };

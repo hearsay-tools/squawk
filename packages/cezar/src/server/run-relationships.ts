@@ -5,7 +5,7 @@ import type { RunRecord } from '../runs/store.ts';
 import type { RunFamilyReads, RunLookup, WorkerExecutions } from '../runs/ports.ts';
 import { familyRecordOf, isFamilyRecord, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
 
-type Reads = RunLookup & Pick<RunFamilyReads, 'listOwnedWorkers'> & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
+type Reads = RunLookup & { readonly queries: Pick<RunFamilyReads, 'listOwnedWorkers'> } & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
 
 /**
  * What the cockpit shows around one run: a root's whole family, each worker naming the worker that
@@ -20,7 +20,7 @@ export function runRelationships(store: Reads, run: RunRecord): RunRelationships
   const getRun = (id: string) => store.getRun(id);
   const parent = run.delegation?.role === 'worker' ? getRun(run.delegation.parentRunId) : undefined;
   const supervisorId = run.delegation?.role === 'worker' ? run.delegation.supervisorRunId : undefined;
-  const listed = isFamilyRecord(run) ? store.listOwnedWorkers(run.id)
+  const listed = isFamilyRecord(run) ? store.queries.listOwnedWorkers(run.id)
     : supervisedReceipts(familyRecordOf(run, getRun), run.id).flatMap(receipt => {
       const worker = getRun(receipt.workerId);
       return worker && supervisorIdOf(worker) === run.id ? [worker] : [];

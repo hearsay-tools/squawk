@@ -11,7 +11,7 @@ export function discoverTasks(store: RunStore, callerId: string, request: Extrac
   if (!caller || !grantsOf(caller).message.includes('peer') || historyDeleting(caller)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
   // Peer discovery is peer messaging (hearsay-tools/cezarion#2784).
   requireMessagingAllowed(caller);
-  const page = store.listPeerTaskSummaries({ callerId, ...request });
+  const page = store.queries.listPeerTaskSummaries({ callerId, ...request });
   const tasks = page.runs.flatMap(run => {
     const current = store.getRun(run.id);
     if (!isRootTask(current) || historyDeleting(current)) return [];

@@ -81,7 +81,7 @@ describe('claims held by another process', () => {
     expect(claims()).toEqual([expect.objectContaining({ family: owner.runId, pid: owner.pid, startToken: processStartToken(owner.pid) ?? null })]);
 
     const store = open();
-    expect(store.heldIds()).toEqual([]);
+    expect(store.queries.heldIds()).toEqual([]);
     expect(store.claims.runOwnership(owner.runId)).toBe('foreign');
     expect(store.getRun(owner.runId)?.status).toBe('running');
     expect(store.updateRun(owner.runId, { title: 'mine' })).toBeUndefined();
@@ -95,7 +95,7 @@ describe('claims held by another process', () => {
 
     expect(before.claims.runOwnership(owner.runId)).toBe('orphaned');
     const after = open();
-    expect(after.heldIds()).toEqual([owner.runId]);
+    expect(after.queries.heldIds()).toEqual([owner.runId]);
     // keepLive: left running for the manager's recovery, not settled.
     expect(after.getRun(owner.runId)?.status).toBe('running');
     expect(claims()).toEqual([expect.objectContaining({ family: owner.runId, pid: process.pid })]);
@@ -106,7 +106,7 @@ describe('claims held by another process', () => {
     setClaimToken('a-start-identity-the-owner-never-had');
     expect(claimOwnerLive({ session: 'owner', pid: owner.pid, startToken: 'a-start-identity-the-owner-never-had' })).toBe(false);
     const store = open();
-    expect(store.heldIds()).toEqual([owner.runId]);
+    expect(store.queries.heldIds()).toEqual([owner.runId]);
   }, 30_000);
 
   it('never takes over a live pid without a start identity: it cannot be proven dead', async () => {
@@ -114,7 +114,7 @@ describe('claims held by another process', () => {
     setClaimToken(null);
     expect(claimOwnerLive({ session: 'owner', pid: owner.pid, startToken: null })).toBe(true);
     const store = open();
-    expect(store.heldIds()).toEqual([]);
+    expect(store.queries.heldIds()).toEqual([]);
     expect(store.claims.runOwnership(owner.runId)).toBe('foreign');
   }, 30_000);
 });

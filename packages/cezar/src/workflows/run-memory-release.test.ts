@@ -146,7 +146,7 @@ describe('run memory release (hearsay-tools/squawk#2064)', () => {
     const record = settledWithSlot(RUN_STATUS.review);
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     // The reconciler lists the runs awaiting a settled peer; nothing else in this write lists runs.
-    vi.spyOn(store, 'listRuns').mockImplementation(() => { throw new Error('reconcile failed'); });
+    vi.spyOn(store.queries, 'listRuns').mockImplementation(() => { throw new Error('reconcile failed'); });
     try {
       expect(setRunStatus(store, record.id, RUN_STATUS.done)?.status).toBe(RUN_STATUS.done);
     } finally { vi.restoreAllMocks(); }

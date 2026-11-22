@@ -67,11 +67,11 @@ describe('Stop before the first Codex turn (#493)', { timeout: 15_000 }, () => {
       for (const { root, manager, store } of projects.splice(0)) {
         // Also clean up on the intentionally-red baseline: its result never
         // settles even after SIGTERM has physically terminated the child.
-        for (const record of store.listRuns()) manager.cancel(record.id);
+        for (const record of store.queries.listRuns()) manager.cancel(record.id);
         const ready = join(root, '.codex-startup-ready');
         const pid = readPid(ready);
         if (pid !== undefined) await vi.waitFor(() => expect(processExited(pid)).toBe(true), waitOptions);
-        for (const record of store.listRuns()) unregisterRunProcess(record.id);
+        for (const record of store.queries.listRuns()) unregisterRunProcess(record.id);
         manager.dispose();
         store.persistence.flush();
         rmSync(root, { recursive: true, force: true });

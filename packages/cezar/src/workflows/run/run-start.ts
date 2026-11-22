@@ -45,7 +45,7 @@ export class RunStart {
     input: StartRunInput,
     request: { id: string; hash: string },
   ): { run: RunRecord; created: boolean } | { conflict: true } {
-    const existing = this.context.store.findRunByClientRequestId(request.id);
+    const existing = this.context.store.queries.findRunByClientRequestId(request.id);
     if (existing) {
       return existing.clientRequestHash === request.hash ? { run: existing, created: false } : { conflict: true };
     }

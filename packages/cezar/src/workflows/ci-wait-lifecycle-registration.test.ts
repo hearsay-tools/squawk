@@ -21,7 +21,7 @@ describe('CI wait registration', { timeout: 30_000 }, () => {
     github();
     await expect(Promise.resolve().then(() => manager.registerWait('absent', { kind: WAIT_KIND.pr, pr, timeout_seconds: 30 }, 'cezar_wait', 'old')))
       .rejects.toMatchObject({ code: 'run_missing' });
-    expect(store.listRuns()).toEqual([]);
+    expect(store.queries.listRuns()).toEqual([]);
   });
 
   it('persists registration while executing, then parks marker-free without nudges or timed wakes', async () => {

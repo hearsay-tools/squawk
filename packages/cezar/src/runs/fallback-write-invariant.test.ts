@@ -141,7 +141,7 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
     await manager.recover();
     manager.reconcileWorkerWaits();
     for (const f of [fixture.legacy, fixture.mixed, fixture.mixedLive, fixture.fallbackSettled, fixture.fallbackLive]) manager.reconcileWorkerWaits(f.parentId);
-    store.setRepoHandle({ owner: 'acme', name: 'app' });
+    store.repoScope.setRepoHandle({ owner: 'acme', name: 'app' });
     const merged = new ArchiveOnMergeCoordinator({
       projects: async () => [project], enabled: async () => true, repository: async () => 'acme/app',
       withStore: async (_project, work) => work(store, id => manager.isActive(id), () => true),
@@ -156,7 +156,7 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
     store.archive.compressArchivedHistory();
     await store.archive.historyIdle();
     await reclaimWorktrees(root, store, 0);
-    await pruneOrphans(root, new Set(store.listRunIds()));
+    await pruneOrphans(root, new Set(store.queries.listRunIds()));
     store.archive.archiveFinished(undefined, true);
     store.createRun({ title: 'triggers count retention', task: 'r', workflow: 'quick-task', steps: [] });
     store.persistence.flush();

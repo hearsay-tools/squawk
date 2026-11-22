@@ -14,7 +14,7 @@ import '../delegation/worker-executions.testkit.ts';
 /** Flush until `runId` has left the store's memory; false if it never does. */
 async function leavesMemory(store: RunStore, runId: string): Promise<boolean> {
   try {
-    await waitFor(() => { store.persistence.flush(); return !store.heldIds().includes(runId); }, 10_000);
+    await waitFor(() => { store.persistence.flush(); return !store.queries.heldIds().includes(runId); }, 10_000);
     return true;
   } catch {
     return false;
@@ -48,7 +48,7 @@ export const OWNERSHIP_GROUPS = {
               await waitFor(() => !manager.isActive(runId));
               left = await leavesMemory(store, runId);
               expect(manager.continueRun(runId, { text: promptFor(backend, 'cezar-done') }).ok).toBe(true);
-              heldWhileContinuing = store.heldIds().includes(runId);
+              heldWhileContinuing = store.queries.heldIds().includes(runId);
               await waitFor(() => TERMINAL.includes(store.getRun(runId)?.status ?? '') && !manager.isActive(runId), 30_000);
               leftAgain = await leavesMemory(store, runId);
             },

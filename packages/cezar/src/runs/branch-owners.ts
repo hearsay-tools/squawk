@@ -1,10 +1,10 @@
-/** What branch cleanup and git-log attribution read about each run (`RunStore.listBranchOwners`). */
+/** What branch cleanup and git-log attribution read about each run (`store.queries.listBranchOwners`). */
 import type { RunRecord, RunStatus } from '@open-mercato/cezar-contract';
 import type { BranchOwnerRow } from './run-database.ts';
 import { encodeRunRow, isEndedRoot, isLiveRecord } from './run-row.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
 
-/** What branch cleanup and git-log attribution read about a run (`RunStore.listBranchOwners`). */
+/** What branch cleanup and git-log attribution read about a run (`store.queries.listBranchOwners`). */
 export interface BranchOwner {
   id: string;
   title: string;

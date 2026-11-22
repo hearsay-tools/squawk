@@ -87,7 +87,7 @@ describe('controls on a run another Squawk process owns', () => {
     expect(delegationErrorResponseSchema.parse(destroy.body)).toEqual({ code: 'incompatible_state', error: RUN_IN_USE_ELSEWHERE });
     expect(answers.filter((answer) => answer !== destroy).every((answer) => Object.keys(answer.body).join() === 'error')).toBe(true);
     expect(readPersistedRuns(dataDir)).toEqual(before);
-    expect(store.heldIds()).toEqual([]);
+    expect(store.queries.heldIds()).toEqual([]);
 
     const detail = await apiRequest(app, `/api/v1/runs/${runId}`);
     expect(detail.status).toBe(200);

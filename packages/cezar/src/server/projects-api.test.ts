@@ -496,7 +496,7 @@ describe('workspace projects API', () => {
         expect((await getProjects()).projects.map((p) => p.id)).toContain(other.id);
         expect(contexts.peek(other.id)).toBe(await building);
 
-        setRunStatus(contexts.peek(other.id)!.store, contexts.peek(other.id)!.store.listRuns()[0]!.id, RUN_STATUS.done);
+        setRunStatus(contexts.peek(other.id)!.store, contexts.peek(other.id)!.store.queries.listRuns()[0]!.id, RUN_STATUS.done);
         expect((await del(other.id, { contexts })).status).toBe(200);
         expect(contexts.peek(other.id)).toBeUndefined();
       } finally {

@@ -270,7 +270,7 @@ export class WorkerQuestions {
   /** `noticeParkedWorker` for every worker of the family `runId` belongs to: each notice goes to
    *  the task that started its worker. */
   noticeParkedWorkers(runId: string): void {
-    for (const child of familyWorkers(this.context.store, this.context.store.getRun(runId))) this.host.noticeParkedWorker(child.id);
+    for (const child of familyWorkers(this.context.store.queries, this.context.store.getRun(runId))) this.host.noticeParkedWorker(child.id);
   }
 
   /** The worker's pending ask when it went to the parent (a legacy human fallback excluded). */
@@ -346,7 +346,7 @@ export class WorkerQuestions {
 
   /** Routed questions this parent has not answered yet, by asking worker. */
   unansweredQuestions(parentId: string): { workerId: string; messageId: string }[] {
-    return this.context.store.listWorkersOf(parentId).flatMap(run => {
+    return this.context.store.queries.listWorkersOf(parentId).flatMap(run => {
       const routed = this.routedAsk(run.id);
       const root = this.context.store.getRun(parentId);
       const answered = root?.delegation?.role === 'root' && root.delegation.conversation?.outcomes.some(outcome => outcome.requestId === routed?.message.id);
@@ -361,7 +361,7 @@ export class WorkerQuestions {
     const parent = this.context.store.getRun(parentId);
     if (parent?.delegation?.role !== 'root') return;
     const state = parent.delegation.conversation ?? { messages: [], outcomes: [] };
-    const workers = this.context.store.listWorkersOf(parentId);
+    const workers = this.context.store.queries.listWorkersOf(parentId);
     const routed = workers.flatMap(run => { const ask = this.routedAsk(run.id); return ask ? [{ workerId: run.id, ...ask }] : []; });
     const missing = routed.filter(entry => !state.outcomes.some(outcome => outcome.requestId === entry.message.id));
     if (missing.length) {

@@ -16,7 +16,7 @@ export function storedRow({ revision, seq, data, extras }: StoredRow): StoredRow
 }
 
 /**
- * The cold reads of one `RunStore.withReadCache` scope (hearsay-tools/cezarion#2378): the frozen
+ * The cold reads of one `store.queries.withReadCache` scope (hearsay-tools/cezarion#2378): the frozen
  * copy of each run that was not held, with the row revision it was decoded from. Every read of the
  * scope shares it, so a family reconcile pass decodes each member once, not once per message.
  *

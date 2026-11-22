@@ -89,7 +89,7 @@ describe('bounded peer discovery pages', () => {
         const run = f.store.createRun({ title: `Held ${index}`, task: 'hold', workflow: 'quick-task', steps: [] });
         f.store.updateRun(run.id, { createdAt: new Date(Date.UTC(2020, 0, 1) + index * 2000 + 1000).toISOString() });
       }
-      const expected = f.store.listRunSummaries().runs.filter(run => run.id !== f.parent.id).map(run => run.id);
+      const expected = f.store.queries.listRunSummaries().runs.filter(run => run.id !== f.parent.id).map(run => run.id);
       const actual = [];
       for (let offset = 0; offset < expected.length; offset += 32) actual.push(...(await tasks(false, offset)).tasks.map(run => run.id));
       expect(actual).toEqual(expected);

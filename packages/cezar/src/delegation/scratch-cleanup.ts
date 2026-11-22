@@ -38,8 +38,8 @@ export class WorkerScratchCleanup {
     const autosaves = autosaveCleanupIds(this.dataDir);
     // Only runs that can own scratch matter: the live set, and every worker or quarantined run
     // by id (indexed, nothing decoded, #779). Other finished runs were reaped when they ended.
-    const live = this.store.listRuns();
-    const owners = [...this.store.listWorkerIds(), ...this.store.listQuarantinedRunIds()];
+    const live = this.store.queries.listRuns();
+    const owners = [...this.store.queries.listWorkerIds(), ...this.store.queries.listQuarantinedRunIds()];
     for (const id of new Set([...live.map(run => run.id), ...owners, ...(retained ?? [])])) this.schedule(id);
     // The sweep independently reserves every private-evidence id, even if the index lost it, and
     // every run another process claims (#779): its live runs are not in this store's live set, and

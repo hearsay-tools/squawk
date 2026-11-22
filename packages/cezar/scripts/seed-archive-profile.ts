@@ -10,7 +10,7 @@ import { RunStore } from '../src/runs/store.ts';
 const root = process.argv[2];
 if (!root) throw new Error('Pass the path to an empty scratch repository');
 const store = RunStore.open(join(root, '.ai/cezar'));
-if (store.listRunSummaries().runs.length) throw new Error('Scratch repository already contains runs');
+if (store.queries.listRunSummaries().runs.length) throw new Error('Scratch repository already contains runs');
 
 for (let p = 0; p < 12; p++) {
   const parent = store.createRun({
@@ -51,5 +51,5 @@ for (let i = 0; i < 200; i++) {
   });
   setRunStatus(store, extra.id, 'review');
 }
-console.log(JSON.stringify({ root, runs: store.listRunSummaries().runs.length, finished: 12 }));
+console.log(JSON.stringify({ root, runs: store.queries.listRunSummaries().runs.length, finished: 12 }));
 store.close();

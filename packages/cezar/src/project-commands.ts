@@ -73,6 +73,6 @@ export function openStore(repoRoot: string, opts?: { keepLive?: boolean; repoHan
   });
   // Repo-scope the referenced tier (#945) — see `armRepoHandle`. Background, never awaited: a
   // `gh`-less or offline machine keeps working exactly as it did, just unscoped.
-  armRepoHandle(store, repoRoot, resolveForgeRoot, opts?.repoHandleSignal);
+  armRepoHandle(store.repoScope, repoRoot, resolveForgeRoot, opts?.repoHandleSignal);
   return store;
 }

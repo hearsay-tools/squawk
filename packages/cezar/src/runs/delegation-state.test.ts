@@ -411,7 +411,7 @@ describe('RunStore durable delegation', () => {
     const first = store.createRun(input);
     const second = store.createRun(input);
     const observed: unknown[] = [];
-    onRunWrite(store.lifecycle, () => observed.push({ disk: disk(), memory: store.listRuns().map(r => r.delegation) }));
+    onRunWrite(store.lifecycle, () => observed.push({ disk: disk(), memory: store.queries.listRuns().map(r => r.delegation) }));
     store.commitDelegation([{ id: first.id, delegation: root }, { id: second.id, delegation: { role: 'invalid' } }]);
     expect(observed).toHaveLength(2);
     for (const value of observed) {
@@ -490,7 +490,7 @@ describe('RunStore durable delegation', () => {
     try {
       expect(() => store.commitDelegation([{ id: run.id, delegation: { ...root, wait: workerWaitSchema.parse(wait) } }])).toThrow();
       expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal)).toThrow();
-      expect(store.listRuns()).toHaveLength(1);
+      expect(store.queries.listRuns()).toHaveLength(1);
       expect(store.getRun(run.id)?.delegation).toEqual(root);
       expect(emitted).toEqual([]);
       expect(readPersistedText(dataDir)).toBe(original);
@@ -509,7 +509,7 @@ describe('RunStore durable delegation', () => {
     onRunWrite(store.lifecycle, r => emitted.push(r));
     try {
       expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal)).toThrow('disk failure');
-      expect(store.listRuns()).toHaveLength(1);
+      expect(store.queries.listRuns()).toHaveLength(1);
       expect(store.getRun(run.id)?.delegation).toEqual(before);
       expect(emitted).toEqual([]);
       expect(readPersistedText(dataDir)).toBe(persisted);
@@ -543,9 +543,9 @@ describe('RunStore durable delegation', () => {
     // The selector hash is unchanged even if parent HEAD and inherited settings have moved.
     const retry = store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal);
     expect(retry).toMatchObject({ id: workerId, delegation: { workspace: { baselineSha } } });
-    expect(store.listRuns()).toHaveLength(2);
+    expect(store.queries.listRuns()).toHaveLength(2);
     expect(() => store.createOwnedRun({ ...input, task: 'different' }, run.id, requestId, metadata, 'c'.repeat(64), spawnCapacityRefusal)).toThrow(/request/i);
-    expect(store.listRuns()).toHaveLength(2);
+    expect(store.queries.listRuns()).toHaveLength(2);
   });
 
   it('rejects missing, malformed or duplicate patch targets without a partial commit', () => {
@@ -576,7 +576,7 @@ describe('RunStore durable delegation', () => {
       ownedWorkspace(collision.workspace)[key] = ownedWorkspace(metadata.workspace)[key];
       expect(() => store.createOwnedRun(input, run.id, randomUUID(), collision, requestHash, spawnCapacityRefusal)).toThrow();
     }
-    expect(store.listRuns()).toHaveLength(3);
+    expect(store.queries.listRuns()).toHaveLength(3);
   });
 
   it("accepts workers that share their host run's worktree, and still refuses a reused resource id (hearsay-tools/squawk#3819)", () => {
@@ -617,8 +617,8 @@ describe('RunStore durable delegation', () => {
     store = openTestRunStore(dataDir, { keepLive: true });
     const reopened = store.getRun(run.id)!.delegation;
     expect(reopened?.role === 'root' ? reopened.receipts.length : 0).toBe(33);
-    expect(store.listOwnedWorkers(run.id)).toHaveLength(33);
-    expect(store.listRuns()).toHaveLength(34);
+    expect(store.queries.listOwnedWorkers(run.id)).toHaveLength(33);
+    expect(store.queries.listRuns()).toHaveLength(34);
   });
 
   it('refuses a 33rd outstanding receipt inside the store transaction (#816)', { timeout: 30_000 }, () => {
@@ -653,7 +653,7 @@ describe('RunStore durable delegation', () => {
     seedRuns(dataDir, disk().filter((r: { id: string }) => r.id !== workerId));
     store = openTestRunStore(dataDir, { keepLive: true });
     expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal)).toThrow(/receipt/i);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('fails closed when a retry receipt no longer points at an intact owned worker', () => {

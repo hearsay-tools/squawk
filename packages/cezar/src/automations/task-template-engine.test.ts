@@ -31,7 +31,7 @@ describe('automation task templates', () => {
             occurrence, receiptId, projectName: 'demo', timeZone: 'UTC',
           });
         const launched = await launch();
-        const runs = store.listRuns().filter((run) => (run.automation ?? run.automationTrigger)?.receiptId === receiptId);
+        const runs = store.queries.listRuns().filter((run) => (run.automation ?? run.automationTrigger)?.receiptId === receiptId);
         expect(runs).toHaveLength(1);
         expect(runs.some((run) => run.id === launched.runId)).toBe(true);
         for (const run of runs) {

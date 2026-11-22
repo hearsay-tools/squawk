@@ -164,11 +164,11 @@ describe('GitHub automation API', () => {
       expect(body.automations.find((row: any) => row.id === scheduled.id).counts.launched).toBe(2);
       // Unsaved changes override cold rows without waiting for the save debounce.
       reopened.updateRun(first.id, { automation: undefined });
-      expect(reopened.countAutomationRuns(definition.id)).toBe(2);
+      expect(reopened.queries.countAutomationRuns(definition.id)).toBe(2);
       reopened.retention.deleteRun(second.id);
-      expect(reopened.countAutomationRuns(definition.id)).toBe(1);
+      expect(reopened.queries.countAutomationRuns(definition.id)).toBe(1);
       reopened.persistence.flush();
-      expect(reopened.countAutomationRuns(definition.id)).toBe(1);
+      expect(reopened.queries.countAutomationRuns(definition.id)).toBe(1);
     } finally {
       reopened.close();
     }
@@ -672,7 +672,7 @@ describe('GitHub automation API', () => {
       const response = await apiRequest(server, `/api/v1/automation-log/${receipt.receiptId}/retry`, { method: 'POST' });
       expect(response.status).toBe(409);
       expect(automationStore.latestReceipts().get(receipt.receiptKey)).toMatchObject({ status: 'released' });
-      expect(store.findNonArchivedRunByIssue('acme/demo', 7)).toBeUndefined();
+      expect(store.queries.findNonArchivedRunByIssue('acme/demo', 7)).toBeUndefined();
       expect(automationStore.reserveReceipt({ automationId: rule.id, revision: rule.revision, eventId: 'e', candidate })).toBeDefined();
     } finally { live.mockRestore(); }
   });
@@ -828,7 +828,7 @@ describe('GitHub automation API', () => {
     };
     try {
       await boot('launched');
-      const launched = store.listRuns().filter((run) => run.automationTrigger);
+      const launched = store.queries.listRuns().filter((run) => run.automationTrigger);
       expect(launched).toHaveLength(1);
       expect(launched[0]!.automationTrigger).toMatchObject({ automationId: 'nightly', automationRevision: 1, trigger: 'schedule', occurrenceAt });
       expect(launched[0]!.task).toContain('Scheduled run context');
@@ -839,7 +839,7 @@ describe('GitHub automation API', () => {
       // The second boot meets the same past-due instant; the receipt makes it a `duplicate`.
       pastDue();
       await boot('duplicate');
-      expect(store.listRuns().filter((run) => run.automationTrigger)).toHaveLength(1);
+      expect(store.queries.listRuns().filter((run) => run.automationTrigger)).toHaveLength(1);
       expect(manager.startRun).toHaveBeenCalledTimes(1);
       expect(AutomationStore.open(projectPaths(root).write).logs({ automationId: 'nightly' })[0]).toMatchObject({ result: 'duplicate' });
     } finally {

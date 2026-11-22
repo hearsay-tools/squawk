@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { historyPaths } from './history-file.ts';
 import { TranscriptFactsQueue } from './transcript-facts-queue.ts';
+import { RunQueriesTopic } from './run-queries.ts';
 import { RunStore } from './store.ts';
 import { countTranscriptReads, restoreTranscriptReads } from './transcript-reads.testkit.ts';
 import { seedSettledFamily } from '../workflows/delegation-reconcile.testkit.ts';
@@ -46,7 +47,7 @@ describe('RunStore transcript facts (#880)', () => {
     try {
       const reopened = openStore(dir).store;
       await reopened.transcriptFacts.factsWarmIdle();
-      expect(reopened.listRunSummaries().runs).toHaveLength(3);
+      expect(reopened.queries.listRunSummaries().runs).toHaveLength(3);
       expect(dispatch).not.toHaveBeenCalled();
     } finally {
       dispatch.mockRestore();
@@ -228,7 +229,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
       requested.push(id);
       return request.call(this, id, demand);
     });
-    const scans = vi.spyOn(RunStore.prototype, 'listConversationRootIds');
+    const scans = vi.spyOn(RunQueriesTopic.prototype, 'listConversationRootIds');
     const reopened = RunStore.open(dir); stores.push(reopened);
     // Drain every microtask open() queued: the scan must wait for a later turn of the loop.
     for (let i = 0; i < 10; i++) await Promise.resolve();

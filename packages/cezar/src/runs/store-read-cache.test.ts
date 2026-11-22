@@ -23,7 +23,7 @@ vi.mock('./raw-record.ts', async (importOriginal) => {
   } };
 });
 
-/** `RunStore.withReadCache` (hearsay-tools/cezarion#2378): one decode per cold run, and every
+/** `store.queries.withReadCache` (hearsay-tools/cezarion#2378): one decode per cold run, and every
  *  write visible to the reads after it. */
 let dataDir: string;
 const stores: RunStore[] = [];
@@ -48,13 +48,13 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe('RunStore.withReadCache', () => {
+describe('store.queries.withReadCache', () => {
   it('decodes a cold run once and answers every read of the scope with that copy', () => {
     const store = open();
-    const [first, second] = store.withReadCache(() => [store.getRun(run.id), store.withReadCache(() => store.getRun(run.id))]);
+    const [first, second] = store.queries.withReadCache(() => [store.getRun(run.id), store.queries.withReadCache(() => store.getRun(run.id))]);
     expect(second).toBe(first);
     expect(decodes.get(run.id)).toBe(1);
-    expect(store.heldIds()).toEqual([]);
+    expect(store.queries.heldIds()).toEqual([]);
     // The cache ends with the scope: a later read decodes the row again.
     expect(store.getRun(run.id)).not.toBe(first);
     expect(decodes.get(run.id)).toBe(2);
@@ -62,7 +62,7 @@ describe('RunStore.withReadCache', () => {
 
   it('a write in the scope is visible to the reads after it, without a second decode', () => {
     const store = open();
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       expect(store.getRun(run.id)?.title).toBe('settled');
       store.updateRun(run.id, { title: 'renamed' });
       expect(store.getRun(run.id)?.title).toBe('renamed');
@@ -75,11 +75,11 @@ describe('RunStore.withReadCache', () => {
 
   it('a written run that leaves memory in the scope is read again, never the copy from before the write', () => {
     const store = open();
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       const before = store.getRun(run.id);
       store.updateRun(run.id, { title: 'renamed' });
       store.persistence.flush(); // the settled write lets the run leave memory
-      expect(store.heldIds()).toEqual([]);
+      expect(store.queries.heldIds()).toEqual([]);
       const after = store.getRun(run.id);
       expect(after).not.toBe(before);
       expect(after?.title).toBe('renamed');
@@ -88,12 +88,12 @@ describe('RunStore.withReadCache', () => {
 
   it('a run with no row reads as absent in the scope', () => {
     const store = open();
-    expect(store.withReadCache(() => store.getRun(randomUUID()))).toBeUndefined();
+    expect(store.queries.withReadCache(() => store.getRun(randomUUID()))).toBeUndefined();
   });
 
   it('a run deleted in the scope reads as absent', () => {
     const store = open();
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       expect(store.getRun(run.id)).toBeDefined();
       expect(store.retention.deleteRun(run.id)).toBe(true);
       expect(store.getRun(run.id)).toBeUndefined();
@@ -103,7 +103,7 @@ describe('RunStore.withReadCache', () => {
   it('a direct read sees another store\'s update and deletion inside the scope', () => {
     const store = open();
     const other = open();
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       expect(store.getRun(run.id)?.title).toBe('settled');
       other.updateRun(run.id, { title: 'changed elsewhere' });
       other.persistence.flush();
@@ -121,15 +121,15 @@ describe('RunStore.withReadCache', () => {
     seedRuns(dataDir, [root, worker]);
     const store = open();
     const other = open();
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       expect(store.getRun(workerId)?.title).toBe('settled');
       other.updateRun(workerId, { title: 'changed elsewhere' });
       other.persistence.flush(); // released: this store may claim the family again
       // A query reads the row again and sees its new revision.
-      expect(store.listWorkersOf(root.id).map((entry) => entry.title)).toEqual(['changed elsewhere']);
+      expect(store.queries.listWorkersOf(root.id).map((entry) => entry.title)).toEqual(['changed elsewhere']);
       expect(store.getRun(workerId)?.title).toBe('changed elsewhere');
     });
-    store.withReadCache(() => {
+    store.queries.withReadCache(() => {
       expect(store.getRun(workerId)?.title).toBe('changed elsewhere');
       other.updateRun(workerId, { title: 'changed again' });
       other.persistence.flush();
@@ -137,6 +137,6 @@ describe('RunStore.withReadCache', () => {
       store.updateRun(workerId, { task: 'mine' });
       expect(store.getRun(workerId)).toMatchObject({ title: 'changed again', task: 'mine' });
     });
-    expect(store.listQuarantinedRunIds()).toEqual([]);
+    expect(store.queries.listQuarantinedRunIds()).toEqual([]);
   });
 });

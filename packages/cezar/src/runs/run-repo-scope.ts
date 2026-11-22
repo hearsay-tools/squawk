@@ -1,0 +1,89 @@
+/**
+ * The repository a project is, armed after the store opens, and the repair of the runs it rescopes
+ * (hearsay-tools/squawk#4044). `RunStore` keeps one of these as `store.repoScope`.
+ */
+import { isDeepStrictEqual } from 'node:util';
+import { REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
+import { guardedJsonSql } from './guarded-json-sql.ts';
+import { snapshotRun } from './lifecycle.ts';
+import type { RunRepoHandle } from './ports.ts';
+import { rowFamily } from './run-claims.ts';
+import type { RunClaimsTopic } from './run-claims-topic.ts';
+import type { RunColdReadsTopic } from './run-cold-reads.ts';
+import type { RunDatabase, RunRow } from './run-database.ts';
+import type { RunPersistenceTopic } from './run-persistence.ts';
+import { namesForeignReference, rescopeRun } from './run-references.ts';
+import { parseStoredSummary } from './run-summary-page.ts';
+import type { RepoHandle, RunRecord } from './store.ts';
+
+/** What the topic asks of the store; no import of `store.ts` values. */
+export interface RepoScopeState {
+  /** The open database; null for an unavailable or closed store. */
+  db(): RunDatabase | null;
+  readonly held: Map<string, RunRecord>;
+  readonly deleted: Set<string>;
+  readonly claims: Pick<RunClaimsTopic, 'claimFamilies'>;
+  readonly persistence: Pick<RunPersistenceTopic, 'touch' | 'flush'>;
+  readonly rows: Pick<RunColdReadsTopic, 'decodeCold' | 'holdDecoded'>;
+}
+
+export class RunRepoScopeTopic implements RunRepoHandle {
+  /** The repository this project IS (#945), armed after `open()` by `setRepoHandle`. Undefined
+   *  until it arrives and `null` when it cannot be known — both mean "unscoped", which is
+   *  exactly the pre-#945 behavior. */
+  repoHandle: RepoHandle | null | undefined;
+  constructor(private readonly state: RepoScopeState) {}
+  private get db(): RunDatabase | null { return this.state.db(); }
+  private get held(): Map<string, RunRecord> { return this.state.held; }
+  private get deleted(): Set<string> { return this.state.deleted; }
+  private get claims(): RepoScopeState['claims'] { return this.state.claims; }
+  private get persistence(): RepoScopeState['persistence'] { return this.state.persistence; }
+  private decodeCold(row: RunRow, loaded?: (run: RunRecord) => void): RunRecord | undefined { return this.state.rows.decodeCold(row, loaded); }
+  private holdDecoded(run: RunRecord): RunRecord { return this.state.rows.holdDecoded(run); }
+
+  /**
+   * Set discovered repository identity without blocking boot. Recompute conclusions from retained
+   * evidence, including cold records; null retains unknown-handle behavior.
+   */
+  setRepoHandle(handle: RepoHandle | null): void {
+    this.repoHandle = handle;
+    if (!handle) return; // nothing to prove foreign against
+    // `touch` per healed run: the cockpit is already live when the handle lands, so a corrected
+    // chip has to reach the open page over SSE, not just the next `runs.json` write.
+    let healed = false;
+    const stored = this.db?.listWhere(guardedJsonSql(`${REFERENCED_RUN_RULE.sql} OR json_extract(summary, '$.pullRequests') IS NOT NULL`, 0)).filter((row) => {
+      if (this.held.has(row.id) || this.deleted.has(row.id)) return false;
+      const summary = parseStoredSummary(row.summary);
+      return !summary || namesForeignReference(summary, handle);
+    }) ?? [];
+    for (const run of [...this.held.values()]) {
+      const before = snapshotRun(run);
+      if (rescopeRun(run, this.repoHandle)) {
+        this.persistence.touch(run, before);
+        healed = true;
+      }
+    }
+    // Only rows this store may write: another process's runs heal when their owner arms its handle.
+    const writable = this.claims.claimFamilies(stored.map(rowFamily));
+    for (const row of stored) {
+      if (!writable.has(rowFamily(row))) continue;
+      let before: Readonly<RunRecord> | undefined;
+      const run = this.decodeCold(row, (loaded) => { before = snapshotRun(loaded); });
+      // `decodeCold` already scoped it with the handle just armed; write it when that changed it.
+      if (!run || !this.storedScopeDiffers(row, run)) continue;
+      this.holdDecoded(run);
+      this.persistence.touch(run, before ?? snapshotRun(run));
+      healed = true;
+    }
+    // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
+    // debounced save is unref'd, so it cannot keep the CLI alive once the lookup completes.
+    if (healed) this.persistence.flush();
+  }
+
+  /** Whether the stored summary still names a reference the scoped record no longer has. */
+  private storedScopeDiffers(row: RunRow, run: RunRecord): boolean {
+    const summary = parseStoredSummary(row.summary);
+    return summary?.referencedPullRequestUrl !== run.referencedPullRequestUrl ||
+      summary?.referencedIssueUrl !== run.referencedIssueUrl || summary?.issueNumber !== run.issueNumber || !isDeepStrictEqual(summary?.pullRequests, run.pullRequests);
+  }
+}

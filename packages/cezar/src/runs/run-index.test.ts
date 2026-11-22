@@ -175,10 +175,10 @@ describe('the cold window agrees with the store', () => {
     const coldRoots = readRunIndexFromDisk(dir, { archivedWindow: 4, roots: true });
     const store = RunStore.open(dir);
     try {
-      const owned = store.listRunSummaries({ archivedWindow: 4 });
+      const owned = store.queries.listRunSummaries({ archivedWindow: 4 });
       expect(cold.runs.map((run) => run.id)).toEqual(owned.runs.map((run) => run.id));
       expect(cold.truncated).toBe(owned.truncated);
-      const ownedRoots = store.listRunSummaries({ archivedWindow: 4, roots: true });
+      const ownedRoots = store.queries.listRunSummaries({ archivedWindow: 4, roots: true });
       expect(coldRoots.runs.map((run) => run.id)).toEqual(ownedRoots.runs.map((run) => run.id));
       expect(coldRoots.runs.map((run) => run.id)).not.toContain('w-live');
       expect(cold.runs.map((run) => run.id)).toContain('w-live');
@@ -245,8 +245,8 @@ describe('the cold reader and the store read every repaired row alike', () => {
     const cold = byId(readRunIndexFromDisk(dir, { handle: identity }).runs);
     const store = RunStore.open(dir, { keepLive: true });
     try {
-      if (identity) store.setRepoHandle(identity);
-      const owned = byId(store.listRunSummaries().runs);
+      if (identity) store.repoScope.setRepoHandle(identity);
+      const owned = byId(store.queries.listRunSummaries().runs);
       for (const raw of corpus) {
         const run = decodeRunRecord(JSON.stringify(raw))!;
         reconcileLoadedRun(run, { keepLive: true });
@@ -272,8 +272,8 @@ describe('the cold reader and the store read every repaired row alike', () => {
     try {
       expect(other.claims.runOwnership('held')).toBe('foreign');
       const cold = readRunIndexFromDisk(dir).runs;
-      expect(cold).toEqual(other.listRunSummaries().runs);
-      expect(cold).toEqual(owner.listRunSummaries().runs);
+      expect(cold).toEqual(other.queries.listRunSummaries().runs);
+      expect(cold).toEqual(owner.queries.listRunSummaries().runs);
       expect(cold).toMatchObject([{ id: 'held', status: RUN_STATUS.running }]);
     } finally {
       other.close();

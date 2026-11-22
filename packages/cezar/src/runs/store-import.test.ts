@@ -244,7 +244,7 @@ describe('the import marker is checked inside the import transaction', () => {
       writeFileSync(scratch + '/ready-' + name, '');
       waitFor(scratch + '/go');
       const store = RunStore.open(dataDir, { retryBusy: true });
-      process.stdout.write(String(store.listRunSummaries().runs.length));
+      process.stdout.write(String(store.queries.listRunSummaries().runs.length));
       store.close();
     `, [name]);
     const results = Promise.all([exitOf(opener('one')), exitOf(opener('two'))]);
@@ -594,7 +594,7 @@ describe('RunStore.unavailable', () => {
     try {
       expect(store.unavailable).toBe(failure);
       expect(() => store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] })).toThrow(failure);
-      expect(store.listRunSummaries().runs).toEqual([]);
+      expect(store.queries.listRunSummaries().runs).toEqual([]);
       store.persistence.flush();
       expect(vi.getTimerCount()).toBe(0);
     } finally {

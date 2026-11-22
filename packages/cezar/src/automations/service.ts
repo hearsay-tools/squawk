@@ -229,7 +229,7 @@ export function createAutomationService(deps: AutomationServiceDeps) {
             ...(status ? { onceStatus: status } : {}),
             counts: {
               matches: logs.filter((row) => row.result === 'launched' || row.result === 'duplicate').length,
-              launched: store.countAutomationRuns(automation.id),
+              launched: store.queries.countAutomationRuns(automation.id),
               duplicates: logs.filter((row) => row.result === 'duplicate').length,
               errors: logs.filter((row) => row.result === 'error' || row.result === 'rate-limited' || row.result === 'failed').length,
             },

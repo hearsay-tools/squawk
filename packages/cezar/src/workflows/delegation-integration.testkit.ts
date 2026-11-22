@@ -42,7 +42,7 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
   const monitoringPark = (id: string) => store.getRun(id)?.status === RUN_STATUS.waiting && !!monitoringWakeOf(store.getRun(id));
 
   async function until(predicate: () => boolean, label: string) {
-    await vi.waitFor(() => expect(predicate(), `${label}: ${JSON.stringify(store.listRuns().map(r => ({ id: r.id, status: r.status, error: r.error })))}`).toBe(true), { timeout: 15_000, interval: 20 });
+    await vi.waitFor(() => expect(predicate(), `${label}: ${JSON.stringify(store.queries.listRuns().map(r => ({ id: r.id, status: r.status, error: r.error })))}`).toBe(true), { timeout: 15_000, interval: 20 });
   }
 
   function track() {
@@ -76,8 +76,8 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
   });
 
   afterEach(async () => {
-    for (const run of store.listRuns()) manager.cancel(run.id);
-    await until(() => store.listRuns().every(run => !manager.isActive(run.id)), 'all sessions stopped');
+    for (const run of store.queries.listRuns()) manager.cancel(run.id);
+    await until(() => store.queries.listRuns().every(run => !manager.isActive(run.id)), 'all sessions stopped');
     await fixtureWorkSettled(repo);
     await drainFixtureManagers(repo);
     manager.dispose(); store.persistence.flush(); await controller.close();
@@ -258,7 +258,7 @@ if (group === 'reviewed-integration') {
     expect(store.workerResults.readWorkerResultDiff(p.id, b)).toContain('+beta');
     expect(git(parentPath, 'show', 'HEAD:shared.txt')).toBe('alpha');
     expect(git(parentPath, 'rev-parse', 'HEAD')).toBe(integratedHead);
-    const publicState = JSON.stringify([store.listRuns(), ...store.listRuns().map(run => store.eventLog.readEvents(run.id))]);
+    const publicState = JSON.stringify([store.queries.listRuns(), ...store.queries.listRuns().map(run => store.eventLog.readEvents(run.id))]);
     for (const env of environments.values()) expect(publicState).not.toContain(env.CEZ_DELEGATION_TOKEN!);
     reply(p.id, 1, { text: 'Reviewed alpha integration; beta conflict deliberately aborted.', done: true });
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.review, 'collected deleted workers permit honest parent review');
@@ -274,7 +274,7 @@ if (group === 'failure-authority') {
     // hearsay-tools/squawk#3819: a worker may start one shared worker; a worker with its own worktree stays outside its grant.
     expect(await command(failed, ['spawn', '--workspace', 'isolated', '--baseline', 'parent-head', '--request-id', randomUUID(), 'Unauthorized nested worker'], 1))
       .toMatchObject({ code: 'denied_scope', error: expect.stringContaining('Allowed: --workspace shared') });
-    expect(store.listRuns()).toHaveLength(3);
+    expect(store.queries.listRuns()).toHaveLength(3);
     reply(p.id, 1); await until(() => monitoringPark(p.id), 'parent idle');
     const wait = await command<WorkerWaitResult>(p.id, ['wait', failed, stopped, '--mode', 'all']);
     reply(failed, 1, { error: 'integration provider unavailable' }); await settled(failed, RUN_STATUS.failed);

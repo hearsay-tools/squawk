@@ -117,11 +117,11 @@ describe('explicit owned worker context', () => {
     f.store.redaction.registerSessionSecret(f.token);
     attachment('binary.bin', Buffer.concat([Buffer.from([0xff, 0x00]), Buffer.from(f.token), Buffer.from([0xfe])]));
     await expect(f.service.spawn(f.caller, input({ artifacts: [{ kind: 'parent-attachment', id: 'binary.bin' }] }))).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   it.each(['../outside', '/etc/passwd', 'a/../../outside', 'a\\b', 'missing.txt'])('rejects unsafe or missing baseline reference %s', async path => {
     await expect(f.service.spawn(f.caller, input({ artifacts: [{ kind: 'baseline-file', path }] }))).rejects.toThrow();
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   it('rejects committed symlinks and unrelated or redirected parent attachments', async () => {
     symlinkSync('/etc/passwd', join(f.root, 'escape'));
@@ -132,7 +132,7 @@ describe('explicit owned worker context', () => {
     for (const id of ['document.txt', '../other-images/document.txt', 'absent.txt']) {
       await expect(f.service.spawn(f.caller, input({ artifacts: [{ kind: 'parent-attachment', id }] }))).rejects.toThrow();
     }
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   it('bounds combined text, reference count, aggregate copied bytes and rejects credentials in context', async () => {
     attachment('large.bin', Buffer.alloc(8 * 1024 * 1024 + 1));
@@ -140,7 +140,7 @@ describe('explicit owned worker context', () => {
     for (const context of [{ text: 'x'.repeat(100_000) }, { text: f.token }, { artifacts: Array.from({ length: 33 }, () => ({ kind: 'parent-attachment' as const, id: 'large.bin' })) }, { artifacts: [{ kind: 'parent-attachment' as const, id: 'large.bin' }] }]) {
       await expect(f.service.spawn(f.caller, input(context))).rejects.toThrow();
     }
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
 });
 
@@ -200,7 +200,7 @@ describe('parent-file references', () => {
     commit('.gitignore', 'qa/**\n!qa/*.md\n');
     write('qa/keep.md', 're-included'); write('qa/other.txt', 'ignored');
     await expect(f.service.spawn(f.caller, input(files('qa/other.txt', 'qa/keep.md')))).rejects.toThrow(/not ignored by git: qa\/keep\.md.*commit/);
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
 
   it('refuses an attached .gitignore even when the request schema was bypassed', async () => {
@@ -227,7 +227,7 @@ describe('parent-file references', () => {
       await expect(f.service.spawn(f.caller, input(files('qa/ok.md', path)))).rejects.toThrow(`--attach path is not a regular file inside the parent worktree: ${path}`);
     }
     expect(runsDir()).toEqual(before);
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
 
   it('binds the read bytes to the canonical source, refusing an ancestor swapped for a symlink during the read', async () => {
@@ -239,7 +239,7 @@ describe('parent-file references', () => {
     expect(openHook.current).toBeUndefined();
     expect(readFileSync(join(f.root, 'qa/brief.md'), 'utf8')).toBe('inside bytes');
     expect(runsDir()).toEqual(before);
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
     // A source removed while it is opened is named too, not folded into the generic refusal.
     openHook.current = path => { if (path.endsWith('/qa/brief.md')) { openHook.current = undefined; rmSync(path); } return undefined; };
     await expect(f.service.spawn(f.caller, input(files('qa/brief.md')))).rejects.toThrow('--attach path not found: qa/brief.md');
@@ -286,7 +286,7 @@ describe('parent-file references', () => {
     f.store.redaction.registerSessionSecret(f.token);
     write('qa/leak.md', `token ${f.token}`);
     await expect(f.service.spawn(f.caller, input(files('qa/leak.md')))).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
 
   it('replays a retried request id without rereading the file', async () => {

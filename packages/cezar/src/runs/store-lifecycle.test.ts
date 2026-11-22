@@ -122,7 +122,7 @@ describe('lifecycle delivery cases', () => {
   it('appendEvent that finds a PR reference publishes run.event, then run.updated', () => {
     const { store, created } = setup();
     const id = created();
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     const deliveries = record(store);
     store.eventLog.appendEvent(id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
     expect(types(deliveries)).toEqual(['run.event', 'run.updated']);
@@ -247,7 +247,7 @@ describe('before holds the record as it was at the entry of each write path', ()
   it('a committed update whose rules change the held record before the commit', () => {
     const { store, created } = setup();
     const id = created();
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     const deliveries = record(store);
     store.updateRun(id, { pullRequestUrl: 'https://github.com/o/r/pull/7', autoMergePr: true });
     const { run, before } = only(deliveries, 'run.updated');
@@ -290,7 +290,7 @@ describe('before holds the record as it was at the entry of each write path', ()
       createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
       referencedPullRequestUrl: foreign, referencedPrCandidates: [foreign] }]);
     const deliveries = record(store);
-    store.setRepoHandle({ owner: 'me', name: 'repo' });
+    store.repoScope.setRepoHandle({ owner: 'me', name: 'repo' });
     expect(types(deliveries)).toEqual(['run.updated']);
     const { run, before } = only(deliveries, 'run.updated');
     expect(before).toMatchObject({ issueNumber: 3, referencedPullRequestUrl: foreign });

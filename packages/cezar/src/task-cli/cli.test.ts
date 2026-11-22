@@ -74,7 +74,7 @@ describe('cez task', () => {
         expect(await run(args.filter((arg) => arg !== flag))).toBe(2);
         expect(last()).toMatchObject({ error: 'request id payload conflict' });
       }
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
       expect(ctx.store.getRun(first.id as string)).toMatchObject({ archiveWhenDone: true, autoMergePr: true });
     });
 
@@ -116,7 +116,7 @@ describe('cez task', () => {
         id: first.id, created: false,
         warning: 'skill "cli-sample-skill" is not currently available; a missing id fails the step',
       });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('warns on an unknown skill, starts the run, and never downloads run history', async () => {
@@ -132,7 +132,7 @@ describe('cez task', () => {
       expect(ctx.store.getRun(last().id as string)?.workflowDef?.steps).toEqual([
         { id: 'task', name: 'not-a-real-cli-skill', skill: 'not-a-real-cli-skill', prompt: '{{task}}' },
       ]);
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('warns and still starts when the skill catalog is unavailable', async () => {
@@ -149,7 +149,7 @@ describe('cez task', () => {
         created: true,
         warning: 'could not check whether skill "maybe-there" is available; a missing id fails the step',
       });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('warns and still starts when the catalog request fails', async () => {
@@ -166,7 +166,7 @@ describe('cez task', () => {
         created: true,
         warning: 'could not check whether skill "maybe-there" is available; a missing id fails the step',
       });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('rejects a changed retry payload even after its skill disappears', async () => {
@@ -179,7 +179,7 @@ describe('cez task', () => {
       unlinkSync(path);
       expect(await run(['start', 'different task', '--skill', 'cli-sample-skill', '--request-id', id])).toBe(2);
       expect(last()).toMatchObject({ error: 'request id payload conflict' });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
 
@@ -190,7 +190,7 @@ describe('cez task', () => {
       const first = last();
       expect(await run(['start', '--request-id', id, 'x'])).toBe(0);
       expect(last()).toMatchObject({ id: first.id, created: false });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('passes a request-id payload conflict through with exit 2 and starts nothing', async () => {
@@ -198,7 +198,7 @@ describe('cez task', () => {
       await run(['start', '--request-id', id, 'x']);
       expect(await run(['start', '--request-id', id, 'y'])).toBe(2);
       expect(last()).toMatchObject({ error: 'request id payload conflict' });
-      expect(ctx.store.listRuns()).toHaveLength(1);
+      expect(ctx.store.queries.listRuns()).toHaveLength(1);
     });
 
     it('reads the task from stdin with --task-file -', async () => {
@@ -210,7 +210,7 @@ describe('cez task', () => {
     it('treats empty stdin as a usage error and starts nothing', async () => {
       expect(await run(['start', '--task-file', '-'], '  \n')).toBe(64);
       expect(last()).toMatchObject({ code: 'invalid_input' });
-      expect(ctx.store.listRuns()).toHaveLength(0);
+      expect(ctx.store.queries.listRuns()).toHaveLength(0);
     });
 
     it('rejects empty stdin as a usage error even when no cockpit is running', async () => {

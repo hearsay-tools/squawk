@@ -245,9 +245,9 @@ export function takesPart(self: RunRecord, other: RunRecord | undefined, otherId
 /** Every conversation root, live or settled, with an open peer request to `runId`: the peer's
  *  settlement or deletion settles each at once (spec § 5, R17). Roots another process owns are its
  *  own to settle. */
-export function rootsAwaitingPeer(store: RunQueries & RunLookup & { readonly claims: RunAccess }, runId: string): string[] {
+export function rootsAwaitingPeer(store: { readonly queries: RunQueries } & RunLookup & { readonly claims: RunAccess }, runId: string): string[] {
   // Only ledgers that name the run are read: the store narrows the candidates before decoding any.
-  return store.listConversationRootIds(runId).filter(id => {
+  return store.queries.listConversationRootIds(runId).filter(id => {
     const root = store.claims.writeRefusal(id) ? undefined : store.getRun(id);
     const state = conversationOf(root);
     return !!state?.messages.some(message => message.relationship === 'peer' && message.kind === 'request' && message.state === 'accepted' &&
@@ -257,7 +257,7 @@ export function rootsAwaitingPeer(store: RunQueries & RunLookup & { readonly cla
 
 /** The families a settled run's reconcile covers: a worker's parent, or a root's own family and
  *  every root that awaits it as a peer (`rootsAwaitingPeer`). */
-export function settledRunFamilies(store: RunQueries & RunLookup & { readonly claims: RunAccess }, run: RunRecord): string[] {
+export function settledRunFamilies(store: { readonly queries: RunQueries } & RunLookup & { readonly claims: RunAccess }, run: RunRecord): string[] {
   const family = familyRecordIdOf(run);
   if (family === undefined) return [];
   return family === run.id ? [run.id, ...rootsAwaitingPeer(store, run.id)] : [family];

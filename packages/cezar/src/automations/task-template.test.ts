@@ -407,10 +407,10 @@ it('obsolete handling events cannot claim the issue before its current handler',
       launch: (definition, candidate, receiptId) => launchAutomationRun({ root, store, manager: fakeManager(store), definition, candidate, receiptId, poller }),
     });
     await scheduler.check(auto);
-    expect(store.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
+    expect(store.queries.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
     expect(automations.latestReceipts().size).toBe(0);
     await scheduler.check(design);
-    const runId = store.findNonArchivedRunByIssue(candidate.repo, 7);
+    const runId = store.queries.findNonArchivedRunByIssue(candidate.repo, 7);
     expect(runId).toBeTruthy();
     expect(store.getRun(runId!)?.automation?.automationId).toBe(design.id);
   } finally { store.close(); await rm(root, { recursive: true, force: true }); }
@@ -425,7 +425,7 @@ it('a current-label opt-in rechecks immediately before run creation, including r
       candidate: { ...candidate, event: 'issue.labeled', changedLabel: 'friction-auto', labels: ['friction-auto'] },
       definition: { ...definition, filters: { ...definition.filters, requireCurrentLabels: true, allLabels: ['friction-auto'] } },
     })).rejects.toThrow(/current labels/);
-    expect(store.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
+    expect(store.queries.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
   } finally { store.close(); await rm(root, { recursive: true, force: true }); }
 });
 
@@ -450,7 +450,7 @@ it.each(['same', 'new'])('releases a late stale-route receipt so a %s event can 
       launch: (definition, candidate, receiptId) => launchAutomationRun({ root, store, manager: fakeManager(store), definition, candidate, receiptId, poller }),
     });
     await scheduler(automations).check(rule).catch(() => undefined);
-    expect(store.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
+    expect(store.queries.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
     const released = [...automations.latestReceipts().values()][0]!;
     expect(released).toMatchObject({ status: 'released' });
     expect(automations.isReservationInFlight(released.receiptId)).toBe(false);
@@ -462,7 +462,7 @@ it.each(['same', 'new'])('releases a late stale-route receipt so a %s event can 
     if (next === 'new') event = { ...event, eventId: 'later-event' };
     const restarted = AutomationStore.open(dataDir);
     await scheduler(restarted).check(rule);
-    const runId = store.findNonArchivedRunByIssue(candidate.repo, 7);
+    const runId = store.queries.findNonArchivedRunByIssue(candidate.repo, 7);
     expect(runId).toBeTruthy();
     const launched = restarted.latestReceipts().get(`${rule.id}:${event.eventId}`)!;
     expect(launched).toMatchObject({ status: 'launched', runId });
@@ -491,10 +491,10 @@ it.each(['before reservation', 'before launch'])('skips a closed issue %s withou
       launch: (definition, candidate, receiptId) => launchAutomationRun({ root, store, manager: fakeManager(store), definition, candidate, receiptId, poller }),
     });
     await scheduler.check(rule);
-    expect(store.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
+    expect(store.queries.findNonArchivedRunByIssue(candidate.repo, 7)).toBeUndefined();
     expect([...automations.latestReceipts().values()].every(receipt => receipt.status === 'released')).toBe(true);
     closed = false;
     await scheduler.check(rule);
-    expect(store.findNonArchivedRunByIssue(candidate.repo, 7)).toBeTruthy();
+    expect(store.queries.findNonArchivedRunByIssue(candidate.repo, 7)).toBeTruthy();
   } finally { store.close(); await rm(root, { recursive: true, force: true }); }
 });

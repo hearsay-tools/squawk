@@ -354,7 +354,7 @@ export class RunLine {
     // continuation and no queue entry for it. `pump()` cannot see such a run — it iterates the
     // queue, and this one is not in it — so nothing will ever start it. Re-adopt it through the
     // same path boot recovery uses.
-    for (const run of this.context.store.listRuns()) {
+    for (const run of this.context.store.queries.listRuns()) {
       if (!this.lostQueuedRun(run)) continue;
       console.warn(`[hsq] queue watchdog: re-adopting queued run ${run.id} the engine had lost`);
       await this.host.reviveQueuedRun(run, 'queue watchdog');
@@ -363,7 +363,7 @@ export class RunLine {
     if (this.host.busySlots() > 0 || this.startingCount() > 0) return;
     if (this.context.semaphore.busy() > 0) return;
     // A future deadline is a real reason to sit still: that timer will fire and pump.
-    for (const run of this.context.store.listRuns()) {
+    for (const run of this.context.store.queries.listRuns()) {
       if (!isUsageLimitHold(run)) continue;
       const deadline = Date.parse(run.autoResumeAt);
       if (Number.isFinite(deadline) && deadline > now) return;

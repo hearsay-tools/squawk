@@ -42,7 +42,7 @@ describe('authenticated delegation HTTP family', () => {
     const { workerId } = await spawn(); const waitId = randomUUID();
     const wait = { id: waitId, workerIds: [workerId], phase: 'wake-pending', reason: 'timeout', wakeId: waitId,
       deadline: new Date(Date.now() - 1000).toISOString(), outcomes: [] };
-    const records = f.store.listRuns().map(run => run.id === f.parent.id ? { ...run, status,
+    const records = f.store.queries.listRuns().map(run => run.id === f.parent.id ? { ...run, status,
       delegation: { ...run.delegation, permissions: ['wait'], wait: legacy ? { id: wait.id, workerIds: wait.workerIds, phase: wait.phase, deadline: wait.deadline, outcomes: wait.outcomes } : wait } } : run);
     // A restart: the old manager and store go, or the store would still own the family it reloads.
     f.manager.dispose(); f.store.close();

@@ -229,7 +229,7 @@ describe('authenticated delegation HTTP family', () => {
     const wait = await request('/wait', { workerIds: [workerId] }); expect(delegationErrorResponseSchema.parse(await wait.json()).code).toBe('incompatible_state');
     const stop = await request(`/${workerId}/stop`, {}); expect(workerStopResultSchema.parse(await stop.json())).toEqual({ workerId, state: 'terminated' });
     const destroy = await request(`/${workerId}/destroy`, {}); expect(workerDestroyResultSchema.parse(await destroy.json())).toEqual({ workerId, state: 'complete', remaining: [] });
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
+    expect(JSON.stringify(f.store.queries.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
   });
   it.each(['', 'Bearer bad', 'Basic ignored'])('rejects invalid credentials %s', async authorization => {
     const response = await request('/spawn', { task: 'x', baseline: 'HEAD', requestId: randomUUID() }, { authorization });
@@ -283,10 +283,10 @@ describe('authenticated delegation HTTP family', () => {
     setRunStatus(f.store, parent.id, RUN_STATUS.queued);
     const token = kind === 'worker' ? f.credentials.issue('project', workerId, randomUUID())
       : kind === 'foreign' ? f.credentials.issue('elsewhere', parent.id, randomUUID()) : f.token;
-    const before = structuredClone(f.store.listRuns());
+    const before = structuredClone(f.store.queries.listRuns());
     // A worker holds `wait` for its own waits (hearsay-tools/squawk#3819): the parent's receipt is not one of them, so it is "no longer current" (409), unread.
     expect((await request('/cancel-wait', { waitId }, { authorization: `Bearer ${token}` })).status).toBe(kind === 'worker' ? 409 : 403);
-    expect(f.store.listRuns()).toEqual(before);
+    expect(f.store.queries.listRuns()).toEqual(before);
   });
 
 });
