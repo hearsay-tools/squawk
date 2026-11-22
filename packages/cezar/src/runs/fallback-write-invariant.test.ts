@@ -80,7 +80,7 @@ function buildFixture() {
   const archived = store.createRun({ title: 'archived fallback', task: 'a', workflow: 'quick-task', steps: [] });
   setRunStatus(store, archived.id, RUN_STATUS.done);
   store.eventLog.appendEvent(archived.id, { type: 'text', text: 'archived history' });
-  store.setArchived(archived.id, true);
+  store.archive.setArchived(archived.id, true);
   const worktreeRun = store.createRun({ title: 'fallback worktree', task: 'w', workflow: 'quick-task', steps: [] });
   const worktreePath = join(fallback, 'worktrees', worktreeRun.id);
   setRunStatus(store, worktreeRun.id, RUN_STATUS.done, { worktreePath, branch: `cez/${worktreeRun.id.slice(0, 8)}` });
@@ -153,11 +153,11 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
       forge: async () => undefined, head: async () => undefined,
     });
     await completions.tick();
-    store.compressArchivedHistory();
-    await store.historyIdle();
+    store.archive.compressArchivedHistory();
+    await store.archive.historyIdle();
     await reclaimWorktrees(root, store, 0);
     await pruneOrphans(root, new Set(store.listRunIds()));
-    store.archiveFinished(undefined, true);
+    store.archive.archiveFinished(undefined, true);
     store.createRun({ title: 'triggers count retention', task: 'r', workflow: 'quick-task', steps: [] });
     store.flush();
 

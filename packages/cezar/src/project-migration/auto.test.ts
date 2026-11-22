@@ -183,7 +183,7 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       expect(existsSync(join(project.taskPath, 'report.html'))).toBe(true);
       expect(JSON.parse(readFileSync(join(project.newDir, LEGACY_RUNS_FILE), 'utf8'))).toEqual({ version: 1, runs: [TASK] });
       // The task is archived; one attempt per cockpit run, so the same run does not move its files.
-      kept.store.setArchived(TASK, true);
+      kept.store.archive.setArchived(TASK, true);
       kept.store.flush();
       second.contexts.dispose('p');
       await second.contexts.context('p');

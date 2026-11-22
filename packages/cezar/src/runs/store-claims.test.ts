@@ -130,8 +130,8 @@ describe('another store\'s runs are readable and refuse writes', () => {
     expect(other.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
 
     expect(other.updateRun(run.id, { title: 'mine now' })).toBeUndefined();
-    expect(other.setArchived(run.id, true)).toBeUndefined();
-    expect(other.setRead(run.id)).toBeUndefined();
+    expect(other.archive.setArchived(run.id, true)).toBeUndefined();
+    expect(other.readFlags.setRead(run.id)).toBeUndefined();
     expect(other.pin(run.id, 'continue')).toBeUndefined();
     expect(() => other.eventLog.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
     expect(() => other.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow(RunWriteRefusedError);
@@ -150,16 +150,16 @@ describe('another store\'s runs are readable and refuse writes', () => {
     owner.pin(run.id, 'active'); // still settling there
     owner.flush();
     const other = open({ keepLive: true });
-    expect(other.markAllRead()).toBe(0);
-    expect(other.archiveFinished()).toEqual({ archived: 0, ids: [], pinnedIds: [] });
+    expect(other.readFlags.markAllRead()).toBe(0);
+    expect(other.archive.archiveFinished()).toEqual({ archived: 0, ids: [], pinnedIds: [] });
 
     owner.unpin(run.id, 'active');
     owner.flush();
     expect(owner.heldIds()).toEqual([]);
     expect(claims()).toEqual([]);
     expect(other.runOwnership(run.id)).toBe('free');
-    expect(other.markAllRead()).toBe(1);
-    expect(other.archiveFinished().ids).toEqual([run.id]);
+    expect(other.readFlags.markAllRead()).toBe(1);
+    expect(other.archive.archiveFinished().ids).toEqual([run.id]);
     other.flush();
     expect(persisted(run.id)).toMatchObject({ archived: true });
   });
@@ -173,7 +173,7 @@ describe('claims follow memory', () => {
     expect(claims().map((claim) => claim.family)).toEqual([live.id]);
     expect(store.runOwnership(live.id)).toBe('held');
 
-    store.setRead('finished');
+    store.readFlags.setRead('finished');
     expect(claims().map((claim) => claim.family).sort()).toEqual(['finished', live.id].sort());
     store.flush();
     expect(claims().map((claim) => claim.family)).toEqual([live.id]);
@@ -311,7 +311,7 @@ describe('a run changed under this store', () => {
     seedRuns(dataDir, [record('old')]);
     const files = historyFiles('old');
     const store = open({ keepLive: true });
-    store.setRead('old');
+    store.readFlags.setRead('old');
     store.flush();
     store.pin('old', 'cleanup');
     writeBehindItsBack({ ...persisted('old'), title: 'touched elsewhere' });
@@ -385,7 +385,7 @@ describe('a run nobody alive owns', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       // Before #779 an optimistic write never touched the database; it still does not fail.
-      expect(store.setRead('finished')?.seenAt).toBeDefined();
+      expect(store.readFlags.setRead('finished')?.seenAt).toBeDefined();
       expect(claims()).toEqual([]);
       store.flush();
       expect(errors.mock.calls.flat().join('\n')).toContain('database is locked');

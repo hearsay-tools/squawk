@@ -262,7 +262,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       const response = await apiRequest(app, path, { method: 'POST' });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: runId, pinned: true });
-      store.setPinned(runId, false);
+      store.readFlags.setPinned(runId, false);
     }
     const response = await apiRequest(app, `/api/v1/p/${other.id}/runs/${runId}/pin`, { method: 'POST' });
     expect(response.status).toBe(200);

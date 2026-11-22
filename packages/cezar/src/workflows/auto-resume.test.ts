@@ -660,7 +660,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
 
     // What the archive route does, and what `cancelAutoResume` guarantees on its own.
     expect(manager.cancelAutoResume(resigned.id)).toBe(true);
-    store.setArchived(resigned.id, true);
+    store.archive.setArchived(resigned.id, true);
     expect(store.getRun(resigned.id)?.autoResumeAt).toBeUndefined();
     expect(store.getRun(resigned.id)?.status).toBe('failed');
 

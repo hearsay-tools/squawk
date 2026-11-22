@@ -22,7 +22,7 @@
       "reason": "loads the transcript facts sidecar"
     },
     {
-      "file": "packages/cezar/src/runs/store.ts",
+      "file": "packages/cezar/src/runs/run-archive.ts",
       "kind": "historyPaths",
       "reason": "checks archive eligibility"
     },

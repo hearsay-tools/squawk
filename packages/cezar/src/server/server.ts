@@ -2840,11 +2840,11 @@ export function createApp(deps: ServerDeps) {
     // Registered before the `/:id/...` routes so "archive-finished" and "read-all"
     // never match as a run id.
     .post('/runs/archive-finished', jsonZodValidator(archiveFinishedRequestSchema, { absent: {}, malformed: null }), (c) =>
-      c.json(c.get('project').store.archiveFinished(c.req.valid('json').scope, c.req.valid('json').automation)))
+      c.json(c.get('project').store.archive.archiveFinished(c.req.valid('json').scope, c.req.valid('json').automation)))
     // The read-receipt sweep (#unread-done-items) — the mark-read twin of the archive
     // sweep above, and under the same registration-order guard.
     .post('/runs/read-all', jsonZodValidator(markAllReadRequestSchema, { absent: {}, malformed: null }), (c) =>
-      c.json({ read: c.get('project').store.markAllRead(c.req.valid('json').automation) }))
+      c.json({ read: c.get('project').store.readFlags.markAllRead(c.req.valid('json').automation) }))
     .post('/runs/:id/archive', jsonZodValidator(archiveSchema, { absent: ({}) }), async (c) => {
       const { store } = c.get('project');
       const id = c.req.param('id');
@@ -2854,7 +2854,7 @@ export function createApp(deps: ServerDeps) {
       // `setArchived` itself — the bulk sweep must obey it too (spec
       // 2026-08-03-auto-resume-after-usage-limit).
       const parsed = { data: c.req.valid('json') };
-      const run = store.setArchived(id, parsed.data.archived !== false);
+      const run = store.archive.setArchived(id, parsed.data.archived !== false);
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
     // Pin one task to the top of this project's list, or unpin it (#935). The archive route's
@@ -2863,7 +2863,7 @@ export function createApp(deps: ServerDeps) {
     // event and no new response shape.
     .post('/runs/:id/pin', paramZodValidator(runIdParamSchema), jsonZodValidator(pinRunInputSchema, { absent: {}, malformed: null }), (c) => {
       const { store } = c.get('project');
-      const run = store.setPinned(c.req.valid('param').id, c.req.valid('json').pinned !== false);
+      const run = store.readFlags.setPinned(c.req.valid('param').id, c.req.valid('json').pinned !== false);
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
     // Task webhook opt-in for one run (#589), valid in every state — handing a finished task to a
@@ -2903,14 +2903,14 @@ export function createApp(deps: ServerDeps) {
     .post('/runs/:id/read', (c) => {
       // No body: opening a thread marks it read, full stop. Stamps `seenAt = now` and
       // returns the updated record (which also rides the `run` SSE via `touch`).
-      const run = c.get('project').store.setRead(c.req.param('id'));
+      const run = c.get('project').store.readFlags.setRead(c.req.param('id'));
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
     .post('/runs/:id/unread', (c) => {
       // The mark-unread twin (#775) — bodyless like its read counterpart: clearing the
       // receipt is the whole action, so there is nothing to say about it. Sits under
       // `/runs/:id/`, so the `read-all` registration-order caveat above does not apply.
-      const run = c.get('project').store.setUnread(c.req.param('id'));
+      const run = c.get('project').store.readFlags.setUnread(c.req.param('id'));
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
 

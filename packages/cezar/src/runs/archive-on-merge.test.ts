@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type RunRecord } from './store.ts';
+import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
 import { seedRuns, blockRunWrites, readPersistedRuns } from './run-store.testkit.ts';
 import { archivePullRequests } from './pull-requests.ts';
 import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.ts';
@@ -30,7 +31,7 @@ function setup(overrides: Partial<RunRecord> = {}) {
   const store = RunStore.open(dir, { keepLive: true }); stores.push(store);
   return { dir, store, id: run.id };
 }
-function observations(snapshot: NonNullable<ReturnType<RunStore['archiveOnMergeSnapshot']>>) {
+function observations(snapshot: ArchiveOnMergeSnapshot) {
   return snapshot.pullRequests.map(identity => ({ ...identity, mergedAt }));
 }
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -54,42 +55,42 @@ describe('authoritative archive associations', () => {
 describe('guarded automatic archive', () => {
   it('durably commits a receipt and suppresses replays after unarchive and restart', () => {
     const { store, id, dir } = setup();
-    const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
     expect(readPersistedRuns(dir)[0]).toMatchObject({ archived: true, autoArchive: { reason: 'pull-requests-merged', fingerprint: snapshot.fingerprint } });
-    store.setArchived(id, false); store.flush();
+    store.archive.setArchived(id, false); store.flush();
     expect(store.getRun(id)).toMatchObject({ archived: false, manualUnarchivedAt: expect.any(String), autoArchive: { fingerprint: snapshot.fingerprint } });
-    expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+    expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     store.close(); stores.splice(stores.indexOf(store), 1);
     const reopened = RunStore.open(dir, { keepLive: true }); stores.push(reopened);
-    expect(reopened.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+    expect(reopened.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
   });
   it('lets a manual restore during lookup win and does not archive old merges after a manual archive', () => {
     const { store, id } = setup();
-    const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-    store.setArchived(id, true); store.setArchived(id, false);
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(false);
-    const fresh = store.archiveOnMergeSnapshot(id, repo)!;
-    expect(store.archiveAfterMerge(fresh, observations(fresh), repo)).toBe(false);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    store.archive.setArchived(id, true); store.archive.setArchived(id, false);
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(false);
+    const fresh = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    expect(store.archive.archiveAfterMerge(fresh, observations(fresh), repo)).toBe(false);
   });
   it.each([{ status: RUN_STATUS.waiting }, { activity: 'monitoring' }, { waits: [{ id: '22222222-2222-4222-8222-222222222222', kind: WAIT_KIND.timer, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait,
     registeredAt: '2026-12-31T23:55:00.000Z', deadline: '2027-01-01T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn', seconds: 300 }] }, { waits: [{ id: '33333333-3333-4333-8333-333333333333', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: '2026-12-31T23:55:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn' }] }, { hasPendingPermission: true }, { delegation: { role: 'invalid', reason: 'bad' } }])('defers live/uncertain evidence %j', overrides => {
     const { store, id } = setup(overrides as Partial<RunRecord>);
-    expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+    expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
   });
   it('refuses incomplete merge observations, association changes and live pins', () => {
-    const { store, id } = setup(); const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-    expect(store.archiveAfterMerge(snapshot, [], repo)).toBe(false);
-    store.pin(id, 'active'); expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined(); store.unpin(id, 'active');
+    const { store, id } = setup(); const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    expect(store.archive.archiveAfterMerge(snapshot, [], repo)).toBe(false);
+    store.pin(id, 'active'); expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined(); store.unpin(id, 'active');
     registerRunProcess(id, process.pid);
-    try { expect(store.archiveOnMergeSnapshot(id, repo)).toBeDefined(); } finally { unregisterRunProcess(id); }
+    try { expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeDefined(); } finally { unregisterRunProcess(id); }
     store.updateRun(id, { pullRequests: [pr, { number: 43, source: 'declared' }] });
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(false);
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(false);
   });
   it('publishes neither archive nor receipt when the durable write fails', () => {
-    const { store, id, dir } = setup(); const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
+    const { store, id, dir } = setup(); const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
     const unblock = blockRunWrites(dir);
-    try { expect(() => store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toThrow(); }
+    try { expect(() => store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toThrow(); }
     finally { unblock(); }
     expect(store.getRun(id)?.archived).toBe(false);
     expect(readPersistedRuns(dir)[0]).not.toHaveProperty('autoArchive');
@@ -99,11 +100,11 @@ describe('guarded automatic archive', () => {
     try {
       vi.setSystemTime(new Date('2026-01-03T00:00:00Z'));
       const { store, id } = setup();
-      store.setArchived(id, true); store.setArchived(id, false); store.flush();
+      store.archive.setArchived(id, true); store.archive.setArchived(id, false); store.flush();
       store.updateRun(id, { pullRequests: [pr, { number: 43, source: 'declared' }] }); store.flush();
       vi.setSystemTime(new Date('2026-01-05T00:00:00Z'));
-      const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-      expect(store.archiveAfterMerge(snapshot, snapshot.pullRequests.map(identity => ({ ...identity, mergedAt: identity.number === 43 ? '2026-01-04T00:00:00Z' : mergedAt })), repo)).toBe(true);
+      const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+      expect(store.archive.archiveAfterMerge(snapshot, snapshot.pullRequests.map(identity => ({ ...identity, mergedAt: identity.number === 43 ? '2026-01-04T00:00:00Z' : mergedAt })), repo)).toBe(true);
     } finally { vi.useRealTimers(); }
   });
 
@@ -111,13 +112,13 @@ describe('guarded automatic archive', () => {
     const { store, id, dir } = setup();
     const history = '{"seq":1,"type":"note","text":"keep this history"}\n';
     writeFileSync(historyPaths(dir, id).plain, history);
-    await store.prepareArchiveOnMerge(id);
-    const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
-    await store.historyIdle();
+    await store.archive.prepareArchiveOnMerge(id);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
+    await store.archive.historyIdle();
     expect(existsSync(historyPaths(dir, id).compressed)).toBe(true);
     expect(readHistoryText(dir, id)).toBe(history);
-    store.setArchived(id, false);
+    store.archive.setArchived(id, false);
     expect(existsSync(historyPaths(dir, id).plain)).toBe(true);
     expect(readHistoryText(dir, id)).toBe(history);
   });
@@ -130,9 +131,9 @@ describe('guarded automatic archive', () => {
       role: 'worker', permissions: [], parentRunId: id, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated', path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
     }, 'a'.repeat(64), spawnCapacityRefusal);
     store.updateRun(worker.id, { pullRequests: [pr] }); store.flush();
-    expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+    expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     store.move(worker.id, 'stop-worker');
-    expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+    expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     expect(store.getRun(id)?.archiveBlocker?.runId).toBe(worker.id);
     const proof = store.workerExecutions.readWorkerExecution(worker.id)!;
     expect(store.workerExecutions.commitWorkerExecutionComplete(worker.id, proof.generation)).toBe(true);
@@ -140,30 +141,30 @@ describe('guarded automatic archive', () => {
     mkdirSync(join(dir, 'absent-worktree'));
     mkdirSync(join(dir, 'root-worktree'));
     store.updateRun(id, { worktreePath: join(dir, 'root-worktree') }); store.flush();
-    const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
     expect(snapshot?.pullRequests).toEqual([{ owner: 'o', repo: 'r', number: 42 }]);
-    store.archiveMergeBlocker(snapshot, snapshot.pullRequests[0]!, repo);
+    store.archive.archiveMergeBlocker(snapshot, snapshot.pullRequests[0]!, repo);
     expect(store.getRun(id)?.archiveBlocker).toMatchObject({ runId: worker.id, pullRequestUrl: `${repo}/pull/42` });
     const seen: boolean[][] = [];
     onRunWrite(store.lifecycle, () => seen.push([store.getRun(id)!.archived, store.getRun(worker.id)!.archived]));
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
     expect(seen.every(pair => pair.every(Boolean))).toBe(true);
     expect(readPersistedRuns(dir).every(run => run.archived)).toBe(true);
   });
 
   it('enumerates eligible roots in bounded pages', () => {
     const { store, id } = setup();
-    expect(store.listArchiveOnMergeCandidates(0, 1)).toEqual([{ id, seq: expect.any(Number) }]);
-    const page = store.listArchiveOnMergeCandidates(0, 1);
-    expect(store.listArchiveOnMergeCandidates(page[0]!.seq, 1)).toEqual([]);
+    expect(store.archive.listArchiveOnMergeCandidates(0, 1)).toEqual([{ id, seq: expect.any(Number) }]);
+    const page = store.archive.listArchiveOnMergeCandidates(0, 1);
+    expect(store.archive.listArchiveOnMergeCandidates(page[0]!.seq, 1)).toEqual([]);
   });
 });
 
 it('manual archive overrides pending input while automatic archive exposes the blocking task', () => {
   const { store, id } = setup({ hasPendingPermission: true });
-  expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
+  expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
   expect(store.getRun(id)?.archiveBlocker).toMatchObject({ runId: id, message: expect.stringContaining('permission') });
-  store.setArchived(id, true);
+  store.archive.setArchived(id, true);
   expect(store.getRun(id)).toMatchObject({ archived: true });
   expect(store.getRun(id)?.archiveBlocker).toBeUndefined();
 });
@@ -171,10 +172,10 @@ it('automatic and manual archive retain registered processes and worktrees', () 
   const { store, id, dir } = setup({ worktreePath: '/retained/task/worktree' });
   registerRunProcess(id, process.pid);
   try {
-    const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
-    expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
     expect(readPersistedRuns(dir)[0]).toMatchObject({ archived: true, worktreePath: '/retained/task/worktree' });
-    store.setArchived(id, false); store.setArchived(id, true);
+    store.archive.setArchived(id, false); store.archive.setArchived(id, true);
     expect(store.getRun(id)?.worktreePath).toBe('/retained/task/worktree');
   } finally { unregisterRunProcess(id); }
 });

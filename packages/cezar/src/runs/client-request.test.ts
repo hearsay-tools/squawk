@@ -48,7 +48,7 @@ describe('RunStore client request id', () => {
   it('persists the id and hash across a reopen, and finds archived runs', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'x', steps: [], clientRequestId: id, clientRequestHash: 'h' });
-    store.setArchived(run.id, true);
+    store.archive.setArchived(run.id, true);
     store.flush();
     const reopened = RunStore.open(dataDir);
     const found = reopened.findRunByClientRequestId(id);

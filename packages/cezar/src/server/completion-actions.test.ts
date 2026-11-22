@@ -77,7 +77,7 @@ it.each(['disable', 'continue', 'restore', 'stop', 'branch'] as const)('invalida
   f.read.mockImplementationOnce(async () => {
     if (change === 'disable') f.store().updateRun(f.id, { autoMergePr: false });
     if (change === 'continue') setRunStatus(f.store(), f.id, RUN_STATUS.running);
-    if (change === 'restore') { f.store().setArchived(f.id, true); f.store().setArchived(f.id, false); }
+    if (change === 'restore') { f.store().archive.setArchived(f.id, true); f.store().archive.setArchived(f.id, false); }
     if (change === 'stop') c.stop();
     if (change === 'branch') f.store().updateRun(f.id, { branch: 'changed' });
     return { available: true, mergeState: {} as ForgePrMergeState };
@@ -113,7 +113,7 @@ it.each(['review', 'failed', 'cancelled', 'waiting'] as const)('does no automati
   const f = fixture({ status }); await f.coordinator().tick(); expect(f.forge).not.toHaveBeenCalled();
 });
 it('does not rearm a manually restored completion on restart', async () => {
-  const f = fixture(); await f.coordinator().tick(); f.store().setArchived(f.id, false); f.restart();
+  const f = fixture(); await f.coordinator().tick(); f.store().archive.setArchived(f.id, false); f.restart();
   await f.coordinator().tick(); expect(f.merge).toHaveBeenCalledOnce(); expect(f.store().getRun(f.id)?.archived).toBe(false);
 });
 it('leaves failed GitHub mutations visible with an actionable blocker', async () => {

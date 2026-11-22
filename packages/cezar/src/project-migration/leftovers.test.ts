@@ -46,7 +46,7 @@ async function migrateWith(project: MigrationProject, kept?: readonly string[]) 
 
 function setArchived(dataDir: string, id: string, archived: boolean): void {
   const store = RunStore.open(dataDir, { keepLive: true });
-  try { store.setArchived(id, archived); store.flush(); } finally { store.close(); }
+  try { store.archive.setArchived(id, archived); store.flush(); } finally { store.close(); }
 }
 
 describe('a project move with tasks that can still resume', { timeout: TIMEOUT }, () => {

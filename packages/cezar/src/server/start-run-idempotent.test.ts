@@ -109,7 +109,7 @@ describe('POST /api/v1/runs clientRequestId', () => {
 
   it('still answers with an archived match', async () => {
     const { id } = (await (await post(body)).json()) as { id: string };
-    store.setArchived(id, true);
+    store.archive.setArchived(id, true);
     const again = await post(body);
     expect(again.status).toBe(200);
     expect(((await again.json()) as { id: string }).id).toBe(id);

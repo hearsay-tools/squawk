@@ -337,7 +337,7 @@ describe('debounced saves write only what changed', () => {
     const store = open();
     const run = store.createRun({ title: 'summary', workflow: '(planned)', task: 't', steps: [{ id: 's', name: 'Planner', kind: STEP_KIND.agent }] });
     setRunStatus(store, run.id, RUN_STATUS.waiting, { autoResumeAt: '2026-10-06T00:00:00.000Z', error: 'usage limit' });
-    store.setArchived(run.id, false);
+    store.archive.setArchived(run.id, false);
     store.flush();
     const saved = row(run.id)!;
     expect(JSON.parse(saved.data)).toEqual(JSON.parse(JSON.stringify(store.getRun(run.id))));

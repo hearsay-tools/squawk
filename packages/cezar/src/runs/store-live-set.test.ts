@@ -157,7 +157,7 @@ describe('writing a finished run', () => {
     const emitted: RunRecord[] = [];
     onRunWrite(store.lifecycle, (run: RunRecord) => emitted.push(run));
 
-    const read = store.setRead(done.id)!;
+    const read = store.readFlags.setRead(done.id)!;
     expect(emitted).toEqual([read]);
     expect(read.seenAt).toBeDefined();
     // Until its write settles it is held, and reads see the write.
@@ -374,11 +374,11 @@ describe('indexed queries reach runs not in memory', () => {
     seedRuns(dataDir, [manual, nightly, github]);
     const store = open();
     // One of each side in memory, so the held branch and the stored-summary branch both decide.
-    store.setPinned(nightly.id, false);
-    store.setPinned(manual.id, false);
-    expect(store.archiveFinished(undefined, true).ids.sort()).toEqual(ids([nightly, github]).sort());
+    store.readFlags.setPinned(nightly.id, false);
+    store.readFlags.setPinned(manual.id, false);
+    expect(store.archive.archiveFinished(undefined, true).ids.sort()).toEqual(ids([nightly, github]).sort());
     expect(store.getRun(manual.id)?.archived).toBe(false);
-    expect(store.archiveFinished(undefined, false).ids).toEqual([manual.id]);
+    expect(store.archive.archiveFinished(undefined, false).ids).toEqual([manual.id]);
   });
 
   it('let archive-finished and mark-all-read reach every finished run', () => {
@@ -387,8 +387,8 @@ describe('indexed queries reach runs not in memory', () => {
     const scheduled = record({ status: RUN_STATUS.failed, autoResumeAt: '2099-01-01T00:00:00.000Z' });
     seedRuns(dataDir, [unread, read, scheduled]);
     const store = open({ keepLive: true });
-    expect(store.markAllRead()).toBe(1);
-    expect(store.archiveFinished()).toMatchObject({ archived: 2, ids: [read.id, unread.id] });
+    expect(store.readFlags.markAllRead()).toBe(1);
+    expect(store.archive.archiveFinished()).toMatchObject({ archived: 2, ids: [read.id, unread.id] });
     store.flush();
     expect(readPersistedRuns(dataDir).filter((run) => run.archived).map((run) => run.id).sort()).toEqual(ids([unread, read]));
     expect(held(store)).toEqual([scheduled.id]);

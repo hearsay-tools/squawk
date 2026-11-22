@@ -271,7 +271,7 @@ describe('the offline migrate-project', { timeout: TIMEOUT }, () => {
     expect(migratedTask()?.worktreePath).toBe(project.taskPath);
     expect(existsSync(project.taskPath)).toBe(true);
     const archived = RunStore.open(project.newDir, { keepLive: true });
-    try { archived.setArchived(TASK, true); archived.flush(); } finally { archived.close(); }
+    try { archived.archive.setArchived(TASK, true); archived.flush(); } finally { archived.close(); }
     const migrated = await cli([]);
     expect(migrated.code).toBe(0);
     expect(migratedTask()?.worktreePath).toBe(moved(project, project.taskPath));

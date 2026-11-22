@@ -129,7 +129,7 @@ describe('run summaries API', () => {
     it('lists a run archived since the last save, and pages held runs too', async () => {
       reseed();
       const fresh = store.createRun({ title: 'fresh', workflow: 'quick-task', task: 't', steps: [] });
-      store.setArchived(fresh.id, true);
+      store.archive.setArchived(fresh.id, true);
       const first = await page('?limit=1');
       expect(first.runs.map((row) => row.id)).toEqual([fresh.id]);
       expect(first.total).toBe(251);
