@@ -3,6 +3,8 @@ import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SC
 const { 'no-progress-ack-only': _ackWithoutTurn, 'silent-tail-no-reply': _noReply, 'silent-tail-late-reply': _lateReply, ...commonScenarios } = COMMON_MOCK_SCENARIOS;
 export const ANTIGRAVITY_MOCK = {
   nativeAskScenario: 'ask-resume',
+  // scripts/mock-acp-sessions.mjs: a resume finds only a session the mock saved, as the CLI does.
+  sessionStore: { env: 'CEZ_MOCK_ANTIGRAVITY_SESSIONS_FILE', argsFileSuffix: '.antigravity-sessions.json' },
   script: 'mock-acp.mjs', toolGrantObservation: 'permission-policy', promptResponseEndsTurn: true, defaultApprovalEcho: 'Approval response: allow', malformedApprovalEcho: 'Malformed permission refused', binEnv: 'HSQ_ANTIGRAVITY_BIN',
   scenarios: { ...commonScenarios, ...STDIO_ASK_MOCK_SCENARIOS, ...PROVIDER_ERROR_MOCK_SCENARIOS,
     approval: 'mock:approval', 'approval-turn-end': 'mock:approval-turn-end', 'ask-bad': 'mock:ask-bad', 'ask-resume': 'mock:ask-native mock:resume-cezar-done', 'permission-late': 'mock:permission-late', 'permission-default': 'mock:permission-default', 'approval-malformed': 'mock:approval-malformed', 'provider-unavailable': 'mock:provider-unavailable' },

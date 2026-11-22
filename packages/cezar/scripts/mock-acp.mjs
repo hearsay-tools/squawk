@@ -13,6 +13,7 @@ import { loadControls } from './mock-controls.mjs';
 import { waitForRelease } from './mock-lifecycle.mjs';
 import { answerNudge } from './mock-nudge.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
+import { knownSession, saveSession } from './mock-acp-sessions.mjs';
 
 // The Antigravity CLI's identity: a bare version and a help text that lists its acp command.
 if (process.argv.includes('--version')) { console.log('1.5.14'); process.exit(0); }
@@ -316,10 +317,10 @@ async function handle(frame) {
     case 'authenticate': authenticate(frame); break;
     case 'session/new':
       // Like the CLI, each session gets its own id; recordings show it as mock-acp-session.
-      sessionParams = frame.params; sessionId = mintedId = `mock-acp-${randomUUID()}`;
+      sessionParams = frame.params; sessionId = mintedId = `mock-acp-${randomUUID()}`; saveSession(sessionId);
       reply(frame.id, { sessionId, configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     // A conversation the CLI does not hold (one the retired registry server saved) is refused.
-    case 'session/resume': case 'session/load': if (frame.params.sessionId === 'registry-session') { write({ id: frame.id, error: { code: -32603, message: 'conversation not found' } }); break; }
+    case 'session/resume': case 'session/load': if (!knownSession(frame.params.sessionId)) { write({ id: frame.id, error: { code: -32603, message: 'conversation not found' } }); break; }
       context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/set_config_option': setConfig(frame); break;
     case 'session/prompt': await prompt(frame); break;
