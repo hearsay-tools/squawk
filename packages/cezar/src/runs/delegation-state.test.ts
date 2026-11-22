@@ -522,16 +522,21 @@ describe('RunStore durable delegation', () => {
     const run = parent();
     const metadata = worker(run.id);
     const emitted: string[] = [];
+    // The lifecycle logs a listener that throws and goes on, so the listener records and the test asserts.
+    const diskAtNotice: Array<ReturnType<typeof disk>> = [];
     onRunWrite(store.lifecycle, r => {
       emitted.push(r.id);
-      expect(disk()).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: run.id, delegation: expect.objectContaining({ receipts: [{ requestId, workerId, requestHash }] }) }),
-        expect.objectContaining({ id: workerId, delegation: metadata }),
-      ]));
+      diskAtNotice.push(disk());
     });
     const created = store.createOwnedRun({ ...input, runner: 'codex', model: 'model', agentProfile: 'account' }, run.id, requestId, metadata, requestHash);
     expect(created).toMatchObject({ id: workerId, delegation: metadata, status: RUN_STATUS.queued, runner: 'codex', model: 'model', agentProfile: 'account' });
     expect(emitted.sort()).toEqual([run.id, workerId].sort());
+    for (const rows of diskAtNotice) {
+      expect(rows).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: run.id, delegation: expect.objectContaining({ receipts: [{ requestId, workerId, requestHash }] }) }),
+        expect.objectContaining({ id: workerId, delegation: metadata }),
+      ]));
+    }
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
     // The selector hash is unchanged even if parent HEAD and inherited settings have moved.

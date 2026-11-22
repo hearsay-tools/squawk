@@ -157,14 +157,12 @@ describe('RunManager directional usage accounting', () => {
     await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
     manager.dispose();
     manager = createFixtureManager(store, repoRoot);
-    const persistedAtSink: StepState[] = [];
+    // The lifecycle logs a listener that throws and goes on, so the listener records and the test asserts.
+    const persistedAtSink: Array<{ type: string; persisted: StepState | undefined }> = [];
     store.lifecycle.subscribe({ 'run.event': ({ runId, event }) => {
       if (event.type !== 'turn.started' && event.type !== 'turn.completed') return;
       const persisted = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true }).getRun(runId)?.steps[0];
-      expect(persisted).toMatchObject(event.type === 'turn.started'
-        ? { usageInvocationsObserved: 1, usageTurnsStarted: 1 }
-        : { usageTurnsRecorded: 1, inputTokens: 8, outputTokens: 2 });
-      persistedAtSink.push(persisted!);
+      persistedAtSink.push({ type: event.type, persisted });
     } });
     runnerHook.runner = {
       backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
@@ -182,6 +180,11 @@ describe('RunManager directional usage accounting', () => {
     const record = manager.startRun({ name: 'usage', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}' }] }, { task: 'usage', worktree: false });
     await waitForProduct(manager, store, () => persistedAtSink.length === 2 && !manager.isActive(record.id));
     expect(persistedAtSink).toHaveLength(2);
+    for (const { type, persisted } of persistedAtSink) {
+      expect(persisted).toMatchObject(type === 'turn.started'
+        ? { usageInvocationsObserved: 1, usageTurnsStarted: 1 }
+        : { usageTurnsRecorded: 1, inputTokens: 8, outputTokens: 2 });
+    }
   });
 
   it('tracks an unmetered turn without recording it and ignores a completion that never started', () => {
