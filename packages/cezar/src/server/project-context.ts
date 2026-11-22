@@ -216,6 +216,8 @@ export class ProjectContexts {
   /** Each context's branch sweeps (hearsay-tools/squawk#911): disposing the context aborts them,
    *  and `disposeAll` resolves once every sweep, of any context, has stopped. */
   private readonly sweepControllers = new WeakMap<RunStore, AbortController>();
+  /** Each built store's preview release (`armPreview`), removed when its context is torn down. */
+  private readonly previewReleases = new WeakMap<RunStore, () => void>();
   private readonly sweeps = new Set<Promise<unknown>>();
   /** Live store-created subscribers; invoked before RunManager recovery. */
   private readonly storeListeners = new Set<(store: RunStore) => void>();
@@ -463,7 +465,7 @@ export class ProjectContexts {
     this.repoHandleControllers.get(ctx.store)!.abort();
     this.sweepControllers.get(ctx.store)?.abort();
     this.managerCleanups.get(ctx.manager)?.();
-    teardown(ctx);
+    teardown(ctx, this.previewReleases.get(ctx.store));
   }
 
   /** Tear down every built context (process shutdown), and every build still running. Resolves
@@ -522,7 +524,7 @@ export class ProjectContexts {
       ?? AutomationStore.open(dataDir);
     reconcileAutomationReceipts(automationStore, store);
     this.notifyStoreCreated(store);
-    armPreview(store, dataDir, this.deps.preview);
+    this.previewReleases.set(store, armPreview(store, dataDir, this.deps.preview));
     this.sweepControllers.set(store, new AbortController());
     const manager: ProjectRunManager = createManager(store, project.root, {
       home: this.deps.home,
@@ -572,7 +574,7 @@ export class ProjectContexts {
       // A failed build must not leak the half-built context's subscriptions, nor its sweep.
       this.sweepControllers.get(store)?.abort();
       this.managerCleanups.get(manager)?.();
-      teardown({ store, manager });
+      teardown({ store, manager }, this.previewReleases.get(store));
       throw err;
     } finally {
       this.buildingManagers.delete(projectId);
@@ -581,9 +583,11 @@ export class ProjectContexts {
 }
 
 /** Shared teardown for built and half-built contexts. Closing the store writes what is pending
- *  and releases its database connection; a late write to it afterwards saves nothing. */
-function teardown(ctx: { store: RunStore; manager: ProjectRunManager }): void {
+ *  and releases its database connection; a late write to it afterwards saves nothing. The store's
+ *  listeners go after the close, so what the close publishes still reaches them. */
+function teardown(ctx: { store: RunStore; manager: ProjectRunManager }, releasePreview: (() => void) | undefined): void {
   ctx.manager.dispose();
   ctx.store.close();
   ctx.store.removeAllListeners();
+  releasePreview?.();
 }
