@@ -206,6 +206,8 @@ export interface UiItemDeltaEvent {
 export interface UiItemUpdatedEvent {
   type: 'item.updated'
   item: UiItem
+  /** A runner filled in a field it read after the item completed: a display update. */
+  late?: true
 }
 
 /** Final snapshot of an item — safe to persist (snapshots, not deltas). */
