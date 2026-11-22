@@ -2,6 +2,7 @@ import type { RunnerLoginStatus } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { AcpRpcError } from '../acp/transport.ts';
 import { AntigravityProbe } from './probe-process.ts';
+import { antigravityInstalled, antigravityStatusUnverified } from './executable.ts';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
 
@@ -32,6 +33,8 @@ export const antigravityLogin: RunnerLoginStatus = {
   parse: result => result.exitCode === 0 && VERSION.test(result.stdout.trim()) ? 'disconnected' : null,
   async inspect(result, env) {
     if (result.exitCode !== 0 || !VERSION.test(result.stdout.trim())) return null;
+    // A cold read ran a PATH candidate that was still being checked; only the CLI counts.
+    if (antigravityStatusUnverified(env) && !await antigravityInstalled(env)) return null;
     if (hasKey(env)) return 'connected';
     return await antigravityPersonalSignIn(env).catch(() => false) ? 'connected' : 'disconnected';
   },

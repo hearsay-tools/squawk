@@ -8,7 +8,7 @@ import { antigravityRunner } from './definition.ts';
 import { ANTIGRAVITY_CODE_REDIRECT, antigravityLoginResponse, startAntigravitySignIn } from './browser-sign-in.ts';
 import { discoverAntigravityModels, antigravityModelCatalogKey } from './antigravity-model-catalog.ts';
 import { antigravityLogin } from './login-probe.ts';
-import { antigravityCliOutput, antigravityOnPath, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
+import { antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusUnverified, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
 
 registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
@@ -150,4 +150,23 @@ it('recognizes the CLI by its help and version, not by its name', async () => {
   expect(knownAntigravityCli(join(second, 'antigravity'))).toBe(true);
   expect(cachedAntigravityOnPath({ PATH: `${first}:${second}` })).toBe(join(second, 'antigravity'));
   expect(await antigravityOnPath({ PATH: first })).toBeUndefined();
+});
+
+it('runs a still-unchecked PATH candidate for a cold status read and accepts it only once it is the CLI', async () => {
+  const dir = await root(); const path = join(dir, 'bin'); const empty = join(dir, 'empty');
+  await mkdir(path); await mkdir(empty);
+  await copyFile(bin, join(path, 'agy')); await chmod(join(path, 'agy'), 0o755);
+  const env = { PATH: path };
+  expect(antigravityStatusExecutable(env)).toBe(join(path, 'agy'));
+  expect(antigravityStatusUnverified(env)).toBe(true);
+  expect(await antigravityInstalled(env)).toBe(true);
+  expect(antigravityStatusUnverified(env)).toBe(false);
+  expect(antigravityStatusExecutable(env)).toBe(join(path, 'agy'));
+  expect(antigravityStatusExecutable({ PATH: empty })).toBe('antigravity-cli-not-installed');
+});
+
+it('rejects a CLI look-alike whose --version fails', async () => {
+  const dir = await root(); const fake = join(dir, 'antigravity');
+  await writeFile(fake, '#!/bin/sh\nif [ "$1" = --help ]; then printf "Usage of antigravity:\\n  acp  Start\\n"; exit 2; fi\necho 1.5.14; exit 1\n', { mode: 0o755 });
+  expect(await checkAntigravityCli(fake)).toBe(false);
 });

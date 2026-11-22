@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { productEnv } from '../../core/product-env.ts';
-import { antigravityExecutable } from './executable.ts';
+import { antigravityStatusExecutable } from './executable.ts';
 import { ANTIGRAVITY_FACTS } from './facts.ts';
 import { ANTIGRAVITY_SPEC_SUPPORT } from './spec-support.ts';
 import { ANTIGRAVITY_DETECTION } from './detection.ts';
@@ -20,7 +20,7 @@ export const antigravityRunner = defineRunner({
   models: { ...ANTIGRAVITY_MODELS, loadSettings: async () => (await import('./model-settings.ts')).antigravityModelSettings },
   accounts: { ...ANTIGRAVITY_ACCOUNTS, homeDir: (env, home) => env.GEMINI_HOME?.trim() || join(home, '.gemini') },
   env: ANTIGRAVITY_ENV, mock: ANTIGRAVITY_MOCK, display: ANTIGRAVITY_DISPLAY,
-  login: { ...ANTIGRAVITY_LOGIN, executable: () => productEnv('ANTIGRAVITY_BIN') ?? antigravityExecutable() ?? 'antigravity-cli-not-installed' },
+  login: { ...ANTIGRAVITY_LOGIN, executable: () => productEnv('ANTIGRAVITY_BIN') ?? antigravityStatusExecutable() },
   configFiles: ANTIGRAVITY_CONFIG_FILES, extraTools: ANTIGRAVITY_EXTRA_TOOLS,
   loadLogin: async () => (await import('./login-probe.ts')).antigravityLogin,
   loadBrowserSignIn: async () => (await import('./browser-sign-in.ts')).startAntigravitySignIn,

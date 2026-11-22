@@ -10,6 +10,8 @@ import { ANTIGRAVITY_CLI } from './cli.ts';
 /** The names Google's CLI is installed under: `agy` (Windows, symlinks) and `antigravity` (archives). */
 const PATH_NAMES = ['agy', 'antigravity'] as const;
 const source = ANTIGRAVITY_CLI.installSource.managed;
+/** The name a missing CLI is spawned under: ENOENT reports it not installed. */
+const NOT_INSTALLED = 'antigravity-cli-not-installed';
 const identities = new Map<string, boolean | Promise<boolean>>();
 const execFileAsync = promisify(execFile);
 
@@ -44,11 +46,14 @@ export function checkAntigravityCli(path: string): Promise<boolean> {
   if (!identity) return Promise.resolve(false);
   const known = identities.get(identity);
   if (known !== undefined) return Promise.resolve(known);
-  const run = (args: string[]) => execFileAsync(path, args, RUN).catch((error: { stdout?: string; stderr?: string; code?: unknown }) =>
-    typeof error.code === 'number' ? { stdout: error.stdout ?? '', stderr: error.stderr ?? '' } : undefined);
+  // Go's flag package may exit 2 after --help; the text decides. --version must succeed.
+  const run = (args: string[]) => execFileAsync(path, args, RUN).then(output => ({ ...output, status: 0 }),
+    (error: { stdout?: string; stderr?: string; code?: unknown }) =>
+      typeof error.code === 'number' ? { stdout: error.stdout ?? '', stderr: error.stderr ?? '', status: error.code } : undefined);
   const check = (async () => {
     const help = await run(['--help']);
-    const cli = verdict(help, help ? await run(['--version']) : undefined);
+    const version = help ? await run(['--version']) : undefined;
+    const cli = version?.status === 0 && verdict(help, version);
     identities.set(identity, cli);
     return cli;
   })();
@@ -113,6 +118,26 @@ export function managedAntigravity(): string | undefined {
 }
 
 /** HSQ_ANTIGRAVITY_BIN, else the managed install, else the CLI on PATH. Undefined: not installed. */
+/**
+ * The status command's executable, from metadata only. While a PATH candidate is still being
+ * checked it is that candidate, so a cold status read runs its --version instead of reporting the
+ * CLI missing; `antigravityInstalled` then decides whether that output counts.
+ */
+export function antigravityStatusExecutable(env: NodeJS.ProcessEnv = process.env): string {
+  return antigravityExecutable(env) ?? pathCandidates(env).find(path => knownAntigravityCli(path) === undefined) ?? NOT_INSTALLED;
+}
+
+/** Whether a CLI is installed, waiting for an unfinished PATH check. */
+export async function antigravityInstalled(env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  return !!(productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? await antigravityOnPath(env));
+}
+
+/** The status command may have run a PATH candidate not yet known to be the CLI: no override, no
+ *  managed release and no verified PATH entry, but a candidate exists. */
+export function antigravityStatusUnverified(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !antigravityExecutable(env) && pathCandidates(env).length > 0;
+}
+
 export function antigravityExecutable(env: NodeJS.ProcessEnv = process.env): string | undefined {
   return productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? cachedAntigravityOnPath(env);
 }
@@ -141,7 +166,7 @@ export function launchAntigravity(override: string | undefined): AntigravityLaun
 /** A launch that cannot start: spawning it fails with ENOENT, which reports ANTIGRAVITY_MISSING.
  *  A rejected PATH binary (the IDE launcher, the registry server) is never run. */
 export function missingAntigravity(dir: string): AntigravityLaunch {
-  return unleased(join(dir, 'antigravity-cli-not-installed'));
+  return unleased(join(dir, NOT_INSTALLED));
 }
 
 export const ANTIGRAVITY_MISSING = 'The Antigravity CLI is not installed. Install it from Settings > Accounts > Install CLI, put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.';
