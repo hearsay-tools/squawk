@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActivitySnapshot } from '@open-mercato/cezar-contract';
 import { ACTIVITY_RATE_SECONDS, activityToolSchema } from '@open-mercato/cezar-contract/activity';
@@ -32,7 +31,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 function project(id: string, runs: RunRecord[], ciProgress: CiProgressRegistry): LoadedProject {
-  const store = Object.assign(new EventEmitter(), fakeStore(runs));
+  const store = fakeStore(runs);
   return { id, root: `/repos/${id}`, store, manager: { isActive: () => false, ciProgress } } as unknown as LoadedProject;
 }
 

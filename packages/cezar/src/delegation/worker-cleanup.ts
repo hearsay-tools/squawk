@@ -66,6 +66,7 @@ export class WorkerCleanup {
   private detached = false;
   private readonly projects: Pick<Map<string, DelegationProject>, 'get'>;
   private readonly now: () => number;
+  private readonly unsubscribe: () => void;
 
   constructor(private readonly project: DelegationProject, isAttached: () => boolean,
     private readonly serialized: Serialize, options: WorkerCleanupOptions = {}) {
@@ -75,10 +76,16 @@ export class WorkerCleanup {
     this.destroyAttentionAttempts = options.attentionAttempts ?? DESTROY_ATTENTION_ATTEMPTS;
     this.terminationTimeoutMs = options.terminationTimeoutMs ?? 30_000;
     this.manualLockWaitMs = options.manualLockWaitMs ?? MANUAL_DESTROY_LOCK_WAIT_MS;
-    project.store.on('run', this.onRun);
+    // The record as it stands now, not the write's snapshot: an earlier listener's nested write of
+    // the run reaches this one first. A conflict's payload is the other writer's record.
+    this.unsubscribe = project.store.lifecycle.subscribe({
+      'run.created': ({ run }) => this.onRun(project.store.getRun(run.id) ?? run),
+      'run.updated': ({ run, source }) => this.onRun(source === 'conflict' ? run : project.store.getRun(run.id) ?? run),
+    });
   }
 
-  /** Every run change: a worker that just failed before its first step is destroyed in the background. */
+  /** Every run change, a status change or not (a worker's execution completes in a write that
+   *  changes no status): a worker that just failed before its first step is destroyed in the background. */
   private readonly onRun = (run: RunRecord): void => {
     if (failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(run.id);
   };
@@ -131,7 +138,7 @@ export class WorkerCleanup {
 
   detach(): void {
     this.clearDestroyRetries(this.project.id);
-    this.project.store.off('run', this.onRun);
+    this.unsubscribe();
     this.detached = true;
   }
 

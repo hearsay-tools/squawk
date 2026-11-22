@@ -1,7 +1,6 @@
-import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import type { ActivitySnapshot } from '@open-mercato/cezar-contract';
-import { fakeStore, makeRoot } from '../activity/activity.testkit.ts';
+import { fakeStore, makeRoot, type CountedLifecycle } from '../activity/activity.testkit.ts';
 import { ActivityDemand } from '../activity/demand.ts';
 import { createActivitySources, type LoadedProject } from './activity-sources.ts';
 import { projectEventOf, type ProjectEvent } from './activity-project-topic.ts';
@@ -10,7 +9,7 @@ import { ProjectContextError } from './project-context.ts';
 import type { SocketHub, TopicFamilyResolver, TopicOptions, TopicPublisher } from './ws.ts';
 
 function project(id: string, title: string): LoadedProject {
-  const store = Object.assign(new EventEmitter(), fakeStore([makeRoot({ title })]));
+  const store = fakeStore([makeRoot({ title })]);
   return { id, root: `/repos/${id}`, store, manager: { isActive: () => false } } as unknown as LoadedProject;
 }
 
@@ -112,15 +111,15 @@ describe('the activity topics', () => {
     let next!: () => void;
     const stop = publisher.start((data) => { frames.push(data as ActivitySnapshot); next?.(); });
     await publisher.snapshot();
-    const store = (context: LoadedProject) => context.store as unknown as EventEmitter;
-    expect(store(before).listenerCount('run')).toBe(1);
+    const subscriptions = (context: LoadedProject) => (context.store.lifecycle as CountedLifecycle).subscriptions;
+    expect(subscriptions(before)).toBe(1);
     expect(demand.has('docs')).toBe(true);
 
     loaded.delete('docs');
     emit('removed', 'docs');
     expect(frames.map((frame) => frame.projects[0]!.unavailable)).toEqual([{ status: 404, error: expect.stringContaining('docs') }]);
     expect(frames[0]!.projects[0]!.name).toBe('Docs');
-    expect(store(before).listenerCount('run')).toBe(0);
+    expect(subscriptions(before)).toBe(0);
     expect(demand.has('docs')).toBe(false);
     emit('removed', 'docs');
     expect(frames).toHaveLength(1);
@@ -132,11 +131,11 @@ describe('the activity topics', () => {
     emit('added', 'docs');
     await rebound;
     expect(frames.at(-1)!.projects[0]!.tasks.map((task) => task.title)).toEqual(['New task']);
-    expect(store(after).listenerCount('run')).toBe(1);
+    expect(subscriptions(after)).toBe(1);
     expect(demand.has('docs')).toBe(true);
 
     stop();
-    expect(store(after).listenerCount('run')).toBe(0);
+    expect(subscriptions(after)).toBe(0);
     expect(demand.has('docs')).toBe(false);
     expect(projectListeners.size).toBe(0);
   });
@@ -189,7 +188,7 @@ describe('the activity topics', () => {
     await new Promise<void>((resolve) => setImmediate(resolve)); // the stale read finishes
     expect(frames.map((frame) => frame.projects[0]!.unavailable?.status)).toEqual([404, 404]);
     expect(await publisher.snapshot()).toMatchObject({ projects: [{ unavailable: { status: 404 } }] });
-    expect((again.store as unknown as EventEmitter).listenerCount('run')).toBe(0);
+    expect((again.store.lifecycle as CountedLifecycle).subscriptions).toBe(0);
     expect(demand.has('docs')).toBe(false);
     stop();
   });

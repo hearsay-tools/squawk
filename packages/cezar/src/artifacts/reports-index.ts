@@ -8,13 +8,21 @@ import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import type { RunDatabase } from '../runs/run-database.ts';
 import { REPORTS_BACKFILL_KEY, type IndexedArtifact, type ReportRow, type ReportCursor } from '../runs/report-rows.ts';
 import { parseStoredSummary } from '../runs/run-summary-page.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
+import type { RunLifecycleEvents, RunLifecycleSource } from '../runs/lifecycle.ts';
+import type { RunAccess, RunLookup, StoreHandle } from '../runs/ports.ts';
+import type { RunRecord } from '../runs/store.ts';
 import { artifactRunsRoot, scanArtifactsForIndex, checkArtifactContentForIndex } from './store.ts';
 
 export { REPORTS_BACKFILL_KEY } from '../runs/report-rows.ts';
 const cursorSchema = z.tuple([z.iso.datetime(), z.uuid()]);
-const instances = new WeakMap<RunStore, ReportsIndex>();
-export function reportsIndex(store: RunStore): ReportsIndex {
+/** What the index reads from a run store: its database, a run's record and files, the write-out
+ *  before a read, and the lifecycle whose run changes drive the report watch. */
+export interface ReportsStore extends RunLookup, Pick<RunAccess, 'sourceDataDir'>, Pick<StoreHandle, 'flush'> {
+  reportSource(): { db: RunDatabase | null; dataDir: string; openFailure: Error | undefined };
+  readonly lifecycle: RunLifecycleSource;
+}
+const instances = new WeakMap<ReportsStore, ReportsIndex>();
+export function reportsIndex(store: ReportsStore): ReportsIndex {
   const { db, dataDir, openFailure } = store.reportSource();
   if (!db) throw openFailure ?? new Error('runs database unavailable');
   let index = instances.get(store);
@@ -35,7 +43,6 @@ export class ReportsIndex {
   private closed = false;
   private started = false;
   private projectBackfilled = false;
-  private live = new Set<string>();
   private runsRoot?: string;
   private changes: ReportsWatch;
   private settlements = new Set<string>();
@@ -43,7 +50,6 @@ export class ReportsIndex {
   watch() { return this.changes.watch(); }
   markRead() { this.changes.markRead(); }
   onChange(listener: Parameters<ReportsWatch['onChange']>[0]) { return this.changes.onChange(listener); }
-  private onDeleted = (id: string): void => { this.changes.deleted(id); this.live.delete(id); };
 
 
   private root(): string { return this.runsRoot ??= artifactRunsRoot(this.dataDir); }
@@ -56,7 +62,7 @@ export class ReportsIndex {
     catch (error) { return { state: 'indeterminate' as const, error }; }
   }
 
-  constructor(private db: RunDatabase, private store: RunStore, private dataDir: string) {
+  constructor(private db: RunDatabase, private store: ReportsStore, private dataDir: string) {
     this.changes = new ReportsWatch(
       id => this.serial(async () => {
         if (!this.changes.watching()) return;
@@ -83,20 +89,26 @@ export class ReportsIndex {
       const summary = parseStoredSummary(row.summary);
       this.changes.seed(row.runId, summary ? reportMetadataKey(summary) : undefined);
     }
-    this.live = new Set(db.listLive().map(row => row.id));
-    store.on('run', this.onRun);
-    store.on('deleted', this.onDeleted);
-    store.once('closed', () => { this.closed = true; this.changes.close(); store.off('run', this.onRun); store.off('deleted', this.onDeleted); });
+    const unsubscribe = store.lifecycle.subscribe({
+      'run.created': ({ run }) => this.watchRun(store.getRun(run.id) ?? run, false),
+      'run.updated': ({ run, before, source }) => this.watchRun(source === 'conflict' ? run : store.getRun(run.id) ?? run, isLiveStatus(before.status)),
+      'run.status-changed': this.onStatusChanged,
+      'run.deleted': ({ runId }) => this.changes.deleted(runId),
+      'store.closed': () => { this.closed = true; this.changes.close(); unsubscribe(); },
+    });
   }
 
-  private onRun = (run: RunRecord): void => {
-    const wasLive = this.live.has(run.id);
-    if (wasLive && !isLiveStatus(run.status) && this.changes.watching()) this.settlements.add(run.id);
-    const live = isLiveStatus(run.status);
-    this.changes.run(run, live || wasLive, this.db.reports.forRun(run.id).length > 0);
-    if (live) { this.live.add(run.id); return; }
-    const settled = this.live.delete(run.id);
-    if (this.started && settled && !this.changes.watching()) void this.reconcile(false, run.id).catch(error => console.warn(`[hsq] Reports reconciliation failed:`, error));
+  /** The record as it stands now goes to the watch, not the write's snapshot: an earlier listener's
+   *  nested write of the run reaches the index first. A conflict's payload is the other writer's record. */
+  private watchRun(run: RunRecord, wasLive: boolean): void {
+    this.changes.run(run, isLiveStatus(run.status) || wasLive, this.db.reports.forRun(run.id).length > 0);
+  }
+
+  /** A run that left the live set: its final scan, now or when the last shelf closes. */
+  private onStatusChanged = ({ run, from, to }: RunLifecycleEvents['run.status-changed']): void => {
+    if (!isLiveStatus(from) || isLiveStatus(to)) return;
+    if (this.changes.watching()) this.settlements.add(run.id);
+    else if (this.started) void this.reconcile(false, run.id).catch(error => console.warn(`[hsq] Reports reconciliation failed:`, error));
   };
 
   /** Only the post-listen boot hook and already-served lazy contexts call this. */
