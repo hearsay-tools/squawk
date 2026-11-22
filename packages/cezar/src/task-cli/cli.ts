@@ -24,7 +24,7 @@ import { runHistoryContextSchema } from '@open-mercato/cezar-contract/events';
 import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
 import { runnerSchema } from '@open-mercato/cezar-contract/runner';
 import { openUrl } from '../open-url.ts';
-import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 import { runnerFlag, skillFlagIssue, skillTaskSteps } from '../workflows/types.ts';
 import { discoverCockpit, type DiscoverOptions } from './discovery.ts';
 import { handoffUrl, invalidResponse, refuse, request, TaskCliError, threadUrl, type Cockpit } from './http.ts';
@@ -82,7 +82,7 @@ export const OPERATIONS: Record<string, Operation> = {
       'request-id': { type: 'string', help: '<UUID>     Retry-safe id; reuse it when retrying this start.' },
       workflow: { type: 'string', help: '<name>       Workflow (default quick-task).' },
       skill: { type: 'string', help: '<name>          Run one discovered skill instead of a workflow.' },
-      runner: { type: 'string', help: `<id>           ${BUILT_IN_RUNNERS.map(({ id }) => id).join(' | ')}.` },
+      runner: { type: 'string', get help() { return `<id>           ${knownRunnerIds().join(' | ')}.`; } },
       backend: { type: 'string', help: '<id>          Alias of --runner.' },
       model: { type: 'string', help: '<model>         Model override.' },
       effort: { type: 'string', help: '<level>       Reasoning effort.' },

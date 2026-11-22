@@ -1,36 +1,19 @@
 #!/usr/bin/env node
-import { projectPaths } from './project-paths.ts';
 import { commandText } from './home/command.ts';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RunStore } from './runs/store.ts';
-import { RunStoreOpenError } from './runs/store-open-error.ts';
-import { initCommand, openStore } from './project-commands.ts';
 import { warnLegacyEnv } from './home/deprecation.ts';
 import { resolveHome } from './home/resolve.ts';
 import type { Home } from './home/home.ts';
-import { runMigrations } from './workspace/migrations.ts';
-import { registerProject, shouldRegisterProject } from './workspace/projects.ts';
 import { main, defaultCliDeps } from './cli-dispatch.ts';
-import { serverCommand } from './server-command.ts';
-import { runHeadless, defaultHeadlessDeps, type TaskAccess } from './headless-run.ts';
-import { serveCommand, defaultServeDeps } from './serve-command.ts';
-import { workerCleanups } from './delegation/worker-cleanup.ts';
+import type { TaskAccess } from './headless-run.ts';
+import { prepareCommandRuntime } from './subcommands.ts';
 import { onTerminal } from './serve-listener.ts';
 import { installWindowsIdentityStore } from './delegation/windows-identity-store.ts';
-import { registerBuiltInRunners } from './runners/built-in.ts';
-import { registerBuiltInRunSlots } from './built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
-
-// Every command, the cockpit, a headless task and each child process that reruns this entry read
-// runner data from the registry (spec 2026-11-18-runner-definitions).
-registerBuiltInRunners();
-// A deletion, a reclaim or a family archive asks the removal slots, and throws in a process that
-// sealed none (spec 2026-11-21-run-lifecycle-and-store-ports).
-registerBuiltInRunSlots();
 
 warnLegacyEnv(process.env);
 
@@ -53,6 +36,8 @@ warnLegacyEnv(process.env);
  */
 async function initWorkspace(repoRoot: string, home: Home): Promise<string | undefined> {
   try {
+    const { runMigrations } = await import('./workspace/migrations.ts');
+    const { registerProject, shouldRegisterProject } = await import('./workspace/projects.ts');
     await runMigrations({ bootRepoRoot: repoRoot, home });
     if (await shouldRegisterProject(repoRoot)) return (await registerProject(repoRoot, 'local', home)).id;
   } catch (err) {
@@ -91,6 +76,10 @@ async function runCommand(
     process.exitCode = 1;
     return;
   }
+  await prepareCommandRuntime('run');
+  const { runHeadless, defaultHeadlessDeps } = await import('./headless-run.ts');
+  const { openStore } = await import('./project-commands.ts');
+  const { workerCleanups } = await import('./delegation/worker-cleanup.ts');
   const stopHint = hintRunningCockpit(repoRoot);
   try {
     await runHeadless(home, repoRoot, task, workflowName, model, access, { ...defaultHeadlessDeps, initWorkspace, openStore, onTerminal, workerCleanup: workerCleanups() });
@@ -100,21 +89,6 @@ async function runCommand(
 }
 
 // ---- helpers -----------------------------------------------------------------
-
-/**
- * The boot project's store for `serve` (#779, plan step 4). One that cannot open does not stop the
- * cockpit: the boot project answers every route with the reason (`RunStore.unavailable`), the
- * other projects work, and a restart once the cause is gone opens it.
- */
-function openBootStore(repoRoot: string): RunStore {
-  try {
-    return openStore(repoRoot, { keepLive: true });
-  } catch (error) {
-    if (!(error instanceof RunStoreOpenError)) throw error;
-    console.error(`\n  ✗ ${error.message}\n`);
-    return RunStore.unavailable(projectPaths(repoRoot).write, error);
-  }
-}
 
 /** Own package name — for the npm-registry update check (#368). */
 function readOwnName(): string {
@@ -138,8 +112,39 @@ function readOwnVersion(): string {
 }
 
 main({
-  ...defaultCliDeps, resolveCliHome: () => resolveHome({ purpose: 'cli' }), readOwnVersion, runCommand, initCommand, serverCommand,
-  serveCommand: (...args) => serveCommand(...args, { ...defaultServeDeps, initWorkspace, openBootStore, readOwnName, readOwnVersion, workerCleanup: workerCleanups() }),
+  ...defaultCliDeps, resolveCliHome: () => resolveHome({ purpose: 'cli' }), readOwnVersion, runCommand,
+  initCommand: async (...args) => {
+    await prepareCommandRuntime('init');
+    return (await import('./project-commands.ts')).initCommand(...args);
+  },
+  serverCommand: async (...args) => {
+    await prepareCommandRuntime(`server-${args[0]}`);
+    return (await import('./server-command.ts')).serverCommand(...args);
+  },
+  serveCommand: async (...args) => {
+    await prepareCommandRuntime('serve');
+    const { serveCommand, defaultServeDeps } = await import('./serve-command.ts');
+    const { openStore } = await import('./project-commands.ts');
+    const { RunStore } = await import('./runs/store.ts');
+    const { RunStoreOpenError } = await import('./runs/store-open-error.ts');
+    const { projectPaths } = await import('./project-paths.ts');
+    const { workerCleanups } = await import('./delegation/worker-cleanup.ts');
+    /**
+     * The boot project's store for `serve`. One that cannot open does not stop the
+     * cockpit: the boot project answers every route with the reason (`RunStore.unavailable`), the
+     * other projects work, and a restart once the cause is gone opens it.
+     */
+    const openBootStore = (repoRoot: string) => {
+      try {
+        return openStore(repoRoot, { keepLive: true });
+      } catch (error) {
+        if (!(error instanceof RunStoreOpenError)) throw error;
+        console.error(`\n  ✗ ${error.message}\n`);
+        return RunStore.unavailable(projectPaths(repoRoot).write, error);
+      }
+    };
+    return serveCommand(...args, { ...defaultServeDeps, initWorkspace, openBootStore, readOwnName, readOwnVersion, workerCleanup: workerCleanups() });
+  },
 }).catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);

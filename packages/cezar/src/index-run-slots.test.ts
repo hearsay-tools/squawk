@@ -1,20 +1,65 @@
 import { expect, it, vi } from 'vitest';
 
-// Each bin imports index.ts, which seals the removal slots before the CLI dispatch, so every
-// command, the cockpit, a headless task and each child process that reruns the entry can delete,
-// reclaim and archive runs (spec 2026-11-21-run-lifecycle-and-store-ports, "Removal slots"), and registers the
-// worker executions every store builds on first use (hearsay-tools/squawk#4039).
-vi.mock('./serve-command.ts', () => ({ defaultServeDeps: {}, serveCommand: vi.fn(async () => undefined) }));
-vi.mock('./headless-run.ts', () => ({ defaultHeadlessDeps: {}, runHeadless: vi.fn(async () => undefined) }));
-
-it.each(['./index.ts', './hsq.ts', './cez.ts', './cezarion.ts'])('%s seals the removal slots and registers the worker executions before the CLI dispatch runs', async (entry) => {
+// Runner definitions and removal/worker registries must be ready before command code executes.
+const commands: Array<[string, string[]]> = [
+  ...['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
+    'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].map(command => [command, []] as [string, string[]]),
+  ...[['spawn', '--runner', 'codex'], ['spawn', '--backend=codex'], ['--help'], []].map(args => ['worker', args] as [string, string[]]),
+  ...['restore', 'import', 'ignore'].map(operation => ['backup', [operation, 'config.json']] as [string, string[]]),
+  ['remote-settings', ['status']], ['backup', ['list']],
+  ['backup', ['--at=2026-11-20T12:00:00Z', 'restore', 'config.json']],
+  ['backup', ['--at', '2026-11-20T12:00:00Z', 'restore', 'agent-accounts.json']],
+];
+it.each(commands)('%s %j initializes process services before its handler', async (command, args) => {
   vi.resetModules();
   const slots = await import('./runs/removal-slots.ts');
   const executions = await import('./runs/worker-executions-registry.ts');
-  expect(slots.runSlotsSealed()).toBe(false);
-  expect(executions.workerExecutionsRegistered()).toBe(false);
-  let atDispatch: boolean[] | undefined;
-  vi.doMock('./cli-dispatch.ts', () => ({ defaultCliDeps: {}, main: vi.fn(async () => { atDispatch = [slots.runSlotsSealed(), executions.workerExecutionsRegistered()]; }) }));
-  await import(entry);
-  expect(atDispatch).toEqual([true, true]);
+  const runners = await import('./core/runner-registry.ts');
+  const { BUILT_IN_RUNNER_IDS } = await import('./runners/ids.ts');
+  const check = () => {
+    expect(slots.runSlotsSealed()).toBe(true);
+    expect(executions.workerExecutionsRegistered()).toBe(true);
+    expect(runners.registeredRunners().map(runner => runner.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
+  };
+  if (['migrate', 'server-migrate', 'migrate-project', 'discover', 'task', 'worker', 'backup', 'remote-settings'].includes(command)) {
+    const modules: Record<string, [string, string]> = {
+      migrate: ['./home/migration-cli.ts', 'runMigrationCommand'],
+      'server-migrate': ['./server-install/migrate-cli.ts', 'runServerMigrateCommand'],
+      'migrate-project': ['./project-migration/cli.ts', 'migrateProjectRunner'],
+      discover: ['./discovery/cli.ts', 'runDiscoverCommand'], task: ['./task-cli/cli.ts', 'runTaskCommand'],
+      'remote-settings': ['./remote-settings-cli.ts', 'runRemoteSettingsCommand'],
+      worker: ['./delegation/cli.ts', 'runWorkerCommand'], backup: ['./workspace/backup-cli.ts', 'runBackupCommand'],
+    };
+    const [path, name] = modules[command]!;
+    const handler = async () => { check(); return 0; };
+    vi.doMock(path, () => ({ [name]: name === 'migrateProjectRunner' ? () => handler : handler }));
+    const { runSubcommand } = await import('./subcommands.ts');
+    expect(await runSubcommand([command, ...args], {})).toBe(0);
+    vi.doUnmock(path);
+  } else {
+    const { defaultCliDeps, main } = await import('./cli-dispatch.ts');
+    const handler = async () => { check(); };
+    await main({ ...defaultCliDeps,
+      process: { argv: ['/bin/node', '/bin/hsq', command], env: {}, cwd: () => '/work', exitCode: undefined } as typeof defaultCliDeps.process,
+      console: { log: vi.fn(), error: vi.fn() } as unknown as typeof defaultCliDeps.console, readOwnVersion: () => '0',
+      resolveCliHome: () => ({}) as never, prepareOperatorHome: home => home,
+      runSubcommand: async () => undefined, getRepoInfo: async () => null,
+      serveCommand: handler, runCommand: handler, initCommand: handler, serverCommand: handler,
+      runProjectsCommand: async () => { check(); return 0; },
+    });
+  }
+});
+
+it.each([
+  ['backup', '--help'], ['backup', '-h'],
+  ['remote-settings', '--help'], ['remote-settings', '-h'], ['remote-settings', 'help'],
+])('%s %s skips operator Home preparation and runner registration', async (command, flag) => {
+  vi.resetModules();
+  const { runSubcommand } = await import('./subcommands.ts');
+  const { knownRunnerIds } = await import('./core/runner-registry.ts');
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    expect(await runSubcommand([command!, flag!], {}, () => { throw new Error('Unexpected Home preparation'); })).toBe(0);
+    expect(knownRunnerIds()).toEqual([]);
+  } finally { log.mockRestore(); }
 });

@@ -1,7 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import { z } from 'zod';
-import { runIdParamSchema } from '@open-mercato/cezar-contract/events';
 
 /**
  * Tasks whose own files stay in `.ai/cezar/` after a project move (owner decision A,
@@ -20,7 +18,22 @@ import { runIdParamSchema } from '@open-mercato/cezar-contract/events';
 
 export const LEGACY_RUNS_FILE = 'legacy-runs.json';
 
-export const legacyRunsSchema = z.object({ version: z.literal(1), runs: z.array(runIdParamSchema.shape.id) }).strict();
+/** Same accepted ids as contract/events runIdParamSchema, without loading the HTTP contract. */
+function isRunId(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 1 && value.length <= 128 && /^[A-Za-z0-9._-]+$/.test(value);
+}
+
+export const legacyRunsSchema = {
+  parse(value: unknown): { version: 1; runs: string[] } {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid legacy runs object');
+    const record = value as Record<string, unknown>;
+    if (Object.keys(record).some(key => key !== 'version' && key !== 'runs')
+      || record.version !== 1 || !Array.isArray(record.runs) || !Array.from(record.runs).every(isRunId)) {
+      throw new Error('Invalid legacy runs: expected version 1 and an array of run ids');
+    }
+    return { version: 1, runs: [...record.runs] };
+  },
+};
 
 const cache = new Map<string, ReadonlySet<string>>();
 

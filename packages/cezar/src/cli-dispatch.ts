@@ -4,9 +4,8 @@ import { resolve } from 'node:path';
 import { operatorHomeEntry, prepareOperatorHome } from './home/entry.ts';
 import { bindManagedCliHome } from './managed-install/runtime-home.ts';
 import type { Home } from './home/home.ts';
-import { runSubcommand } from './subcommands.ts';
+import { runSubcommand, prepareCommandRuntime } from './subcommands.ts';
 import { getRepoInfo } from './server/git.ts';
-import { runProjectsCommand } from './workspace/projects-cli.ts';
 import { projectPaths } from './project-paths.ts';
 import { assertProjectAdmitted, projectAdmissionRefusal } from './server/cockpit-ownership.ts';
 import type { serverCommand } from './server-command.ts';
@@ -14,7 +13,10 @@ import type { TaskAccess } from './headless-run.ts';
 
 export const defaultCliDeps = {
   parseArgs, operatorHomeEntry, prepareOperatorHome,
-  runSubcommand, getRepoInfo, runProjectsCommand, process, console,
+  runSubcommand, getRepoInfo,
+  runProjectsCommand: async (...args: Parameters<typeof import('./workspace/projects-cli.ts').runProjectsCommand>) =>
+    (await import('./workspace/projects-cli.ts')).runProjectsCommand(...args),
+  process, console,
 };
 
 export type CliDeps = typeof defaultCliDeps & {
@@ -169,6 +171,9 @@ async function dispatch(deps: CliDeps): Promise<void> {
   if (printCliMetadata(deps, values, help)) return;
 
   const command = positionals[0] ?? 'serve';
+  if (['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall'].includes(command)) {
+    await prepareCommandRuntime(command);
+  }
   const task = positionals.slice(1).join(' ').trim();
   homeEntry = commandHomeEntry(command, task);
   const cwd = resolve(values.repo ?? deps.process.cwd());

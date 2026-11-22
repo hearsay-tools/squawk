@@ -28,7 +28,7 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
       return (await import('./server-install/migrate-cli.ts')).runServerMigrateCommand(argv, env, { legacy, target });
     };
     case 'backup': return async (argv, env) => {
-      const selected = home(env);
+      const selected = operatorHelp('backup', argv) ? resolveHome({ purpose: 'cli', env }) : home(env);
       const source = selected.layout === 'split' && argv[0] === 'list' && !hasInstallMarker(selected.config)
         ? resolveHome({ purpose: 'cli', env, layout: 'legacy' }) : selected;
       return (await import('./workspace/backup-cli.ts')).runBackupCommand(argv, env, source, { contained: source !== selected });
@@ -42,7 +42,8 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
     case 'message': return (await import('./delegation/cli.ts')).runMessageCommand;
     case 'worker': return (await import('./delegation/cli.ts')).runWorkerCommand;
     case 'remote-settings': return async (argv, env) => {
-      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, home(env));
+      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, operatorHelp('remote-settings', argv)
+        ? resolveHome({ purpose: 'cli', env }) : home(env));
     };
     default: return undefined;
   }
@@ -50,7 +51,27 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
 
 /** Run `argv[0]` when it names a subcommand and answer its exit code; anything else is not ours. */
 export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home = () => resolveHome({ purpose: 'cli', env })): Promise<number | undefined> {
+  if (SUBCOMMAND_NAMES.some(name => name === argv[0])) await prepareCommandRuntime(argv[0]!, argv.slice(1));
   // Only operator runners call the lazy Home factory. Task runners keep two arguments.
   const run = await loadSubcommand(argv[0], () => home());
   return run ? run(argv.slice(1), env) : undefined;
+}
+
+/** Install process services before loading commands that read runner or removal registries. */
+export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
+  const help = argv.some(arg => arg === '--help' || arg === '-h');
+  const worker = command === 'worker' && (argv.length === 0 || help || argv[0] === 'help' || argv[0] === 'spawn');
+  const operator = command === 'backup' || command === 'remote-settings';
+  const operatorRuntime = operator && !operatorHelp(command, argv);
+  if (!worker && !operatorRuntime && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
+    'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
+  const { registerBuiltInRunners } = await import('./runners/built-in.ts');
+  registerBuiltInRunners();
+  const { registerBuiltInRunSlots } = await import('./built-in-run-slots.ts');
+  registerBuiltInRunSlots();
+}
+
+/** Help must skip both runtime registration and the migrating operator Home factory. */
+function operatorHelp(command: string, argv: readonly string[]): boolean {
+  return ['--help', '-h', ...(command === 'remote-settings' ? ['help'] : [])].includes(argv[0] ?? '');
 }

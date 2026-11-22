@@ -3,10 +3,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { removeHistory } from './runs/history-file.ts';
-import { forgetLegacyRunIds, LEGACY_RUNS_FILE, legacyItemOwner, legacyRunIds, legacyRunItem, LegacyRunsUnreadableError, runDataDir } from './legacy-runs.ts';
+import { forgetLegacyRunIds, LEGACY_RUNS_FILE, legacyRunsSchema, legacyItemOwner, legacyRunIds, legacyRunItem, LegacyRunsUnreadableError, runDataDir } from './legacy-runs.ts';
 import { workerEvidenceRunIds } from './runs/worker-execution.ts';
 
 /** Live tasks that keep their own items in `.ai/cezar/` after a project move (owner decision A). */
+
+it('accepts exactly the strict legacy-run file shape and contract run ids', () => {
+  const runs = ['a', 'A-z_0.9', 'x'.repeat(128)];
+  expect(legacyRunsSchema.parse({ version: 1, runs })).toEqual({ version: 1, runs });
+  for (const value of [null, [], {}, { version: 2, runs: [] }, { version: 1, runs: [], extra: true },
+    ...['', 'x'.repeat(129), '../escape', 'space id', 1, null].map(id => ({ version: 1, runs: [id] })),
+    { version: 1, runs: 'a' }, { version: 1, runs: Array(1) }]) {
+    expect(() => legacyRunsSchema.parse(value)).toThrow();
+  }
+});
 
 const LIVE = '20000000-0000-4000-8000-000000000002';
 const OTHER = '30000000-0000-4000-8000-000000000003';
