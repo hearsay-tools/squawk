@@ -8,7 +8,7 @@ export function prepareAntigravityAccount(accountHome: string | undefined, sourc
   const source = resolve(sourceHome);
   mkdirSync(accountHome, { recursive: true, mode: 0o700 });
   mkdirSync(join(accountHome, '.squawk-home', '.config'), { recursive: true, mode: 0o700 });
-  for (const relative of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills']) {
+  for (const relative of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills', 'skills']) {
     const target = join(accountHome, relative);
     try { lstatSync(target); continue; } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;

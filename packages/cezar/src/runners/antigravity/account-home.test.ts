@@ -17,7 +17,7 @@ it.each(['absolute', 'relative'])('shares native files from an %s source home an
   await mkdir(source); await writeFile(join(source, 'AGENTS.md'), 'User instructions');
   const sourceHome = kind === 'relative' ? relative(process.cwd(), source) : source;
   prepareAntigravityAccount(account, sourceHome);
-  for (const name of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills']) {
+  for (const name of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills', 'skills']) {
     expect(await readlink(join(account, name))).toBe(join(source, name));
   }
   await writeFile(join(account, 'antigravity-acp-settings'), 'account-owned');

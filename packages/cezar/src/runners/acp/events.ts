@@ -15,6 +15,8 @@ const toolSchema = z.object({
 }).passthrough();
 type AcpTool = z.infer<typeof toolSchema>;
 const planStatusSchema = z.enum(['pending', 'in_progress', 'completed']);
+/** Updates that are the agent's own work, as opposed to session metadata. */
+const WORK_UPDATES: ReadonlySet<string> = new Set(['agent_message_chunk', 'agent_thought_chunk', 'tool_call', 'tool_call_update', 'plan']);
 const planSchema = z.array(z.object({ content: z.string(), status: planStatusSchema.catch('pending'), priority: z.enum(['high', 'medium', 'low']) }));
 export interface AcpEventSink { event?(event: AgentEvent): void; uiEvent?(event: UiEvent): void }
 
@@ -22,30 +24,68 @@ export interface AcpEventSink { event?(event: AgentEvent): void; uiEvent?(event:
 export class AcpEvents {
   private serial = 0;
   private turnId: string | undefined;
+  /** The open turn was started by the agent's own work, and no prompt carries it yet. */
+  private agentStarted = false;
+  /** The kind of the open turn's latest work update. */
+  private lastWork: string | undefined;
+  /** A provider failure reported as text in the open turn. */
+  private failure: string | undefined;
   private block: UiMessageItem | UiReasoningItem | undefined;
   private tools = new Map<string, UiToolItem>();
   constructor(private readonly sink: AcpEventSink, private readonly hooks: AcpHooks) {}
 
+  get turnOpen(): boolean { return this.turnId !== undefined; }
+  /** The provider failure of the open turn, if its text reported one. */
+  get turnFailure(): string | undefined { return this.failure; }
+
   begin(): string {
     if (this.turnId) throw new Error('ACP prompt already active');
     this.turnId = `acp-turn-${++this.serial}`;
+    this.lastWork = undefined;
     this.sink.uiEvent?.({ type: 'turn.started', turnId: this.turnId });
     return this.turnId;
   }
 
+  /** A prompt joins the agent-started turn that is open; its response ends that turn. */
+  adopt(): void {
+    if (!this.agentStarted) throw new Error('ACP has no agent-started turn to adopt');
+    this.agentStarted = false;
+  }
+
+  /** The open turn was started by the agent and no prompt carries it. */
+  get agentTurn(): boolean { return this.agentStarted; }
+
   finish(stopReason: StopReason, usage?: TokenUsage): void {
     this.flush();
     if (!this.turnId) return;
-    this.finishTools(stopReason);
-    this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason, ...(usage ? { usage } : {}) });
-    this.turnId = undefined;
+    const reason = this.failure ? 'error' : stopReason;
+    this.finishTools(reason);
+    this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason: reason, ...(usage ? { usage } : {}) });
+    this.turnId = undefined; this.agentStarted = false; this.failure = undefined;
     this.sink.event?.({ type: 'turn-end' });
   }
 
   update(update: Record<string, unknown>): void {
-    try { this.mapUpdate(update); }
-    catch { this.notice('ACP ignored malformed session/update'); }
+    try {
+      if (this.closedTool(update)) return;
+      const work = WORK_UPDATES.has(update.sessionUpdate as string);
+      if (work && !this.turnId && this.hooks.agentWorkEnds) { this.begin(); this.agentStarted = true; }
+      const failure = this.turnId ? this.hooks.updateError?.(update) : undefined;
+      if (failure) this.failure ??= failure;
+      this.mapUpdate(update);
+      const previous = this.lastWork;
+      if (work) this.lastWork = update.sessionUpdate as string;
+      if (this.agentStarted && this.hooks.agentWorkEnds?.(update, previous)) this.finish('end_turn');
+    } catch { this.notice('ACP ignored malformed session/update'); }
   }
+
+  /** A late update for a tool already closed (a failed call the agent reports after cancel). */
+  private closedTool(update: Record<string, unknown>): boolean {
+    if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') return false;
+    const status = this.tools.get(String(update.toolCallId))?.status;
+    return status === 'completed' || status === 'failed';
+  }
+
 
   notice(message: string): void {
     this.sink.event?.({ type: 'note', message });
@@ -56,6 +96,7 @@ export class AcpEvents {
   fork(sink: AcpEventSink): AcpEvents {
     const next = new AcpEvents(sink, this.hooks);
     next.serial = this.serial; next.turnId = this.turnId;
+    next.agentStarted = this.agentStarted; next.lastWork = this.lastWork; next.failure = this.failure;
     next.block = this.block ? { ...this.block } : undefined;
     // Updates replace tool snapshots; their nested input/output values are never mutated.
     next.tools = new Map(this.tools);
@@ -71,6 +112,8 @@ export class AcpEvents {
       case 'usage_update': this.usage(update); break;
       case 'config_option_update': this.hooks.normalizeOptions?.(update.configOptions); break;
       case 'available_commands_update': break; // Native command catalog, not a fault.
+      case 'session_info_update': break; // A native session title.
+      case 'current_mode_update': break; // The native mode the session/set_config_option call chose.
       default: this.notice('ACP ignored unsupported session/update');
     }
   }
@@ -112,6 +155,9 @@ export class AcpEvents {
   }
 
   private finishTools(reason: StopReason): void {
+    // A wire whose idle session wakes on its own keeps a call running past a normal turn end: a
+    // background command, a timer or a question completes in a later turn.
+    if (this.hooks.agentWorkEnds && reason !== 'cancelled' && reason !== 'error') return;
     for (const [id, tool] of this.tools) {
       if (tool.status === 'completed' || tool.status === 'failed') continue;
       const item: UiToolItem = { ...tool, status: 'failed', output: tool.output || (reason === 'cancelled' ? 'Cancelled' : 'Turn ended before the tool completed') };

@@ -17,7 +17,8 @@
  * - S40, S41: a mid-turn human message is read in the running turn or held for the next one, as
  *   `humanInputAtTurnEnd` declares, when it arrives before (S40) or after (S41) the last model call.
  * - S42: `spec.systemPrompt` reaches every process on a system channel when the runner declares
- *   `resent`, and the opening turn of the thread when it declares `in-thread`.
+ *   `resent`. When it declares `in-thread`, the fresh thread keeps it (prepended to the opening turn,
+ *   or on a session-open channel the thread saves) and a resume never resends it on a saved channel.
  * - S43: the session reports every native process it starts while that process runs: the first
  *   as `pid` when `startSession` returns, each later one through `onPidChange`. The worker process
  *   ledger records exactly these pids (worker-reboot, worker-restart).
@@ -592,13 +593,19 @@ function assertSystemPrompt({ backend, records = [], systemPromptOnResume, varia
   const userPrompt = promptFor(backend, 'baseline');
   const carrying = records.filter(record => record.includes(SYSTEM_PROMPT));
   const trace = `\n${records.join('\n')}`;
-  expect(carrying.length, `${variant} wire carries spec.systemPrompt${trace}`).toBeGreaterThan(0);
+  const prepended = (record: string) => record.includes(userPrompt) && record.indexOf(SYSTEM_PROMPT) < record.indexOf(userPrompt);
   if (systemPromptOnResume === 'resent') {
     // A system channel outside the conversation, which every process receives again.
+    expect(carrying.length, `${variant} wire carries spec.systemPrompt${trace}`).toBeGreaterThan(0);
     expect(carrying.filter(record => record.includes(userPrompt)), `resent: outside the opening turn${trace}`).toEqual([]);
+  } else if (variant === 'fresh') {
+    // The native thread keeps it: prepended to the opening user turn, or sent on the session-open
+    // channel that the thread saves (Antigravity's session/new).
+    expect(carrying.length, `in-thread: the fresh wire carries spec.systemPrompt${trace}`).toBeGreaterThan(0);
   } else {
-    // Prepended to the opening user turn, which the native thread keeps for a resume.
-    expect(carrying.some(record => record.indexOf(SYSTEM_PROMPT) < record.indexOf(userPrompt)), `in-thread: prepended to the opening turn${trace}`).toBe(true);
+    // A resume may prepend it to its opening turn again, never resend it on a saved channel: the
+    // thread would then hold it twice.
+    expect(carrying.filter(record => !prepended(record)), `in-thread: a resume resends no saved system prompt${trace}`).toEqual([]);
   }
 }
 

@@ -53,7 +53,7 @@ export function createProviderSignInRoutes(options: {
       try {
         const result = await signIns.redirect(c.req.valid('param').id, c.req.valid('json').redirectUrl);
         return result ? c.json(result) : c.json({ error: 'Sign-in expired. Start a new sign-in.' }, 404);
-      } catch { return c.json({ error: 'The redirect could not be accepted. Paste the complete URL from this sign-in, or start a new sign-in.' }, 409); }
+      } catch { return c.json({ error: 'The code could not be accepted. Paste the code or the full page address from this sign-in, or start a new sign-in.' }, 409); }
     })
     .delete('/providers/sign-in/:id', paramZodValidator(providerSignInParamsSchema), async c => {
       const result = await signIns.cancel(c.req.valid('param').id);

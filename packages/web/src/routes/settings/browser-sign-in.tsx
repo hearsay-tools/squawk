@@ -72,10 +72,8 @@ function useBrowserSignIn(provider: string, profileId?: string) {
   return { open, result, redirect, setRedirect, start, replay, status, error, close, connect }
 }
 
-function SignInInstructions({ local }: { local: boolean }) {
-  return local
-    ? 'After consent, sign-in completes here. If your browser cannot reach the host’s 127.0.0.1 address, paste the full failed redirect URL below.'
-    : 'Open the sign-in link in your browser. After Google consent, your browser will fail to open a 127.0.0.1 address. Copy that full address and paste it below to complete sign-in.'
+function SignInInstructions() {
+  return 'Open the sign-in link in your browser. After Google consent, the page shows a code. Copy that code, or the full address of that page, and paste it below.'
 }
 
 export function BrowserSignInButton({ provider, profileId, label }: { provider: string; profileId?: string; label: string }) {
@@ -93,9 +91,9 @@ export function BrowserSignInButton({ provider, profileId, label }: { provider: 
         {start.isPending ? <p role="status">Preparing sign-in…</p> : null}
         {result?.state === 'waiting' ? <div className="grid min-w-0 gap-3">
           <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-action underline">Open Google sign-in</a>
-          <p className="text-sm text-muted-foreground"><SignInInstructions local={capabilities.localHandoff} /></p>
-          <label className="grid gap-2">Redirect URL
-            <Input type="url" autoComplete="off" spellCheck={false} value={redirect} onChange={event => setRedirect(event.target.value)} />
+          <p className="text-sm text-muted-foreground"><SignInInstructions /></p>
+          <label className="grid gap-2">Code or page address
+            <Input type="text" autoComplete="off" spellCheck={false} value={redirect} onChange={event => setRedirect(event.target.value)} />
           </label>
           <Button disabled={!redirect.trim() || replay.isPending} onClick={() => replay.mutate()}>Complete sign-in</Button>
         </div> : null}

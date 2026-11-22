@@ -1,4 +1,5 @@
 import { prepareAntigravityAccount } from './account-home.ts';
+import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
 import { readdir, readFile } from 'node:fs/promises';
 import { agentHomeDir } from '../../paths.ts';
 import { join } from 'node:path';
@@ -7,16 +8,17 @@ import { z } from 'zod';
 import type { SkillCatalog } from '../../core/runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from '../../core/skill-probe.ts';
 const metadataSchema = z.object({ name: z.string().optional(), description: z.string().optional() });
-/** Live-probed resolve_skills_paths order in antigravity-acp 1.5.0 (hearsay-tools/squawk#4000).
- * ACP exposes no skills/list; available_commands_update contains built-in commands only. */
+/** The folders Antigravity CLI 1.5.14 reads (cli-skill-folders.ndjson, hearsay-tools/squawk#4058).
+ * The CLI also lists skills in available_commands_update, but only after the first prompt. */
 export async function discoverAntigravitySkills(options: SkillDiscoveryOptions): Promise<SkillCatalog> {
   const home = options.accountHome || agentHomeDir('antigravity');
   prepareAntigravityAccount(options.accountHome);
   const roots = [
     { path: join(home, 'config', 'skills'), scope: 'user' as const },
-    { path: join(options.cwd, '.gemini', 'skills'), scope: 'repo' as const },
-    { path: join(home, 'antigravity-cli', 'skills'), scope: 'user' as const },
+    { path: join(home, ANTIGRAVITY_APP_DATA_DIR, 'skills'), scope: 'user' as const },
+    { path: join(home, 'skills'), scope: 'user' as const },
     { path: join(options.cwd, '.agents', 'skills'), scope: 'repo' as const },
+    { path: join(options.cwd, '.agent', 'skills'), scope: 'repo' as const },
   ];
   const skills: SkillCatalog['skills'] = [];
   const names = new Set<string>();

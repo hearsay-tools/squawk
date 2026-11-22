@@ -48,5 +48,6 @@ export const agentProfileRouteParamsSchema = z.object({ id: z.string() });
 
 export const providerSignInParamsSchema = z.object({ id: z.uuid() });
 export const providerSignInRedirectSchema = z.object({
-  redirectUrl: z.string().url().max(8192),
+  /** The address the browser landed on after consent, or the code that page shows. */
+  redirectUrl: z.string().trim().min(1).max(8192),
 }).strict();

@@ -1,4 +1,3 @@
-import { filterAntigravityUpdate, antigravityUpdateError } from './wire-updates.ts';
 import { askPayloadOf } from '@open-mercato/cezar-contract/pending-ask';
 import { rm } from 'node:fs/promises';
 import { z } from 'zod';
@@ -12,17 +11,18 @@ import { AcpSession } from '../acp/session.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
-import { antigravityTool } from './tool-normalization.ts';
-import { antigravityAsk, permissionPolicy } from './permissions.ts';
+import { permissionPolicy } from './permissions.ts';
 import { squawkToolNames } from '../../ci-wait/tool-catalog.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
-import { antigravityStderr } from './stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
-import type { UiEvent } from '../../core/ui-events.ts';
+import { ANTIGRAVITY_WIRE_HOOKS, antigravityUpdateError } from './wire-updates.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, type AntigravityLaunch } from './executable.ts';
+import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
+import type { UiAskQuestion, UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
 function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown>[] {
@@ -36,6 +36,7 @@ function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown
 export class AntigravitySession implements AgentSession {
   readonly result: Promise<AgentRunResult>;
   private readonly runtime;
+  private readonly launch: AntigravityLaunch;
   private readonly child;
   private readonly descendants;
   private readonly acp: AcpSession;
@@ -50,39 +51,48 @@ export class AntigravitySession implements AgentSession {
   private providerError: string | undefined;
   private accepting = true;
   private requestedClose = false;
+  private quiet = false;
+  private quietTimer: NodeJS.Timeout | undefined;
   private interrupted = false;
   private timedOut = false;
   private failure: Error | undefined;
-  private pendingAsk: string | undefined;
+  /** The open ask_question call: its card's request id and question. The next prompt answers it. */
+  private pendingAsk: { requestId: string; toolCallId: string; question: UiAskQuestion } | undefined;
   private humanAcks = 0;
   private agentAcks = 0;
   private reportedFailure = false;
   private failedTurn: Extract<UiEvent, { type: 'turn.completed' }> | undefined;
   private readonly humanHolds = new Set<symbol>();
-  private readonly steers = new Map<symbol, boolean>();
   private configOptions: unknown;
   private autoEnd: NodeJS.Timeout | undefined;
   private term: NodeJS.Timeout | undefined;
   private kill: NodeJS.Timeout | undefined;
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
-  constructor(bin: string, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
+  constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
-    this.runtime = antigravityEnv(bin, spec);
-    this.child = spawnSessionLeader(bin, antigravityLaunchArgs(process.platform, this.runtime.env), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.runtime = antigravityEnv(spec);
+    this.launch = launchAntigravity(bin) ?? { executable: 'agy', bindProcess() {}, release() {} };
+    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    try { if (this.child.pid) this.launch.bindProcess(this.child.pid); }
+    catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)); }
     this.descendants = new SessionDescendants(this.child);
     boundOutputDrainAfterExit(this.child);
     this.acp = this.createAcp();
     this.child.stderr.setEncoding('utf8'); this.child.stderr.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-32_768); });
-    this.child.on('error', error => { this.failure = new Error(`${error.message}. Install Antigravity ACP and put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.`); this.acp.transport.close(error); });
+    this.child.on('error', error => {
+      this.failure = new Error((error as NodeJS.ErrnoException).code === 'ENOENT' ? ANTIGRAVITY_MISSING : error.message);
+      this.acp.transport.close(error);
+    });
     this.exited = new Promise(resolve => this.child.once('close', resolve));
     this.limit = spec.timeoutMs ?? timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     if (this.limit > 0) this.deadline = setTimeout(() => { this.timedOut = true; this.emit({ type: 'error', message: `Antigravity timed out after ${this.limit}ms` }); this.interrupt(); }, this.limit);
-    const boot = this.boot().catch(error => this.fail(error));
+    const boot = this.failure ? Promise.resolve().then(() => this.fail(this.failure)) : this.boot().catch(error => this.fail(error));
     this.result = this.settle(boot);
   }
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
+  get closingQuietly(): boolean { return this.quiet && !this.requestedClose; }
   private emit(event: AgentEvent): void {
     if (event.type === 'turn-end' && this.failedTurn) return;
     if (event.type === 'text') this.output.text += event.text;
@@ -96,52 +106,63 @@ export class AntigravitySession implements AgentSession {
       backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, // ACP usage_update reports context occupancy, not spent tokens.
       event: event => { if (event.type !== 'token-usage') this.emit(event); },
       onActivity: () => this.options.onActivity?.(),
-      uiEvent: event => {
-        if (event.type === 'turn.started' || event.type === 'turn.completed') {
-          if (event.type === 'turn.completed') {
-            for (const hold of this.humanHolds) if (!this.steers.has(hold)) this.humanHolds.delete(hold);
-          }
-          for (const [hold, acknowledged] of this.steers) {
-            if (event.type === 'turn.started' || acknowledged) { this.humanHolds.delete(hold); this.steers.delete(hold); }
-          }
-        }
-        if (event.type === 'turn.completed' && event.stopReason === 'error' && !this.reportedFailure) {
-          this.failedTurn = event; return;
-        }
-        if (event.type === 'turn.completed' && event.usage) {
-          this.output.tokensUsed += event.usage.total;
-          this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
-        }
-        const ask = askPayloadOf(event);
-        if (ask) this.pendingAsk = ask.requestId;
-        this.options.onUiEvent?.(event);
-      }, hooks: {
+      uiEvent: event => this.uiEvent(event),
+      hooks: {
+        ...ANTIGRAVITY_WIRE_HOOKS,
         selectAuthMethod: hello => this.runtime.env.GEMINI_API_KEY && hello.authMethods.some(method => method.id === 'gemini-api-key') ? 'gemini-api-key' : undefined,
-        normalizeTool: antigravityTool, normalizeUsage: antigravityUsage,
+        normalizeUsage: antigravityUsage,
         normalizeOptions: value => { this.configOptions = value; },
-        permissionAsk: antigravityAsk, permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${ANTIGRAVITY_MCP_NAME}_${name}`) : []),
+        permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${ANTIGRAVITY_MCP_NAME}_${name}`) : []),
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
-        // agy sorts active workspaces to choose its command cwd. Extra roots can displace
-        // the task checkout. Absolute handoff/temp paths remain available to shell tools.
-        sessionParams: () => ({ _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' },
-          // Squawk owns workflows. The native tool also writes a built-in skill into cwd.
-          disabledTools: ['run_workflow'], eagerMcpServers: spec.squawkTools ? [ANTIGRAVITY_MCP_NAME] : [] } } }),
+        // The CLI saves the session/new system prompt with the session and appends a resent one,
+        // so a resume sends none (systemPromptOnResume 'in-thread').
+        sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } } } : {},
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
           this.providerError = failure ?? this.providerError;
           if (failure) this.reportFailure(failure);
-          return filterAntigravityUpdate(update);
+          return true;
         },
-        promptError: () => { const error = this.providerError; this.providerError = undefined; return error; },
       },
     });
+  }
+  private uiEvent(event: UiEvent): void {
+    if (event.type === 'turn.started') {
+      clearTimeout(this.quietTimer); this.clearAutoEnd();
+      // The prompt that opened this turn is read; an agent-started turn holds nothing.
+      if (this.busy) this.humanHolds.clear();
+    }
+    if (event.type === 'turn.completed' && event.stopReason === 'error' && !this.reportedFailure) {
+      this.failedTurn = event; return;
+    }
+    if (event.type === 'turn.completed' && event.usage) {
+      this.output.tokensUsed += event.usage.total;
+      this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
+    }
+    this.options.onUiEvent?.(event);
+    if (event.type === 'item.started' && event.item.kind === 'tool' && event.item.name === 'ask_question') this.openAsk(event.item.id, event.item.input);
+    if (event.type === 'item.completed' && event.item.id === this.pendingAsk?.toolCallId) this.pendingAsk = undefined;
+    // Work the agent started on its own ended: input and auto-end resume as after a prompt.
+    if (event.type === 'turn.completed' && !this.busy) {
+      this.armQuietEnd();
+      if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
+    }
+  }
+  /** ask_question ends the prompt with the question as text; the next prompt is the answer. */
+  private openAsk(toolCallId: string, input: unknown): void {
+    const question = antigravityQuestion(input);
+    if (!question) return;
+    const ask = { requestId: `antigravity-ask-${toolCallId}`, toolCallId, question };
+    this.pendingAsk = ask;
+    const event = { type: 'ask.requested', requestId: ask.requestId, questions: [question] } as const;
+    if (askPayloadOf(event)) this.options.onUiEvent?.(event);
   }
   private async boot(): Promise<void> {
     this.bridge = await antigravityMcp(this.spec, this.runtime.env);
     if (!this.open) return;
     await this.acp.initialize();
     await this.acp.open({ cwd: this.spec.cwd, ...(this.spec.resume && this.spec.sessionId ? { sessionId: this.spec.sessionId } : {}), mcpServers: this.bridge ? [this.bridge.descriptor] : [] });
-    // A saved yolo mode must never bypass the permission policy on Continue.
+    // A saved accept-edits or plan mode must never bypass the permission policy on Continue.
     await this.acp.setConfigOption('mode', 'default');
     if (this.spec.model) await this.acp.setConfigOption('model', this.spec.model);
     if (this.spec.effort) {
@@ -164,34 +185,30 @@ export class AntigravitySession implements AgentSession {
       this.inflight--;
       if (this.busy) return;
       if (this.interrupted) this.closeInput();
-      this.pendingAsk = undefined;
       if (this.open && this.queue.length) void this.submit(this.queue.shift()!).catch(error => this.fail(error));
       else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
+      this.armQuietEnd();
     });
   }
   sendMessage(content: ContentBlock[]): boolean {
     if (!this.open || !validSkillMessage(content)) return false;
-    if (this.pendingAsk) return this.answerAsk(content);
+    if (this.pendingAsk) content = this.answerAsk(content);
     if (!this.ready) { this.queue.push(content); return true; }
-    const steered = this.busy;
     const hold = Symbol('human input');
     this.humanHolds.add(hold); this.humanAcks++;
-    if (steered) this.steers.set(hold, false);
-    void this.submit(content).then(() => this.releaseHuman(hold, false), error => { this.releaseHuman(hold, true); this.fail(error); });
+    void this.submit(content).then(() => this.releaseHuman(hold), error => { this.releaseHuman(hold); this.fail(error); });
     return true;
   }
-  private answerAsk(content: ContentBlock[]): boolean {
-    try {
-      const text = content.filter(block => block.type === 'text').map(block => block.text).join('\n');
-      if (!this.acp.respondAsk(this.pendingAsk!, text)) return false;
-      this.pendingAsk = undefined; return true;
-    } catch (error) { this.emit({ type: 'note', message: String(error) }); return false; }
+  /** The card's answer becomes the next prompt, in the words the CLI's own question offered. */
+  private answerAsk(content: ContentBlock[]): ContentBlock[] {
+    const ask = this.pendingAsk!;
+    this.pendingAsk = undefined;
+    const text = content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+    return [{ type: 'text', text: antigravityAnswer(ask.question, text) }];
   }
-  private releaseHuman(hold: symbol, rejected: boolean): void {
+  private releaseHuman(hold: symbol): void {
     this.humanAcks = Math.max(0, this.humanAcks - 1);
-    if (rejected || !this.steers.has(hold)) this.humanHolds.delete(hold);
-    else this.steers.set(hold, true);
-    if (rejected) this.steers.delete(hold);
+    this.humanHolds.delete(hold);
     this.options.onAgentInputReady?.();
     if (!this.busy) this.scheduleAutoEnd();
   }
@@ -203,20 +220,34 @@ export class AntigravitySession implements AgentSession {
     });
   }
   respondPermission(id: string, option: string): boolean { return this.acp.respondPermission(id, option); }
-  discardQueuedMessages(): void { this.queue.length = 0; this.humanHolds.clear(); this.steers.clear(); }
-  // Idle prompts release at their response. Early-acknowledged steers release at the
-  // carrying turn completion; late steers release at successor turn.started. Rejection,
-  // close and discard also release. ACP has no native consumption signal.
+  discardQueuedMessages(): void { this.queue.length = 0; this.humanHolds.clear(); }
+  // A prompt is held from sendMessage until the turn it opens starts, or until its response: a
+  // steered prompt's response ends the turn that read it. ACP has no consumption signal.
+  // Rejection, close and discard also release.
   holdsHumanInput(): boolean { return this.heldHumanInputCount() > 0; }
   heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size; }
-  end(): void {
+  /** A background command or timer can wake the idle session and ask after a done: stay up
+   *  AUTO_END_DELAY_MS for that, and end once no turn it opened still runs. */
+  endWhenQuiet(): void {
     if (!this.open) return;
+    this.quiet = true; this.accepting = false;
+    this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
+    this.armQuietEnd();
+  }
+  private armQuietEnd(): void {
+    if (!this.quiet || this.requestedClose) return;
+    clearTimeout(this.quietTimer);
+    if (this.busy || this.acp.agentWorking) return;
+    this.quietTimer = setTimeout(() => { if (!this.busy && !this.acp.agentWorking) this.end(); }, AUTO_END_DELAY_MS);
+  }
+  end(): void {
+    if (this.requestedClose) return;
     this.beginClose(); this.closeInput();
     this.term = setTimeout(() => this.terminate(), this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
   }
   private beginClose(): void {
     this.descendants.capture();
-    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
+    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); clearTimeout(this.quietTimer); this.discardQueuedMessages(); this.pendingAsk = undefined;
   }
   private closeInput(): void { this.acp.close(); this.child.stdin.end(); }
   private terminate(): void {
@@ -225,16 +256,16 @@ export class AntigravitySession implements AgentSession {
     this.kill = setTimeout(() => signalSession(this.child, 'SIGKILL'), this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
   }
   interrupt(): void {
-    if (!this.open) return;
+    if (this.requestedClose) return;
     this.interrupted = true; this.beginClose();
-    if (this.ready && this.busy) {
+    if (this.ready && (this.busy || this.acp.agentWorking)) {
       try { this.acp.cancel(); } catch { /* The shutdown deadline still owns cleanup. */ }
-      // Leave the transport open for failed tool updates and the cancelled prompt response.
+      // The CLI answers cancelled before the open command closes; keep the transport for that.
       this.term = setTimeout(() => { this.closeInput(); this.terminate(); }, this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
     } else { this.closeInput(); this.terminate(); }
   }
   private fail(error: unknown): void {
-    if (!this.open) return;
+    if (this.requestedClose) return;
     this.failure ??= error instanceof Error ? error : new Error(String(error));
     this.end();
   }
@@ -243,7 +274,7 @@ export class AntigravitySession implements AgentSession {
     if (!this.open || !this.options.autoEndAfterFirstTurn || this.agentAcks || this.humanAcks || this.autoEnd) return;
     this.autoEnd = setTimeout(() => {
       this.autoEnd = undefined;
-      if (this.open && !this.busy && !this.humanAcks && !this.queue.length && this.options.shouldAutoEnd?.() !== false) this.end();
+      if (this.open && !this.busy && !this.acp.agentWorking && !this.humanAcks && !this.queue.length && this.options.shouldAutoEnd?.() !== false) this.end();
     }, AUTO_END_DELAY_MS);
   }
   private reportFailure(message: string): void {
@@ -254,17 +285,18 @@ export class AntigravitySession implements AgentSession {
   }
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
-    this.accepting = false; this.acp.close(); this.clearAutoEnd(); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
+    this.accepting = false; this.acp.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
+    try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
     await boot;
     await this.bridge?.close();
     const unexpected = !this.requestedClose && (code !== 0 || this.busy);
     if (this.timedOut || this.failure || unexpected || this.reportedFailure) {
-      await logAntigravityFailure(this.runtime.temp, 'session', this.failure ?? this.providerError ?? `Agent exited code ${code}`, this.runtime.env, this.stderr);
+      await logAntigravityFailure(this.runtime.geminiDir, this.child.pid, 'session', this.failure ?? this.providerError ?? `Agent exited code ${code}`, this.runtime.env, this.stderr);
     }
     await rm(this.runtime.temp, { recursive: true, force: true });
     if (this.timedOut) throw new Error(`Antigravity timed out after ${this.limit}ms`);
-    const stderr = antigravityStderr(redactAntigravityDiagnostics(this.stderr, this.runtime.env));
+    const stderr = redactAntigravityDiagnostics(this.stderr, this.runtime.env).trim();
     if (this.failure || unexpected) {
       const message = [this.failure?.message, `Antigravity exited code ${code}`, summarizeRunnerStderr(stderr)].filter(Boolean).join(': ');
       const error = new Error(message);

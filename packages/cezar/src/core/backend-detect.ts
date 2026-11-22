@@ -33,7 +33,7 @@ export async function detectEnvironment(): Promise<BackendCheck[]> {
 
 /** The executables `detectEnvironment` starts, as each probe names them. */
 function probedBinaries(): string[] {
-  return [...registeredRunners().map(({ detection }) => detection.binOverride() ?? detection.binary), 'gh', 'git'];
+  return [...registeredRunners().map(({ detection }) => detection.binOverride() ?? detection.locate?.() ?? detection.binary), 'gh', 'git'];
 }
 
 /** The file a PATH lookup of `bin` finds, followed through symlinks, with its identity; `-` when none. */
@@ -108,12 +108,12 @@ export async function probeRunner(name: string, detection: RunnerDetection): Pro
   if (productEnv('DRY_RUN') === '1' && (detection.dryRun === 'always' || override === undefined)) {
     return { name, available: true, version: dryRunVersion() };
   }
-  const bin = override ?? detection.binary;
+  const bin = override ?? detection.locate?.() ?? detection.binary;
   try {
     const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
     const banner = stdout.trim();
     const version = detection.versionPattern?.exec(banner)?.[1]?.trim() ?? banner;
-    if (detection.banner && !detection.banner.pattern.test(banner)) {
+    if (detection.banner && (!detection.banner.pattern.test(banner) || detection.identify?.(bin) === false)) {
       return {
         name,
         available: false,

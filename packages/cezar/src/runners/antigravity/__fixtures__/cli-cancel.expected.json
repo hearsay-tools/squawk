@@ -145,22 +145,6 @@
     "turnId": "acp-turn-3"
   },
   {
-    "type": "item.updated",
-    "item": {
-      "kind": "tool",
-      "id": "call_15646625950998597129",
-      "name": "Bash",
-      "title": "sleep 30 && echo late",
-      "toolKind": "execute",
-      "status": "failed",
-      "input": {
-        "command": "sleep 30 && echo late"
-      },
-      "output": "{\"output\":\"\"}",
-      "diffs": []
-    }
-  },
-  {
     "type": "item.started",
     "item": {
       "kind": "reasoning",

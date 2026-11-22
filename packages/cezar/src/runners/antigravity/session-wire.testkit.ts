@@ -11,7 +11,7 @@ export const ANTIGRAVITY_SESSION_WIRE: SessionWire = {
   resumed: wire => requests(wire, 'session/resume').map(params => String(params.sessionId)),
   freshSessions: wire => requests(wire, 'session/new').length,
   started: wire => requests(wire, 'session/prompt').length > 0,
-  effort: wire => requests(wire, 'session/set_config_option').filter(params => params.configId === 'thinking_level').at(-1)?.value as string | undefined,
+  effort: wire => requests(wire, 'session/set_config_option').filter(params => params.configId === 'thought_level').at(-1)?.value as string | undefined,
   prompts: recording => prompts(recording.stdin), steers: () => [],
   systemPrompt: recording => [...requests(recording.args, 'session/new'), ...requests(recording.args, 'session/resume')].map(params => (params._meta as { antigravity?: { systemPrompt?: { append?: string } } })?.antigravity?.systemPrompt?.append ?? '').join('\n'),
   skillTriggers: (recording, name) => prompts(recording.stdin).filter(text => name ? text.startsWith(`/${name} `) || text.startsWith(`/${name}\n`) || text === `/${name}` : /^\/[\w-]+(?:\s|$)/.test(text)),

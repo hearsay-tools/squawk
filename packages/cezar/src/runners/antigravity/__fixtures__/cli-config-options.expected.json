@@ -39,6 +39,6 @@
   {
     "type": "turn.completed",
     "turnId": "acp-turn-1",
-    "stopReason": "end_turn"
+    "stopReason": "error"
   }
 ]

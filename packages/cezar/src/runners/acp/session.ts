@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { StopReason, TokenUsage } from '../../core/ui-events.ts';
 import { AcpEvents, type AcpEventSink } from './events.ts';
 import { AcpRpcError, AcpTransport } from './transport.ts';
+import { addUsage } from './usage.ts';
 import { initializeSchema, permissionSchema, recordSchema, type AcpAsk, type AcpHooks, type AcpInitializeResult, type AcpPermissionRequest } from './protocol.ts';
 
 const updateSchema = z.object({ sessionId: z.string(), update: recordSchema });
@@ -41,6 +42,7 @@ export class AcpSession {
   private readonly prompts = new Set<symbol>();
   private get promptActive(): boolean { return this.promptOwner !== undefined; }
   private turnCancelled = false;
+  private turnUsage: TokenUsage | undefined;
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
     this.hooks = options.hooks ?? {};
@@ -107,12 +109,15 @@ export class AcpSession {
     return this.requestPrompt(content);
   }
 
-  /** An early concurrent response acknowledges steering. If the original response
-   * arrives first, the pending prompt owns a successor turn and its permission lifetime. */
+  /** Steering adds input to the running turn. The turn is one logical turn: if the running prompt
+   * answers first, the steered prompt carries the turn and its response ends it. */
   async steer(content: readonly Record<string, unknown>[]): Promise<void> {
     if (!this.promptActive) throw new Error('ACP steering requires an active prompt');
     await this.requestPrompt(content);
   }
+
+  /** An agent-started turn is open: the agent works on its own, with no prompt carrying it. */
+  get agentWorking(): boolean { return this.events.agentTurn; }
 
   private async requestPrompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
     const sessionId = this.requireSession();
@@ -122,10 +127,8 @@ export class AcpSession {
     let result: z.infer<typeof promptResultSchema>;
     try {
       result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
-      if (this.promptOwner === token) {
-        const message = this.hooks.promptError?.();
-        if (message) throw new Error(message);
-      }
+      const failure = this.promptOwner === token ? this.events.turnFailure : undefined;
+      if (failure) throw new Error(failure);
     } catch (error) {
       this.finishPrompt(token, this.turnCancelled ? 'cancelled' : 'error');
       throw error;
@@ -138,16 +141,22 @@ export class AcpSession {
   private beginPrompt(token: symbol): void {
     this.promptOwner = token;
     this.turnCancelled = false;
-    this.events.begin();
+    this.turnUsage = undefined;
+    if (this.events.agentTurn) this.events.adopt();
+    else this.events.begin();
   }
 
   private finishPrompt(token: symbol, reason: StopReason, usage?: TokenUsage): void {
     this.prompts.delete(token);
+    if (usage) this.turnUsage = addUsage(this.turnUsage, usage);
     if (this.promptOwner !== token) return;
-    this.cancelPermissions();
-    this.events.finish(reason, usage);
-    this.promptOwner = undefined;
     const next = this.prompts.values().next().value;
+    // A steer still pending carries the running turn: the agent ended this prompt to read it.
+    if (next && reason === 'end_turn' && !this.closed) { this.promptOwner = next; return; }
+    this.cancelPermissions();
+    this.events.finish(reason, this.turnUsage);
+    this.promptOwner = undefined;
+    this.turnUsage = undefined;
     if (next && !this.closed) this.beginPrompt(next);
   }
 
@@ -208,7 +217,8 @@ export class AcpSession {
     if (method !== 'session/request_permission') throw new AcpRpcError(-32601, `Unsupported ACP client method: ${method}`);
     const request = permissionSchema.parse(params);
     if (request.sessionId !== this.sessionId) throw new AcpRpcError(-32602, 'Permission requested for another session');
-    if (!this.promptActive || this.turnCancelled) return { outcome: { outcome: 'cancelled' } };
+    // An agent-started turn asks too: its idle session woke on its own.
+    if (!(this.promptActive || this.events.turnOpen) || this.turnCancelled) return { outcome: { outcome: 'cancelled' } };
     const policy = this.hooks.permissionPolicy?.(request);
     if (policy) return { outcome: policy };
     // Native JSON-RPC string IDs have no length bound; UI permission IDs do.

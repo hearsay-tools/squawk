@@ -1,12 +1,17 @@
 import type { RunnerFacts } from '../../core/runner-facts.ts';
-// Live Google antigravity-acp 1.5.0 probes: hearsay-tools/squawk#4000.
+// Live Google Antigravity CLI 1.5.14 probes (hearsay-tools/squawk#4058, #4060);
+// docs/runners/antigravity-wire.md names the fixture behind each value.
+// systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends
+// a resent one, so the runner sends it only on session/new and Continue omits the skill prefix.
+// humanInputAtTurnEnd: a steer sent while the final text streamed was read in the same turn.
+// nativePermission: a background command or timer wakes the idle session, which then asks.
 export const ANTIGRAVITY_FACTS = {
   shutdownDescendants: 'observed-tree',
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'live',
-  transport: 'stdio', sessionIdSource: 'native', systemPromptOnResume: 'resent',
+  transport: 'stdio', sessionIdSource: 'native', systemPromptOnResume: 'in-thread',
   inputDelivery: { mode: 'steer', consumption: 'unobservable', acknowledgement: 'response',
-    humanInputAtTurnEnd: 'held-when-late', via: 'second session/prompt while busy' },
-  nativePermission: 'in-turn', nativeAsk: 'answerable', nativeSubagents: 'turn-held',
+    humanInputAtTurnEnd: 'never-held', via: 'second session/prompt while busy' },
+  nativePermission: 'after-turn', nativeAsk: 'answerable', nativeSubagents: 'turn-held',
   childWork: 'none', hookEvents: 'none', humanPromptHold: 'acknowledgement',
-  nativeTimerTool: null, costReport: 'per-turn', claudeModelAliases: false, turnStart: 'on-write',
+  nativeTimerTool: 'schedule', costReport: 'per-turn', claudeModelAliases: false, turnStart: 'on-write',
 } as const satisfies RunnerFacts;
