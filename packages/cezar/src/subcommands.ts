@@ -42,7 +42,8 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
     case 'message': return (await import('./delegation/cli.ts')).runMessageCommand;
     case 'worker': return (await import('./delegation/cli.ts')).runWorkerCommand;
     case 'remote-settings': return async (argv, env) => {
-      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, home(env));
+      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, ['help', '--help', '-h'].includes(argv[0] ?? '')
+        ? resolveHome({ purpose: 'cli', env }) : home(env));
     };
     default: return undefined;
   }
@@ -60,20 +61,12 @@ export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home
 export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
   const help = argv.some(arg => arg === '--help' || arg === '-h');
   const worker = command === 'worker' && (argv.length === 0 || help || argv[0] === 'help' || argv[0] === 'spawn');
-  const backup = command === 'backup' && await backupNeedsRunners(argv);
-  if (!worker && !backup && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
+  const operator = command === 'backup' || command === 'remote-settings';
+  const operatorRuntime = operator && !['help', '--help', '-h'].includes(argv[0] ?? '');
+  if (!worker && !operatorRuntime && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
     'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
   const { registerBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
   const { registerBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   registerBuiltInRunSlots();
-}
-
-/** Match the command's parser, including options before the operation and literal option values. */
-async function backupNeedsRunners(argv: readonly string[]): Promise<boolean> {
-  const { parseBackupArgs } = await import('./workspace/backups.ts');
-  try {
-    const { values, positionals } = parseBackupArgs(argv);
-    return !values.help && ['restore', 'import', 'ignore'].includes(positionals[0] ?? '');
-  } catch { return false; } // The command reports its own usage errors.
 }

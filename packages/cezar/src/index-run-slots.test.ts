@@ -6,6 +6,7 @@ const commands: Array<[string, string[]]> = [
     'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].map(command => [command, []] as [string, string[]]),
   ...[['spawn', '--runner', 'codex'], ['spawn', '--backend=codex'], ['--help'], []].map(args => ['worker', args] as [string, string[]]),
   ...['restore', 'import', 'ignore'].map(operation => ['backup', [operation, 'config.json']] as [string, string[]]),
+  ['remote-settings', ['status']], ['backup', ['list']],
   ['backup', ['--at=2026-11-20T12:00:00Z', 'restore', 'config.json']],
   ['backup', ['--at', '2026-11-20T12:00:00Z', 'restore', 'agent-accounts.json']],
 ];
@@ -20,12 +21,13 @@ it.each(commands)('%s %j initializes process services before its handler', async
     expect(executions.workerExecutionsRegistered()).toBe(true);
     expect(runners.registeredRunners().map(runner => runner.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
   };
-  if (['migrate', 'server-migrate', 'migrate-project', 'discover', 'task', 'worker', 'backup'].includes(command)) {
+  if (['migrate', 'server-migrate', 'migrate-project', 'discover', 'task', 'worker', 'backup', 'remote-settings'].includes(command)) {
     const modules: Record<string, [string, string]> = {
       migrate: ['./home/migration-cli.ts', 'runMigrationCommand'],
       'server-migrate': ['./server-install/migrate-cli.ts', 'runServerMigrateCommand'],
       'migrate-project': ['./project-migration/cli.ts', 'migrateProjectRunner'],
       discover: ['./discovery/cli.ts', 'runDiscoverCommand'], task: ['./task-cli/cli.ts', 'runTaskCommand'],
+      'remote-settings': ['./remote-settings-cli.ts', 'runRemoteSettingsCommand'],
       worker: ['./delegation/cli.ts', 'runWorkerCommand'], backup: ['./workspace/backup-cli.ts', 'runBackupCommand'],
     };
     const [path, name] = modules[command]!;
