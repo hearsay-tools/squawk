@@ -1,0 +1,1 @@
+{"workerId":"7d0b1c4e-5a3f-4e2b-9c61-2f8a0d9e4b17","cgroups":["/sys/fs/cgroup/user.slice/squawk-worker-7d0b1c4e-5a3f-4e2b-9c61-2f8a0d9e4b17"],"groups":[{"pid":4243,"startToken":"linux:123460","pgid":4243}],"jobs":["Local\\squawk-worker-7d0b1c4e-5a3f-4e2b-9c61-2f8a0d9e4b17"]}
