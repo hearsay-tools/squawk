@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testHome } from '../home/test-home.testkit.ts';
 import { autosaveRemovalCleanup } from '../autosave-removal-slots.ts';
 import { cleanupSafety, reclaimWorktree } from '../runs/retention.ts';
@@ -156,8 +156,16 @@ describe('removal cases on a real repository', () => {
 
 describe('removal cases in a run store', () => {
   let dataDir: string;
+  // Each store a case opens is closed before its fixture directory goes, a failed case's too.
+  const stores = new Set<RunStore>();
+  const open = (...args: Parameters<typeof RunStore.open>) => { const store = RunStore.open(...args); stores.add(store); return store; };
+  const close = (store: RunStore) => { stores.delete(store); store.close(); };
   beforeEach(() => { dataDir = mkdtempSync(join(tmpdir(), 'cez-removal-cases-')); });
-  afterEach(() => { vi.restoreAllMocks(); rmSync(dataDir, { recursive: true, force: true }); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const store of [...stores]) close(store);
+    rmSync(dataDir, { recursive: true, force: true });
+  });
 
   it('archive of a settled family keeps a member\'s tmp directory while the archive-tmp gate refuses', () => {
     const run = { title: 'old', workflow: 'quick-task', task: 'old', status: RUN_STATUS.done, createdAt: '2026-01-01T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [] };
@@ -165,8 +173,7 @@ describe('removal cases in a run store', () => {
     seedRuns(dataDir, [...ids.map(id => ({ ...run, id })),
       ...Array.from({ length: 299 }, (_, index) => ({ ...run, id: `newer-${index}`, createdAt: '2026-02-01T00:00:00.000Z' }))]);
     for (const id of ids) mkdirSync(join(dataDir, 'tmp', id), { recursive: true });
-    const store = RunStore.open(dataDir, { keepLive: true });
-    onTestFinished(() => store.close());
+    const store = open(dataDir, { keepLive: true });
     const refuseKept: DeletionGate = { name: 'kept', refuse: (runId, kind) => kind === 'archive-tmp' && runId === 'kept-tmp' ? 'a job runs' : undefined };
     gate.refuse = (runId, kind) => { calls.push(`gate ${kind} ${runId}`); return refuseKept.refuse(runId, kind, dataDir); };
     try {
@@ -179,7 +186,7 @@ describe('removal cases in a run store', () => {
   });
 
   it('plain run history delete asks the history gate, then runs the cleanups after the commit; a failure is logged and the row stays gone', () => {
-    const store = RunStore.open(dataDir);
+    const store = open(dataDir);
     const run = store.createRun({ title: 'plain', task: 'plain', workflow: 'quick-task', steps: [] });
     setRunStatus(store, run.id, RUN_STATUS.done);
     store.flush();
@@ -197,9 +204,7 @@ describe('removal cases in a run store', () => {
     expect(calls).toEqual(['gate history', 'cleanup']);
     expect(existsSync(evidence)).toBe(false);
     expect(warn).toHaveBeenCalledWith(`[hsq] History cleanup of run ${run.id} is incomplete: cleanup failed`);
-    store.close();
-    const reopened = RunStore.open(dataDir);
-    expect(reopened.getRun(run.id)).toBeUndefined();
-    reopened.close();
+    close(store);
+    expect(open(dataDir).getRun(run.id)).toBeUndefined();
   });
 });
