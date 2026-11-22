@@ -7,6 +7,7 @@ const discoverRepoHandleMock = vi.fn();
 const forgeFactory = (root: string) => ({ ...resolveForgeRoot(root), discoverRepository: (signal?: AbortSignal) => discoverRepoHandleMock(root, signal) });
 
 import { armRepoHandle } from './arm-repo-handle.ts';
+const resolveForge = (root: string) => resolveForgeRoot(root, forgeFactory);
 
 
 /**
@@ -31,7 +32,7 @@ describe('armRepoHandle (#945)', () => {
     discoverRepoHandleMock.mockResolvedValue({ status: 'resolved', handle: { owner: 'open-mercato', name: 'cezar' } });
     const { store, setRepoHandle } = fakeStore();
 
-    armRepoHandle(store, '/repo', undefined, forgeFactory);
+    armRepoHandle(store, '/repo', resolveForge);
     await settle();
 
     expect(discoverRepoHandleMock).toHaveBeenCalledWith('/repo', undefined);
@@ -44,7 +45,7 @@ describe('armRepoHandle (#945)', () => {
     discoverRepoHandleMock.mockResolvedValue({ status: 'unknown' });
     const { store, setRepoHandle } = fakeStore();
 
-    armRepoHandle(store, '/repo', undefined, forgeFactory);
+    armRepoHandle(store, '/repo', resolveForge);
     await settle();
 
     expect(setRepoHandle).toHaveBeenCalledWith(null);
@@ -58,7 +59,7 @@ describe('armRepoHandle (#945)', () => {
     discoverRepoHandleMock.mockRejectedValue(new Error('gh exploded'));
     const { store, setRepoHandle } = fakeStore();
 
-    expect(() => armRepoHandle(store, '/repo', undefined, forgeFactory)).not.toThrow();
+    expect(() => armRepoHandle(store, '/repo', resolveForge)).not.toThrow();
     await vi.runAllTimersAsync();
 
     expect(setRepoHandle).not.toHaveBeenCalled(); // unscoped, exactly as before #945
@@ -70,7 +71,7 @@ describe('armRepoHandle (#945)', () => {
     discoverRepoHandleMock.mockReturnValue(new Promise((resolve) => { release = resolve; }));
     const { store, setRepoHandle } = fakeStore();
 
-    expect(armRepoHandle(store, '/repo', undefined, forgeFactory)).toBeUndefined();
+    expect(armRepoHandle(store, '/repo', resolveForge)).toBeUndefined();
     expect(setRepoHandle).not.toHaveBeenCalled(); // still pending — and the caller already moved on
 
     release({ status: 'resolved', handle: { owner: 'open-mercato', name: 'cezar' } });

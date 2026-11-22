@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunner } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
 import { generateRunName } from './runs/auto-name.ts';
+import { resolveProfileEnvForRoot } from './workspace/agent-profiles.ts';
 
 
 const run = vi.fn(async () => ({ text: '' }));
@@ -52,7 +53,7 @@ describe('planner and namer model presets per default runner', () => {
 
   it.each(BUILT_IN_RUNNER_IDS)('names on %s with its preset model or none', async (runner) => {
     useDefaultRunner(runner);
-    await generateRunName(repoRoot, { task: 'rename the settings page' }, testHome(), runners);
+    await generateRunName(repoRoot, { task: 'rename the settings page' }, testHome(), runners, resolveProfileEnvForRoot);
     expect(run).toHaveBeenCalled();
     for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED(runner).namer);
   });

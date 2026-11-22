@@ -5,7 +5,7 @@ import { loadConfig } from '../config.ts';
 import type { RunnerFactory } from '../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { parseStructured } from '../core/structured-output.ts';
-import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
+import type { ProviderId } from '../core/provider-auth.ts';
 import { extractTaskRefs, refineTaskRefs, titleRefNumber, type TaskRefs } from './task-refs.ts';
 
 /**
@@ -147,13 +147,16 @@ export function postValidateTitle(title: string, refNumber?: number): string {
   return refNumber !== undefined ? `${refNumber}: ${t}`.trim().replace(/:\s*$/, ':') : t;
 }
 
+/** The agent account env a model call runs under, resolved for one project root and provider. */
+export type ResolveProfileEnv = (repoRoot: string, provider: ProviderId, profileId: undefined, env: NodeJS.ProcessEnv, home: Home) => Promise<{ env: Record<string, string> }>;
+
 /**
  * The one-shot runner call: never throws, never blocks a run — every failure
  * path (runner error, timeout, junk twice) answers null and the caller keeps
  * the heuristic title. `namerModel` is a Claude alias, so it is passed only
  * to a runner that takes Claude model aliases (the `plannerModel` precedent).
  */
-export async function generateRunName(repoRoot: string, ctx: NamerContext, home: Home, createRunner: RunnerFactory): Promise<NameResult | null> {
+export async function generateRunName(repoRoot: string, ctx: NamerContext, home: Home, createRunner: RunnerFactory, resolveProfileEnvForRoot: ResolveProfileEnv): Promise<NameResult | null> {
   try {
     const config = await loadConfig(repoRoot, home);
     const runner = await createRunner(config.defaultRunner);
