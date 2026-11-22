@@ -115,6 +115,22 @@ describe('the startup orphan sweep', () => {
     expect([existsSync(agentTmpDir(dataDir, id)), existsSync(short)]).toEqual([true, true]);
   });
 
+  it('keeps a refused run\'s markerless short directory whichever control directory the sweep reaches first', () => {
+    // Two runs share the short name; the refused one's scratch is there without its marker yet.
+    const allowed = 'aaaaaaaa-1111-4222-8333-444455556666', kept = 'aaaaaaaa-9999-4222-8333-444455556666';
+    for (const id of [allowed, kept]) mkdirSync(agentTmpDir(dataDir, id), { recursive: true });
+    const short = agentShortTmpDir(dataDir, kept);
+    expect(short).toBe(agentShortTmpDir(dataDir, allowed));
+    mkdirSync(short, { recursive: true });
+    writeFileSync(join(short, 'note.txt'), 'scratch of the refused run');
+    refused.add(kept);
+
+    sweepAgentTmpDirs(dataDir, []);
+
+    expect(asked).toEqual(expect.arrayContaining([`${allowed}:scratch`, `${kept}:scratch`]));
+    expect([existsSync(agentTmpDir(dataDir, allowed)), existsSync(agentTmpDir(dataDir, kept)), existsSync(short)]).toEqual([false, true, true]);
+  });
+
   it('keeps the fallback directory in the OS temp root of a refused run', () => {
     // A dataDir so deep that the run's scratch falls back to a digest directory in the OS temp root.
     const deep = join(realpathSync(tmpdir()), `cez-deep-slots-${'d'.repeat(80)}`);
