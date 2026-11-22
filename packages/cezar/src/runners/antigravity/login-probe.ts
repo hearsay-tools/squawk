@@ -32,9 +32,10 @@ export const antigravityLogin: RunnerLoginStatus = {
   requiresAccountHome: env => !hasKey(env),
   parse: result => result.exitCode === 0 && VERSION.test(result.stdout.trim()) ? 'disconnected' : null,
   async inspect(result, env) {
-    if (result.exitCode !== 0 || !VERSION.test(result.stdout.trim())) return null;
-    // A cold read ran a PATH candidate that was still being checked; only the CLI counts.
-    if (antigravityStatusUnverified(env) && !await antigravityInstalled(env)) return null;
+    // A cold read ran a PATH candidate that was still being checked. The CLI's own check decides,
+    // whatever that candidate printed: an IDE launcher earlier on PATH does not hide a later CLI.
+    if (antigravityStatusUnverified(env)) { if (!await antigravityInstalled(env)) return null; }
+    else if (result.exitCode !== 0 || !VERSION.test(result.stdout.trim())) return null;
     if (hasKey(env)) return 'connected';
     return await antigravityPersonalSignIn(env).catch(() => false) ? 'connected' : 'disconnected';
   },

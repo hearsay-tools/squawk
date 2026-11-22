@@ -184,6 +184,16 @@ it('runs a still-unchecked PATH candidate for a cold status read and accepts it 
   expect(antigravityStatusExecutable({ PATH: empty })).toBe('antigravity-cli-not-installed');
 });
 
+it('reports a later CLI on PATH as installed when an IDE launcher comes first on a cold read', async () => {
+  const dir = await root(); vi.stubEnv('HSQ_ANTIGRAVITY_BIN', ''); vi.stubEnv('GEMINI_API_KEY', 'fixture-key');
+  const first = join(dir, 'ide'); const second = join(dir, 'cli'); await mkdir(first); await mkdir(second);
+  await writeFile(join(first, 'agy'), '#!/bin/sh\necho "Antigravity IDE 2.0"\n', { mode: 0o755 });
+  await copyFile(bin, join(second, 'antigravity')); await chmod(join(second, 'antigravity'), 0o755);
+  const env = { ...process.env, PATH: `${first}:${second}` };
+  const ide = { stdout: 'Antigravity IDE 2.0\n', stderr: '', exitCode: 0 };
+  expect(await antigravityLogin.inspect!(ide, env)).toBe('connected');
+});
+
 it('rejects a CLI look-alike whose --version fails', async () => {
   const dir = await root(); const fake = join(dir, 'antigravity');
   await writeFile(fake, '#!/bin/sh\nif [ "$1" = --help ]; then printf "Usage of antigravity:\\n  acp  Start\\n"; exit 2; fi\necho 1.5.14; exit 1\n', { mode: 0o755 });

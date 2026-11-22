@@ -140,7 +140,7 @@ export function antigravityStatusExecutable(env: NodeJS.ProcessEnv = process.env
 
 /** Whether a CLI is installed, waiting for an unfinished PATH check. */
 export async function antigravityInstalled(env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  return !!(productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? await antigravityOnPath(env));
+  return !!(productEnv('ANTIGRAVITY_BIN', env) || managedAntigravity() || await antigravityOnPath(env));
 }
 
 /** The status command may have run a PATH candidate not yet known to be the CLI: no override, no
@@ -150,7 +150,7 @@ export function antigravityStatusUnverified(env: NodeJS.ProcessEnv = process.env
 }
 
 export function antigravityExecutable(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  return productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? cachedAntigravityOnPath(env);
+  return productEnv('ANTIGRAVITY_BIN', env) || managedAntigravity() || cachedAntigravityOnPath(env);
 }
 
 export interface AntigravityLaunch {
