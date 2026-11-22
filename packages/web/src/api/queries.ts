@@ -1,3 +1,4 @@
+export { useProjectRuns } from './project-runs'
 import { invalidateRunnerModels } from './model-catalog'
 export { invalidateRunnerModels, useRunnerModels, useRunnerModelCatalogs } from './model-catalog'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
@@ -28,7 +29,7 @@ export {
 import { getApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { normalizeSidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
 import { toast } from '@/components/ui/toaster'
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type MutateOptions } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type MutateOptions, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
 
 import { mergeProviderStatusResponse } from '@/lib/provider-status'
@@ -130,6 +131,7 @@ import type {
   ProviderStatusResponse,
   ReferenceStatus,
   RunRecord,
+  RunsIndexResponse,
   SelectAgentProfileInput,
   SetAgentConfigInput,
   UpdateAgentProfileInput,
@@ -895,40 +897,18 @@ export const MIN_RUNS_SEARCH_LENGTH = 2
  * interval any document asks for. No `refetchOnWindowFocus`: `global-events.tsx` reconciles this
  * key on visibility restore through the same fence.
  */
-export function useRunsIndex(enabled = true, refetchIntervalMs: number = RUNS_INDEX_BACKSTOP_MS) {
+export function useRunsIndex<T>(enabled: boolean, refetchIntervalMs: number | undefined, select: (index: RunsIndexResponse) => T): UseQueryResult<T>
+export function useRunsIndex(enabled?: boolean, refetchIntervalMs?: number): UseQueryResult<RunsIndexResponse>
+export function useRunsIndex<T = RunsIndexResponse>(enabled = true, refetchIntervalMs: number = RUNS_INDEX_BACKSTOP_MS, select?: (index: RunsIndexResponse) => T) {
   const sync = runsIndexSync(useQueryClient())
   useLiveRead('/api/v1/workspace/runs-index', workspaceQueryKeys.runsIndex, liveRefetchInterval(enabled ? refetchIntervalMs : false), mergeRunsIndexRead)
-  return useQuery({
+  return useQuery<RunsIndexResponse, Error, T>({
     queryKey: workspaceQueryKeys.runsIndex,
     queryFn: ({ signal }) => getRunsIndex({ signal }).then(sync.merge),
     enabled,
+    ...(select ? { select } : {}),
     staleTime: 30_000,
     refetchInterval: false,
-  })
-}
-
-/**
- * One project's run list by EXPLICIT id — the sidebar's per-group task lists (step 3.3), which
- * must read projects the mounted scope cannot reach. Keyed `[projectId, 'runs', 'list']`: for
- * the ACTIVE project that is the very entry `useRuns()` fills and the stream patches, so the
- * two views share one cache; for any other project it is that project's own entry, kept fresh
- * by refetch-on-expand rather than by the stream (the stream filter applies only the active
- * scope's events). `enabled: false` parks the fetch — a COLLAPSED group costs one registry
- * row, never a runs request (spec, "40 registered projects" row) — while still reading any
- * cached answer, which is what lets a collapsed group keep its attention badge.
- *
- * `boot: true` aliases the key scope to `'default'`: the boot project's main view and the SSE
- * patcher keep its list there, so reading any other entry would freeze it. The fetch still goes
- * to `/api/p/<bootId>/runs` (route parity). If health or the registry names the boot project
- * after the list answered under its id key, that list stays as placeholder data until `'default'`
- * answers, so the sidebar rows never unmount (hearsay-tools/squawk#3048). Other moves start empty.
- */
-export function useProjectRuns(projectId: string, enabled = true, boot = false) {
-  return useQuery({
-    queryKey: [projectAddress({ projectId, boot }).cacheScope, 'runs', 'list'] as const,
-    queryFn: ({ signal }) => getRuns(projectAddress({ projectId, boot }), { signal }),
-    enabled,
-    placeholderData: (previous, previousQuery) => (boot && previousQuery?.queryKey[0] === projectId ? previous : undefined),
   })
 }
 

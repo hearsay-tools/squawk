@@ -79,3 +79,23 @@ describe('useWorkspaceSignals: registry id-set changes (hearsay-tools/cezarion#2
     expect(indexReads().length).toBe(before)
   })
 })
+
+it('keeps the shell observer quiet when token and usage fields change', async () => {
+  const render = vi.fn(() => useWorkspaceSignals())
+  const { result } = renderHook(render, { wrapper })
+  await act(async () => vi.advanceTimersByTimeAsync(0))
+  const before = render.mock.calls.length
+  const signals = result.current?.signals
+  act(() => client.setQueryData<RunsIndexResponse>(workspaceQueryKeys.runsIndex, (current) => ({
+    ...current!, runs: current!.runs.map((row) => ({ ...row, tokensUsed: 99, usage: { cpuPct: 20, rssBytes: 1024, procCount: 1 } })),
+  })))
+  await act(async () => vi.advanceTimersByTimeAsync(0))
+  expect(render).toHaveBeenCalledTimes(before)
+  expect(result.current?.signals).toBe(signals)
+  act(() => client.setQueryData<RunsIndexResponse>(workspaceQueryKeys.runsIndex, (current) => ({
+    ...current!, runs: current!.runs.map((row) => ({ ...row, archived: true })),
+  })))
+  await act(async () => vi.advanceTimersByTimeAsync(0))
+  expect(result.current?.signals?.get('a')?.inMotion).toBe(0)
+  expect(render.mock.calls.length).toBeGreaterThan(before)
+})

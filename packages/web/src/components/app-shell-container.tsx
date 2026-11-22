@@ -1,5 +1,5 @@
 import { projectAddress } from '@/api/run-address'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { useHealth, useProjectRuns, useProjects } from '@/api/queries'
@@ -26,6 +26,9 @@ import { useActiveProjectId, stripProjectPrefix } from '@/lib/project-router'
 import { listCounts, runTitle } from '@/lib/task-groups'
 import { pageTitleContext, type PageTitleContext } from '@/lib/page-title'
 import { repoChipOf, type RepoChip } from '@/lib/repo-chip'
+
+type ShellTitleRun = Pick<RunSummary, 'title' | 'titleSummary' | 'titleOrigin' | 'worktreePath'>
+const selectNeedsYou = (runs: RunSummary[]) => listCounts(runs).waiting > 0
 
 // Moved to `lib/repo-chip`; kept importable from here.
 export { repoChipOf } from '@/lib/repo-chip'
@@ -55,16 +58,13 @@ function shellTitleParts(
   isBootProject: boolean,
   health: HealthResponse | undefined,
   titleContext: PageTitleContext,
-  titleRuns: RunSummary[] | undefined,
+  titleRun: ShellTitleRun | undefined,
 ) {
   const globalSettings = pathname === '/tools' || pathname === '/settings/global' || pathname.startsWith('/settings/global/')
   const projectName = globalSettings
     ? null
     : (activeProject?.name ??
       (isBootProject ? (repoChipOf(health)?.name ?? null) : null))
-  const titleRun = titleContext.taskId
-    ? titleRuns?.find((run) => run.id === titleContext.taskId)
-    : undefined
   const pageLabel = titleRun ? runTitle(titleRun) : titleContext.pageLabel
   return { globalSettings, projectName, titleRun, pageLabel }
 }
@@ -111,7 +111,7 @@ function shellRepoChip(
 function shellBreadcrumb(
   pathname: string,
   projectName: string | null,
-  titleRun: RunSummary | undefined,
+  titleRun: ShellTitleRun | undefined,
   pageLabel: string | null,
 ) {
   return { project: pathname === '/tools' ? 'Workspace' : projectName, page: titleRun ? `Tasks / ${pageLabel}` : pageLabel ?? 'Squawk', branch: titleRun?.worktreePath ? 'Isolated worktree' : undefined }
@@ -157,14 +157,19 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
   const titleContext = pageTitleContext(pathname)
   const { bootProjectId, sidebarProjectId, sidebarBoot, isBootProject, activeProject } =
     shellProjectScope(projectId, registry, health.data)
-  const runs = useProjectRuns(sidebarProjectId, true, sidebarBoot)
-  const titleRuns = useProjectRuns(
+  const needsYou = useProjectRuns(sidebarProjectId, true, sidebarBoot, selectNeedsYou).data ?? false
+  const selectTitle = useCallback((runs: RunSummary[]): ShellTitleRun | undefined => {
+    const run = runs.find((row) => row.id === titleContext.taskId)
+    return run ? { title: run.title, titleSummary: run.titleSummary, titleOrigin: run.titleOrigin, worktreePath: run.worktreePath } : undefined
+  }, [titleContext.taskId])
+  const selectedTitle = useProjectRuns(
     projectId ?? '',
     // Wait for the registry to identify the project before choosing the boot/non-boot cache
     // key. Health can arrive first; fetching then would briefly populate a project-scoped key
     // for the boot project before switching to the authoritative `default` key.
     activeProject !== undefined && titleContext.taskId !== null,
     registry?.bootProject === projectId,
+    selectTitle,
   ).data
 
   const { globalSettings, projectName, titleRun, pageLabel } = shellTitleParts(
@@ -173,7 +178,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
     isBootProject,
     health.data,
     titleContext,
-    titleRuns,
+    selectedTitle,
   )
 
   useDocumentTitle({ projectName, pageLabel })
@@ -211,7 +216,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
         sidebarProjectId={sidebarProjectId}
         projectHeader={<SidebarProjectHeader />}
         mobileProjects={workspace}
-        needsYou={listCounts(runs.data ?? []).waiting > 0}
+        needsYou={needsYou}
         toolsMenu={<ToolsMenu health={health.data} runners={runners.data} />}
         toolsStatus={health.data ? { blocked: toolsBlocker(health.data, runners.data) !== null, note: forgeNote(health.data) } : null}
         projectRail={shellProjectRail(workspace, projectSwitch, projectsQuery.isPending, version)}

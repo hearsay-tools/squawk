@@ -3,8 +3,7 @@ import type { ProcessUsage, ProjectsResponse, RunsIndexResponse } from '@open-me
 
 import type { WorkspaceRunEvent } from './events'
 import {
-  applyIndexChange,
-  applyIndexUsage,
+  applyIndexBatch,
   createIndexOverlay,
   dropIndexProject,
   mergeIndexSnapshot,
@@ -223,22 +222,13 @@ export function createRunsIndexSync(queryClient: QueryClient): RunsIndexSync {
     const data = cached()
     if (!data || patches.length === 0) return
     const registry = registryOf(queryClient)
-    let next = data
-    let needsReconcile = false
-    for (const patch of patches) {
-      // A frame from another server generation says nothing about these rows.
-      if (patch.generation !== data.generation) continue
-      if (patch.type === 'usage') {
-        if (!removed.has(patch.project)) next = applyIndexUsage(next, patch.project, patch.usage)
-        continue
-      }
-      if (removed.has(patch.change.project)) continue
-      // Frames the cached snapshot already includes would only move a row back in time.
-      if (patch.change.seq <= data.eventSeq) continue
-      const result = applyIndexChange(next, patch.change, registry)
-      next = result.index
-      needsReconcile ||= result.reconcile
-    }
+    const applicable = patches.filter((patch) => {
+      // Fence against the original snapshot, not earlier patches in this flush.
+      if (patch.generation !== data.generation) return false
+      if (patch.type === 'usage') return !removed.has(patch.project)
+      return !removed.has(patch.change.project) && patch.change.seq > data.eventSeq
+    })
+    const { index: next, reconcile: needsReconcile } = applyIndexBatch(data, applicable, registry)
     if (next !== data) write(next)
     if (needsReconcile) void reconcile({ hold: true })
   }
