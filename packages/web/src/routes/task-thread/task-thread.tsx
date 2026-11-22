@@ -6,7 +6,9 @@ import { useLocation, useParams } from 'react-router'
 
 import { Link, useActiveProjectId } from '@/lib/project-router'
 
-import { ApiError } from '@/api/client'
+import { useQuery } from '@tanstack/react-query'
+import { ApiError, getRuns } from '@/api/client'
+import { projectAddress } from '@/api/run-address'
 import {
   useEditQueuedMessage,
   useMarkRunSeen,
@@ -15,6 +17,7 @@ import {
   useRun,
   useProjectRepoBase,
   useRuns,
+  queryKeys,
   useRunRelationships,
   useSendMessage,
 } from '@/api/queries'
@@ -200,7 +203,11 @@ export function ThreadView({
   onMarkedUnread?: ((runId: string) => void) | undefined
 }) {
   useActiveProjectId()
-  const runs = useRuns(selectThreadRuns)
+  const runs = useQuery({
+    queryKey: queryKeys.runs.list(),
+    queryFn: ({ signal }) => getRuns(projectAddress(), { signal }),
+    select: selectThreadRuns,
+  })
   // Attention reads the open human wait on the record; the transcript's unanswered ask only
   // decides whether the composer answers it (hearsay-tools/cezarion#1236, split by fact).
   const { pendingAsk, transcriptAsk, pendingAskId, historyLoading } = pendingThreadAsk(history, currentThread)

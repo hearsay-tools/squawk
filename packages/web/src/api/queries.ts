@@ -841,9 +841,8 @@ export function useOpenTargets() {
 }
 
 /** The authoritative run list. */
-export function useRuns<T = Awaited<ReturnType<typeof getRuns>>>(select?: (runs: Awaited<ReturnType<typeof getRuns>>) => T) {
+export function useRuns() {
   return useQuery({
-    ...(select ? { select } : {}),
     queryKey: queryKeys.runs.list(),
     queryFn: ({ signal }) => getRuns(projectAddress(), { signal }),
   })

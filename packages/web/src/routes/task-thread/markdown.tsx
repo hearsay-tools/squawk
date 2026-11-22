@@ -114,7 +114,11 @@ const REFUSED_IMAGE = 'https://refused.invalid/'
 /** Trust belongs to a parsed node, never to a destination shared by messages. */
 const rewrittenLinks = new WeakSet<object>()
 type LinkFile = { data: Record<string, unknown> }
-const linkPosition = (node: MdastNode) => `${node.position?.start.offset}:${node.position?.end.offset}`
+function linkPosition(node: MdastNode): string | null {
+  const start = node.position?.start.offset
+  const end = node.position?.end.offset
+  return start === undefined || end === undefined ? null : `${start}:${end}`
+}
 
 function taskLinks(context: NonNullable<React.ContextType<typeof TaskFileContext>>) {
   return (tree: MdastNode, file: LinkFile) => {
@@ -128,14 +132,16 @@ function taskLinks(context: NonNullable<React.ContextType<typeof TaskFileContext
         if (node.type === 'definition' && node.identifier && !definitions.has(node.identifier)) definitions.set(node.identifier, target !== null)
         if (target) {
           node.url = target
-          if (node.type === 'link') trusted.add(linkPosition(node))
+          const position = linkPosition(node)
+          if (node.type === 'link' && position !== null) trusted.add(position)
         }
       }
       node.children?.forEach(walk)
     }
     walk(tree)
     const references = (node: MdastNode): void => {
-      if (node.type === 'linkReference' && node.identifier && definitions.get(node.identifier)) trusted.add(linkPosition(node))
+      const position = linkPosition(node)
+      if (node.type === 'linkReference' && node.identifier && definitions.get(node.identifier) && position !== null) trusted.add(position)
       node.children?.forEach(references)
     }
     references(tree)
@@ -147,7 +153,8 @@ function taskLinks(context: NonNullable<React.ContextType<typeof TaskFileContext
 function markTaskLinks() {
   return (tree: MdastNode & { tagName?: string }, file: LinkFile) => {
     const walk = (node: MdastNode & { tagName?: string }): void => {
-      if (node.tagName === 'a' && file.data.taskLinks instanceof Set && file.data.taskLinks.has(linkPosition(node))) rewrittenLinks.add(node)
+      const position = linkPosition(node)
+      if (node.tagName === 'a' && position !== null && file.data.taskLinks instanceof Set && file.data.taskLinks.has(position)) rewrittenLinks.add(node)
       node.children?.forEach(walk)
     }
     walk(tree)
