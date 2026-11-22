@@ -74,19 +74,25 @@ function fileIndirectImports(path: string, text: string, owners: Owners, inContr
   return found;
 }
 
+/**
+ * A file can take a name from a checked module only through one of the specifiers, so only such files are parsed.
+ * A specifier written with an escape, such as `'./deleg\u0061tion.ts'`, does not match the text, so a file with a backslash in a `from` string is parsed too.
+ */
+const mayTakeFrom = (text: string, specifiers: string[]) =>
+  specifiers.some((specifier) => text.includes(specifier)) || /\bfrom\s*(['"])[^'"\n]*\\/.test(text);
+
 /** Each `<file>: <name> from <module>, owned by <owner>` the Squawk and contract sources take the long way. */
 function indirectImports(): string[] {
   const owners: Owners = new Map(CHECKED.flatMap((module) => {
     const moduleOwners = reExports(module);
     return [[`${CONTRACT}/${module}`, moduleOwners], [`./${module}.ts`, moduleOwners]];
   }));
-  // A file can take a name from a checked module only through one of these specifiers, so only files whose text holds one are parsed.
   const specifiers = [...owners.keys()].flatMap((source) => [`'${source}'`, `"${source}"`]);
   const contract = join(repo, 'packages/contract/src');
   const checkedHere = new Set([...CHECKED, 'index'].map((module) => join(contract, `${module}.ts`)));
   return [...sourceFiles(join(repo, 'packages/cezar/src')), ...sourceFiles(contract).filter((path) => !checkedHere.has(path))].flatMap((path) => {
     const text = readFileSync(path, 'utf8');
-    if (!specifiers.some((specifier) => text.includes(specifier))) return [];
+    if (!mayTakeFrom(text, specifiers)) return [];
     return fileIndirectImports(path, text, owners, path.startsWith(contract));
   });
 }
@@ -97,6 +103,16 @@ describe('imports from delegation.ts and waits.ts', () => {
     expect(reExports('waits').get('isUsageLimitHold')).toBe('usage-limit-hold');
     expect(reExports('waits').get('WAIT_LIMIT')).toBe('wait-limits');
     expect(reExports('waits').get('computeWaitingOn')).toBe('waiting-on');
+  });
+
+  it('parses a file whose specifier holds an escape', () => {
+    const owners: Owners = new Map([['./delegation.ts', reExports('delegation')]]);
+    const text = "import { agentInputSchema } from './deleg\\u0061tion.ts';\n";
+    expect(mayTakeFrom(text, ["'./delegation.ts'"])).toBe(true);
+    expect(fileIndirectImports(join(repo, 'packages/contract/src/escaped.ts'), text, owners, true)).toEqual([
+      'packages/contract/src/escaped.ts: agentInputSchema from ./delegation.ts, owned by agent-input',
+    ]);
+    expect(mayTakeFrom("import { x } from './other.ts';\n", ["'./delegation.ts'"])).toBe(false);
   });
 
   it('take no re-exported value from them', () => {
