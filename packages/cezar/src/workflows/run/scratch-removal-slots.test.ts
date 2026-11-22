@@ -1,13 +1,13 @@
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { autosaveDeletionGate } from '../../autosave-removal-slots.ts';
 import { jobsDeletionGate } from '../../jobs/removal-slot.ts';
 import { runDataDir } from '../../project-paths.ts';
-import { agentTmpDirLocations, agentTmpDirMayExist, agentTmpEnv, sweepAgentTmpDirs } from '../../runs/agent-tmpdir.ts';
+import { agentShortTmpDir, agentTmpDir, agentTmpDirLocations, agentTmpDirMayExist, agentTmpEnv, sweepAgentTmpDirs } from '../../runs/agent-tmpdir.ts';
 import type { DeletionKind } from '../../runs/removal-slots.ts';
 import { sealTestRunSlots } from '../../runs/removal-slots.testkit.ts';
 import { setRunStatus } from '../../runs/run-store.testkit.ts';
@@ -82,6 +82,57 @@ describe('the startup orphan sweep', () => {
 
     expect(asked).toEqual(expect.arrayContaining([`${kept}:scratch`, `${swept}:scratch`]));
     expect([agentTmpDirMayExist(dataDir, kept), agentTmpDirMayExist(dataDir, swept)]).toEqual([true, false]);
+  });
+
+  /** A short directory `t/<id8>` whose marker names the run, as `agentTmpEnv` mints it. */
+  function shortDir(id: string): string {
+    const dir = agentShortTmpDir(dataDir, id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.cez-run'), id);
+    return dir;
+  }
+
+  it('asks for a short directory with no control directory, and keeps the refused one', () => {
+    const [kept, swept] = [randomUUID(), randomUUID()];
+    const [keptDir, sweptDir] = [shortDir(kept), shortDir(swept)];
+    refused.add(kept);
+
+    sweepAgentTmpDirs(dataDir, []);
+
+    expect(asked).toEqual(expect.arrayContaining([`${kept}:scratch`, `${swept}:scratch`]));
+    expect([existsSync(keptDir), existsSync(sweptDir)]).toEqual([true, false]);
+  });
+
+  it('keeps the short directory of a run refused for its control directory', () => {
+    const id = randomUUID();
+    mkdirSync(agentTmpDir(dataDir, id), { recursive: true });
+    const short = shortDir(id);
+    refused.add(id);
+
+    sweepAgentTmpDirs(dataDir, []);
+
+    expect(asked).toEqual([`${id}:scratch`]);
+    expect([existsSync(agentTmpDir(dataDir, id)), existsSync(short)]).toEqual([true, true]);
+  });
+
+  it('keeps the fallback directory in the OS temp root of a refused run', () => {
+    // A dataDir so deep that the run's scratch falls back to a digest directory in the OS temp root.
+    const deep = join(realpathSync(tmpdir()), `cez-deep-slots-${'d'.repeat(80)}`);
+    const deepDataDir = join(deep, 'repo', '.ai', 'cezar');
+    const id = randomUUID();
+    const fallback = agentTmpEnv(deepDataDir, id, {}).TMPDIR!;
+    try {
+      expect(fallback.startsWith(deep)).toBe(false);
+      refused.add(id);
+
+      sweepAgentTmpDirs(deepDataDir, []);
+
+      expect(asked).toEqual([`${id}:scratch`]);
+      expect(existsSync(fallback)).toBe(true);
+    } finally {
+      rmSync(fallback, { recursive: true, force: true });
+      rmSync(deep, { recursive: true, force: true });
+    }
   });
 });
 

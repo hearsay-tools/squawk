@@ -712,18 +712,22 @@ function reapAgentTmpDir(dataDir: string, runId: string, spareUnclaimedShort: bo
   }
 }
 
-/** Whether the sweep keeps an orphan run's directories: one of them holds what `spare` names, or a
- *  deletion gate refuses the run's scratch. */
-function sweepKeeps(dataDir: string, runId: string, spare: (dir: string) => boolean): boolean {
-  return agentTmpDirLocations(dataDir, runId).some(spare) || deletionRefusal(runId, 'scratch', dataDir) !== undefined;
+/** Whether a deletion gate refuses `runId`'s scratch (`runs/removal-slots.ts`). The sweep then keeps
+ *  the run as it keeps one in `keepRunIds`: its short and fallback directories stay in the later loops. */
+function scratchRefused(dataDir: string, runId: string, keep: Set<string>, claimedShort: Set<string>): boolean {
+  if (deletionRefusal(runId, 'scratch', dataDir) === undefined) return false;
+  keep.add(runId);
+  claimedShort.add(basename(agentShortTmpDir(dataDir, runId)));
+  return true;
 }
 
 /**
  * Startup sweep of confined repo-local and digest directories not claimed by keepRunIds. Respect
  * full-run and dataDir ownership markers; retain unreadable or uncertain ownership. A directory
  * `spare` names stays too: the caller keeps one that holds a running job (hearsay-tools/squawk#3138).
- * A run's directories also stay when a deletion gate refuses its `scratch` (`runs/removal-slots.ts`);
- * the sweep throws before it removes anything while the removal slots are not sealed.
+ * A run's directories also stay when a deletion gate refuses its `scratch` (`runs/removal-slots.ts`),
+ * asked for each run id the sweep finds; the sweep throws before it removes anything while the
+ * removal slots are not sealed.
  */
 export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spare: (dir: string) => boolean = () => false): string[] {
   assertRunSlotsSealed();
@@ -749,7 +753,8 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>,
     for (const name of entries) {
       if (keep.has(name) || !safeRunId(name)) continue;
       try {
-        if (sweepKeeps(dataDir, name, spare)) continue;
+        if (agentTmpDirLocations(dataDir, name).some(spare)) continue;
+        if (scratchRefused(dataDir, name, keep, claimedShort)) continue;
         const locations = agentTmpDirLocations(dataDir, name).filter(dir => existsSync(dir));
         reapAgentTmpDir(dataDir, name, claimedShort.has(basename(agentShortTmpDir(dataDir, name))));
         reaped.push(...locations.filter(dir => !existsSync(dir)).map(dir => basename(dir)));
@@ -758,9 +763,18 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>,
       }
     }
   }
-  // The hearsay-tools/cezarion#1022 short directories. Every entry here is this
-  // dataDir's own, so no ownership marker is needed — only the claim check
-  // that keeps a kept run's directory, and a colliding name's, alive.
+  reaped.push(...sweepShortDirs(dataDir, keep, claimedShort, spare));
+  reaped.push(...sweepFallbackRoots(dataDir, keep, spare));
+  return reaped;
+}
+
+/**
+ * The hearsay-tools/cezarion#1022 short directories. Every entry here is this
+ * dataDir's own, so no ownership marker is needed — only the claim check
+ * that keeps a kept run's directory, and a colliding name's, alive.
+ */
+function sweepShortDirs(dataDir: string, keep: Set<string>, claimedShort: Set<string>, spare: (dir: string) => boolean): string[] {
+  const reaped: string[] = [];
   const shortRoot = join(dataDir, SHORT_TMP_ROOT);
   if (existsSync(shortRoot)) {
     let shortEntries: string[];
@@ -779,6 +793,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>,
       if (owner === null ? claimedShort.has(name) : [...keep].some((id) => id.startsWith(owner))) continue;
       try {
         if (spare(join(shortRoot, name))) continue;
+        if (owner !== null && scratchRefused(dataDir, owner, keep, claimedShort)) continue;
         rmSync(join(shortRoot, name), { recursive: true, force: true });
         reaped.push(owner ?? name);
       } catch {
@@ -786,7 +801,6 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>,
       }
     }
   }
-  reaped.push(...sweepFallbackRoots(dataDir, keep, spare));
   return reaped;
 }
 
