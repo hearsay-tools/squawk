@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
-import { PINNED_SESSION_ID, driveSeam } from './harness-parity-core.testkit.ts';
+import { PINNED_SESSION_ID, driveSeam, seedMockSession } from './harness-parity-core.testkit.ts';
 import type { CellBody } from './parity-partition.testkit.ts';
 import { createRunner } from './runner-registry.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
@@ -94,6 +94,8 @@ export const describeSkillResumeParity = skillResumeParity({
         },
       });
       expect(fresh.v1.filter((event) => event.type === 'error')).toEqual([]);
+      // A mock that resumes only a session it knows must hold the pinned one, or the resume falls back.
+      seedMockSession(backend, join(dir, `${resumeName}.args.ndjson`));
       const resumed = await driveSeam(backend, 'baseline', {
         spec: {
           cwd: dir,
@@ -120,6 +122,8 @@ export const describeSkillResumeParity = skillResumeParity({
         const resumedIn = (name: string) => sessionWire(backend).resumed(readMockRecords<WireRow>(join(dir, `${name}.args.ndjson`)));
         expect(resumedIn(resumeName)).toEqual([PINNED_SESSION_ID]);
         expect(resumedIn(freshName)).toEqual([]);
+        // The pinned session reopened: no fallback opened a fresh one beside the resume request.
+        expect(sessionWire(backend).freshSessions(readMockRecords<WireRow>(join(dir, `${resumeName}.args.ndjson`)))).toBe(0);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
