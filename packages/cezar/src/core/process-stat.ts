@@ -58,6 +58,9 @@ export function processStartToken(pid: number, platform: NodeJS.Platform = proce
 }
 
 
+/** A recorded process's `startToken` field, or no field when the platform cannot say. */
+export const startToken = (pid: number) => { const token = processStartToken(pid); return token === undefined ? {} : { startToken: token }; };
+
 /** `pgid`: the session leader leads its own process group (hearsay-tools/cezarion#890). */
 export type RecordedProcess = { pid: number; startToken?: string | undefined; pgid?: number | undefined };
 export type WorkerProcessRecord = { generation: string; controller: RecordedProcess; processes: RecordedProcess[] };

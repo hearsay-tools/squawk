@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
@@ -2936,6 +2937,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
         },
       },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     );
     setRunStatus(store, worker.id, workerStatus);
     return { parent, worker };

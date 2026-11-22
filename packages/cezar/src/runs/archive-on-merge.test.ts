@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import {
   RUN_STATUS,
   WAIT_KIND,
@@ -127,7 +128,7 @@ describe('guarded automatic archive', () => {
     const workerId = randomUUID();
     const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: id, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated', path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     store.updateRun(worker.id, { pullRequests: [pr] }); store.flush();
     expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     store.move(worker.id, 'stop-worker');

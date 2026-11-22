@@ -48,7 +48,7 @@ import { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { emptyFacts, stampOf, TranscriptFactsIndex, type TranscriptFacts } from './transcript-facts.ts';
 import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, removeHistory, restoreHistory } from './history-file.ts';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
-import { processStartToken, type RecordedProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
+import { startToken, type RecordedProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
 import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
 // Pure, dependency-free reference helpers — the same sanity bound the marker parser applies.
 import { archivePullRequests, pullRequestKey } from './pull-requests.ts';
@@ -80,7 +80,7 @@ import { assertNoLegacyCockpit, assertNoLegacyWriter, backUpLegacyIndex, LEGACY_
 import { RunStoreOpenError, toRunStoreOpenError } from './store-open-error.ts';
 import { archiveStoreFamily } from './archive-family.ts';
 import { claimStoreFamilies } from './claim-families.ts';
-import { createStoreOwnedRun } from './owned-run-create.ts';
+import { createStoreOwnedRun, type SpawnCapacityRefusal } from './owned-run-create.ts';
 import { commitStoreWorkerResult } from './worker-result-commit.ts';
 import { supervisedWorkers } from './supervised.ts';
 import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
@@ -512,7 +512,6 @@ const recordedProcessSchema = z.object({ pid: z.number().int().positive(), start
   pgid: z.number().int().positive().optional() }).strict();
 const workerProcessRecordSchema = z.object({ generation: z.string().uuid(), controller: recordedProcessSchema,
   processes: z.array(recordedProcessSchema).max(WORKER_PROCESS_CAP) }).strict();
-const startToken = (pid: number) => { const token = processStartToken(pid); return token === undefined ? {} : { startToken: token }; };
 /**
  * Run rows in runs.db plus append-only NDJSON events and an in-process event bus. Hold live,
  * pinned, related and unsettled records only. Optimistic writes debounce; durable commits
@@ -1886,6 +1885,7 @@ export class RunStore {
     requestId: string,
     worker: DelegationState,
     requestHash: string,
+    spawnCapacityRefusal: SpawnCapacityRefusal,
     executionIdentity: WorkerExecutionIdentity = { kind: 'internal' },
   ): RunRecord {
     return createStoreOwnedRun({
@@ -1896,7 +1896,7 @@ export class RunStore {
       writeWorkerIdentity: (id, identity) => this.writeWorkerIdentity(id, identity),
       writeWorkerExecution: (id, proof, fresh) => this.writeWorkerExecution(id, proof, fresh),
       commitIndex: (owned) => this.commitIndex(owned),
-    }, input, parentId, requestId, worker, requestHash, executionIdentity);
+    }, input, parentId, requestId, worker, requestHash, spawnCapacityRefusal, executionIdentity);
   }
 
   /**

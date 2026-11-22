@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { seedWaits } from './run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -100,7 +101,7 @@ describe('a commit that leaves waiting', () => {
     const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, parentId, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: parentId,
       workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated', path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     hold(worker.id);
     store.move(worker.id, 'stop-worker');
     expect(committed(worker.id)).toMatchObject({ status: RUN_STATUS.cancelled, autoResumeAttempts: 2 });

@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from './capacity.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -53,5 +54,5 @@ export async function worker(parentId: string) {
   const workspace = await planOwnedWorkspace(root, id, sha);
   return store.createOwnedRun({ title: 'worker', task: 'mock:hold', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] }, parentId, randomUUID(), {
     role: 'worker', permissions: [], parentRunId: parentId, workspace,
-  }, 'a'.repeat(64));
+  }, 'a'.repeat(64), spawnCapacityRefusal);
 }

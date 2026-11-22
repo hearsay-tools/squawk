@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../src/delegation/capacity.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /** Repro fixture for #657: 12 archiveable parents, 48 owned workers, 200 review rows.
  * Run only against an empty scratch repository:
@@ -38,6 +39,7 @@ for (let p = 0; p < 12; p++) {
         },
       },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     );
     setRunStatus(store, worker.id, 'running');
   }

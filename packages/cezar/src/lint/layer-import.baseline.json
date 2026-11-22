@@ -104,50 +104,14 @@
       "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
-      "file": "packages/cezar/src/process-wait/supervisor.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/arm-repo-handle.ts",
-      "target": "packages/cezar/src/server/forge/index.ts",
-      "count": 1,
-      "reason": "feature:forge: the core reads the PR watcher or GitHub state directly. The pr wait kind and its watcher move to the forge feature"
-    },
-    {
-      "file": "packages/cezar/src/runs/auto-name.ts",
-      "target": "packages/cezar/src/workspace/agent-profiles.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core resolves a step's account directly. A later step moves the call behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
-      "file": "packages/cezar/src/runs/owned-run-create.ts",
-      "target": "packages/cezar/src/delegation/capacity.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
       "file": "packages/cezar/src/runs/owned-run-create.ts",
       "target": "packages/cezar/src/delegation/execution-identity.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/runs/run-claims.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
       "file": "packages/cezar/src/runs/store.ts",
       "target": "packages/cezar/src/delegation/execution-identity.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
@@ -160,18 +124,6 @@
     {
       "file": "packages/cezar/src/runs/store.ts",
       "target": "packages/cezar/src/worker-scope/worker-scopes.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/worker-execution.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/worker-resource-holders.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
@@ -590,12 +542,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/workflows/run/wait-registry.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/wake-admission.ts",
       "target": "packages/cezar/src/delegation/conversations.ts",
       "count": 1,
@@ -616,12 +562,6 @@
     {
       "file": "packages/cezar/src/workflows/run/wake-retries.ts",
       "target": "packages/cezar/src/delegation/retry-backoff.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/worker-orphans.ts",
-      "target": "packages/cezar/src/delegation/process-liveness.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },

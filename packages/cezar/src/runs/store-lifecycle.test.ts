@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -326,7 +327,7 @@ function family(fixture: ReturnType<typeof setup>) {
   const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, rootId, randomUUID(), {
     role: 'worker', permissions: [], parentRunId: rootId, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
       path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
-  }, 'a'.repeat(64));
+  }, 'a'.repeat(64), spawnCapacityRefusal);
   return { rootId, workerId: worker.id };
 }
 

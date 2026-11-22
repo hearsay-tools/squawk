@@ -1,4 +1,5 @@
 // Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../built-in-run-slots.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -289,7 +290,7 @@ export async function worker(parentId: string, task = 'mock:hold', runner: strin
       role: 'worker', permissions: [], parentRunId: family, supervisorRunId: parentId,
       workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'shared', path: directory, hostRunId: parentId,
         baselineSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim() },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
   }
   checkpoint('worker-plan-start');
   const id = randomUUID();
@@ -298,7 +299,7 @@ export async function worker(parentId: string, task = 'mock:hold', runner: strin
   checkpoint('worker-planned');
   const run = store.createOwnedRun({ title: 'worker', task, workflow: 'quick-task', runner, steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] }, parentId, randomUUID(), {
     role: 'worker', permissions: [], parentRunId: parentId, workspace,
-  }, 'a'.repeat(64));
+  }, 'a'.repeat(64), spawnCapacityRefusal);
   checkpoint('worker-created'); return run;
 }
 /** Spend a worker's automatic-wake budget before it starts: its turn ends with no wait or done then

@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../core/created-runners.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
@@ -746,7 +747,7 @@ it('P6-35 Continue worker identity wins over a conflicting recorded account', as
     steps: [{ stepId: 'work', account, grants: {} }] });
   const target = store.createOwnedRun({ title: 'worker', task: 'target', runner: 'claude', agentProfile: 'accepted', workflow: 'accepted',
     workflowDef: acceptedWorkflow, steps: [{ id: 'work', name: 'work', kind: STEP_KIND.agent }] }, parent.id, randomUUID(),
-    { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), identity);
+    { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal, identity);
   manager.enqueueOwnedRun(target.id);
   const first = await waitForOpen(target.id, 1);
   expect(first.env?.CLAUDE_CONFIG_DIR).toBe(homePath);

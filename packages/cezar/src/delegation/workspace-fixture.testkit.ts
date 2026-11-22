@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from './capacity.ts';
 import { projectPaths } from '../project-paths.ts';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
@@ -44,7 +45,7 @@ export function durableRun(root: string, workspace: WorkerWorkspace) {
   store.flush();
   const run = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent }] }, parent.id, randomUUID(), {
     role: 'worker', parentRunId: parent.id, permissions: [], workspace,
-  }, 'a'.repeat(64));
+  }, 'a'.repeat(64), spawnCapacityRefusal);
   return { run, store };
 }
 export function receiptPath(root: string, workspace: WorkerWorkspace) {

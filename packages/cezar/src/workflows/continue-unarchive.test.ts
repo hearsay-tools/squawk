@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -89,6 +90,7 @@ describe('continueRun unarchives', () => {
         path: `/managed/${workerId}`, branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40),
       } },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     );
     store.updateStep(worker.id, 'task', { status: STEP_STATUS.done, sessionId: 'old-session' });
     setRunStatus(store, worker.id, RUN_STATUS.done);

@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -65,6 +66,7 @@ export function taskCliFixture(createManager?: RunManagerFactory) {
         },
       },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     ).id;
   };
 
