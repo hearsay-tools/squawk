@@ -131,10 +131,12 @@ export class RunManager {
 
   #disposed = false;
 
-  /** The lifecycle's `run` is this write's record; the reconciler reads the run as it is now, which
-   *  its own nested writes change, and reads another writer's row (`conflict`) as a durable write. */
+  /** A commit publishes a frozen copy of what it wrote: the reconciler reads the held record, which
+   *  its own nested writes change. A conflict publishes the record the reconciler reads (the other
+   *  writer's, held or not) and is a durable write, which carries no source. */
   readonly #onDelegationRun = (run: RunRecord, source?: RunUpdateSource): void => {
-    this.#modules.familyReconciler.onDelegationRun(this.#store.getRun(run.id) ?? run, source === 'conflict' ? undefined : source);
+    if (source === 'conflict') this.#modules.familyReconciler.onDelegationRun(run);
+    else this.#modules.familyReconciler.onDelegationRun(this.#store.getRun(run.id) ?? run, source);
   };
 
   /** A run that ended releases its memory (hearsay-tools/squawk#2064); so does a deleted one. */
