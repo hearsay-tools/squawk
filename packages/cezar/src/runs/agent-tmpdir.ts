@@ -1,5 +1,5 @@
 import { assertRunSlotsSealed, deletionRefusal } from './removal-slots.ts';
-import { runDataDir } from '../legacy-runs.ts';
+import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { productEnv } from '../core/product-env.ts';
 /**
  * Task-owned temp directories with real-byte write probes and a Unix socket path budget. Prefer
@@ -722,12 +722,15 @@ function directoryNames(dir: string): string[] {
 }
 
 /** Ask the deletion gates (`runs/removal-slots.ts`) for the scratch of every run the sweep may find,
- *  by control directory and by short-directory marker, before anything goes: a refused run joins
+ *  before anything goes: by control directory, by short-directory marker, and each task a project
+ *  move left in `.ai/cezar/`, whose fallback directory the last loop can reach. A refused run joins
  *  `keep`, so every loop keeps all its directories. A gate that throws keeps the run too. */
 function keepRefusedScratch(dataDir: string, keep: Set<string>): void {
   const shortRoot = join(dataDir, SHORT_TMP_ROOT);
   const markers = directoryNames(shortRoot).filter(safeRunId).map((name) => readRunMarker(join(shortRoot, name)));
-  for (const id of new Set([...directoryNames(agentTmpRoot(dataDir)), ...markers])) {
+  let legacy: string[] = [];
+  try { legacy = legacyRunsBeside(dataDir); } catch { /* an unreadable list names no run to ask about */ }
+  for (const id of new Set([...directoryNames(agentTmpRoot(dataDir)), ...markers, ...legacy])) {
     if (typeof id !== 'string' || keep.has(id) || !safeRunId(id)) continue;
     try {
       if (deletionRefusal(id, 'scratch', dataDir) === undefined) continue;

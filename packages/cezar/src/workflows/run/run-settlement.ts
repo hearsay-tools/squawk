@@ -585,8 +585,12 @@ export class RunSettlement {
     // terminal path. Fire-and-forget: retention must never delay or throw into
     // the lifecycle.
     void this.enforceRetention();
-    this.reapTerminalScratch(runId);
-    this.host.releaseRunMemory(runId);
+    // The reap throws on an unsealed process or a failing removal gate; the memory slot goes anyway.
+    try {
+      this.reapTerminalScratch(runId);
+    } finally {
+      this.host.releaseRunMemory(runId);
+    }
   }
 }
 

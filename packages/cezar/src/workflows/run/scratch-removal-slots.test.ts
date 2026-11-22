@@ -152,6 +152,30 @@ describe('the startup orphan sweep', () => {
   });
 });
 
+describe('the startup orphan sweep of a moved project', () => {
+  it('keeps the fallback directory of a refused task the move left in .ai/cezar', () => {
+    // A project so deep that the task's scratch falls back to a digest directory in the OS temp root.
+    const deep = join(realpathSync(tmpdir()), `cez-deep-moved-${randomUUID().slice(0, 8)}-${'d'.repeat(72)}`);
+    const moved = join(deep, 'repo', '.ai', 'squawk');
+    const [kept, swept] = [randomUUID(), randomUUID()];
+    mkdirSync(moved, { recursive: true });
+    writeFileSync(join(moved, 'legacy-runs.json'), JSON.stringify({ version: 1, runs: [kept, swept] }));
+    const keptFallback = agentTmpEnv(moved, kept, {}).TMPDIR!, sweptFallback = agentTmpEnv(moved, swept, {}).TMPDIR!;
+    try {
+      expect(keptFallback.startsWith(deep)).toBe(false);
+      refused.add(kept);
+
+      sweepAgentTmpDirs(moved, []);
+
+      expect(asked).toEqual(expect.arrayContaining([`${kept}:scratch`, `${swept}:scratch`]));
+      expect([existsSync(keptFallback), existsSync(sweptFallback)]).toEqual([true, false]);
+    } finally {
+      for (const dir of [keptFallback, sweptFallback]) rmSync(dir, { recursive: true, force: true });
+      rmSync(deep, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the built-in gates for scratch', () => {
   const kinds: DeletionKind[] = ['history', 'worktree', 'archive-tmp', 'scratch'];
 
