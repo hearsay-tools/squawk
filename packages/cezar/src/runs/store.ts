@@ -1,8 +1,7 @@
 import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, withKeptFields } from './legacy-run-rows.ts';
-import { dataReadDirs, runDataDir } from '../project-paths.ts';
-import { addRunSource, copyFallbackFamily, fallbackRunSource, fallbackRunDeleteError } from './project-run-sources.ts';
+import { addRunSource, fallbackRunSource } from './project-run-sources.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
-import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageStepUpdate, stepTotals, redactPatch, type RecordPatch } from './record-write-rules.ts';
+import { stageCommit, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageStepUpdate, stepTotals, redactPatch, type RecordPatch } from './record-write-rules.ts';
 import { publishRunWrite, RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
@@ -38,7 +37,7 @@ import { restoreHistory } from './history-file.ts';
 // Type-only module (zod + nothing else), so this cannot cycle back into the store.
 import { workflowDefSchema } from '../workflows/types.ts';
 import { applyOutcomes, type OutcomeDependencies, type OutcomeReceipt, type RunOutcome } from './outcome-commit.ts';
-import { ISSUE_URL_RE, namesForeignReference, referencedPrDeclaration, rescopeRun, resolveReferencedRef, restoreOriginatingIssue, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
+import { ISSUE_URL_RE, namesForeignReference, rescopeRun, restoreOriginatingIssue, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
@@ -50,8 +49,7 @@ import {
 } from './run-database.ts';
 import { listBranchOwners, type BranchOwner } from './branch-owners.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
-import { restoreLostReferencedPullRequest } from './loaded-run-healing.ts';
-import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop } from './loaded-run-exits.ts';
+import { reconcileLoadedRun } from './loaded-run-exits.ts';
 import { hasLegacyWaitFields, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
@@ -59,16 +57,18 @@ import { encodeRunRow, familyRootOf, isLiveRecord, materializedWorktreePath, new
 import { RunRetentionTopic } from './run-retention.ts';
 import { collectRawExtras, encodeRawRecord, type RawExtras } from './raw-record.ts';
 import { ColdReadCache, storedRow, type StoredRow } from './cold-reads.ts';
-import { assertNoLegacyCockpit, assertNoLegacyWriter, backUpLegacyIndex, LEGACY_INDEX_FILE, LegacyWriterError, readLegacyIndex } from './legacy-index.ts';
+import { LEGACY_INDEX_FILE, LegacyWriterError } from './legacy-index.ts';
 import { RunStoreOpenError, toRunStoreOpenError } from './store-open-error.ts';
-import { claimStoreFamilies } from './claim-families.ts';
+import { importLegacyIndex, OPEN_RETRY_DELAYS_MS, sleepSync } from './store-open.ts';
+import { RunClaimsTopic, RunWriteRefusedError } from './run-claims-topic.ts';
+import { RunPinsTopic, type RunPinHolder } from './run-pins.ts';
 import { createStoreOwnedRun, type SpawnCapacityRefusal } from './owned-run-create.ts';
 import { WorkerResultsTopic } from './worker-results.ts';
 import { RunEventLogTopic } from './event-log.ts';
 import { RunRedaction } from './run-redaction.ts';
 import { RunArchiveTopic } from './run-archive.ts';
 import { RunReadFlagsTopic } from './run-read-flags.ts';
-import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
+import { closeClaimSession, familyKey, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 
 /** Per-store persistence adapter; the second argument is the normal fenced transaction. */
@@ -219,16 +219,6 @@ export type RunRecord = z.infer<typeof runRecordSchema>;
 /** One persisted event line; `type` mirrors AgentEvent plus engine lifecycle. */
 export type RunEvent = import('@open-mercato/cezar-contract').RunEvent;
 
-/** The pauses between open attempts while the database is busy, when `open` may wait (a boot):
- *  about 3.5 s in all, with each attempt's own busy timeout. Long enough for another process to
- *  finish importing a large `runs.json`. */
-const OPEN_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600];
-
-/** Block this thread for `ms`. Only `open` does, at boot, when there is nothing else to run. */
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
 /** How many archived root runs the run lists carry per project (#864): `GET /run-summaries?archived=recent`
  *  and `GET /workspace/runs-index`. Unarchived runs are never cut; older archived runs page in
  *  through `GET /run-summaries/archived` and the workspace search. */
@@ -238,160 +228,7 @@ export const ARCHIVED_WINDOW = 200;
  *  which is a real and common state (no `gh`, no remote, a non-git root) — never an error. */
 export type RepoHandle = { owner: string; name: string };
 
-/**
- * Reconcile one record just read off disk with the fact that whichever process wrote it is gone.
- *
- * Mutates and returns `run`. Extracted from `RunStore.open` so the read-only index reader
- * (`./run-index.ts`) answers the SAME question about a `running` row on disk. Two parsers that
- * disagree here is a visible bug, not an internal one: the cockpit would show a task as running
- * in the ⌘K index and failed the moment you opened it.
- *
- * `keepLive` (#367): leave `queued`/`running`/`waiting` untouched so the caller can recover them
- * (RunManager.recover re-queues queued runs, resumes interrupted ones). Without it — one-shot CLI
- * paths that never recover, and the index reader, which has no manager at all — live-looking runs
- * are marked failed so no ghost stays behind.
- */
-export function reconcileLoadedRun(run: RunRecord, opts?: { keepLive?: boolean }): RunRecord {
-  settleLoadedStop(run);
-  restoreLoadedUsageLimitHold(run);
-  failLoadedInterruptedRun(run, opts);
-  clearLoadedStaleResume(run);
-  restoreLostReferencedPullRequest(run, referencedPrDeclaration, resolveReferencedRef);
-  restoreOriginatingIssue(run);
-  // Repository scoping follows reconciliation: stores arm a handle asynchronously, while
-  // the read-only index applies its cached handle to these fresh records (#97). This ordering
-  // also scopes any referenced PR restored above without filtering candidate evidence first.
-  return run;
-}
-
-function clearLoadedStaleResume(run: RunRecord): void {
-  // Recovery owns waits; a usage-limit appointment survives while status is waiting.
-  stageLoaded(run);
-}
-
-/**
- * Settle an adopted dead owner’s live run without starting work. Untouched runs cancel; started
- * runs become interrupted. Stop explicitly cancels its target. Mutates run.
- */
-export function settleOrphanedRun(run: RunRecord, opts: { stop?: boolean | undefined } = {}): RunRecord {
-  if (opts.stop && (run.status === 'queued' || run.status === 'running' || run.status === 'waiting')) run.stopping = true;
-  if (run.status === 'queued' && !run.startedAt && run.workflowDef !== undefined &&
-    run.steps.every((step) => step.status === 'pending' && !step.startedAt && !step.sessionId)) {
-    Object.assign(run, applyExit(run, 'cancel'));
-  }
-  return reconcileLoadedRun(run, { keepLive: false });
-}
-
-/** Test seam (#779): `beforeTransaction` runs once `runs.json` is read and parsed, before the
- *  import asks for the write lock; `beforeCommit` runs inside the import transaction, after every
- *  row is written and before the last check that no older Squawk wrote `runs.json` meanwhile. */
-let legacyImportHook: { beforeTransaction?: () => void; beforeCommit?: () => void } | undefined;
-
-export function __setLegacyImportHookForTests(hook?: { beforeTransaction?: () => void; beforeCommit?: () => void }): void {
-  legacyImportHook = hook;
-}
-
-/**
- * Import legacy rows and the completion marker atomically, once. Recheck live-writer evidence
- * before commit and preserve exact input bytes in a synced backup. Leave runs.json untouched;
- * invalid entries are skipped and reported.
- */
-function importLegacyIndex(db: RunDatabase, dataDir: string): void {
-  assertNoLegacyCockpit(dataDir);
-  const snapshot = readLegacyIndex(join(dataDir, LEGACY_INDEX_FILE));
-  const parsed = snapshot ? legacyIndexRows(snapshot.bytes, parseRunRecords) : undefined;
-  const rows = parsed?.rows ?? [];
-  const skipped = parsed?.skipped ?? 0;
-  const source = !snapshot ? 'none' : parsed ? LEGACY_INDEX_FILE : `${LEGACY_INDEX_FILE} (unparseable)`;
-  assertNoLegacyWriter(dataDir, snapshot);
-  legacyImportHook?.beforeTransaction?.();
-  let backup: string | undefined;
-  const commit = db.transaction({
-    upserts: rows,
-    deletes: [],
-    onlyIfMetaAbsent: RUNS_IMPORT_COMPLETE_KEY,
-    beforeCommit: () => {
-      legacyImportHook?.beforeCommit?.();
-      assertNoLegacyWriter(dataDir, snapshot);
-      backup = snapshot ? backUpLegacyIndex(dataDir, snapshot) : undefined;
-      const read = snapshot ? { bytes: snapshot.bytes.length, sha256: snapshot.sha256, backup } : {};
-      return { [RUNS_IMPORT_COMPLETE_KEY]: JSON.stringify({ at: new Date().toISOString(), source, records: rows.length, ...(skipped > 0 ? { skipped } : {}), ...read }) };
-    },
-  });
-  // Told once, by the import that committed: the marker means no later open reads runs.json again.
-  if (commit.skipped || backup === undefined) return;
-  const kept = `Its exact bytes are kept in ${join(dataDir, backup)}; https://github.com/hearsay-tools/squawk/blob/main/docs/run-history-recovery.md says how to import it after a repair.`;
-  if (!parsed) console.warn(`[hsq] ${LEGACY_INDEX_FILE} could not be read; no run was imported, and this project starts with an empty history. ${kept}`);
-  else if (skipped > 0) console.warn(`[hsq] ${skipped} of ${parsed.total} runs in ${LEGACY_INDEX_FILE} could not be read and were not imported. ${kept}`);
-}
-
-/**
- * Finished rows whose stored summary an open-time normalization would still change: a referenced
- * PR an older Squawk's created-PR declaration erased, or issue attribution displaced by a
- * follow-up declaration (see `reconcileLoadedRun`), or a summary that is not JSON. Not live, so not
- * in the `live` column; open decodes these few and keeps the ones it actually repaired.
- */
-const LEGACY_REFERENCE_HEAL_SQL = guardedJsonSql(
-  "(json_extract(summary, '$.markerRefs.pr') IS NOT NULL AND json_extract(summary, '$.referencedPullRequestUrl') IS NULL)" +
-  " OR (NOT EXISTS (SELECT 1 FROM meta WHERE key = 'issue-attribution:' || runs.id AND value = CAST(runs.revision AS TEXT)) AND json_extract(summary, '$.markerRefs.issue') IS NOT NULL)", 1);
-
-/**
- * The rows whose stored summary reading their record can change, as SQL over `runs`: the rows
- * `open` decodes to normalize (the `live` column it loads by, then `LEGACY_REFERENCE_HEAL_SQL`).
- * With a repository handle, a row whose summary `namesForeignReference` is one too, as
- * `setRepoHandle` reads it. The cold reader (run-index.ts) decodes exactly these rows and serves
- * every other stored summary, so the two read paths cannot disagree about which rows to read.
- * `AUTOMATION_ORIGIN_HEAL_SQL` is left out on purpose: no cross-project view reads
- * `automationId`, and asking it scans `data`.
- */
-export const LOAD_REPAIR_SQL = `live = 1 OR ${LEGACY_REFERENCE_HEAL_SQL}`;
-
-/**
- * Rows whose record names the automation that launched it while the stored summary does not
- * (hearsay-tools/cezarion#1332): summaries a Squawk wrote before `RunSummary.automationId`
- * existed. Open rewrites each one's summary once, so the sidebar's Automations tab classifies a
- * finished task nobody has opened since the upgrade. `instr` keeps the JSON parse off every
- * other row.
- */
-const AUTOMATION_ORIGIN_HEAL_SQL = `instr(data, '"automation') > 0 AND ${guardedJsonSql("json_extract(summary, '$.automationId') IS NULL" +
-  " AND (json_extract(data, '$.automation.automationId') IS NOT NULL OR json_extract(data, '$.automationTrigger.automationId') IS NOT NULL)", 0, ['summary', 'data'])}`;
-
 export { branchOwnerOf, type BranchOwner } from './branch-owners.ts';
-
-/** Who may hold a run in memory besides its own record (see `RunStore.pin`). `maintenance` is the
- *  RunManager's publish, worktree-reclaim and branch-cleanup claims, held across their async work. */
-export type RunPinHolder = 'active' | 'continue' | 'cleanup' | 'maintenance';
-
-/**
- * Who may change a run, as this store sees it (#779, plan step 3; `RunStore.runOwnership`):
- * - `held`: this store claims its delegation family;
- * - `free`: no live process claims it and nothing in its family is live; a write takes it. A
- *   proven-dead owner's claim on such a family counts for nothing: there is nothing to recover;
- * - `orphaned`: nobody alive owns a family that still has a live run (its owner died, or nobody
- *   claimed it): taking it means adopting it first (`RunStore.adoptFamily` settles it, then the
- *   manager recovers the family);
- * - `foreign`: another process that is alive (or cannot be proven dead) holds it: read-only here;
- * - `quarantined`: a write found it changed under this store; refused until Squawk restarts;
- * - `fallback`: a family member is read from the fallback directory: refused as `foreign` until a control adopts it.
- */
-export type RunOwnership = 'held' | 'free' | 'orphaned' | 'foreign' | 'quarantined' | 'fallback';
-
-/** The one answer every control gives for a run another Squawk process owns (`409 { error }`). */
-export const RUN_IN_USE_ELSEWHERE = `run is in use by another Squawk process`;
-/** The answer for a run this process stopped writing after a conflicting write. */
-export const RUN_QUARANTINED = `run changed under this Squawk process — restart Squawk to reload it`;
-
-/** A write this store must not make: another process owns the run, its owner died with work
- *  still live (adopt it first), or a conflict quarantined it. Nothing was changed. */
-export class RunWriteRefusedError extends Error {
-  constructor(readonly runId: string, readonly ownership: Exclude<RunOwnership, 'held' | 'free'>, fallbackError?: string) {
-    super(ownership === 'fallback' ? fallbackError ?? `run ${runId} is read only in the fallback project directory`
-      : ownership === 'quarantined' ? `${RUN_QUARANTINED}: ${runId}`
-      : ownership === 'orphaned' ? `run ${runId} belongs to a Squawk process that exited; take it over before writing it`
-        : `${RUN_IN_USE_ELSEWHERE}: ${runId}`);
-    this.name = 'RunWriteRefusedError';
-  }
-}
 
 /** Make `target` hold exactly `source`'s fields, keeping the object every holder references. */
 function replaceRecord(target: RunRecord, source: RunRecord): void {
@@ -527,13 +364,17 @@ export class RunStore {
   readonly eventLog: RunEventLogTopic;
   /** The scrub of events and free text (hearsay-tools/squawk#4040). */
   readonly redaction: RunRedaction;
+  /** Claims, ownership, sources and fallback (hearsay-tools/squawk#4042). */
+  readonly claims: RunClaimsTopic;
+  /** The holds that keep a run loaded (hearsay-tools/squawk#4042). */
+  readonly runPins: RunPinsTopic;
   private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
   /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
    *  first use by the factory this process registered; throws when none is registered. */
   get workerExecutions(): WorkerExecutions & WorkerExecutionRecords {
     return this.executions ??= workerExecutionsFactory()(this.dataDir, {
-      peek: (id) => this.peek(id), getRun: (id) => this.getRun(id), writeDir: (id) => this.writeDir(id),
-      sourceDataDir: (id) => this.sourceDataDir(id), commitIndex: (input) => this.commitIndex(input),
+      peek: (id) => this.peek(id), getRun: (id) => this.getRun(id), writeDir: (id) => this.claims.writeDir(id),
+      sourceDataDir: (id) => this.claims.sourceDataDir(id), commitIndex: (input) => this.commitIndex(input),
       published: this.published, workerResults: this.workerResults,
     });
   }
@@ -546,9 +387,15 @@ export class RunStore {
 
   private constructor(private readonly dataDir: string) {
     this.redaction = new RunRedaction();
+    this.claims = new RunClaimsTopic(dataDir, {
+      db: () => this.db, owner: () => this.owner, keepLive: () => this.keepLive, held: this.held, base: this.base, dirty: this.dirty,
+      deleted: this.deleted, quarantined: this.quarantined, unreadable: this.unreadable, claimed: this.claimed, pendingClaims: this.pendingClaims,
+      exitEvents: this.exitEvents, coldReads: this.coldReads, decodeRunRow, anchoredFamilies: () => this.anchoredFamilies(), scheduleSave: () => this.scheduleSave(),
+    });
+    this.runPins = new RunPinsTopic({ pins: this.pins, published: this.published, record: (id) => this.record(id), peek: (id) => this.peek(id), sweepIfSettled: (ids) => this.sweepIfSettled(ids) });
     this.transcriptFacts = new RunTranscriptFacts(dataDir, {
-      isFallbackRun: (id) => this.isFallbackRun(id),
-      sourceDataDir: (id) => this.sourceDataDir(id),
+      isFallbackRun: (id) => this.claims.isFallbackRun(id),
+      sourceDataDir: (id) => this.claims.sourceDataDir(id),
       isOpen: () => this.db !== null,
       held: this.held,
       listFamilyRunIds: (rootId) => this.listFamilyRunIds(rootId),
@@ -556,14 +403,14 @@ export class RunStore {
       listRunIds: () => this.listRunIds(),
     });
     this.workerResults = new WorkerResultsTopic(dataDir, {
-      peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), hasFallbackRun: (id) => this.hasFallbackRun(id),
-      writeDir: (id) => this.writeDir(id), sourceDataDir: (id) => this.sourceDataDir(id),
+      peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), hasFallbackRun: (id) => this.claims.hasFallbackRun(id),
+      writeDir: (id) => this.claims.writeDir(id), sourceDataDir: (id) => this.claims.sourceDataDir(id),
       redactResult: (result) => this.redaction.redact({ type: 'worker-result', seq: 0, ts: result.observedAt, result }).result,
       redactText: (text) => this.redaction.redactText(text), commitDelegation: (patches) => this.commitDelegation(patches),
     });
     this.eventLog = new RunEventLogTopic(dataDir, {
       seqs: this.seqs, published: this.published, liveItems: this.liveItems, transcriptFacts: this.transcriptFacts, redaction: this.redaction,
-      record: (id) => this.record(id), missingRunError: (runId) => this.missingRunError(runId), sourceDataDir: (id) => this.sourceDataDir(id),
+      record: (id) => this.record(id), missingRunError: (runId) => this.claims.missingRunError(runId), sourceDataDir: (id) => this.claims.sourceDataDir(id),
       touch: (run, before) => this.touch(run, before), change: (id, apply) => this.change(id, apply), repoHandle: () => this.repoHandle,
       maybeEnqueueHistoryCompress: (run) => this.archive.maybeEnqueueHistoryCompress(run),
     });
@@ -571,9 +418,9 @@ export class RunStore {
       db: () => this.db, held: this.held, deleted: this.deleted, quarantined: this.quarantined,
       historyOwed: this.historyOwed, seqs: this.seqs, published: this.published, transcriptFacts: this.transcriptFacts,
       peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), record: (id) => this.record(id),
-      listWorkersOf: (parentId) => this.listWorkersOf(parentId), isFallbackRun: (id) => this.isFallbackRun(id),
-      hasFallbackRun: (id) => this.hasFallbackRun(id), listOrder: (run) => this.listOrder(run),
-      claimFamilies: (families) => this.claimFamilies(families), markDeleted: (id, family) => this.markDeleted(id, family),
+      listWorkersOf: (parentId) => this.listWorkersOf(parentId), isFallbackRun: (id) => this.claims.isFallbackRun(id),
+      hasFallbackRun: (id) => this.claims.hasFallbackRun(id), listOrder: (run) => this.listOrder(run),
+      claimFamilies: (families) => this.claims.claimFamilies(families), markDeleted: (id, family) => this.markDeleted(id, family),
       scheduleSave: () => this.scheduleSave(), commitIndex: (input) => this.commitIndex(input),
       commitDelegation: (patches) => this.commitDelegation(patches), applyArchived: (run, archived) => this.archive.applyArchived(run, archived),
       workerDeletionEvidence: (id) => this.workerExecutions.workerDeletionEvidence(id),
@@ -588,7 +435,7 @@ export class RunStore {
       claimed: this.claimed, base: this.base, owner: () => this.owner, transcriptFacts: this.transcriptFacts,
       decodeRunRow, sortNewestFirst, peek: (id) => this.peek(id), record: (id) => this.record(id),
       listWorkersOf: (parentId) => this.listWorkersOf(parentId), familyOf: (id) => this.familyOf(id),
-      claimFamilies: (families, opts) => this.claimFamilies(families, opts), writeRefusal: (id) => this.writeRefusal(id),
+      claimFamilies: (families, opts) => this.claims.claimFamilies(families, opts), writeRefusal: (id) => this.claims.writeRefusal(id),
       assertWritable: (staged) => this.assertWritable(staged), decodeCold: (row) => this.decodeCold(row),
       listOrder: (run) => this.listOrder(run), commitIndex: (input, source, write) => this.commitIndex(input, source, write),
       touch: (run, before, exit) => this.touch(run, before, exit),
@@ -596,7 +443,7 @@ export class RunStore {
     });
     this.readFlags = new RunReadFlagsTopic({
       db: () => this.db, held: this.held, deleted: this.deleted, record: (id) => this.record(id),
-      claimFamilies: (families) => this.claimFamilies(families), touch: (run, before) => this.touch(run, before),
+      claimFamilies: (families) => this.claims.claimFamilies(families), touch: (run, before) => this.touch(run, before),
       change: (id, apply) => this.change(id, apply),
     });
   }
@@ -643,12 +490,12 @@ export class RunStore {
     let db = RunDatabase.open(deferred ? ':memory:' : path);
     try {
       if (deferred) db.transaction({ upserts: [], deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'none' } });
-      else if (db.getMeta(RUNS_IMPORT_COMPLETE_KEY) === undefined) importLegacyIndex(db, dataDir);
+      else if (db.getMeta(RUNS_IMPORT_COMPLETE_KEY) === undefined) importLegacyIndex(db, dataDir, parseRunRecords);
       if (source) db = addRunSource(db, dataDir, source);
       store.db = db;
       store.owner = openClaimSession();
       if (!maintenance) {
-        store.loadHeldRows();
+        store.claims.loadHeldRows();
         store.transcriptFacts.warmTranscriptFacts();
         store.exitEvents.writeLoaded();
       }
@@ -685,194 +532,6 @@ export class RunStore {
   /** Why this store has no database, when it is `RunStore.unavailable`'s: its runs are unknown,
    *  not absent. */
   get unavailable(): RunStoreOpenError | undefined { return this.openFailure; }
-
-  /** Every sidecar for a run follows the winning record, never file-by-file fallback. */
-  sourceDataDir(id: string): string { return this.isFallbackRun(id) ? dataReadDirs(this.dataDir)[1]! : runDataDir(this.dataDir, id); }
-  isFallbackRun(id: string): boolean { return this.db?.isFallback(id) ?? false; }
-  hasFallbackRun(id: string): boolean { return this.db?.hasFallback(id) ?? false; }
-  /**
-   * Open-time load: the live rows, the finished rows a load normalization repairs, then the
-   * delegation families of the live ones. A row that does not parse is skipped and left in the
-   * database untouched; one warning says how many.
-   *
-   * Only rows this store can claim are loaded (#779, plan step 3). A live row whose family another
-   * live process claims — `serve`'s parked run, seen by a headless `cez run` — is that process's:
-   * it is not loaded, normalized or recovered here, and stays readable through `getRun` and the
-   * list rows. A live row nobody alive claims is taken over, as before: this open recovers it
-   * (`keepLive`) or settles it as interrupted.
-   */
-  private loadHeldRows(): void {
-    let unreadable = 0;
-    const decode = (row: RunRow): DecodedRun | undefined => {
-      const decoded = decodeRunRow(row.data);
-      if (!decoded) {
-        unreadable++;
-        this.unreadable.add(row.id);
-      }
-      return decoded;
-    };
-    const live = this.db!.listLive();
-    const owned = this.claimFamilies(live.map(rowFamily), { allowLive: true, wait: true });
-    for (const row of live) {
-      if (!owned.has(rowFamily(row))) continue;
-      const decoded = decode(row);
-      if (decoded) this.adoptLoadedRun(decoded, { keepLive: this.keepLive }, row);
-    }
-    const heal = this.db!.listWhere(LEGACY_REFERENCE_HEAL_SQL).filter((row) => !this.held.has(row.id));
-    const healable = this.claimFamilies(heal.map(rowFamily));
-    for (const row of heal) {
-      if (!healable.has(rowFamily(row))) continue;
-      const decoded = decode(row);
-      // Held only when the repair changed it: the next save writes it, then it leaves.
-      if (decoded) {
-        // Persist verification once even when legacy issue attribution was already correct.
-        const needsIssueCheck = decoded.run.markerRefs?.issue !== undefined &&
-          this.db!.getMeta(`issue-attribution:${row.id}`) !== String(row.revision);
-        this.adoptLoadedRun(decoded, { keepLive: this.keepLive, onlyIfChanged: !needsIssueCheck }, row);
-        if (needsIssueCheck) this.dirty.add(row.id);
-      }
-    }
-    const stale = this.db!.listWhere(AUTOMATION_ORIGIN_HEAL_SQL).filter((row) => !this.held.has(row.id));
-    const restamp = this.claimFamilies(stale.map(rowFamily));
-    for (const row of stale) {
-      if (!restamp.has(rowFamily(row))) continue;
-      const decoded = decode(row);
-      // Nothing in the record changes, only its summary: held dirty, the next save rewrites it.
-      if (decoded) {
-        this.adoptLoadedRun(decoded, { keepLive: this.keepLive }, row);
-        this.dirty.add(row.id);
-      }
-    }
-    for (const rootId of this.anchoredFamilies()) this.holdFamily(rootId, decode);
-    this.releaseUnheldClaims();
-    if (unreadable > 0) console.warn(`[hsq] ${unreadable} run(s) in ${RUNS_DB_FILE} could not be read; they are left in the database untouched.`);
-  }
-
-  /** Normalize a record just read from `row` (see `reconcileLoadedRun`) and hold it. Marks the row
-   *  dirty only when normalization changed it, so the next save persists exactly the runs open()
-   *  rewrote. A row read up from schema-3 wait fields counts as changed: its rewrite drops them
-   *  and recomputes its summary and live column (`upgradeLegacyWaits`), as does a summary that does
-   *  not parse (hearsay-tools/squawk#3530). The caller has claimed the row's family. */
-  private adoptLoadedRun({ run, extras, upgraded }: DecodedRun, opts: { keepLive?: boolean; onlyIfChanged?: boolean; settle?: boolean; stop?: boolean }, row: RunRow): void {
-    if (this.db?.familyHasFallback(rowFamily(row))) return;
-    // Serialized, so a key set to `undefined` reads as the absent key it is once written.
-    const before = JSON.stringify(run);
-    const wasCancelled = run.status === 'cancelled';
-    if (opts.settle) settleOrphanedRun(run, { stop: opts.stop });
-    else reconcileLoadedRun(run, opts);
-    const changed = upgraded === true || JSON.stringify(run) !== before || parseStoredSummary(row.summary) === undefined;
-    if (opts.onlyIfChanged && !changed) return;
-    this.held.set(run.id, run);
-    this.base.set(run.id, { revision: row.revision, seq: row.seq, data: row.data, extras });
-    if (changed) this.dirty.add(run.id);
-    if (!wasCancelled && run.status === 'cancelled') this.exitEvents.loadCancelled(run.id);
-  }
-
-  /**
-   * Hold one delegation family: its root and every worker filed under it, read through the
-   * `parent_run_id` index. No recursion: a worker's own id never names a family. The caller has claimed it. `settle` settles its live rows instead of keeping
-   * them for recovery (`settleOrphanedRun`); `stopId` is the run a Stop settles as cancelled.
-   */
-  private holdFamily(rootId: string, decode: (row: RunRow) => DecodedRun | undefined = (row) => decodeRunRow(row.data), settle = false, stopId?: string): void {
-    const rows = [this.db!.get(rootId), ...this.db!.listByParent(rootId)];
-    for (const row of rows) {
-      if (!row || this.held.has(row.id) || this.deleted.has(row.id)) continue;
-      const decoded = decode(row);
-      if (decoded) this.adoptLoadedRun(decoded, { keepLive: this.keepLive, settle, stop: row.id === stopId }, row);
-    }
-  }
-
-  /** Make sure this store claims each of `families`; `claimStoreFamilies` takes the free ones. */
-  private claimFamilies(families: Iterable<string>, opts: { allowLive?: boolean; wait?: boolean } = {}): Set<string> {
-    return projectWriteRefused(this.dataDir) ? new Set() : claimStoreFamilies({
-      claimed: this.claimed,
-      pendingClaims: this.pendingClaims,
-      db: this.db,
-      owner: this.owner,
-      scheduleSave: () => this.scheduleSave(),
-    }, families, opts);
-  }
-
-  /** Release the claim of every family with nothing left in memory, once nothing is pending: a
-   *  failed save keeps its families claimed until it succeeds. A failed release retries at the
-   *  next sweep; `close()` releases the rest. */
-  private releaseUnheldClaims(): void {
-    if (!this.db || !this.owner || this.dirty.size > 0 || this.deleted.size > 0) return;
-    const kept = new Set<string>();
-    for (const run of this.held.values()) kept.add(familyKey(run));
-    // A claim never taken has nothing to release in the database.
-    for (const family of this.pendingClaims.keys()) if (!kept.has(family)) this.pendingClaims.delete(family);
-    const released = [...this.claimed.keys()].filter((family) => !kept.has(family));
-    if (released.length === 0) return;
-    try {
-      this.db.releaseClaims(this.owner.session, released);
-      for (const family of released) this.claimed.delete(family);
-    } catch {
-      // Busy or failing: the next sweep tries again.
-    }
-  }
-
-  /**
-   * Who may change this run right now (see `RunOwnership`), or undefined when there is no such
-   * run. Read-only: nothing is claimed. Controls ask this first, so a run another process owns is
-   * refused with `RUN_IN_USE_ELSEWHERE` and a dead process's run is adopted before it is changed.
-   */
-  runOwnership(id: string): RunOwnership | undefined {
-    if (this.quarantined.has(id)) return 'quarantined';
-    const held = this.held.get(id);
-    if (!this.db) return held ? 'held' : undefined;
-    const family = held ? familyKey(held) : this.deleted.has(id) ? undefined : this.db.familyOf(id);
-    if (family === undefined) return undefined;
-    if (this.db.familyHasFallback(family)) return 'fallback';
-    if (this.claimed.has(family) || this.pendingClaims.has(family)) return 'held';
-    const claim = this.db.getClaim(family);
-    if (claim && claimOwnerLive(claim)) return 'foreign';
-    // The same rule `claimFamilies` writes by: a dead owner left only settled runs → free.
-    return this.db.familyHasLive(family) ? 'orphaned' : 'free';
-  }
-
-  /** Why a control on this run must be refused here, or undefined when this store may change it. */
-  writeRefusal(id: string): string | undefined {
-    const ownership = this.runOwnership(id);
-    if (ownership === 'quarantined') return RUN_QUARANTINED;
-    if (ownership === 'fallback') return this.fallbackRefusal(id).message;
-    return ownership === 'foreign' || ownership === 'orphaned' ? RUN_IN_USE_ELSEWHERE : undefined;
-  }
-
-  /**
-   * Claim an orphaned family before a control, then settle its live rows.
-   * Stop cancels its target. Return the root id, or undefined for a live owner or missing run.
-   */
-  adoptFamily(id: string, opts: { stop?: boolean } = {}): string | undefined {
-    const family = this.db?.familyOf(id);
-    if (family === undefined || !this.claimFamilies([family], { allowLive: true, wait: true }).has(family)) return undefined;
-    this.holdFamily(family, undefined, true, opts.stop ? id : undefined);
-    this.exitEvents.writeLoaded();
-    return family;
-  }
-
-  /** Explicit controls only (`requireRunControl`): copy a fallback family in so it can be written. */
-  adoptFallbackFamily(id: string): boolean {
-    const members = copyFallbackFamily(this.db, id, this.owner);
-    for (const member of members) this.coldReads.forget(member);
-    return members.length > 0;
-  }
-  private fallbackRefusal(id: string): RunWriteRefusedError { return new RunWriteRefusedError(id, 'fallback', fallbackRunDeleteError(this.dataDir, true)); }
-  /** Run files are written only for a family this store may write, never a fallback family. */
-  /** The error `appendEvent` throws for a run this store cannot write or does not know. */
-  private missingRunError(runId: string): Error {
-    const ownership = this.runOwnership(runId);
-    if (ownership === 'fallback') return this.fallbackRefusal(runId);
-    if (ownership === 'foreign' || ownership === 'orphaned' || ownership === 'quarantined') return new RunWriteRefusedError(runId, ownership);
-    return new Error(`unknown run: ${runId}`);
-  }
-
-  private writeDir(id: string): string { if (this.runOwnership(id) === 'fallback') throw this.fallbackRefusal(id); return runDataDir(this.dataDir, id); }
-
-  /** Every run whose family another process owns (`foreignClaimedRunIds`). */
-  listForeignClaimedRunIds(): string[] { return foreignClaimedRunIds(this.db, this.owner); }
-  /** Non-terminal rows in the database (both directories) and the runs of families another live store claims. */
-  persistedLiveRunIds(): { live: string[]; foreign: string[] } { return { live: this.db?.listLive().map((row) => row.id) ?? [], foreign: liveForeignClaimedRunIds(this.db, this.owner) }; }
 
   /**
    * Whether a held run anchors itself (and its family) in memory. Anything else held is a family
@@ -916,7 +575,7 @@ export class RunStore {
       this.base.delete(id);
       this.coldReads.forget(id);
     }
-    this.releaseUnheldClaims();
+    this.claims.releaseUnheldClaims();
   }
 
   /** A run read from `runs.db`, normalized like a loaded one (`reconcileLoadedRun`, then the
@@ -964,7 +623,7 @@ export class RunStore {
     const held = this.held.get(id);
     if (held) return held;
     const family = this.db && !this.deleted.has(id) ? this.db.familyOf(id) : undefined;
-    if (family === undefined || !this.claimFamilies([family]).has(family)) return undefined;
+    if (family === undefined || !this.claims.claimFamilies([family]).has(family)) return undefined;
     const run = this.coldReads.claimed(id, this.coldBase.get(id), () => this.db?.revisionOf(id)) ?? this.loadCold(id);
     if (!run) return undefined;
     this.holdDecoded(run);
@@ -1018,36 +677,6 @@ export class RunStore {
   }
 
   /**
-   * Keep a run in memory for `holder` until `unpin(id, holder)`: a RunManager pins the runs it is
-   * executing (`active`) and the run a Continue is admitting (`continue`). A finished run is
-   * loaded. Pins are per holder, so releasing one never releases another. Returns the held record.
-   */
-  pin(id: string, holder: RunPinHolder): RunRecord | undefined {
-    const run = this.record(id);
-    if (!run) return undefined;
-    let holders = this.pins.get(id);
-    if (!holders) this.pins.set(id, holders = new Set());
-    holders.add(holder);
-    return run;
-  }
-
-  /** Publish a run's current record again without a write: something read beside the record
-   *  changed, such as the run leaving the manager's live registries, which a detail's finish
-   *  verdict reads (hearsay-tools/cezarion#1301). */
-  republish(id: string): void {
-    const run = this.peek(id);
-    if (run) this.published.publish('run.updated', { run, before: snapshotRun(run), source: 'live-release' });
-  }
-
-  /** Release `holder`'s pin. The run leaves memory at the next sweep once nothing else holds it. */
-  unpin(id: string, holder: RunPinHolder): void {
-    const holders = this.pins.get(id);
-    if (!holders?.delete(holder)) return;
-    if (holders.size === 0) this.pins.delete(id);
-    this.sweepIfSettled([id]);
-  }
-
-  /**
    * Set discovered repository identity without blocking boot. Recompute conclusions from retained
    * evidence, including cold records; null retains unknown-handle behavior.
    */
@@ -1070,7 +699,7 @@ export class RunStore {
       }
     }
     // Only rows this store may write: another process's runs heal when their owner arms its handle.
-    const writable = this.claimFamilies(stored.map(rowFamily));
+    const writable = this.claims.claimFamilies(stored.map(rowFamily));
     for (const row of stored) {
       if (!writable.has(rowFamily(row))) continue;
       let before: Readonly<RunRecord> | undefined;
@@ -1527,7 +1156,7 @@ export class RunStore {
     if (this.openFailure) throw this.openFailure;
     const run = this.buildRun(input, randomUUID());
     // A new family, so nobody else can hold it; claimed before anything (an NDJSON event) is written.
-    if (this.db && !this.claimFamilies([run.id]).has(run.id)) throw new RunWriteRefusedError(run.id, 'foreign');
+    if (this.db && !this.claims.claimFamilies([run.id]).has(run.id)) throw new RunWriteRefusedError(run.id, 'foreign');
     this.held.set(run.id, run);
     this.retention.pruneOldRuns();
     this.touch(run, undefined);
@@ -1920,10 +1549,10 @@ export class RunStore {
       if (this.held.has(id)) held.add(family);
     }
     // A run this store holds may move to a new family; any other row is claimed as a plain write.
-    const owned = new Set([...this.claimFamilies(held, { allowLive: true }),
-      ...this.claimFamilies([...families.values()].filter((family) => !held.has(family)))]);
+    const owned = new Set([...this.claims.claimFamilies(held, { allowLive: true }),
+      ...this.claims.claimFamilies([...families.values()].filter((family) => !held.has(family)))]);
     for (const [id, family] of families) {
-      if (!owned.has(family)) throw this.runOwnership(id) === 'fallback' ? this.fallbackRefusal(id) : new RunWriteRefusedError(id, this.runOwnership(id) === 'orphaned' ? 'orphaned' : 'foreign');
+      if (!owned.has(family)) throw this.claims.runOwnership(id) === 'fallback' ? this.claims.fallbackRefusal(id) : new RunWriteRefusedError(id, this.claims.runOwnership(id) === 'orphaned' ? 'orphaned' : 'foreign');
     }
   }
 
@@ -2058,12 +1687,12 @@ export class RunStore {
   /** Same location `handoffPath()` in handoff.ts produces — inlined to keep
    *  the store free of upward imports. */
   private handoffPath(runId: string): string {
-    return join(this.sourceDataDir(runId), 'runs', `${runId}.handoff.md`);
+    return join(this.claims.sourceDataDir(runId), 'runs', `${runId}.handoff.md`);
   }
 
   /** Agent screenshots persisted by the run manager (see persistImage). */
   private imagesDir(runId: string): string {
-    return join(this.sourceDataDir(runId), 'runs', `${runId}-images`);
+    return join(this.claims.sourceDataDir(runId), 'runs', `${runId}-images`);
   }
 
   /** Save `run` debounced and publish it; `before` is the record at the write's entry (none: created). */
@@ -2153,7 +1782,7 @@ export class RunStore {
     // A held run whose write moved it into a new family (a worker quarantined to `invalid`) takes
     // that family's claim first; one it cannot take fails the fence below as claim-lost.
     const moved = [...new Set(families.values())].filter((family) => !this.claimed.has(family) && !this.pendingClaims.has(family));
-    if (moved.length > 0) this.claimFamilies(moved, { allowLive: true });
+    if (moved.length > 0) this.claims.claimFamilies(moved, { allowLive: true });
     let commit: RunDatabaseCommit;
     try {
       commit = this.writeIndex({ upserts, deletes, ...(this.owner ? { fence: this.fence(families) } : {}) });
@@ -2239,7 +1868,7 @@ export class RunStore {
       }
       const decoded = conflict.current ? decodeRunRow(conflict.current.data) : undefined;
       const current = decoded?.run;
-      if (this.isFallbackRun(conflict.id)) this.held.delete(conflict.id);
+      if (this.claims.isFallbackRun(conflict.id)) this.held.delete(conflict.id);
       const held = this.held.get(conflict.id);
       const before = snapshotRun(held ?? staged.get(conflict.id) ?? undefined);
       if (current && conflict.current) {

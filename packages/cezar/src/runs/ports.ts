@@ -11,6 +11,8 @@
 import type { ArchiveFinishedScope, ArchivePullRequestIdentity, MergedPullRequest, WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunEvent, RunRecord, RunStore } from './store.ts';
 import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
+import type { RunOwnership } from './run-claims-topic.ts';
+import type { RunPinHolder } from './run-pins.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 import type { WorkerProcessRecord } from '../core/process-stat.ts';
@@ -36,8 +38,6 @@ export interface RunQueries {
   listRunSummaries: RunStore['listRunSummaries'];
   listArchivedRuns: RunStore['listArchivedRuns'];
   searchRunSummaries: RunStore['searchRunSummaries'];
-  persistedLiveRunIds: RunStore['persistedLiveRunIds'];
-  listForeignClaimedRunIds: RunStore['listForeignClaimedRunIds'];
   heldIds: RunStore['heldIds'];
   listWorkerIds: RunStore['listWorkerIds'];
   listQuarantinedRunIds: RunStore['listQuarantinedRunIds'];
@@ -195,19 +195,28 @@ export interface RunReadFlags {
   markAllRead(automation?: boolean): number;
 }
 
-/** Whether this process may write a run, where its files are, and the redaction of its text. */
+/** Whether this process may write a run, and where its files are (`runs/run-claims-topic.ts`, `store.claims`). */
 export interface RunAccess {
-  writeRefusal: RunStore['writeRefusal'];
-  readonly unavailable: RunStore['unavailable'];
-  sourceDataDir: RunStore['sourceDataDir'];
-  isFallbackRun: RunStore['isFallbackRun'];
-  runOwnership: RunStore['runOwnership'];
+  writeRefusal(id: string): string | undefined;
+  sourceDataDir(id: string): string;
+  isFallbackRun(id: string): boolean;
+  hasFallbackRun(id: string): boolean;
+  runOwnership(id: string): RunOwnership | undefined;
 }
 
-/** The hold that keeps a run loaded while a process works on it. Not in the spec's table: retention needs it. */
+/** The adoption of a dead owner's or a fallback family, and the runs other processes claim (`runs/run-claims-topic.ts`, `store.claims`). */
+export interface RunClaims {
+  adoptFamily(id: string, opts?: { stop?: boolean }): string | undefined;
+  adoptFallbackFamily(id: string): boolean;
+  listForeignClaimedRunIds(): string[];
+  persistedLiveRunIds(): { live: string[]; foreign: string[] };
+}
+
+/** The hold that keeps a run loaded while a process works on it, and a publish without a write (`runs/run-pins.ts`, `store.runPins`). Not in the spec's table: retention needs it. */
 export interface RunPins {
-  pin: RunStore['pin'];
-  unpin: RunStore['unpin'];
+  pin(id: string, holder: RunPinHolder): RunRecord | undefined;
+  unpin(id: string, holder: RunPinHolder): void;
+  republish(id: string): void;
 }
 
 /** The repository identity a store learns after it opens. */
@@ -215,8 +224,9 @@ export interface RunRepoHandle {
   setRepoHandle: RunStore['setRepoHandle'];
 }
 
-/** Closing the store and writing it out. */
+/** Whether the store opened, closing it and writing it out. */
 export interface StoreHandle {
+  readonly unavailable: RunStore['unavailable'];
   close: RunStore['close'];
   flush: RunStore['flush'];
 }
@@ -231,6 +241,6 @@ export type RunEventInput = Parameters<RunEventLog['appendEvent']>[1];
 /** What `projectLiveTasks` reads: the live task view of a project, over a store or over its files read-only. */
 export interface LiveRunReads {
   listRuns: RunStore['listRuns'];
-  persistedLiveRunIds: RunStore['persistedLiveRunIds'];
+  readonly claims: Pick<RunClaims, 'persistedLiveRunIds'>;
   getRun: RunStore['getRun'];
 }
