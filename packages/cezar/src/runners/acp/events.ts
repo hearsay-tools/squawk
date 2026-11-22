@@ -151,8 +151,9 @@ export class AcpEvents {
   }
 
   /** v1 `text` is one whole assistant block, as `V1TextCoalescer` documents: a marker split
-   *  across chunks must reach the server's per-event marker strip in one piece. */
-  private flush(): void {
+   *  across chunks must reach the server's per-event marker strip in one piece. The session
+   *  also flushes when the wire closes: an agent-started turn has no prompt to finish it. */
+  flush(): void {
     if (this.block?.kind === 'message' && this.block.text) this.sink.event?.({ type: 'text', text: this.block.text });
     if (this.block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...this.block } });
     this.block = undefined;
