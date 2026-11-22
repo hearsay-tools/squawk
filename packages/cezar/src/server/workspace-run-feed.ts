@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { toRunSummary, type ProcessUsage, type RunSummary } from '@open-mercato/cezar-contract/runs';
-import type { RunLifecycleSource } from '../runs/lifecycle.ts';
+import type { RunLifecycleSource, RunUpdateSource } from '../runs/lifecycle.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { ProjectContext } from './project-context.ts';
 
@@ -23,6 +23,19 @@ export type WorkspaceRunFeedMode = 'full' | 'summary';
 
 /** Writes one SSE frame. The caller owns the stream; the feed never awaits it. */
 export type WorkspaceFrameWriter = (event: string, data: string) => void;
+
+/** A `run.created` or `run.updated` payload, as a record feed reads it. */
+export type RunWrite = { run: RunRecord; source?: RunUpdateSource };
+
+/**
+ * The record a feed sends for a run write: the store's current record, as the emitter's live
+ * record was. A listener that ran before the feed may have written the run again inside this
+ * publish, and the payload's `run` does not show that write. A `conflict` sends the payload, which
+ * is the record the conflict installed: reading a run the store does not hold would load it.
+ */
+export function currentRecord(store: Pick<FeedStore, 'getRun'>, { run, source }: RunWrite): RunRecord {
+  return source === 'conflict' ? run : store.getRun(run.id) ?? run;
+}
 
 /** What the feed reads off a project store: its run writes and deletes, and run ownership. */
 export interface FeedStore {
@@ -119,7 +132,8 @@ export function createWorkspaceRunFeed(deps: WorkspaceRunFeedDeps): WorkspaceRun
 
   const attach = (project: string, store: FeedStore): void => {
     if (attached.has(project)) return;
-    const onRun = ({ run }: { run: RunRecord }): void => {
+    const onRun = (write: RunWrite): void => {
+      const run = currentRecord(store, write);
       seq += 1;
       const current = seq;
       broadcast({

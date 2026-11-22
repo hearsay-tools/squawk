@@ -124,10 +124,11 @@ export class ProviderRuntimeAuthObserver {
     private readonly home: Home,
   ) {}
 
-  watch(store: RunStore): void {
-    if (this.watched.has(store)) return;
+  /** Returns the unsubscribe on the first watch of `store`, and a no-op on a repeat. */
+  watch(store: RunStore): () => void {
+    if (this.watched.has(store)) return () => {};
     this.watched.add(store);
-    watchProviderRuntimeAuthFailures(store, this.providerAuth, this.onProviderStatus, this.resolveProfile, this.home);
+    return watchProviderRuntimeAuthFailures(store, this.providerAuth, this.onProviderStatus, this.resolveProfile, this.home);
   }
 }
 

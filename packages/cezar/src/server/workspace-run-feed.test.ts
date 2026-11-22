@@ -1,6 +1,6 @@
 import { workspaceReadyEventSchema, workspaceRunDeletedEventSchema, workspaceRunSummaryEventSchema } from '@open-mercato/cezar-contract/workspace-events';
 import { toRunSummary, type ProcessUsage, type RunSummary } from '@open-mercato/cezar-contract/runs';
-import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { publishRunWrite, RunLifecycle, snapshotRun } from '../runs/lifecycle.ts';
 import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
@@ -120,6 +120,29 @@ describe('workspace run feed (hearsay-tools/cezarion#2730)', () => {
     ]);
     expect(summary.frames.map((frame) => frame.event)).toEqual(['run-summary', 'run-deleted']);
     expect(other.frames[0]!.data).toBe(summary.frames[0]!.data);
+  });
+
+  it("sends the store's current record when an earlier listener wrote the run again inside the publish", () => {
+    const h = harness();
+    h.boot.runs.set('a', record('a'));
+    // Subscribed before the feed, as the run manager's reconciler is: a run that failed loses its
+    // open waits in a nested write.
+    h.boot.lifecycle.subscribe({
+      'run.updated': ({ run }) => { if (run.status === RUN_STATUS.failed && run.waits?.length) h.boot.put({ ...run, waits: [] }); },
+    });
+    const full = h.open('full');
+    h.boot.put(record('a', { status: RUN_STATUS.failed, waits: [makeTimerWait()] }));
+    const reconciled = JSON.stringify({ ...record('a', { status: RUN_STATUS.failed, waits: [] }), project: 'boot' });
+    expect(full.frames).toEqual([{ event: 'run', data: reconciled }, { event: 'run', data: reconciled }]);
+  });
+
+  it('sends the record a conflict installed, not a read of the store', () => {
+    const h = harness();
+    h.boot.runs.set('a', record('a', { title: 'held' }));
+    const full = h.open('full');
+    const installed = record('a', { title: 'installed' });
+    h.boot.lifecycle.publish('run.updated', { run: installed, before: record('a'), source: 'conflict' });
+    expect(full.frames).toEqual([{ event: 'run', data: JSON.stringify({ ...installed, project: 'boot' }) }]);
   });
 
   it('clears a stopped project once in summary mode and never in legacy mode', () => {

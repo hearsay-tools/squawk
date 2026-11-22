@@ -247,7 +247,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { createProject, listGithubOwners, type CommandRunner } from './create-project.ts';
-import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
+import { createWorkspaceRunFeed, currentRecord, type RunWrite } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
@@ -3725,8 +3725,8 @@ export function createApp(deps: ServerDeps) {
       return streamSSENoBuffer(c, async (stream) => {
         const controller = new AbortController();
         const stop = () => controller.abort();
-        const onRun = ({ run }: { run: RunRecord }) => {
-          if (run.id === id) void stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
+        const onRun = (write: RunWrite) => {
+          if (write.run.id === id) void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
         };
         const unsubscribe = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun });
         stream.onAbort(() => { stop(); unsubscribe(); });
@@ -3764,7 +3764,7 @@ export function createApp(deps: ServerDeps) {
     .get('/events', (c) => {
       const { store } = c.get('project');
       return streamSSENoBuffer(c, async (stream) => {
-        const onRun = ({ run }: { run: RunRecord }) => void stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
+        const onRun = (write: RunWrite) => void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
         const onDeleted = ({ runId: id }: { runId: string }) =>
           void stream.writeSSE({
             event: 'run-deleted',
