@@ -6,7 +6,7 @@ import type { MiddlewareHandler } from 'hono';
 const zip = promisify(gzip);
 const brotli = promisify(brotliCompress);
 type Encoding = 'br' | 'gzip';
-type Asset = { raw: Buffer; encoded: Map<Encoding, Buffer> };
+type Asset = { raw: Buffer<ArrayBuffer>; encoded: Map<Encoding, Buffer<ArrayBuffer>> };
 
 /** Respect explicit exclusions, wildcard qualities and relative preferences. */
 function encoding(header: string): Encoding | undefined {
@@ -30,7 +30,7 @@ function compressible(request: Request, response: Response): boolean {
     /^(text\/(?!event-stream\b)|application\/(?:json|[^;]+\+json|javascript)\b)/i.test(type);
 }
 
-async function compressed(raw: Buffer, coding: Encoding): Promise<Buffer> {
+async function compressed(raw: Buffer<ArrayBuffer>, coding: Encoding): Promise<Buffer<ArrayBuffer>> {
   return coding === 'gzip' ? zip(raw) : brotli(raw, {
     params: { [constants.BROTLI_PARAM_QUALITY]: 4 },
   });
