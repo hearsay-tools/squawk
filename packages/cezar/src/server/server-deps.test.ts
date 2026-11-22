@@ -85,7 +85,7 @@ describe('createProviderStatus', () => {
       modelCatalog: { invalidate } as unknown as RunnerModelCatalog,
       providerAuth: { status } as unknown as ProviderAuthService,
       workspaceConfig: { load, mergeWrite: vi.fn() } as never,
-    });
+    }, testHome());
     return { ...services, status, load, invalidate };
   };
 

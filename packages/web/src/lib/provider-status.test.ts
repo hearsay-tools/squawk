@@ -9,6 +9,10 @@ import {
   parseProviderStatusEventRow,
   parseProviderStatusResponse,
   providerStatusFor,
+  runnableAccount,
+  runnableAccounts,
+  signedOutRunners,
+  uninstalledRunners,
   usableRunners,
 } from './provider-status'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
@@ -377,5 +381,71 @@ describe('providerStatusFor', () => {
     expect(providerStatusFor({
       providers: [{ provider: 'claude', status: 'connected' }],
     } as unknown as ProviderStatusResponse, 'claude')).toBeUndefined()
+  })
+})
+
+describe('runner availability with agent accounts (hearsay-tools/squawk#4116)', () => {
+  // Antigravity-shaped: the default account is signed out, a second account is signed in.
+  const DEFAULT_SIGNED_OUT: ProviderStatusResponse = {
+    providers: [
+      { provider: 'claude', status: 'disconnected', enabled: true },
+      { provider: 'codex', status: 'connected', enabled: true },
+      { provider: 'opencode', status: 'not-installed', enabled: true },
+    ],
+  }
+  const defaultClaude = { provider: 'claude', id: 'default', isDefault: true } as const
+  const work = { provider: 'claude', id: 'work', isDefault: false, status: 'connected' } as const
+  const old = { provider: 'claude', id: 'old', isDefault: false, status: 'disconnected' } as const
+  const unprobed = { provider: 'claude', id: 'new', isDefault: false } as const
+
+  it('keeps a runner usable when its default account is signed out and another account is connected', () => {
+    expect(usableRunners(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, [defaultClaude, work])).toEqual(['claude', 'codex'])
+    expect(signedOutRunners(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, [defaultClaude, work])).toEqual([])
+  })
+
+  it('lists an installed runner with no connected account as signed out, never dropping it', () => {
+    const accounts = [defaultClaude, old, unprobed]
+    expect(usableRunners(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, accounts)).toEqual(['codex'])
+    expect(signedOutRunners(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, accounts)).toEqual(['claude'])
+    // Not-installed stays its own list; a signed-out runner is never counted twice.
+    expect(uninstalledRunners(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE)).toEqual(['opencode'])
+  })
+
+  it('never counts a disabled runner as usable or signed out', () => {
+    const disabled: ProviderStatusResponse = {
+      providers: [{ provider: 'claude', status: 'disconnected', enabled: false }],
+    }
+    expect(usableRunners(disabled, RUNNERS_RESPONSE, [work])).toEqual([])
+    expect(signedOutRunners(disabled, RUNNERS_RESPONSE, [work])).toEqual([])
+  })
+
+  it('offers only accounts not known to be signed out', () => {
+    expect(runnableAccounts(DEFAULT_SIGNED_OUT, [defaultClaude, work, old, unprobed])).toEqual([work, unprobed])
+  })
+
+  it('replaces a signed-out default account with a connected one', () => {
+    const accounts = [defaultClaude, work]
+    // Untouched picker, project follows the default account: name the connected account explicitly.
+    expect(runnableAccount(DEFAULT_SIGNED_OUT, accounts, 'claude', null, undefined)).toBe('work')
+    // An explicit pick of the signed-out default account is replaced too.
+    expect(runnableAccount(DEFAULT_SIGNED_OUT, accounts, 'claude', 'default', undefined)).toBe('work')
+    // The project's selection is connected: follow it and send no key.
+    expect(runnableAccount(DEFAULT_SIGNED_OUT, accounts, 'claude', null, { claude: 'work' })).toBeNull()
+  })
+
+  it('keeps the pick and the project selection when they are signed in', () => {
+    const connected: ProviderStatusResponse = {
+      providers: [{ provider: 'claude', status: 'connected', enabled: true }],
+    }
+    expect(runnableAccount(connected, [defaultClaude, work], 'claude', 'work', undefined)).toBe('work')
+    expect(runnableAccount(connected, [defaultClaude, work], 'claude', null, undefined)).toBeNull()
+    // A signed-out project selection falls back to the connected default account.
+    expect(runnableAccount(connected, [defaultClaude, old], 'claude', null, { claude: 'old' })).toBe('default')
+    // A pick that belongs to another runner is dropped.
+    expect(runnableAccount(connected, [defaultClaude, work], 'codex', 'work', undefined)).toBeNull()
+  })
+
+  it('sends no account when no account of the runner is connected', () => {
+    expect(runnableAccount(DEFAULT_SIGNED_OUT, [defaultClaude, old], 'claude', null, undefined)).toBeNull()
   })
 })

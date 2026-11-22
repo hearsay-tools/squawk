@@ -21,6 +21,11 @@ vi.mock('@/api/queries', () => ({
   useProviderStatus: () => ({ data: providerStatus, isSuccess: true }),
 }))
 
+// The thread's provider gate also reads the run's agent account; these tests use the default account.
+vi.mock('@/api/agent-accounts', () => ({
+  useAgentAccounts: () => ({ accounts: [], repoAccount: undefined }),
+}))
+
 afterEach(cleanup)
 
 beforeEach(() => {

@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffe
 import { cn } from '@/lib/utils'
 
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
-import type { Runner } from '@open-mercato/cezar-api-client'
+import type { ProviderStatus, Runner } from '@open-mercato/cezar-api-client'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -407,6 +407,10 @@ export interface RunnerAccountChoice {
   label: string
   /** The folder, as written. The labels are Squawk's invention; the folder IS the account. */
   configDir: string
+  /** True for the discovered account, whose sign-in state is the provider-status row. */
+  isDefault?: boolean | undefined
+  /** A named account's own sign-in state; absent until the server has probed it. */
+  status?: ProviderStatus['status'] | undefined
 }
 
 /** How one row of the pill's menu is addressed: the agent, and which of its logins. */
@@ -447,11 +451,14 @@ export function RunnerPill({
   icon,
   fieldLabel,
   uninstalled = [],
+  signedOut = [],
 }: {
   runners: readonly Runner[]
   /** Registered runners whose CLI is missing: listed after the choices, greyed out, each a link
    *  to its card on global Settings → Agents. Picking one navigates there and starts nothing. */
   uninstalled?: readonly Runner[]
+  /** Installed runners with no signed-in account: listed the same way, as sign-in links. */
+  signedOut?: readonly Runner[]
   icon?: ReactNode | undefined
   fieldLabel?: boolean | undefined
   value: Runner
@@ -485,7 +492,7 @@ export function RunnerPill({
   // pill pointing at nothing.
   // A disabled pill still opens when it lists a missing CLI: the install links are the way out of
   // "no runner is ready", so they stay reachable while the choices stay locked.
-  const linksOnly = disabled && uninstalled.length > 0
+  const linksOnly = disabled && (uninstalled.length > 0 || signedOut.length > 0)
   const selected = account ?? repoAccount?.[value] ?? DEFAULT_AGENT_ACCOUNT_ID
   const value_ = options.some((option) => option.value === choiceValue(value, selected))
     ? choiceValue(value, selected)
@@ -506,16 +513,21 @@ export function RunnerPill({
         onPick(runner as Runner, picked ?? null)
       }}
       options={options}
-      footer={<UninstalledRunnerLinks runners={uninstalled} />}
+      footer={<UnavailableRunnerLinks uninstalled={uninstalled} signedOut={signedOut} />}
     />
   )
 }
 
-/** Not-installed runners as menu links to their Settings card. Greyed by colour, not opacity, so
- *  the text keeps its contrast. A link, not a radio row: it can never become the task's runner. */
-function UninstalledRunnerLinks({ runners }: { runners: readonly Runner[] }) {
+/** Not-installed and signed-out runners as menu links to their Settings card. Greyed by colour,
+ *  not opacity, so the text keeps its contrast. A link, not a radio row: it can never become the
+ *  task's runner. */
+function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
   const registered = useRunners().data
-  const entries = runnerEntries(registered).filter((entry) => runners.includes(entry.id))
+  const entries = runnerEntries(registered).flatMap((entry) => {
+    if (uninstalled.includes(entry.id)) return [{ id: entry.id, state: 'Not installed', action: 'Install in Settings' }]
+    if (signedOut.includes(entry.id)) return [{ id: entry.id, state: 'Not signed in', action: 'Sign in in Settings' }]
+    return []
+  })
   if (entries.length === 0) return null
   return (
     <>
@@ -526,7 +538,7 @@ function UninstalledRunnerLinks({ runners }: { runners: readonly Runner[] }) {
             <span className="flex min-w-0 flex-col">
               <span className="text-[13px] font-medium text-muted-foreground">{entry.id}</span>
               <span className="text-[11px] text-muted-foreground">
-                Not installed · <span className="font-medium text-accent-text">Install in Settings</span>
+                {entry.state} · <span className="font-medium text-accent-text">{entry.action}</span>
               </span>
             </span>
           </RouterLink>

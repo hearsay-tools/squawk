@@ -13,7 +13,7 @@ import { ResolveConflictsButton } from '@/components/reference-conflict-action'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
-import { usableRunners } from '@/lib/provider-status'
+import { useRunnerAvailability } from '@/api/agent-accounts'
 import { runTitle } from '@/lib/task-groups'
 import {
   isOwnRepoReference,
@@ -90,7 +90,7 @@ function useOpenInChoices(run: ApiRun, canResume: boolean) {
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  const availableRunners = usableRunners(providers.data, registered.data)
+  const availableRunners = useRunnerAvailability().runners
   // The action routes remain authoritative for a stale browser. Once the complete status and the
   // runners list have arrived, hide only unavailable *agent* handoffs; editors, Finder, and file
   // tools stay available because they do not launch a provider.

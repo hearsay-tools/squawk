@@ -1,5 +1,6 @@
 import type { ProviderStatus, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 
 const PROVIDER_STATES = new Set(['connected', 'disconnected', 'not-installed', 'unknown'])
 
@@ -166,20 +167,124 @@ function sameProviderStatusRow(left: ProviderStatus, right: ProviderStatus): boo
     && left.authFailureId === right.authFailureId
 }
 
-/** The registered runners that are enabled and connected, in the runners list's display order.
+/**
+ * One agent account's sign-in state, as the runner pickers read it (spec 2026-07-29-agent-profiles).
+ *
+ * The provider-status row speaks for the DEFAULT account only. A named account carries its own
+ * `status`, absent while the server has not probed it yet.
+ */
+export interface AccountSignIn {
+  provider: Runner
+  id: string
+  isDefault?: boolean | undefined
+  status?: ProviderStatus['status'] | undefined
+}
+
+function namedAccountConnected(accounts: readonly AccountSignIn[], provider: Runner): boolean {
+  return accounts.some((account) => account.provider === provider && !account.isDefault && account.status === 'connected')
+}
+
+/** Installed, and at least one account (the default or a named one) is connected. */
+export function runnerSignedIn(row: ProviderStatus, accounts: readonly AccountSignIn[]): boolean {
+  if (row.status === 'not-installed') return false
+  return row.status === 'connected' || namedAccountConnected(accounts, row.provider)
+}
+
+/** Enabled, installed, and at least one account is connected. */
+function rowUsable(row: ProviderStatus, accounts: readonly AccountSignIn[]): boolean {
+  return row.enabled === true && runnerSignedIn(row, accounts)
+}
+
+function registeredWhere(
+  status: ProviderStatusResponse | undefined,
+  runners: RunnersResponse | undefined,
+  keep: (row: ProviderStatus) => boolean,
+): Runner[] {
+  const rows = completeProviderRows(status)
+  if (rows === null) return []
+  const kept = new Set(rows.filter(keep).map((row) => row.provider))
+  return (runners?.runners ?? []).map((entry) => entry.id).filter((runner) => kept.has(runner))
+}
+
+/** The registered runners a task can start on, in the runners list's display order: enabled,
+ *  installed, and signed in on at least one account. Pass the agent accounts, or a runner whose
+ *  default account is signed out vanishes even when another of its accounts is connected.
  *  Empty until both the provider status and the runners list have answered. */
 export function usableRunners(
   status: ProviderStatusResponse | undefined,
   runners: RunnersResponse | undefined,
+  accounts: readonly AccountSignIn[] = [],
 ): Runner[] {
-  const rows = completeProviderRows(status)
-  if (rows === null) return []
-  const usable = new Set(
-    rows
-      .filter((row) => row.enabled && row.status === 'connected')
-      .map((row) => row.provider),
+  return registeredWhere(status, runners, (row) => rowUsable(row, accounts))
+}
+
+/** The registered runners that are enabled and installed but have no connected account. Runner
+ *  pickers list them greyed out, as links to their global Settings card, so a signed-out runner
+ *  never disappears from the picker. */
+export function signedOutRunners(
+  status: ProviderStatusResponse | undefined,
+  runners: RunnersResponse | undefined,
+  accounts: readonly AccountSignIn[] = [],
+): Runner[] {
+  return registeredWhere(
+    status,
+    runners,
+    (row) => row.enabled === true && row.status !== 'not-installed' && !rowUsable(row, accounts),
   )
-  return (runners?.runners ?? []).map((entry) => entry.id).filter((runner) => usable.has(runner))
+}
+
+/** True when `account` is KNOWN to be signed out. The default account reads the provider row; a
+ *  named account its own status, and one not probed yet is not counted as signed out. */
+function accountSignedOut(status: ProviderStatusResponse | undefined, account: AccountSignIn): boolean {
+  if (account.isDefault || account.id === DEFAULT_AGENT_ACCOUNT_ID) {
+    const row = providerStatusFor(status, account.provider)
+    return row !== undefined && row.status !== 'connected'
+  }
+  return account.status !== undefined && account.status !== 'connected'
+}
+
+function accountConnected(status: ProviderStatusResponse | undefined, account: AccountSignIn): boolean {
+  if (account.isDefault || account.id === DEFAULT_AGENT_ACCOUNT_ID) {
+    return providerStatusFor(status, account.provider)?.status === 'connected'
+  }
+  return account.status === 'connected'
+}
+
+/** The accounts a picker may offer: every account not known to be signed out. A signed-out
+ *  account is never a row, so a task cannot be started on it from the picker. */
+export function runnableAccounts<T extends AccountSignIn>(
+  status: ProviderStatusResponse | undefined,
+  accounts: readonly T[],
+): T[] {
+  return accounts.filter((account) => !accountSignedOut(status, account))
+}
+
+/**
+ * The account a start on `runner` sends as `agentProfile`.
+ *
+ * - The user's pick, when it belongs to `runner` and is not signed out.
+ * - `null` (follow the project's selection) when the account the selection resolves to is not
+ *   signed out. An untouched picker keeps sending no key, as before.
+ * - Otherwise the first connected account of `runner`, named explicitly, so the task never starts
+ *   on a signed-out account the server would pick by default.
+ */
+export function runnableAccount(
+  status: ProviderStatusResponse | undefined,
+  accounts: readonly AccountSignIn[],
+  runner: Runner,
+  picked: string | null | undefined,
+  repoAccount: Partial<Record<Runner, string>> | undefined,
+): string | null {
+  const own = accounts.filter((account) => account.provider === runner)
+  const pickedAccount = own.find((account) => account.id === picked)
+  if (pickedAccount && !accountSignedOut(status, pickedAccount)) return pickedAccount.id
+  const selected = repoAccount?.[runner]
+  const followed = own.find((account) => account.id === selected)
+    ?? { provider: runner, id: DEFAULT_AGENT_ACCOUNT_ID, isDefault: true }
+  if (!accountSignedOut(status, followed)) return null
+  // Listing order: the default account first, then the named ones.
+  const connected = own.find((account) => accountConnected(status, account))
+  return connected?.id ?? null
 }
 
 export function providerStatusFor(
@@ -197,8 +302,5 @@ export function uninstalledRunners(
   status: ProviderStatusResponse | undefined,
   runners: RunnersResponse | undefined,
 ): Runner[] {
-  const rows = completeProviderRows(status)
-  if (rows === null) return []
-  const missing = new Set(rows.filter((row) => row.status === 'not-installed').map((row) => row.provider))
-  return (runners?.runners ?? []).map((entry) => entry.id).filter((runner) => missing.has(runner))
+  return registeredWhere(status, runners, (row) => row.status === 'not-installed')
 }

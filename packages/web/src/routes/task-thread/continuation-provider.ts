@@ -2,7 +2,7 @@ import { useConfig, useProviderStatus } from '@/api/queries'
 import { runnerIds, useRunners } from '@/api/runners'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
-import { usableRunners } from '@/lib/provider-status'
+import { useRunnerAvailability } from '@/api/agent-accounts'
 import { resolveRunner } from '@/routes/new-task-form'
 import { isStoppedBeforeStarting } from './run-actions'
 
@@ -51,14 +51,16 @@ function useProviderSources() {
 
 /** One provider decision for every UI path that reopens an existing agent session. */
 export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null) {
-  const { providers, registered, providersPending, providersError, providersReady } = useProviderSources()
+  const { registered, providersPending, providersError, providersReady } = useProviderSources()
   const config = useConfig()
   const untouched = isStoppedBeforeStarting(run)
   // A task saved on a removed runner has no runner of its own: it starts on the project's default
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
   const removed = run.removedRunner !== undefined
   const needsConfig = (untouched && !run.runner) || removed
-  const runners = usableRunners(providers.data, registered.data)
+  // A runner counts when ANY of its accounts is signed in, not only the default one
+  // (hearsay-tools/squawk#4116); the server refuses a continuation on a signed-out account.
+  const { runners, signedOut } = useRunnerAvailability()
   const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
@@ -78,6 +80,7 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
 
   return {
     runners,
+    signedOut,
     currentRunner,
     runner,
     currentRunnerConnected,

@@ -153,7 +153,7 @@ describe('runHeadless', () => {
     expect(f.status).toHaveBeenCalledOnce();
     expect(f.deps.loadWorkspaceConfig).toHaveBeenCalledWith(f.home.workspaceConfig);
     expect(f.deps.applyProviderEnablement).toHaveBeenCalledWith({ providers: [] }, ['claude']);
-    expect(f.deps.unavailableProviderMessage).toHaveBeenCalledWith(['codex'], { providers: [] });
+    expect(f.deps.unavailableProviderMessage).toHaveBeenCalledWith(['codex'], { providers: [] }, new Map());
     expect(f.deps.unavailableProviderMessage).toHaveBeenCalledBefore(f.deps.openStore);
   });
 

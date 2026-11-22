@@ -197,7 +197,9 @@ describe('the hand-to-agent backend pills (#401)', () => {
       name: /Run agent on this issue/,
     })
     await waitFor(() => expect(run.disabled).toBe(false))
-    expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
+    // The signed-out runners show as sign-in links, so the pill opens (hearsay-tools/squawk#4116);
+    // codex stays the only choice.
+    expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull()
     fireEvent.click(run)
 
     await waitFor(() => expect(postedRun(sent)).toBeDefined())
@@ -222,7 +224,9 @@ describe('the hand-to-agent backend pills (#401)', () => {
       name: /Run agent on this issue/,
     })
     await waitFor(() => expect(run.disabled).toBe(false))
-    expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
+    // The signed-out runners show as sign-in links, so the pill opens (hearsay-tools/squawk#4116);
+    // codex stays the only choice.
+    expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull()
     fireEvent.click(run)
 
     await waitFor(() => expect(postedRun(sent)).toBeDefined())

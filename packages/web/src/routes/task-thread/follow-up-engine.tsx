@@ -224,6 +224,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
             runners={runners}
+            signedOut={continuation.signedOut}
             value={runner}
             onPick={(next) => {
               // Changing the AGENT invalidates the model pick: presets are per-runner.

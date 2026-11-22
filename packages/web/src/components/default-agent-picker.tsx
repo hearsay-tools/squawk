@@ -1,4 +1,4 @@
-import type { AgentProfile, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
+import type { AgentProfile, ProviderStatus, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
 import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { cn } from '@/lib/utils'
 import { providerStatusFor } from '@/lib/provider-status'
@@ -26,6 +26,9 @@ export interface AgentPickerRow {
   label: string
   desc: string
   missing: boolean
+  /** A named account's own sign-in state from the listing; absent for the default account (its
+   *  state is the provider row) and for an account the server has not probed yet. */
+  accountStatus?: ProviderStatus['status'] | undefined
 }
 
 /** Build the rows once, so the caller's `checked` logic and the render agree by construction. */
@@ -46,6 +49,7 @@ export function agentPickerRows(profiles: readonly AgentProfile[], runners: Runn
       // to say so is where the choice is made.
       desc: login.exists ? login.configDir : `${login.configDir} — folder not created yet`,
       missing: !login.exists,
+      ...(login.isDefault || login.status === undefined ? {} : { accountStatus: login.status.status }),
     }))
   })
 }
@@ -58,13 +62,17 @@ export const hasAgentAccounts = (rows: readonly AgentPickerRow[], runners: Runne
 export function providerChoice(
   providerStatus: { data?: ProviderStatusResponse | undefined; isPending: boolean; isError: boolean },
   runner: Runner,
+  accountStatus?: ProviderStatus['status'] | undefined,
 ): { providerConnected: boolean; providerReason: string | undefined } {
   const provider = providerStatusFor(providerStatus.data, runner)
+  // A named account's own state replaces the default account's row (hearsay-tools/squawk#4116).
+  const signedIn = provider !== undefined && provider.status !== 'not-installed'
+    && (accountStatus ?? provider.status) === 'connected'
   const providerConnected =
     !providerStatus.isPending &&
     !providerStatus.isError &&
     provider?.enabled === true &&
-    provider.status === 'connected'
+    signedIn
   const providerReason = providerStatus.isPending
     ? 'Checking provider authentication…'
     : providerStatus.isError
@@ -117,7 +125,7 @@ export function DefaultAgentPicker({
       )}
     >
       {rows.map((row) => {
-        const { providerConnected, providerReason } = providerChoice(providerStatus, row.runner.id)
+        const { providerConnected, providerReason } = providerChoice(providerStatus, row.runner.id, row.accountStatus)
         const hasAccountChoice = rows.filter((other) => other.runner.id === row.runner.id).length > 1
         const checked = row.runner.id === runner && row.account === accountFor(row.runner.id)
         return (

@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato/cezar-api-client'
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
-import { useConfig, useProviderStatus, useRunnerModels, useWorkflows } from '@/api/queries'
+import { useConfig, useRunnerModels, useWorkflows } from '@/api/queries'
 import { runnerPickerLabel, useRunners } from '@/api/runners'
 import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from '@/lib/project-router'
-import { usableRunners } from '@/lib/provider-status'
+import { useRunnerAvailability } from '@/api/agent-accounts'
 import { modelsForRunner } from '../new-task-form'
 import { CopyAsCliCard } from './copy-as-cli-card'
 import { fromDefinition, toCreateBody, toUpdateBody, type AutomationDraft } from './editor-draft'
@@ -295,13 +295,13 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
  *  "whatever the project defaults to when the run starts", so the options start with that. */
 function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: Partial<AutomationDraft>) => void }) {
   const workflows = useWorkflows()
-  const providers = useProviderStatus()
+  const usable = useRunnerAvailability().runners
   const config = useConfig()
   const registered = useRunners()
   const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
   const catalog = useRunnerModels(effectiveRunner)
   const names = [...new Set([...(workflows.data?.workflows ?? []).map((workflow) => workflow.name), ...(draft.workflow ? [draft.workflow] : [])])]
-  const runners = [...new Set([...usableRunners(providers.data, registered.data), ...(draft.runner ? [draft.runner] : [])])]
+  const runners = [...new Set([...usable, ...(draft.runner ? [draft.runner] : [])])]
   const models = modelsForRunner(effectiveRunner, registered.data, catalog.data, [draft.model])
   const modelLabel = models.find((model) => model.id === (draft.model ?? ''))?.label ?? draft.model ?? 'auto'
   const icon = (Icon: typeof CpuIcon) => <Icon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />

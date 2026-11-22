@@ -7,6 +7,7 @@ import {
   useWorkspaceUiState,
   workspaceQueryKeys,
 } from '@/api/queries'
+import { useAccountSignIns } from '@/api/agent-accounts'
 import { useRunners } from '@/api/runners'
 import type { WorkspaceUiState } from '@open-mercato/cezar-api-client'
 import { ProviderBanner } from '@/components/provider-banner'
@@ -25,6 +26,7 @@ function workspaceUiState(value: unknown): WorkspaceUiState | undefined {
 export function ProviderBannerContainer() {
   const providers = useProviderStatus()
   const runners = useRunners().data
+  const accounts = useAccountSignIns()
   const uiState = useWorkspaceUiState()
   const queryClient = useQueryClient()
   const writeChain = useRef<Promise<unknown>>(Promise.resolve())
@@ -93,6 +95,7 @@ export function ProviderBannerContainer() {
         runners,
       )}
       onDismissAuthFailures={dismiss}
+      accounts={accounts}
     />
   )
 }

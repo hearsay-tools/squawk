@@ -1,7 +1,17 @@
-import type { Runner } from '@open-mercato/cezar-api-client'
+import { useQueries } from '@tanstack/react-query'
+import type { ProviderStatus, Runner } from '@open-mercato/cezar-api-client'
 
-import { useAgentProfiles, useRepo } from '@/api/queries'
+import { getAgentAccountStatus } from '@/api/client'
+import { useAgentProfiles, useProviderStatus, useRepo, workspaceQueryKeys } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
+import {
+  runnableAccount,
+  runnableAccounts,
+  signedOutRunners,
+  uninstalledRunners,
+  usableRunners,
+} from '@/lib/provider-status'
 
 /**
  * The agent accounts a runner pill needs (spec 2026-07-29-agent-profiles), in ONE place.
@@ -20,15 +30,54 @@ export interface AgentAccountChoices {
   repoAccount?: Partial<Record<Runner, string>> | undefined
 }
 
+/**
+ * The sign-in state of every NAMED account the listing served without one, so a runner picker can
+ * tell whether a runner with a signed-out default account still has a connected account. Asks the
+ * same cached per-account query the Accounts pane asks, so the two share one answer.
+ */
+export function useNamedAccountStatuses(
+  profiles: readonly { id: string; provider: string; isDefault: boolean; status?: unknown }[],
+): ReadonlyMap<string, ProviderStatus['status']> {
+  const missing = profiles.filter((profile) => !profile.isDefault && profile.status === undefined)
+  const results = useQueries({
+    queries: missing.map((profile) => ({
+      queryKey: workspaceQueryKeys.agentAccountStatus(profile.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => getAgentAccountStatus(profile.id, { signal }),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  })
+  const statuses = new Map<string, ProviderStatus['status']>()
+  missing.forEach((profile, index) => {
+    const status = results[index]?.data?.status?.status
+    if (status !== undefined) statuses.set(profile.id, status)
+  })
+  return statuses
+}
+
+/** Every login for every runner, each with its sign-in state: the listing's cached answer, else
+ *  the per-account status route's. Workspace-wide: it reads no project. */
+export function useAccountSignIns(): RunnerAccountChoice[] {
+  const profiles = useAgentProfiles()
+  const listed = profiles.data?.profiles ?? []
+  const probed = useNamedAccountStatuses(listed)
+  return listed.map((profile) => {
+    const status = profile.status?.status ?? probed.get(profile.id)
+    return {
+      provider: profile.provider as Runner,
+      id: profile.id,
+      label: profile.label,
+      configDir: profile.configDir,
+      isDefault: profile.isDefault,
+      ...(status === undefined ? {} : { status }),
+    }
+  })
+}
+
 export function useAgentAccounts(): AgentAccountChoices {
   const profiles = useAgentProfiles()
   const repo = useRepo()
-  const accounts = (profiles.data?.profiles ?? []).map((profile) => ({
-    provider: profile.provider as Runner,
-    id: profile.id,
-    label: profile.label,
-    configDir: profile.configDir,
-  }))
+  const accounts = useAccountSignIns()
   // Selections are keyed by the project's realpath'd ROOT — the key the store itself uses — and
   // `useRepo` is project-scoped, so it already answers for the ACTIVE project; going through the
   // projects list would mean re-deriving a mapping the API has already done.
@@ -47,4 +96,39 @@ export function hasAccountChoice(
   runner: Runner,
 ): boolean {
   return accounts.filter((choice) => choice.provider === runner).length > 1
+}
+
+/**
+ * Which runners a start picker offers, and with which accounts (hearsay-tools/squawk#4116).
+ *
+ * The provider-status row speaks for the DEFAULT account only, so it cannot say alone whether a
+ * runner can run: a runner whose default account is signed out is still usable when another of its
+ * accounts is connected. Every start surface reads this one answer, so none of them can drop such a
+ * runner or start a task on a signed-out account.
+ */
+export interface RunnerAvailability extends AgentAccountChoices {
+  /** Enabled, installed, and signed in on at least one account. */
+  runners: Runner[]
+  /** Registered runners whose CLI is missing: links to their Settings card. */
+  uninstalled: Runner[]
+  /** Enabled and installed, but no account is signed in: links to their Settings card. */
+  signedOut: Runner[]
+  /** The accounts a picker may offer as rows: none known to be signed out. */
+  accounts: readonly RunnerAccountChoice[]
+  /** The `agentProfile` a start on `runner` sends; `null` follows the project's selection. */
+  accountFor: (runner: Runner, picked: string | null | undefined) => string | null
+}
+
+export function useRunnerAvailability(): RunnerAvailability {
+  const providers = useProviderStatus()
+  const registered = useRunners()
+  const { accounts, repoAccount } = useAgentAccounts()
+  return {
+    runners: usableRunners(providers.data, registered.data, accounts),
+    uninstalled: uninstalledRunners(providers.data, registered.data),
+    signedOut: signedOutRunners(providers.data, registered.data, accounts),
+    accounts: runnableAccounts(providers.data, accounts),
+    repoAccount,
+    accountFor: (runner, picked) => runnableAccount(providers.data, accounts, runner, picked, repoAccount),
+  }
 }

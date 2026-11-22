@@ -2,8 +2,11 @@ import { controlLocation } from '@open-mercato/cezar-api-client/contract/control
 import { providerForActiveRun } from '@open-mercato/cezar-api-client/contract/active-provider'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import type { ApiRun, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
+import { latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { useAgentAccounts } from '@/api/agent-accounts'
 import { useProviderStatus } from '@/api/queries'
 import { runnerDisplayName, useRunners } from '@/api/runners'
+import type { RunnerAccountChoice } from '@/components/picker-pill'
 import { providerStatusFor } from '@/lib/provider-status'
 
 /** Mirrors the server's providerForExistingRun for an override-free POST /continue. */
@@ -11,17 +14,50 @@ export function providerForExistingRun(run: ApiRun): Runner {
   return run.runner ?? 'claude'
 }
 
+/**
+ * The named account a run's next turn on `provider` uses, mirroring the server's `runAccountFor`:
+ * the latest session's account when that session ran on `provider`, else the run's own account when
+ * `provider` is its runner, else the project's selection. `undefined` means the default account.
+ */
+export function runAccountChoice(
+  run: ApiRun,
+  provider: Runner,
+  accounts: readonly RunnerAccountChoice[],
+  repoAccount: Partial<Record<Runner, string>> | undefined,
+): RunnerAccountChoice | undefined {
+  const session = latestSession(run)
+  const recorded = session.sessionId !== undefined && session.backend === provider
+    ? session.profileId ?? run.agentProfile
+    : provider === (run.runner ?? 'claude') ? run.agentProfile : undefined
+  const id = recorded ?? repoAccount?.[provider]
+  const account = accounts.find((choice) => choice.provider === provider && choice.id === id)
+  return account?.isDefault ? undefined : account
+}
+
+type Availability = { provider: Runner; usable: boolean; reason?: string | undefined }
+
 function providerAvailability(
   provider: Runner,
   status: ProviderStatusResponse,
   runners: RunnersResponse,
-): { provider: Runner; usable: boolean; reason?: string | undefined } {
+  account?: RunnerAccountChoice | undefined,
+): Availability {
   const row = providerStatusFor(status, provider)
   if (row?.enabled === false) {
     return {
       provider,
       usable: false,
       reason: `${runnerDisplayName(runners, provider)} is disabled. Enable it in ${controlLocation('providers')}.`,
+    }
+  }
+  // A named account answers for itself: the provider row describes the default account only
+  // (hearsay-tools/squawk#4116). One not probed yet is left to the server's gate.
+  if (account) {
+    if (account.status === undefined || account.status === 'connected') return { provider, usable: true }
+    return {
+      provider,
+      usable: false,
+      reason: `${runnerDisplayName(runners, provider)} account "${account.label}" is not signed in. Sign in in ${controlLocation('providers')}.`,
     }
   }
   if (row?.status !== 'connected') {
@@ -38,16 +74,18 @@ export function activeProviderAvailability(
   run: ApiRun,
   status: ProviderStatusResponse,
   runners: RunnersResponse,
-): { provider: Runner; usable: boolean; reason?: string | undefined } {
-  return providerAvailability(providerForActiveRun(run), status, runners)
+  account?: RunnerAccountChoice | undefined,
+): Availability {
+  return providerAvailability(providerForActiveRun(run), status, runners, account)
 }
 
 export function existingProviderAvailability(
   run: ApiRun,
   status: ProviderStatusResponse,
   runners: RunnersResponse,
-): { provider: Runner; usable: boolean; reason?: string | undefined } {
-  return providerAvailability(providerForExistingRun(run), status, runners)
+  account?: RunnerAccountChoice | undefined,
+): Availability {
+  return providerAvailability(providerForExistingRun(run), status, runners, account)
 }
 
 /** Availability for the same provider the server will use for a live/queued message. */
@@ -55,11 +93,13 @@ export function useActiveProviderAvailability(run: ApiRun) {
   const status = useProviderStatus()
   const runners = useRunners().data
   const provider = providerForActiveRun(run)
+  const { accounts, repoAccount } = useAgentAccounts()
+  const account = runAccountChoice(run, provider, accounts, repoAccount)
   // Do not strand an existing task while the availability query or the runners list is loading
   // or retrying; the server remains the boundary for a stale client. Once a complete response
   // arrives, mirror its fixed action gate exactly.
   return status.isSuccess && status.data && runners
-    ? activeProviderAvailability(run, status.data, runners)
+    ? activeProviderAvailability(run, status.data, runners, account)
     : { provider, usable: true }
 }
 
@@ -68,7 +108,9 @@ export function useExistingProviderAvailability(run: ApiRun) {
   const status = useProviderStatus()
   const runners = useRunners()
   const provider = providerForExistingRun(run)
-  if (status.isSuccess && status.data && runners.data) return existingProviderAvailability(run, status.data, runners.data)
+  const { accounts, repoAccount } = useAgentAccounts()
+  const account = runAccountChoice(run, provider, accounts, repoAccount)
+  if (status.isSuccess && status.data && runners.data) return existingProviderAvailability(run, status.data, runners.data, account)
   if (status.isError || runners.isError) {
     return {
       provider,

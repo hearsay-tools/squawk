@@ -661,7 +661,7 @@ export function createApp(deps: ServerDeps) {
   // The host-wide services and the provider closures built on them live in `./server-deps.ts`.
   const { skillCatalog, modelCatalog, providerAuth, workspaceConfig, openTerminal, openFile, openApp, detectEnvironment } = resolveServerDeps(deps, bootRoot);
   const { providerStatus, providerActionError, invalidateHostModels } =
-    createProviderStatus({ modelCatalog, providerAuth, workspaceConfig });
+    createProviderStatus({ modelCatalog, providerAuth, workspaceConfig }, deps.home);
 
   const workspaceProjects = deps.workspaceProjects ?? createWorkspaceProjects({ bootRoot, bootProjectId, home: deps.home });
   const { resolveBootProject } = workspaceProjects;
@@ -2506,7 +2506,7 @@ export function createApp(deps: ServerDeps) {
     .post('/plan', jsonZodValidator(planSchema), async (c) => {
       const { root: repoRoot, manager } = c.get('project');
       const parsed = { data: c.req.valid('json') };
-      const blocked = await providerActionError([(await loadConfig(repoRoot, deps.home)).defaultRunner]);
+      const blocked = await providerActionError([(await loadConfig(repoRoot, deps.home)).defaultRunner], { repoRoot });
       if (blocked) return c.json({ error: blocked }, 409);
       return c.json(await planChain(repoRoot, parsed.data.task, skillCatalog, deps.home, manager.createRunner));
     });
@@ -2929,7 +2929,7 @@ export function createApp(deps: ServerDeps) {
       if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
       const { workflow } = resolved;
       const runner = body.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : registeredRunnerId(body.runner);
-      const blocked = await providerGateRefusal(providerActionError, workflow, runner);
+      const blocked = await providerGateRefusal(providerActionError, workflow, runner, { repoRoot, picks: { [runner]: body.agentProfile } });
       if (blocked) return c.json({ error: blocked.error }, blocked.status);
       const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, runner, body.agentProfile);
       if (badProfile) return c.json({ error: badProfile.error }, badProfile.status);
@@ -3056,7 +3056,7 @@ export function createApp(deps: ServerDeps) {
       // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
       // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
       if (run.status !== 'queued') {
-        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))]);
+        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))], { repoRoot: c.get('project').root, run });
         if (blocked) return c.json({ error: blocked }, 409);
       }
       const content: PastedContent[] = [
@@ -3198,7 +3198,7 @@ export function createApp(deps: ServerDeps) {
       const required = untouched
         ? providersRequiredByWorkflow(run.workflowDef!, provider)
         : [provider];
-      const blocked = await providerActionError(required);
+      const blocked = await providerActionError(required, { repoRoot, run });
       if (blocked) return c.json({ error: blocked }, 409);
       const result = manager.continueRun(id, {
         text: parsed.data.text,
@@ -3222,7 +3222,7 @@ export function createApp(deps: ServerDeps) {
       const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
-      const blocked = await providerActionError([backend]);
+      const blocked = await providerActionError([backend], { repoRoot: project.root, picks: { [backend]: profileId } });
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();
       const refusal = fallbackProjectWriteError(cwd);

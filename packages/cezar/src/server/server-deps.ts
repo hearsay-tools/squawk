@@ -25,6 +25,9 @@ import { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import type { ProjectContext, ProjectContexts } from './project-context.ts';
 import { unavailableProviderMessage } from './provider-action-gate.ts';
+import { probeNamedAccounts, scopeRunAccounts, type AccountScope } from './run-accounts.ts';
+import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
+import type { Home } from '../home/home.ts';
 import type { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
 import type { ServerDeps, WorkspaceEventBus } from './server.ts';
 
@@ -57,7 +60,7 @@ export function resolveServerDeps(deps: Pick<ServerDeps, HostServiceKey> & Pick<
 }
 
 /** The host-wide provider closures the provider, models and start-gate routes share. */
-export function createProviderStatus(services: Pick<HostServices, 'modelCatalog' | 'providerAuth' | 'workspaceConfig'>) {
+export function createProviderStatus(services: Pick<HostServices, 'modelCatalog' | 'providerAuth' | 'workspaceConfig'>, home: Home) {
   const { modelCatalog, providerAuth, workspaceConfig } = services;
   const invalidateHostModels = (provider: ProviderId): void => {
     modelCatalog.invalidate(provider);
@@ -78,20 +81,32 @@ export function createProviderStatus(services: Pick<HostServices, 'modelCatalog'
   /**
    * Verify cached provider unavailability before refusing a start. Settings-disabled providers
    * need no probe. Runtime incidents remain authoritative until an explicit retry or matching
-   * native verification clears them.
+   * native verification clears them. `scope` says which account each provider runs on; a named
+   * account's own sign-in state replaces the default account's row (hearsay-tools/squawk#4116).
    */
   const providerActionError = async (
     required: readonly ProviderId[],
+    scope?: AccountScope,
   ): Promise<string | null> => {
-    const known = await providerStatus();
-    const message = unavailableProviderMessage(required, known);
+    // With auth checks off every provider row reads connected; a named account must not re-add a probe.
+    const named = providerAuthChecksDisabled() || scope === undefined
+      ? new Map<ProviderId, ResolvedAgentProfile>()
+      : await scopeRunAccounts(home, required, scope);
+    const check = async (refresh: boolean) => {
+      const [known, statuses] = await Promise.all([
+        providerStatus(refresh ? { refresh: true } : undefined),
+        probeNamedAccounts(providerAuth, named, refresh),
+      ]);
+      return { known, message: unavailableProviderMessage(required, known, statuses) };
+    };
+    const { known, message } = await check(false);
     if (message === null) return null;
     // A DISABLED provider is a settings fact, not a probe result — re-probing it learns nothing and
     // would spawn a CLI to re-read something the user typed.
     const disabled = required.some((provider) =>
       known.providers.find((row) => row.provider === provider)?.enabled === false);
     if (disabled) return message;
-    return unavailableProviderMessage(required, await providerStatus({ refresh: true }));
+    return (await check(true)).message;
   };
   return { providerStatus, providerActionError, invalidateHostModels };
 }

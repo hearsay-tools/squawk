@@ -9,13 +9,14 @@ import { runnerDefinition } from '../core/runner-registry.ts';
 import { terminalExecutable, type resumeCommand } from '../core/runner-cli.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
+import type { AccountScope } from './run-accounts.ts';
 import { readWorktreePath } from './git-changes.ts';
 import type { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import type { openInTerminal } from './open-in-terminal.ts';
 
 interface CliHandoffDeps {
   home: Home;
-  providerActionError: (required: readonly string[]) => Promise<string | null>;
+  providerActionError: (required: readonly string[], scope?: AccountScope) => Promise<string | null>;
   resumeCommand: typeof resumeCommand;
   handoffEnv: (provider: string, profileId: string | undefined) => Promise<{ env: Record<string, string> } | { error: string }>;
   handoffFallbackCommand: (cwd: string, command: string, env: Record<string, string>) => string | null;
@@ -89,14 +90,15 @@ export async function openRunCli(
 ) {
   const refusal = fallbackProjectWriteError(dir);
   if (refusal) return c.json({ error: refusal }, 409);
-  const blocked = await providerActionError([cliRunner]);
-  if (blocked) return c.json({ error: blocked }, 409);
   // A usage-limit hold has no session until its resume (hearsay-tools/cezarion#1236), so it resumes.
   const session = checkout.resumeAllowed ? latestSession(run) : undefined;
   const sessionId = session?.sessionId;
   // An id resumeCommand refuses (open-mercato/cezar#431) degrades to a fresh CLI in the worktree,
   // exactly like a run that never recorded a session.
   const resume = sessionId && cliRunner === session?.backend ? resumeCommand(cliRunner, sessionId) : null;
+  // The gate checks the account the terminal opens on (hearsay-tools/squawk#4116).
+  const blocked = await providerActionError([cliRunner], { repoRoot, picks: { [cliRunner]: resume ? session?.profileId : undefined } });
+  if (blocked) return c.json({ error: blocked }, 409);
   // A resume uses the session account; a fresh CLI uses the project's account.
   const account = resume
     ? { command: resume, ...await handoffEnv(cliRunner, session?.profileId) }
