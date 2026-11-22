@@ -17,8 +17,10 @@ const CHECKED = ['delegation', 'waits'];
 
 type Node = { type: string; [key: string]: unknown };
 
-const parseFile = (path: string) =>
-  parse(readFileSync(path, 'utf8'), { sourceType: 'module', plugins: ['typescript', ...(path.endsWith('.tsx') ? ['jsx' as const] : [])] }).program.body as unknown as Node[];
+const parseSource = (path: string, text: string) =>
+  parse(text, { sourceType: 'module', plugins: ['typescript', ...(path.endsWith('.tsx') ? ['jsx' as const] : [])] }).program.body as unknown as Node[];
+
+const parseFile = (path: string) => parseSource(path, readFileSync(path, 'utf8'));
 
 const name = (node: Node) => (node.type === 'StringLiteral' ? node.value : node.name) as string;
 
@@ -50,30 +52,49 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Each `<file>: <name> from <module>, owned by <owner>` the Squawk and contract sources take the long way. */
-function indirectImports(): string[] {
-  const owners = new Map(CHECKED.flatMap((module) => [[`${CONTRACT}/${module}`, reExports(module)], [`./${module}.ts`, reExports(module)]]));
-  const contract = join(repo, 'packages/contract/src');
-  const checkedHere = new Set([...CHECKED, 'index'].map((module) => join(contract, `${module}.ts`)));
+type Owners = Map<string, Map<string, string>>;
+
+/** Each `<file>: <name> from <module>, owned by <owner>` one source file takes the long way. */
+function fileIndirectImports(path: string, text: string, owners: Owners, inContract: boolean): string[] {
   const found: string[] = [];
-  for (const path of [...sourceFiles(join(repo, 'packages/cezar/src')), ...sourceFiles(contract).filter((path) => !checkedHere.has(path))]) {
-    const inContract = path.startsWith(contract);
-    for (const node of parseFile(path)) {
-      const isImport = node.type === 'ImportDeclaration' && node.importKind !== 'type';
-      const isReExport = node.type === 'ExportNamedDeclaration' && node.exportKind !== 'type';
-      const source = (node.source as Node | null | undefined)?.value as string | undefined;
-      const relativeSource = source?.startsWith('./') && !inContract;
-      const moduleOwners = source && !relativeSource ? owners.get(source) : undefined;
-      if (!(isImport || isReExport) || !moduleOwners) continue;
-      for (const s of (node.specifiers ?? []) as Node[]) {
-        if (s.importKind === 'type' || s.exportKind === 'type') continue;
-        const taken = name(((isImport ? s.imported : undefined) ?? s.local) as Node);
-        const owner = moduleOwners.get(taken);
-        if (owner) found.push(`${relative(repo, path)}: ${taken} from ${source}, owned by ${owner}`);
-      }
+  for (const node of parseSource(path, text)) {
+    const isImport = node.type === 'ImportDeclaration' && node.importKind !== 'type';
+    const isReExport = node.type === 'ExportNamedDeclaration' && node.exportKind !== 'type';
+    const source = (node.source as Node | null | undefined)?.value as string | undefined;
+    const relativeSource = source?.startsWith('./') && !inContract;
+    const moduleOwners = source && !relativeSource ? owners.get(source) : undefined;
+    if (!(isImport || isReExport) || !moduleOwners) continue;
+    for (const s of (node.specifiers ?? []) as Node[]) {
+      if (s.importKind === 'type' || s.exportKind === 'type') continue;
+      const taken = name(((isImport ? s.imported : undefined) ?? s.local) as Node);
+      const owner = moduleOwners.get(taken);
+      if (owner) found.push(`${relative(repo, path)}: ${taken} from ${source}, owned by ${owner}`);
     }
   }
   return found;
+}
+
+/**
+ * A file can take a name from a checked module only through one of the specifiers, so only such files are parsed.
+ * A specifier written with an escape, such as `'./deleg\u0061tion.ts'`, does not match the text, so a file with a backslash in a `from` string is parsed too.
+ */
+const mayTakeFrom = (text: string, specifiers: string[]) =>
+  specifiers.some((specifier) => text.includes(specifier)) || /\bfrom\s*(['"])[^'"\n]*\\/.test(text);
+
+/** Each `<file>: <name> from <module>, owned by <owner>` the Squawk and contract sources take the long way. */
+function indirectImports(): string[] {
+  const owners: Owners = new Map(CHECKED.flatMap((module) => {
+    const moduleOwners = reExports(module);
+    return [[`${CONTRACT}/${module}`, moduleOwners], [`./${module}.ts`, moduleOwners]];
+  }));
+  const specifiers = [...owners.keys()].flatMap((source) => [`'${source}'`, `"${source}"`]);
+  const contract = join(repo, 'packages/contract/src');
+  const checkedHere = new Set([...CHECKED, 'index'].map((module) => join(contract, `${module}.ts`)));
+  return [...sourceFiles(join(repo, 'packages/cezar/src')), ...sourceFiles(contract).filter((path) => !checkedHere.has(path))].flatMap((path) => {
+    const text = readFileSync(path, 'utf8');
+    if (!mayTakeFrom(text, specifiers)) return [];
+    return fileIndirectImports(path, text, owners, path.startsWith(contract));
+  });
 }
 
 describe('imports from delegation.ts and waits.ts', () => {
@@ -82,6 +103,16 @@ describe('imports from delegation.ts and waits.ts', () => {
     expect(reExports('waits').get('isUsageLimitHold')).toBe('usage-limit-hold');
     expect(reExports('waits').get('WAIT_LIMIT')).toBe('wait-limits');
     expect(reExports('waits').get('computeWaitingOn')).toBe('waiting-on');
+  });
+
+  it('parses a file whose specifier holds an escape', () => {
+    const owners: Owners = new Map([['./delegation.ts', reExports('delegation')]]);
+    const text = "import { agentInputSchema } from './deleg\\u0061tion.ts';\n";
+    expect(mayTakeFrom(text, ["'./delegation.ts'"])).toBe(true);
+    expect(fileIndirectImports(join(repo, 'packages/contract/src/escaped.ts'), text, owners, true)).toEqual([
+      'packages/contract/src/escaped.ts: agentInputSchema from ./delegation.ts, owned by agent-input',
+    ]);
+    expect(mayTakeFrom("import { x } from './other.ts';\n", ["'./delegation.ts'"])).toBe(false);
   });
 
   it('take no re-exported value from them', () => {
