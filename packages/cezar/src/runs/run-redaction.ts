@@ -3,7 +3,7 @@
  * text before they reach disk or the live wire. `RunStore` keeps one of these as `store.redaction`.
  */
 import { productEnv } from '../core/product-env.ts';
-import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
+import { collectSecretValues, redactDeep, redactDeepWith, redactSecrets } from '../core/secret-redaction.ts';
 import type { RunRedaction as RunRedactionPort } from './ports.ts';
 import { redactText } from './record-write-rules.ts';
 import type { RunEvent } from './store.ts';
@@ -13,23 +13,32 @@ export class RunRedaction implements RunRedactionPort {
   private secretValues: readonly string[] | null = null;
   /** Controller-issued tokens never persist, including when host-secret redaction is disabled. */
   private readonly sessionSecrets = new Set<string>();
-  registerSessionSecret(value: string): void { this.sessionSecrets.add(value); }
-  containsSessionSecret(value: string): boolean { return [...this.sessionSecrets].some(secret => value.includes(secret)); }
+  /** `sessionSecrets` in insertion order; rebuilt only when a new secret is registered. */
+  private sessionList: readonly string[] = [];
+  registerSessionSecret(value: string): void {
+    if (this.sessionSecrets.has(value)) return;
+    this.sessionSecrets.add(value);
+    this.sessionList = [...this.sessionSecrets];
+  }
+  containsSessionSecret(value: string): boolean { return this.sessionList.some(secret => value.includes(secret)); }
 
   /**
    * Scrub known credential values / token shapes from an event before it is
    * persisted or fanned out. On by default; `CEZ_REDACT_SECRETS=0` opts out.
    */
   redact<T extends RunEvent>(event: T): T {
-    const safe = this.sessionSecrets.size ? redactDeep(event, [...this.sessionSecrets]) : event;
-    if (productEnv('REDACT_SECRETS') === '0') return safe;
-    return redactDeep(safe, this.hostSecrets());
+    const session = this.sessionList;
+    if (productEnv('REDACT_SECRETS') === '0') return session.length ? redactDeep(event, session) : event;
+    const host = this.hostSecrets();
+    if (!session.length) return redactDeep(event, host);
+    // One copy for both scrubs; each string leaf gets the same two passes in the same order.
+    return redactDeepWith(event, text => redactSecrets(redactSecrets(text, session), host));
   }
 
   /** Best-effort scrub of one free-text string bound for `runs.json`. Honors
    *  the `CEZ_REDACT_SECRETS=0` opt-out itself so every caller inherits it. */
   redactText(text: string): string {
-    return redactText(text, [...this.sessionSecrets], () => this.hostSecrets());
+    return redactText(text, this.sessionList, () => this.hostSecrets());
   }
 
   private hostSecrets(): readonly string[] {
