@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { Home } from '../home/home.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -14,7 +15,7 @@ import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { reclaimWorktrees } from '../runs/retention.ts';
@@ -104,7 +105,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     store.commitDelegation([{ id: hostId, delegation: { role: 'root', permissions: [], receipts: [] } }]);
     const workerId = randomUUID();
     store.createOwnedRun({ title: 'shared', task: 'shared', workflow: 'quick-task', steps: [] }, hostId, randomUUID(), { role: 'worker', permissions: [], parentRunId: hostId,
-      workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'shared', path: store.getRun(hostId)!.worktreePath!, hostRunId: hostId, baselineSha: 'a'.repeat(40) } }, 'b'.repeat(64));
+      workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'shared', path: store.getRun(hostId)!.worktreePath!, hostRunId: hostId, baselineSha: 'a'.repeat(40) } }, 'b'.repeat(64), spawnCapacityRefusal);
     const host = async () => (await getWorktrees()).worktrees.find((w) => w.runId === hostId)!;
     // A worker in the middle of its run, as the selector and the claim read it from the store.
     setRunStatus(store, workerId, RUN_STATUS.waiting);
@@ -175,9 +176,9 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     const oldWorkspace = await createOwnedWorkspace(repoRoot, randomUUID(), sha);
     const newWorkspace = await createOwnedWorkspace(repoRoot, randomUUID(), sha);
     const oldWorker = store.createOwnedRun({ title: 'old worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-      { role: 'worker', parentRunId: parent.id, permissions: [], workspace: oldWorkspace }, 'a'.repeat(64));
+      { role: 'worker', parentRunId: parent.id, permissions: [], workspace: oldWorkspace }, 'a'.repeat(64), spawnCapacityRefusal);
     const newWorker = store.createOwnedRun({ title: 'new worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-      { role: 'worker', parentRunId: parent.id, permissions: [], workspace: newWorkspace }, 'b'.repeat(64));
+      { role: 'worker', parentRunId: parent.id, permissions: [], workspace: newWorkspace }, 'b'.repeat(64), spawnCapacityRefusal);
     setRunStatus(store, oldWorker.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: oldWorkspace.path, branch: oldWorkspace.branch });
     setRunStatus(store, newWorker.id, RUN_STATUS.done, { finishedAt: '2026-07-09T00:00:00Z', worktreePath: newWorkspace.path, branch: newWorkspace.branch });
     for (const id of [oldWorker.id, newWorker.id]) executedWorker(store, id);
@@ -206,7 +207,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     const clean = await createOwnedWorkspace(repoRoot, randomUUID(), sha);
     const worker = (workspace: typeof dirty, seal: string) => {
       const rec = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-        { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, seal);
+        { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, seal, spawnCapacityRefusal);
       setRunStatus(store, rec.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: workspace.path, branch: workspace.branch });
       executedWorker(store, rec.id);
       return rec.id;
@@ -233,6 +234,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       randomUUID(),
       { role: 'worker', parentRunId: parent.id, permissions: [], workspace },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     );
     setRunStatus(store, worker.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: workspace.path, branch: workspace.branch });
     const listed = await getWorktrees();

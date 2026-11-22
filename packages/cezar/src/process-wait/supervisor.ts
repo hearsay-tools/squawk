@@ -1,5 +1,5 @@
 import type { ProcessWaitResult } from '@open-mercato/cezar-contract';
-import { recordedProcessLive } from '../delegation/process-liveness.ts';
+import { recordedProcessLive } from '../core/process-stat.ts';
 import { readExitCode, type ExitFileRoots } from './exit-file.ts';
 
 /**

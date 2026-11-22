@@ -7,6 +7,7 @@
  * (hearsay-tools/cezarion#2938). A test that needs a run imports this kit.
  */
 // Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../built-in-run-slots.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -317,7 +318,7 @@ async function createOwnedInputWorker(
       ? workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step) }))
       : [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] }, parentRunId, randomUUID(), {
     role: 'worker', parentRunId, permissions: [], workspace,
-  }, 'a'.repeat(64), options.identity ?? { kind: 'internal', ...(workflowDef ? { workflowHash: workerWorkflowHash(workflowDef) } : {}) });
+  }, 'a'.repeat(64), spawnCapacityRefusal, options.identity ?? { kind: 'internal', ...(workflowDef ? { workflowHash: workerWorkflowHash(workflowDef) } : {}) });
 }
 
 interface OwnedInputState {

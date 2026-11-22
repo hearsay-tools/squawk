@@ -3,11 +3,11 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { processStartToken, recordedProcessLive } from '../delegation/process-liveness.ts';
+import { processStartToken, recordedProcessLive } from '../core/process-stat.ts';
 import { ProcessWaitSupervisor, probeProcessWait, type ProcessWatchRequest } from './supervisor.ts';
 
-vi.mock('../delegation/process-liveness.ts', async original => {
-  const real = await original<typeof import('../delegation/process-liveness.ts')>();
+vi.mock('../core/process-stat.ts', async original => {
+  const real = await original<typeof import('../core/process-stat.ts')>();
   return { ...real, recordedProcessLive: vi.fn(real.recordedProcessLive) };
 });
 

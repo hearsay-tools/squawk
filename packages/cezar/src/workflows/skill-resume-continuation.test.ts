@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunnerSkill, RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
@@ -302,7 +303,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
       steps: [{ id: 'task', name: WORKER_SKILL, kind: STEP_KIND.agent }],
     }, parent.id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: parent.id, workspace,
-    }, 'a'.repeat(64), { kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) });
+    }, 'a'.repeat(64), spawnCapacityRefusal, { kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) });
 
     manager.enqueueOwnedRun(workerId);
     await vi.waitFor(() => expect(launches.length).toBe(1), { timeout: LAUNCH_WAIT_MS });

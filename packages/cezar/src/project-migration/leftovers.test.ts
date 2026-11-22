@@ -9,7 +9,7 @@ import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { parentFileSnapshotPath, verifyWorkerContext } from '../delegation/context.ts';
 import { ownedWorkflow, workerContextHash, workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { isFallbackProjectPath } from '../project-paths.ts';

@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 
@@ -131,7 +132,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const w = store.createOwnedRun({ title: 'worker', task: 'check', workflow: workflow.name, workflowDef: workflow,
       runner: 'claude', steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.check }] }, parent.id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: parent.id, workspace: owned,
-    }, 'a'.repeat(64), { kind: 'internal', workflowHash: workerWorkflowHash(workflow) });
+    }, 'a'.repeat(64), spawnCapacityRefusal, { kind: 'internal', workflowHash: workerWorkflowHash(workflow) });
     const pidPath = join(workspace(w).path, 'check.pid'); let pid: number | undefined;
     releases.push(() => { if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* already closed */ } } });
     manager.enqueueOwnedRun(w.id); await until(() => readPid(pidPath) !== undefined); pid = requirePid(pidPath);

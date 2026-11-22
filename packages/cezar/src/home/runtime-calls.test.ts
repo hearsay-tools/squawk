@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { runtimeHomes } from './runtime-isolation.testkit.ts';
 import { planChain } from '../planner.ts';
 import { generateRunName } from '../runs/auto-name.ts';
+import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
 import type { AgentRunner } from '../core/agent-runner.ts';
 import { createHostDiscovery } from '../discovery/catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
@@ -24,7 +25,7 @@ it('uses the selected config and account for task naming', async () => {
   const { root, selected } = runtimeHomes();
   Home.seed(selected, selected.workspaceConfig, { agentDefaults: { runner: 'claude' } });
   run.mockResolvedValue({ text: '{"title":"testing home isolation"}' });
-  expect(await generateRunName(root, { task: 'Test home isolation' }, selected, createRunner)).toMatchObject({ titleSummary: 'testing home isolation' });
+  expect(await generateRunName(root, { task: 'Test home isolation' }, selected, createRunner, resolveProfileEnvForRoot)).toMatchObject({ titleSummary: 'testing home isolation' });
   expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: expect.objectContaining({ CLAUDE_CONFIG_DIR: join(root, 'selected-account') }) }));
 });
 
@@ -32,7 +33,7 @@ it('chooses the selected machine runner for planner and namer', async () => {
   const { root, selected } = runtimeHomes();
   run.mockResolvedValue({ text: '{"title":"testing home isolation"}' });
   await planChain(root, 'Test home isolation', fixedSkillCatalog(), selected, createRunner);
-  await generateRunName(root, { task: 'Test home isolation' }, selected, createRunner);
+  await generateRunName(root, { task: 'Test home isolation' }, selected, createRunner, resolveProfileEnvForRoot);
   expect(createRunner).toHaveBeenCalledTimes(2);
   expect(createRunner).toHaveBeenNthCalledWith(1, 'codex');
   expect(createRunner).toHaveBeenNthCalledWith(2, 'codex');

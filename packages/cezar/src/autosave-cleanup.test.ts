@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { autosaveCleanupBlocker, autosaveCleanupIds, clearAutosaveCleanup, retainAutosaveCleanup } from './autosave-cleanup.ts';
-import { processStartToken } from './delegation/process-liveness.ts';
+import { processStartToken } from './core/process-stat.ts';
+import * as processStat from './core/process-stat.ts';
 import * as liveness from './delegation/process-liveness.ts';
 
 const fixtures: string[] = [];
@@ -133,7 +134,7 @@ describe('durable autosave cleanup', () => {
     retainAutosaveCleanup(dataDir, id, dataDir, 'held', { processes: [], groups: [], uncertain: false, since: 'Tue Sep 29 10:00:00 2026' });
     deadOwner();
     vi.spyOn(liveness, 'processesWithCwdUnder').mockReturnValue([123]);
-    vi.spyOn(liveness, 'processStartToken').mockReturnValue('Mon Sep 28 10:00:00 2026');
+    vi.spyOn(processStat, 'processStartToken').mockReturnValue('Mon Sep 28 10:00:00 2026');
     expect(autosaveCleanupBlocker(dataDir, id)).toContain('123');
   });
 

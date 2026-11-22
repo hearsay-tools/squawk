@@ -1,16 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
-import { basename, resolve, sep } from 'node:path';
+import { readdirSync, realpathSync, readlinkSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 
-import { linuxBootId, processStartToken, sameIncarnation, type RecordedProcess } from '../core/process-stat.ts';
+import { linuxBootId, type RecordedProcess } from '../core/process-stat.ts';
 
 /**
- * Synchronous process evidence: recorded-process liveness for worker recovery, and the cwd scan
- * that autosave cleanup still uses. Worker ownership never comes from the scan (ADR 0032).
+ * Synchronous process evidence: the boot check for recorded processes, and the cwd scan that
+ * autosave cleanup still uses. Worker ownership never comes from the scan (ADR 0032).
  * Unreadable cwd is no evidence; other uncertainty stays alive or unknown, never proven gone.
  */
-export { parseProcStat, processStartToken, recordedProcessLive, type RecordedProcess } from '../core/process-stat.ts';
-export type WorkerProcessRecord = { generation: string; controller: RecordedProcess; processes: RecordedProcess[] };
 
 const LINUX_BOOT_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 /** A known different boot proves that no descendant of this controller can still exist. */
@@ -21,12 +19,6 @@ function controllerPredatesBoot(token: string | undefined, boot: string | undefi
 /** A different recorded Linux boot proves every original process group ended. */
 export function processPredatesCurrentBoot(entry: RecordedProcess): boolean {
   return process.platform === 'linux' && controllerPredatesBoot(entry.startToken, linuxBootId());
-}
-
-export function isCurrentProcess(entry: RecordedProcess): boolean {
-  if (entry.pid !== process.pid) return false;
-  const own = processStartToken(process.pid);
-  return entry.startToken === undefined || own === undefined || sameIncarnation(entry.startToken, own);
 }
 
 /** The `/proc` reads the Linux scan makes; injectable for platform/error boundary coverage. */
@@ -88,27 +80,4 @@ export function processesWithCwdUnder(dirs: string | readonly string[], platform
   const targets = (typeof dirs === 'string' ? [dirs] : dirs).map(dir => { try { return realpathSync(dir); } catch { return resolve(dir); } });
   const under = (cwd: string) => { const path = cwd.replace(/ \(deleted\)$/, ''); return targets.some(target => path === target || path.startsWith(target + sep)); };
   return [...snapshot].filter(([, cwd]) => under(cwd)).map(([pid]) => pid);
-}
-
-/** One process's executable name, never its arguments: destroy errors are persisted and returned by
- * the API, and any argument may carry a secret. Undefined when it cannot be read. For a refusal a
- * human reads, never for a decision. */
-function processName(pid: number): string | undefined {
-  let name: string | undefined;
-  if (process.platform === 'linux') {
-    // The executable file; `comm` is a thread name the process may change (Node's is `node-MainThread`).
-    try { name = basename(readlinkSync(`/proc/${pid}/exe`)); }
-    catch { try { name = readFileSync(`/proc/${pid}/comm`, 'utf8'); } catch { return undefined; } }
-  } else if (process.platform === 'darwin') {
-    const ps = spawnSync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8', timeout: 2_000 });
-    name = ps.status === 0 ? basename(ps.stdout.trim()) : undefined;
-  }
-  return name?.trim() || undefined;
-}
-
-/** Holder pids with their executable names, `123 (sleep), 456`, so a refusal tells a test server from
- * an agent's leftover (hearsay-tools/squawk#914). At most 8 are named. */
-export function describeProcesses(pids: readonly number[]): string {
-  const named = pids.slice(0, 8).map(pid => { const name = processName(pid); return name ? `${pid} (${name})` : String(pid); });
-  return named.join(', ') + (pids.length > 8 ? ', …' : '');
 }

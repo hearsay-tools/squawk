@@ -15,7 +15,7 @@ import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { groupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';

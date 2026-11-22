@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { noJitter, retryDelayMs, WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -63,7 +64,7 @@ async function ownedChain(runner: string, workflow: WorkflowDef) {
   const run = store.createOwnedRun({ title: 'CI worker', task: 'Recover CI and run the remaining workflow',
     runner, agentProfile: 'default', workflow: workflow.name, workflowDef: workflow,
     steps: workflow.steps.map(step => ({ id: step.id, name: step.id, kind: stepKind(step) })),
-  }, parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), identity);
+  }, parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal, identity);
   manager.enqueueOwnedRun(run.id);
   return run;
 }

@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import * as fs from 'node:fs/promises';
@@ -362,7 +363,7 @@ describe('project reports', () => {
     const worker = store.createOwnedRun({ title: 'Worker report', task: 'Analyze', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(), {
       role: 'worker', parentRunId: parent.id, permissions: [],
       workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'owned-isolated', path: join(root, 'worker'), branch: `cez/${id.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
-    }, 'b'.repeat(64));
+    }, 'b'.repeat(64), spawnCapacityRefusal);
     const artifact = await publish(worker.id);
     expect((await page()).reports).toEqual([expect.objectContaining({ id: artifact.id, runId: worker.id, taskTitle: 'Worker report' })]);
   });

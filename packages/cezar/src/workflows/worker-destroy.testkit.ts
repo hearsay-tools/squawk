@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -59,7 +60,7 @@ export async function worker(task = 'mock:hold') {
     const workspace = await planOwnedWorkspace(root, id, sha);
     return store.createOwnedRun({ title: 'worker', task, workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] }, parent.id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: parent.id, workspace,
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
   }
 export function workspace(run: RunRecord) { if (run.delegation?.role !== 'worker') throw Error('fixture'); return ownedWorkspace(run.delegation.workspace); }
 export function destroy(run: RunRecord) {

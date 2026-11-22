@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../src/delegation/capacity.ts';
 import { benchmarkHome, prepareBenchmarkEnv } from './benchmark-home.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /**
@@ -81,7 +82,7 @@ function seed(dataDir: string, root: string, messageCount: number) {
         ownerRunId: id, resourceId: randomUUID(), kind: 'owned-isolated',
         path: join(root, 'workers', id), branch: `cez/${id.slice(0, 8)}`, baselineSha: '0'.repeat(40),
       },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     setRunStatus(store, worker.id, 'done');
     return worker.id;
   });

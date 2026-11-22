@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +15,7 @@ export function seedSettledFamily(store: RunStore, root: string) {
       ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
       path: join(root, 'workers', workerId), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: '0'.repeat(40),
     },
-  }, 'a'.repeat(64));
+  }, 'a'.repeat(64), spawnCapacityRefusal);
   setRunStatus(store, worker.id, RUN_STATUS.done);
   setRunStatus(store, parent.id, RUN_STATUS.done);
   const messageId = randomUUID();

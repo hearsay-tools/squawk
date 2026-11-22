@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from './capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { workerExecutionStopped } from '../workflows/run/run-guards.ts';
 import { workerCollectedResultSchema } from '@open-mercato/cezar-contract/delegation';
@@ -274,7 +275,7 @@ describe('verified destruction retains results through explicit history deletion
     const workspace = await planOwnedWorkspace(f.root, randomUUID(), f.sha);
     interruptedParentDeletion();
     expect(() => f.store.createOwnedRun({ title: 'child', task: 'child', workflow: 'quick-task', steps: [] }, f.parent.id, randomUUID(), {
-      role: 'worker', permissions: [], parentRunId: f.parent.id, workspace }, 'a'.repeat(64))).toThrow('invalid delegation parent');
+      role: 'worker', permissions: [], parentRunId: f.parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal)).toThrow('invalid delegation parent');
     expect(runIds(f.store)).toHaveLength(1);
     expect(f.store.deleteRun(f.parent.id)).toBe(true);
   });

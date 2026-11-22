@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -57,7 +58,7 @@ describe('a crashed owner\'s claim on a settled family', () => {
     const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     const workspace = await planOwnedWorkspace(root, workerId, sha);
     const worker = owner.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-      { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64));
+      { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal);
     owner.commitWorkerExecutionStart(worker.id);
     const finishedAt = new Date().toISOString();
     setRunStatus(owner, worker.id, RUN_STATUS.done, { finishedAt });

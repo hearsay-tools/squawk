@@ -6,14 +6,16 @@ import { randomUUID } from 'node:crypto';
 import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
 import { delegationStateSchema, ownsDirectory, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
-import { spawnCapacityRefusal } from '../delegation/capacity.ts';
-import { receiptSupervisorId, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
+import { receiptSupervisorId, supervisedReceipts, supervisorIdOf, type Lookup } from './task-rights.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 
 type RootDelegation = Extract<DelegationState, { role: 'root' }>;
 type WorkerDelegation = Extract<DelegationState, { role: 'worker' }>;
 type CreationIdentity = Pick<RootDelegation['receipts'][number], 'requestId' | 'requestHash'>;
 type WorkerWorkspace = WorkerDelegation['workspace'];
+
+/** Why a supervisor may not start one more worker in a family, or undefined: the caller passes the spawn capacity check. */
+export type SpawnCapacityRefusal = (family: RunRecord, supervisor: RunRecord, getRun: Lookup) => string | undefined;
 
 /** The store lookups owned-run creation needs; no import of `store.ts`. */
 export interface OwnedRunCreateLookup {
@@ -44,6 +46,7 @@ export function createStoreOwnedRun<TInput extends { worktree?: false | undefine
   requestId: string,
   worker: DelegationState,
   requestHash: string,
+  spawnCapacityRefusal: SpawnCapacityRefusal,
   executionIdentity: WorkerExecutionIdentity,
 ): RunRecord {
   const { parent, authority } = resolveOwnedRunParent(state, parentId);

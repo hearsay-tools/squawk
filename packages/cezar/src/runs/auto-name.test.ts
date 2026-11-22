@@ -1,4 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
+import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentRunner, AgentRunSpec } from '../core/agent-runner.ts';
 import {
@@ -125,7 +126,7 @@ describe('generateRunName (dry run)', () => {
         const { generateRunName } = await import('./auto-name.ts');
         const { createRunner, registerRunner } = await import('../core/runner-registry.ts');
         registerRunner((await import('../runners/claude/definition.ts')).claudeRunner);
-        const result = await generateRunName(root, { task: '437', skillName: 'om-auto-review-pr' }, testHome(), createRunner);
+        const result = await generateRunName(root, { task: '437', skillName: 'om-auto-review-pr' }, testHome(), createRunner, resolveProfileEnvForRoot);
         expect(result).toEqual({ titleSummary: '437: implementing cr fixes', prNumber: 437 });
       } finally {
         rmSync(root, { recursive: true, force: true });
@@ -149,7 +150,7 @@ describe('generateRunName runner spec', () => {
       run: async (spec: AgentRunSpec) => { specs.push(spec); return { text: '{"title": "naming tasks"}' }; },
     } as unknown as AgentRunner;
     try {
-      await expect(generateRunName(root, { task: 'name tasks' }, testHome(), async () => runner)).resolves.toEqual({ titleSummary: 'naming tasks' });
+      await expect(generateRunName(root, { task: 'name tasks' }, testHome(), async () => runner, resolveProfileEnvForRoot)).resolves.toEqual({ titleSummary: 'naming tasks' });
       expect(specs).toHaveLength(1);
       expect(specs[0]).toMatchObject({ minimal: true, toolGrant: { kind: 'explicit', tools: [] } });
     } finally {

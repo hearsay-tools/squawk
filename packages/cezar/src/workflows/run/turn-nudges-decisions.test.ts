@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../../delegation/capacity.ts';
 import '../../core/created-runners.testkit.ts';
 import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
@@ -67,7 +68,7 @@ describe('closed-session refusal effects through public recovery', () => {
     store.createOwnedRun({ title: 'live worker', task: 'history', workflow: 'quick-task', steps: [] }, id, randomUUID(), {
       role: 'worker', parentRunId: id, permissions: [], workspace: { ownerRunId: workerId, resourceId: randomUUID(),
         kind: 'owned-isolated', path: join(root, 'worker'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: '0'.repeat(40) },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     store.commitRootFinishIntent(id);
     // Recovery must reach the gate, while owned capacity prevents later continuation launches.
     const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 }, load: async () => ({ maxParallel: 0, memoryLimitMb: null }) });

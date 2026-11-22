@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
-import { processesWithCwdUnder, processStartToken, recordedProcessLive, type RecordedProcess } from './delegation/process-liveness.ts';
+import { processesWithCwdUnder } from './delegation/process-liveness.ts';
+import { processStartToken, recordedProcessLive, type RecordedProcess } from './core/process-stat.ts';
 
 type Snapshot = Map<number, string | undefined> | 'unknown';
 

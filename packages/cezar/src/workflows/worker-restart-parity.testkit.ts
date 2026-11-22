@@ -14,7 +14,7 @@ import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { groupHolder, orphanedGroupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import * as worktreeLock from '../git-worktree-lock.ts';
 import { withWorktreeMutation } from '../git-worktree-lock.ts';
 import { isLiveRecord } from '../runs/run-row.ts';

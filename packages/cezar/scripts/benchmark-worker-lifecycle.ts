@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../src/delegation/capacity.ts';
 import { prepareBenchmarkEnv } from './benchmark-home.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /**
@@ -71,7 +72,7 @@ try {
     const t0 = performance.now();
     const workspace = await planOwnedWorkspace(root, id, sha);
     store.createOwnedRun({ title: `worker ${i}`, task: 'say hello', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', kind: 'agent', name: 'Task' }] },
-      parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64));
+      parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal);
     manager.enqueueOwnedRun(id);
     if (await until(() => started(id), 60_000)) spawnToSession.push(performance.now() - t0);
     else outcome('no-session-within-60s');

@@ -26,7 +26,7 @@ import { hostname } from 'node:os';
 import { defaultCliDeps, main, type CliDeps } from '../cli-dispatch.ts';
 import { initCommand, openStore } from '../project-commands.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { seedRuns, setRunStatus } from '../runs/run-store.testkit.ts';
 import { closeClaimSession, openClaimSession } from '../runs/run-claims.ts';
 import { RUNS_DB_FILE, RunDatabase } from '../runs/run-database.ts';

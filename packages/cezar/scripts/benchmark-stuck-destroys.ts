@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../src/delegation/capacity.ts';
 import { prepareBenchmarkEnv } from './benchmark-home.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /**
@@ -86,7 +87,7 @@ try {
     const id = randomUUID();
     const workspace = await planOwnedWorkspace(root, id, sha);
     store.createOwnedRun({ title: `worker ${i}`, task: 'stuck', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', name: 'Task', kind: 'agent' }] },
-      parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64));
+      parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal);
     const generation = store.commitWorkerExecutionStart(id);
     const created = await ensureOwnedWorkspace(root, store.getRun(id)!);
     setRunStatus(store, id, 'review', { worktreePath: created.path, branch: created.branch });

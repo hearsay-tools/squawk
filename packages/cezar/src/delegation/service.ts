@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from './capacity.ts';
 import { commandText } from '../home/command.ts';
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import { projectPaths } from '../project-paths.ts';
@@ -241,7 +242,7 @@ async function acceptSpawnedWorker(args: {
       autonomous: parent.autonomous,
       steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step) })),
     }, family.id, request.requestId, { role: 'worker', permissions: [...DEFAULT_GRANTS.worker.operate], ...(spawnGrant ? { spawnGrant } : {}),
-      parentRunId: family.id, ...(parent.id === family.id ? {} : { supervisorRunId: parent.id }), workspace, ...(context ? { context } : {}) }, requestHash, {
+      parentRunId: family.id, ...(parent.id === family.id ? {} : { supervisorRunId: parent.id }), workspace, ...(context ? { context } : {}) }, requestHash, spawnCapacityRefusal, {
       ...identity, ...(context ? { contextHash: workerContextHash(context) } : {}),
       // A named catalog chain or skill is bound like the context recipe; the default quick-task leaves the identity as before.
       ...(request.workflow === undefined && request.skill === undefined ? {} : { workflowHash: workerWorkflowHash(workflowDef) }),

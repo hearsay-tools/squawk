@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -36,7 +37,7 @@ describe('restart recovery of a closed waiting worker', () => {
       parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace: {
         ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
         path: `/managed/${workerId}`, branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40),
-      } }, 'a'.repeat(64));
+      } }, 'a'.repeat(64), spawnCapacityRefusal);
     {
       const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.waiting, currentStepId: 'task', ...(invalidAsk ? { invalidAsk: true } : {}) };
       setRunStatus(store, w.id, fixtureStatus, fixtureExtras);

@@ -12,7 +12,7 @@ import { runsIndexResponseSchema } from '@open-mercato/cezar-contract/workspace-
 import { runArtifactCommand } from '../artifacts/cli.ts';
 import { defaultCliDeps, main, type CliDeps } from '../cli-dispatch.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';

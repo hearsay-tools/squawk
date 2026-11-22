@@ -11,7 +11,7 @@ import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { runArtifactCommand } from '../artifacts/cli.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { Home } from '../home/home.ts';
 import { holdCockpitLease } from '../home/leases.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';

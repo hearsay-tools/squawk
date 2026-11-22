@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from './run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -413,6 +414,7 @@ describe('RunStore history compression', () => {
         },
       },
       'a'.repeat(64),
+      spawnCapacityRefusal,
     );
     store.appendEvent(worker.id, { type: 'note', message: 'old' });
     store.updateStep(worker.id, 'task', { status: STEP_STATUS.done, sessionId: 'old-session' });

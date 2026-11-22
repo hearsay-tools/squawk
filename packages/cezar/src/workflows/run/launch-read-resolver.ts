@@ -20,6 +20,7 @@ import { makeRunTitle } from '../../runs/run-title.ts';
 import { readProjectUiState, readProjectUiStateSync } from '../../ui-state.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../../workspace/agent-accounts.ts';
 import { resolveProfileEnvForRoot } from '../../workspace/agent-profiles.ts';
+import type { ResolveProfileEnv } from '../../runs/auto-name.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { resolveAttachmentPath } from '../attachment-path.ts';
 import { loadWorkflows } from '../load.ts';
@@ -774,6 +775,8 @@ function stepPrompt(step: WorkflowStepDef, source: SourceInput): string { return
 function stepSkill(step: WorkflowStepDef): string | undefined { return step.skill; }
 
 export function namingTask(run: RunRecord): string { return run.task; }
+/** The agent account env the naming call runs under: the call is a model call like any other (spec 2026-07-29-agent-profiles). */
+export function namingProfileEnv(...args: Parameters<ResolveProfileEnv>): ReturnType<ResolveProfileEnv> { return resolveProfileEnvForRoot(...args); }
 export function namingSkillHint(workflow: WorkflowDef | null): string | undefined {
   return workflow?.steps.find(candidate => stepKind(candidate) === 'agent' && candidate.skill)?.skill?.trim();
 }

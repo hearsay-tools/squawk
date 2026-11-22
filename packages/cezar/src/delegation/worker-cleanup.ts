@@ -7,7 +7,7 @@ import { supervisorIdOf } from '../runs/task-rights.ts';
 import { collectWorkerEvidence } from './results.ts';
 import { controllerRefusal } from '../runs/worker-execution.ts';
 import { DelegationPolicyError } from './policy.ts';
-import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
+import { describeProcesses, isCurrentProcess, recordedProcessLive } from '../core/process-stat.ts';
 import { workspaceDirectoryRemoved, workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';

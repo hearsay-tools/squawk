@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import {
@@ -308,7 +309,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
         ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
         path: join(root, 'workers', workerId), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: '0'.repeat(40),
       },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     setRunStatus(seed, worker.id, RUN_STATUS.done);
     leftover(seed, parent.id, worker.id);
     setRunStatus(seed, parent.id, RUN_STATUS.cancelled, { finishedAt: new Date().toISOString() });
@@ -360,7 +361,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
         ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
         path: join(root, 'workers', workerId), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: '0'.repeat(40),
       },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     seed.commitRootFinishIntent(parent.id);
     seed.close();
     await reboot(async (store) => {

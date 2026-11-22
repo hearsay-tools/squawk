@@ -3,6 +3,7 @@ import * as childProcess from 'node:child_process';
 import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as processStat from './core/process-stat.ts';
 import * as liveness from './delegation/process-liveness.ts';
 import { AUTOSAVE_OWNER_ENV, watchAutosaveHolders, type OwnerProbe } from './autosave-holders.ts';
 import { autosaveGit } from './autosave-git.ts';
@@ -25,8 +26,8 @@ describe('autosave cwd-holder proof', () => {
     candidates = [101];
     tokens = new Map([[101, 'existing']]);
     vi.spyOn(liveness, 'processesWithCwdUnder').mockImplementation(() => candidates);
-    vi.spyOn(liveness, 'processStartToken').mockImplementation(pid => tokens.get(pid));
-    vi.spyOn(liveness, 'recordedProcessLive').mockImplementation(entry => tokens.has(entry.pid) && tokens.get(entry.pid) === entry.startToken);
+    vi.spyOn(processStat, 'processStartToken').mockImplementation(pid => tokens.get(pid));
+    vi.spyOn(processStat, 'recordedProcessLive').mockImplementation(entry => tokens.has(entry.pid) && tokens.get(entry.pid) === entry.startToken);
   });
   afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); vi.unstubAllGlobals(); });
 

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { namingTask, namingSkillHint, narrowTitleConfig } from './launch-read-resolver.ts';
+import { namingProfileEnv, namingTask, namingSkillHint, narrowTitleConfig } from './launch-read-resolver.ts';
 import { worktreeShortstat } from '../../git-worktree.ts';
 import { autoNamingActive, generateRunName, liveTitleUpdatesEnabled, postValidateTitle } from '../../runs/auto-name.ts';
 import { extractTaskRefs } from '../../runs/task-refs.ts';
@@ -53,7 +53,7 @@ export class TurnBookkeeper {
         const skills = this.host.sessionSkills(runId);
         skillDescription = skills.find((s) => s.id === skillName)?.description;
       }
-      const result = await generateRunName(this.context.repoRoot, { task, skillName, skillDescription, ...live }, this.context.home, this.context.createRunner);
+      const result = await generateRunName(this.context.repoRoot, { task, skillName, skillDescription, ...live }, this.context.home, this.context.createRunner, namingProfileEnv);
       if (!result || this.host.isDisposedDelegatedRun(runId)) return;
       const run = this.context.store.getRun(runId);
       // Marker-owned state outranks the namer (spec 2026-07-18-task-ref-markers):

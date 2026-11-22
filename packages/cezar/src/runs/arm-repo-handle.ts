@@ -1,6 +1,14 @@
-import { resolveForgeRoot, type ForgeFactory } from '../server/forge/index.ts';
-
 import type { RunRepoHandle } from './ports.ts';
+import type { RepoHandle } from './store.ts';
+
+/** What a forge answers when asked which repository a root is. */
+export type RepoDiscovery =
+  | { status: 'resolved'; handle: RepoHandle }
+  | { status: 'unknown' }
+  | { status: 'retryable' }
+  | { status: 'cancelled' };
+/** The forge for one repository root, as far as this module uses it: the caller picks the forge. */
+export type ResolveRepoForge = (repoRoot: string) => { discoverRepository(signal?: AbortSignal): Promise<RepoDiscovery> };
 
 const RETRY_DELAYS_MS = [1_000, 5_000] as const;
 
@@ -11,7 +19,7 @@ const RETRY_DELAYS_MS = [1_000, 5_000] as const;
  * Permanent unknown identity and exhausted retries retain the existing unscoped behavior.
  * Successful discovery uses setRepoHandle's existing repair and reference-ownership rules.
  */
-export function armRepoHandle(store: RunRepoHandle, repoRoot: string, signal?: AbortSignal, forgeFactory?: ForgeFactory): void {
+export function armRepoHandle(store: RunRepoHandle, repoRoot: string, resolveForge: ResolveRepoForge, signal?: AbortSignal): void {
   if (signal?.aborted) return;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retries = 0;
@@ -26,7 +34,7 @@ export function armRepoHandle(store: RunRepoHandle, repoRoot: string, signal?: A
     timer = undefined;
     if (signal?.aborted) return;
     // A future unexpected rejection must not become an unhandled boot failure either.
-    const result = await resolveForgeRoot(repoRoot, forgeFactory).discoverRepository(signal).catch(() => ({ status: 'retryable' as const }));
+    const result = await resolveForge(repoRoot).discoverRepository(signal).catch(() => ({ status: 'retryable' as const }));
     if (signal?.aborted) return;
     if (result.status === 'resolved' || result.status === 'unknown') {
       finish();

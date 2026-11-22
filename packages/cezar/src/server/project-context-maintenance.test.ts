@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-registry.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { projectMovedMarker, projectPaths } from '../project-paths.ts';
 import { RunDatabase, RUNS_DB_FILE } from '../runs/run-database.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';

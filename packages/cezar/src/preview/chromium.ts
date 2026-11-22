@@ -9,7 +9,7 @@ import { basename, delimiter, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Readable, Writable } from 'node:stream';
 import { z } from 'zod';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { spawnDetached, stopGroup } from '../detached-process.ts';
 import { cdpOverPipe, type CdpConnection } from './cdp.ts';
 import { LAUNCH_HANG_GUARD_MS, watchChromiumLaunch, type chromiumProcessProgress } from './chromium-launch-progress.ts';

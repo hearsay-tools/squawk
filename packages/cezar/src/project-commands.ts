@@ -5,6 +5,7 @@ import { commandText } from './home/command.ts';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { armRepoHandle } from './runs/arm-repo-handle.ts';
+import { resolveForgeRoot } from './server/forge/index.ts';
 import { RunStore } from './runs/store.ts';
 import { ensureDataGitignore } from './data-gitignore.ts';
 import { admittedWrite } from './server/cockpit-ownership.ts';
@@ -72,6 +73,6 @@ export function openStore(repoRoot: string, opts?: { keepLive?: boolean; repoHan
   });
   // Repo-scope the referenced tier (#945) — see `armRepoHandle`. Background, never awaited: a
   // `gh`-less or offline machine keeps working exactly as it did, just unscoped.
-  armRepoHandle(store, repoRoot, opts?.repoHandleSignal);
+  armRepoHandle(store, repoRoot, resolveForgeRoot, opts?.repoHandleSignal);
   return store;
 }

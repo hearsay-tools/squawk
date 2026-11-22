@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -84,7 +85,7 @@ describe('stopped composer engine', { timeout: 15_000 }, () => {
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }] }, parent.id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: parent.id, workspace: { ownerRunId: id, resourceId: randomUUID(),
         kind: 'owned-isolated', path: join(root, 'worker'), branch: 'worker', baselineSha: 'a'.repeat(40) },
-    }, 'a'.repeat(64));
+    }, 'a'.repeat(64), spawnCapacityRefusal);
     manager.cancel(run.id);
     vi.spyOn(store, 'commitWorkerExecutionStart').mockImplementationOnce(() => { throw new Error('checkpoint failed'); });
     expect(manager.continueRun(run.id, { text: 'must remain draft' })).toEqual({

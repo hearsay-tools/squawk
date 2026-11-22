@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from './run-store.testkit.ts';
 import { openTestRunStore, runPersistence } from './run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -436,7 +437,7 @@ describe('RunStore durable delegation', () => {
     const metadata = worker(run.id, randomUUID());
     if (metadata.role !== 'worker') throw new Error('fixture');
     const id = metadata.workspace.ownerRunId;
-    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash);
+    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash, spawnCapacityRefusal);
     const agentInput = (text: string) => ({ id: randomUUID(), source: WAIT_SOURCE.agent, parentRunId: run.id, text, createdAt: now });
     store.commitAgentInputs(id, [agentInput('original')]);
     const delivered = agentInput('delivered');
@@ -453,7 +454,7 @@ describe('RunStore durable delegation', () => {
     const metadata = worker(run.id, randomUUID());
     if (metadata.role !== 'worker') throw new Error('fixture');
     const id = metadata.workspace.ownerRunId;
-    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash);
+    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash, spawnCapacityRefusal);
     const delivered = { id: randomUUID(), source: WAIT_SOURCE.agent, parentRunId: run.id, text: 'delivered', createdAt: now };
     const before = store.getRun(id);
     expect(() => store.commitWorkerContinuation(id, 'continue-line', { agentInputs: [{ ...delivered, text: 'patched' }] }, undefined,
@@ -466,7 +467,7 @@ describe('RunStore durable delegation', () => {
     const metadata = worker(run.id, randomUUID());
     if (metadata.role !== 'worker') throw new Error('fixture');
     const id = metadata.workspace.ownerRunId;
-    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash);
+    store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash, spawnCapacityRefusal);
     const secret = `session-${randomUUID()}`;
     store.registerSessionSecret(secret);
     const agentInput = (text: string) => ({ id: randomUUID(), source: WAIT_SOURCE.agent, parentRunId: run.id, text, createdAt: now });
@@ -488,7 +489,7 @@ describe('RunStore durable delegation', () => {
     const release = blockRunWrites(dataDir);
     try {
       expect(() => store.commitDelegation([{ id: run.id, delegation: { ...root, wait: workerWaitSchema.parse(wait) } }])).toThrow();
-      expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash)).toThrow();
+      expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal)).toThrow();
       expect(store.listRuns()).toHaveLength(1);
       expect(store.getRun(run.id)?.delegation).toEqual(root);
       expect(emitted).toEqual([]);
@@ -507,7 +508,7 @@ describe('RunStore durable delegation', () => {
     const emitted: unknown[] = [];
     onRunWrite(store.lifecycle, r => emitted.push(r));
     try {
-      expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash)).toThrow('disk failure');
+      expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal)).toThrow('disk failure');
       expect(store.listRuns()).toHaveLength(1);
       expect(store.getRun(run.id)?.delegation).toEqual(before);
       expect(emitted).toEqual([]);
@@ -528,7 +529,7 @@ describe('RunStore durable delegation', () => {
       emitted.push(r.id);
       diskAtNotice.push(disk());
     });
-    const created = store.createOwnedRun({ ...input, runner: 'codex', model: 'model', agentProfile: 'account' }, run.id, requestId, metadata, requestHash);
+    const created = store.createOwnedRun({ ...input, runner: 'codex', model: 'model', agentProfile: 'account' }, run.id, requestId, metadata, requestHash, spawnCapacityRefusal);
     expect(created).toMatchObject({ id: workerId, delegation: metadata, status: RUN_STATUS.queued, runner: 'codex', model: 'model', agentProfile: 'account' });
     expect(emitted.sort()).toEqual([run.id, workerId].sort());
     for (const rows of diskAtNotice) {
@@ -540,10 +541,10 @@ describe('RunStore durable delegation', () => {
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
     // The selector hash is unchanged even if parent HEAD and inherited settings have moved.
-    const retry = store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash);
+    const retry = store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal);
     expect(retry).toMatchObject({ id: workerId, delegation: { workspace: { baselineSha } } });
     expect(store.listRuns()).toHaveLength(2);
-    expect(() => store.createOwnedRun({ ...input, task: 'different' }, run.id, requestId, metadata, 'c'.repeat(64))).toThrow(/request/i);
+    expect(() => store.createOwnedRun({ ...input, task: 'different' }, run.id, requestId, metadata, 'c'.repeat(64), spawnCapacityRefusal)).toThrow(/request/i);
     expect(store.listRuns()).toHaveLength(2);
   });
 
@@ -563,17 +564,17 @@ describe('RunStore durable delegation', () => {
     const run = parent();
     const other = store.createRun(input);
     const metadata = worker(run.id);
-    expect(() => store.createOwnedRun(input, other.id, requestId, worker(other.id), requestHash)).toThrow();
-    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, run.id), requestHash)).toThrow();
-    expect(() => store.createOwnedRun(input, run.id, requestId, worker(other.id), requestHash)).toThrow();
-    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, other.id), requestHash)).toThrow();
-    store.createOwnedRun(input, run.id, requestId, metadata, requestHash);
+    expect(() => store.createOwnedRun(input, other.id, requestId, worker(other.id), requestHash, spawnCapacityRefusal)).toThrow();
+    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, run.id), requestHash, spawnCapacityRefusal)).toThrow();
+    expect(() => store.createOwnedRun(input, run.id, requestId, worker(other.id), requestHash, spawnCapacityRefusal)).toThrow();
+    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, other.id), requestHash, spawnCapacityRefusal)).toThrow();
+    store.createOwnedRun(input, run.id, requestId, metadata, requestHash, spawnCapacityRefusal);
     if (metadata.role !== 'worker') throw new Error('fixture');
     for (const key of ['resourceId', 'path', 'branch'] as const) {
       const collision = worker(run.id, randomUUID());
       if (collision.role !== 'worker') throw new Error('fixture');
       ownedWorkspace(collision.workspace)[key] = ownedWorkspace(metadata.workspace)[key];
-      expect(() => store.createOwnedRun(input, run.id, randomUUID(), collision, requestHash)).toThrow();
+      expect(() => store.createOwnedRun(input, run.id, randomUUID(), collision, requestHash, spawnCapacityRefusal)).toThrow();
     }
     expect(store.listRuns()).toHaveLength(3);
   });
@@ -588,10 +589,10 @@ describe('RunStore durable delegation', () => {
     };
     const first = sharedWorker();
     if (first.role !== 'worker') throw new Error('fixture');
-    const created = store.createOwnedRun(input, run.id, randomUUID(), first, requestHash);
+    const created = store.createOwnedRun(input, run.id, randomUUID(), first, requestHash, spawnCapacityRefusal);
     expect(created.worktreePath).toBeUndefined(); expect(created.branch).toBeUndefined();
-    expect(store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(), requestHash).delegation).toMatchObject({ workspace: { kind: 'shared', path: '/managed/host' } });
-    expect(() => store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(first.workspace.resourceId), requestHash)).toThrow('worker resource ownership collision');
+    expect(store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(), requestHash, spawnCapacityRefusal).delegation).toMatchObject({ workspace: { kind: 'shared', path: '/managed/host' } });
+    expect(() => store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(first.workspace.resourceId), requestHash, spawnCapacityRefusal)).toThrow('worker resource ownership collision');
     expect(store.getRun(run.id)).toMatchObject({ worktreePath: '/managed/host', branch: 'cez/host' });
   });
 
@@ -602,7 +603,7 @@ describe('RunStore durable delegation', () => {
       const id = randomUUID();
       const metadata = worker(run.id, id);
       if (metadata.role !== 'worker') throw new Error('fixture');
-      store.createOwnedRun(input, run.id, i === 0 ? requestId : randomUUID(), metadata, requestHash);
+      store.createOwnedRun(input, run.id, i === 0 ? requestId : randomUUID(), metadata, requestHash, spawnCapacityRefusal);
       store.commitDelegation([{ id, delegation: {
         ...metadata, destroy: { requestedAt: now, phase: 'complete', remaining: [] },
       } }]);
@@ -610,8 +611,8 @@ describe('RunStore durable delegation', () => {
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
     const thirtyThird = randomUUID();
-    expect(store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, thirtyThird), requestHash).id).toBe(thirtyThird);
-    expect(store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash).delegation).toMatchObject({ destroy: { phase: 'complete' } });
+    expect(store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, thirtyThird), requestHash, spawnCapacityRefusal).id).toBe(thirtyThird);
+    expect(store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal).delegation).toMatchObject({ destroy: { phase: 'complete' } });
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
     const reopened = store.getRun(run.id)!.delegation;
@@ -622,8 +623,8 @@ describe('RunStore durable delegation', () => {
 
   it('refuses a 33rd outstanding receipt inside the store transaction (#816)', { timeout: 30_000 }, () => {
     const run = parent();
-    for (let i = 0; i < 32; i++) store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, randomUUID()), requestHash);
-    expect(() => store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, randomUUID()), requestHash)).toThrow(/32 outstanding workers/);
+    for (let i = 0; i < 32; i++) store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal);
+    expect(() => store.createOwnedRun(input, run.id, randomUUID(), worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal)).toThrow(/32 outstanding workers/);
     const delegation = store.getRun(run.id)!.delegation;
     expect(delegation?.role === 'root' ? delegation.receipts.length : 0).toBe(32);
   });
@@ -635,7 +636,7 @@ describe('RunStore durable delegation', () => {
       const id = randomUUID(); ids.push(id);
       const metadata = worker(run.id, id);
       if (metadata.role !== 'worker') throw new Error('fixture');
-      store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash);
+      store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash, spawnCapacityRefusal);
       if (i < 32) store.commitDelegation([{ id, delegation: { ...metadata, destroy: { requestedAt: now, phase: 'complete', remaining: [] } } }]);
     }
     store.close();
@@ -647,19 +648,19 @@ describe('RunStore durable delegation', () => {
 
   it('fails closed when a retry receipt points at a missing worker', () => {
     const run = parent();
-    store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash);
+    store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal);
     store.close();
     seedRuns(dataDir, disk().filter((r: { id: string }) => r.id !== workerId));
     store = openTestRunStore(dataDir, { keepLive: true });
-    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash)).toThrow(/receipt/i);
+    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id, randomUUID()), requestHash, spawnCapacityRefusal)).toThrow(/receipt/i);
     expect(store.listRuns()).toHaveLength(1);
   });
 
   it('fails closed when a retry receipt no longer points at an intact owned worker', () => {
     const run = parent();
-    store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash);
+    store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal);
     store.commitDelegation([{ id: workerId, delegation: { role: 'invalid' } }]);
-    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash)).toThrow();
+    expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash, spawnCapacityRefusal)).toThrow();
   });
 
   it('quarantines malformed delegation locally, preserving all runs and legacy absence on reopen', () => {
@@ -674,7 +675,7 @@ describe('RunStore durable delegation', () => {
     expect(store.getRun(legacy.id)?.delegation).toBeUndefined();
     expect(store.getRun(broken.id)?.delegation).toEqual({ role: 'invalid' });
     expect(store.getRun(valid.id)?.delegation).toEqual(root);
-    expect(() => store.createOwnedRun(input, broken.id, requestId, worker(broken.id), requestHash)).toThrow();
+    expect(() => store.createOwnedRun(input, broken.id, requestId, worker(broken.id), requestHash, spawnCapacityRefusal)).toThrow();
     store.flush();
     expect(RunStore.open(dataDir).getRun(broken.id)?.delegation).toEqual({ role: 'invalid' });
   });

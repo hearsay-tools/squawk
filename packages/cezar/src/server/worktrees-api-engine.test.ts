@@ -1,3 +1,4 @@
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -7,7 +8,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { RunStore } from '../runs/store.ts';
@@ -55,7 +56,7 @@ describe('the worktrees API on the real engine', { timeout: 30_000 }, () => {
     const sha = (await run('git', ['rev-parse', 'HEAD'], { cwd: repoRoot })).stdout.trim();
     const workspace = await createOwnedWorkspace(repoRoot, randomUUID(), sha);
     const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-      { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, 'a'.repeat(64));
+      { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, 'a'.repeat(64), spawnCapacityRefusal);
     setRunStatus(store, worker.id, RUN_STATUS.cancelled, { worktreePath: workspace.path, branch: workspace.branch });
     store.appendEvent(worker.id, { type: 'note', message: 'preserved worker history' });
     for (const id of [worker.id, parent.id]) {
