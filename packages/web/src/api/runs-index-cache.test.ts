@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { RunIndexEntry, RunsIndexResponse, RunSummary } from '@open-mercato/cezar-api-client'
 
 import {
+  applyIndexBatch,
+  type IndexBatchPatch,
   applyIndexChange,
   applyIndexUsage,
   createIndexOverlay,
@@ -382,5 +384,54 @@ describe('mergeIndexSnapshot: the fence', () => {
     const { generation: _g, eventSeq: _s, ...rest } = projectA()
     const legacy = rest as RunsIndexResponse
     expect(mergeIndexSnapshot(overlay, legacy)).toEqual({ index: legacy, reconcile: false })
+  })
+})
+
+describe('applyIndexBatch', () => {
+  it('matches ordered single patches across updates, membership and usage', () => {
+    const before = projectA({ truncated: ['a'] })
+    const patches: IndexBatchPatch[] = [
+      { type: 'change', change: runChange('a', summary('a4', '2026-01-04', { archived: true })) },
+      { type: 'usage', project: 'a', usage: { a4: SAMPLE } },
+      { type: 'change', change: deleted('a', 'a2') },
+      { type: 'change', change: runChange('a', summary('a5', '2026-01-05', { archived: true })) },
+      { type: 'change', change: runChange('a', summary('old', '2025-01-01', { archived: true })) },
+      { type: 'change', change: runChange('unknown', summary('x', '2026-01-06')) },
+      { type: 'usage', project: 'a', usage: {} },
+    ]
+    let sequential = before
+    let reconcile = false
+    for (const patch of patches) {
+      if (patch.type === 'usage') sequential = applyIndexUsage(sequential, patch.project, patch.usage)
+      else {
+        const result = applyIndexChange(sequential, patch.change)
+        sequential = result.index
+        reconcile ||= result.reconcile
+      }
+    }
+    const result = applyIndexBatch(before, patches)
+    expect(result).toEqual({ index: sequential, reconcile })
+    expect(result.index.runs.find((row) => row.id === 'b3')).toBe(before.runs[1])
+    expect(before.runs[0]!.archived).toBe(false)
+    expect(before.runs).toHaveLength(4)
+  })
+
+  it('copies the original array once for many updates and never for equal patches', () => {
+    const before = projectA()
+    let copies = 0
+    const patches: IndexBatchPatch[] = Array.from({ length: 50 }, (_, tokensUsed) => ({
+      type: 'change', change: runChange('a', summary('a4', '2026-01-04', { tokensUsed })),
+    }))
+    const iterator = Array.prototype[Symbol.iterator]
+    Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+      if (this.length === 4 && (this[0] as RunIndexEntry)?.projectId) copies += 1
+      return iterator.call(this)
+    }
+    let result
+    try { result = applyIndexBatch(before, patches) } finally { Array.prototype[Symbol.iterator] = iterator }
+    expect(copies).toBe(1)
+    expect(result.index.runs[0]!.tokensUsed).toBe(49)
+    expect(result.index.runs[1]).toBe(before.runs[1])
+    expect(applyIndexBatch(result.index, [patches[49]!]).index).toBe(result.index)
   })
 })

@@ -13,6 +13,7 @@ import type {
   ProviderStatusResponse,
   RunRecord,
 } from '@open-mercato/cezar-api-client'
+import * as titleHook from '@/lib/use-document-title'
 import { AppShellContainer, repoChipOf } from '@/components/app-shell-container'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ProjectRouteMatcherContext } from '@/lib/project-route-matcher'
@@ -1059,4 +1060,35 @@ describe('GitHub view sidebar list (#622)', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="task-quick-list"]')).not.toBeNull())
     expect(document.querySelector('[data-slot="github-sidebar"]')).toBeNull()
   })
+})
+
+it('does not render shell chrome for unrelated token ticks or active-task usage', async () => {
+  const activeRun = run({ id: 'active', title: 'Active task' })
+  serve({
+    '/api/v1/health': HEALTH,
+    '/api/v1/workspace/projects': { projects: [PROJECT], bootProject: 'cezar' },
+    '/api/v1/runs': [activeRun],
+    '/api/v1/p/cezar/runs': [activeRun],
+    '/api/v1/workspace/runs-index': { runs: [], truncated: [], referenceStatuses: {}, perProjectLimit: 200, generation: 'g', eventSeq: 0 },
+  })
+  const renders = vi.spyOn(titleHook, 'useDocumentTitle')
+  const { client } = renderShell('/p/cezar/tasks/active')
+  await waitFor(() => expect(document.title).toContain('Active task'))
+  vi.useFakeTimers()
+  try {
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    const before = renders.mock.calls.length
+    act(() => client.setQueryData(['default', 'runs', 'list'], [
+      { ...activeRun, tokensUsed: 55, usage: { cpuPct: 1, rssBytes: 100, procCount: 1 } },
+      run({ id: 'other', tokensUsed: 88 }),
+    ]))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(renders).toHaveBeenCalledTimes(before)
+    act(() => client.setQueryData(['default', 'runs', 'list'], [{ ...activeRun, title: 'Changed task' }]))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(document.title).toContain('Changed task')
+  } finally {
+    renders.mockRestore()
+    vi.useRealTimers()
+  }
 })

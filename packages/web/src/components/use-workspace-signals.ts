@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { useProjects, useRunsIndex } from '@/api/queries'
 import { runsIndexSync } from '@/api/runs-index-sync'
-import type { ProjectListEntry } from '@open-mercato/cezar-api-client'
+import type { RunsIndexResponse, ProjectListEntry } from '@open-mercato/cezar-api-client'
 import { canPersistProjectOrder, orderProjects } from '@/lib/project-order'
 import { signalsByProject, type ProjectSignal } from '@/lib/project-signal'
 import { useProjectOrder } from '@/lib/use-project-order'
@@ -41,8 +41,20 @@ export function useWorkspaceSignals(): WorkspaceSignals | null {
   const { order, canReorder: uiStateLoaded, setOrder } = useProjectOrder()
   const canReorder = uiStateLoaded && registered !== undefined && canPersistProjectOrder(registered.length)
   const projects = React.useMemo(() => (registered ? orderProjects(registered, order) : undefined), [registered, order])
-  const index = useRunsIndex().data
-  const signals = React.useMemo(() => (index ? signalsByProject(index.runs) : null), [index])
+  const selectSignals = React.useMemo(() => {
+    let previous: Map<string, ProjectSignal> | undefined
+    return (index: RunsIndexResponse) => {
+      const next = signalsByProject(index.runs)
+      if (previous && previous.size === next.size && [...next].every(([id, signal]) => {
+        const old = previous!.get(id)
+        return old && old.needsYou === signal.needsYou && old.failedUnread === signal.failedUnread
+          && old.inMotion === signal.inMotion && old.finishedUnread === signal.finishedUnread
+      })) return previous
+      previous = next
+      return next
+    }
+  }, [])
+  const signals = useRunsIndex(true, undefined, selectSignals).data ?? null
 
   // The stream patches the index row by row, and none of its frames fire when the registry
   // changes. A project registered (or cloned) with runs already on disk would show no signal until

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import type { RunIndexEntry, RunsIndexResponse, RunSummary } from '@open-mercato/cezar-api-client'
 
+import { applyIndexChange } from './runs-index-cache'
 import { createQueryClient } from './query-client'
 import { mergeRunsIndexRead, runsIndexSync, RUNS_INDEX_QUERY_KEY, RUNS_INDEX_RECONCILE_HOLD_MS, RUNS_INDEX_WRITE_INTERVAL_MS, type RunsIndexSync } from './runs-index-sync'
 
@@ -677,4 +678,20 @@ describe('runs index sync: sustained updates', () => {
     expect(queryFn.mock.calls.length).toBeLessThanOrEqual(2)
     unsubscribe()
   })
+})
+
+it('flushes a long update batch with the same result as ordered single changes', () => {
+  const seed = SEED()
+  client.setQueryData(RUNS_INDEX_QUERY_KEY, seed)
+  const writes = indexWrites()
+  let expected = seed
+  for (let tokensUsed = 1; tokensUsed <= 50; tokensUsed += 1) {
+    const run = summary('a2', '2026-01-02', { tokensUsed })
+    runFrame('a', run)
+    expected = applyIndexChange(expected, { type: 'run', project: 'a', seq, run }).index
+  }
+  sync.flush()
+  expect(cached()).toEqual(expected)
+  expect(writes()).toHaveLength(1)
+  expect(cached()?.runs[1]).toBe(seed.runs[1])
 })

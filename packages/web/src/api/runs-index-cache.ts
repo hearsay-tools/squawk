@@ -48,12 +48,61 @@ function archivedCount(runs: readonly RunIndexEntry[], project: string): number 
   return count
 }
 
-/** Insert by `createdAt`, newest first, as the route sorts. */
-function insertRow(runs: readonly RunIndexEntry[], row: RunIndexEntry): RunIndexEntry[] {
-  const at = runs.findIndex((r) => (r.createdAt ?? '').localeCompare(row.createdAt) < 0)
-  const next = [...runs]
-  next.splice(at < 0 ? runs.length : at, 0, row)
-  return next
+/** One lazy array copy shared by every patch in a flush. Membership edits rebuild positions. */
+class IndexBatch {
+  runs: RunIndexEntry[]
+  private copied = false
+  private positions = new Map<string, number>()
+  constructor(runs: RunIndexEntry[]) {
+    this.runs = runs
+    this.reindex()
+  }
+  private reindex(): void {
+    this.positions.clear()
+    this.runs.forEach((row, at) => this.positions.set(indexKey(row.projectId, row.id), at))
+  }
+  at(project: string, id: string): number {
+    return this.positions.get(indexKey(project, id)) ?? -1
+  }
+  private mutable(): RunIndexEntry[] {
+    if (!this.copied) { this.runs = [...this.runs]; this.copied = true }
+    return this.runs
+  }
+  replace(at: number, row: RunIndexEntry): RunIndexEntry[] {
+    this.mutable()[at] = row
+    return this.runs
+  }
+  remove(at: number): RunIndexEntry[] {
+    this.mutable().splice(at, 1)
+    this.reindex()
+    return this.runs
+  }
+  insert(row: RunIndexEntry): RunIndexEntry[] {
+    const at = this.runs.findIndex((r) => (r.createdAt ?? '').localeCompare(row.createdAt) < 0)
+    this.mutable().splice(at < 0 ? this.runs.length : at, 0, row)
+    this.reindex()
+    return this.runs
+  }
+}
+
+export type IndexBatchPatch =
+  | { type: 'change'; change: IndexChange }
+  | { type: 'usage'; project: string; usage: Readonly<Record<string, ProcessUsage>> }
+
+/** Apply ordered frames with the same row sharing and reconciliation rules as single patches. */
+export function applyIndexBatch(index: RunsIndexResponse, patches: readonly IndexBatchPatch[], registry?: ReadonlySet<string>): IndexPatch {
+  const batch = new IndexBatch(index.runs)
+  let next = index
+  let reconcile = false
+  for (const patch of patches) {
+    if (patch.type === 'usage') next = applyUsage(next, patch.project, patch.usage, batch)
+    else {
+      const result = applyChange(next, patch.change, registry, batch)
+      next = result.index
+      reconcile ||= result.reconcile
+    }
+  }
+  return { index: next, reconcile }
 }
 
 /**
@@ -86,39 +135,41 @@ export function applyIndexChange(
   change: IndexChange,
   registry?: ReadonlySet<string>,
 ): IndexPatch {
+  return applyChange(index, change, registry, new IndexBatch(index.runs))
+}
+
+function applyChange(index: RunsIndexResponse, change: IndexChange, registry: ReadonlySet<string> | undefined, batch: IndexBatch): IndexPatch {
   const { project } = change
-  const id = changeId(change)
-  const at = index.runs.findIndex((row) => row.projectId === project && row.id === id)
+  const at = batch.at(project, changeId(change))
   const previous = at >= 0 ? index.runs[at] : undefined
   const truncated = index.truncated.includes(project)
 
   if (change.type === 'deleted') {
     if (!previous) return { index, reconcile: false }
     return {
-      index: withRuns(index, index.runs.filter((_, position) => position !== at)),
+      index: withRuns(index, batch.remove(at)),
       reconcile: truncated && previous.archived,
     }
   }
 
   const { run } = change
   if (run.delegation?.role === 'worker') {
-    return previous ? { index: withRuns(index, index.runs.filter((_, position) => position !== at)), reconcile: false } : { index, reconcile: false }
+    return previous ? { index: withRuns(index, batch.remove(at)), reconcile: false } : { index, reconcile: false }
   }
   if (!previous && !isKnownProject(index, project, registry)) return { index, reconcile: true }
 
   const row = replaceEqualDeep(previous, { projectId: project, ...run } satisfies RunIndexEntry) as RunIndexEntry
   if (previous) {
     if (row === previous) return { index, reconcile: false }
-    const runs = [...index.runs]
-    runs[at] = row
+    const runs = batch.replace(at, row)
     // Archive or unarchive: the window of a truncated project moves; a project that was complete
     // becomes truncated once it holds more archived rows than the window.
     const boundary = previous.archived !== row.archived
       && (truncated || archivedCount(runs, project) > index.perProjectLimit)
     return { index: withRuns(index, runs), reconcile: boundary }
   }
-  if (truncated) return applyToTruncatedWindow(index, row)
-  const runs = insertRow(index.runs, row)
+  if (truncated) return applyToTruncatedWindow(index, row, batch)
+  const runs = batch.insert(row)
   return {
     index: withRuns(index, runs),
     reconcile: row.archived && archivedCount(runs, project) > index.perProjectLimit,
@@ -146,11 +197,11 @@ function windowEdge(runs: readonly RunIndexEntry[], project: string): string | u
  *
  * With no held archived row there is no edge, so an unarchived row reconciles to stay honest.
  */
-function applyToTruncatedWindow(index: RunsIndexResponse, row: RunIndexEntry): IndexPatch {
+function applyToTruncatedWindow(index: RunsIndexResponse, row: RunIndexEntry, batch: IndexBatch): IndexPatch {
   const edge = windowEdge(index.runs, row.projectId)
   const insideWindow = edge !== undefined && row.createdAt > edge
   if (row.archived && !insideWindow) return { index, reconcile: false }
-  return { index: withRuns(index, insertRow(index.runs, row)), reconcile: row.archived || edge === undefined || row.createdAt < edge }
+  return { index: withRuns(index, batch.insert(row)), reconcile: row.archived || edge === undefined || row.createdAt < edge }
 }
 
 /**
@@ -162,22 +213,26 @@ export function applyIndexUsage(
   project: string,
   usage: Readonly<Record<string, ProcessUsage>>,
 ): RunsIndexResponse {
+  return applyUsage(index, project, usage, new IndexBatch(index.runs))
+}
+
+function applyUsage(index: RunsIndexResponse, project: string, usage: Readonly<Record<string, ProcessUsage>>, batch: IndexBatch): RunsIndexResponse {
   let changed = false
-  const runs = index.runs.map((row) => {
-    if (row.projectId !== project) return row
+  index.runs.forEach((row, at) => {
+    if (row.projectId !== project) return
     const sample = usage[row.id]
     if (sample) {
       const next = replaceEqualDeep(row.usage, sample) as ProcessUsage
-      if (next === row.usage) return row
-      changed = true
-      return { ...row, usage: next }
+      if (next === row.usage) return
+      batch.replace(at, { ...row, usage: next })
+    } else {
+      if (row.usage === undefined) return
+      const { usage: _dropped, ...rest } = row
+      batch.replace(at, rest)
     }
-    if (row.usage === undefined) return row
     changed = true
-    const { usage: _dropped, ...rest } = row
-    return rest
   })
-  return changed ? withRuns(index, runs) : index
+  return changed ? withRuns(index, batch.runs) : index
 }
 
 /** A removed project leaves the index whole: its rows, its `truncated` entry and its statuses. */

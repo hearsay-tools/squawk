@@ -28,7 +28,7 @@ export {
 import { getApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { normalizeSidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
 import { toast } from '@/components/ui/toaster'
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type MutateOptions } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type MutateOptions, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
 
 import { mergeProviderStatusResponse } from '@/lib/provider-status'
@@ -130,6 +130,8 @@ import type {
   ProviderStatusResponse,
   ReferenceStatus,
   RunRecord,
+  RunSummary,
+  RunsIndexResponse,
   SelectAgentProfileInput,
   SetAgentConfigInput,
   UpdateAgentProfileInput,
@@ -895,13 +897,16 @@ export const MIN_RUNS_SEARCH_LENGTH = 2
  * interval any document asks for. No `refetchOnWindowFocus`: `global-events.tsx` reconciles this
  * key on visibility restore through the same fence.
  */
-export function useRunsIndex(enabled = true, refetchIntervalMs: number = RUNS_INDEX_BACKSTOP_MS) {
+export function useRunsIndex<T>(enabled: boolean, refetchIntervalMs: number | undefined, select: (index: RunsIndexResponse) => T): UseQueryResult<T>
+export function useRunsIndex(enabled?: boolean, refetchIntervalMs?: number): UseQueryResult<RunsIndexResponse>
+export function useRunsIndex<T = RunsIndexResponse>(enabled = true, refetchIntervalMs: number = RUNS_INDEX_BACKSTOP_MS, select?: (index: RunsIndexResponse) => T) {
   const sync = runsIndexSync(useQueryClient())
   useLiveRead('/api/v1/workspace/runs-index', workspaceQueryKeys.runsIndex, liveRefetchInterval(enabled ? refetchIntervalMs : false), mergeRunsIndexRead)
-  return useQuery({
+  return useQuery<RunsIndexResponse, Error, T>({
     queryKey: workspaceQueryKeys.runsIndex,
     queryFn: ({ signal }) => getRunsIndex({ signal }).then(sync.merge),
     enabled,
+    ...(select ? { select } : {}),
     staleTime: 30_000,
     refetchInterval: false,
   })
@@ -923,11 +928,12 @@ export function useRunsIndex(enabled = true, refetchIntervalMs: number = RUNS_IN
  * after the list answered under its id key, that list stays as placeholder data until `'default'`
  * answers, so the sidebar rows never unmount (hearsay-tools/squawk#3048). Other moves start empty.
  */
-export function useProjectRuns(projectId: string, enabled = true, boot = false) {
-  return useQuery({
+export function useProjectRuns<T = RunSummary[]>(projectId: string, enabled = true, boot = false, select?: (runs: RunSummary[]) => T) {
+  return useQuery<RunSummary[], Error, T>({
     queryKey: [projectAddress({ projectId, boot }).cacheScope, 'runs', 'list'] as const,
     queryFn: ({ signal }) => getRuns(projectAddress({ projectId, boot }), { signal }),
     enabled,
+    ...(select ? { select } : {}),
     placeholderData: (previous, previousQuery) => (boot && previousQuery?.queryKey[0] === projectId ? previous : undefined),
   })
 }
