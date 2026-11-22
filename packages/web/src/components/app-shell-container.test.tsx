@@ -1063,12 +1063,12 @@ describe('GitHub view sidebar list (#622)', () => {
 })
 
 it('does not render shell chrome for unrelated token ticks or active-task usage', async () => {
-  const activeRun = run({ id: 'active', title: 'Active task' })
+  const activeRun = run({ id: 'active', title: 'Active task', titleSummary: undefined })
   serve({
     '/api/v1/health': HEALTH,
-    '/api/v1/workspace/projects': { projects: [PROJECT], bootProject: 'cezar' },
-    '/api/v1/runs': [activeRun],
-    '/api/v1/p/cezar/runs': [activeRun],
+    '/api/v1/projects': { projects: [PROJECT], bootProject: 'cezar' },
+    '/api/v1/run-summaries': [activeRun],
+    '/api/v1/p/cezar/run-summaries': [activeRun],
     '/api/v1/workspace/runs-index': { runs: [], truncated: [], referenceStatuses: {}, perProjectLimit: 200, generation: 'g', eventSeq: 0 },
   })
   const renders = vi.spyOn(titleHook, 'useDocumentTitle')
