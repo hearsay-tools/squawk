@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type RunRecord } from './store.ts';
+import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
 import { seedRuns, blockRunWrites, readPersistedRuns } from './run-store.testkit.ts';
 import { archivePullRequests } from './pull-requests.ts';
 import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.ts';
@@ -30,7 +31,7 @@ function setup(overrides: Partial<RunRecord> = {}) {
   const store = RunStore.open(dir, { keepLive: true }); stores.push(store);
   return { dir, store, id: run.id };
 }
-function observations(snapshot: NonNullable<ReturnType<RunStore['archive']['archiveOnMergeSnapshot']>>) {
+function observations(snapshot: ArchiveOnMergeSnapshot) {
   return snapshot.pullRequests.map(identity => ({ ...identity, mergedAt }));
 }
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
