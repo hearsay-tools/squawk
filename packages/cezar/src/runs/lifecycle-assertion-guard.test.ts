@@ -29,35 +29,45 @@ const nameOf = (node: Node): string | undefined => node.type === 'Identifier' ? 
 
 const startOf = (node: Node): number => node.start as number;
 const endOf = (node: Node): number => node.end as number;
+const sizeOf = (node: Node): number => endOf(node) - startOf(node);
+const contains = (outer: Node, inner: Node): boolean => startOf(outer) <= startOf(inner) && endOf(inner) <= endOf(outer);
 
-/** A function a `const` or a declaration names, with the block whose scope holds the name. */
-interface NamedFunction { name: string; fn: Node; scope: Node; hoisted: boolean }
+/** One place a name is bound: `fn` is the function it holds, if any; `scope` is the node whose body sees it. */
+interface Binding { name: string; fn: Node | undefined; scope: Node; at: number; hoisted: boolean }
 
-function namedFunctions(nodes: readonly Node[]): NamedFunction[] {
+/** The names a file binds: `const`s, function declarations and simple parameters. */
+function bindingsOf(nodes: readonly Node[]): Binding[] {
   const blocks = nodes.filter((node) => node.type === 'BlockStatement' || node.type === 'Program');
-  const scopeOf = (node: Node): Node => blocks
-    .filter((block) => startOf(block) <= startOf(node) && endOf(node) <= endOf(block))
-    .reduce((inner, block) => (endOf(block) - startOf(block) < endOf(inner) - startOf(inner) ? block : inner));
-  const named: NamedFunction[] = [];
+  const blockOf = (node: Node): Node => blocks.filter((block) => contains(block, node)).reduce((inner, block) => (sizeOf(block) < sizeOf(inner) ? block : inner));
+  const bindings: Binding[] = [];
   for (const node of nodes) {
-    if (node.type === 'VariableDeclarator' && isListenerFunction(node.init)) named.push({ name: nameOf(node.id as Node) ?? '', fn: node.init, scope: scopeOf(node), hoisted: false });
-    if (node.type === 'FunctionDeclaration' && node.id) named.push({ name: nameOf(node.id as Node) ?? '', fn: node, scope: scopeOf(node), hoisted: true });
+    if (node.type === 'VariableDeclarator' && nameOf(node.id as Node)) {
+      bindings.push({ name: nameOf(node.id as Node)!, fn: isListenerFunction(node.init) ? node.init : undefined, scope: blockOf(node), at: startOf(node), hoisted: false });
+    }
+    if (node.type === 'FunctionDeclaration' && node.id) bindings.push({ name: nameOf(node.id as Node)!, fn: node, scope: blockOf(node), at: startOf(node), hoisted: true });
+    for (const param of isListenerFunction(node) ? (node.params as Node[] | undefined) ?? [] : []) {
+      const id = param.type === 'AssignmentPattern' ? (param.left as Node) : param;
+      if (nameOf(id)) bindings.push({ name: nameOf(id)!, fn: undefined, scope: node, at: startOf(node), hoisted: true });
+    }
   }
-  return named;
+  return bindings;
 }
 
-/** The function `reference` names where it stands: the nearest declaration before it in a block around it, or a function declaration anywhere in one. */
-function resolve(named: readonly NamedFunction[], reference: Node): Node | undefined {
-  return named
-    .filter((entry) => entry.name === nameOf(reference) && startOf(entry.scope) <= startOf(reference) && endOf(reference) <= endOf(entry.scope) && (entry.hoisted || startOf(entry.fn) < startOf(reference)))
-    .reduce<NamedFunction | undefined>((nearest, entry) => (!nearest || startOf(entry.fn) > startOf(nearest.fn) ? entry : nearest), undefined)?.fn;
+/** The function `reference` names where it stands: its innermost binding, and only a function counts. */
+function resolve(bindings: readonly Binding[], reference: Node): Node | undefined {
+  const visible = bindings.filter((binding) => binding.name === nameOf(reference) && contains(binding.scope, reference) && (binding.hoisted || binding.at < startOf(reference)));
+  const innermost = visible.reduce<Binding | undefined>((best, binding) => {
+    if (!best || sizeOf(binding.scope) < sizeOf(best.scope)) return binding;
+    return sizeOf(binding.scope) === sizeOf(best.scope) && binding.at > best.at ? binding : best;
+  }, undefined);
+  return innermost?.fn;
 }
 
 /** The functions a file hands to `onRunWrite` or to `subscribe({ … })` as listeners. */
-function listenersOf(nodes: readonly Node[], named: readonly NamedFunction[]): Set<Node> {
+function listenersOf(nodes: readonly Node[], bindings: readonly Binding[]): Set<Node> {
   const listeners = new Set<Node>();
   const take = (arg: unknown): void => {
-    const target = isListenerFunction(arg) ? arg : isNode(arg) && arg.type === 'Identifier' ? resolve(named, arg) : undefined;
+    const target = isListenerFunction(arg) ? arg : isNode(arg) && arg.type === 'Identifier' ? resolve(bindings, arg) : undefined;
     if (target) listeners.add(target);
   };
   for (const node of nodes) {
@@ -77,7 +87,7 @@ function listenersOf(nodes: readonly Node[], named: readonly NamedFunction[]): S
 export function assertionsInListeners(source: string, file: string): string[] {
   const nodes = [...walk(parse(source, { sourceType: 'module', plugins: ['typescript'] }).program)];
   const lines = new Set<number>();
-  for (const listener of listenersOf(nodes, namedFunctions(nodes))) {
+  for (const listener of listenersOf(nodes, bindingsOf(nodes))) {
     for (const node of walk(listener.body)) {
       if (node.type === 'CallExpression' && nameOf(node.callee as Node) === 'expect') {
         lines.add((node.loc as { start: { line: number } }).start.line);
@@ -120,6 +130,26 @@ describe('assertions in lifecycle listeners', () => {
     expect(assertionsInListeners(source, 'any.ts')).toEqual([
       'any.ts:2 expect inside a lifecycle listener', 'any.ts:11 expect inside a lifecycle listener',
     ]);
+  });
+
+  it('resolves a name to its innermost binding: a later outer function or an inner shadow', () => {
+    const source = [
+      "it('inner listener, outer recorder', () => {",
+      '  const onRun = (run) => { expect(run.id).toBe(id); };',
+      '  onRunWrite(store.lifecycle, onRun);',
+      '});',
+      'function onRun(run) { seen.push(run); }',
+      "it('outer listener, inner mock', () => {",
+      '  const onRun = vi.fn();',
+      '  onRunWrite(store.lifecycle, onRun);',
+      '});',
+      "it('a parameter shadows', (onRun) => {",
+      '  onRunWrite(store.lifecycle, onRun);',
+      '});',
+    ].join('\n');
+    expect(assertionsInListeners(source, 'any.ts')).toEqual(['any.ts:2 expect inside a lifecycle listener']);
+    const outer = "function onRun(run) { expect(run).toBeDefined(); }\nit('x', () => { const onRun = vi.fn(); onRunWrite(store.lifecycle, onRun); });";
+    expect(assertionsInListeners(outer, 'any.ts')).toEqual([]);
   });
 
   it('accepts a listener that records, and an expect outside every listener', () => {
