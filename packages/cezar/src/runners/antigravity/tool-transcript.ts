@@ -52,51 +52,108 @@ export function transcriptResultText(row: z.infer<typeof rowSchema>): string {
 
 export interface TranscriptCall { id: string; name: string; args: unknown }
 
+/** Result texts held at once; the oldest goes first. */
+const HELD_RESULTS = 64;
+
 /**
  * Matches tool calls to their result rows. A planner row lists the step's calls with the same
  * `name` and `args` the wire sends, and the k-th call's result is the row `step_index + 1 + k`.
+ * Each call takes its slot when it starts, so the n-th started call with a name and arguments gets
+ * the n-th planned one: neither the order calls complete in nor a call that stopped waiting moves
+ * another call's result. Only results a waiting call can still take are held.
  */
 export class AntigravityTranscript {
-  private readonly planned: Array<{ name: string; args: string; step: number; claimed: boolean }> = [];
+  /** Per call key: planned result steps, and started calls, that have no partner yet. */
+  private readonly planned = new Map<string, number[]>();
+  private readonly started = new Map<string, string[]>();
+  private readonly steps = new Map<string, number>();
+  private readonly dropped = new Set<string>();
   private readonly results = new Map<number, string>();
-  private readonly claims = new Map<string, number>();
+
+  /** A call started on the wire: it takes the next planned slot of its name and arguments. */
+  start(call: TranscriptCall): void {
+    const key = callKey(call.name, call.args);
+    this.started.set(key, [...this.started.get(key) ?? [], call.id]);
+    this.pair(key);
+  }
+
+  /** The call no longer waits (it had wire output, or its wait ended): it keeps its slot and its
+   *  result is thrown away. */
+  drop(id: string): void {
+    const step = this.steps.get(id);
+    if (step === undefined) { this.dropped.add(id); return; }
+    this.steps.delete(id);
+    this.results.delete(step);
+  }
 
   addRow(value: unknown): void {
     const row = rowSchema.safeParse(value);
     if (!row.success) return;
     const { step_index: step, type, tool_calls: calls } = row.data;
     if (type === 'PLANNER_RESPONSE') {
-      calls?.forEach((call, index) => this.planned.push({ name: call.name, args: canonical(call.args ?? {}), step: step + 1 + index, claimed: false }));
-    } else if (!NOT_RESULTS.has(type)) this.results.set(step, transcriptResultText(row.data));
+      calls?.forEach((call, index) => {
+        const key = callKey(call.name, call.args);
+        this.planned.set(key, [...this.planned.get(key) ?? [], step + 1 + index]);
+        this.pair(key);
+      });
+    } else if (!NOT_RESULTS.has(type) && this.wanted(step)) this.hold(step, transcriptResultText(row.data));
   }
 
-  /** The call's result text once its row is known. The call claims the first planned call with its
-   *  name and arguments, so repeated equal calls take their rows in order. */
-  output(call: TranscriptCall): string | undefined {
-    let step = this.claims.get(call.id);
-    if (step === undefined) {
-      const args = canonical(call.args ?? {});
-      const planned = this.planned.find(entry => !entry.claimed && entry.name === call.name && entry.args === args);
-      if (!planned) return undefined;
-      planned.claimed = true;
-      step = planned.step;
-      this.claims.set(call.id, step);
+  /** The call's result text once its row is read; reading it consumes it. */
+  output(id: string): string | undefined {
+    const step = this.steps.get(id);
+    const text = step === undefined ? undefined : this.results.get(step);
+    if (text === undefined) return undefined;
+    this.steps.delete(id);
+    this.results.delete(step!);
+    return text;
+  }
+
+  private pair(key: string): void {
+    const planned = this.planned.get(key) ?? [];
+    const started = this.started.get(key) ?? [];
+    while (planned.length && started.length) {
+      const step = planned.shift()!;
+      const id = started.shift()!;
+      if (this.dropped.delete(id)) this.results.delete(step);
+      else this.steps.set(id, step);
     }
-    return this.results.get(step);
+    for (const [map, list] of [[this.planned, planned], [this.started, started]] as const) {
+      if (list.length) (map as Map<string, unknown[]>).set(key, list); else map.delete(key);
+    }
+  }
+
+  /** A row a call holds, or one a started call has yet to pair with. */
+  private wanted(step: number): boolean {
+    for (const held of this.steps.values()) if (held === step) return true;
+    for (const steps of this.planned.values()) if (steps.includes(step)) return true;
+    return false;
+  }
+
+  private hold(step: number, text: string): void {
+    this.results.set(step, text);
+    for (const old of this.results.keys()) { if (this.results.size <= HELD_RESULTS) break; this.results.delete(old); }
   }
 }
 
-const updateSchema = z.object({
+function callKey(name: string, args: unknown): string { return `${name}\u0000${canonical(args ?? {})}`; }
+
+const wireSchema = z.object({
   sessionUpdate: z.enum(['tool_call', 'tool_call_update']), toolCallId: z.string(), name: z.string(),
-  status: z.enum(['completed', 'failed']), args: z.unknown().optional(), rawInput: z.unknown().optional(),
+  args: z.unknown().optional(), rawInput: z.unknown().optional(),
 });
+const TERMINAL: ReadonlySet<unknown> = new Set(['completed', 'failed']);
+
+function wireCall(update: Record<string, unknown>): TranscriptCall | undefined {
+  const parsed = wireSchema.safeParse(update);
+  if (!parsed.success) return undefined;
+  return { id: parsed.data.toolCallId, name: parsed.data.name, args: parsed.data.args ?? parsed.data.rawInput };
+}
 
 /** A terminal tool update that carries no result: its output can come only from the transcript. */
 export function transcriptCall(update: Record<string, unknown>): TranscriptCall | undefined {
-  if (update.content != null || update.rawOutput != null) return undefined;
-  const parsed = updateSchema.safeParse(update);
-  if (!parsed.success) return undefined;
-  return { id: parsed.data.toolCallId, name: parsed.data.name, args: parsed.data.args ?? parsed.data.rawInput };
+  if (update.content != null || update.rawOutput != null || !TERMINAL.has(update.status)) return undefined;
+  return wireCall(update);
 }
 
 interface Pending { call: TranscriptCall; item?: UiToolItem; deadline: number }
@@ -118,6 +175,7 @@ export class AntigravityToolOutputs {
   private reading: Promise<void> | undefined;
   private readonly transcript = new AntigravityTranscript();
   private readonly pending = new Map<string, Pending>();
+  private readonly seen = new Set<string>();
   constructor(private readonly amend: (item: UiToolItem) => void, private readonly now: () => number = Date.now) {}
 
   /** The session is open: read its transcript from its current end. */
@@ -126,11 +184,16 @@ export class AntigravityToolOutputs {
     try { this.offset = statSync(path).size; } catch { this.offset = 0; }
   }
 
-  /** A wire update; a terminal tool update with no result starts the wait for its row. */
+  /** A wire update. A call takes its transcript slot when it first appears; a terminal update with
+   *  no result starts the wait for its row, and one with a result gives the slot up. */
   observe(update: Record<string, unknown>): void {
     if (this.closed || this.broken || !this.path) return;
-    const call = transcriptCall(update);
-    if (call && !this.pending.has(call.id)) this.pending.set(call.id, { call, deadline: this.now() + TRANSCRIPT_WAIT_MS });
+    const call = wireCall(update);
+    if (!call) return;
+    if (!this.seen.has(call.id)) { this.seen.add(call.id); this.transcript.start(call); }
+    if (!TERMINAL.has(update.status)) return;
+    if (transcriptCall(update)) { if (!this.pending.has(call.id)) this.pending.set(call.id, { call, deadline: this.now() + TRANSCRIPT_WAIT_MS }); }
+    else this.transcript.drop(call.id);
   }
 
   /** The mapped tool item closed with no output: amend it once its row is read. */
@@ -163,7 +226,7 @@ export class AntigravityToolOutputs {
 
   private expire(): void {
     const now = this.now();
-    for (const [id, pending] of this.pending) if (pending.deadline < now) this.pending.delete(id);
+    for (const [id, pending] of this.pending) if (pending.deadline < now) { this.pending.delete(id); this.transcript.drop(id); }
   }
 
   private async read(): Promise<void> {
@@ -172,7 +235,7 @@ export class AntigravityToolOutputs {
     await this.readAppended(this.path);
     for (const [id, pending] of this.pending) {
       if (!pending.item) continue;
-      const output = this.transcript.output(pending.call);
+      const output = this.transcript.output(id);
       if (output === undefined) continue;
       this.pending.delete(id);
       if (output && !this.closed) this.amend({ ...pending.item, output });

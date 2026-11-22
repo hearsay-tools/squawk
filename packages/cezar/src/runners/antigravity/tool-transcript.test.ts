@@ -27,9 +27,12 @@ describe('the Antigravity CLI transcript as the source of tool results', () => {
     const transcript = new AntigravityTranscript();
     for (const row of await fixtureLines('cli-tool-output.transcript.jsonl')) transcript.addRow(row);
     const outputs: Record<string, { name: string; output: string | null }> = {};
+    const started = new Set<string>();
     for (const update of await wireUpdates()) {
+      const id = update.toolCallId as string | undefined;
+      if (id && !started.has(id)) { started.add(id); transcript.start({ id, name: update.name as string, args: update.args }); }
       const call = transcriptCall(update);
-      if (call) outputs[call.id] = { name: call.name, output: transcript.output(call) ?? null };
+      if (call) outputs[call.id] = { name: call.name, output: transcript.output(call.id) ?? null };
     }
     expect(outputs).toStrictEqual(JSON.parse(await readFile(new URL('cli-tool-output.outputs.json', fixtures), 'utf8')));
     // A read, an MCP result, an MCP failure and the denied subagent call each carry what the agent received.
@@ -66,6 +69,37 @@ describe('the Antigravity CLI transcript as the source of tool results', () => {
     await appendFile(path, rows(planner(2), result(3, '1: new content')));
     await outputs.poll();
     expect(await amended).toEqual({ ...readItem, output: '1: new content' });
+    outputs.close();
+  });
+
+  it('gives identical calls their own rows when they complete out of order', () => {
+    const transcript = new AntigravityTranscript();
+    transcript.start({ id: 'first', name: 'read_file', args: readArgs });
+    transcript.start({ id: 'second', name: 'read_file', args: readArgs });
+    transcript.addRow({ step_index: 0, type: 'PLANNER_RESPONSE', tool_calls: [{ name: 'read_file', args: readArgs }, { name: 'read_file', args: readArgs }] });
+    transcript.addRow(result(1, 'first content'));
+    transcript.addRow(result(2, 'second content'));
+    expect(transcript.output('second')).toBe('second content');
+    expect(transcript.output('first')).toBe('first content');
+  });
+
+  it('keeps an expired call\'s slot, so a later identical call never shows its late row', async () => {
+    const path = await transcriptFile();
+    const amended: UiToolItem[] = [];
+    let now = 0;
+    const outputs = new AntigravityToolOutputs(item => amended.push(item), () => now);
+    outputs.open(path);
+    outputs.observe(readUpdate); outputs.completed(readItem);
+    now = TRANSCRIPT_WAIT_MS + 1;
+    await outputs.poll();
+    // The first read's rows land after its wait ended; the agent then reads the edited file again.
+    await writeFile(path, rows(planner(0), result(1, 'old content')));
+    const again = { ...readUpdate, toolCallId: 'call_2' };
+    outputs.observe(again); outputs.completed({ ...readItem, id: 'call_2' });
+    await outputs.poll();
+    await appendFile(path, rows(planner(2), result(3, 'new content')));
+    await outputs.poll();
+    expect(amended).toEqual([{ ...readItem, id: 'call_2', output: 'new content' }]);
     outputs.close();
   });
 
