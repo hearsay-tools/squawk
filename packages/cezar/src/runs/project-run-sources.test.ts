@@ -68,7 +68,7 @@ describe('project run sources', () => {
     expect(store.listRunIds()).toEqual([run.id]);
     expect(store.eventLog.readEvents(run.id)[0]?.text).toBe('source history');
     expect((await store.eventLog.readEventsAsync(run.id))[0]?.text).toBe('source history');
-    expect(readHandoff(store.sourceDataDir(run.id), run.id)).toBe('# fallback handoff');
+    expect(readHandoff(store.claims.sourceDataDir(run.id), run.id)).toBe('# fallback handoff');
     expect(store.workerExecutions.readWorkerExecution(run.id)).toBeUndefined();
     expect(store.workerExecutions.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
     expect(readRunIndexFromDisk(root('cezar')).runs.map(item => item.id)).toEqual([run.id]);
@@ -91,7 +91,7 @@ describe('project run sources', () => {
     const store = open();
     expect(new Set(store.listConversationRootIds(peer))).toEqual(new Set([legacy.id, fallback.id]));
     expect(store.listConversationRootIds(other)).toEqual([duplicate.id]);
-    expect(store.adoptFallbackFamily(fallback.id)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(fallback.id)).toBe(true);
     expect(new Set(store.listConversationRootIds(peer))).toEqual(new Set([legacy.id, fallback.id]));
     expect(new Set(store.listConversationRootIds())).toEqual(new Set([legacy.id, fallback.id, duplicate.id]));
   });
@@ -107,7 +107,7 @@ describe('project run sources', () => {
     expect(store.countAutomationRuns('daily')).toBe(2);
     expect(store.countAutomationRuns('weekly')).toBe(1);
     expect(store.findRunIdsByAutomationReceipt(['r-fallback', 'r-dup'])).toEqual(new Map([['r-fallback', fallback.id], ['r-dup', duplicate.id]]));
-    expect(store.adoptFallbackFamily(fallback.id)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(fallback.id)).toBe(true);
     expect(store.countAutomationRuns('daily')).toBe(2);
     expect(store.findRunIdsByAutomationReceipt(['r-fallback']).get('r-fallback')).toBe(fallback.id);
   });
@@ -124,7 +124,7 @@ describe('project run sources', () => {
     expect(store.getRun(duplicate.id)?.title).toBe('legacy duplicate');
     expect(store.eventLog.readEvents(duplicate.id)).toEqual([]);
     expect(store.eventLog.readEvents(fallback.id)[0]?.text).toBe('fallback');
-    expect(store.sourceDataDir(duplicate.id)).toBe(root('cezar'));
+    expect(store.claims.sourceDataDir(duplicate.id)).toBe(root('cezar'));
     expect(searchRunIndexFromDisk(root('cezar'), 'wrong fallback', { limit: 10 }).runs).toEqual([]);
   });
 
@@ -149,13 +149,13 @@ describe('project run sources', () => {
     expect(readdirSync(root('cezar'))).toEqual([]);
     expect(() => store.eventLog.appendEvent(run.id, { type: 'text', text: 'automatic' })).toThrow(/\.ai\/squawk.*binary that migrated/);
     expect(store.updateRun(run.id, { title: 'automatic' })).toBeUndefined();
-    expect(store.writeRefusal(run.id)).toMatch(/\.ai\/squawk/);
+    expect(store.claims.writeRefusal(run.id)).toMatch(/\.ai\/squawk/);
     expect(readdirSync(root('cezar'))).toEqual([]);
-    expect(store.adoptFallbackFamily(run.id)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(run.id)).toBe(true);
     store.eventLog.appendEvent(run.id, { type: 'text', text: 'new' });
     store.updateRun(run.id, { title: 'changed' });
     store.flush();
-    expect(store.sourceDataDir(run.id)).toBe(root('cezar'));
+    expect(store.claims.sourceDataDir(run.id)).toBe(root('cezar'));
     expect(store.eventLog.readEvents(run.id).map(event => event.text)).toEqual(['original', 'new']);
     expect(readFileSync(history, 'utf8')).toBe(bytes);
     expect(readHandoff(root('cezar'), run.id)).toBe('# preserved');
@@ -186,7 +186,7 @@ describe('project run sources', () => {
     seed('cezar', [duplicate, old]);
     seed('squawk', [{ ...duplicate, title: 'fallback copy' }]);
     const store = open();
-    expect(store.isFallbackRun(duplicate.id)).toBe(false);
+    expect(store.claims.isFallbackRun(duplicate.id)).toBe(false);
     expect(store.retention.canDeleteRun(duplicate.id, 'worktree')).toBe(true);
     expect(store.retention.canDeleteRun(duplicate.id)).toBe(false);
     expect(() => store.retention.deleteRun(duplicate.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
@@ -202,7 +202,7 @@ describe('project run sources', () => {
     const store = open();
     expect(store.getRun(run.id)?.status).toBe('waiting');
     expect(store.listRuns()).toEqual([]);
-    expect(store.runOwnership(run.id)).toBe('fallback');
+    expect(store.claims.runOwnership(run.id)).toBe('fallback');
     expect(readdirSync(root('cezar'))).toEqual([]);
   });
 
@@ -244,9 +244,9 @@ describe('project run sources', () => {
       db.takeClaims(owner, [{ family: run.id, expect: null }]);
       const store = open();
       expect(store.getRun(run.id)?.title).toBe('foreign');
-      expect(store.runOwnership(run.id)).toBe('fallback');
+      expect(store.claims.runOwnership(run.id)).toBe('fallback');
       expect(store.updateRun(run.id, { title: 'unsafe' })).toBeUndefined();
-      expect(() => store.adoptFallbackFamily(run.id)).toThrow('in use by another process');
+      expect(() => store.claims.adoptFallbackFamily(run.id)).toThrow('in use by another process');
       expect(store.getRun(run.id)?.title).toBe('foreign');
       expect(readdirSync(root('cezar'))).toEqual([]);
       expect(db.get(run.id)?.data).toContain('foreign');
@@ -263,7 +263,7 @@ describe('project run sources', () => {
     writeFileSync(document, '<title>Fallback report</title>');
     const artifact = await publishArtifact(artifactDirectory(source, run.id), run.id, document);
     const store = open();
-    expect((await readArtifact(artifactDirectory(store.sourceDataDir(run.id), run.id), run.id, artifact.id))?.bytes.toString()).toContain('Fallback report');
+    expect((await readArtifact(artifactDirectory(store.claims.sourceDataDir(run.id), run.id), run.id, artifact.id))?.bytes.toString()).toContain('Fallback report');
     expect((await reportsIndex(store).list({}))).toMatchObject({ reports: [{ id: artifact.id, runId: run.id }] });
   });
 
@@ -327,10 +327,10 @@ describe('project run sources', () => {
     writeFileSync(path, bytes);
     const store = open();
     expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
-    expect(store.adoptFallbackFamily(workerId)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(workerId)).toBe(true);
     store.updateRun(workerId, { title: 'explicit write' });
     store.flush();
-    expect(store.sourceDataDir(parentId)).toBe(root('cezar'));
+    expect(store.claims.sourceDataDir(parentId)).toBe(root('cezar'));
     expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
     expect(store.workerResults.readWorkerResult(parentId, workerId)?.diff).toMatchObject({ path: join(root('cezar'), 'runs', `${parentId}-worker-results`, `${workerId}.${snapshotId}.json`) });
     expect(readFileSync(path, 'utf8')).toBe(bytes);
@@ -346,14 +346,14 @@ describe('project run sources', () => {
     writeFileSync(join(root('cezar'), 'runs', name, 'result.json'), different ? 'other evidence' : 'source evidence');
     const store = open();
     if (different) {
-      expect(() => store.adoptFallbackFamily(run.id)).toThrow('sidecar already exists');
-      expect(store.isFallbackRun(run.id)).toBe(true);
+      expect(() => store.claims.adoptFallbackFamily(run.id)).toThrow('sidecar already exists');
+      expect(store.claims.isFallbackRun(run.id)).toBe(true);
       expect(readFileSync(join(root('cezar'), 'runs', name, 'result.json'), 'utf8')).toBe('other evidence');
     } else {
-      store.adoptFallbackFamily(run.id);
+      store.claims.adoptFallbackFamily(run.id);
       store.updateRun(run.id, { title: 'changed' });
       store.flush();
-      expect(store.isFallbackRun(run.id)).toBe(false);
+      expect(store.claims.isFallbackRun(run.id)).toBe(false);
       expect(store.getRun(run.id)?.title).toBe('changed');
       expect(readFileSync(join(root('cezar'), 'runs', name, 'result.json'), 'utf8')).toBe('source evidence');
     }
@@ -381,11 +381,11 @@ describe('project run sources', () => {
     seed('squawk', [parent]);
     const store = open();
     expect(store.listRuns()).toEqual([]);
-    expect(store.adoptFamily(parent.id, { stop: true })).toBeUndefined();
-    expect(store.adoptFallbackFamily(parent.id)).toBe(true);
-    expect(store.adoptFamily(parent.id, { stop: true })).toBe(parent.id);
+    expect(store.claims.adoptFamily(parent.id, { stop: true })).toBeUndefined();
+    expect(store.claims.adoptFallbackFamily(parent.id)).toBe(true);
+    expect(store.claims.adoptFamily(parent.id, { stop: true })).toBe(parent.id);
     store.flush();
-    expect(store.isFallbackRun(parent.id)).toBe(false);
+    expect(store.claims.isFallbackRun(parent.id)).toBe(false);
     expect(store.getRun(parent.id)?.status).toBe(RUN_STATUS.cancelled);
     const source = RunDatabase.openReadOnly(join(root('squawk'), 'runs.db'))!;
     try { expect(JSON.parse(source.get(parent.id)!.data).status).toBe(RUN_STATUS.running); }
@@ -412,12 +412,12 @@ describe('project run sources', () => {
     vi.spyOn(RunDatabase.prototype, 'transaction').mockImplementation(function (this: RunDatabase, changes) {
       return transaction.call(this, changes.adoptFallback?.length ? { ...changes, beforeCommit: () => { throw new Error('injected failure'); } } : changes);
     });
-    expect(() => store.adoptFallbackFamily(run.id)).toThrow('injected failure');
-    expect(store.isFallbackRun(run.id)).toBe(true);
+    expect(() => store.claims.adoptFallbackFamily(run.id)).toThrow('injected failure');
+    expect(store.claims.isFallbackRun(run.id)).toBe(true);
     expect(existsSync(join(root('cezar'), 'runs', `${run.id}.ndjson`))).toBe(false);
     expect(readFileSync(history, 'utf8')).toContain('original');
     vi.restoreAllMocks();
-    store.adoptFallbackFamily(run.id);
+    store.claims.adoptFallbackFamily(run.id);
     store.updateRun(run.id, { title: 'retry' });
     store.flush();
     expect(store.getRun(run.id)?.title).toBe('retry');

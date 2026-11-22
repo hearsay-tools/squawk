@@ -81,7 +81,7 @@ describe('guarded automatic archive', () => {
   it('refuses incomplete merge observations, association changes and live pins', () => {
     const { store, id } = setup(); const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
     expect(store.archive.archiveAfterMerge(snapshot, [], repo)).toBe(false);
-    store.pin(id, 'active'); expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined(); store.unpin(id, 'active');
+    store.runPins.pin(id, 'active'); expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined(); store.runPins.unpin(id, 'active');
     registerRunProcess(id, process.pid);
     try { expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeDefined(); } finally { unregisterRunProcess(id); }
     store.updateRun(id, { pullRequests: [pr, { number: 43, source: 'declared' }] });

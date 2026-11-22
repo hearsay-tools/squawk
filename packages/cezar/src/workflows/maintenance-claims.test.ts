@@ -67,12 +67,12 @@ describe('claims that admit work on a finished run', () => {
       const release = claim(claimsFor(ours), id);
       expect(release).not.toBeNull();
       // While the claim stands, the other process sees the run as ours and cannot act on it.
-      expect(theirs.runOwnership(id)).toBe('foreign');
-      expect(theirs.writeRefusal(id)).toBe(RUN_IN_USE_ELSEWHERE);
+      expect(theirs.claims.runOwnership(id)).toBe('foreign');
+      expect(theirs.claims.writeRefusal(id)).toBe(RUN_IN_USE_ELSEWHERE);
       release!();
       // A released run leaves memory, and its family claim, at the next save.
       ours.flush();
-      expect(theirs.writeRefusal(id)).toBeUndefined();
+      expect(theirs.claims.writeRefusal(id)).toBeUndefined();
     } finally {
       ours.close();
       theirs.close();
@@ -90,7 +90,7 @@ describe('claims that admit work on a finished run', () => {
       const claimer = claimsFor(ours);
       // The other process takes the claim after our ownership check would have passed.
       vi.spyOn(ours, 'writeRefusal').mockReturnValue(undefined);
-      expect(theirs.pin(id, 'cleanup')).toBeDefined();
+      expect(theirs.runPins.pin(id, 'cleanup')).toBeDefined();
       expect(claim(claimer, id)).toBeNull();
     } finally {
       ours.close();

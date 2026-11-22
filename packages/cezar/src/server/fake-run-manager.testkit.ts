@@ -116,7 +116,7 @@ export class FakeRunManager implements ProjectRunManager {
 
   /** The engine's Stop on a run no session holds: a queued run leaves the line, a worker's queued proof completes. */
   cancel(runId: string): boolean {
-    if (this.#store.writeRefusal(runId)) return false;
+    if (this.#store.claims.writeRefusal(runId)) return false;
     const queued = this.#queued.has(runId);
     const run = this.#store.getRun(runId);
     if (run?.delegation?.role === 'worker') {

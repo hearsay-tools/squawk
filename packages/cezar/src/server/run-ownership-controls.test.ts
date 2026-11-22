@@ -100,7 +100,7 @@ describe('controls on a run another Squawk process owns', () => {
     const raw = new DatabaseSync(join(dataDir, RUNS_DB_FILE));
     raw.prepare("UPDATE run_claims SET session = 'crashed-owner'").run();
     raw.close();
-    expect(store.runOwnership(runId)).toBe('orphaned');
+    expect(store.claims.runOwnership(runId)).toBe('orphaned');
 
     const response = await apiRequest(app, `/api/v1/runs/${runId}/cancel`, { method: 'POST' });
     // The adoption carried the Stop out: the run ends cancelled, and Stop says it stopped it.
@@ -110,7 +110,7 @@ describe('controls on a run another Squawk process owns', () => {
     store.flush();
     expect(readPersistedRuns(dataDir).find((run) => run.id === runId)).toMatchObject({ status: RUN_STATUS.cancelled });
     // Settled and let go: nobody claims it now.
-    expect(store.runOwnership(runId)).toBe('free');
+    expect(store.claims.runOwnership(runId)).toBe('free');
   });
 
   it('a control on its own runs is not refused', async () => {
@@ -176,7 +176,7 @@ describe('adopting a dead owner\'s run for a control', () => {
     }
     owner.flush();
     crashStore(owner);
-    expect(store.runOwnership(run.id)).toBe('orphaned');
+    expect(store.claims.runOwnership(run.id)).toBe('orphaned');
     return run.id;
   };
   /** Everything the control set going has settled: a queued run would have reached the runner. */

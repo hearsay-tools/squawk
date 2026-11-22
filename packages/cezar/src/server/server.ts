@@ -2777,11 +2777,11 @@ export function createApp(deps: ServerDeps) {
     const id = c.req.param('id');
     if (c.req.method === 'GET' || c.req.method === 'HEAD' || id === undefined) return next();
     const { store, manager } = c.get('project');
-    if (store.runOwnership(id) === 'orphaned') {
+    if (store.claims.runOwnership(id) === 'orphaned') {
       const stop = c.req.method === 'POST' && c.req.path.endsWith('/cancel');
       if (await manager.adoptOrphanedRun(id, { stop }) && stop && store.getRun(id)?.status === 'cancelled') c.set('stoppedOnAdoption', true);
     }
-    const refusal = store.writeRefusal(id);
+    const refusal = store.claims.writeRefusal(id);
     if (!refusal) return next();
     // The delegation route in this family answers in the delegation error shape it always uses.
     return c.req.path.endsWith('/worker-destroy')
@@ -2959,7 +2959,7 @@ export function createApp(deps: ServerDeps) {
         if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
         try {
           return c.json(
-            await readRunHistoryPage(store.sourceDataDir(id), id, c.req.valid('query').cursor),
+            await readRunHistoryPage(store.claims.sourceDataDir(id), id, c.req.valid('query').cursor),
           );
         } catch (error) {
           if (error instanceof HistoryCursorError) return c.json({ error: error.message }, error.status);
@@ -2975,7 +2975,7 @@ export function createApp(deps: ServerDeps) {
         const { store } = c.get('project');
         const { id } = c.req.valid('param');
         if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-        return c.json(await deriveRunContextEvents(store.sourceDataDir(id), id));
+        return c.json(await deriveRunContextEvents(store.claims.sourceDataDir(id), id));
       },
     )
 
@@ -3277,7 +3277,7 @@ export function createApp(deps: ServerDeps) {
       const { store } = c.get('project');
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
-      return c.text(renderHandoffRecords(readHandoff(store.sourceDataDir(run.id), run.id), run.handoffRecords), 200, {
+      return c.text(renderHandoffRecords(readHandoff(store.claims.sourceDataDir(run.id), run.id), run.handoffRecords), 200, {
         'content-type': 'text/markdown; charset=utf-8',
       });
     })
@@ -3287,7 +3287,7 @@ export function createApp(deps: ServerDeps) {
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
       const file = c.req.valid('param').file;
-      const path = resolveAttachmentPath(store.sourceDataDir(run.id), run.id, file);
+      const path = resolveAttachmentPath(store.claims.sourceDataDir(run.id), run.id, file);
       if (!path) return c.json({ error: 'not found' }, 404);
       const ext = file.split('.').pop() ?? '';
       const image = IMAGE_TYPES[ext];
@@ -3363,7 +3363,7 @@ export function createApp(deps: ServerDeps) {
       if ('body' in checkout) return c.json(checkout.body, checkout.status);
       const { run, directory: workingDirectory } = checkout;
       const query = c.req.valid('query');
-      const loaded = await loadFileLink({ dataDir: store.sourceDataDir(run.id), runId: run.id, projectRoot: root, workingDirectory, path: query.path });
+      const loaded = await loadFileLink({ dataDir: store.claims.sourceDataDir(run.id), runId: run.id, projectRoot: root, workingDirectory, path: query.path });
       if (query.raw === '1') {
         if (!loaded.imageBytes || loaded.preview.type !== 'file') return c.json({ error: 'Only bounded raster images can be served inline.' }, 409);
         return c.body(new Uint8Array(loaded.imageBytes).buffer, 200, {
@@ -3531,7 +3531,7 @@ export function createApp(deps: ServerDeps) {
         const outcome = await resolveForgeRoot(repoRoot, deps.forgeFactory).createPR({
           repoRoot,
           run,
-          handoffText: readHandoff(store.sourceDataDir(id), id),
+          handoffText: readHandoff(store.claims.sourceDataDir(id), id),
         });
         if (!outcome.ok) {
           return c.json({ error: outcome.error, manual: `git merge ${run.branch}` }, 409);
@@ -3711,7 +3711,7 @@ export function createApp(deps: ServerDeps) {
       const query = c.req.valid('query');
       if (query.cursor) {
         try {
-          await validateLiveCursor(store.sourceDataDir(id), id, query.cursor);
+          await validateLiveCursor(store.claims.sourceDataDir(id), id, query.cursor);
         } catch (error) {
           if (error instanceof HistoryCursorError) return c.json({ error: error.message }, error.status);
           throw error;

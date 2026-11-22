@@ -127,7 +127,7 @@ it('holds a committed family claim through remote reads and mutations', async ()
   try {
     f.read.mockImplementationOnce(async () => {
       f.store().flush(); // A store sweep must retain the in-flight family claim.
-      expect(other.runOwnership(f.id)).toBe('foreign');
+      expect(other.claims.runOwnership(f.id)).toBe('foreign');
       expect(other.updateRun(f.id, { autoMergePr: false })).toBeUndefined();
       return { available: true, mergeState: { number: 12, url: 'https://github.com/o/r/pull/12',
         headRef: 'cez/task', headSha: 'a'.repeat(40), state: 'merged' } as ForgePrMergeState };

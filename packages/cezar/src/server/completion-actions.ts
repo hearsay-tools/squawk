@@ -89,14 +89,14 @@ export class CompletionActionCoordinator {
         this.backoff(key);
       }
       return true;
-    } finally { store.unpin(run.id, 'maintenance'); }
+    } finally { store.runPins.unpin(run.id, 'maintenance'); }
   }
 
   private async runClaimedCompletion(
     project: ArchiveProject, store: RunStore, run: RunRecord, token: string, key: string, current: () => boolean,
   ): Promise<boolean> {
     if (!current()) return false;
-    store.pin(run.id, 'maintenance');
+    store.runPins.pin(run.id, 'maintenance');
     if (!store.archive.claimCompletionAction(run.id, token)) return false;
     await store.archive.prepareArchiveOnMerge(run.id);
     if (!current()) return false;

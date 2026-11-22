@@ -65,7 +65,7 @@ export function claimsManager(store: RunStore): RunManager {
   });
   const claims: MaintenanceClaims = new MaintenanceClaims({ store, disposed: () => false } as unknown as RunModuleContext, {
     isActive: runId => manager.isActive(runId),
-    autosaveCleanupBlocker: runId => autosaveCleanupBlocker(store.sourceDataDir(runId), runId),
+    autosaveCleanupBlocker: runId => autosaveCleanupBlocker(store.claims.sourceDataDir(runId), runId),
     hasExecution: () => false,
     scheduleScratchCleanup: () => undefined,
     holdForMaintenance: runIds => claims.holdForMaintenance(runIds),

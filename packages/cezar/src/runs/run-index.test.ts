@@ -269,7 +269,7 @@ describe('the cold reader and the store read every repaired row alike', () => {
     const owner = RunStore.open(dir, { keepLive: true });
     const other = RunStore.open(dir, { keepLive: true });
     try {
-      expect(other.runOwnership('held')).toBe('foreign');
+      expect(other.claims.runOwnership('held')).toBe('foreign');
       const cold = readRunIndexFromDisk(dir).runs;
       expect(cold).toEqual(other.listRunSummaries().runs);
       expect(cold).toEqual(owner.listRunSummaries().runs);

@@ -62,7 +62,7 @@ export class MaintenanceClaims {
    * forced removal is deleting — nor a removal start under a session that was just admitted.
    */
   claimWorktreeReclaim(runId: string): (() => void) | null {
-    if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.writeRefusal(runId)) return null;
+    if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.claims.writeRefusal(runId)) return null;
     const run = this.context.store.getRun(runId);
     if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id), (rootId) => this.context.store.listWorkersOf(rootId))) return null;
     return this.host.holdForMaintenance([runId]);
@@ -79,15 +79,15 @@ export class MaintenanceClaims {
     // Only pin and reclaim together: a failed hold leaves nothing held.
     const pinned: string[] = [];
     for (const id of runIds) {
-      if (!this.context.store.pin(id, 'maintenance')) {
-        for (const done of pinned) this.context.store.unpin(done, 'maintenance');
+      if (!this.context.store.runPins.pin(id, 'maintenance')) {
+        for (const done of pinned) this.context.store.runPins.unpin(done, 'maintenance');
         return null;
       }
       pinned.push(id);
     }
     for (const id of runIds) this.reclaiming.add(id);
     return () => {
-      for (const id of runIds) { this.reclaiming.delete(id); this.context.store.unpin(id, 'maintenance'); }
+      for (const id of runIds) { this.reclaiming.delete(id); this.context.store.runPins.unpin(id, 'maintenance'); }
     };
   }
 
@@ -98,7 +98,7 @@ export class MaintenanceClaims {
    * branch cleanup and Continue off the checkout until the push and `gh` are done with it.
    */
   claimForPublish(runId: string): (() => void) | null {
-    if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.writeRefusal(runId)) return null;
+    if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.claims.writeRefusal(runId)) return null;
     return this.host.holdForMaintenance([runId]);
   }
 
@@ -115,7 +115,7 @@ export class MaintenanceClaims {
       const run = lookup(id);
       return !!run && !['done', 'failed', 'cancelled'].includes(run.status) && !(run.status === 'review' && workerFamilyEnded(run, lookup));
     };
-    if (runIds.some((id) => this.has(id) || !!this.host.autosaveCleanupBlocker(id) || this.host.isActive(id) || unfinished(id) || this.hostsLiveSharedWorker(lookup(id)) || this.context.store.writeRefusal(id))) return null;
+    if (runIds.some((id) => this.has(id) || !!this.host.autosaveCleanupBlocker(id) || this.host.isActive(id) || unfinished(id) || this.hostsLiveSharedWorker(lookup(id)) || this.context.store.claims.writeRefusal(id))) return null;
     return this.host.holdForMaintenance(runIds);
   }
 

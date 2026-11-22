@@ -69,7 +69,7 @@ describe('a crashed owner\'s claim on a settled family', () => {
     setRunStatus(owner, plain.id, RUN_STATUS.done, { finishedAt, worktreePath: worktree, branch: `cez/${plain.id.slice(0, 8)}` });
     const scratch = agentTmpDir(dataDir, plain.id); mkdirSync(scratch, { recursive: true });
     // The process dies while both families are still in its memory: their claims stay behind.
-    owner.pin(parent.id, 'cleanup'); owner.pin(plain.id, 'cleanup'); owner.flush();
+    owner.runPins.pin(parent.id, 'cleanup'); owner.runPins.pin(plain.id, 'cleanup'); owner.flush();
     crashStore(owner);
     const raw = RunDatabase.open(join(dataDir, RUNS_DB_FILE));
     try { expect(raw.listClaims().map((claim) => claim.family).sort()).toEqual([parent.id, plain.id].sort()); } finally { raw.close(); }
@@ -94,7 +94,7 @@ describe('a crashed owner\'s claim on a settled family', () => {
       // across its async work); flush so the families they held are released again.
       store.flush();
       // Nothing in either family is live: a dead owner's claim on it is no claim at all.
-      for (const id of [parent.id, worker.id, plain.id]) expect.soft(store.runOwnership(id), `ownership of ${id}`).toBe('free');
+      for (const id of [parent.id, worker.id, plain.id]) expect.soft(store.claims.runOwnership(id), `ownership of ${id}`).toBe('free');
     } finally {
       await drainFixtureManagers(root);
       store.close();

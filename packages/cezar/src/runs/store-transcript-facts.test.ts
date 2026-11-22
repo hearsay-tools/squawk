@@ -123,7 +123,7 @@ describe('RunStore transcript facts across processes (#880 review)', () => {
     a.eventLog.appendEvent(run.id, { type: 'text', text: 'three' });
     a.close(); stores.splice(stores.indexOf(a), 1);
     expect(b.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:two']);
-    expect(b.adoptFamily(run.id)).toBeDefined();
+    expect(b.claims.adoptFamily(run.id)).toBeDefined();
     expect(b.eventLog.appendEvent(run.id, { type: 'text', text: 'four' }).seq).toBe(4);
   });
 });

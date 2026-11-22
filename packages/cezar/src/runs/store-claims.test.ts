@@ -124,15 +124,15 @@ describe('another store\'s runs are readable and refuse writes', () => {
     owner.flush();
     const other = open({ keepLive: true });
 
-    expect(other.runOwnership(run.id)).toBe('foreign');
-    expect(other.writeRefusal(run.id)).toBe(RUN_IN_USE_ELSEWHERE);
+    expect(other.claims.runOwnership(run.id)).toBe('foreign');
+    expect(other.claims.writeRefusal(run.id)).toBe(RUN_IN_USE_ELSEWHERE);
     expect(other.getRun(run.id)?.title).toBe('theirs');
     expect(other.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
 
     expect(other.updateRun(run.id, { title: 'mine now' })).toBeUndefined();
     expect(other.archive.setArchived(run.id, true)).toBeUndefined();
     expect(other.readFlags.setRead(run.id)).toBeUndefined();
-    expect(other.pin(run.id, 'continue')).toBeUndefined();
+    expect(other.runPins.pin(run.id, 'continue')).toBeUndefined();
     expect(() => other.eventLog.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
     expect(() => other.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow(RunWriteRefusedError);
     expect(other.retention.deleteRun(run.id)).toBe(false);
@@ -147,17 +147,17 @@ describe('another store\'s runs are readable and refuse writes', () => {
     const owner = open({ keepLive: true });
     const run = owner.createRun({ title: 'done there', workflow: 'w', task: 't', steps: [] });
     setRunStatus(owner, run.id, RUN_STATUS.done, { finishedAt: '2026-10-05T10:00:00.000Z' });
-    owner.pin(run.id, 'active'); // still settling there
+    owner.runPins.pin(run.id, 'active'); // still settling there
     owner.flush();
     const other = open({ keepLive: true });
     expect(other.readFlags.markAllRead()).toBe(0);
     expect(other.archive.archiveFinished()).toEqual({ archived: 0, ids: [], pinnedIds: [] });
 
-    owner.unpin(run.id, 'active');
+    owner.runPins.unpin(run.id, 'active');
     owner.flush();
     expect(owner.heldIds()).toEqual([]);
     expect(claims()).toEqual([]);
-    expect(other.runOwnership(run.id)).toBe('free');
+    expect(other.claims.runOwnership(run.id)).toBe('free');
     expect(other.readFlags.markAllRead()).toBe(1);
     expect(other.archive.archiveFinished().ids).toEqual([run.id]);
     other.flush();
@@ -171,7 +171,7 @@ describe('claims follow memory', () => {
     const store = open({ keepLive: true });
     const live = store.createRun({ title: 'live', workflow: 'w', task: 't', steps: [] });
     expect(claims().map((claim) => claim.family)).toEqual([live.id]);
-    expect(store.runOwnership(live.id)).toBe('held');
+    expect(store.claims.runOwnership(live.id)).toBe('held');
 
     store.readFlags.setRead('finished');
     expect(claims().map((claim) => claim.family).sort()).toEqual(['finished', live.id].sort());
@@ -191,8 +191,8 @@ describe('claims follow memory', () => {
     // Only the row's columns matter here: `parent_run_id` files it under the root.
     const raw = db();
     try { raw.transaction({ upserts: [{ ...encodeRunRow(record('worker-1')), parentRunId: root.id }], deletes: [] }); } finally { raw.close(); }
-    expect(other.runOwnership('worker-1')).toBe('foreign');
-    expect(store.runOwnership('worker-1')).toBe('held');
+    expect(other.claims.runOwnership('worker-1')).toBe('foreign');
+    expect(store.claims.runOwnership('worker-1')).toBe('held');
   });
 
   it('takes over the claims of a store in this process that is gone without releasing them', () => {
@@ -206,7 +206,7 @@ describe('claims follow memory', () => {
 
     const other = open({ keepLive: true });
     expect(other.heldIds()).toEqual([run.id]);
-    expect(other.runOwnership(run.id)).toBe('held');
+    expect(other.claims.runOwnership(run.id)).toBe('held');
   });
 });
 
@@ -252,7 +252,7 @@ describe('a run changed under this store', () => {
     // The corrected view, announced; the row is refused from now on.
     expect(store.getRun(a.id)?.title).toBe('a from elsewhere');
     expect(events).toContain(`${a.id}:a from elsewhere`);
-    expect(store.runOwnership(a.id)).toBe('quarantined');
+    expect(store.claims.runOwnership(a.id)).toBe('quarantined');
     // One line that names the run and where its evidence is.
     expect(errors.mock.calls.flat().join('\n')).toMatch(new RegExp(`run ${a.id} was changed by another writer .*run_conflicts, seq 1`));
     expect(store.updateRun(a.id, { title: 'again' })).toBeUndefined();
@@ -277,7 +277,7 @@ describe('a run changed under this store', () => {
     store.updateRun(a.id, { title: 'local' });
     store.flush();
     expect(errors.mock.calls.flat().join('\n')).toContain('could not record the conflicting write');
-    expect(store.runOwnership(a.id)).toBe('held');
+    expect(store.claims.runOwnership(a.id)).toBe('held');
     expect(store.getRun(a.id)?.title).toBe('local');
     expect(conflicts()).toEqual([]);
 
@@ -286,7 +286,7 @@ describe('a run changed under this store', () => {
     raw.close();
     store.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, localData: expect.stringContaining('"title":"local"') })]);
-    expect(store.runOwnership(a.id)).toBe('quarantined');
+    expect(store.claims.runOwnership(a.id)).toBe('quarantined');
     expect(store.getRun(a.id)?.title).toBe('elsewhere');
   });
 
@@ -313,10 +313,10 @@ describe('a run changed under this store', () => {
     const store = open({ keepLive: true });
     store.readFlags.setRead('old');
     store.flush();
-    store.pin('old', 'cleanup');
+    store.runPins.pin('old', 'cleanup');
     writeBehindItsBack({ ...persisted('old'), title: 'touched elsewhere' });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    store.unpin('old', 'cleanup');
+    store.runPins.unpin('old', 'cleanup');
     expect(store.retention.deleteRun('old')).toBe(true);
     store.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: 'old', reason: 'changed', localDeleted: true, localData: null })]);
@@ -353,7 +353,7 @@ describe('a run changed under this store', () => {
     store.updateRun(a.id, { title: 'local' });
     store.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, reason: 'claim-lost' })]);
-    expect(store.runOwnership(a.id)).toBe('quarantined');
+    expect(store.claims.runOwnership(a.id)).toBe('quarantined');
     expect(persisted(a.id)).toMatchObject({ title: 'a' });
   });
 });
@@ -365,14 +365,14 @@ describe('a run nobody alive owns', () => {
     setRunStatus(gone, run.id, RUN_STATUS.running);
     gone.flush();
     const store = open({ keepLive: true });
-    expect(store.runOwnership(run.id)).toBe('foreign');
+    expect(store.claims.runOwnership(run.id)).toBe('foreign');
     crashStore(gone);
 
-    expect(store.runOwnership(run.id)).toBe('orphaned');
+    expect(store.claims.runOwnership(run.id)).toBe('orphaned');
     // An ordinary write must not inherit it: the manager adopts and recovers it first.
     expect(store.updateRun(run.id, { title: 'mine' })).toBeUndefined();
-    expect(store.adoptFamily(run.id)).toBe(run.id);
-    expect(store.runOwnership(run.id)).toBe('held');
+    expect(store.claims.adoptFamily(run.id)).toBe(run.id);
+    expect(store.claims.runOwnership(run.id)).toBe('held');
     // Adopted for a control, it is settled, never kept running for recovery to resume.
     expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.failed, error: expect.stringContaining('interrupted') });
     expect(store.updateRun(run.id, { title: 'mine' })?.title).toBe('mine');
