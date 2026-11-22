@@ -8,8 +8,11 @@
  * `.ai/specs/2026-11-21-run-lifecycle-and-store-ports.md`), and the port then points at the module
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
-import type { ArchiveFinishedScope, ArchivePullRequestIdentity, MergedPullRequest, WorkerCollectedResult } from '@open-mercato/cezar-contract';
-import type { RunEvent, RunRecord, RunStore } from './store.ts';
+import type { ArchivedRunsResponse, ArchiveFinishedScope, ArchivePullRequestIdentity, MergedPullRequest, RunSummary, WorkerCollectedResult } from '@open-mercato/cezar-contract';
+import type { AutomationNames } from '@open-mercato/cezar-contract/run-search';
+import type { RepoHandle, RunEvent, RunRecord, RunStore } from './store.ts';
+import type { BranchOwner } from './branch-owners.ts';
+import type { PeerTaskPageOptions } from './run-summary-page.ts';
 import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
 import type { RunOwnership } from './run-claims-topic.ts';
 import type { RunPinHolder } from './run-pins.ts';
@@ -32,33 +35,33 @@ export interface RunReads extends RunLookup {
   isUnreadable: RunStore['isUnreadable'];
 }
 
-/** Lists and finds over many runs. */
+/** Lists and finds over many runs (`runs/run-queries.ts`, `store.queries`). */
 export interface RunQueries {
-  listRuns: RunStore['listRuns'];
-  listAllRunsForLegacyRoute: RunStore['listAllRunsForLegacyRoute'];
-  listPeerTaskSummaries: RunStore['listPeerTaskSummaries'];
-  listRunSummaries: RunStore['listRunSummaries'];
-  listArchivedRuns: RunStore['listArchivedRuns'];
-  searchRunSummaries: RunStore['searchRunSummaries'];
-  heldIds: RunStore['heldIds'];
-  listWorkerIds: RunStore['listWorkerIds'];
-  listQuarantinedRunIds: RunStore['listQuarantinedRunIds'];
-  countAutomationRuns: RunStore['countAutomationRuns'];
-  findNonArchivedRunByIssue: RunStore['findNonArchivedRunByIssue'];
-  findRunIdsByAutomationReceipt: RunStore['findRunIdsByAutomationReceipt'];
-  listConversationRootIds: RunStore['listConversationRootIds'];
-  listRunIds: RunStore['listRunIds'];
-  listRunsWithWorktree: RunStore['listRunsWithWorktree'];
-  listBranchOwners: RunStore['listBranchOwners'];
-  findRunByClientRequestId: RunStore['findRunByClientRequestId'];
-  listFamilyRunIds: RunStore['listFamilyRunIds'];
-  withReadCache: RunStore['withReadCache'];
+  listRuns(): RunRecord[];
+  listAllRunsForLegacyRoute(): RunRecord[];
+  listPeerTaskSummaries(options: PeerTaskPageOptions): { runs: RunSummary[]; nextOffset?: number };
+  listRunSummaries(options?: { archivedWindow?: number | undefined; roots?: boolean }): { runs: RunSummary[]; truncated: boolean };
+  listArchivedRuns(options: { before?: string; limit: number; q?: string; automationNames?: AutomationNames }): ArchivedRunsResponse | { error: string };
+  searchRunSummaries(query: string, limit: number): { runs: RunSummary[]; truncated: boolean };
+  heldIds(): string[];
+  listWorkerIds(): string[];
+  listQuarantinedRunIds(): string[];
+  countAutomationRuns(automationId: string): number;
+  findNonArchivedRunByIssue(repo: string, number: number): string | undefined;
+  findRunIdsByAutomationReceipt(receiptIds: readonly string[]): Map<string, string>;
+  listConversationRootIds(naming?: string): string[];
+  listRunIds(): string[];
+  listRunsWithWorktree(): RunRecord[];
+  listBranchOwners(): BranchOwner[];
+  findRunByClientRequestId(clientRequestId: string): RunRecord | undefined;
+  listFamilyRunIds(rootId: string): string[];
+  withReadCache<T>(fn: () => T): T;
 }
 
-/** The workers of one run. */
+/** The workers of one run (`runs/run-queries.ts`, `store.queries`). */
 export interface RunFamilyReads {
-  listWorkersOf: RunStore['listWorkersOf'];
-  listOwnedWorkers: RunStore['listOwnedWorkers'];
+  listWorkersOf(parentId: string): RunRecord[];
+  listOwnedWorkers(parentId: string): RunRecord[];
 }
 
 /** Every write that creates a run or changes its record, step or outcome. */
@@ -221,9 +224,9 @@ export interface RunPins {
   republish(id: string): void;
 }
 
-/** The repository identity a store learns after it opens. */
+/** The repository identity a store learns after it opens (`runs/run-repo-scope.ts`, `store.repoScope`). */
 export interface RunRepoHandle {
-  setRepoHandle: RunStore['setRepoHandle'];
+  setRepoHandle(handle: RepoHandle | null): void;
 }
 
 /** Whether the store opened, and closing it. */
@@ -247,7 +250,7 @@ export type RunEventInput = Parameters<RunEventLog['appendEvent']>[1];
 
 /** What `projectLiveTasks` reads: the live task view of a project, over a store or over its files read-only. */
 export interface LiveRunReads {
-  listRuns: RunStore['listRuns'];
+  readonly queries: Pick<RunQueries, 'listRuns'>;
   readonly claims: Pick<RunClaims, 'persistedLiveRunIds'>;
   getRun: RunStore['getRun'];
 }

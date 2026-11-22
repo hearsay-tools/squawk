@@ -128,7 +128,7 @@ export function readLiveTaskView(root: string): LiveRunReads & {
     throw new Error(`Cannot migrate ${root}: these tasks are marked live but their records cannot be read: ${unreadable.join(', ')}. `
       + 'Open the project with the binary that wrote them, finish or cancel each one, then retry');
   }
-  return { listRuns: () => [], claims: { persistedLiveRunIds: () => ({ live: [...live], foreign: [...foreign] }) }, getRun: (id) => runs.get(id),
+  return { queries: { listRuns: () => [] }, claims: { persistedLiveRunIds: () => ({ live: [...live], foreign: [...foreign] }) }, getRun: (id) => runs.get(id),
     allRuns: () => [...runs.values()], unreadableUnarchived: () => [...unparsed].filter(id => !runs.has(id)).sort() };
 }
 

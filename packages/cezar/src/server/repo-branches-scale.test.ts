@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { RUN_STATUS, makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '../runs/store.ts';
-import { branchOwnerOf } from '../runs/store.ts';
+import { branchOwnerOf } from '../runs/branch-owners.ts';
 import { classifyBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyInput } from './repo-branches.ts';
 
 /**

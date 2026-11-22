@@ -19,7 +19,7 @@ function liveState(run: RunRecord): string {
  * The migration fence's live-task check uses this one notion of live.
  */
 export function projectLiveTasks(store: LiveRunReads): LiveProjectTask[] {
-  const tasks = new Map(store.listRuns().filter(isLiveRecord).map((run) => [run.id, run]));
+  const tasks = new Map(store.queries.listRuns().filter(isLiveRecord).map((run) => [run.id, run]));
   // Rows another process left live, whose owner may since have gone, are in the database only.
   const { live, foreign } = store.claims.persistedLiveRunIds();
   for (const id of live) {

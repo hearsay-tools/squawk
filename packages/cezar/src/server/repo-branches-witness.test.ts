@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import type { WorktreeGit } from '../git-worktree-lock.ts';
 import { commit, fakeForge, owners, runRecord, taskBranch } from './repo-branches.testkit.ts';
-import { branchOwnerOf, type RunRecord } from '../runs/store.ts';
+import { branchOwnerOf } from '../runs/branch-owners.ts';
+import type { RunRecord } from '../runs/store.ts';
 
 const exec = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

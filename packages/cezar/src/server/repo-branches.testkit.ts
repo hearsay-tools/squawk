@@ -3,7 +3,8 @@ import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { branchOwnerOf, type RunRecord, type RunStatus } from '../runs/store.ts';
+import { branchOwnerOf } from '../runs/branch-owners.ts';
+import type { RunRecord, RunStatus } from '../runs/store.ts';
 import type { BranchForge, ForgePr } from './repo-branches.ts';
 
 const exec = promisify(execFile);
