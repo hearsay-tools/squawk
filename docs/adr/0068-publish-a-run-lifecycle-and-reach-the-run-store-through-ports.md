@@ -78,7 +78,7 @@ refuses `on`, `once`, `off`, `addListener`, `removeListener`, `prependListener` 
 
 ## Changed moments
 
-The owner accepted each change below within decision 1:
+Each change below stays within owner decision 1; the planner or the plan accepted it:
 
 | Slice | Before | After |
 | --- | --- | --- |

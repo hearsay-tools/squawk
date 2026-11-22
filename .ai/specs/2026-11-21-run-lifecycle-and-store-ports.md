@@ -377,7 +377,8 @@ D1 ran inside phase A beside A2; phase B started after A2 and D1.
 
 ### Changed moments
 
-Each change stays within owner decision 1; ADR 0068 has the table.
+Each change stays within owner decision 1; the planner accepted A2, B1, C1 and D3, and the plan
+set B3. ADR 0068 has the table.
 
 - A2: the webhook subscribes to `run.created` and `run.updated` only. A run deleted here and
   restored by another writer's row, and a run first seen through another writer, no longer send
@@ -422,8 +423,9 @@ Each change stays within owner decision 1; ADR 0068 has the table.
 | `Pick<RunStore`, `Partial<RunStore` or `Parameters<RunStore` matches | 79 in 52 files | `runs/store.ts` only |
 | Test files Squeal selects for `runs/store.ts` | about 870 (epic estimate); 895 at `8ff2e7b13` | 889 |
 
-The selection barely moved. Most tests still build the store through testkits, so a port did not
-lower the count (roadmap rule 5). The ports make a narrower fixture possible; no slice built one.
+The selection barely moved. The lifecycle listener tests of A2 and B1 build a `RunLifecycle` and
+port fakes, but most other tests still build the whole store through testkits, so the ports did
+not lower the count (roadmap rule 5).
 
 ### Open seams
 

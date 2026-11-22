@@ -100,7 +100,8 @@ named ports, until `runs/store.ts` is 1,000 lines or fewer.
 Done on 2026-11-22.
 [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md)
 records the result. `RunStore` extends no `EventEmitter`, and every former listener subscribes to
-`store.lifecycle`. Each removal asks the three slots. Callers take ports from `runs/ports.ts`, and
+`store.lifecycle`. Each removal asks the slots it needs: a history deletion the gates and the
+cleanups, a reclaim the gates and the preparation, a scratch removal the gates. Callers take ports from `runs/ports.ts`, and
 13 topic modules are store fields. `runs/store.ts` is 990 lines with no
 `file-length.baseline.json` entry, and `layer-import.baseline.json` holds no `runs/` entry. As rule 5 predicts,
 Squeal still selects about 889 test files for `runs/store.ts`, because most tests build the
