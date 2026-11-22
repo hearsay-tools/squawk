@@ -30,7 +30,7 @@ function setup(overrides: Partial<RunRecord> = {}) {
   const store = RunStore.open(dir, { keepLive: true }); stores.push(store);
   return { dir, store, id: run.id };
 }
-function observations(snapshot: NonNullable<ReturnType<RunStore['archiveOnMergeSnapshot']>>) {
+function observations(snapshot: NonNullable<ReturnType<RunStore['archive']['archiveOnMergeSnapshot']>>) {
   return snapshot.pullRequests.map(identity => ({ ...identity, mergedAt }));
 }
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });

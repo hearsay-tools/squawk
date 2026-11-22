@@ -74,7 +74,7 @@ function recoveryFixture(unavailable = false) {
   const store = {
     unavailable,
     listRuns: vi.fn(() => ['queued', 'waiting', 'running', 'done'].map((status) => ({ status }))),
-    compressArchivedHistory: vi.fn(),
+    archive: { compressArchivedHistory: vi.fn() },
   } as unknown as RunStore;
   const manager = { recover: vi.fn().mockResolvedValue(undefined) } as unknown as RunManager;
   const observer = {} as ProviderRuntimeAuthObserver;
