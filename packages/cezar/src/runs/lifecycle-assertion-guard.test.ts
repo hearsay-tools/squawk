@@ -33,7 +33,7 @@ const sizeOf = (node: Node): number => endOf(node) - startOf(node);
 const contains = (outer: Node, inner: Node): boolean => startOf(outer) <= startOf(inner) && endOf(inner) <= endOf(outer);
 
 /** One place a name is bound: `fn` is the function it holds, if any; `scope` is the node whose body sees it. */
-interface Binding { name: string; fn: Node | undefined; scope: Node; at: number; hoisted: boolean }
+interface Binding { name: string; fn: Node | undefined; scope: Node; at: number }
 
 /** The names a file binds: `const`s, function declarations and simple parameters. */
 function bindingsOf(nodes: readonly Node[]): Binding[] {
@@ -42,20 +42,20 @@ function bindingsOf(nodes: readonly Node[]): Binding[] {
   const bindings: Binding[] = [];
   for (const node of nodes) {
     if (node.type === 'VariableDeclarator' && nameOf(node.id as Node)) {
-      bindings.push({ name: nameOf(node.id as Node)!, fn: isListenerFunction(node.init) ? node.init : undefined, scope: blockOf(node), at: startOf(node), hoisted: false });
+      bindings.push({ name: nameOf(node.id as Node)!, fn: isListenerFunction(node.init) ? node.init : undefined, scope: blockOf(node), at: startOf(node) });
     }
-    if (node.type === 'FunctionDeclaration' && node.id) bindings.push({ name: nameOf(node.id as Node)!, fn: node, scope: blockOf(node), at: startOf(node), hoisted: true });
+    if (node.type === 'FunctionDeclaration' && node.id) bindings.push({ name: nameOf(node.id as Node)!, fn: node, scope: blockOf(node), at: startOf(node) });
     for (const param of isListenerFunction(node) ? (node.params as Node[] | undefined) ?? [] : []) {
       const id = param.type === 'AssignmentPattern' ? (param.left as Node) : param;
-      if (nameOf(id)) bindings.push({ name: nameOf(id)!, fn: undefined, scope: node, at: startOf(node), hoisted: true });
+      if (nameOf(id)) bindings.push({ name: nameOf(id)!, fn: undefined, scope: node, at: startOf(node) });
     }
   }
   return bindings;
 }
 
-/** The function `reference` names where it stands: its innermost binding, and only a function counts. */
+/** The function `reference` names where it stands: its innermost binding, and only a function counts. A binding declared after the reference counts: a closure that holds the reference runs after the declaration. */
 function resolve(bindings: readonly Binding[], reference: Node): Node | undefined {
-  const visible = bindings.filter((binding) => binding.name === nameOf(reference) && contains(binding.scope, reference) && (binding.hoisted || binding.at < startOf(reference)));
+  const visible = bindings.filter((binding) => binding.name === nameOf(reference) && contains(binding.scope, reference));
   const innermost = visible.reduce<Binding | undefined>((best, binding) => {
     if (!best || sizeOf(binding.scope) < sizeOf(best.scope)) return binding;
     return sizeOf(binding.scope) === sizeOf(best.scope) && binding.at > best.at ? binding : best;
@@ -150,6 +150,15 @@ describe('assertions in lifecycle listeners', () => {
     expect(assertionsInListeners(source, 'any.ts')).toEqual(['any.ts:2 expect inside a lifecycle listener']);
     const outer = "function onRun(run) { expect(run).toBeDefined(); }\nit('x', () => { const onRun = vi.fn(); onRunWrite(store.lifecycle, onRun); });";
     expect(assertionsInListeners(outer, 'any.ts')).toEqual([]);
+  });
+
+  it('resolves a binding declared after a closure that registers it', () => {
+    const source = [
+      'function register() { onRunWrite(source, onRun); }',
+      'const onRun = run => { expect(run).toBeDefined(); };',
+      'register();',
+    ].join('\n');
+    expect(assertionsInListeners(source, 'any.ts')).toEqual(['any.ts:2 expect inside a lifecycle listener']);
   });
 
   it('accepts a listener that records, and an expect outside every listener', () => {

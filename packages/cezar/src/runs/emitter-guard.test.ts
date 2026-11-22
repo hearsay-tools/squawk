@@ -21,6 +21,14 @@ type Node = { type: string; [key: string]: unknown };
 
 const isNode = (value: unknown): value is Node => typeof value === 'object' && value !== null && typeof (value as Node).type === 'string';
 
+/** The text of a string literal or of a template literal with no substitution; else `undefined`. */
+function literalOf(node: unknown): string | undefined {
+  if (!isNode(node)) return undefined;
+  if (node.type === 'StringLiteral') return node.value as string;
+  const quasis = node.type === 'TemplateLiteral' && (node.expressions as unknown[]).length === 0 ? (node.quasis as Array<{ value: { cooked: string } }>) : [];
+  return quasis[0]?.value.cooked;
+}
+
 /** Each member call of an emitter method with a store event name as its first argument, in `source`. */
 export function emitterCalls(source: string, file: string): string[] {
   const found: string[] = [];
@@ -29,10 +37,10 @@ export function emitterCalls(source: string, file: string): string[] {
     if (!isNode(value)) return;
     if (value.type === 'CallExpression' && isNode(value.callee) && value.callee.type === 'MemberExpression') {
       const property = value.callee.property as Node;
-      const first = (value.arguments as unknown[])[0];
+      const eventName = literalOf((value.arguments as unknown[])[0]);
       if (!value.callee.computed && property.type === 'Identifier' && EMITTER_CALLS.has(property.name as string) &&
-        isNode(first) && first.type === 'StringLiteral' && STORE_EVENTS.has(first.value as string)) {
-        found.push(`${file}:${(value.loc as { start: { line: number } }).start.line} .${property.name as string}('${first.value as string}', …)`);
+        eventName !== undefined && STORE_EVENTS.has(eventName)) {
+        found.push(`${file}:${(value.loc as { start: { line: number } }).start.line} .${property.name as string}('${eventName}', …)`);
       }
     }
     for (const child of Object.values(value)) if (typeof child === 'object') visit(child);
@@ -49,21 +57,22 @@ describe('run store emitter', () => {
       "other.store.off('deleted', gone);",
       "f.store.addListener('event', seen);",
       "store.emit('run', run);",
+      'store.on(`run`, tagged);',
       "export const stop = () => manager.store.removeListener('run', onRun);",
     ].join('\n');
     expect(emitterCalls(source, 'any.ts')).toEqual([
       "any.ts:1 .on('run', …)", "any.ts:2 .once('closed', …)", "any.ts:3 .off('deleted', …)",
-      "any.ts:4 .addListener('event', …)", "any.ts:5 .emit('run', …)", "any.ts:6 .removeListener('run', …)",
+      "any.ts:4 .addListener('event', …)", "any.ts:5 .emit('run', …)", "any.ts:6 .on('run', …)", "any.ts:7 .removeListener('run', …)",
     ]);
   });
 
-  it('accepts the lifecycle, and an emitter event with another name', () => {
+  it('accepts the lifecycle, an emitter event with another name, and a dynamic name', () => {
     const source = [
       "store.lifecycle.subscribe({ 'run.updated': onRun });",
       "child.on('message', onMessage);",
       "process.on('exit', close);",
       "child.on(name, forward);",
-      "store.on(`run`, tagged);",
+      'store.on(`run-${suffix}`, tagged);',
       "const run = 'run'; stream.on(run, other);",
     ].join('\n');
     expect(emitterCalls(source, 'any.ts')).toEqual([]);
