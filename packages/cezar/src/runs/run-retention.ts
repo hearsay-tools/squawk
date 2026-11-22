@@ -60,8 +60,7 @@ export interface RetentionState {
   processesPath(id: string): string;
   scopePath(id: string): string;
   executionPath(id: string): string;
-  handoffPath(runId: string): string;
-  imagesDir(runId: string): string;
+  sourceDataDir(id: string): string;
 }
 
 export class RunRetentionTopic implements RunRetention {
@@ -156,8 +155,8 @@ export class RunRetentionTopic implements RunRetention {
   private removeHistoryFiles(id: string): void {
     this.state.transcriptFacts.index.forget(id);
     removeHistory(this.dataDir, id);
-    rmSync(this.state.handoffPath(id), { force: true });
-    rmSync(this.state.imagesDir(id), { recursive: true, force: true });
+    rmSync(this.handoffPath(id), { force: true });
+    rmSync(this.imagesDir(id), { recursive: true, force: true });
     runRemovalCleanups(id, this.dataDir);
   }
 
@@ -237,5 +236,16 @@ export class RunRetentionTopic implements RunRetention {
       this.state.applyArchived(member, true);
       if (!deletionRefusal(member.id, 'archive-tmp', this.dataDir)) removeAgentTmpDir(this.dataDir, member.id);
     }
+  }
+
+  /** Same location `handoffPath()` in handoff.ts produces — inlined to keep
+   *  the store free of upward imports. */
+  private handoffPath(runId: string): string {
+    return join(this.state.sourceDataDir(runId), 'runs', `${runId}.handoff.md`);
+  }
+
+  /** Agent screenshots persisted by the run manager (see persistImage). */
+  private imagesDir(runId: string): string {
+    return join(this.state.sourceDataDir(runId), 'runs', `${runId}-images`);
   }
 }

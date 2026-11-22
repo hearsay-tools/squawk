@@ -12,7 +12,8 @@
  */
 import type { RunStatus } from '@open-mercato/cezar-contract';
 import type { RunExitId } from './run-exits.ts';
-import type { CommitSource, RunEvent, RunRecord } from './store.ts';
+import type { CommitSource } from './run-persistence.ts';
+import type { RunEvent, RunRecord } from './store.ts';
 
 /** Why a `run.updated` fired beside the write itself: today's `CommitSource`, or `conflict` when
  *  another writer's row replaced the record. */

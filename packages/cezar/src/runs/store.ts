@@ -1,8 +1,8 @@
 import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, withKeptFields } from './legacy-run-rows.ts';
 import { addRunSource, fallbackRunSource } from './project-run-sources.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
-import { stageCommit, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageStepUpdate, stepTotals, redactPatch, type RecordPatch } from './record-write-rules.ts';
-import { publishRunWrite, RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
+import { stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageStepUpdate, stepTotals, redactPatch, type RecordPatch } from './record-write-rules.ts';
+import { RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
 import type { WorkerExecutionRecords, WorkerExecutions } from './ports.ts';
@@ -37,15 +37,15 @@ import { restoreHistory } from './history-file.ts';
 // Type-only module (zod + nothing else), so this cannot cycle back into the store.
 import { workflowDefSchema } from '../workflows/types.ts';
 import { applyOutcomes, type OutcomeDependencies, type OutcomeReceipt, type RunOutcome } from './outcome-commit.ts';
-import { ISSUE_URL_RE, namesForeignReference, rescopeRun, restoreOriginatingIssue, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
+import { ISSUE_URL_RE, namesForeignReference, rescopeRun, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
 
 import { LEGACY_RUNNER_IDS } from '../core/runner-ids.ts';
 import {
-  ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
-  type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
+  ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, RunDatabaseBusyError,
+  type RunRow,
 } from './run-database.ts';
 import { listBranchOwners, type BranchOwner } from './branch-owners.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
@@ -53,9 +53,9 @@ import { reconcileLoadedRun } from './loaded-run-exits.ts';
 import { hasLegacyWaitFields, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
-import { encodeRunRow, familyRootOf, isLiveRecord, materializedWorktreePath, newestFirst, type ListOrder } from './run-row.ts';
+import { familyRootOf, isLiveRecord, materializedWorktreePath, newestFirst, type ListOrder } from './run-row.ts';
 import { RunRetentionTopic } from './run-retention.ts';
-import { collectRawExtras, encodeRawRecord, type RawExtras } from './raw-record.ts';
+import { collectRawExtras, type RawExtras } from './raw-record.ts';
 import { ColdReadCache, storedRow, type StoredRow } from './cold-reads.ts';
 import { LEGACY_INDEX_FILE, LegacyWriterError } from './legacy-index.ts';
 import { RunStoreOpenError, toRunStoreOpenError } from './store-open-error.ts';
@@ -68,11 +68,8 @@ import { RunEventLogTopic } from './event-log.ts';
 import { RunRedaction } from './run-redaction.ts';
 import { RunArchiveTopic } from './run-archive.ts';
 import { RunReadFlagsTopic } from './run-read-flags.ts';
+import { replaceRecord, RunPersistenceTopic, type RunStorePersistence } from './run-persistence.ts';
 import { closeClaimSession, familyKey, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
-import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
-
-/** Per-store persistence adapter; the second argument is the normal fenced transaction. */
-export type RunStorePersistence = (changes: RunDatabaseChanges, transaction: RunDatabase['transaction']) => RunDatabaseCommit;
 
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled';
 export type StepStatus =
@@ -230,19 +227,9 @@ export type RepoHandle = { owner: string; name: string };
 
 export { branchOwnerOf, type BranchOwner } from './branch-owners.ts';
 
-/** Make `target` hold exactly `source`'s fields, keeping the object every holder references. */
-function replaceRecord(target: RunRecord, source: RunRecord): void {
-  for (const key of Object.keys(target)) if (!(key in source)) delete (target as Record<string, unknown>)[key];
-  Object.assign(target, source);
-}
-
 /** An archived root's place in the archived list, with its summary once it is known: a held run's,
  *  or a searched row's. A row ranked by key alone has none, and its page reads it. */
 type ArchivedKey = ListOrder & { summary?: RunSummary };
-
-/** Why a `run` event fired, when a delegation checkpoint caused it or nothing durable changed
- *  (`republish`) (in-process only). */
-export type CommitSource = 'delegation-checkpoint' | 'delegation-destroy-progress' | 'live-release';
 
 /**
  * A worker's destroy moving between two unfinished phases, and nothing else changing: nothing the
@@ -299,15 +286,11 @@ export class RunStore {
   private readonly pins = new Map<string, Set<RunPinHolder>>();
   /** Staged ids while a durable commit installs and announces them: never evicted mid-commit. */
   private readonly committing = new Set<string>();
-  private saveTimer: NodeJS.Timeout | null = null;
   /** `null` once the store is closed, and in a `RunStore.unavailable` store (nothing is written,
    *  nothing is evicted). */
   private db: RunDatabase | null = null;
-  /** Persistence source for consumers that build the reports index. No index is created here. */
-  reportSource() { return { db: this.db, dataDir: this.dataDir, openFailure: this.openFailure }; }
   /** Why `open` failed, in a `RunStore.unavailable` store. */
   private openFailure: RunStoreOpenError | undefined;
-  private persistence: RunStorePersistence | undefined;
   /** Runs whose held record is ahead of its row; the next save or commit writes them. */
   private readonly dirty = new Set<string>();
   /** The typed lifecycle events the store publishes after each write (lifecycle.ts). */
@@ -343,8 +326,6 @@ export class RunStore {
    *  Cleared at the next microtask: no commit spans a turn. */
   private readonly coldBase = new Map<string, StoredRow & { owned: boolean }>();
   private readonly coldReads = new ColdReadCache();
-  /** The family of each pending deletion, whose claim the deleting write is fenced against. */
-  private readonly deletedFamilies = new Map<string, string>();
   /** Rows a conflicting write excluded: this store refuses to write them until it is reopened. */
   private readonly quarantined = new Set<string>();
   /** Rows whose `data` this store tried to decode and could not: left in the database untouched,
@@ -368,13 +349,15 @@ export class RunStore {
   readonly claims: RunClaimsTopic;
   /** The holds that keep a run loaded (hearsay-tools/squawk#4042). */
   readonly runPins: RunPinsTopic;
+  /** Flush, persist, the fence, conflicts and the save debounce (hearsay-tools/squawk#4043). */
+  readonly persistence: RunPersistenceTopic;
   private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
   /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
    *  first use by the factory this process registered; throws when none is registered. */
   get workerExecutions(): WorkerExecutions & WorkerExecutionRecords {
     return this.executions ??= workerExecutionsFactory()(this.dataDir, {
       peek: (id) => this.peek(id), getRun: (id) => this.getRun(id), writeDir: (id) => this.claims.writeDir(id),
-      sourceDataDir: (id) => this.claims.sourceDataDir(id), commitIndex: (input) => this.commitIndex(input),
+      sourceDataDir: (id) => this.claims.sourceDataDir(id), commitIndex: (input) => this.persistence.commitIndex(input),
       published: this.published, workerResults: this.workerResults,
     });
   }
@@ -385,14 +368,14 @@ export class RunStore {
     return { events: this.liveItems.read(runId), throughSeq: this.seqs.get(runId) ?? Infinity };
   }
 
-  private constructor(private readonly dataDir: string) {
+  private constructor(private readonly dataDir: string, persist?: RunStorePersistence) {
     this.redaction = new RunRedaction();
     this.claims = new RunClaimsTopic(dataDir, {
       db: () => this.db, owner: () => this.owner, keepLive: () => this.keepLive, held: this.held, base: this.base, dirty: this.dirty,
       deleted: this.deleted, quarantined: this.quarantined, unreadable: this.unreadable, claimed: this.claimed, pendingClaims: this.pendingClaims,
-      exitEvents: this.exitEvents, coldReads: this.coldReads, decodeRunRow, anchoredFamilies: () => this.anchoredFamilies(), scheduleSave: () => this.scheduleSave(),
+      exitEvents: this.exitEvents, coldReads: this.coldReads, decodeRunRow, anchoredFamilies: () => this.anchoredFamilies(), scheduleSave: () => this.persistence.scheduleSave(),
     });
-    this.runPins = new RunPinsTopic({ pins: this.pins, published: this.published, record: (id) => this.record(id), peek: (id) => this.peek(id), sweepIfSettled: (ids) => this.sweepIfSettled(ids) });
+    this.runPins = new RunPinsTopic({ pins: this.pins, published: this.published, record: (id) => this.record(id), peek: (id) => this.peek(id), sweepIfSettled: (ids) => this.persistence.sweepIfSettled(ids) });
     this.transcriptFacts = new RunTranscriptFacts(dataDir, {
       isFallbackRun: (id) => this.claims.isFallbackRun(id),
       sourceDataDir: (id) => this.claims.sourceDataDir(id),
@@ -411,7 +394,7 @@ export class RunStore {
     this.eventLog = new RunEventLogTopic(dataDir, {
       seqs: this.seqs, published: this.published, liveItems: this.liveItems, transcriptFacts: this.transcriptFacts, redaction: this.redaction,
       record: (id) => this.record(id), missingRunError: (runId) => this.claims.missingRunError(runId), sourceDataDir: (id) => this.claims.sourceDataDir(id),
-      touch: (run, before) => this.touch(run, before), change: (id, apply) => this.change(id, apply), repoHandle: () => this.repoHandle,
+      touch: (run, before) => this.persistence.touch(run, before), change: (id, apply) => this.change(id, apply), repoHandle: () => this.repoHandle,
       maybeEnqueueHistoryCompress: (run) => this.archive.maybeEnqueueHistoryCompress(run),
     });
     this.retention = new RunRetentionTopic(dataDir, {
@@ -420,31 +403,38 @@ export class RunStore {
       peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), record: (id) => this.record(id),
       listWorkersOf: (parentId) => this.listWorkersOf(parentId), isFallbackRun: (id) => this.claims.isFallbackRun(id),
       hasFallbackRun: (id) => this.claims.hasFallbackRun(id), listOrder: (run) => this.listOrder(run),
-      claimFamilies: (families) => this.claims.claimFamilies(families), markDeleted: (id, family) => this.markDeleted(id, family),
-      scheduleSave: () => this.scheduleSave(), commitIndex: (input) => this.commitIndex(input),
+      claimFamilies: (families) => this.claims.claimFamilies(families), markDeleted: (id, family) => this.persistence.markDeleted(id, family),
+      scheduleSave: () => this.persistence.scheduleSave(), commitIndex: (input) => this.persistence.commitIndex(input),
       commitDelegation: (patches) => this.commitDelegation(patches), applyArchived: (run, archived) => this.archive.applyArchived(run, archived),
       workerDeletionEvidence: (id) => this.workerExecutions.workerDeletionEvidence(id),
       workerResults: this.workerResults,
       readWorkerExecution: (id) => this.workerExecutions.readWorkerExecution(id), identityPath: (id) => this.workerExecutions.identityPath(id),
       processesPath: (id) => this.workerExecutions.processesPath(id), scopePath: (id) => this.workerExecutions.scopePath(id),
-      executionPath: (id) => this.workerExecutions.executionPath(id), handoffPath: (runId) => this.handoffPath(runId),
-      imagesDir: (runId) => this.imagesDir(runId),
+      executionPath: (id) => this.workerExecutions.executionPath(id), sourceDataDir: (id) => this.claims.sourceDataDir(id),
     });
     this.archive = new RunArchiveTopic(dataDir, {
       db: () => this.db, held: this.held, deleted: this.deleted, quarantined: this.quarantined, pins: this.pins,
       claimed: this.claimed, base: this.base, owner: () => this.owner, transcriptFacts: this.transcriptFacts,
       decodeRunRow, sortNewestFirst, peek: (id) => this.peek(id), record: (id) => this.record(id),
-      listWorkersOf: (parentId) => this.listWorkersOf(parentId), familyOf: (id) => this.familyOf(id),
+      listWorkersOf: (parentId) => this.listWorkersOf(parentId), familyOf: (id) => this.persistence.familyOf(id),
       claimFamilies: (families, opts) => this.claims.claimFamilies(families, opts), writeRefusal: (id) => this.claims.writeRefusal(id),
-      assertWritable: (staged) => this.assertWritable(staged), decodeCold: (row) => this.decodeCold(row),
-      listOrder: (run) => this.listOrder(run), commitIndex: (input, source, write) => this.commitIndex(input, source, write),
-      touch: (run, before, exit) => this.touch(run, before, exit),
+      assertWritable: (staged) => this.persistence.assertWritable(staged), decodeCold: (row) => this.decodeCold(row),
+      listOrder: (run) => this.listOrder(run), commitIndex: (input, source, write) => this.persistence.commitIndex(input, source, write),
+      touch: (run, before, exit) => this.persistence.touch(run, before, exit),
       readWorkerExecution: (id) => this.workerExecutions.readWorkerExecution(id),
     });
     this.readFlags = new RunReadFlagsTopic({
       db: () => this.db, held: this.held, deleted: this.deleted, record: (id) => this.record(id),
-      claimFamilies: (families) => this.claims.claimFamilies(families), touch: (run, before) => this.touch(run, before),
+      claimFamilies: (families) => this.claims.claimFamilies(families), touch: (run, before) => this.persistence.touch(run, before),
       change: (id, apply) => this.change(id, apply),
+    });
+    this.persistence = new RunPersistenceTopic(dataDir, persist, {
+      db: () => this.db, owner: () => this.owner, openFailure: () => this.openFailure, repoHandle: () => this.repoHandle,
+      held: this.held, committing: this.committing, dirty: this.dirty, deleted: this.deleted, historyOwed: this.historyOwed,
+      quarantined: this.quarantined, claimed: this.claimed, pendingClaims: this.pendingClaims, base: this.base, coldBase: this.coldBase,
+      coldReads: this.coldReads, liveItems: this.liveItems, published: this.published, archive: this.archive, claims: this.claims,
+      retention: this.retention, decodeRunRow, peek: (id) => this.peek(id), isAnchor: (id, run) => this.isAnchor(id, run),
+      evictSettled: () => this.evictSettled(),
     });
   }
   /**
@@ -484,9 +474,8 @@ export class RunStore {
     const source = fallbackRunSource(dataDir, bytes => legacyIndexRows(bytes, parseRunRecords)?.rows);
     const deferred = source && !existsSync(path) && !existsSync(join(dataDir, LEGACY_INDEX_FILE));
     if (!deferred) mkdirSync(join(dataDir, 'runs'), { recursive: true });
-    const store = new RunStore(dataDir);
+    const store = new RunStore(dataDir, persist);
     store.keepLive = keepLive;
-    store.persistence = persist;
     let db = RunDatabase.open(deferred ? ':memory:' : path);
     try {
       if (deferred) db.transaction({ upserts: [], deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'none' } });
@@ -627,7 +616,7 @@ export class RunStore {
     const run = this.coldReads.claimed(id, this.coldBase.get(id), () => this.db?.revisionOf(id)) ?? this.loadCold(id);
     if (!run) return undefined;
     this.holdDecoded(run);
-    this.scheduleSave();
+    this.persistence.scheduleSave();
     return run;
   }
 
@@ -694,7 +683,7 @@ export class RunStore {
     for (const run of [...this.held.values()]) {
       const before = snapshotRun(run);
       if (rescopeRun(run, this.repoHandle)) {
-        this.touch(run, before);
+        this.persistence.touch(run, before);
         healed = true;
       }
     }
@@ -707,12 +696,12 @@ export class RunStore {
       // `decodeCold` already scoped it with the handle just armed; write it when that changed it.
       if (!run || !this.storedScopeDiffers(row, run)) continue;
       this.holdDecoded(run);
-      this.touch(run, before ?? snapshotRun(run));
+      this.persistence.touch(run, before ?? snapshotRun(run));
       healed = true;
     }
     // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
     // debounced save is unref'd, so it cannot keep the CLI alive once the lookup completes.
-    if (healed) this.flush();
+    if (healed) this.persistence.flush();
   }
 
   /** Whether the stored summary still names a reference the scoped record no longer has. */
@@ -1159,7 +1148,7 @@ export class RunStore {
     if (this.db && !this.claims.claimFamilies([run.id]).has(run.id)) throw new RunWriteRefusedError(run.id, 'foreign');
     this.held.set(run.id, run);
     this.retention.pruneOldRuns();
-    this.touch(run, undefined);
+    this.persistence.touch(run, undefined);
     return run;
   }
 
@@ -1221,7 +1210,7 @@ export class RunStore {
     assertConversationIdFree(root, message ?? delivery?.input, id => this.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
     const staged = new Map<string, RunRecord>();
     stageConversation(staged, root, conversation, delivery, id => this.peek(id), text => this.redaction.redactText(text));
-    this.commitIndex(staged);
+    this.persistence.commitIndex(staged);
   }
 
   /** Crash recovery (#505): input a harness accepted but was never seen reading goes
@@ -1263,7 +1252,7 @@ export class RunStore {
         throw new Error('live inbox receipt changed');
       }
     }
-    this.commitIndex(new Map([[id, { ...run, agentInputs }]]));
+    this.persistence.commitIndex(new Map([[id, { ...run, agentInputs }]]));
   }
 
   /** Reserve only unread conversation inputs in one durable index replacement. */
@@ -1283,7 +1272,7 @@ export class RunStore {
       }
     }
     const selectedIds = new Set(selected);
-    this.commitIndex(new Map([[runId, { ...run, agentInputs: inputs.map(input => selectedIds.has(input.id)
+    this.persistence.commitIndex(new Map([[runId, { ...run, agentInputs: inputs.map(input => selectedIds.has(input.id)
       ? agentInputSchema.parse({ ...input, inboxClaim: receipt }) : input) }]]));
   }
 
@@ -1320,7 +1309,7 @@ export class RunStore {
     const matching = (run.agentInputs ?? []).filter(input => input.inboxClaim?.receiptId === receiptId);
     if (!matching.length || matching.some(input => input.inboxClaim?.generation !== generation ||
       input.inboxClaim?.acknowledgedAt || input.deliveredAt)) throw new Error('inbox receipt changed');
-    this.commitIndex(new Map([[runId, { ...run, agentInputs: run.agentInputs!.map(input => {
+    this.persistence.commitIndex(new Map([[runId, { ...run, agentInputs: run.agentInputs!.map(input => {
       if (input.inboxClaim?.receiptId !== receiptId) return input;
       const { inboxClaim: _claim, ...unclaimed } = input;
       return agentInputSchema.parse(unclaimed);
@@ -1333,7 +1322,7 @@ export class RunStore {
     if (!run) throw new Error('missing inbox recipient');
     inboxClaimSchema.shape.expiresAt.parse(now);
     if (!run.agentInputs?.some(input => input.inboxClaim && !input.inboxClaim.acknowledgedAt && input.inboxClaim.expiresAt <= now)) return;
-    this.commitIndex(new Map([[runId, { ...run, agentInputs: run.agentInputs.map(input => {
+    this.persistence.commitIndex(new Map([[runId, { ...run, agentInputs: run.agentInputs.map(input => {
       if (!input.inboxClaim || input.inboxClaim.acknowledgedAt || input.inboxClaim.expiresAt > now) return input;
       const { inboxClaim: _claim, ...unclaimed } = input;
       return agentInputSchema.parse(unclaimed);
@@ -1350,14 +1339,14 @@ export class RunStore {
   commitWait(id: string, wait: Wait, input?: AgentInput, registration?: WaitRegistrationReceipt): void {
     const run = this.peek(id);
     if (!run) throw new Error('missing wait target');
-    this.commitIndex(new Map([[id, registeredWaitRecord(run, wait, input, registration)]]));
+    this.persistence.commitIndex(new Map([[id, registeredWaitRecord(run, wait, input, registration)]]));
   }
 
   /** Record a deduplicated registration without mutating its wait. */
   commitWaitRegistration(id: string, receipt: WaitRegistrationReceipt): void {
     const run = this.peek(id);
     if (!run) throw new Error('missing wait target');
-    this.commitIndex(new Map([[id, registeredReceiptRecord(run, receipt)]]));
+    this.persistence.commitIndex(new Map([[id, registeredReceiptRecord(run, receipt)]]));
   }
 
   /** A usage-limit appointment withdrawn, committed at once instead of on the debounced save
@@ -1368,7 +1357,7 @@ export class RunStore {
     const run = this.peek(id);
     if (!run || (run.autoResumeAt === undefined && run.autoResumeAttempts === undefined)) return;
     if (isUsageLimitHold(run)) this.move(id, 'withdraw-hold');
-    else this.commitIndex(new Map([[id, { ...run, autoResumeAt: undefined, autoResumeAttempts: undefined, autoResumeReason: undefined }]]));
+    else this.persistence.commitIndex(new Map([[id, { ...run, autoResumeAt: undefined, autoResumeAttempts: undefined, autoResumeReason: undefined }]]));
   }
 
   /** A human message beside a run's waits (hearsay-tools/cezarion#1235): accepted durably, and
@@ -1378,7 +1367,7 @@ export class RunStore {
   commitHumanMessageBesideWaits(id: string, acceptedHumanMessage: QueuedMessage): void {
     const run = this.peek(id);
     if (!run) throw new Error('missing queued message target');
-    this.commitIndex(new Map([[id, { ...run, queuedMessages: [...(run.queuedMessages ?? []), queuedMessageSchema.parse(acceptedHumanMessage)],
+    this.persistence.commitIndex(new Map([[id, { ...run, queuedMessages: [...(run.queuedMessages ?? []), queuedMessageSchema.parse(acceptedHumanMessage)],
       ...(run.continuationMessage ? { continuationMessage: { ...run.continuationMessage, origin: 'human' as const } } : {}),
     }]]));
   }
@@ -1398,7 +1387,7 @@ export class RunStore {
     if (!run) return { committed: false, answered: [], settled: [] };
     const staged = applyOutcomes(run, Array.isArray(outcomes) ? outcomes : [outcomes as RunOutcome], deps);
     if (!staged.changed) return { committed: false, answered: [], settled: [] };
-    try { this.commitIndex(new Map([[id, staged.next]]), undefined, { exits: new Map([[id, staged.exit]]) }); }
+    try { this.persistence.commitIndex(new Map([[id, staged.next]]), undefined, { exits: new Map([[id, staged.exit]]) }); }
     catch (error) {
       if (!opts.bestEffort) throw error;
       console.warn(`[hsq] outcome checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -1406,7 +1395,7 @@ export class RunStore {
       if (!live) return { committed: false, answered: staged.answered, settled: staged.settled };
       const before = snapshotRun(live);
       replaceRecord(live, staged.next);
-      this.touch(live, before, staged.exit);
+      this.persistence.touch(live, before, staged.exit);
       return { committed: false, answered: staged.answered, settled: staged.settled };
     }
     return { committed: true, answered: staged.answered, settled: staged.settled };
@@ -1434,7 +1423,7 @@ export class RunStore {
     }
     // In-process cause only: consumers can skip metadata replay when delegation
     // is disabled without dropping real status or termination-proof notifications.
-    this.commitIndex(staged, destroyProgress ? 'delegation-destroy-progress' : 'delegation-checkpoint');
+    this.persistence.commitIndex(staged, destroyProgress ? 'delegation-destroy-progress' : 'delegation-checkpoint');
   }
 
   /** A pending destroy's automatic retry state, or its removal (hearsay-tools/cezarion#879). Kept on
@@ -1445,7 +1434,7 @@ export class RunStore {
     if (run?.delegation?.role !== 'worker' || !run.delegation.destroy) throw new Error('missing pending destroy');
     if (!retry && !run.destroyRetry) return;
     // An explicit `undefined`, not an omitted key: commitIndex assigns onto the live record.
-    this.commitIndex(new Map([[id, { ...run, destroyRetry: retry ? workerDestroyRetrySchema.parse(retry) : undefined }]]), 'delegation-destroy-progress');
+    this.persistence.commitIndex(new Map([[id, { ...run, destroyRetry: retry ? workerDestroyRetrySchema.parse(retry) : undefined }]]), 'delegation-destroy-progress');
   }
 
   /** Accepted execution revision is public lifecycle identity, separate from process generations. */
@@ -1470,7 +1459,7 @@ export class RunStore {
       stageConversation(staged, root, conversation.state, { recipientRunId: id, input: conversation.input },
         runId => this.peek(runId), text => this.redaction.redactText(text));
     }
-    this.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
+    this.persistence.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
   }
 
   /** Create an owned worker run and its parent receipt; `createStoreOwnedRun` holds the checks. */
@@ -1490,84 +1479,8 @@ export class RunStore {
       buildRun: (ownedInput, id) => this.buildRun(ownedInput, id),
       writeWorkerIdentity: (id, identity) => this.workerExecutions.writeWorkerIdentity(id, identity),
       writeWorkerExecution: (id, proof, fresh) => this.workerExecutions.writeWorkerExecution(id, proof, fresh),
-      commitIndex: (owned) => this.commitIndex(owned),
+      commitIndex: (owned) => this.persistence.commitIndex(owned),
     }, input, parentId, requestId, worker, requestHash, spawnCapacityRefusal, executionIdentity);
-  }
-
-  /**
-   * Durably replace or delete staged rows together with pending dirty rows. Persist before
-   * changing held objects or notifying subscribers. On failure retain all pending state; flush()
-   * remains best-effort.
-   */
-  private commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: CommitSource,
-    write: { before?: ReadonlyMap<string, Readonly<RunRecord>>; exits?: ReadonlyMap<string, RunExitId | undefined> } = {}): void {
-    const exits = new Map(write.exits);
-    const staged = stageCommit(input, {
-      peek: id => this.peek(id),
-      completionArchiveBlocker: run => this.archive.completionArchiveBlocker(run),
-      stageArchive: (staged, run, archived) => this.archive.stageArchive(staged, run, archived, exits),
-    });
-    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined])), committed = new Map([...staged].map(([id, next]) => [id, snapshotRun(next ?? undefined)]));
-    if (!this.db) throw this.openFailure ?? new Error('runs database unavailable: nothing can be saved');
-    this.assertWritable(staged);
-    this.persist(staged);
-    // Preserve existing record references, but expose the entire transaction before its first event, which
-    // carries the record this commit wrote (`committed`). A finished run is held until the next sweep.
-    for (const [id, next] of staged) {
-      this.coldReads.forget(id);
-      if (!next) { this.held.delete(id); continue; }
-      this.committing.add(id);
-      const current = this.held.get(id);
-      if (current) replaceRecord(current, next);
-      else this.held.set(id, next);
-    }
-    try {
-      for (const id of staged.keys()) {
-        const run = this.held.get(id);
-        if (run) publishRunWrite(this.published, committed.get(id) ?? run, before.get(id), source, exits.get(id));
-        else this.published.publish('run.deleted', { runId: id });
-      }
-    } finally {
-      for (const id of staged.keys()) this.committing.delete(id);
-      this.sweepIfSettled(staged.keys());
-    }
-    for (const [id, next] of staged) if (next?.archived) this.archive.compressor.enqueue(id);
-  }
-
-  /**
-   * Refuse (throwing, with nothing changed) a commit that stages a quarantined run, or a run whose
-   * family this store does not claim and cannot take: another process owns it, or a dead process
-   * left it live and it has not been adopted.
-   */
-  private assertWritable(staged: ReadonlyMap<string, RunRecord | null>): void {
-    const families = new Map<string, string>();
-    const held = new Set<string>();
-    for (const [id, next] of staged) {
-      if (this.quarantined.has(id)) throw new RunWriteRefusedError(id, 'quarantined');
-      const family = next ? familyKey(next) : this.familyOf(id);
-      families.set(id, family);
-      if (this.held.has(id)) held.add(family);
-    }
-    // A run this store holds may move to a new family; any other row is claimed as a plain write.
-    const owned = new Set([...this.claims.claimFamilies(held, { allowLive: true }),
-      ...this.claims.claimFamilies([...families.values()].filter((family) => !held.has(family)))]);
-    for (const [id, family] of families) {
-      if (!owned.has(family)) throw this.claims.runOwnership(id) === 'fallback' ? this.claims.fallbackRefusal(id) : new RunWriteRefusedError(id, this.claims.runOwnership(id) === 'orphaned' ? 'orphaned' : 'foreign');
-    }
-  }
-
-  /** The family of a run this store knows: held, else its row; a run nowhere is its own. */
-  private familyOf(id: string): string {
-    const held = this.held.get(id);
-    return held ? familyKey(held) : this.deletedFamilies.get(id) ?? this.db?.familyOf(id) ?? id;
-  }
-
-  /** Schedule the sweep that lets any of `ids` leave memory, when one of them now can. */
-  private sweepIfSettled(ids: Iterable<string>): void {
-    for (const id of ids) {
-      const run = this.held.get(id);
-      if (run && !this.isAnchor(id, run)) { this.scheduleSave(); return; }
-    }
   }
 
   /** Move run `id` by `exit` (ADR 0056): its status and `extras` in one write, checked against the
@@ -1591,7 +1504,7 @@ export class RunStore {
     if (!guarded) moved = this.writeRun(id, run, applyExit(run, exit, redacted, call), exitDurability(exit, run), exit);
     else {
       const input = { ...run, ...redacted };
-      this.commitIndex(new Map([[id, { ...(spec.settle?.(input, { ...call, now: new Date().toISOString() }) ?? input), ...applyExit(run, exit, {}, call) }]]), undefined, { exits: new Map([[id, exit]]) });
+      this.persistence.commitIndex(new Map([[id, { ...(spec.settle?.(input, { ...call, now: new Date().toISOString() }) ?? input), ...applyExit(run, exit, {}, call) }]]), undefined, { exits: new Map([[id, exit]]) });
       moved = this.peek(id);
     }
     if (event) this.exitEvents.write(id, event);
@@ -1618,11 +1531,11 @@ export class RunStore {
       repoHandle: this.repoHandle,
       restore: () => restoreHistory(this.dataDir, id),
       archive: (record: RunRecord, archived: boolean) => this.archive.applyArchived(record, archived, before, exit),
-      touch: (record: RunRecord) => this.touch(record, before, exit),
+      touch: (record: RunRecord) => this.persistence.touch(record, before, exit),
     };
     if (durability === 'committed') {
       const staged = stageDurableUpdate(run, patch, hooks, exit);
-      this.commitIndex(new Map([[id, staged.run]]), undefined, { before: new Map([[id, before]]), exits: new Map([[id, staged.exit]]) });
+      this.persistence.commitIndex(new Map([[id, staged.run]]), undefined, { before: new Map([[id, before]]), exits: new Map([[id, staged.exit]]) });
       return this.record(id);
     }
     stageDebouncedUpdate(run, patch, hooks);
@@ -1638,7 +1551,7 @@ export class RunStore {
     if (!run || run.steps.some((s) => s.id === step.id)) return;
     const before = snapshotRun(run);
     run.steps = [...run.steps, { ...step, status: 'pending', iterations: 0, tokensUsed: 0 }];
-    this.touch(run, before);
+    this.persistence.touch(run, before);
   }
   updateStep(runId: string, stepId: string, patch: Partial<Omit<StepState, 'id'>>): void {
     const run = this.record(runId);
@@ -1648,7 +1561,7 @@ export class RunStore {
     // Replaced, never changed in place, so `before` keeps the steps as they were.
     run.steps = run.steps.map((candidate) => candidate === step ? next : candidate);
     Object.assign(run, stepTotals(run.steps));
-    this.touch(run, before);
+    this.persistence.touch(run, before);
   }
 
   /** A debounced write of the held record `id`: `apply` changes it in place, then `touch` saves it. */
@@ -1656,7 +1569,7 @@ export class RunStore {
     const run = this.record(id), before = snapshotRun(run);
     if (!run) return undefined;
     apply(run);
-    this.touch(run, before);
+    this.persistence.touch(run, before);
     return run;
   }
 
@@ -1671,244 +1584,9 @@ export class RunStore {
     return [...ids];
   }
 
-  /** Write the pending rows out now (used on shutdown). */
-  flush(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    this.saveNow();
-  }
-
   // ---- internals -----------------------------------------------------------
 
   private seqs = new Map<string, number>();
-
-  /** Same location `handoffPath()` in handoff.ts produces — inlined to keep
-   *  the store free of upward imports. */
-  private handoffPath(runId: string): string {
-    return join(this.claims.sourceDataDir(runId), 'runs', `${runId}.handoff.md`);
-  }
-
-  /** Agent screenshots persisted by the run manager (see persistImage). */
-  private imagesDir(runId: string): string {
-    return join(this.claims.sourceDataDir(runId), 'runs', `${runId}-images`);
-  }
-
-  /** Save `run` debounced and publish it; `before` is the record at the write's entry (none: created). */
-  private touch(run: RunRecord, before: Readonly<RunRecord> | undefined, exit?: RunExitId): void {
-    this.dirty.add(run.id);
-    this.scheduleSave();
-    publishRunWrite(this.published, run, before, undefined, exit);
-    this.archive.maybeEnqueueHistoryCompress(run);
-  }
-
-  /** The held record is gone; the next save or commit deletes its row, fenced by `family`'s claim
-   *  and by the revision this store last saw (kept in `base` until the delete is written). */
-  private markDeleted(id: string, family: string): void {
-    this.liveItems.forget(id);
-    this.coldReads.forget(id);
-    const read = this.coldBase.get(id);
-    if (!this.base.has(id) && read) this.base.set(id, storedRow(read));
-    this.dirty.delete(id);
-    this.deleted.add(id);
-    this.deletedFamilies.set(id, family);
-    this.historyOwed.add(id);
-  }
-
-  /** Debounced so token-usage updates don't rewrite a row per event. Nothing to schedule without
-   *  a database: a `RunStore.unavailable` store, or a closed one, writes nothing. */
-  private scheduleSave(): void {
-    if (this.saveTimer || !this.db) return;
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      this.saveNow();
-    }, 300);
-    this.saveTimer.unref?.();
-  }
-
-  /** The single database write, so a test can fail it the way a full disk would. */
-  private writeIndex(changes: RunDatabaseChanges): RunDatabaseCommit {
-    const transaction = (changes: RunDatabaseChanges) => { assertProjectWritable(this.dataDir); return this.db!.transaction(changes); };
-    return this.persistence ? this.persistence(changes, transaction) : transaction(changes);
-  }
-
-  /**
-   * Write `staged` plus everything still pending — dirty rows from memory, deletions — in one
-   * transaction, then clear the pending marks. Throws with nothing cleared when it fails.
-   * Never copies or sorts the whole store: the cost is the rows that changed.
-   *
-   * Fenced (#779, plan step 3): the transaction commits only if every family it writes still
-   * carries this store's claim and every row is at the revision this store last saw. Otherwise
-   * nothing is written and `handleConflicts` deals with the rows that changed under it.
-   */
-  private persist(staged: ReadonlyMap<string, RunRecord | null>): void {
-    const upserts: RunRowInput[] = [];
-    const deletes: string[] = [];
-    const families = new Map<string, string>();
-    const extras = new Map<string, RawExtras | undefined>();
-    const encode = (run: RunRecord) => {
-      const encoded = encodeRawRecord(run, (this.base.get(run.id) ?? this.coldBase.get(run.id))?.extras);
-      extras.set(run.id, encoded.extras);
-      const projected = { ...run };
-      restoreOriginatingIssue(projected);
-      upserts.push({ ...encodeRunRow(run, encoded.data),
-        issueAttributionCurrent: isDeepStrictEqual(projected, run) });
-    };
-    for (const [id, next] of staged) {
-      if (next) encode(next);
-      else deletes.push(id);
-      families.set(id, next ? familyKey(next) : this.familyOf(id));
-    }
-    for (const id of this.dirty) {
-      const run = this.held.get(id);
-      if (!run || staged.has(id)) continue;
-      encode(run);
-      families.set(id, familyKey(run));
-    }
-    for (const id of this.deleted) {
-      if (staged.has(id)) continue;
-      deletes.push(id);
-      families.set(id, this.familyOf(id));
-    }
-    // A row's insertion order (`seq`) is the order this write inserts it in, and it is where the
-    // run lists among runs created in the same millisecond. Insert new runs in creation order (the
-    // held set's, then staged runs not held yet), whether staged or dirty brought them here.
-    if (upserts.filter((row) => !this.base.has(row.id)).length > 1) {
-      const created = new Map<string, number>();
-      for (const id of [...this.held.keys(), ...staged.keys()]) if (!created.has(id)) created.set(id, created.size);
-      upserts.sort((a, b) => created.get(a.id)! - created.get(b.id)!);
-    }
-    // A held run whose write moved it into a new family (a worker quarantined to `invalid`) takes
-    // that family's claim first; one it cannot take fails the fence below as claim-lost.
-    const moved = [...new Set(families.values())].filter((family) => !this.claimed.has(family) && !this.pendingClaims.has(family));
-    if (moved.length > 0) this.claims.claimFamilies(moved, { allowLive: true });
-    let commit: RunDatabaseCommit;
-    try {
-      commit = this.writeIndex({ upserts, deletes, ...(this.owner ? { fence: this.fence(families) } : {}) });
-    } catch (error) {
-      if (error instanceof RunConflictError) this.handleConflicts(error, staged);
-      throw error;
-    }
-    for (const [family, generation] of commit.claims) {
-      this.claimed.set(family, generation);
-      this.pendingClaims.delete(family);
-    }
-    for (const row of upserts) {
-      this.base.set(row.id, { revision: commit.revisions.get(row.id)!, seq: commit.seqs.get(row.id)!, data: row.data, extras: extras.get(row.id) });
-    }
-    for (const id of deletes) {
-      this.liveItems.forget(id);
-      this.base.delete(id);
-      this.deletedFamilies.delete(id);
-      this.retention.removeOwedHistory(id);
-    }
-    this.dirty.clear();
-    this.deleted.clear();
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-  }
-
-  /** What a write of these rows (id → family) must still find: this store's claims, at the
-   *  generations it took them, and each row at the revision it last saw (none for a new row). */
-  private fence(families: ReadonlyMap<string, string>): RunWriteFence {
-    const claims = new Map<string, RunFenceClaim>();
-    const rows = new Map<string, { revision: number | null; family: string }>();
-    for (const [id, family] of families) {
-      const pending = this.pendingClaims.get(family);
-      // Generations start at 1, so an unclaimed family's 0 fails the fence as claim-lost.
-      claims.set(family, pending !== undefined ? { take: pending } : { generation: this.claimed.get(family) ?? 0 });
-      rows.set(id, { revision: (this.base.get(id) ?? this.coldBase.get(id))?.revision ?? null, family });
-    }
-    return { owner: this.owner!, claims, rows };
-  }
-
-  /**
-   * Handle a fenced-write conflict. Save unexpected conflict evidence before clearing pending
-   * state or quarantining the row. If evidence persistence fails, retain pending writes. Other
-   * rows remain writable; stale unclaimed reads only fail their write.
-   */
-  private handleConflicts(error: RunConflictError, staged: ReadonlyMap<string, RunRecord | null>): void {
-    const unexpected = error.conflicts.filter((conflict) =>
-      this.held.has(conflict.id) || this.deleted.has(conflict.id) || this.coldBase.get(conflict.id)?.owned === true);
-    if (unexpected.length === 0 || !this.db || !this.owner) return;
-    const evidence: RunConflictEvidence[] = unexpected.map((conflict) => {
-      const seen = this.base.get(conflict.id) ?? this.coldBase.get(conflict.id);
-      const local = staged.has(conflict.id) ? staged.get(conflict.id)! : this.deleted.has(conflict.id) ? null : this.held.get(conflict.id) ?? null;
-      return {
-        runId: conflict.id, reason: conflict.reason,
-        baseRevision: seen?.revision ?? null, baseData: seen?.data ?? null,
-        localData: local === null ? null : JSON.stringify(local), localDeleted: local === null,
-        currentRevision: conflict.current?.revision ?? null, currentData: conflict.current?.data ?? null,
-      };
-    });
-    let seqs: number[];
-    try {
-      seqs = this.db.recordConflicts(this.owner.session, evidence);
-    } catch (evidenceError) {
-      const message = evidenceError instanceof Error ? evidenceError.message : String(evidenceError);
-      console.error(`[hsq] ${RUNS_DB_FILE}: could not record the conflicting write on ${unexpected.map((c) => c.id).join(', ')}; it stays pending: ${message}`);
-      return;
-    }
-    unexpected.forEach((conflict, index) => {
-      const family = this.familyOf(conflict.id);
-      this.liveItems.forget(conflict.id);
-      this.quarantined.add(conflict.id);
-      this.coldReads.forget(conflict.id);
-      this.dirty.delete(conflict.id);
-      this.deleted.delete(conflict.id);
-      this.deletedFamilies.delete(conflict.id);
-      // The delete did not happen, so the history stays with the row.
-      this.historyOwed.delete(conflict.id);
-      if (conflict.reason === 'claim-lost') {
-        this.claimed.delete(family);
-        this.pendingClaims.delete(family);
-      }
-      const decoded = conflict.current ? decodeRunRow(conflict.current.data) : undefined;
-      const current = decoded?.run;
-      if (this.claims.isFallbackRun(conflict.id)) this.held.delete(conflict.id);
-      const held = this.held.get(conflict.id);
-      const before = snapshotRun(held ?? staged.get(conflict.id) ?? undefined);
-      if (current && conflict.current) {
-        // The other writer's record as it stands, normalized only as a live owner's run would be.
-        reconcileLoadedRun(current, { keepLive: true });
-        rescopeRun(current, this.repoHandle);
-        if (held) replaceRecord(held, current);
-        this.base.set(conflict.id, { revision: conflict.current.revision, seq: conflict.current.seq, data: conflict.current.data, extras: decoded!.extras });
-        publishRunWrite(this.published, held ?? current, before ?? snapshotRun(current), 'conflict');
-      } else {
-        this.held.delete(conflict.id);
-        this.base.delete(conflict.id);
-        this.published.publish('run.deleted', { runId: conflict.id });
-      }
-      console.error(`[hsq] run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until Squawk restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
-    });
-    this.scheduleSave();
-  }
-
-  /** Write what is pending, then (unless closing) let every run whose write settled leave memory. */
-  private saveNow(evict = true): void {
-    if (!this.db || projectWriteRefused(this.dataDir)) return;
-    // A second attempt only after a conflict excluded its rows: the unrelated rest goes out at once.
-    for (let attempt = 0; attempt < 2 && (this.dirty.size > 0 || this.deleted.size > 0); attempt++) {
-      const quarantined = this.quarantined.size;
-      try {
-        this.persist(new Map());
-      } catch (err) {
-        if (err instanceof RunConflictError && this.quarantined.size > quarantined) continue;
-        // A pending save may outlive its directory; never recreate it or hide live-directory
-        // failures. The rows stay pending (and held), so the next save or commit retries them.
-        if (existsSync(this.dataDir)) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`[hsq] failed to save ${RUNS_DB_FILE}: ${message}`);
-        }
-        break;
-      }
-    }
-    if (evict) this.evictSettled();
-  }
 
   /**
    * Write what is pending and release the database (store disposal, process shutdown).
@@ -1922,11 +1600,7 @@ export class RunStore {
     this.published.publish('store.closed', {});
     this.archive.compressor.stop();
     this.transcriptFacts.stop();
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    this.saveNow(false);
+    this.persistence.flush(false);
     if (this.db && this.owner) {
       // Every claim goes with the store. Should the release fail, the claims stay until this
       // process exits; from then on they are provably dead and the next opener takes them.
