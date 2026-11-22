@@ -1,0 +1,100 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to run `echo probe-denied` via shell command tool. If it is rejected, reply REJECTED and do not retry.\nLet's invoke `run_command` with `CommandLine=\"echo probe-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "denied\"`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12454,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to run `echo probe-denied` via shell command tool. If it is rejected, reply REJECTED and do not retry.\nLet's invoke `run_command` with `CommandLine=\"echo probe-denied\"`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_4617173897375432672",
+      "name": "Bash",
+      "title": "echo probe-denied",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo probe-denied"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_4617173897375432672",
+      "name": "Bash",
+      "title": "echo probe-denied",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo probe-denied"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_4617173897375432672",
+      "name": "Bash",
+      "title": "echo probe-denied",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "echo probe-denied"
+      },
+      "output": "{\"output\":\"\"}",
+      "diffs": []
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3974,
+      "output": 97,
+      "total": 12454,
+      "reasoning": 53,
+      "cacheRead": 8383,
+      "cacheWrite": 0
+    }
+  }
+]

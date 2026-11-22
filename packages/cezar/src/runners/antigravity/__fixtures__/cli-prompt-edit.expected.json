@@ -1,0 +1,282 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to edit `notes.txt` in the workspace: replace"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the line `beta` with `gamma`. Use the file edit tool, and reply `DONE`.\nLet's first check if `notes"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ".txt` exists or read it. Let's read `notes.txt` using `read_file`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 24345,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to edit `notes.txt` in the workspace: replace the line `beta` with `gamma`. Use the file edit tool, and reply `DONE`.\nLet's first check if `notes.txt` exists or read it. Let's read `notes.txt` using `read_file`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_15682491174973788168",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "EndLine": 50,
+        "Path": "/work/project/notes.txt",
+        "StartLine": 1
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_15682491174973788168",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "EndLine": 50,
+        "Path": "/work/project/notes.txt",
+        "StartLine": 1
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "`notes.txt` contains:\n```\nalpha\nbeta\n```\nNow let's use `edit_file` to replace `beta` with `gamma`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 24517,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "`notes.txt` contains:\n```\nalpha\nbeta\n```\nNow let's use `edit_file` to replace `beta` with `gamma`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_6951189726986495668",
+      "name": "Edit",
+      "title": "File notes.txt",
+      "toolKind": "edit",
+      "status": "running",
+      "input": {
+        "Path": "/work/project/notes.txt",
+        "Replacement": "gamma",
+        "Target": "beta"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_6951189726986495668",
+      "name": "Edit",
+      "title": "File notes.txt",
+      "toolKind": "edit",
+      "status": "pending",
+      "input": {
+        "Path": "/work/project/notes.txt",
+        "Replacement": "gamma",
+        "Target": "beta"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_6951189726986495668",
+      "name": "Edit",
+      "title": "File notes.txt",
+      "toolKind": "edit",
+      "status": "running",
+      "input": {
+        "Path": "/work/project/notes.txt",
+        "Replacement": "gamma",
+        "Target": "beta"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_6951189726986495668",
+      "name": "Edit",
+      "title": "File notes.txt",
+      "toolKind": "edit",
+      "status": "completed",
+      "input": {
+        "Path": "/work/project/notes.txt",
+        "Replacement": "gamma",
+        "Target": "beta"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ],
+      "output": "{}",
+      "diffs": [
+        {
+          "path": "/work/project/notes.txt",
+          "oldText": "alpha\nbeta\n",
+          "newText": "alpha\ngamma\n"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "The replacement was successful. The user asked: \"Reply DONE.\"\nLet's reply `DONE`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": "The replacement was successful. The user asked: \"Reply DONE.\"\nLet's reply `DONE`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "DONE"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 24775,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "DONE"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 9581,
+      "output": 218,
+      "total": 73637,
+      "reasoning": 124,
+      "cacheRead": 63838,
+      "cacheWrite": 0
+    }
+  }
+]

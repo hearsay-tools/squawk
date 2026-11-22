@@ -1,0 +1,452 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " me to do the following:\n1. Run exactly `sleep 10 && echo bg"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "2` with `run_command`, with `WaitMsBeforeAsync: 500`, so it goes to the background"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ".\n2. Reply \"STARTED\" now and end my turn (do not call any more tools after that, or rather"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ", call the tool for step 1, then in that same turn or next turn reply STARTED? Wait, let's"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " look closely at the request: \"Run exactly `sleep 10 && echo bg2` with your shell command tool, Wait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "MsBeforeAsync 500, so it goes to the background. Reply STARTED now and end your turn. When"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " the background command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\")\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Wait! Let's check the workflow:\n- I must run `sleep 10 && echo bg2"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "` with `run_command`, `WaitMsBeforeAsync: 500`.\n- Reply STARTED and end turn"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ".\n- Then, when the background command finishes, the system will notify me (via background task completion notification / messaging"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": ").\n- Then, run `echo after-bg` and report its output.\n\nLet's execute step 1 right"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " now!\nTool call: `run_command` with `CommandLine: \"sleep 10 && echo bg2\"`, "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`WaitMsBeforeAsync: 500`, `toolSummary: \"Run background sleep\"`.\nAnd in my response"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " or along with it? Wait, can I call the tool and output text? Yes, tool call and text response. But the"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " prompt says \"Reply STARTED now and end your turn.\"\nLet's make sure we call `run_command` and output"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " \"STARTED\"."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9311,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to do the following:\n1. Run exactly `sleep 10 && echo bg2` with `run_command`, with `WaitMsBeforeAsync: 500`, so it goes to the background.\n2. Reply \"STARTED\" now and end my turn (do not call any more tools after that, or rather, call the tool for step 1, then in that same turn or next turn reply STARTED? Wait, let's look closely at the request: \"Run exactly `sleep 10 && echo bg2` with your shell command tool, WaitMsBeforeAsync 500, so it goes to the background. Reply STARTED now and end your turn. When the background command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\")\nWait! Let's check the workflow:\n- I must run `sleep 10 && echo bg2` with `run_command`, `WaitMsBeforeAsync: 500`.\n- Reply STARTED and end turn.\n- Then, when the background command finishes, the system will notify me (via background task completion notification / messaging).\n- Then, run `echo after-bg` and report its output.\n\nLet's execute step 1 right now!\nTool call: `run_command` with `CommandLine: \"sleep 10 && echo bg2\"`, `WaitMsBeforeAsync: 500`, `toolSummary: \"Run background sleep\"`.\nAnd in my response or along with it? Wait, can I call the tool and output text? Yes, tool call and text response. But the prompt says \"Reply STARTED now and end your turn.\"\nLet's make sure we call `run_command` and output \"STARTED\"."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_13466194841907764102",
+      "name": "Bash",
+      "title": "sleep 10 && echo bg2",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 10 && echo bg2"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_13466194841907764102",
+      "name": "Bash",
+      "title": "sleep 10 && echo bg2",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "sleep 10 && echo bg2"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_13466194841907764102",
+      "name": "Bash",
+      "title": "sleep 10 && echo bg2",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 10 && echo bg2"
+      }
+    }
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The background task has started. Now I should reply \"STARTED\" and end my turn ("
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "calling no more tools). The system will notify me when the background task completes, and then I will run `echo after-bg"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "` and report its output."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The background task has started. Now I should reply \"STARTED\" and end my turn (calling no more tools). The system will notify me when the background task completes, and then I will run `echo after-bg` and report its output."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "STARTED"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9502,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "STARTED"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_13466194841907764102",
+      "name": "Bash",
+      "title": "sleep 10 && echo bg2",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "sleep 10 && echo bg2"
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 12261,
+      "output": 474,
+      "total": 18813,
+      "reasoning": 427,
+      "cacheRead": 6078,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_13466194841907764102",
+      "name": "Bash",
+      "title": "sleep 10 && echo bg2",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "sleep 10 && echo bg2"
+      },
+      "output": "{\"output\":\"Command exited with code 0.\\n\\nCommand output:\\nbg2\\r\\n\",\"exit_code\":0}",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The background task"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " has finished with output `bg2`.\nNow the user request states:\n\"When the background"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\"\n\nLet'"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "s run `echo after-bg` using `run_command` with `WaitMsBeforeAsync: 500"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "` (or normal execution, since `echo after-bg` is instantaneous)."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9937,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The background task has finished with output `bg2`.\nNow the user request states:\n\"When the background command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\"\n\nLet's run `echo after-bg` using `run_command` with `WaitMsBeforeAsync: 500` (or normal execution, since `echo after-bg` is instantaneous)."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_13021273311845859207",
+      "name": "Bash",
+      "title": "echo after-bg",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo after-bg"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_13021273311845859207",
+      "name": "Bash",
+      "title": "echo after-bg",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo after-bg"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_13021273311845859207",
+      "name": "Bash",
+      "title": "echo after-bg",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo after-bg"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_13021273311845859207",
+      "name": "Bash",
+      "title": "echo after-bg",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "echo after-bg"
+      },
+      "output": "{\"output\":\"Created At: 2026-11-22T00:38:07+01:00\\nCompleted At: 2026-11-22T00:38:07+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nafter-bg\\r\\n\",\"exit_code\":0}",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "The output is `after-bg`. Let's report it to the user."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": "The output is `after-bg`. Let's report it to the user."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "\n\nafter-bg"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10046,
+      "contextWindow": 1048576
+    }
+  }
+]

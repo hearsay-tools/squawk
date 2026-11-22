@@ -1,0 +1,243 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to run `sleep 30 && echo late` using the shell command tool.\nLet's call `run_command` with `CommandLine=\"sleep 30 && echo late\"`, `Wait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "MsBeforeAsync=500`. (Since 30 seconds is > 10 seconds, `WaitMsBeforeAsync"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "=500` will background it or wait up to 500ms and then background it / notify us when"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " finished). Wait, the documentation says:\n\"Each command runs in a new session... Commands that do not finish within the specified wait"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " time continue running in the background as tasks; the system will notify you when they finish, so do not poll their status or set timers to"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " check on them.\"\nLet's set `WaitMsBeforeAsync=500` or higher, but since it takes"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " 30 seconds, it will be backgrounded and we will be notified when it completes."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13549,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to run `sleep 30 && echo late` using the shell command tool.\nLet's call `run_command` with `CommandLine=\"sleep 30 && echo late\"`, `WaitMsBeforeAsync=500`. (Since 30 seconds is > 10 seconds, `WaitMsBeforeAsync=500` will background it or wait up to 500ms and then background it / notify us when finished). Wait, the documentation says:\n\"Each command runs in a new session... Commands that do not finish within the specified wait time continue running in the background as tasks; the system will notify you when they finish, so do not poll their status or set timers to check on them.\"\nLet's set `WaitMsBeforeAsync=500` or higher, but since it takes 30 seconds, it will be backgrounded and we will be notified when it completes."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_15646625950998597129",
+      "name": "Bash",
+      "title": "sleep 30 && echo late",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 30 && echo late"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_15646625950998597129",
+      "name": "Bash",
+      "title": "sleep 30 && echo late",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "sleep 30 && echo late"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_15646625950998597129",
+      "name": "Bash",
+      "title": "sleep 30 && echo late",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 30 && echo late"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_15646625950998597129",
+      "name": "Bash",
+      "title": "sleep 30 && echo late",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "sleep 30 && echo late"
+      },
+      "output": "Cancelled"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "cancelled",
+    "usage": {
+      "input": 2810,
+      "output": 244,
+      "total": 13549,
+      "reasoning": 197,
+      "cacheRead": 10495,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-3"
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_15646625950998597129",
+      "name": "Bash",
+      "title": "sleep 30 && echo late",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "sleep 30 && echo late"
+      },
+      "output": "{\"output\":\"\"}",
+      "diffs": []
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "The user requested"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": ": \"Reply with the single word READY.\"\nLet's simply reply with"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": " `READY`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": "The user requested: \"Reply with the single word READY.\"\nLet's simply reply with `READY`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "READY"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14176,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "READY"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-3",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3686,
+      "output": 23,
+      "total": 14176,
+      "reasoning": 22,
+      "cacheRead": 10467,
+      "cacheWrite": 0
+    }
+  }
+]

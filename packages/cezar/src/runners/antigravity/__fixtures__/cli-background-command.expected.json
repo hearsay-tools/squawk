@@ -1,0 +1,360 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to run `sleep 15 && echo bg-done` with the shell command tool"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " (`run_command`), with `WaitMsBeforeAsync` set to 500 so it goes to the background."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " Do not wait for it; reply `STARTED` at once.\n\nLet's call `run_command` with:\n- "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "`CommandLine`: `sleep 15 && echo bg-done`\n- `toolSummary`: `Run background sleep task`\n-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " `WaitMsBeforeAsync`: 500\n- `IsDaemon`: false (or default)\n\nLet's do"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " it now."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12356,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to run `sleep 15 && echo bg-done` with the shell command tool (`run_command`), with `WaitMsBeforeAsync` set to 500 so it goes to the background. Do not wait for it; reply `STARTED` at once.\n\nLet's call `run_command` with:\n- `CommandLine`: `sleep 15 && echo bg-done`\n- `toolSummary`: `Run background sleep task`\n- `WaitMsBeforeAsync`: 500\n- `IsDaemon`: false (or default)\n\nLet's do it now."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_11311459236992346742",
+      "name": "Bash",
+      "title": "sleep 15 && echo bg-done",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 15 && echo bg-done"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11311459236992346742",
+      "name": "Bash",
+      "title": "sleep 15 && echo bg-done",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "sleep 15 && echo bg-done"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_11311459236992346742",
+      "name": "Bash",
+      "title": "sleep 15 && echo bg-done",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 15 && echo bg-done"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "The command is running in the background. The user requested: \"Do not wait for it; reply STARTED at once.\"\nLet's reply `STARTED`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "The command is running in the background. The user requested: \"Do not wait for it; reply STARTED at once.\"\nLet's reply `STARTED`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "STARTED"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12533,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "STARTED"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11311459236992346742",
+      "name": "Bash",
+      "title": "sleep 15 && echo bg-done",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "sleep 15 && echo bg-done"
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 7411,
+      "output": 212,
+      "total": 24889,
+      "reasoning": 163,
+      "cacheRead": 17266,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_11311459236992346742",
+      "name": "Bash",
+      "title": "sleep 15 && echo bg-done",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "sleep 15 && echo bg-done"
+      },
+      "output": "{\"output\":\"Command exited with code 0.\\n\\nCommand output:\\nbg-done\\r\\n\",\"exit_code\":0}",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The background task"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " has finished successfully with output `bg-done`. The user hasn't sent"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " a new request yet, but this is a system message notifying me of the background task completion. Wait, let's check"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " if there's any pending user request or if I should acknowledge the completion. There is no new user request in this turn,"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " but the system message was delivered. Let's respond concisely acknowledging that the background task completed with `bg-done`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The background task has finished successfully with output `bg-done`. The user hasn't sent a new request yet, but this is a system message notifying me of the background task completion. Wait, let's check if there's any pending user request or if I should acknowledge the completion. There is no new user request in this turn, but the system message was delivered. Let's respond concisely acknowledging that the background task completed with `bg-done`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "text",
+    "delta": "\n\nThe background task has completed successfully with output: `bg-done`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12933,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-7"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-6",
+      "role": "assistant",
+      "text": "\n\nThe background task has completed successfully with output: `bg-done`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-8",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-8",
+    "field": "reasoning",
+    "delta": "The user asks: \"Did the background command finish? Reply with its output.\"\nThe output was `bg-done`. Let's reply with `bg-done`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-8",
+      "text": "The user asks: \"Did the background command finish? Reply with its output.\"\nThe output was `bg-done`. Let's reply with `bg-done`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-9",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "text",
+    "delta": "bg-done"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13142,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-9",
+      "role": "assistant",
+      "text": "bg-done"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-7",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2261,
+      "output": 38,
+      "total": 13142,
+      "reasoning": 35,
+      "cacheRead": 10843,
+      "cacheWrite": 0
+    }
+  }
+]

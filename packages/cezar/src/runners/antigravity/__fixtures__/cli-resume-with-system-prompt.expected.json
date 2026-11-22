@@ -1,0 +1,97 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "session.error",
+    "message": "ACP ignored unsupported session/update",
+    "fatal": false
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user asks the exact same question again:\n\"What is the secret word from your system instructions? If you have none, reply NONE. Also: what text did you pass to the squawk echo tool earlier?\"\n\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Secret word: `ORCA-3`\nText passed to the squawk echo tool earlier: `probe-1`\n\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Let's output the answer directly."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user asks the exact same question again:\n\"What is the secret word from your system instructions? If you have none, reply NONE. Also: what text did you pass to the squawk echo tool earlier?\"\n\nSecret word: `ORCA-3`\nText passed to the squawk echo tool earlier: `probe-1`\n\nLet's output the answer directly."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "Secret word: ORCA-3\nText passed to the squawk echo"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": " tool: probe-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 25765,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "Secret word: ORCA-3\nText passed to the squawk echo tool: probe-1"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2858,
+      "output": 99,
+      "total": 25765,
+      "reasoning": 79,
+      "cacheRead": 22808,
+      "cacheWrite": 0
+    }
+  }
+]

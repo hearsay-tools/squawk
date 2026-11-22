@@ -1,0 +1,226 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "The user wants me to run `sleep 8 && echo slept` using the shell command tool, and"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " reply with the output.\nLet's call `run_command` with `CommandLine=\"sleep 8 && echo"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " slept\"`, `WaitMsBeforeAsync=10000`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12738,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "The user wants me to run `sleep 8 && echo slept` using the shell command tool, and reply with the output.\nLet's call `run_command` with `CommandLine=\"sleep 8 && echo slept\"`, `WaitMsBeforeAsync=10000`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_1105772482190492382",
+      "name": "Bash",
+      "title": "sleep 8 && echo slept",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 8 && echo slept"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_1105772482190492382",
+      "name": "Bash",
+      "title": "sleep 8 && echo slept",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "sleep 8 && echo slept"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_1105772482190492382",
+      "name": "Bash",
+      "title": "sleep 8 && echo slept",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "sleep 8 && echo slept"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_1105772482190492382",
+      "name": "Bash",
+      "title": "sleep 8 && echo slept",
+      "toolKind": "execute",
+      "status": "failed",
+      "input": {
+        "command": "sleep 8 && echo slept"
+      },
+      "output": "Turn ended before the tool completed"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2175,
+      "output": 106,
+      "total": 12738,
+      "reasoning": 60,
+      "cacheRead": 10457,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-3"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_1105772482190492382",
+      "name": "Bash",
+      "title": "sleep 8 && echo slept",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "sleep 8 && echo slept"
+      },
+      "output": "{\"output\":\"Created At: 2026-11-22T00:33:45+01:00\\nCompleted At: 2026-11-22T00:33:53+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nslept\\r\\n\",\"exit_code\":0}",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "The previous command output was `slept`. The user's request was: \"Use"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": " your shell command tool to run exactly `sleep 8 && echo slept`. Then reply with the output. Also: include the word KI"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "WI in your final answer.\"\nSo the output is `slept`, and we need to include KIWI in our final answer."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "\nLet's format the final answer clearly with `slept` and `KIWI`."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": "The previous command output was `slept`. The user's request was: \"Use your shell command tool to run exactly `sleep 8 && echo slept`. Then reply with the output. Also: include the word KIWI in your final answer.\"\nSo the output is `slept`, and we need to include KIWI in our final answer.\nLet's format the final answer clearly with `slept` and `KIWI`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "slept KIWI"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13125,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "slept KIWI"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-3",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2594,
+      "output": 95,
+      "total": 13125,
+      "reasoning": 91,
+      "cacheRead": 10436,
+      "cacheWrite": 0
+    }
+  }
+]

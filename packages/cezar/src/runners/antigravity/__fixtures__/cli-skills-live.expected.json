@@ -1,0 +1,407 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Let's check the available skills again from the system prompt:\nAvailable skills:\n- agy"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "-customizations\n- antigravity-guide\n- run-workflow\n- sk-cwd-agent\n- sk-cwd-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "- sk-late (/work/project/.agents/skills/sk-late/"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "SKILL.md)\n- swarm_monitor\n- swarm_pane\n\nNotice that `sk-late` was"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " added mid-session in the list of available skills! Let's verify all skills starting with `sk-`:\n1. sk"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "-cwd-agent\n2. sk-cwd-agents\n3. sk-gem-acp\n4."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " sk-gem-config\n5. sk-gem-root\n6. sk-late\n\nLet's check"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": " alphabetical order or the order in the list:\nThe prompt list order:\n- sk-cwd-agent\n- sk-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "root\n- sk-late\n\nLet's list them one per line, nothing else."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "Let's check the available skills again from the system prompt:\nAvailable skills:\n- agy-customizations\n- antigravity-guide\n- run-workflow\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n- sk-late (/work/project/.agents/skills/sk-late/SKILL.md)\n- swarm_monitor\n- swarm_pane\n\nNotice that `sk-late` was added mid-session in the list of available skills! Let's verify all skills starting with `sk-`:\n1. sk-cwd-agent\n2. sk-cwd-agents\n3. sk-gem-acp\n4. sk-gem-config\n5. sk-gem-root\n6. sk-late\n\nLet's check alphabetical order or the order in the list:\nThe prompt list order:\n- sk-cwd-agent\n- sk-cwd-agents\n- sk-gem-acp\n- sk-gem-config\n- sk-gem-root\n- sk-late\n\nLet's list them one per line, nothing else."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "sk-cwd-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "agent\nsk-cwd-agents\nsk-gem-acp\nsk-gem-config\nsk-gem-root\n"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "sk-late"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10950,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "sk-cwd-agent\nsk-cwd-agents\nsk-gem-acp\nsk-gem-config\nsk-gem-root\nsk-late"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 10647,
+      "output": 303,
+      "total": 10950,
+      "reasoning": 269,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-4"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "The"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " user invoked `/sk-late`. The metadata tells us:\n\"/sk-late is a ["
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "Slash Command]:\n<SKILL>The user requested you read and use the \"sk-late\" skill. The path to the skill"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " file is:\n/work/project/.agents/skills"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": "/sk-late/SKILL.md</SKILL>\"\n\nLet's read the `SKILL.md` file"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "reasoning",
+    "delta": " for `sk-late` using `read_file`."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 11552,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-5",
+      "text": "The user invoked `/sk-late`. The metadata tells us:\n\"/sk-late is a [Slash Command]:\n<SKILL>The user requested you read and use the \"sk-late\" skill. The path to the skill file is:\n/work/project/.agents/skills/sk-late/SKILL.md</SKILL>\"\n\nLet's read the `SKILL.md` file for `sk-late` using `read_file`."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_598714134544840670",
+      "name": "Read",
+      "title": "File .agents/skills/sk-late/SKILL.md",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "Path": "/work/project/.agents/skills/sk-late/SKILL.md"
+      },
+      "locations": [
+        {
+          "path": "/work/project/.agents/skills/sk-late/SKILL.md"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_598714134544840670",
+      "name": "Read",
+      "title": "File .agents/skills/sk-late/SKILL.md",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "Path": "/work/project/.agents/skills/sk-late/SKILL.md"
+      },
+      "locations": [
+        {
+          "path": "/work/project/.agents/skills/sk-late/SKILL.md"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-6",
+    "field": "reasoning",
+    "delta": "The instruction in `sk-late/SKILL.md` is:\n\"Reply with SK-LATE.\"\n\nLet's reply with SK-LATE."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-6",
+      "text": "The instruction in `sk-late/SKILL.md` is:\n\"Reply with SK-LATE.\"\n\nLet's reply with SK-LATE."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "SK-"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-7",
+    "field": "text",
+    "delta": "LATE"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 11715,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-7",
+      "role": "assistant",
+      "text": "SK-LATE"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-4",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 5820,
+      "output": 194,
+      "total": 23267,
+      "reasoning": 146,
+      "cacheRead": 17253,
+      "cacheWrite": 0
+    }
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-8"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-9",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": "The user requested `/no-such-skill`. There is no such skill. Let's respond politely"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": " explaining that `/no-such-skill` is not a recognized skill or slash command. Keep the response concise as per"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-9",
+    "field": "reasoning",
+    "delta": " communication style."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-9",
+      "text": "The user requested `/no-such-skill`. There is no such skill. Let's respond politely explaining that `/no-such-skill` is not a recognized skill or slash command. Keep the response concise as per communication style."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-10",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-10",
+    "field": "text",
+    "delta": "The command `/no-such-skill` is not a recognized skill or slash command."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 12015,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-10",
+      "role": "assistant",
+      "text": "The command `/no-such-skill` is not a recognized skill or slash command."
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-8",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 3324,
+      "output": 66,
+      "total": 12015,
+      "reasoning": 48,
+      "cacheRead": 8625,
+      "cacheWrite": 0
+    }
+  }
+]
