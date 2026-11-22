@@ -578,7 +578,7 @@ export class RunManager {
   steerWorker(runId: string, input: AgentInput): 'queued' | 'delivered' { return this.#modules.inputDelivery.steerWorker(runId, input); }
 
   #pendingHumanAskSeq(runId: string): number | undefined {
-    return pendingAskFacts.pendingHumanAskSeq(this.#store, runId);
+    return pendingAskFacts.pendingHumanAskSeq(this.#store.transcriptFacts, runId);
   }
 
   #hasPendingHumanAsk(runId: string): boolean {

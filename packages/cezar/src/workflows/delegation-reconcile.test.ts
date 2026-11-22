@@ -77,7 +77,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     store = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
     manager = new RunManager(store, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     const writes = vi.spyOn(store, 'commitConversation');
-    const prepare = vi.spyOn(store, 'prepareRecoveryFacts');
+    const prepare = vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts');
     const before = store.readEvents(a.parentId);
     await manager.recover();
     store.flush();
@@ -165,8 +165,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     setRunStatus(store, a.parentId, RUN_STATUS.queued);
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
-    const prepare = store.prepareRecoveryFacts.bind(store);
-    vi.spyOn(store, 'prepareRecoveryFacts').mockImplementationOnce(async family => {
+    const prepare = store.transcriptFacts.prepareRecoveryFacts.bind(store.transcriptFacts);
+    vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts').mockImplementationOnce(async family => {
       await gate; await prepare(family);
     });
     const before = store.readEvents(a.parentId);
@@ -191,8 +191,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     let release!: () => void;
     let reject!: (reason: Error) => void;
     const gate = new Promise<void>((yes, no) => { release = yes; reject = no; });
-    const prepare = store.prepareRecoveryFacts.bind(store);
-    vi.spyOn(store, 'prepareRecoveryFacts').mockImplementationOnce(async family => {
+    const prepare = store.transcriptFacts.prepareRecoveryFacts.bind(store.transcriptFacts);
+    vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts').mockImplementationOnce(async family => {
       await gate;
       await prepare(family);
     });
@@ -229,8 +229,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     let entered!: () => void; let release!: () => void;
     const ready = new Promise<void>(resolve => { entered = resolve; });
     const gate = new Promise<void>(resolve => { release = resolve; });
-    const prepare = store.prepareTranscriptFacts.bind(store);
-    vi.spyOn(store, 'prepareTranscriptFacts').mockImplementation(async ids => {
+    const prepare = store.transcriptFacts.prepareTranscriptFacts.bind(store.transcriptFacts);
+    vi.spyOn(store.transcriptFacts, 'prepareTranscriptFacts').mockImplementation(async ids => {
       const selected = [...ids];
       if (selected.includes(a.workerId)) {
         expect(selected).toContain(a.parentId); expect(selected).not.toContain(b.workerId);

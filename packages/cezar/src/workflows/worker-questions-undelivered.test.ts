@@ -34,8 +34,8 @@ it('answers the worker for the parent when the parent cannot take another messag
     const p = await steeringParent(); await until(() => store.getRun(p.id)?.status === 'waiting');
     fillInbox(p.id);
     const w = await worker(p.id, 'mock:cezar-ask');
-    const facts = store.transcriptFacts.bind(store);
-    const route = vi.spyOn(store, 'transcriptFacts').mockImplementation(id => {
+    const facts = store.transcriptFacts.transcriptFacts.bind(store.transcriptFacts);
+    const route = vi.spyOn(store.transcriptFacts, 'transcriptFacts').mockImplementation(id => {
       const value = facts(id);
       const { pendingAsk: _pendingAsk, ...withoutAsk } = value;
       return id === w.id ? withoutAsk : value;
@@ -75,8 +75,8 @@ it('closes the question without an answer when the worker spent its automatic-wa
   it('answers the worker when its question is not a valid request', async () => {
     const p = await steeringParent(); await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:cezar-ask');
-    const facts = store.transcriptFacts.bind(store);
-    const route = vi.spyOn(store, 'transcriptFacts').mockImplementation(id => {
+    const facts = store.transcriptFacts.transcriptFacts.bind(store.transcriptFacts);
+    const route = vi.spyOn(store.transcriptFacts, 'transcriptFacts').mockImplementation(id => {
       const value = facts(id);
       const { pendingAsk: _pendingAsk, ...withoutAsk } = value;
       return id === w.id ? withoutAsk : value;

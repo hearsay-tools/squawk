@@ -224,8 +224,8 @@ function trackTurnBookkeeping(manager: RunManager): () => Promise<void> {
  * human answer used before. A worker's question has one addressee, so no human answers it.
  */
 export async function answerAsParent(store: RunStore, manager: RunManager, parentRunId: string, workerRunId: string, text: string): Promise<string> {
-  await waitFor(() => store.transcriptFacts(workerRunId).pendingAsk?.routedMessageId !== undefined);
-  const requestId = store.transcriptFacts(workerRunId).pendingAsk!.routedMessageId!;
+  await waitFor(() => store.transcriptFacts.transcriptFacts(workerRunId).pendingAsk?.routedMessageId !== undefined);
+  const requestId = store.transcriptFacts.transcriptFacts(workerRunId).pendingAsk!.routedMessageId!;
   const root = store.getRun(parentRunId)?.delegation;
   if (root?.role !== 'root' || !root.conversation) throw Error('the parent has no conversation');
   const now = new Date().toISOString();

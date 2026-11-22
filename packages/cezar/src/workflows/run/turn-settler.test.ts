@@ -30,7 +30,7 @@ function fixture() {
   const run = makeRunRecord({ id: 'run', status: RUN_STATUS.running, waits: [], autoResumeAttempts: 2 });
   const store = {
     getRun: () => run,
-    transcriptFacts: () => ({}), readEvents: () => [],
+    transcriptFacts: { transcriptFacts: () => ({}) }, readEvents: () => [],
     appendEvent: vi.fn((_id: string, event: { type: string; message?: string }) => { log.push(`event:${event.type}`); }),
     updateRun: vi.fn((_id: string, patch: object) => { log.push(`update:${Object.keys(patch).join(',')}`); }),
     updateStep: call('step', undefined), flush: call('flush', undefined), commitWait: call('commitWait', undefined),

@@ -94,7 +94,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     id = store.createRun({ title: 'guard', task: 'work', workflow: 'quick-task', autonomous: true, steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] }).id;
     setRunStatus(store, id, RUN_STATUS.running);
     // Worker startup belongs to fixture setup, before policy tests replace timers.
-    await store.factsWarmIdle();
+    await store.transcriptFacts.factsWarmIdle();
     disposed = false; active.clear();
     vi.resetAllMocks();
     submit.mockReturnValue(true); charge.mockReturnValue(40); count.mockReturnValue(0);

@@ -195,7 +195,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
       const noWait = humanOpen(run.id)[0]!;
       expect(noWait).toMatchObject({ via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar });
       expect(store.readEvents(run.id).find(event => event.seq === noWait.askSeq)).toMatchObject({ type: 'note', message: NO_WAIT_NOTE });
-      expect(store.transcriptFacts(run.id).pendingGateSeq).toBeUndefined();
+      expect(store.transcriptFacts.transcriptFacts(run.id).pendingGateSeq).toBeUndefined();
       expect(hasPendingAsk(store, run.id)).toBeFalsy();
       expect(deriveAttention(store.getRun(run.id)!).label).toBe('needs you');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
@@ -233,7 +233,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
           expect(manager.isActive(run.id)).toBe(true);
         }
         const answeredBefore = asks(run.id).slice(0, -1).map(ask => ask.seq);
-        const askSeq = store.transcriptFacts(run.id).pendingAsk!.seq;
+        const askSeq = store.transcriptFacts.transcriptFacts(run.id).pendingAsk!.seq;
         expect(manager.finish(run.id)).toBe(true);
         await until(() => terminal.includes(store.getRun(run.id)?.status ?? '') && !manager.isActive(run.id));
         // Finish is a successful end that frees the run's slot.
@@ -243,7 +243,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
         expect(events.filter(event => event.type === 'human-ask-closed')).toEqual([expect.objectContaining({ askSeq, reason: 'finish' })]);
         expect(events.filter(event => event.type === 'human-input-delivered').map(event => event.askSeq)).toEqual(answeredBefore);
         expect(pendingAskOf(events)).toBeUndefined();
-        expect(store.transcriptFacts(run.id).pendingGateSeq).toBeUndefined();
+        expect(store.transcriptFacts.transcriptFacts(run.id).pendingGateSeq).toBeUndefined();
         expect(hasPendingAsk(store, run.id)).toBeFalsy();
         if (mode !== 'closed') {
           expect(stepStatus(run.id, 'verify')).toBe('pending');

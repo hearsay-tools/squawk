@@ -25,7 +25,7 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       const ask = store.readEvents(runId).find(event => event.type === 'ask.requested')!;
       const requestId = randomUUID();
       // The worker's question is routed to the parent first: its message stays in the ledger.
-      await waitFor(() => store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
+      await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
       const existing = (() => { const d = store.getRun(parentRunId)!.delegation!; return d.role === 'root' ? d.conversation ?? { messages: [], outcomes: [] } : { messages: [], outcomes: [] }; })();
       const messages: ConversationMessage[] = [...existing.messages];
       const inputs: AgentInput[] = [];

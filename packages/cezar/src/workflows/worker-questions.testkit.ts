@@ -25,7 +25,7 @@ export const closedAs = (runId: string) => eventsOf(runId, 'human-ask-closed').m
 export const noHumanCard = (runId: string) => {
     expect(eventsOf(runId, 'worker-question-fallback')).toEqual([]);
     if (hasPendingAsk(store, runId)) {
-      const ask = store.transcriptFacts(runId).pendingAsk!;
+      const ask = store.transcriptFacts.transcriptFacts(runId).pendingAsk!;
       expect(!ask.fallback && !!ask.routedMessageId || store.getRun(runId)?.agentInputs?.some(input => !input.deliveredAt && input.purpose === 'undelivered-question')).toBe(true);
     }
   };
@@ -67,7 +67,7 @@ export const steer = (workerId: string, parentRunId: string, text: string) => {
 
 export function expectFallbackIntact(f: Awaited<ReturnType<typeof idleWorker>>, waits: unknown, outcomes: unknown, stopped = false) {
     expect(eventsOf(f.w.id, 'human-ask-closed').map(event => event.reason)).toEqual(stopped ? ['worker-stopped'] : []);
-    expect(store.transcriptFacts(f.w.id).pendingAsk?.seq).toBe(stopped ? undefined : f.askSeq);
+    expect(store.transcriptFacts.transcriptFacts(f.w.id).pendingAsk?.seq).toBe(stopped ? undefined : f.askSeq);
     expect(store.getRun(f.w.id)?.waits).toEqual(waits);
     expect(conversationOf(f.p.id)?.outcomes.filter(outcome => outcome.requestId === f.requestId)).toEqual(outcomes);
   }

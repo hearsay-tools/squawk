@@ -143,7 +143,7 @@ export class RunSettlement {
   supersedeFallbackThenWorkflowAsk(runId: string, state: ActiveRun): boolean {
     if (!state.liveSession.finishRequested) this.workerQuestions.supersedeWorkerFallback(runId);
     const run = this.context.store.getRun(runId);
-    return !state.liveSession.finishRequested && !!run && hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) &&
+    return !state.liveSession.finishRequested && !!run && hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) &&
       waitingBeforeFinalWorkflowStep(run, this.host.isSyntheticContinuation, record => this.waitingWorkflowStepIndex(record));
   }
 
@@ -482,7 +482,7 @@ export class RunSettlement {
       await this.settleIdleClosedWorker(runId);
       return;
     }
-    if (!run || !nudgeHeldRunning(state) || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
+    if (!run || !nudgeHeldRunning(state) || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id))) return;
     for (const step of run.steps) {
       if (step.status === 'running') this.context.store.updateStep(runId, step.id, { status: 'waiting' });
     }
@@ -499,7 +499,7 @@ export class RunSettlement {
     // did (hearsay-tools/cezarion#1301).
     this.workerQuestions.supersedeWorkerFallback(runId);
     const run = this.context.store.getRun(runId);
-    if (run?.delegation?.role !== 'worker' || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return false;
+    if (run?.delegation?.role !== 'worker' || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id))) return false;
     if (run.invalidAsk) {
       // The exit fails its running step and keeps the waiting one a parent resume re-enters (B11).
       this.host.move(runId, 'fail', { error: 'invalid structured question' });

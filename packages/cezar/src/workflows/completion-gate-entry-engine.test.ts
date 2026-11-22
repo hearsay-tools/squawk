@@ -108,7 +108,7 @@ describe('completion refusal through a live runner', () => {
     f.store.commitDelegation([{ id, delegation: { role: 'root', permissions: ['wait'], receipts: [{ requestId: randomUUID(), workerId: randomUUID(), requestHash: 'b'.repeat(64) }] } }]);
     emitUi({ type: 'ask.requested', requestId: randomUUID(), context: 'Choose a path.',
       questions: [{ header: 'Choice', question: 'Which path?' }] });
-    await f.store.factsWarmIdle();
+    await f.store.transcriptFacts.factsWarmIdle();
     const releaseSlot = semaphore.release.bind(semaphore);
     const release = vi.spyOn(semaphore, 'release').mockImplementation(() => {
       expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.waiting);

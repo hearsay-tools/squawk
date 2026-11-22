@@ -95,7 +95,7 @@ export function inputDeliveryModule(policy: InputDeliveryPolicy): InputDeliveryM
   const turn: SessionTurn = { text: '', scheduleWakeup: undefined, sessionError: undefined };
   onTestFinished(async () => {
     clearUnreadInputTimer(state); clearHeldHumanInputTimer(state);
-    store.flush(); await store.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
+    store.flush(); await store.transcriptFacts.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
   });
   return {
     store, runId, state, group: state.inputState, context, delivery, receiptHost, wire,

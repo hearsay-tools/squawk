@@ -717,7 +717,7 @@ describe('RunManager waiting recovery', () => {
     const legacy = { id: '00000000-0000-4000-8000-0000000000ab', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA['ask-line'],
       registeredAt: '2026-10-21T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'legacy' };
     seedWaits(fixture.store, record.id, { waits: [legacy] });
-    const unreadable = vi.spyOn(fixture.store, 'knownTranscriptFacts').mockImplementation(() => undefined);
+    const unreadable = vi.spyOn(fixture.store.transcriptFacts, 'knownTranscriptFacts').mockImplementation(() => undefined);
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();
     unreadable.mockRestore();

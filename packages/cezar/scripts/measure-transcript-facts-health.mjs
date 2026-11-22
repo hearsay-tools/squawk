@@ -48,7 +48,7 @@ try {
   // Project-open scenario: establish the real HTTP/client path before opening a
   // second cold store on this same event loop. No transcript sidecar is primed.
   bootStore = RunStore.open(projectPaths(root).write);
-  await bootStore.factsWarmIdle();
+  await bootStore.transcriptFacts.factsWarmIdle();
   server = startServer({ home, repoRoot: root, store: bootStore, manager: {}, createManager: (store, root, options) => new RunManager(store, root, { ...options, acquireCiResources }), version: 'task4-measurement', bindHost: '127.0.0.1' }, 0);
   if (!server.listening) await once(server, 'listening');
   const address = server.address();
@@ -76,7 +76,7 @@ try {
     // The first request includes synchronous project-open work too.
     if (!store) {
       store = RunStore.open(dataDir);
-      warming = store.factsWarmIdle().then(() => { end = performance.now(); });
+      warming = store.transcriptFacts.factsWarmIdle().then(() => { end = performance.now(); });
     }
     const response = await pendingResponse;
     assert.equal(response.status, 200);

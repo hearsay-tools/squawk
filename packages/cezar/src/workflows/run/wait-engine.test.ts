@@ -86,7 +86,7 @@ let current: Fixture | undefined;
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }); });
 afterEach(async () => {
   vi.useRealTimers();
-  if (current) { current.engine.dispose(); current.store.flush(); await current.store.factsWarmIdle(); current.store.close(); rmSync(current.root, { recursive: true, force: true }); }
+  if (current) { current.engine.dispose(); current.store.flush(); await current.store.transcriptFacts.factsWarmIdle(); current.store.close(); rmSync(current.root, { recursive: true, force: true }); }
   current = undefined;
 });
 

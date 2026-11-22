@@ -71,12 +71,12 @@ describe('peer conversations', () => {
   it('R1 a peer message is agent input: it reaches a task with an open question and answers nothing', async () => {
     const b = peer(RUN_STATUS.waiting);
     f.store.appendEvent(b.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ question: 'Ignored file?', header: 'Ignored', options: [{ label: 'Yes' }, { label: 'No' }] }] });
-    const askSeq = f.store.transcriptFacts(b.id).pendingAsk?.seq;
+    const askSeq = f.store.transcriptFacts.transcriptFacts(b.id).pendingAsk?.seq;
     expect(askSeq).toBeDefined();
     const sent = await f.service.send(f.caller, message(b.id, 'progress', { text: 'Coordinator continues wave 2' }));
     expect(f.store.getRun(b.id)?.agentInputs).toEqual([expect.objectContaining({ id: sent.message.id, source: agentInputSchema.shape.source.enum.agent })]);
     expect(f.store.readEvents(b.id).filter(event => event.type === 'user-message' || event.type === 'human-input-delivered')).toEqual([]);
-    expect(f.store.transcriptFacts(b.id).pendingAsk?.seq).toBe(askSeq);
+    expect(f.store.transcriptFacts.transcriptFacts(b.id).pendingAsk?.seq).toBe(askSeq);
   });
 
   it('R4 R5 R6 refuses every pair outside a family or a peer pair with one text, and family pairs still work', async () => {

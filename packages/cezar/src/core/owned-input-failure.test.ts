@@ -29,7 +29,7 @@ async function openSession(fixture: Fixture, mode: 'fresh' | 'continuation'): Pr
   }
   // The idle worker parks on Squawk's fallback question, routed to its parent
   // (hearsay-tools/cezarion#1301, hearsay-tools/cezarion#2410).
-  await waitFor(() => store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
+  await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
 }
 
 /** The checkpoint now follows the real HTTP ACK, so the previous fixture's

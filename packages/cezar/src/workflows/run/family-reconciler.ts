@@ -143,7 +143,7 @@ export class FamilyReconciler {
     for (const rootId of this.context.store.listConversationRootIds()) {
       if (this.context.store.writeRefusal(rootId)) continue;
       this.recoveryFactsPending = true;
-      await this.context.store.prepareRecoveryFacts(rootId);
+      await this.context.store.transcriptFacts.prepareRecoveryFacts(rootId);
       if (this.context.disposed()) return;
       this.recoveryFactsPending = false;
       this.host.reconcileWorkerWaits(rootId);
@@ -303,7 +303,7 @@ export class FamilyReconciler {
       } else {
         this.host.waitEngine.refresh(parent.id, entry, next);
       }
-      const recorded = this.context.store.transcriptFacts(parent.id).workerOutcomeKeys;
+      const recorded = this.context.store.transcriptFacts.transcriptFacts(parent.id).workerOutcomeKeys;
       for (const outcome of next.outcomes ?? []) {
         if (!recorded.includes(workerOutcomeKey(entry.id, outcome.workerId, outcome.revision ?? 0))) {
           this.context.store.appendEvent(parent.id, { type: 'worker-outcome', waitId: entry.id, outcome });

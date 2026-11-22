@@ -344,7 +344,7 @@ const dataDir = ${JSON.stringify(join(root, 'installed-facts'))};
 const fixtures = await seedColdHistories(dataDir, runtime);
 const store = RunStore.open(dataDir);
 try {
-  await store.factsWarmIdle();
+  await store.transcriptFacts.factsWarmIdle();
   const stats = verifyFacts(dataDir, fixtures, store);
   assert.equal(workers, 1);
   assert.ok(resolutions.some(path => path.includes(sep + 'dist' + sep + 'contract' + sep)));

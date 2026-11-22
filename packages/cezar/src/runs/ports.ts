@@ -9,6 +9,7 @@
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
 import type { RunStore } from './store.ts';
+import type { TranscriptFacts } from './transcript-facts.ts';
 
 export type { RunLifecycleSource } from './lifecycle.ts';
 
@@ -86,11 +87,11 @@ export interface RunEventLog {
 
 /** What the transcript says about a run. The type `TranscriptFacts` is the facts themselves. */
 export interface TranscriptFactsPort {
-  transcriptFacts: RunStore['transcriptFacts'];
-  knownTranscriptFacts: RunStore['knownTranscriptFacts'];
-  prepareTranscriptFacts: RunStore['prepareTranscriptFacts'];
-  prepareRecoveryFacts: RunStore['prepareRecoveryFacts'];
-  factsWarmIdle: RunStore['factsWarmIdle'];
+  transcriptFacts(runId: string): Readonly<TranscriptFacts>;
+  knownTranscriptFacts(runId: string): Readonly<TranscriptFacts> | undefined;
+  prepareTranscriptFacts(runIds: Iterable<string>): Promise<void>;
+  prepareRecoveryFacts(familyRootId?: string): Promise<void>;
+  factsWarmIdle(): Promise<void>;
 }
 
 /** A worker's collected result. */

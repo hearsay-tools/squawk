@@ -45,7 +45,8 @@ import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@ope
 import { storedDelegationStateSchema } from './delegation-state.ts';
 import { HistoryCompressor } from './history-compressor.ts';
 import { LiveItemSnapshots } from './live-item-snapshots.ts';
-import { emptyFacts, stampOf, TranscriptFactsIndex, type TranscriptFacts } from './transcript-facts.ts';
+import { stampOf } from './transcript-facts.ts';
+import { RunTranscriptFacts } from './transcript-facts-topic.ts';
 import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, removeHistory, restoreHistory } from './history-file.ts';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { startToken, type RecordedProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
@@ -73,7 +74,7 @@ import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop
 import { hasLegacyWaitFields, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
-import { encodeRunRow, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
+import { encodeRunRow, familyRootOf, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
 import { collectRawExtras, encodeRawRecord, type RawExtras } from './raw-record.ts';
 import { ColdReadCache, storedRow, type StoredRow } from './cold-reads.ts';
 import { assertNoLegacyCockpit, assertNoLegacyWriter, backUpLegacyIndex, LEGACY_INDEX_FILE, LegacyWriterError, readLegacyIndex } from './legacy-index.ts';
@@ -243,10 +244,6 @@ const OPEN_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600];
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
-
-/** Runs (and conversation roots, one family query each) the open-time facts warm-up enumerates
- *  per event-loop turn (hearsay-tools/cezarion#949), so each slice stays a few milliseconds. */
-const WARM_IDS_PER_SLICE = 100;
 
 const MAX_RUNS_KEPT = 300;
 
@@ -491,13 +488,6 @@ function sortNewestFirst<T>(entries: Iterable<readonly [T, ListOrder]>): T[] {
   return [...entries].sort(([, a], [, b]) => newestFirst(a, b)).map(([item]) => item);
 }
 
-/** The family a run belongs to, by its root's id. A worker a worker started is filed under the root too. */
-function familyRootOf(run: Pick<RunRecord, 'id' | 'delegation'>): string | undefined {
-  if (run.delegation?.role === 'root') return run.id;
-  if (run.delegation?.role === 'worker') return run.delegation.parentRunId;
-  return undefined;
-}
-
 /** Tests freeze the copies of cold runs, so an in-place write to one throws instead of vanishing. */
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -579,12 +569,9 @@ export class RunStore {
   private readonly unreadable = new Set<string>();
   /** Background one-at-a-time compressor for archived transcripts (#818). */
   private readonly compressor: HistoryCompressor;
-  /** Transcript facts the delegation paths ask about, so they never re-read a transcript (#880). */
-  private readonly facts: TranscriptFactsIndex;
+  /** What the transcript says about a run (hearsay-tools/squawk#4036). */
+  readonly transcriptFacts: RunTranscriptFacts;
   private readonly liveItems = new LiveItemSnapshots();
-
-  private fallbackFacts: TranscriptFactsIndex | undefined;
-  private factsFor(id: string): TranscriptFactsIndex { return this.isFallbackRun(id) ? this.fallbackFacts ??= new TranscriptFactsIndex(this.sourceDataDir(id), true) : this.facts; }
 
   /** Capture both sources on the same synchronous sequence boundary before history IO. */
   liveReadSnapshot(runId: string) {
@@ -592,9 +579,17 @@ export class RunStore {
   }
 
   private constructor(private readonly dataDir: string) {
-    this.facts = new TranscriptFactsIndex(dataDir);
+    this.transcriptFacts = new RunTranscriptFacts(dataDir, {
+      isFallbackRun: (id) => this.isFallbackRun(id),
+      sourceDataDir: (id) => this.sourceDataDir(id),
+      isOpen: () => this.db !== null,
+      held: this.held,
+      listFamilyRunIds: (rootId) => this.listFamilyRunIds(rootId),
+      listConversationRootIds: () => this.listConversationRootIds(),
+      listRunIds: () => this.listRunIds(),
+    });
     this.compressor = new HistoryCompressor(dataDir, (id) => this.isHistoryCompressEligible(id),
-      (id, plain, archive) => this.facts.adoptArchive(id, plain, stampOf(archive)));
+      (id, plain, archive) => this.transcriptFacts.index.adoptArchive(id, plain, stampOf(archive)));
   }
   /**
    * Open the project's run store. See `reconcileLoadedRun` for what `keepLive` (#367) decides
@@ -645,7 +640,7 @@ export class RunStore {
       store.owner = openClaimSession();
       if (!maintenance) {
         store.loadHeldRows();
-        store.warmTranscriptFacts();
+        store.transcriptFacts.warmTranscriptFacts();
         store.exitEvents.writeLoaded();
       }
     } catch (error) {
@@ -1815,7 +1810,7 @@ export class RunStore {
     if (run?.delegation?.role !== 'worker') throw new Error('missing worker continuation target');
     const delegation = delegationStateSchema.parse({ ...run.delegation,
       executionRevision: (run.delegation.executionRevision ?? 0) + 1,
-      executionStartSeq: this.transcriptFacts(id).lastSeq,
+      executionStartSeq: this.transcriptFacts.transcriptFacts(id).lastSeq,
     });
     const staged = new Map<string, RunRecord>();
     this.exitEvents.started(id);
@@ -1942,7 +1937,7 @@ export class RunStore {
   private completionArchiveBlocker(root: RunRecord): string | undefined {
     const family = [root, ...this.listWorkersOf(root.id)];
     for (const run of family) {
-      const facts = this.factsFor(run.id).peek(run.id);
+      const facts = this.transcriptFacts.factsFor(run.id).peek(run.id);
       if (!facts || !['done', 'review', 'failed', 'cancelled'].includes(run.status) || run.waits?.some(wait => wait.phase === 'open') ||
         run.hasPendingPermission || facts.pendingAsk !== undefined)
         return 'Task or worker work still needs attention. Open the task or archive manually.';
@@ -2141,7 +2136,7 @@ export class RunStore {
       decodeRunRow,
       decodeCold: (row) => this.decodeCold(row),
       writeRefusal: (memberId) => this.writeRefusal(memberId),
-      factsPeek: (memberId) => this.factsFor(memberId).peek(memberId),
+      factsPeek: (memberId) => this.transcriptFacts.factsFor(memberId).peek(memberId),
       readWorkerExecution: (memberId) => this.readWorkerExecution(memberId),
     }, id, isActive);
   }
@@ -2170,7 +2165,7 @@ export class RunStore {
   async prepareArchiveOnMerge(id: string): Promise<void> {
     const ids = [id, ...(this.db?.listIdsByParent(id) ?? [])];
     if (ids.length > 1025) return;
-    for (const memberId of ids) await this.factsFor(memberId).ready(memberId);
+    for (const memberId of ids) await this.transcriptFacts.factsFor(memberId).ready(memberId);
   }
 
   archiveOnMergeSnapshot(id: string, repoBase?: string, isActive: (id: string) => boolean = () => false): ArchiveOnMergeSnapshot | undefined {
@@ -2436,7 +2431,7 @@ export class RunStore {
     if (!hasPlainHistory(this.dataDir, runId)) restoreHistory(this.dataDir, runId);
     const line = `${JSON.stringify(full)}\n`;
     appendFileSync(this.eventsPath(runId), line, 'utf8');
-    this.facts.append(runId, full, Buffer.byteLength(line));
+    this.transcriptFacts.index.append(runId, full, Buffer.byteLength(line));
     this.maybeEnqueueHistoryCompress(run);
     this.liveItems.observe(runId, full, false);
     this.published.publish('run.event', { runId, event: full });
@@ -2565,23 +2560,9 @@ export class RunStore {
     return this.secretValues;
   }
 
-  /** The run's indexed transcript facts (#880): a read-only view, never a transcript read once
-   *  the run's index is loaded. An unreadable transcript answers as empty, as readEvents does. */
-  transcriptFacts(runId: string): Readonly<TranscriptFacts> {
-    return this.factsFor(runId).get(runId) ?? emptyFacts();
-  }
-
-  /** The run's transcript facts when they are known: undefined when the transcript exists but its
-   *  facts are not current or cannot be read, so a caller can tell "no ask" from "no evidence". */
-  knownTranscriptFacts(runId: string): Readonly<TranscriptFacts> | undefined {
-    return this.factsFor(runId).peek(runId);
-  }
-
   hasProjection(runId: string, projectionId: string): boolean {
-    return this.transcriptFacts(runId).projectionIds.includes(projectionId);
+    return this.transcriptFacts.transcriptFacts(runId).projectionIds.includes(projectionId);
   }
-
-  private factsWarming: Promise<void> = Promise.resolve();
 
   /** Indexed family enumeration, including members not yet flushed to SQLite. */
   listFamilyRunIds(rootId: string): string[] {
@@ -2592,67 +2573,6 @@ export class RunStore {
     }
     for (const id of this.deleted) ids.delete(id);
     return [...ids];
-  }
-
-  private recoveryFactIds(familyRootId?: string): string[] {
-    if (familyRootId !== undefined) return this.listFamilyRunIds(familyRootId);
-    const ids = new Set<string>();
-    for (const [id, run] of this.held) {
-      if (!isLiveRecord(run)) continue;
-      const root = familyRootOf(run);
-      for (const member of root === undefined ? [id] : this.listFamilyRunIds(root)) ids.add(member);
-    }
-    return [...ids];
-  }
-
-  /** Readiness owns no run snapshot across an await: refresh only the currently held owner. */
-  async prepareTranscriptFacts(runIds: Iterable<string>): Promise<void> {
-    for (const id of new Set(runIds)) {
-      // Exact sidecars resolve immediately too: recovery must yield to timers/I/O between IDs.
-      await new Promise<void>(resolve => setImmediate(resolve));
-      await this.factsFor(id).ready(id);
-    }
-  }
-
-  prepareRecoveryFacts(familyRootId?: string): Promise<void> {
-    return this.prepareTranscriptFacts(this.recoveryFactIds(familyRootId));
-  }
-
-  /** Register IDs only here; the index yields between cache reads and off-loop rebuilds. */
-  private warmTranscriptFacts(): void {
-    this.factsWarming = Promise.resolve().then(async () => {
-      if (!this.db) return;
-      const ids = new Set(this.recoveryFactIds());
-      // hearsay-tools/cezarion#949: this microtask ends open()'s synchronous slice, and on a
-      // large history the JSON scan for conversation roots plus one family query per root cost
-      // as much again. Past one slice's worth of runs, yield before the scan and between root
-      // batches; a small store (every unit test) still registers in this one microtask.
-      const large = this.listRunIds().length > WARM_IDS_PER_SLICE;
-      const turn = async (): Promise<boolean> => {
-        await new Promise<void>(resolve => setImmediate(resolve));
-        return this.db !== null;
-      };
-      if (large && !await turn()) return;
-      const roots = this.listConversationRootIds();
-      for (let i = 0; i < roots.length; i++) {
-        if (large && i > 0 && i % WARM_IDS_PER_SLICE === 0 && !await turn()) return;
-        for (const id of this.listFamilyRunIds(roots[i]!)) ids.add(id);
-      }
-      if (large && !await turn()) return;
-      // Re-list after the yields: a run deleted meanwhile must not be registered again.
-      const present = this.listRunIds();
-      if (large) {
-        const live = new Set(present);
-        for (const id of ids) if (!live.has(id)) ids.delete(id);
-      }
-      for (const id of present) ids.add(id);
-      await this.facts.warm(ids);
-    }).catch(() => undefined);
-  }
-
-  /** Resolves when the open-time warm-up is done (tests). */
-  factsWarmIdle(): Promise<void> {
-    return this.factsWarming;
   }
 
   /** `readEvents` off the event loop (async read and async brotli), for collection paths. */
@@ -2972,7 +2892,7 @@ export class RunStore {
 
   /** The run's history, handoff and images, then the removal cleanups (`runs/removal-slots.ts`). */
   private removeHistoryFiles(id: string): void {
-    this.facts.forget(id);
+    this.transcriptFacts.index.forget(id);
     removeHistory(this.dataDir, id);
     rmSync(this.handoffPath(id), { force: true });
     rmSync(this.imagesDir(id), { recursive: true, force: true });
@@ -3023,7 +2943,7 @@ export class RunStore {
    *  resumed event, even across a reload (the frozen-transcript symptom class
    *  of #424). One file read on the first post-restart append per run. */
   private rehydrateSeq(runId: string): number {
-    return this.transcriptFacts(runId).lastSeq;
+    return this.transcriptFacts.transcriptFacts(runId).lastSeq;
   }
 
   private eventsPath(runId: string): string {
@@ -3333,9 +3253,7 @@ export class RunStore {
     // Demand-bound feeds stop before storage disappears during project removal/shutdown.
     this.published.publish('store.closed', {});
     this.compressor.stop();
-    this.fallbackFacts?.stop();
-    this.facts.stop();
-    this.facts.flush();
+    this.transcriptFacts.stop();
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;

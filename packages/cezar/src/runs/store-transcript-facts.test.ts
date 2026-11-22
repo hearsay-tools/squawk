@@ -45,7 +45,7 @@ describe('RunStore transcript facts (#880)', () => {
     const dispatch = vi.spyOn(Worker.prototype, 'postMessage');
     try {
       const reopened = openStore(dir).store;
-      await reopened.factsWarmIdle();
+      await reopened.transcriptFacts.factsWarmIdle();
       expect(reopened.listRunSummaries().runs).toHaveLength(3);
       expect(dispatch).not.toHaveBeenCalled();
     } finally {
@@ -63,7 +63,7 @@ describe('RunStore transcript facts (#880)', () => {
     store.appendEvent(run.id, { type: 'human-input-delivered', askSeq: ask.seq });
     expect(hasPendingAsk(store, run.id)).toBe(false);
     expect(reads.counts.files).toEqual([]);
-    expect(store.transcriptFacts(run.id).pendingAsk).toBeUndefined();
+    expect(store.transcriptFacts.transcriptFacts(run.id).pendingAsk).toBeUndefined();
   });
 
   it('answers projection lookups from the index', () => {
@@ -96,7 +96,7 @@ describe('RunStore transcript facts (#880)', () => {
     const reads = countTranscriptReads();
     store.setArchived(run.id, false);
     store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:after' });
-    expect(store.transcriptFacts(run.id).projectionIds).toEqual(['p:before', 'p:after']);
+    expect(store.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:before', 'p:after']);
     // Only restoreHistory decodes the archive; the facts never re-read it.
     expect(reads.counts.decompress).toBe(1);
   });
@@ -118,11 +118,11 @@ describe('RunStore transcript facts across processes (#880 review)', () => {
     const run = a.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     a.appendEvent(run.id, { type: 'text', text: 'one' });
     const b = openStore(dir).store;
-    expect(b.transcriptFacts(run.id).lastSeq).toBe(1); // cached, as warm-up caches a family
+    expect(b.transcriptFacts.transcriptFacts(run.id).lastSeq).toBe(1); // cached, as warm-up caches a family
     a.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:two' });
     a.appendEvent(run.id, { type: 'text', text: 'three' });
     a.close(); stores.splice(stores.indexOf(a), 1);
-    expect(b.transcriptFacts(run.id).projectionIds).toEqual(['p:two']);
+    expect(b.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:two']);
     expect(b.adoptFamily(run.id)).toBeDefined();
     expect(b.appendEvent(run.id, { type: 'text', text: 'four' }).seq).toBe(4);
   });
@@ -142,7 +142,7 @@ describe('RunStore transcript facts off the request path (#880)', () => {
     store.close(); stores.pop();
     const reopened = openStore(dir).store;
     const reads = countTranscriptReads();
-    expect(reopened.transcriptFacts(run.id).projectionIds).toEqual(['p:1']);
+    expect(reopened.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:1']);
     expect(reads.counts.decompress).toBe(0);
   });
 
@@ -158,10 +158,10 @@ describe('RunStore transcript facts off the request path (#880)', () => {
     rmSync(historyPaths(dir, parentId).facts, { force: true });
     const reads = countTranscriptReads();
     const reopened = openStore(dir).store;
-    await reopened.factsWarmIdle();
+    await reopened.transcriptFacts.factsWarmIdle();
     expect(existsSync(paths.facts)).toBe(true);
     expect(reads.counts.decompress).toBe(0);
-    expect(reopened.transcriptFacts(workerId).projectionIds).toEqual(['p:worker']);
+    expect(reopened.transcriptFacts.transcriptFacts(workerId).projectionIds).toEqual(['p:worker']);
     expect(reads.counts.decompress).toBe(0);
   });
 
@@ -189,7 +189,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     store.appendEvent(run.id, { type: 'text', text: 'cached' });
     let ticked = false;
     const tick = new Promise<void>(resolve => setImmediate(() => { ticked = true; resolve(); }));
-    await store.prepareTranscriptFacts([run.id]);
+    await store.transcriptFacts.prepareTranscriptFacts([run.id]);
     expect(ticked).toBe(true);
     await tick;
   });
@@ -211,7 +211,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
       return request.call(this, id, demand).then(value => { completed.push(id); return value; });
     });
     const reopened = RunStore.open(dir, { keepLive: true }); stores.push(reopened);
-    await reopened.factsWarmIdle();
+    await reopened.transcriptFacts.factsWarmIdle();
     expect(completed).toEqual([live.parentId, live.workerId, historical.parentId, historical.workerId, other.id]);
     for (const id of ids) expect(existsSync(historyPaths(dir, id).facts)).toBe(true);
   });
@@ -234,7 +234,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(scans).not.toHaveBeenCalled();
     expect(reopened.deleteRun(others[0]!)).toBe(true);
-    await reopened.factsWarmIdle();
+    await reopened.transcriptFacts.factsWarmIdle();
     expect(scans).toHaveBeenCalledTimes(1);
     expect(requested.slice(0, 2)).toEqual([family.parentId, family.workerId]);
     expect(requested).not.toContain(others[0]);

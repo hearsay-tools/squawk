@@ -184,7 +184,7 @@ export class TurnNudges {
   canAutoContinue(runId: string, state: ActiveRun): boolean {
     const run = this.context.store.getRun(runId);
     return !!run && !this.context.disposed() && !run.stopping && !state.liveSession.cancelled && !state.liveSession.finishRequested &&
-      !state.inputState.agentInputError && !state.boundary.pendingHumanAsk && !hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) && !!state.liveSession.session?.open &&
+      !state.inputState.agentInputError && !state.boundary.pendingHumanAsk && !hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) && !!state.liveSession.session?.open &&
       !this.host.workerExecutionStopped(runId) && !this.host.executionBlockedByRootFinish(run) && !run.waits?.length &&
       !state.inputState.agentInputFlight && !harnessOwesInput(state) && !this.host.hasQueuedAgentInputs(runId);
   }
@@ -331,7 +331,7 @@ export class TurnNudges {
     transitionTurnBoundary(state, { kind: 'reply-content', phase: 'received', session: state.liveSession.session });
     clearNoWaitNudgeReplyTimer(state);
     if (state.boundary.noWaitNudgeParked !== state.liveSession.session || !this.line.isParked(runId)) return;
-    if (state.boundary.pendingHumanAsk || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
+    if (state.boundary.pendingHumanAsk || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id))) return;
     this.host.resumeParkedRun(runId, state);
     transitionTurnBoundary(state, { kind: 'reply-content', phase: 'resumed', session: state.liveSession.session });
   }
