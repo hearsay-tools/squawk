@@ -1,4 +1,3 @@
-import { askPayloadOf } from '@open-mercato/cezar-contract/pending-ask';
 import { rm } from 'node:fs/promises';
 import { z } from 'zod';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlock, SessionOptions } from '../../core/agent-runner.ts';
@@ -152,8 +151,7 @@ export class AntigravitySession implements AgentSession {
     if (!question) return;
     const ask = { requestId: `antigravity-ask-${toolCallId}`, toolCallId, question };
     this.pendingAsk = ask;
-    const event = { type: 'ask.requested', requestId: ask.requestId, questions: [question] } as const;
-    if (askPayloadOf(event)) this.options.onUiEvent?.(event);
+    this.options.onUiEvent?.({ type: 'ask.requested', requestId: ask.requestId, questions: [question] });
   }
   private async boot(): Promise<void> {
     this.bridge = await antigravityMcp(this.spec, this.runtime.env);

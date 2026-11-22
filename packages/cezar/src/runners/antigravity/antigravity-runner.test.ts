@@ -183,7 +183,7 @@ it('maps work after the turn to an agent-started turn and closes quietly once it
   await session.result;
   expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(2);
   expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
-  const second = ui.findLastIndex(event => event.type === 'turn.started');
+  const second = ui.map(event => event.type).lastIndexOf('turn.started');
   expect(ui.findIndex(event => event.type === 'permission.requested')).toBeGreaterThan(second);
   expect(events.filter(event => event.type === 'text').map(event => event.text).join('')).toContain('Approval response: {"reply":"once"}');
 });
