@@ -172,37 +172,13 @@ it('lets a prompt carry an open agent-started turn instead of starting a second 
   const { session, ui, events } = start({ hooks: { agentWorkEnds: () => false, permissionPolicy: () => ({ outcome: 'selected', optionId: 'allow-once' }) } });
   await session.initialize(); await session.open({ cwd: tmpdir() });
   await session.prompt([{ type: 'text', text: 'mock:permission-late' }]);
-  await waitFor(() => approvalStreamed(ui));
+  await waitFor(() => events.some(event => event.type === 'text' && event.text.startsWith('Approval response: {"reply":"once"}')));
   expect(session.agentWorking).toBe(true);
   await session.prompt([{ type: 'text', text: 'mock:agent-echo joined' }]);
   expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(2);
   expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
   expect(session.agentWorking).toBe(false);
-  expect(approvalTexts(events)).toHaveLength(1);
 });
-
-it.each(['session closes', 'agent exits'] as const)('emits the open block of an agent-started turn once when the %s', async ending => {
-  const { session, ui, events } = start({ hooks: { agentWorkEnds: () => false, permissionPolicy: () => ({ outcome: 'selected', optionId: 'allow-once' }) } });
-  await session.initialize(); await session.open({ cwd: tmpdir() });
-  await session.prompt([{ type: 'text', text: 'mock:permission-late' }]);
-  await waitFor(() => approvalStreamed(ui));
-  expect(approvalTexts(events)).toEqual([]);
-  const child = children.at(-1)!;
-  if (ending === 'session closes') session.close();
-  const exited = once(child, 'close');
-  child.kill();
-  await exited;
-  await waitFor(() => approvalTexts(events).length > 0);
-  expect(approvalTexts(events)).toHaveLength(1);
-});
-
-const APPROVAL = 'Approval response: {"reply":"once"}';
-function approvalStreamed(ui: UiEvent[]): boolean {
-  return ui.some(event => event.type === 'item.delta' && event.delta.includes(APPROVAL));
-}
-function approvalTexts(events: AgentEvent[]): string[] {
-  return events.flatMap(event => event.type === 'text' && event.text.startsWith(APPROVAL) ? [event.text] : []);
-}
 
 it('applies update filtering and provider usage to a prompt without mutating mapper state', async () => {
   const { session, events, ui } = start({ hooks: {

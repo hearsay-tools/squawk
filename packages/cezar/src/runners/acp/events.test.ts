@@ -79,15 +79,26 @@ it('ends the turn that carried an executor error as failed, and lets a prompt ad
   expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'error' });
 });
 
-it('emits one v1 text per message block, so a marker split across chunks stays whole', () => {
-  const texts: string[] = [];
-  const events = new AcpEvents({ event: event => { if (event.type === 'text') texts.push(event.text); } }, hooks);
+const texts = (events: AcpEvents, chunks: string[]): void => {
+  for (const text of chunks) events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
+};
+
+it('streams v1 text per chunk but holds a line that may become a marker until it is whole', () => {
+  const v1: string[] = [];
+  const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
   events.begin();
-  for (const text of ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.'])
-    events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
-  expect(texts).toEqual([]);
-  events.update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'next' } });
-  events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Waiting.' } });
+  texts(events, ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.']);
+  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n\n- done', '.']);
+  texts(events, ['All done. C', 'E', 'Z:DONE']);
+  expect(v1.at(-1)).toBe('All done. ');
   events.finish('end_turn');
-  expect(texts).toEqual(['Opened the PR.\n\nCEZ:PR=4104\n\n- done.', 'Waiting.']);
+  expect(v1.slice(3)).toEqual(['All done. ', 'CEZ:DONE']);
+});
+
+it('releases a held prefix once the line grows past it', () => {
+  const v1: string[] = [];
+  const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
+  events.begin();
+  texts(events, ['See C', 'I logs']);
+  expect(v1).toEqual(['See ', 'CI logs']);
 });
