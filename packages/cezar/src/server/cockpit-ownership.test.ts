@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts } from './project-context.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';

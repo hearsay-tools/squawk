@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import * as legacyIndex from './legacy-index.ts';
 import { RUN_DATABASE_SCHEMA_VERSION, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, RunDatabaseDiskFullError } from './run-database.ts';
 import { blockRunWrites, readPersistedRuns, runIds } from './run-store.testkit.ts';

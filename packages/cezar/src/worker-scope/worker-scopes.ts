@@ -4,7 +4,7 @@
  * that met it, never falls back to another mechanism (ADR 0032). */
 import type { RecordedProcess } from '../core/process-stat.ts';
 import type { RunRecord } from '@open-mercato/cezar-contract';
-import type { WorkerProcessRecord } from '../delegation/process-liveness.ts';
+import type { WorkerProcessRecord } from '../core/process-stat.ts';
 import { cgroupCommand, cgroupPopulated, ensureCgroup, killCgroup, probeCgroups, removeCgroup, workerCgroupPath } from './cgroup.ts';
 import { groupEntry, groupsStillStopping, killGroups, liveGroups } from './groups.ts';
 import { jobCommand, jobEmpty, probeJobs, realJobHelper, terminateJob, workerJobName, type JobHelper } from './job.ts';

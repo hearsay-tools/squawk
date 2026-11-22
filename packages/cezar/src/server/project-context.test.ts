@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../automations/store.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import type { ProviderAuthService } from '../core/provider-auth.ts';

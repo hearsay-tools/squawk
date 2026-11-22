@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { isCurrentProcess, processStartToken, recordedProcessLive } from '../delegation/process-liveness.ts';
+import { isCurrentProcess, processStartToken, recordedProcessLive } from '../core/process-stat.ts';
 import type { RunDatabase, RunRow } from './run-database.ts';
 import type { RunRecord } from './store.ts';
 

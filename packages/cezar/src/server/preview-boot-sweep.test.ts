@@ -7,7 +7,7 @@ import { setImmediate as afterRejectionCheck } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { RunLifecycle } from '../runs/lifecycle.ts';
 import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';

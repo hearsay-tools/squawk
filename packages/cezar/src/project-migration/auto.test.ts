@@ -17,7 +17,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { defaultServeDeps, serveCommand, type ServeDeps } from '../serve-command.ts';
 import { CockpitOwnership, migrationFencePaths, projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { ProjectContexts, sweepRegisteredPreviewLeftovers } from '../server/project-context.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { AutomationCoordinator } from '../automations/coordinator.ts';

@@ -2,7 +2,7 @@ import { productEnvEntries } from './core/product-env.ts';
 import { spawnGit } from './git-command.ts';
 import { autosaveGroupExists, autosaveGroupSnapshotAlive, groupInspectionFailed } from './autosave-group.ts';
 import type { AutosaveCleanupProof } from './autosave-cleanup.ts';
-import { describeProcesses, processStartToken } from './delegation/process-liveness.ts';
+import { describeProcesses, processStartToken } from './core/process-stat.ts';
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { watchAutosaveHolders, type AutosaveHolders } from './autosave-holders.ts';

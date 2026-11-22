@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readlinkSync } from 'node:fs';
+import { basename } from 'node:path';
 
 /** Windows PowerShell 5.1, the one PowerShell every supported Windows host has. */
 export const POWERSHELL = 'powershell.exe';
@@ -59,6 +60,7 @@ export function processStartToken(pid: number, platform: NodeJS.Platform = proce
 
 /** `pgid`: the session leader leads its own process group (hearsay-tools/cezarion#890). */
 export type RecordedProcess = { pid: number; startToken?: string | undefined; pgid?: number | undefined };
+export type WorkerProcessRecord = { generation: string; controller: RecordedProcess; processes: RecordedProcess[] };
 
 export function pidExists(pid: number): boolean {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
@@ -88,3 +90,31 @@ export function recordedProcessLive(entry: RecordedProcess): boolean {
   return current === undefined || sameIncarnation(entry.startToken, current);
 }
 
+export function isCurrentProcess(entry: RecordedProcess): boolean {
+  if (entry.pid !== process.pid) return false;
+  const own = processStartToken(process.pid);
+  return entry.startToken === undefined || own === undefined || sameIncarnation(entry.startToken, own);
+}
+
+/** One process's executable name, never its arguments: destroy errors are persisted and returned by
+ * the API, and any argument may carry a secret. Undefined when it cannot be read. For a refusal a
+ * human reads, never for a decision. */
+function processName(pid: number): string | undefined {
+  let name: string | undefined;
+  if (process.platform === 'linux') {
+    // The executable file; `comm` is a thread name the process may change (Node's is `node-MainThread`).
+    try { name = basename(readlinkSync(`/proc/${pid}/exe`)); }
+    catch { try { name = readFileSync(`/proc/${pid}/comm`, 'utf8'); } catch { return undefined; } }
+  } else if (process.platform === 'darwin') {
+    const ps = spawnSync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8', timeout: 2_000 });
+    name = ps.status === 0 ? basename(ps.stdout.trim()) : undefined;
+  }
+  return name?.trim() || undefined;
+}
+
+/** Holder pids with their executable names, `123 (sleep), 456`, so a refusal tells a test server from
+ * an agent's leftover (hearsay-tools/squawk#914). At most 8 are named. */
+export function describeProcesses(pids: readonly number[]): string {
+  const named = pids.slice(0, 8).map(pid => { const name = processName(pid); return name ? `${pid} (${name})` : String(pid); });
+  return named.join(', ') + (pids.length > 8 ? ', …' : '');
+}

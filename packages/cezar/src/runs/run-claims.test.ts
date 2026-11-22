@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import { claimOwnerLive, closeClaimSession, openClaimSession } from './run-claims.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { RunStore } from './store.ts';

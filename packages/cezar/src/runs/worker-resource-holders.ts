@@ -5,7 +5,7 @@
  * from which files a process uses (ADR 0032).
  */
 import type { RunRecord } from '@open-mercato/cezar-contract';
-import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
+import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../core/process-stat.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 
 type WorkerOwnedRun = RunRecord & { delegation: Extract<RunRecord['delegation'], { role: 'worker' }> };

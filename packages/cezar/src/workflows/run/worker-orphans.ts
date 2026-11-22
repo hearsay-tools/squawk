@@ -1,6 +1,6 @@
 import type { RunModuleContext, WorkerTerminationBlocker } from './types.ts';
 import { noJitter, ORPHAN_BACKOFF, retryDelayMs, type Backoff } from '../../delegation/retry-backoff.ts';
-import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../../delegation/process-liveness.ts';
+import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../../core/process-stat.ts';
 import { controllerRefusal, WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
 
 type OrphanOptions = { admitting?: boolean; fresh?: boolean };

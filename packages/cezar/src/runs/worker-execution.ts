@@ -2,7 +2,7 @@ import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { describeProcesses, isCurrentProcess, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
+import { describeProcesses, isCurrentProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
 
 /** Terminal task intent survives loss/quarantine of the public run index. Starting a new
  * generation replaces this entire checkpoint, so an old cleanup cannot authorize reuse. */

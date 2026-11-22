@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hasLinuxPython, singleThreadZombie, threadHoldingPort } from '../linux-zombie.testkit.ts';
 import { nonDumpableHolder } from './non-dumpable.testkit.ts';
-import { parseProcStat, processesWithCwdUnder, processStartToken, recordedProcessLive, describeProcesses } from './process-liveness.ts';
+import { processesWithCwdUnder } from './process-liveness.ts';
+import { parseProcStat, processStartToken, recordedProcessLive, describeProcesses } from '../core/process-stat.ts';
 import { recordedHolders } from '../runs/worker-resource-holders.ts';
 
 // Scope only enumeration to the processes this fixture owns, so host processes never enter a scan.

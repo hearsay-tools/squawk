@@ -5,7 +5,7 @@ import { Socket } from 'node:net';
 import { join, resolve } from 'node:path';
 import type { PreviewServer } from '@open-mercato/cezar-contract';
 import { buildCommandEnv } from '../core/agent-env.ts';
-import { processStartToken, recordedProcessLive } from '../delegation/process-liveness.ts';
+import { processStartToken, recordedProcessLive } from '../core/process-stat.ts';
 import { spawnDetached, stopGroup, type GroupLeader } from '../detached-process.ts';
 import { CHROMIUM_PID_FILE } from './chromium.ts';
 import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';

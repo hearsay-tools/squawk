@@ -25,7 +25,7 @@ import { delegationWaitRefusal, workerListTarget } from '../wait-scope.ts';
 import { isSessionLeader } from '../../core/session-process.ts';
 import { probeProcessWait } from '../../process-wait/supervisor.ts';
 import { confineExitFile } from '../../process-wait/exit-file.ts';
-import { processStartToken, recordedProcessLive } from '../../delegation/process-liveness.ts';
+import { processStartToken, recordedProcessLive } from '../../core/process-stat.ts';
 
 /** CI identity stays live across registration and rotates at the existing turn boundaries. */
 export class WaitGroup {

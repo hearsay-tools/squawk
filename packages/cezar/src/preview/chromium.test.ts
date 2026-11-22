@@ -25,7 +25,7 @@ vi.mock('node:child_process', async (original) => {
     return child;
   }) as typeof actual.spawn };
 });
-import { processStartToken } from '../delegation/process-liveness.ts';
+import { processStartToken } from '../core/process-stat.ts';
 import {
   ChromiumError,
   chromiumArgs,
