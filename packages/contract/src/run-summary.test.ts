@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { runDelegationSummarySchema } from './delegation.ts';
 import { isAutomationTask, runIndexEntrySchema, runSummarySchema, toRunSummary, type RunRecord } from './runs.ts';
 import {
   RUN_STATUS,
@@ -38,6 +39,34 @@ function record(over: Partial<RunRecord> = {}): RunRecord {
 }
 
 describe('toRunSummary', () => {
+  it('matches the slim Zod projection across roles and malformed wait fields', () => {
+    const ids = [PARENT, REQUEST];
+    const waits: unknown[] = [undefined, null, [], {}];
+    for (const phase of ['registered', 'parked', 'wake-pending', 'bad']) {
+      for (const workerIds of [undefined, [], ids, [PARENT, PARENT], ['bad'], Array(1), Array(33).fill(PARENT), null]) {
+        for (const requestIds of [undefined, [], ids, [PARENT, PARENT], ['bad'], Array(1), null]) {
+          for (const outcomes of [undefined, [], [{ workerId: PARENT, secret: 'drop' }], [{ workerId: 'bad' }], Array(1), null]) {
+            waits.push({ phase, workerIds, requestIds, outcomes, secret: 'drop' });
+          }
+        }
+      }
+    }
+    for (const role of ['root', 'worker', 'invalid', 'bad']) {
+      for (const wait of waits) {
+        const delegation = { role, parentRunId: PARENT, supervisorRunId: undefined, wait, secret: 'drop' };
+        const expected = runDelegationSummarySchema.safeParse(delegation);
+        const summary = toRunSummary(record({ delegation: delegation as RunRecord['delegation'] }));
+        expect(summary.delegation).toStrictEqual(expected.success ? expected.data : { role: 'invalid' });
+      }
+    }
+    for (const parentRunId of [undefined, '', 'bad', null, PARENT, '00000000-0000-0000-0000-000000000000', 'ffffffff-ffff-ffff-ffff-ffffffffffff']) {
+      const delegation = { role: 'worker', parentRunId };
+      const expected = runDelegationSummarySchema.safeParse(delegation);
+      expect(toRunSummary(record({ delegation: delegation as RunRecord['delegation'] })).delegation)
+        .toStrictEqual(expected.success ? expected.data : { role: 'invalid' });
+    }
+  });
+
   it('preserves every PR in the summary and workspace index', () => {
     const entries = Array.from({ length: 10 }, (_, i) => ({ number: 812 + i, source: 'declared' as const }));
     const summary = toRunSummary(record({ pullRequests: entries } as Partial<RunRecord>));
