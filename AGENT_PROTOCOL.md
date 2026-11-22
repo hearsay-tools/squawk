@@ -244,6 +244,8 @@ Autosave process attribution is observation, not OS containment: `autosave-holde
 starts, when the wire reports a read inside an open turn, or on rejection, close or discard.
 For `inputDelivery.consumption: unobservable`, a steer keeps its hold until the response that
 acknowledges it. On the Antigravity CLI that response also ends the turn that read the steer.
+A prompt that opens an Antigravity turn is acknowledged, and its hold released, at that turn's
+first agent update; ACP sends no turn-start frame, and the prompt's response ends the turn.
 An acknowledgement alone never proves consumption. Observable wires keep their existing
 release points. The Antigravity runner tests cover the steer and rejection, close and discard.
 

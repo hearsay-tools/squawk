@@ -4,6 +4,8 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 // systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends
 // a resent one, so a resume never resends it; it prepends it to the opening turn, as Codex does.
 // humanInputAtTurnEnd: a steer sent while the final text streamed was read in the same turn.
+// acknowledgement: ACP has no turn-start frame and a prompt's response ends its turn, so the first
+// agent work of the turn a prompt opens acknowledges it; a turn without any, its response.
 // nativePermission: a background command or timer wakes the idle session, which then asks.
 // nativeSubagents: a subagent's permission requests never reach the ACP client, so a PreToolUse hook
 // denies the subagent tools (subagent-guard.ts, hearsay-tools/squawk#4098).

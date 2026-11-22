@@ -82,7 +82,9 @@ export interface RunnerMock {
   /** Permission-policy runners prove tool admission through recorded native responses. */
   readonly toolGrantObservation?: 'permission-policy';
   /** ACP idle session/prompt replies are turn completion, not an independent receipt
-   * (Antigravity CLI cli-prompt-*.ndjson in its recorded fixtures). */
+   * (Antigravity CLI cli-prompt-*.ndjson in its recorded fixtures). The turn's first agent work
+   * acknowledges the prompt, so the mock's `hold-ack` holds only the turn end and its
+   * `hold-response` holds the acknowledgement. */
   readonly promptResponseEndsTurn?: true;
   readonly defaultApprovalEcho?: string;
   /** The env var the runner reads to locate its binary; a test points it at the mock script. */
