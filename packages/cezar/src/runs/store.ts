@@ -1600,7 +1600,7 @@ export class RunStore {
     this.published.publish('store.closed', {});
     this.archive.compressor.stop();
     this.transcriptFacts.stop();
-    this.persistence.flush(false);
+    this.persistence.closeSave();
     if (this.db && this.owner) {
       // Every claim goes with the store. Should the release fail, the claims stay until this
       // process exits; from then on they are provably dead and the next opener takes them.

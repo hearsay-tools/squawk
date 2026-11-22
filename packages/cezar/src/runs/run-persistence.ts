@@ -185,14 +185,22 @@ export class RunPersistenceTopic implements RunPersistence {
     }
   }
 
-  /** Write the pending rows out now (used on shutdown). `close` passes `evict` false: its final save
-   *  evicts nothing. */
-  flush(evict = true): void {
+  /** Write the pending rows out now (used on shutdown). */
+  flush(): void {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    this.saveNow(evict);
+    this.saveNow();
+  }
+
+  /** `RunStore.close`'s final save: what is pending goes out, and nothing leaves memory. */
+  closeSave(): void {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.saveNow(false);
   }
 
   /** Save `run` debounced and publish it; `before` is the record at the write's entry (none: created). */
