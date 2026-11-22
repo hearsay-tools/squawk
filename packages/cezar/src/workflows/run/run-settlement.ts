@@ -221,10 +221,10 @@ export class RunSettlement {
       return;
     }
     this.context.store.updateStep(runId, stepId, { status: 'failed', error: this.wakeSessionClosedError, finishedAt: new Date().toISOString() });
-    this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
+    this.context.store.eventLog.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
     this.host.move(runId, 'fail', { error: `continue failed: ${this.wakeSessionClosedError}` });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: `continue failed — ${this.wakeSessionClosedError}` });
-    this.context.store.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: `continue failed — ${this.wakeSessionClosedError}` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
   }
 
   /** A Stop ended the Continue's session: cancel its step and the run. */
@@ -239,7 +239,7 @@ export class RunSettlement {
    *  the workflow remainder. */
   settleDoneContinuation(runId: string, state: ActiveRun, stepId: string, close: ContinuationClose): Promise<void> | undefined {
     this.context.store.updateStep(runId, stepId, { status: 'done', finishedAt: new Date().toISOString() });
-    this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'done' });
+    this.context.store.eventLog.appendEvent(runId, { type: 'step-end', stepId, status: 'done' });
     const completed = this.context.store.getRun(runId);
     const workflow = completed ? atContinue.storedWorkflow(completed) : undefined;
     if (!completed || !workflow) return this.succeedContinuation(runId);
@@ -265,7 +265,7 @@ export class RunSettlement {
     // The continuation succeeded, not the failed attempt it recovered.
     if (completed.workflowCursor?.mode !== 'resume' || waitingStep.id !== completed.workflowCursor.stepId) {
       this.context.store.updateStep(runId, waitingStep.id, { status: 'done', finishedAt: new Date().toISOString() });
-      this.context.store.appendEvent(runId, { type: 'step-end', stepId: waitingStep.id, status: 'done' });
+      this.context.store.eventLog.appendEvent(runId, { type: 'step-end', stepId: waitingStep.id, status: 'done' });
     }
     return this.queueWorkflowRemainder(runId, state, completed, workflow, waitingIndex + 1, close);
   }
@@ -321,14 +321,14 @@ export class RunSettlement {
       // Retain the wait and scheduler wake source while closing this attempt.
       // settleSuccess only completes running/waiting steps, so its failure is durable.
       this.humanWaits.surfaceHumanWait(runId, state);
-      this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
+      this.context.store.eventLog.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
       this.host.move(runId, 'park-closing-wakes', { error: `continue failed: ${message}` });
       return;
     }
     if (this.autoResumeScheduler.holdFailure(runId, `continue failed: ${message}`)) return;
     this.host.move(runId, 'fail-continue', { error: `continue failed: ${message}` });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: `continue failed — ${message}` });
-    if (delivery === 'capped') this.context.store.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: `continue failed — ${message}` });
+    if (delivery === 'capped') this.context.store.eventLog.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
   }
 
   /**
@@ -376,8 +376,8 @@ export class RunSettlement {
   settleFailedRun(runId: string, runError: string, deliveryCapped: boolean): void {
     if (this.autoResumeScheduler.holdFailure(runId, runError)) return;
     this.host.move(runId, 'fail', { error: runError });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${runError}` });
-    if (deliveryCapped) this.context.store.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${runError}` });
+    if (deliveryCapped) this.context.store.eventLog.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
   }
 
   /**
@@ -422,7 +422,7 @@ export class RunSettlement {
     } else {
       this.commitOrdinarySuccess(runId, review, keepStepId);
     }
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'lifecycle',
       message: review
         ? 'changes ready for review — send feedback, open a draft PR, or finish'
@@ -532,7 +532,7 @@ export class RunSettlement {
     for (const step of run.steps) if (step.status === 'running') this.context.store.updateStep(runId, step.id, { status: 'waiting' });
     // A failed attempt a continuation recovers stays failed: the resume cursor finds it as it is.
     if (run.steps.find(step => step.id === stepId)?.status !== 'failed') this.context.store.updateStep(runId, stepId, { status: 'waiting' });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', stepId, message: `step "${stepId}" ended without done — Continue to resume it` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', stepId, message: `step "${stepId}" ended without done — Continue to resume it` });
     if (run.delegation?.role === 'worker' && await this.settleIdleClosedWorker(runId, stepId)) return;
     this.host.move(runId, 'park');
     this.context.store.flush();

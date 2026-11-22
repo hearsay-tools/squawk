@@ -43,7 +43,7 @@ function opening() {
     openDeliveryScope: vi.fn(), flushAgentInputs: vi.fn(), isCurrentState: vi.fn(() => true) };
   const context = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: root, semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false };
   const saved = () => readPersistedRuns(root).find(run => run.id === recipient.id)!;
-  const deliveries = (id: string) => store.readEvents(id).filter(event => event.type === 'conversation-message' && event.delivery === 'delivered');
+  const deliveries = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'conversation-message' && event.delivery === 'delivered');
   return { parent, recipient, state, host, context, saved, deliveries };
 }
 
@@ -131,7 +131,7 @@ it.each(['cancelled', 'stale', 'empty'] as const)('rejects unread retirement for
   expect(f.saved().agentInputs?.[0]?.deliveredAt).toBeDefined();
   expect([...f.state.inputState.unreadInputIds!]).toEqual([f.id]);
   expect(f.host.flushAgentInputs).not.toHaveBeenCalled();
-  expect(store.readEvents(f.recipient.id).filter(e => e.type === 'note')).toEqual([]);
+  expect(store.eventLog.readEvents(f.recipient.id).filter(e => e.type === 'note')).toEqual([]);
 });
 
 it.each([true, false])('routes an image once with its step id when saving succeeds=%s', saved => {
@@ -203,7 +203,7 @@ function invokeReceipt(operation: string, f: ReturnType<typeof receiptFixture>) 
 it.each(['latched', 'interrupt', 'event'] as const)('preserves durable unread input through retirement failure: %s', failure => {
   const f = receiptFixture(); f.accept();
   vi.spyOn(store, 'commitOutcome').mockImplementation(() => { throw new Error('refused'); });
-  const append = vi.spyOn(store, 'appendEvent');
+  const append = vi.spyOn(store.eventLog, 'appendEvent');
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   if (failure === 'latched') f.state.inputState.recordInputError('earlier failure');
   if (failure === 'interrupt') vi.mocked(f.session.interrupt).mockImplementation(() => { throw new Error('interrupt refused'); });
@@ -225,7 +225,7 @@ function assertRetirementTail(f: ReturnType<typeof receiptFixture>, failure: str
   expect(f.session.interrupt).toHaveBeenCalledOnce();
   expect(append).toHaveBeenCalledWith(f.recipient.id, { type: 'error', message: f.state.inputState.agentInputError });
   if (failure === 'event') expect(error).toHaveBeenCalledWith(expect.stringContaining('refused'));
-  else expect(store.readEvents(f.recipient.id).at(-1)).toMatchObject({ type: 'error', message: f.state.inputState.agentInputError });
+  else expect(store.eventLog.readEvents(f.recipient.id).at(-1)).toMatchObject({ type: 'error', message: f.state.inputState.agentInputError });
 }
 
 it('finishes setup in order before attaching close result handling', async () => {

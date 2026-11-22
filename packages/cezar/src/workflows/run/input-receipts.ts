@@ -51,7 +51,7 @@ export function retireUnreadInputs(context: RunModuleContext, host: InputReceipt
     if (state.inputState.agentInputError) return;
     state.inputState.recordInputError(`agent input requeue checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
     try { state.liveSession.session?.interrupt(); } finally {
-      try { context.store.appendEvent(runId, { type: 'error', message: state.inputState.agentInputError }); }
+      try { context.store.eventLog.appendEvent(runId, { type: 'error', message: state.inputState.agentInputError }); }
       catch { console.error(`[hsq] ${state.inputState.agentInputError}`); }
     }
     return;
@@ -60,7 +60,7 @@ export function retireUnreadInputs(context: RunModuleContext, host: InputReceipt
   // Reported before its own acknowledgement landed: that acknowledgement must not
   // mark it delivered again.
   for (const id of ids) if (state.inputState.agentInputFlight?.inputIds.includes(id)) state.inputState.retireInFlight(id);
-  context.store.appendEvent(runId, { type: 'note', message: `resubmitting ${ids.length} message${ids.length === 1 ? '' : 's'} the agent did not read` });
+  context.store.eventLog.appendEvent(runId, { type: 'note', message: `resubmitting ${ids.length} message${ids.length === 1 ? '' : 's'} the agent did not read` });
   if (outOfTurn) host.flushAgentInputs(runId);
 }
 
@@ -103,7 +103,7 @@ export function commitBundledDelivery(context: RunModuleContext, runId: string, 
 export function commitRoutedAnswer(context: RunModuleContext, runId: string, state: ActiveRun, answer: { askSeq: number; delivered: readonly string[] }, fallback: boolean, maxAutoContinues: number): void {
   const spent = fallback ? (context.store.getRun(runId)?.automaticWakes ?? 0) + 1 : undefined;
   commitBundledDelivery(context, runId, state, answer.delivered, [{ kind: 'answered', askSeq: answer.askSeq }, ...chargedIf(spent)]);
-  if (spent !== undefined) context.store.appendEvent(runId, { type: 'note', message: `${WORKER_FALLBACK_REPLY_NOTE} (${spent}/${maxAutoContinues})` });
+  if (spent !== undefined) context.store.eventLog.appendEvent(runId, { type: 'note', message: `${WORKER_FALLBACK_REPLY_NOTE} (${spent}/${maxAutoContinues})` });
 }
 
 /** One commit (hearsay-tools/cezarion#1805): the human waits a message answers, the messages bundled

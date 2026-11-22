@@ -28,8 +28,8 @@ describe('history readers', () => {
     const violates = (file: string, source: string) => scanHistoryReaders(`packages/cezar/src/${file}`, source).length > 0;
     expect(violates('runs/other.ts', 'createReadStream(this.eventsPath(id))')).toBe(true);
     expect(violates('runs/other.ts', 'statSync(this.eventsPath(id))')).toBe(true);
-    expect(violates('runs/store.ts', 'appendFileSync(this.eventsPath(runId), line)')).toBe(false);
-    expect(violates('runs/store.ts', 'class Store { private eventsPath(runId: string): string { return ""; } }')).toBe(false);
+    expect(violates('runs/event-log.ts', 'appendFileSync(this.eventsPath(runId), line)')).toBe(false);
+    expect(violates('runs/event-log.ts', 'class Store { private eventsPath(runId: string): string { return ""; } }')).toBe(false);
     expect(violates('runs/store.ts', 'id + ".ndjson"')).toBe(true);
     expect(violates('runs/store.ts', '`${id}.ndjson.br`')).toBe(true);
     expect(violates('runs/history-file.ts', '`${id}.ndjson`')).toBe(false);
@@ -39,17 +39,17 @@ describe('history readers', () => {
   it('store.readEvents reads a compressed transcript', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'before archive' });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'before archive' });
+    store.eventLog.appendEvent(run.id, {
       type: 'ask.requested',
       requestId: 'human-question',
       questions: [{ header: 'Choice', question: 'Which implementation?', options: [{ label: 'First' }, { label: 'Second' }] }],
     });
-    const events = store.readEvents(run.id);
+    const events = store.eventLog.readEvents(run.id);
     expect(events).toHaveLength(2);
     expect(await compressHistory(dir, run.id, () => true)).toBe('compressed');
     expect(existsSync(historyPaths(dir, run.id).plain)).toBe(false);
-    expect(store.readEvents(run.id).map((event) => ({ seq: event.seq, type: event.type }))).toEqual(
+    expect(store.eventLog.readEvents(run.id).map((event) => ({ seq: event.seq, type: event.type }))).toEqual(
       events.map((event) => ({ seq: event.seq, type: event.type })),
     );
   });
@@ -57,13 +57,13 @@ describe('history readers', () => {
   it('appending to a compressed run restores it first', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    const first = store.appendEvent(run.id, { type: 'note', message: 'old' });
+    const first = store.eventLog.appendEvent(run.id, { type: 'note', message: 'old' });
     expect(await compressHistory(dir, run.id, () => true)).toBe('compressed');
     store.close();
     stores.pop();
     const reopened = RunStore.open(dir);
     stores.push(reopened);
-    const second = reopened.appendEvent(run.id, { type: 'note', message: 'new' });
+    const second = reopened.eventLog.appendEvent(run.id, { type: 'note', message: 'new' });
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(false);
     const lines = readFileSync(plain, 'utf8').split('\n').filter(Boolean);

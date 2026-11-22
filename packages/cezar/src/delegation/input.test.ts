@@ -242,15 +242,15 @@ it('ask replay requires a validated successful-delivery checkpoint for the curre
     const ask = { type: 'ask.requested', requestId: 'question', questions: [{
       header: 'Library', question: 'Which library?', options: [{ label: 'Vitest' }, { label: 'Node' }],
     }] };
-    const first = store.appendEvent(record.id, ask);
-    store.appendEvent(record.id, { type: 'user-message', text: 'legacy or refused attempt', imageCount: 1 });
+    const first = store.eventLog.appendEvent(record.id, ask);
+    store.eventLog.appendEvent(record.id, { type: 'user-message', text: 'legacy or refused attempt', imageCount: 1 });
     expect(pendingAsk()).toBe(true);
-    store.appendEvent(record.id, { type: 'human-input-delivered', askSeq: String(first.seq) });
+    store.eventLog.appendEvent(record.id, { type: 'human-input-delivered', askSeq: String(first.seq) });
     expect(pendingAsk()).toBe(true);
-    const second = store.appendEvent(record.id, { ...ask, requestId: 'next-question' });
-    store.appendEvent(record.id, { type: 'human-input-delivered', askSeq: first.seq });
+    const second = store.eventLog.appendEvent(record.id, { ...ask, requestId: 'next-question' });
+    store.eventLog.appendEvent(record.id, { type: 'human-input-delivered', askSeq: first.seq });
     expect(pendingAsk()).toBe(true);
-    store.appendEvent(record.id, { type: 'human-input-delivered', askSeq: second.seq });
+    store.eventLog.appendEvent(record.id, { type: 'human-input-delivered', askSeq: second.seq });
     expect(pendingAsk()).toBe(false);
   } finally { manager.dispose(); store.flush(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -333,7 +333,7 @@ it('ACK cannot answer a newly visible human ask or drain its queued successor', 
     expect(store.getRun(runId)?.agentInputs).toEqual([{ ...input, deliveredAt: expect.any(String) }, second]);
     expect(send).toHaveBeenCalledOnce(); expect(human).not.toHaveBeenCalled();
     expect(store.transcriptFacts.transcriptFacts(runId).pendingGateSeq).toBeDefined();
-    expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 });
 
@@ -493,7 +493,7 @@ it.each(['live', 'expired'] as const)('restart recovers a %s receipt and expiry 
       // stand-in: it asks for a scheduler continuation, which this stepless fixture cannot open, so
       // the message stays queued for the next wake.
       expect(reopened.getRun(runId)?.delegation).not.toHaveProperty('wait');
-      expect(reopened.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith('Messages retained; continuation unavailable: '))).toHaveLength(1);
+      expect(reopened.eventLog.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith('Messages retained; continuation unavailable: '))).toHaveLength(1);
       expect(reopened.getRun(runId)?.agentInputs?.[0]?.deliveredAt).toBeUndefined();
       expect(() => recovered.acknowledgeInbox(runId, generation, receipt.receiptId)).toThrow();
     } finally { recovered.dispose(); reopened.flush(); }
@@ -512,7 +512,7 @@ it('a continuation refused across several admission retries writes the retained 
     const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 }, load: async () => ({ maxParallel: 0, memoryLimitMb: null }) });
     const recovered = new RunManager(reopened, dir, { acquireCiResources: acquireInertCiResources, createRunner: spiedRunners, home: testHome(), semaphore });
     const resume = vi.spyOn(recovered, 'continueRun');
-    const notes = () => reopened.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith('Messages retained; continuation unavailable: '));
+    const notes = () => reopened.eventLog.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith('Messages retained; continuation unavailable: '));
     try {
       await recovered.recover();
       const tries = resume.mock.calls.length;

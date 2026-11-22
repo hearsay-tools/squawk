@@ -120,27 +120,27 @@ describe('another store\'s runs are readable and refuse writes', () => {
   it('answers reads, refuses every write, and leaves the row as its owner wrote it', () => {
     const owner = open({ keepLive: true });
     const run = owner.createRun({ title: 'theirs', workflow: 'w', task: 't', steps: [] });
-    owner.appendEvent(run.id, { type: 'note', message: 'from the owner' });
+    owner.eventLog.appendEvent(run.id, { type: 'note', message: 'from the owner' });
     owner.flush();
     const other = open({ keepLive: true });
 
     expect(other.runOwnership(run.id)).toBe('foreign');
     expect(other.writeRefusal(run.id)).toBe(RUN_IN_USE_ELSEWHERE);
     expect(other.getRun(run.id)?.title).toBe('theirs');
-    expect(other.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
+    expect(other.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
 
     expect(other.updateRun(run.id, { title: 'mine now' })).toBeUndefined();
     expect(other.setArchived(run.id, true)).toBeUndefined();
     expect(other.setRead(run.id)).toBeUndefined();
     expect(other.pin(run.id, 'continue')).toBeUndefined();
-    expect(() => other.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
+    expect(() => other.eventLog.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
     expect(() => other.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow(RunWriteRefusedError);
     expect(other.retention.deleteRun(run.id)).toBe(false);
     other.flush();
 
     expect(other.heldIds()).toEqual([]);
     expect(persisted(run.id)).toMatchObject({ title: 'theirs', archived: false });
-    expect(owner.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
+    expect(owner.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
   });
 
   it('sweeps skip another store\'s finished runs until it lets them go', () => {

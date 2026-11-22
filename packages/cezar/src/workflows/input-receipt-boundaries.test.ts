@@ -132,8 +132,8 @@ for (const mode of ['fresh', 'continuation'] as const) {
     const finallyCalled = vi.spyOn(runner.session.result, 'finally');
     const boundary = signal<'termination' | 'error'>();
     vi.mocked(runner.session.interrupt).mockImplementation(() => boundary.resolve('termination'));
-    const append = store.appendEvent.bind(store);
-    vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+    const append = store.eventLog.appendEvent.bind(store.eventLog);
+    vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       if (event.type === 'session.error') boundary.resolve('error');
       return append(id, event);
     });

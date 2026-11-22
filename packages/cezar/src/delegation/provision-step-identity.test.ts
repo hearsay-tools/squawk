@@ -193,7 +193,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
     doneTurn(sessions[1]!, 'implemented');
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
-    const verifyStarts = () => f.store.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'verify').length;
+    const verifyStarts = () => f.store.eventLog.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'verify').length;
     expect(verifyStarts()).toBe(1);
     // What that recovery leaves: the failed attempt, and the done `continue-1` that resumed its
     // session and recorded it, between `implement` and `verify`.
@@ -229,7 +229,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     f.store.updateStep(workerId, 'implement', { status: STEP_STATUS.failed, error: 'boom', finishedAt: failedAt });
     f.store.addStep(workerId, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation', continuesStepId: 'implement' });
     f.store.updateStep(workerId, 'continue-1', { status: STEP_STATUS.done, iterations: 1, startedAt: implement.startedAt, sessionId: 'implement-session', backend: 'claude', profileId: implement.profileId });
-    const implementStarts = () => f.store.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'implement').length;
+    const implementStarts = () => f.store.eventLog.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'implement').length;
     expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
     await until(() => sessions.length === 3);
     expect(sessions[2]!.spec).toMatchObject({ resume: true, sessionId: 'implement-session' });

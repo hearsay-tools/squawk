@@ -118,13 +118,13 @@ describe('held human input liveness bound (#486)', () => {
     };
 
     const record = manager.startRun(SINGLE_STEP, { task: 'hold then drain', runner: 'claude', worktree: false });
-    await until(() => store.readEvents(record.id).some(e => e.type === 'turn-end'), () => 'turn-end never arrived');
+    await until(() => store.eventLog.readEvents(record.id).some(e => e.type === 'turn-end'), () => 'turn-end never arrived');
     expect(store.getRun(record.id)?.status).toBe('running');
-    expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(false);
+    expect(store.eventLog.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(false);
     holding = false;
     await until(() => ['done', 'review', 'failed', 'waiting'].includes(store.getRun(record.id)?.status ?? ''), () => `run stuck ${store.getRun(record.id)?.status}`);
     expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
-    expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
+    expect(store.eventLog.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
   });
 
   it.each([
@@ -163,10 +163,10 @@ describe('held human input liveness bound (#486)', () => {
     const record = manager.startRun(SINGLE_STEP, { task: 'hold forever', runner: 'claude', worktree: false });
     await until(() => ['done', 'review', 'failed', 'waiting'].includes(store.getRun(record.id)?.status ?? ''), () => `run stuck ${store.getRun(record.id)?.status}`);
     expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
-    const note = store.readEvents(record.id).filter(e => e.type === 'note').map(e => String(e.message))
+    const note = store.eventLog.readEvents(record.id).filter(e => e.type === 'note').map(e => String(e.message))
       .find(m => m.includes('did not confirm reading'));
     expect(note).toBe(expectedNote);
     if (count === undefined) expect(note).not.toMatch(/\d/);
-    expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
+    expect(store.eventLog.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
   });
 });

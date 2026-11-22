@@ -94,7 +94,7 @@ describe('harness parity — autosave cleanup (#495)', () => {
               // Pinned beside eight busy loops it took under 1 s.
               await waitFor(() => git !== undefined);
               // bound: hang guard; the stubbed budget reports the blocked cleanup 700 ms after the spawn.
-              await waitFor(() => store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('termination not confirmed')));
+              await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('termination not confirmed')));
               // bound: hang guard for the run settling while the blocked save keeps its cleanup hold.
               await waitFor(() => !manager.isActive(runId));
               expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
@@ -115,7 +115,7 @@ describe('harness parity — autosave cleanup (#495)', () => {
               await waitFor(() => !manager.isActive(runId));
             }
             expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
-            expect(store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('autosave failed'))).toBe(true);
+            expect(store.eventLog.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('autosave failed'))).toBe(true);
             expect(readFileSync(join(dir, 'progress.txt'), 'utf8')).toBe('recover me\n');
           });
         } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }

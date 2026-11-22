@@ -189,7 +189,7 @@ export class RunRecovery {
       // Delivery is at-least-once: the replay keeps the input's ID in its text.
       if (['queued', 'running', 'waiting'].includes(run.status) && !this.host.isActive(run.id)) {
         const replayed = this.context.store.requeueAwaitingReadInputs(run.id);
-        if (replayed.length) this.context.store.appendEvent(run.id, { type: 'note', message: `replaying ${replayed.length} message${replayed.length === 1 ? '' : 's'} accepted before the restart but not read` });
+        if (replayed.length) this.context.store.eventLog.appendEvent(run.id, { type: 'note', message: `replaying ${replayed.length} message${replayed.length === 1 ? '' : 's'} accepted before the restart but not read` });
       }
     }
   }
@@ -368,7 +368,7 @@ export class RunRecovery {
       // CI ACK retires the wait, but not the failed workflow source. A closed
       // worker at this boundary must resume before its remaining checks run.
       const resumed = this.host.continueRun(run.id, { text: this.restartContinuationPrompt }, true);
-      this.context.store.appendEvent(run.id, { type: 'lifecycle', message: resumed.ok
+      this.context.store.eventLog.appendEvent(run.id, { type: 'lifecycle', message: resumed.ok
         ? 'cezar restarted — resuming the worker CI recovery from its last session'
         : `Squawk restarted — could not resume worker CI recovery (${resumed.error ?? 'unknown'})` });
       return undefined;
@@ -379,7 +379,7 @@ export class RunRecovery {
         this.context.store.updateStep(run.id, step.id, { status: 'done', finishedAt });
       }
     }
-    this.context.store.appendEvent(run.id, {
+    this.context.store.eventLog.appendEvent(run.id, {
       type: 'lifecycle',
       message: 'cezar restarted — the open worker session was settled',
     });
@@ -407,7 +407,7 @@ export class RunRecovery {
       },
       true,
     );
-    this.context.store.appendEvent(run.id, {
+    this.context.store.eventLog.appendEvent(run.id, {
       type: 'lifecycle',
       message: resumed.ok
         ? 'cezar restarted — resuming the interrupted task from its last session'

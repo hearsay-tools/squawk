@@ -202,8 +202,8 @@ describe('task webhook API', () => {
       expect(res.status).toBe(200);
       expect(res.body.notify).toBe(true);
       // The webhook log row is written after the response, so wait for it.
-      await vi.waitFor(() => expect(store.readEvents(id).some((event) => event.type === 'webhook.dry-run')).toBe(true), { timeout: HANG_GUARD_MS });
-      const events = store.readEvents(id);
+      await vi.waitFor(() => expect(store.eventLog.readEvents(id).some((event) => event.type === 'webhook.dry-run')).toBe(true), { timeout: HANG_GUARD_MS });
+      const events = store.eventLog.readEvents(id);
       expect(events.find((event) => event.type === 'handoff')).toMatchObject({ notify: true, message: 'take over from here' });
       expect(events.find((event) => event.type === 'webhook.dry-run')).toMatchObject({
         event: 'task.subscribed',
@@ -230,7 +230,7 @@ describe('task webhook API', () => {
       const res = await send(`/api/v1/runs/${id}/notify`, 'POST', { notify: false });
       expect(res.status).toBe(200);
       expect(store.getRun(id)?.notify).toBeUndefined();
-      expect(store.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ notify: false });
+      expect(store.eventLog.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ notify: false });
     });
 
     it('answers 400 without a webhook, 404 for an unknown run, 400 for a bad body', async () => {

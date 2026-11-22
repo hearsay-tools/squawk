@@ -73,7 +73,7 @@ describe('human permission lifecycle', () => {
     agentEvent({ type: 'turn-end' });
     expect(session.sendMessage).not.toHaveBeenCalled();
     expect(session.sendAgentMessage).not.toHaveBeenCalled();
-    expect(f.store.readEvents(id).some(event => event.type === 'user-message')).toBe(false);
+    expect(f.store.eventLog.readEvents(id).some(event => event.type === 'user-message')).toBe(false);
     expect(f.manager.respondPermission(id, 'a', 'invalid')).toBe(false);
     expect(f.manager.respondPermission(id, 'unknown', 'deny')).toBe(false);
     expect(f.manager.respondPermission(id, 'a', 'deny')).toBe(true);

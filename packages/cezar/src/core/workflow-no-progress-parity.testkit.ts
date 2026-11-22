@@ -85,11 +85,11 @@ export const describeWorkflowNoProgressParity = workflowNoProgressParity({
         expect(store.getRun(runId)?.status).toBe('waiting');
         expect(manager.isActive(runId)).toBe(true);
         if (row.id === 'N6') {
-          expect(store.readEvents(runId).some(e => e.type === 'ask.requested')).toBe(true);
-          const turns = store.readEvents(runId).filter(e => e.type === 'turn.completed').length;
+          expect(store.eventLog.readEvents(runId).some(e => e.type === 'ask.requested')).toBe(true);
+          const turns = store.eventLog.readEvents(runId).filter(e => e.type === 'turn.completed').length;
           // The worker's own question is its parent's to answer (hearsay-tools/cezarion#2410).
           await answer('Vitest');
-          await waitFor(() => store.readEvents(runId).filter(e => e.type === 'turn.completed').length > turns && store.getRun(runId)?.status === 'waiting');
+          await waitFor(() => store.eventLog.readEvents(runId).filter(e => e.type === 'turn.completed').length > turns && store.getRun(runId)?.status === 'waiting');
           manager.finish(runId);
           await waitFor(() => !manager.isActive(runId));
           expect(store.getRun(runId)?.error).toBeUndefined();
@@ -117,7 +117,7 @@ export const describeWorkflowNoProgressParity = workflowNoProgressParity({
       }
       // Let the real native wire and process exit settle; no synthetic turn events.
       if (row.id === 'N5' || row.id === 'N7') {
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'error' && typeof e.message === 'string' && e.message.includes('no progress')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'error' && typeof e.message === 'string' && e.message.includes('no progress')));
         const pid = requirePid(join(store.getRun(runId)!.worktreePath!, 'watchdog.pid'));
         if (row.id === 'N5') {
           expect(() => process.kill(pid, 0)).not.toThrow();
@@ -147,7 +147,7 @@ export const describeWorkflowNoProgressParity = workflowNoProgressParity({
       } else {
         expect(run.status).toBe('failed');
         expect(run.error).toContain('no progress');
-        expect(store.readEvents(runId).some(e => e.type === 'check-output')).toBe(false);
+        expect(store.eventLog.readEvents(runId).some(e => e.type === 'check-output')).toBe(false);
       }
     }, { workflowDef, timings: { noProgressTimeoutMs: 800, killGraceMs: 150,
       ...(row.id === 'N5' ? { eofTermGraceMs: 150, eofKillGraceMs: 150 } : {}),

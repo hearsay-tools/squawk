@@ -81,7 +81,7 @@ export class WorkerQuestions {
     // whatever its capacity or state is now. Record the routing; the close sweeps follow.
     const committed = root?.delegation?.role === 'root' && !!root.delegation.conversation?.messages.some(m => m.id === message.id);
     if (committed) {
-      this.context.store.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
+      this.context.store.eventLog.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
       return;
     }
     const routing = workerQuestionRouting(worker, root, { unreadable: id => this.context.store.isUnreadable(id),
@@ -94,7 +94,7 @@ export class WorkerQuestions {
     if (!commitNewMessage(this.context.store, parentId, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input },
       () => this.answerUndelivered(workerId, ask.seq, 'its message ID is already in use in the parent conversation'))) return;
     projectConversationEvents(this.context.store, this.context.store.getRun(parentId)!);
-    this.context.store.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
+    this.context.store.eventLog.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
     this.host.deliverConversationInput(parentId);
   }
 
@@ -169,8 +169,8 @@ export class WorkerQuestions {
 
   /** The transcript shows the question as not delivered once, after the answer that settles it is queued. */
   private recordUndelivered(workerId: string, askSeq: number, reason: string | undefined): void {
-    if (this.context.store.readEvents(workerId).some(event => event.type === 'worker-question-undelivered' && event.askSeq === askSeq)) return;
-    this.context.store.appendEvent(workerId, { type: 'worker-question-undelivered', askSeq, reason: reason ?? 'the parent could not take it' });
+    if (this.context.store.eventLog.readEvents(workerId).some(event => event.type === 'worker-question-undelivered' && event.askSeq === askSeq)) return;
+    this.context.store.eventLog.appendEvent(workerId, { type: 'worker-question-undelivered', askSeq, reason: reason ?? 'the parent could not take it' });
   }
 
   /** The worker's pending question closes unanswered (hearsay-tools/cezarion#2410), and Squawk's own
@@ -181,8 +181,8 @@ export class WorkerQuestions {
     // unrelated message. A failed write leaves the question pending for the next sweep.
     try { for (const id of this.queuedAnswerIds(workerId)) this.host.retireUnreadParentQuestion(workerId, id); }
     catch (error) { console.warn(`[hsq] worker question not closed: ${error instanceof Error ? error.message : String(error)}`); return; }
-    if (detail) this.context.store.appendEvent(workerId, { type: 'note', tone: 'warning', message: `Question not delivered to the parent: ${detail}.` });
-    this.context.store.appendEvent(workerId, { type: 'human-ask-closed', askSeq, reason });
+    if (detail) this.context.store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', message: `Question not delivered to the parent: ${detail}.` });
+    this.context.store.eventLog.appendEvent(workerId, { type: 'human-ask-closed', askSeq, reason });
     this.host.withdrawSquawkHumanWaits(workerId);
     this.host.updatePendingHumanAsk(workerId, hasPendingHumanAsk(workerId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)));
   }
@@ -201,11 +201,11 @@ export class WorkerQuestions {
     const target = this.parkNoticeTarget(worker);
     if (!target) return;
     const { root, parent, parentId, state, wait } = target;
-    const turn = parkingTurn(this.context.store.readEvents(workerId));
+    const turn = parkingTurn(this.context.store.eventLog.readEvents(workerId));
     if (messagedParentSince(state.messages, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
     const now = new Date().toISOString();
     const message = parkNoticeMessage({ workerRunId: workerId, parentRunId: parentId, waitId: wait.id, waits: worker.waits ?? [],
-      ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redactText(text) });
+      ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redaction.redactText(text) });
     const input = { id: message.id, source: 'agent' as const, parentRunId: root.id, text: message.text, createdAt: now,
       conversation: { senderRunId: workerId, recipientRunId: parentId, kind: 'progress' as const } };
     if (!commitNewMessage(this.context.store, root.id, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input }, () => parkNoticeIdInUse(this.context.store, workerId, wait.id))) return;
@@ -251,8 +251,8 @@ export class WorkerQuestions {
   parkNoticeAtCapacity(workerId: string, waitId: string, parent: RunRecord, state: ConversationState): boolean {
     if (state.messages.length + reservedReplies(state) < 1024 && inboxSlotsUsed(parent) < 32) return false;
     const projectionId = `park-notice-skipped:${waitId}`;
-    if (!this.context.store.hasProjection(workerId, projectionId)) {
-      this.context.store.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the parent conversation is at capacity: no park notice was sent.' });
+    if (!this.context.store.eventLog.hasProjection(workerId, projectionId)) {
+      this.context.store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the parent conversation is at capacity: no park notice was sent.' });
     }
     return true;
   }
@@ -393,10 +393,10 @@ export class WorkerQuestions {
    */
   askParentForWorker(runId: string, state: ActiveRun, stepId: string | undefined): void {
     const questions = [{ header: WORKER_FALLBACK_HEADER, question: WORKER_FALLBACK_QUESTION(runId) }];
-    this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: WORKER_FALLBACK_NOTE });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: WORKER_FALLBACK_NOTE });
     const wait = this.host.openHumanAlias(runId, state, 'no-wait', { questions });
     if (wait && wait.askSeq === undefined && pendingHumanAskSeq(this.context.store.transcriptFacts, runId) === undefined) {
-      this.context.store.appendEvent(runId, { type: 'ask.requested', requestId: randomUUID(), questions, ...(stepId ? { stepId } : {}) });
+      this.context.store.eventLog.appendEvent(runId, { type: 'ask.requested', requestId: randomUUID(), questions, ...(stepId ? { stepId } : {}) });
       this.host.prepareHumanAsk(state);
       this.host.markHumanWaitSurfaced(runId, wait, { questions });
       this.host.routeWorkerQuestion(runId);
@@ -421,7 +421,7 @@ export class WorkerQuestions {
   chargeWorkerFallbackReply(runId: string, beforeHumanReset?: HumanAnswerBudget): void {
     const spent = beforeHumanReset === undefined ? this.host.chargeAutomaticWake(runId) : beforeHumanReset.spent + 1;
     if (beforeHumanReset) beforeHumanReset.spent = spent;
-    this.context.store.appendEvent(runId, { type: 'note', message: `${WORKER_FALLBACK_REPLY_NOTE} (${spent}/${this.maxAutoContinues})` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', message: `${WORKER_FALLBACK_REPLY_NOTE} (${spent}/${this.maxAutoContinues})` });
   }
 
   /**
@@ -454,7 +454,7 @@ export class WorkerQuestions {
         return false;
       }
     }
-    this.context.store.appendEvent(runId, { type: 'human-ask-closed', askSeq: ask.seq, reason: 'superseded' });
+    this.context.store.eventLog.appendEvent(runId, { type: 'human-ask-closed', askSeq: ask.seq, reason: 'superseded' });
     this.host.withdrawSquawkHumanWaits(runId);
     this.host.updatePendingHumanAsk(runId, hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)));
     return true;

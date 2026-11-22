@@ -163,7 +163,7 @@ describe('transcript facts sidecar', () => {
   const line = (event: RunEvent) => `${JSON.stringify(event)}\n`;
   const plainPath = () => historyPaths(dataDir, id).plain;
   const factsPath = () => historyPaths(dataDir, id).facts;
-  /** Append to the transcript and tell the index, as RunStore.appendEvent does. */
+  /** Append to the transcript and tell the index, as RunEventLogTopic.appendEvent does. */
   const append = (index: TranscriptFactsIndex, event: RunEvent) => {
     const text = line(event);
     appendFileSync(plainPath(), text);

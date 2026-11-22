@@ -94,7 +94,7 @@ it('checks the failing account from the observer Home', async () => {
   observer.watch(store);
   try {
     const run = store.createRun({ title: 'Home', task: 'Home', workflow: 'quick-task', runner: 'claude', agentProfile: 'work', steps: [] });
-    store.appendEvent(run.id, { type: 'error', message: '401 Unauthorized: authentication failed' });
+    store.eventLog.appendEvent(run.id, { type: 'error', message: '401 Unauthorized: authentication failed' });
     // bound: the resolver and observer signal when the native verification starts.
     await expect(checked).resolves.toEqual({ id: 'work', configDir: join(root, 'selected-account') });
   } finally { store.close(); }

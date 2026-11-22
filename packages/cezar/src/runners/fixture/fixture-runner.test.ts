@@ -55,7 +55,7 @@ describe('a task on the fixture runner', () => {
     await waitForProduct(f.manager, f.store, () => f.store.getRun(record.id)?.status === RUN_STATUS.waiting);
     const run = f.store.getRun(record.id)!;
     expect(run.runner).toBe('fixture');
-    expect(f.store.readEvents(record.id).some(event => event.type === 'text' && String(event.text).startsWith('fixture reply to:'))).toBe(true);
+    expect(f.store.eventLog.readEvents(record.id).some(event => event.type === 'text' && String(event.text).startsWith('fixture reply to:'))).toBe(true);
     writeFileSync(join(run.worktreePath!, 'fixture.txt'), 'changed by the fixture task\n');
     expect(f.manager.finish(record.id)).toBe(true);
     await waitForProduct(f.manager, f.store, () => f.store.getRun(record.id)?.status === RUN_STATUS.review);

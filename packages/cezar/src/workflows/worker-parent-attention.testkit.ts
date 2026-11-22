@@ -60,7 +60,7 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
           try {
             const caller = callerFor(w.id);
             const id = randomUUID();
-            const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+            const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
             const delivery = service.send(caller, { id, recipientRunId: p.id, kind: 'progress', text: 'Progress mock:agent-echo delay-owned-ack', timeoutSeconds: 600 });
             await delivery;
             if (responseHeld) {
@@ -68,19 +68,19 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
               if (transport === 'pipe-write') {
                 await until(responseHeld);
                 await until(() => !!store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt);
-                expect(store.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
+                expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
                 release();
               }
             }
             const completesWithAck = runnerDefinition(backend).mock.promptResponseEndsTurn;
             if (transport === 'protocol' && completesWithAck) {
-              await until(() => store.readEvents(p.id).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack')));
-              expect(store.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
+              await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack')));
+              expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
               expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
               expect(semaphore.busy()).toBe(1);
               release();
             }
-            await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
+            await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
             if (transport === 'protocol' && !completesWithAck) {
               expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
               expect(semaphore.busy()).toBe(1);
@@ -88,7 +88,7 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
             release();
             await until(() => !!store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt);
             await until(() => semaphore.busy() === 0);
-            expect(store.readEvents(p.id).some(event => event.type === 'conversation-message')).toBe(true);
+            expect(store.eventLog.readEvents(p.id).some(event => event.type === 'conversation-message')).toBe(true);
             expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });
             expect(hasPendingAsk(store, p.id)).not.toBe(true);
             expect(store.getRun(p.id)?.waits?.filter(wait => wait.kind === 'human') ?? []).toEqual([]);
@@ -115,9 +115,9 @@ it(`${mode} spawn without wait parks as monitoring and a real ASK still wins`, a
         await until(() => store.getRun(p.id)?.status === 'waiting');
       }
       await worker(p.id);
-      const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+      const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
       manager.sendMessage(p.id, [{ type: 'text', text: 'mock:hold' }]);
-      await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
+      await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
       expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });
       const timer = monitoringWakeOf(store.getRun(p.id));
       expect(timer).toBeDefined();
@@ -202,10 +202,10 @@ it('keeps a wake-pending parent with a pending human ask as Needs you (#971)', a
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id);
     const send = async (prompt: string, afterDelivery?: () => void) => {
-      const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+      const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
       expect(manager.sendMessage(p.id, [{ type: 'text', text: prompt }])).toBe(true);
       afterDelivery?.();
-      await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
+      await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
     };
     await send(ASK_PROMPT, () => {
       expect(register(p.id, [w.id]).phase).toBe('registered');

@@ -120,7 +120,7 @@ describe('completion refusal through a live runner', () => {
     expect(f.store.getRun(id)?.steps.find(step => step.id === 'task')?.status).toBe('waiting');
     expect(semaphore.busy()).toBe(0);
     expect(release).toHaveBeenCalledOnce();
-    expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
+    expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'note', message: 'cezar_done withdrawn: the agent asked the user',
     })]));
     expect(f.store.getRun(id)?.doneAccepted).toBeUndefined();

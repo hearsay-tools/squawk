@@ -60,13 +60,15 @@ function fakeRuns(dataDir: string) {
     sourceDataDir: () => dataDir,
     runOwnership: (id) => (runs.has(id) ? 'held' : undefined),
     updateRun: (id, patch) => write(id, patch),
-    appendEvent: (runId, event) => {
-      const line = { ...event, seq: ++seq, ts: new Date().toISOString() } as RunEvent;
-      events.set(runId, [...(events.get(runId) ?? []), line]);
-      const file = historyPaths(dataDir, runId).plain;
-      mkdirSync(dirname(file), { recursive: true });
-      appendFileSync(file, `${JSON.stringify(line)}\n`);
-      return line;
+    eventLog: {
+      appendEvent: (runId, event) => {
+        const line = { ...event, seq: ++seq, ts: new Date().toISOString() } as RunEvent;
+        events.set(runId, [...(events.get(runId) ?? []), line]);
+        const file = historyPaths(dataDir, runId).plain;
+        mkdirSync(dirname(file), { recursive: true });
+        appendFileSync(file, `${JSON.stringify(line)}\n`);
+        return line;
+      },
     },
   };
   return {
@@ -209,7 +211,7 @@ describe('TaskWebhook', () => {
     const run = optedIn();
     setRunStatus(store, run.id, RUN_STATUS.running);
     const questions = [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner' }] }];
-    store.appendEvent(run.id, { type: 'ask.requested', requestId: 'ask-1', context: '## Findings', questions });
+    store.eventLog.appendEvent(run.id, { type: 'ask.requested', requestId: 'ask-1', context: '## Findings', questions });
     store.commitWait(run.id, { id: '00000000-0000-4000-8000-0000000000ad', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: '2026-09-05T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn-1', context: '## Findings', questions });
     setRunStatus(store, run.id, RUN_STATUS.waiting);
     await webhook.idle();
@@ -231,7 +233,7 @@ describe('TaskWebhook', () => {
     const webhook = attach(fetchImpl);
     const run = optedIn();
     setRunStatus(store, run.id, RUN_STATUS.running);
-    for (const ask of asks) store.appendEvent(run.id, { type: 'ask.requested', ...ask });
+    for (const ask of asks) store.eventLog.appendEvent(run.id, { type: 'ask.requested', ...ask });
     store.commitWait(run.id, { id: '00000000-0000-4000-8000-0000000000ae', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: '2026-09-05T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn-1' });
     setRunStatus(store, run.id, RUN_STATUS.waiting);
     await webhook.idle();
@@ -245,8 +247,8 @@ describe('TaskWebhook', () => {
     const webhook = attach(fetchImpl);
     const run = optedIn();
     setRunStatus(store, run.id, RUN_STATUS.running);
-    const asked = store.appendEvent(run.id, { type: 'ask.requested', requestId: 'ask-1', context: 'ctx', questions: choice });
-    store.appendEvent(run.id, { type: 'human-input-delivered', askSeq: asked.seq, source: 'human' });
+    const asked = store.eventLog.appendEvent(run.id, { type: 'ask.requested', requestId: 'ask-1', context: 'ctx', questions: choice });
+    store.eventLog.appendEvent(run.id, { type: 'human-input-delivered', askSeq: asked.seq, source: 'human' });
     store.commitWait(run.id, { id: '00000000-0000-4000-8000-0000000000af', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: '2026-09-05T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn-1' });
     setRunStatus(store, run.id, RUN_STATUS.waiting);
     await webhook.idle();

@@ -43,7 +43,7 @@ describe('a worker run with no registered worker workspace port', { timeout: WOR
     await finished(store, run.id);
     expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.failed, error: `worktree creation failed: ${NO_PORT}` });
     expect(store.getRun(run.id)?.worktreePath).toBeUndefined();
-    expect(store.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
+    expect(store.eventLog.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
     expect(existsSync(workspace.path)).toBe(false);
     expect(git(root, 'worktree', 'list', '--porcelain')).toBe(worktreesBefore);
   });
@@ -58,7 +58,7 @@ describe('a worker run with no registered worker workspace port', { timeout: WOR
     expect(managerWithoutPort(store, root).continueRun(run.id, { text: 'mock:cezar-done' }).ok).toBe(true);
     await finished(store, run.id);
     expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.failed, error: `owned workspace unavailable: ${NO_PORT}` });
-    expect(store.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
+    expect(store.eventLog.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
     expect(existsSync(workspace.path)).toBe(true);
   });
 });

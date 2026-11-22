@@ -67,7 +67,7 @@ function failureContext(runner: string, it: typeof registerTest = registerTest):
         expect(line).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
         expect(body.join('\n')).toBe(text || 'Continue.');
         // The cockpit shows the notice the agent received beside the Continue's own message.
-        const notices = store.readEvents(id).filter(event => event.type === 'note' && event.stepId === disk.continuationMessage.id
+        const notices = store.eventLog.readEvents(id).filter(event => event.type === 'note' && event.stepId === disk.continuationMessage.id
           && String(event.message).startsWith('Sent to the agent with this Continue: '));
         expect(notices).toHaveLength(1);
         expect(notices[0]!.message).toContain(`failed: ${failed.error}`);
@@ -89,8 +89,8 @@ function failureContext(runner: string, it: typeof registerTest = registerTest):
       expect(prompt).not.toContain(error);
       expect(prompt).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
       expect(prompt).not.toContain('Selected skill:');
-      await until(() => store.readEvents(id).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
-      expect(store.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');
+      await until(() => store.eventLog.readEvents(id).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+      expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');
     }, 30_000);
 }
 

@@ -23,7 +23,7 @@ describe('reply scope before direction guidance', () => {
 
   function snapshot(recipientId: string) {
     return structuredClone([f.store.getRun(f.parent.id), f.store.getRun(recipientId),
-      f.store.readEvents(f.parent.id), f.store.readEvents(recipientId)]);
+      f.store.eventLog.readEvents(f.parent.id), f.store.eventLog.readEvents(recipientId)]);
   }
 
   it('denies an unprovisioned peer ledger before offering own-request guidance', async () => {

@@ -33,7 +33,7 @@ export function recoveryCells(runners: string[], it: typeof registerTest = regis
       if (!('wait' in registered)) throw Error('registration refused');
       const wait = registered.wait;
       wire.release();
-      await until(() => store.readEvents(run.id).some(event => event.type === 'error'));
+      await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'error'));
       await until(() => !manager.isActive(run.id));
       expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');
       expect(store.getRun(run.id)?.status).not.toBe('failed');
@@ -88,7 +88,7 @@ export function recoveryCells(runners: string[], it: typeof registerTest = regis
       expect(run.status).toBe('failed');
       expect(run.error).toMatch(/^continue failed: /);
       expect(delivered(f.p.id, id)).toBe(false);
-      expect(store.readEvents(f.p.id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE)).toHaveLength(1);
+      expect(store.eventLog.readEvents(f.p.id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE)).toHaveLength(1);
       expect(retryClock.pending).toBe(0);
       await expectAdmissionRetryCleared(runner, f.p.id);
 

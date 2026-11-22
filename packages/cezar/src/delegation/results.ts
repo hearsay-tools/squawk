@@ -28,7 +28,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const delegation = run.delegation;
   const previous = store.workerResults.readWorkerResult(delegation.parentRunId, run.id);
   // One async read (#880): an archived transcript decodes with the async brotli API.
-  const allEvents = await store.readEventsAsync(run.id);
+  const allEvents = await store.eventLog.readEventsAsync(run.id);
   const events = allEvents.filter(event => event.seq > (delegation.executionStartSeq ?? -1));
   const summary = run.status === 'failed' && run.error?.trim() ? failureSummary(run.error, events) : latestAssistantSummary(events);
   const destroyed = delegation.destroy?.phase === 'complete';

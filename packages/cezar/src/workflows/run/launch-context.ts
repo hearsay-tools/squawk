@@ -103,7 +103,7 @@ export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, r
         'handoff.path': handoff,
       },
     });
-  store.appendEvent(runId, { type: 'lifecycle', message: formatSessionContextReport(context.reports) });
+  store.eventLog.appendEvent(runId, { type: 'lifecycle', message: formatSessionContextReport(context.reports) });
   return context;
 }
 

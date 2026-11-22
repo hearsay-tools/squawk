@@ -66,11 +66,11 @@ describe('RunStore.withReadCache', () => {
       expect(store.getRun(run.id)?.title).toBe('settled');
       store.updateRun(run.id, { title: 'renamed' });
       expect(store.getRun(run.id)?.title).toBe('renamed');
-      store.appendEvent(run.id, { type: 'note', message: 'written' });
+      store.eventLog.appendEvent(run.id, { type: 'note', message: 'written' });
       expect(store.getRun(run.id)?.title).toBe('renamed');
     });
     expect(decodes.get(run.id)).toBe(1);
-    expect(store.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
+    expect(store.eventLog.readEvents(run.id).map((event) => event.type)).toEqual(['note']);
   });
 
   it('a written run that leaves memory in the scope is read again, never the copy from before the write', () => {

@@ -108,16 +108,16 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
       const retryClock = observationClock(delay => delay === retryDelay &&
         /\bat (?:[^ (\n]+\.)?backoff \(/.test(new Error().stack ?? ''));
       wire.release();
-      await until(() => store.readEvents(run.id).some(event => event.type === 'error' && event.stepId === failedStepId));
+      await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'error' && event.stepId === failedStepId));
       await until(() => !manager.isActive(run.id) || toolGenerationOf(run.id) !== failedGeneration);
       const failedStep = structuredClone(store.getRun(run.id)!.steps.find(step => step.id === failedStepId)!);
       expect.soft(failedStep.status).toBe('failed');
       expect.soft(failedStep.error?.trim()).toBeTruthy();
       expect.soft(failedStep.finishedAt).toBeTruthy();
-      const providerError = store.readEvents(run.id).find(event => event.type === 'error' && event.stepId === failedStepId)!;
+      const providerError = store.eventLog.readEvents(run.id).find(event => event.type === 'error' && event.stepId === failedStepId)!;
       expect.soft(failedStep.error).toBe(providerError.message);
-      expect.soft(store.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'session.ended', stepId: failedStepId, reason: 'error', message: providerError.message }));
-      expect.soft(store.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'step-end', stepId: failedStepId, status: STEP_STATUS.failed }));
+      expect.soft(store.eventLog.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'session.ended', stepId: failedStepId, reason: 'error', message: providerError.message }));
+      expect.soft(store.eventLog.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'step-end', stepId: failedStepId, status: STEP_STATUS.failed }));
       expect(ciWaitOf(run.id)?.id).toBe(wait.id);
       expect(store.getRun(run.id)?.agentInputs?.find(input => input.id === wait.id)?.deliveredAt).toBeUndefined();
       if (mode === 'fresh') settle();
@@ -163,7 +163,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
         await restart(false, undefined, eventCheckpoint());
       }
       settle();
-      const refusal = () => store.readEvents(run.id).find(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('continuation unavailable'));
+      const refusal = () => store.eventLog.readEvents(run.id).find(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('continuation unavailable'));
       await until(() => !!lastCiWaitOf(run.id)?.deliveredAt || !!refusal());
       expect(refusal()).toBeUndefined();
       await until(() => store.getRun(run.id)?.status === 'waiting');
@@ -181,13 +181,13 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
         // A deliberate check retry starts a real new iteration; the logical step
         // may advance, but the failed attempt stays in the append-only transcript.
         expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')).toMatchObject({ status: STEP_STATUS.done, iterations: 2 });
-        expect(store.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'session.ended', stepId: 'first', reason: 'error', message: failed.error }));
+        expect(store.eventLog.readEvents(run.id)).toContainEqual(expect.objectContaining({ type: 'session.ended', stepId: 'first', reason: 'error', message: failed.error }));
       } else {
         expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')).toMatchObject({
           status: STEP_STATUS.failed, iterations: 1, error: failed.error, finishedAt: failed.finishedAt,
         });
       }
-      expect(store.readEvents(run.id).filter(event => event.type === 'step-end' && event.stepId === 'first').map(event => event.status)).toEqual(outcome === 'source-retry' ? ['failed', 'done'] : ['failed']);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'step-end' && event.stepId === 'first').map(event => event.status)).toEqual(outcome === 'source-retry' ? ['failed', 'done'] : ['failed']);
       expect(store.getRun(run.id)?.steps.find(step => step.id === 'later')).toMatchObject({ status: STEP_STATUS.done, iterations: 2 });
       expect(store.getRun(run.id)?.steps.find(step => step.id === 'check')).toMatchObject({
         status: outcome === 'failed' ? 'failed' : 'done', iterations: 2, retriesUsed: 1,
@@ -236,7 +236,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
       });
       expect(store.getRun(run.id)?.steps.find(step => step.id === 'later')).toMatchObject({ status: STEP_STATUS.done, iterations: 2 });
       expect(store.getRun(run.id)?.steps.find(step => step.id === 'check')).toMatchObject({ status: STEP_STATUS.done, iterations: 2, retriesUsed: 1 });
-      expect(store.readEvents(run.id).filter(event => event.type === 'step-end' && event.stepId === 'first').map(event => event.status)).toEqual(['failed']);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'step-end' && event.stepId === 'first').map(event => event.status)).toEqual(['failed']);
     });
   
    }

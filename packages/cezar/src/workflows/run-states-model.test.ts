@@ -95,7 +95,7 @@ function target(id: string, from: RunState, pick?: RunState): RunState {
 }
 
 let idleClock: ReturnType<typeof observeIdleClose>;
-const turnEnds = (id: string) => store.readEvents(id).filter((event) => event.type === 'turn-end').length;
+const turnEnds = (id: string) => store.eventLog.readEvents(id).filter((event) => event.type === 'turn-end').length;
 const isPark = (state: RunState) => state.startsWith('waiting:');
 const final = (state: RunState) => state === 'done' || state === 'failed' || state === 'cancelled';
 

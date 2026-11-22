@@ -31,13 +31,13 @@ for (const mode of ['fresh', 'continuation'] as const) {
       fixtureUpdateRun(w.id, { status: RUN_STATUS.done });
       await until(() => send.mock.calls.length > 0);
       expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === wait.id)?.deliveredAt).toBeUndefined();
-      const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+      const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
       session!.sendMessage([{ type: 'text', text: 'mock:cezar-ask' }]);
-      await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
-      expect(store.readEvents(p.id).some(event => event.type === 'ask.requested')).toBe(true);
+      await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
+      expect(store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested')).toBe(true);
       expect(waitOf(store.getRun(p.id))?.id).toBe(wait.id);
       expect(store.getRun(p.id)?.agentInputs?.[0]?.deliveredAt).toBeUndefined();
-      expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       // hearsay-tools/cezarion#1235 ("Messages beside a pending question"): the question no longer
       // holds the wake back. Once the backend takes input, the result is delivered beside the card,
       // which stays pending and answerable; it used to release the admission and wait for the answer.
@@ -45,7 +45,7 @@ for (const mode of ['fresh', 'continuation'] as const) {
       await until(() => !!store.getRun(p.id)?.agentInputs?.[0]?.deliveredAt);
       expect(hasPendingAsk(store, p.id)).toBe(true);
       expect(waitOf(store.getRun(p.id))).toBeUndefined();
-      expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
     });
   }
 
@@ -82,19 +82,19 @@ for (const role of ['root', 'worker'] as const) {
       await until(() => wire.received() === 1);
       manager.cancel(target.id);
       await until(() => !manager.isActive(target.id));
-      expect(store.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       await restart(false, checkpoint, events);
       expect(store.getRun(target.id)?.status).not.toBe('failed');
       expect(store.getRun(w.id)?.status).not.toBe('cancelled');
-      expect(store.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       // A miss names the count, each wire's start and stdin lines, and the target's timeline
       // with event times (hearsay-tools/squawk#2535).
       await until(() => wire.received() === 2, () => `${wire.received()} human answers reached the wire; wire processes:\n${wire.inputs()}\n${timeline(target.id)}`);
-      expect(store.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       writeFileSync(replyGate, 'release');
-      await until(() => store.readEvents(target.id).some(event => event.type === 'human-input-delivered'));
-      expect(store.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([expect.objectContaining(role === 'root' ? {} : { source: 'parent' })]);
-      if (role === 'root') expect(store.readEvents(target.id).filter(event => event.type === 'user-message').at(-1)?.text).toContain('human answer');
+      await until(() => store.eventLog.readEvents(target.id).some(event => event.type === 'human-input-delivered'));
+      expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([expect.objectContaining(role === 'root' ? {} : { source: 'parent' })]);
+      if (role === 'root') expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'user-message').at(-1)?.text).toContain('human answer');
     });
   }
 });

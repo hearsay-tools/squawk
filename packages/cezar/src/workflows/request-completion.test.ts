@@ -192,7 +192,7 @@ describe('root request completion without a live session', () => {
     // cycle finishes without replying, and every request settles.
     expect(manager.sendMessage(recipient.id, [{ type: 'text', text: `${toolCall('cezar_done', {})} ${toolCall('cezar_done', {})}` }])).toBe(true);
     await until(() => store.getRun(recipient.id)?.status === 'done' && !manager.isActive(recipient.id));
-    expect(store.readEvents(recipient.id).some(event => event.type === 'text' && String(event.text).includes('requests_unanswered'))).toBe(true);
+    expect(store.eventLog.readEvents(recipient.id).some(event => event.type === 'text' && String(event.text).includes('requests_unanswered'))).toBe(true);
     for (const [index, sender] of senders.entries()) {
       const delegation = store.getRun(sender.id)?.delegation;
       const outcomes = delegation?.role === 'root' ? delegation.conversation?.outcomes : [];

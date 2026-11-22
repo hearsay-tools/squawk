@@ -105,7 +105,7 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
     await f.service.destroy(f.caller, { workerId });
     // The first tick reaches attention at once; the next one is four seconds out.
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.needsAttention).toBe(true), { timeout: 10_000 });
-    const reads = vi.spyOn(f.store, 'readEventsAsync');
+    const reads = vi.spyOn(f.store.eventLog, 'readEventsAsync');
     const timers = vi.spyOn(globalThis, 'setTimeout');
     expect(await f.service.destroyForHuman('project', workerId)).toMatchObject({ state: 'incomplete' });
     const [cleanup] = workerCleanupInternals(f.service);

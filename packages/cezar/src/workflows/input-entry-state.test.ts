@@ -67,7 +67,7 @@ it('arms the held-input timer at turn end and clears it before publishing conten
       if (handle === held) {
         observed = true;
         expect(group.heldHumanInputSince).toBe(clock);
-        expect(f.store.readEvents(f.runId).some(event => event.type === 'text' && event.text === 'Real activity')).toBe(false);
+        expect(f.store.eventLog.readEvents(f.runId).some(event => event.type === 'text' && event.text === 'Real activity')).toBe(false);
       }
       clear(handle);
     });
@@ -76,7 +76,7 @@ it('arms the held-input timer at turn end and clears it before publishing conten
     expect(group.heldHumanInputTimer).toBeUndefined();
     expect(group.heldHumanInputSince).toBeUndefined();
     expect(group.heldHumanInputExpired).toBeUndefined();
-    expect(f.store.readEvents(f.runId).some(event => event.type === 'text' && event.text === 'Real activity')).toBe(true);
+    expect(f.store.eventLog.readEvents(f.runId).some(event => event.type === 'text' && event.text === 'Real activity')).toBe(true);
     spy.mockRestore();
   } finally { vi.restoreAllMocks(); vi.useRealTimers(); }
 });
@@ -156,7 +156,7 @@ it('retries accepted unread input once before leaving its receipt unconfirmed', 
     expect(receipt?.deliveredAt).toBeDefined();
     expect(receipt?.awaitingRead).toBeUndefined();
     expect(receipt?.consumedAt).toBeUndefined();
-    expect(f.store.readEvents(f.runId).some(event => event.type === 'note' && String(event.message).includes('did not confirm'))).toBe(true);
+    expect(f.store.eventLog.readEvents(f.runId).some(event => event.type === 'note' && String(event.message).includes('did not confirm'))).toBe(true);
   } finally { vi.useRealTimers(); }
 });
 

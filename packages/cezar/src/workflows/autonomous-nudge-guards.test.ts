@@ -128,7 +128,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
       case 'stopping': store.updateRun(id, { stopping: true }); break;
       case 'input-error': state.inputState.recordInputError('transport failed'); break;
       case 'native-ask': transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'refresh-question', session: state.liveSession.session, pending: true }); break;
-      case 'persisted-ask': store.appendEvent(id, { type: 'ask.requested', requestId: randomUUID(), ...ask }); break;
+      case 'persisted-ask': store.eventLog.appendEvent(id, { type: 'ask.requested', requestId: randomUUID(), ...ask }); break;
       case 'closed': state.liveSession.attachSession({ ...session, open: false }); break;
       case 'queued-input': queued.mockReturnValue(true); store.commitAgentInputs(id, [{ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'Read this first', createdAt: new Date().toISOString() }]); break;
       case 'unread-input': state.inputState.resetUnreadInputs(); state.inputState.recordUnreadInput(randomUUID()); break;
@@ -152,7 +152,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     expect(charge).not.toHaveBeenCalled();
     expect(arm).not.toHaveBeenCalled();
     expect(store.getRun(id)?.automaticWakes ?? 0).toBe(0);
-    expect(store.readEvents(id).some(e => e.type === 'note' && String(e.message).includes('autonomous'))).toBe(false);
+    expect(store.eventLog.readEvents(id).some(e => e.type === 'note' && String(e.message).includes('autonomous'))).toBe(false);
   });
 
   // hearsay-tools/cezarion#1234: one budget of automatic wakes on the record, for nudges and timers.
@@ -161,11 +161,11 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     expect(nudges.tryAutonomousNudge(id, state, 'task')).toBe(true);
     expect(submit).toHaveBeenCalledOnce();
     expect(charge).toHaveBeenCalledWith(id);
-    expect(store.readEvents(id).some(e => e.type === 'note' && e.message === 'autonomous — continuing without pausing (40/40)')).toBe(true);
+    expect(store.eventLog.readEvents(id).some(e => e.type === 'note' && e.message === 'autonomous — continuing without pausing (40/40)')).toBe(true);
     count.mockReturnValue(40);
     expect(nudges.tryAutonomousNudge(id, state, 'task')).toBe(false);
     expect(charge).toHaveBeenCalledOnce();
-    expect(store.readEvents(id).some(e => e.type === 'note' && String(e.message).startsWith('autonomous — safety cap reached (40)'))).toBe(true);
+    expect(store.eventLog.readEvents(id).some(e => e.type === 'note' && String(e.message).startsWith('autonomous — safety cap reached (40)'))).toBe(true);
   });
 
   function pendingBoundary(): void {
@@ -221,7 +221,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     expect(state.boundary.nudge).toEqual({ session, cause: 'autonomous', state: 'refused' });
     expect(session.sendAgentMessage).not.toHaveBeenCalled();
     expect(session.sendMessage).not.toHaveBeenCalled();
-    expect(store.readEvents(id).some(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toBe(false);
+    expect(store.eventLog.readEvents(id).some(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toBe(false);
   });
 
   it('nested subagent items do not clear the no-wait nudge reply bound', () => {
@@ -392,7 +392,7 @@ describe('nudge bounds through a live runner', () => {
     const { id, session } = await start(true);
     vi.mocked(session.sendAgentMessage).mockImplementation(() => { throw new Error('failed transport'); });
     emit({ type: 'turn-end' });
-    expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
+    expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'error', message: expect.stringContaining('failed transport'),
     })]));
     expect(session.interrupt).toHaveBeenCalledOnce();
@@ -408,7 +408,7 @@ describe('nudge bounds through a live runner', () => {
     expect(f.store.getRun(id)?.automaticWakes ?? 0).toBe(0);
     await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS);
     expect(session.end).toHaveBeenCalledOnce();
-    expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
+    expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'lifecycle', message: 'session closed after 15m of inactivity',
     })]));
     ready();
@@ -421,7 +421,7 @@ describe('nudge bounds through a live runner', () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(f.store.getRun(id)?.status).toBe('waiting');
     expect(f.store.getRun(id)?.waits).toMatchObject([{ kind: WAIT_KIND.human, via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar, phase: WAIT_PHASE.open, askSeq: expect.any(Number) }]);
-    expect(f.store.readEvents(id).filter(e => e.type === 'note' && e.message === NO_WAIT_NO_REPLY_NOTE)).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(id).filter(e => e.type === 'note' && e.message === NO_WAIT_NO_REPLY_NOTE)).toHaveLength(1);
   });
 
   it('expiry after a completion nudge names the completion nudge', async () => {
@@ -439,7 +439,7 @@ describe('nudge bounds through a live runner', () => {
     emit({ type: 'turn-end' });
     await vi.advanceTimersByTimeAsync(300);
     expect(f.store.getRun(id)?.status).toBe('waiting');
-    const notes = f.store.readEvents(id).filter(e => e.type === 'note').map(e => e.message);
+    const notes = f.store.eventLog.readEvents(id).filter(e => e.type === 'note').map(e => e.message);
     expect(notes.filter(message => message === COMPLETION_NO_REPLY_NOTE)).toHaveLength(1);
     expect(notes).not.toContain(NO_WAIT_NO_REPLY_NOTE);
   });

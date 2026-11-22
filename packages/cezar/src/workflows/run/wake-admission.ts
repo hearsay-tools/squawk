@@ -74,7 +74,7 @@ export class WakeAdmission {
     if (!waits.length) return;
     this.host.waitEngine.cancel(runId, waits.map(wait => wait.id));
     for (const wait of waits) {
-      this.context.store.appendEvent(runId, { type: 'note', message: WAIT_KINDS[wait.kind].capNote(wait, this.maxAutoContinues) });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', message: WAIT_KINDS[wait.kind].capNote(wait, this.maxAutoContinues) });
     }
   }
 
@@ -281,7 +281,7 @@ export class WakeAdmission {
     if (!resumed.ok) {
       const message = `${resolved.length ? 'Wait result' : 'Messages'} retained; continuation unavailable: ${resumed.error ?? 'unknown'}`;
       if (this.host.retries.noteRetained(runId, message)) {
-        this.context.store.appendEvent(runId, { type: 'note', message });
+        this.context.store.eventLog.appendEvent(runId, { type: 'note', message });
       }
       return false;
     }

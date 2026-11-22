@@ -53,7 +53,7 @@ describe('CI wait delivery', { timeout: 30_000 }, () => {
     }, new AbortController().signal);
     expect(answer.ok).toBe(true);
     emit({ type: 'turn-end' });
-    await until(() => store.getRun(run.id)?.status === 'waiting' && store.readEvents(run.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.getRun(run.id)?.status === 'waiting' && store.eventLog.readEvents(run.id).some(event => event.type === 'ask.requested'));
     observationClock(delay => delay === 1000 && /\bat WakeRetries\.retryWaitAdmission \(/.test(new Error().stack ?? ''));
     const capacity = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
     external.settle(success());
@@ -97,7 +97,7 @@ describe('CI wait delivery', { timeout: 30_000 }, () => {
       const accepted = original(...args);
       return accepted && accepted.then(() => ack);
     });
-    const turnEnds = () => store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+    const turnEnds = () => store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
     const before = turnEnds();
     try {
       external.settle(12);

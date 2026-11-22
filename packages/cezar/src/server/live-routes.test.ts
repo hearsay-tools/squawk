@@ -53,8 +53,8 @@ async function openSse(path: string) {
 describe('finite multi-run catch-up', () => {
   it('delivers current text before item completion without persisting streaming deltas', async () => {
     const sink = new UiEventSink({
-      persist: event => { store.appendEvent(runId, event); },
-      emitLive: event => { store.emitEphemeral(runId, event); },
+      persist: event => { store.eventLog.appendEvent(runId, event); },
+      emitLive: event => { store.eventLog.emitEphemeral(runId, event); },
     });
     const item = { kind: 'message' as const, id: 'typing', role: 'assistant' as const, text: '' };
     sink.handle({ type: 'item.started', item });
@@ -63,14 +63,14 @@ describe('finite multi-run catch-up', () => {
     sink.flushAll();
     sink.handle({ type: 'item.delta', itemId: item.id, field: 'text', delta: 'writing' });
     sink.flushAll();
-    store.appendEvent(runId, { type: 'note', text: 'unrelated persisted event' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'unrelated persisted event' });
     const next = liveRunBatchResponseSchema.parse(await (await batch([{ projectId: 'boot', runId, afterSeq: first.afterSeq, cursor: first.cursor }])).json()).results[0] as LiveRunBatch;
     expect(next.events.map(event => event.seq)).toEqual([3, 4]);
     expect(next.events[0]).toMatchObject({ type: 'item.updated', item: { text: 'Still writing' } });
     sink.handle({ type: 'item.updated', item: { ...item, text: 'Still writing more' } });
     const last = liveRunBatchResponseSchema.parse(await (await batch([{ projectId: 'boot', runId, afterSeq: next.afterSeq, cursor: next.cursor }])).json()).results[0] as LiveRunBatch;
     expect(last.events).toMatchObject([{ type: 'item.updated', item: { text: 'Still writing more' } }]);
-    expect(store.readEvents(runId).map(event => event.type)).toEqual(['item.started', 'note']);
+    expect(store.eventLog.readEvents(runId).map(event => event.type)).toEqual(['item.started', 'note']);
     const duplicate = liveRunBatchResponseSchema.parse(await (await batch([{ projectId: 'boot', runId, afterSeq: last.afterSeq, cursor: last.cursor }])).json()).results[0] as LiveRunBatch;
     expect(duplicate.events).toEqual([]);
     sink.handle({ type: 'item.completed', item: { ...item, text: 'Finished' } });
@@ -78,8 +78,8 @@ describe('finite multi-run catch-up', () => {
     expect(completed.events).toMatchObject([{ type: 'item.completed', item: { text: 'Finished' } }]);
   });
   it.each([[false, false], [true, false], [false, true]])('does not acknowledge writes newer than its captured snapshots (prior live text: %s, cold store: %s)', async (priorText, cold) => {
-    store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
-    if (priorText) store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'before ' });
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    if (priorText) store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'before ' });
     if (cold) {
       store.close(); store = RunStore.open(join(root, '.ai/cezar'));
       app = createApp({ home: testHome(), repoRoot: root, store, manager: {} as RunManager, version: 'test', bootProjectId: 'boot' });
@@ -92,10 +92,10 @@ describe('finite multi-run catch-up', () => {
       const snapshot = capture(id);
       // The history scanner awaits filesystem IO after capturing live state.
       queueMicrotask(() => {
-        store.emitEphemeral(other, { type: 'item.delta', itemId: 'other', field: 'text', delta: 'unrelated' });
-        if (cold) store.emitEphemeral(runId, { type: 'item.updated', item: { id: 'typing', kind: 'message', text: 'during scan' } });
-        else store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'during scan' });
-        store.appendEvent(runId, { type: 'note', text: 'persisted during scan' });
+        store.eventLog.emitEphemeral(other, { type: 'item.delta', itemId: 'other', field: 'text', delta: 'unrelated' });
+        if (cold) store.eventLog.emitEphemeral(runId, { type: 'item.updated', item: { id: 'typing', kind: 'message', text: 'during scan' } });
+        else store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'during scan' });
+        store.eventLog.appendEvent(runId, { type: 'note', text: 'persisted during scan' });
       });
       return snapshot;
     });
@@ -112,10 +112,10 @@ describe('finite multi-run catch-up', () => {
     expect(listeners('run.event')).toBe(before);
   });
   it('merges active snapshots at an event-limit boundary without skipping persisted records', async () => {
-    store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
-    for (let i = 0; i < 254; i++) store.appendEvent(runId, { type: 'note', text: 'history' });
-    store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'live text' });
-    store.appendEvent(runId, { type: 'note', text: 'after live text' });
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    for (let i = 0; i < 254; i++) store.eventLog.appendEvent(runId, { type: 'note', text: 'history' });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'live text' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'after live text' });
     const first = liveRunBatchResponseSchema.parse(await (await batch([{ projectId: 'boot', runId, afterSeq: 0 }])).json()).results[0] as LiveRunBatch;
     expect(first.events).toHaveLength(256);
     expect(first.events.at(-1)).toMatchObject({ seq: 256, type: 'item.updated', item: { text: 'live text' } });
@@ -125,9 +125,9 @@ describe('finite multi-run catch-up', () => {
     expect(next.hasMore).toBe(false);
   });
   it('retains only redacted active content and clears it on store closure', async () => {
-    store.registerSessionSecret('fixture-secret-must-be-redacted');
-    store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
-    store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'fixture-secret-must-be-redacted' });
+    store.redaction.registerSessionSecret('fixture-secret-must-be-redacted');
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'fixture-secret-must-be-redacted' });
     const response = await (await batch([{ projectId: 'boot', runId, afterSeq: 0 }])).text();
     expect(response).not.toContain('fixture-secret-must-be-redacted');
     expect(response).toContain('[REDACTED]');
@@ -136,15 +136,15 @@ describe('finite multi-run catch-up', () => {
     expect(store.liveReadSnapshot(runId).events).toEqual([]);
   });
   it('discards active snapshots when their run is deleted', () => {
-    store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
-    store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'temporary' });
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'temporary' });
     setRunStatus(store, runId, RUN_STATUS.done);
     expect(store.liveReadSnapshot(runId).events).toHaveLength(1);
     expect(store.retention.deleteRun(runId)).toBe(true);
     expect(store.liveReadSnapshot(runId).events).toEqual([]);
   });
   it('bounds replay at an accepted prefix and continues without loss or duplicates', async () => {
-    for (let i = 0; i < 300; i++) store.appendEvent(runId, { type: 'note', text: `line ${i}` });
+    for (let i = 0; i < 300; i++) store.eventLog.appendEvent(runId, { type: 'note', text: `line ${i}` });
     const first = await batch([{ projectId: 'default', runId, afterSeq: 0 }]);
     expect(first.status).toBe(200);
     const a = liveRunBatchResponseSchema.parse(await first.json()).results[0] as LiveRunBatch;
@@ -158,7 +158,7 @@ describe('finite multi-run catch-up', () => {
     expect(a.projectId).toBe('boot');
   });
   it('reports a missing task without losing the other requested transcript', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'survives' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'survives' });
     const response = await batch([{ projectId: 'boot', runId: 'gone', afterSeq: 0 }, { projectId: 'boot', runId, afterSeq: 0 }]);
     expect(response.status).toBe(200);
     const { results } = liveRunBatchResponseSchema.parse(await response.json());
@@ -173,8 +173,8 @@ describe('finite multi-run catch-up', () => {
     expect((await batch(Array.from({ length: 33 }, (_, i) => ({ ...demand, runId: `run-${i}` })))).status).toBe(400);
   });
   it('keeps sequence gaps while filtering the already accepted prefix', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'first' });
-    store.appendEvent(runId, { type: 'note', text: 'second' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'first' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'second' });
     const response = await batch([{ projectId: 'boot', runId, afterSeq: 1 }]);
     expect(response.status).toBe(200);
     expect((liveRunBatchResponseSchema.parse(await response.json()).results[0] as LiveRunBatch).events.map((e: { seq: number }) => e.seq)).toEqual([2]);
@@ -183,7 +183,7 @@ describe('finite multi-run catch-up', () => {
 
 describe('multiplexed live task feed', () => {
   it('isolates project errors, replays healthy demand and releases listeners on cancellation', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'healthy transcript' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'healthy transcript' });
     const controller = new AbortController();
     const listeners = lifecycleListeners(store.lifecycle);
     const before = listeners('run.event');
@@ -208,7 +208,7 @@ describe('multiplexed live task feed', () => {
   });
   it('keeps the old per-run SSE route and large records compatible', async () => {
     const text = 'x'.repeat(1024 * 1024 + 10);
-    store.appendEvent(runId, { type: 'note', text });
+    store.eventLog.appendEvent(runId, { type: 'note', text });
     const controller = new AbortController();
     const response = await apiRequest(app, `/api/v1/runs/${runId}/events`, { signal: controller.signal });
     const reader = response.body!.getReader();
@@ -272,7 +272,7 @@ describe('multiplexed live task feed', () => {
 
 
 it('resets an individually oversized wire envelope instead of replaying it forever', async () => {
-  store.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT - 100) });
+  store.eventLog.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT - 100) });
   const finite = liveRunBatchResponseSchema.parse(await (await batch([{ projectId: 'boot', runId, afterSeq: 0 }])).json());
   expect(finite.results[0]!.type).toBe('batch');
   const controller = new AbortController();
@@ -297,7 +297,7 @@ it('resets an individually oversized wire envelope instead of replaying it forev
 it.each([-1, 0, 1])('delivers or resets at the complete SSE wire boundary (%i)', async difference => {
   const shape = { type: 'event', projectId: 'boot', runId, name: 'run-event', event: { type: 'note', text: '', seq: 1, ts: new Date().toISOString() } }
   const overhead = Buffer.byteLength(`event: live\ndata: ${JSON.stringify(shape)}\n\n`)
-  store.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + difference - overhead) })
+  store.eventLog.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + difference - overhead) })
   const controller = new AbortController()
   const response = await apiRequest(app, '/api/v1/workspace/run-events', {
     method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' },

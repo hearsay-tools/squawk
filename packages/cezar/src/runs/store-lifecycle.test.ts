@@ -124,7 +124,7 @@ describe('lifecycle delivery cases', () => {
     const id = created();
     store.setRepoHandle({ owner: 'o', name: 'r' });
     const deliveries = record(store);
-    store.appendEvent(id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
+    store.eventLog.appendEvent(id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
     expect(types(deliveries)).toEqual(['run.event', 'run.updated']);
     const { run, before } = only(deliveries, 'run.updated');
     expect(before.pullRequests).toBeUndefined();
@@ -226,7 +226,7 @@ describe('lifecycle delivery cases', () => {
     const { store, created } = setup();
     const id = created();
     const deliveries = record(store);
-    store.emitEphemeral(id, { type: 'item.delta', text: 'x' });
+    store.eventLog.emitEphemeral(id, { type: 'item.delta', text: 'x' });
     expect(deliveries).toEqual([{ type: 'run.event', payload: { runId: id, event: expect.objectContaining({ type: 'item.delta' }) } }]);
   });
 });
@@ -357,8 +357,8 @@ describe('each write path publishes its before, source and exit', () => {
     { key: 'setPinned (change)', act: ({ store }, id) => store.setPinned(id, true), before: { pinned: undefined }, after: { pinned: true } },
     { key: 'markAllRead', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.done, { finishedAt: '2026-11-21T10:00:00.000Z' }); },
       act: ({ store }) => store.markAllRead(), before: { seenAt: undefined }, after: { seenAt: any } },
-    { key: 'applyMarkerRefs', act: ({ store }, id) => store.applyMarkerRefs(id, { issue: 9 }), before: { issueNumber: undefined }, after: { issueNumber: 9 } },
-    { key: 'recordCreatedPr', act: ({ store }, id) => store.recordCreatedPr(id, PR), before: { pullRequestUrl: undefined }, after: { pullRequestUrl: PR } },
+    { key: 'applyMarkerRefs', act: ({ store }, id) => store.eventLog.applyMarkerRefs(id, { issue: 9 }), before: { issueNumber: undefined }, after: { issueNumber: 9 } },
+    { key: 'recordCreatedPr', act: ({ store }, id) => store.eventLog.recordCreatedPr(id, PR), before: { pullRequestUrl: undefined }, after: { pullRequestUrl: PR } },
     { key: 'debounced archive through applyArchived', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, HOLD); },
       act: ({ store }, id) => store.updateRun(id, { archived: true }),
       before: { status: RUN_STATUS.waiting, archived: false, ...HOLD }, after: { status: RUN_STATUS.failed, archived: true, autoResumeAt: undefined }, exit: 'withdraw-hold' },

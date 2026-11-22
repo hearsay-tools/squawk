@@ -33,7 +33,7 @@ it.each(['delayed diff', 'failed diff'])('cancellation retires pending Finish af
       expect(disk.delegation).not.toHaveProperty('finishRequestedAt');
       release(); await completion?.catch(() => {});
       expect(store.getRun(p.id)?.status).toBe('cancelled');
-      expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       store.updateRun(p.id, { baseBranch: 'main' });
       await restart();
       expect(manager.continueRun(p.id, { text: 'actual human answer mock:hold' }).ok).toBe(true);
@@ -50,9 +50,9 @@ it('restart durably reconciles cancelled roots with superseded Finish intent', a
     expect(store.getRun(p.id)?.status).toBe('cancelled');
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === p.id)!;
     expect(disk.delegation).not.toHaveProperty('finishRequestedAt');
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
     expect(manager.continueRun(p.id)).toMatchObject({ ok: false, error: 'pending human question requires an explicit answer' });
     expect(manager.continueRun(p.id, { text: 'actual human answer mock:hold' }).ok).toBe(true);
-    await until(() => store.readEvents(p.id).some(event => event.type === 'human-input-delivered'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'human-input-delivered'));
   });
 });

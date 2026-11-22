@@ -221,7 +221,7 @@ describe('project webhooks API', () => {
       expect(posted[0]!.url).toBe('https://grok.example/friction');
       expect(posted[0]!.headers.authorization).toBe('Bearer friction-token');
       expect(posted[0]!.body).toMatchObject({ event: 'agent.report', runId: run.id, title: 'Squeal denied one edit in a batch' });
-      expect(store.readEvents(run.id).map((event) => event.type)).toContain('webhook.report');
+      expect(store.eventLog.readEvents(run.id).map((event) => event.type)).toContain('webhook.report');
     });
 
     it('answers a webhook without agent access exactly like an unknown one, and sends nothing', async () => {

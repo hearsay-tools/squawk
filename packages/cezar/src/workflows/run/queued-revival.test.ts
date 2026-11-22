@@ -77,7 +77,7 @@ it.each([false, true])('leaves a task queued on an unregistered runner queued an
   await reviveQueuedRun(context, host, run, 'cezar restarted');
   for (const call of [enqueueJob, enqueueContinuation, move, checkpointRestartContext]) expect(call).not.toHaveBeenCalled();
   expect(JSON.stringify(store.getRun(created.id))).toBe(before);
-  expect(store.readEvents(created.id)).toEqual([]);
+  expect(store.eventLog.readEvents(created.id)).toEqual([]);
 });
 
 // hearsay-tools/squawk#3715: a Continue queued after work on a removed runner reopens no older session.

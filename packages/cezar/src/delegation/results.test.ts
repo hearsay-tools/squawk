@@ -38,12 +38,12 @@ describe('parent-owned collected worker results', () => {
   it('collects assistant evidence, bounded Git snapshots and durable parent pointers with redaction', async () => {
     const run = await worker(); await ensureOwnedWorkspace(f.root, run);
     const path = run.delegation?.role === 'worker' ? run.delegation.workspace.path : '';
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     writeFileSync(join(path, 'result.txt'), `result ${f.token}`);
     execFileSync('git', ['add', '.'], { cwd: path });
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '-qm', 'worker'], { cwd: path });
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path, encoding: 'utf8' }).trim();
-    const event = f.store.appendEvent(run.id, { type: 'text', text: 'Implemented. ' + 'x'.repeat(4100) });
+    const event = f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Implemented. ' + 'x'.repeat(4100) });
     setRunStatus(f.store, run.id, RUN_STATUS.review);
     const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id); f.store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     const result = await f.service.collect(f.caller, { workerId: run.id });
@@ -63,7 +63,7 @@ describe('parent-owned collected worker results', () => {
     writeFileSync(join(path, 'older.txt'), 'older work');
     execFileSync('git', ['add', '.'], { cwd: path });
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '-qm', 'older'], { cwd: path });
-    f.store.appendEvent(run.id, { type: 'text', text: 'Older worker done' });
+    f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Older worker done' });
     const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id); f.store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     setRunStatus(f.store, run.id, RUN_STATUS.done, { worktreePath: path });
     expect((await f.service.collect(f.caller, { workerId: run.id })).diff.state).toBe('available');
@@ -81,11 +81,11 @@ describe('parent-owned collected worker results', () => {
     expect(f.store.workerResults.readWorkerResultDiff(f.parent.id, run.id)).toContain('older.txt');
   });
   it('never turns tool output into a summary and marks failures and running evidence partial', async () => {
-    const run = await worker(); f.store.appendEvent(run.id, { type: 'tool-result', result: 'Success!' });
+    const run = await worker(); f.store.eventLog.appendEvent(run.id, { type: 'tool-result', result: 'Success!' });
     let result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result).toMatchObject({ outcome: 'running', status: workerCollectedResultSchema.shape.status.enum.queued, partial: true, summary: { state: 'unavailable', reason: 'no-assistant-output' } });
     setRunStatus(f.store, run.id, RUN_STATUS.failed, { error: 'provider interrupted' });
-    f.store.appendEvent(run.id, { type: 'item.completed', item: { kind: 'message', role: 'assistant', text: 'Partial analysis' } });
+    f.store.eventLog.appendEvent(run.id, { type: 'item.completed', item: { kind: 'message', role: 'assistant', text: 'Partial analysis' } });
     result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result).toMatchObject({ outcome: 'failed', partial: true, error: 'provider interrupted', summary: { state: 'available', source: 'failure', text: 'Runner failure: provider interrupted' } });
   });
@@ -103,7 +103,7 @@ describe('parent-owned collected worker results', () => {
     expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toBeUndefined();
   });
   it('retains historical evidence but does not reuse a previous execution assistant summary', async () => {
-    const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'Old summary' }); setRunStatus(f.store, run.id, RUN_STATUS.review);
+    const run = await worker(); f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Old summary' }); setRunStatus(f.store, run.id, RUN_STATUS.review);
     const old = await f.service.collect(f.caller, { workerId: run.id });
     f.store.commitWorkerContinuation(run.id, 'continue-line');
     expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(old);
@@ -124,7 +124,7 @@ describe('parent-owned collected worker results', () => {
   it('bounds artifact descriptors and reports missing bytes honestly', async () => {
     const run = await worker();
     const dir = join(f.root, '.ai/cezar/runs', `${run.id}-images`); mkdirSync(dir, { recursive: true });
-    for (let i = 0; i < 34; i++) { writeFileSync(join(dir, `${i}.png`), 'image'); f.store.appendEvent(run.id, { type: 'image', url: `/api/v1/runs/${run.id}/images/${i}.png` }); }
+    for (let i = 0; i < 34; i++) { writeFileSync(join(dir, `${i}.png`), 'image'); f.store.eventLog.appendEvent(run.id, { type: 'image', url: `/api/v1/runs/${run.id}/images/${i}.png` }); }
     rmSync(join(dir, '0.png'));
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result.artifacts).toMatchObject({ state: 'available', truncated: true });
@@ -133,7 +133,7 @@ describe('parent-owned collected worker results', () => {
     expect(result.artifacts.items[0]).toMatchObject({ state: 'deleted', reason: 'missing', id: '0.png' });
   });
   it.each(['write', 'fsync'] as const)('removes temporary snapshots and closes descriptors after %s failure while retaining the previous result', async operation => {
-    const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'Retained evidence' });
+    const run = await worker(); f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Retained evidence' });
     const first = await f.service.collect(f.caller, { workerId: run.id });
     const dir = join(f.root, '.ai/cezar/runs', `${f.parent.id}-worker-results`);
     const before = readdirSync(dir);
@@ -160,9 +160,9 @@ describe('parent-owned collected worker results', () => {
   });
 
   it('does not publish or replace retained evidence when the parent index checkpoint fails', async () => {
-    const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'First evidence' });
+    const run = await worker(); f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'First evidence' });
     const first = await f.service.collect(f.caller, { workerId: run.id });
-    f.store.appendEvent(run.id, { type: 'text', text: 'Second evidence' });
+    f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Second evidence' });
     const published = vi.fn(); onRunWrite(f.store.lifecycle, published);
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('disk failure'); });
     await expect(f.service.collect(f.caller, { workerId: run.id })).rejects.toThrow('disk failure');
@@ -170,9 +170,9 @@ describe('parent-owned collected worker results', () => {
     expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(first); fault.mockRestore();
   });
   it('reads retained parent evidence after child history deletion but denies a missing ownership receipt', async () => {
-    const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'Retained summary' });
+    const run = await worker(); f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Retained summary' });
     const images = join(f.root, '.ai/cezar/runs', `${run.id}-images`); mkdirSync(images); writeFileSync(join(images, 'result.png'), 'bytes');
-    f.store.appendEvent(run.id, { type: 'image', url: `/api/v1/runs/${run.id}/images/result.png` });
+    f.store.eventLog.appendEvent(run.id, { type: 'image', url: `/api/v1/runs/${run.id}/images/result.png` });
     await f.service.destroy(f.caller, { workerId: run.id });
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(f.store.retention.deleteRun(run.id)).toBe(true);
@@ -188,7 +188,7 @@ describe('parent-owned collected worker results', () => {
   });
   it.each(['absent', 'pending', 'malformed'] as const)('denies absent-child collection with %s deletion evidence', async kind => {
     const run = await worker();
-    f.store.appendEvent(run.id, { type: 'text', text: 'Retained result' });
+    f.store.eventLog.appendEvent(run.id, { type: 'text', text: 'Retained result' });
     await f.service.destroy(f.caller, { workerId: run.id });
     expect(f.store.retention.deleteRun(run.id)).toBe(true);
     const dataDir = join(f.root, '.ai/cezar');
@@ -231,7 +231,7 @@ describe('unchanged worker results (hearsay-tools/cezarion#879)', () => {
   async function collected() {
     const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
     await ensureOwnedWorkspace(f.root, f.store.getRun(workerId)!);
-    f.store.appendEvent(workerId, { type: 'text', text: 'Done.' });
+    f.store.eventLog.appendEvent(workerId, { type: 'text', text: 'Done.' });
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId); f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
     const result = await f.service.collect(f.caller, { workerId });

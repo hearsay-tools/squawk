@@ -26,7 +26,7 @@ describe('a held worker\'s human Continue', () => {
     // The hold lifts: the pump admits the continuation and it runs.
     manager.cancelAutoResume(holder.id);
     await until(() => store.getRun(child.id)?.status !== 'queued', () => `child ${store.getRun(child.id)?.status}`);
-    await until(() => store.readEvents(child.id).some(event => event.type === 'text'));
+    await until(() => store.eventLog.readEvents(child.id).some(event => event.type === 'text'));
     expect(store.getRun(child.id)?.steps[0]?.sessionId).toBeDefined();
   }, 60_000);
 });

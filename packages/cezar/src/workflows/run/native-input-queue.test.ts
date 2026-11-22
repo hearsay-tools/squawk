@@ -99,14 +99,14 @@ it('a rejected async read interrupts the current session and keeps the accepted 
   nativeInput.mockReturnValue(read.promise);
   expect(delivery.sendMessage(id, text('/demo work'), 'held')).toBe(true);
   expect(queued()).toEqual(['held']);
-  expect(store.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo work']);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo work']);
   read.reject(new Error('list failed'));
   await drain();
   expect(state.inputState.agentInputError).toContain('list failed');
   expect(wire.interrupt).toHaveBeenCalledOnce();
   expect(wire.sendMessage).not.toHaveBeenCalled();
   expect(queued()).toEqual(['held']);
-  expect(store.readEvents(id)).toContainEqual(expect.objectContaining({ type: 'error', message: expect.stringContaining('list failed') }));
+  expect(store.eventLog.readEvents(id)).toContainEqual(expect.objectContaining({ type: 'error', message: expect.stringContaining('list failed') }));
 });
 
 it('accepted native human input blocks every Squawk submission and flush until its read delivers', async () => {
@@ -161,7 +161,7 @@ it('refuses a routed worker answer before accepting it into the durable queue', 
   expect(queued()).toEqual([]);
   expect(nativeInput).not.toHaveBeenCalled();
   expect(wire.sendMessage).not.toHaveBeenCalled();
-  expect(store.readEvents(id)).toContainEqual(expect.objectContaining({
+  expect(store.eventLog.readEvents(id)).toContainEqual(expect.objectContaining({
     type: 'note', message: 'Answer this worker through its parent.' }));
 });
 
@@ -180,12 +180,12 @@ it('keeps FIFO and accepted content while synchronous transport readiness drains
   original[0] = { type: 'text', text: 'caller changed it' };
   expect(delivery.sendMessage(id, text('second'), 'second')).toBe(true);
   expect(queued()).toEqual(['first', 'second']);
-  expect(store.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo first', 'second']);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo first', 'second']);
   first.resolve(nativeInput.mock.calls[0]![2]);
   await drain();
   expect(trace).toEqual(['/demo first', 'second', 'ready']);
   expect(queued()).toEqual([]);
-  expect(store.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo first', 'second']);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').map(event => event.text)).toEqual(['/demo first', 'second']);
 });
 
 it('parks a refused boundary delivery and retries the same durable message once transport becomes ready', async () => {
@@ -201,7 +201,7 @@ it('parks a refused boundary delivery and retries the same durable message once 
   expect(wire.sendMessage).toHaveBeenCalledTimes(2);
   expect(queued()).toEqual([]);
   expect(parked).toBe(false);
-  expect(store.readEvents(id).filter(event => event.type === 'user-message')).toHaveLength(1);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message')).toHaveLength(1);
 });
 
 it('execution cleanup releases native input memory and prevents an old read from delivering', async () => {

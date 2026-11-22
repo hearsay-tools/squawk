@@ -36,7 +36,7 @@ describe('harness parity — autosave on an agent-checked-out branch (#1004)', (
         try {
           await withOwnedInputRun(backend, 'baseline', async ({ repoRoot, store, manager, runId }) => {
             const dataDir = join(repoRoot, '.ai/cezar');
-            const notes = () => store.readEvents(runId).flatMap(event => event.type === 'note' ? [String(event.message)] : []);
+            const notes = () => store.eventLog.readEvents(runId).flatMap(event => event.type === 'note' ? [String(event.message)] : []);
             // The report is in Squawk's records block; the Progress log stays the agent's summary.
             const autosave = () => autosaveLines(readHandoff(dataDir, runId));
             const progress = () => section(readHandoff(dataDir, runId), '## Progress log');
@@ -88,7 +88,7 @@ describe('harness parity — autosave on an agent-checked-out branch (#1004)', (
       try {
         await withOwnedInputRun(backend, 'baseline', async ({ repoRoot, store, manager, runId }) => {
           const dataDir = join(repoRoot, '.ai/cezar');
-          const notes = () => store.readEvents(runId).flatMap(event => event.type === 'note' ? [String(event.message)] : []);
+          const notes = () => store.eventLog.readEvents(runId).flatMap(event => event.type === 'note' ? [String(event.message)] : []);
           const autosave = () => autosaveLines(readHandoff(dataDir, runId));
           const progress = () => section(readHandoff(dataDir, runId), '## Progress log');
           manager.enqueueOwnedRun(runId);

@@ -48,7 +48,7 @@ describe('cez task status — the pending question', () => {
   const waitingOn = async (events: Array<Record<string, unknown>>) => {
     expect(await runTaskCommand(['start', 'do the thing'], {}, io())).toBe(0);
     const id = (JSON.parse(out.at(-1)!) as { id: string }).id;
-    for (const event of events) store.appendEvent(id, { type: 'ask.requested', ...event });
+    for (const event of events) store.eventLog.appendEvent(id, { type: 'ask.requested', ...event });
     store.commitWait(id, { id: randomUUID(), kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: new Date().toISOString(), phase: WAIT_PHASE.open, turnId: 'turn-1' });
     setRunStatus(store, id, RUN_STATUS.waiting);
     return id;
@@ -81,8 +81,8 @@ describe('cez task status — the pending question', () => {
 
   it('prints no question once a delivery answered it', async () => {
     const id = await waitingOn([{ requestId: 'ask-1', context: 'ctx', questions: choice }]);
-    const asked = store.readEvents(id).find((event) => event.type === 'ask.requested')!;
-    store.appendEvent(id, { type: 'human-input-delivered', askSeq: asked.seq, source: 'human' });
+    const asked = store.eventLog.readEvents(id).find((event) => event.type === 'ask.requested')!;
+    store.eventLog.appendEvent(id, { type: 'human-input-delivered', askSeq: asked.seq, source: 'human' });
     const printed = await status(id);
     expect(printed).not.toHaveProperty('question');
     expect(printed).not.toHaveProperty('questionContext');

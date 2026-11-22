@@ -40,7 +40,7 @@ export function fakeStore(servers: PreviewServer[]) {
     events,
     stateEvents: () => events.filter(entry => entry.event.type === 'preview.server-state').map(entry => entry.event),
     getRun: (id: string) => runs.get(id),
-    appendEvent: (runId: string, event: Record<string, unknown>) => { events.push({ runId, event }); return event; },
+    eventLog: { appendEvent: (runId: string, event: Record<string, unknown>) => { events.push({ runId, event }); return event; } },
   };
 }
 

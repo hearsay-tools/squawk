@@ -141,7 +141,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   ];
   const generation = randomUUID();
   const token = options.credentials.issue(options.projectId, run.id, generation);
-  options.store.registerSessionSecret(token);
+  options.store.redaction.registerSessionSecret(token);
   return {
     restrictCrossSessionMessaging: true,
     env: { ...productEnvEntries('DELEGATION_URL', options.url), ...productEnvEntries('DELEGATION_TOKEN', token) },

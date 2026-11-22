@@ -40,7 +40,7 @@ describe('RunManager idle close', () => {
 
     if (mode === 'fresh' && delegation === 'zero-config' && task === 'just do the thing') {
       expect(idle.pending).toBe(1);
-      expect(fixture.store.readEvents(record.id).some(event => event.type === 'ask.requested')).toBe(false);
+      expect(fixture.store.eventLog.readEvents(record.id).some(event => event.type === 'ask.requested')).toBe(false);
     }
     const session = sessionOf(record.id);
 

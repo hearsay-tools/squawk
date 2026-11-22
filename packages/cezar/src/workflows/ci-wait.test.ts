@@ -105,7 +105,7 @@ describe('CI wait recovery and conversations', { timeout: 30_000 }, () => {
     expect(store.getRun(run.id)?.agentInputs?.filter(input => input.id === wait.id)).toHaveLength(1);
     // This wire never echoes a consumed line, so the re-park itself is U3b's, on native wires.
     expect(hasPendingAsk(store, run.id)).toBe(true);
-    expect(store.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 
   it('backend disconnect retains the bounded wait and recovers only after settlement', async () => {
@@ -159,11 +159,11 @@ describe('CI wait recovery and conversations', { timeout: 30_000 }, () => {
     // A message during the CI park wakes the run at once; CI stays open and re-parks it.
     const early = update(0);
     store.commitAgentInputs(run.id, [early]);
-    const boundaries = store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+    const boundaries = store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
     manager.deliverConversationInput(run.id);
     await until(() => !!inputOf(early.id)?.deliveredAt);
     expect(ciWaitOf(run.id)).toMatchObject({ id: wait.id, phase: WAIT_PHASE.open });
-    await until(() => store.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries && parked(run.id));
+    await until(() => store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries && parked(run.id));
     expect(waitOf(store.getRun(run.id))).toBeUndefined();
     send.mockClear();
     // Messages owed when the observation lands go in its one wake, after it.

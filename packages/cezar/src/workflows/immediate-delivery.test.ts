@@ -35,7 +35,7 @@ function conversation(rootId: string) {
   };
 }
 const inputOf = (runId: string, id: string) => store.getRun(runId)?.agentInputs?.find(input => input.id === id);
-const turnEnds = (runId: string) => store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+const turnEnds = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
 
 describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
   useWorkerWaitFixture();
@@ -44,7 +44,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     vi.stubEnv('CEZ_MOCK_STEER_MS', '4000');
     const p = await parent(); await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:steer-tool'); manager.enqueueOwnedRun(w.id);
-    await until(() => store.readEvents(w.id).some(event => event.type === 'tool-call'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'tool-call'));
     const input = conversation(p.id)(p.id, w.id, 'progress', 'API correction: use v2');
     manager.deliverConversationInput(w.id);
     await until(() => !!inputOf(w.id, input.id)?.deliveredAt);
@@ -53,14 +53,14 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     await until(() => !!inputOf(w.id, input.id)?.consumedAt);
     // The first turn ends; the no-wait nudge's turn may follow at once (hearsay-tools/cezarion#1234).
     await until(() => turnEnds(w.id) >= 1, () => timeline(w.id));
-    expect(store.readEvents(w.id).filter(event => event.type === 'text' && String(event.text).includes('API correction')), timeline(w.id)).toHaveLength(1);
+    expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'text' && String(event.text).includes('API correction')), timeline(w.id)).toHaveLength(1);
   });
 
   it("delivers a worker message into the parent's running turn", async () => {
     vi.stubEnv('CEZ_MOCK_STEER_MS', '4000');
     const p = await parent('mock:steer-tool');
     const w = await worker(p.id);
-    await until(() => store.readEvents(p.id).some(event => event.type === 'tool-call'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'tool-call'));
     const input = conversation(p.id)(w.id, p.id, 'progress', 'Worker progress: tests pass');
     manager.deliverConversationInput(p.id);
     await until(() => !!inputOf(p.id, input.id)?.deliveredAt);
@@ -83,9 +83,9 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
       requestHash: 'a'.repeat(64), state: 'accepted', resumed: true };
     const openingInput: AgentInput = { id: opening.id, source: agentInputSchema.shape.source.enum.agent, parentRunId: p.id, text: opening.text, createdAt: now,
       conversation: { senderRunId: p.id, recipientRunId: w.id, kind: 'request' } };
-    const seq = store.readEvents(w.id).at(-1)!.seq;
+    const seq = store.eventLog.readEvents(w.id).at(-1)!.seq;
     expect(manager.continueRun(w.id, { text: opening.text }, true, { rootId: p.id, state: { messages: [opening], outcomes: [] }, input: openingInput }).ok).toBe(true);
-    await until(() => store.readEvents(w.id).some(event => event.seq > seq && event.type === 'tool-call'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.seq > seq && event.type === 'tool-call'));
     // The opening prompt was accepted; its replay checkpoint still waits for the turn to end.
     expect(inputOf(w.id, opening.id)?.deliveredAt).toBeTruthy();
     expect(store.getRun(w.id)?.continuationMessage).toBeDefined();
@@ -96,12 +96,12 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
       input: { ...openingInput, id: laterId, text: later.text, conversation: { senderRunId: p.id, recipientRunId: w.id, kind: 'progress' } } });
     manager.deliverConversationInput(w.id);
     await until(() => !!inputOf(w.id, laterId)?.consumedAt);
-    await until(() => store.readEvents(w.id).some(event => event.seq > seq && event.type === 'turn-end'), () => timeline(w.id, seq));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.seq > seq && event.type === 'turn-end'), () => timeline(w.id, seq));
     // Read inside the opening turn: no later than that turn's end, and answered before it.
     // The no-wait nudge's turn may follow at once (hearsay-tools/cezarion#1234), so count no turns.
-    const openingEnd = store.readEvents(w.id).find(event => event.seq > seq && event.type === 'turn-end')!;
+    const openingEnd = store.eventLog.readEvents(w.id).find(event => event.seq > seq && event.type === 'turn-end')!;
     expect(Date.parse(inputOf(w.id, laterId)!.consumedAt!)).toBeLessThanOrEqual(Date.parse(openingEnd.ts));
-    expect(store.readEvents(w.id).filter(event => event.seq > seq && event.seq < openingEnd.seq && event.type === 'text'
+    expect(store.eventLog.readEvents(w.id).filter(event => event.seq > seq && event.seq < openingEnd.seq && event.type === 'text'
       && String(event.text).includes('Later scope guidance')), timeline(w.id, seq)).toHaveLength(1);
     await until(() => store.getRun(w.id)?.continuationMessage === undefined);
     // The opening instruction was handled by that successful turn: its sender sees it read.
@@ -113,7 +113,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     vi.stubEnv('CEZ_MOCK_STEER_MS', '2500');
     const p = await parent(); await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:steer-tool'); manager.enqueueOwnedRun(w.id);
-    await until(() => store.readEvents(w.id).some(event => event.type === 'tool-call'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'tool-call'));
     const spy = vi.spyOn(sessionOf(w.id), 'sendAgentMessage');
     const send = conversation(p.id);
     const inputs = Array.from({ length: 40 }, (_, i) => send(p.id, w.id, 'progress', `burst ${String(i).padStart(2, '0')}`));
@@ -130,9 +130,9 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
   it('delivers messages beside a pending cezar_ask question in one submission, never as its answer', async () => {
     const sessionOf = captureSessions();
     const p = await parent('mock:cezar-ask');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested'));
     await until(() => store.getRun(p.id)?.status === 'waiting');
-    const askSeq = store.readEvents(p.id).find(event => event.type === 'ask.requested')!.seq;
+    const askSeq = store.eventLog.readEvents(p.id).find(event => event.type === 'ask.requested')!.seq;
     const card = () => store.getRun(p.id)?.waits?.find(wait => wait.kind === 'human' && wait.phase === 'open');
     expect(card()).toMatchObject({ via: WAIT_VIA.cezar_ask, askSeq });
     const w = await worker(p.id);
@@ -146,7 +146,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     expect(accepted[0]![1]).toEqual(held.map(input => input.id));
     expect(new Set(held.map(input => inputOf(p.id, input.id)?.deliveredAt)).size).toBe(1);
     // The card stays answerable: nothing answered it.
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered'), timeline(p.id)).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered'), timeline(p.id)).toEqual([]);
     await until(() => store.getRun(p.id)?.status === 'waiting' && turnEnds(p.id) >= 2, () => timeline(p.id));
     expect(card()).toMatchObject({ askSeq });
     const write = vi.spyOn(sessionOf(p.id), 'sendMessage');
@@ -155,13 +155,13 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     const content = JSON.stringify(write.mock.calls[0]![0]);
     expect(content).toContain('use Vitest');
     for (const input of held) expect(content).not.toContain(input.id);
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered'), timeline(p.id)).toEqual([expect.objectContaining({ askSeq })]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered'), timeline(p.id)).toEqual([expect.objectContaining({ askSeq })]);
     await until(() => held.every(input => !!inputOf(p.id, input.id)?.consumedAt));
   });
 
   it('returns bundled messages to the queue when the answer turn fails (#505 review)', async () => {
     const p = await parent('mock:cezar-ask');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested'));
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id);
     const held = conversation(p.id)(w.id, p.id, 'progress', 'finding held behind the question');
@@ -180,7 +180,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     const sessionOf = captureSessions();
     const retry = wakeRetryClock();
     const p = await parent('mock:cezar-ask');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested'));
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id);
     const held = conversation(p.id)(w.id, p.id, 'progress', 'finding bundled behind the answer');
@@ -227,7 +227,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
         sessionOf(p.id).end();
         await until(() => charged > 0 || store.getRun(p.id)?.status === 'failed', () => timeline(p.id));
       } finally { stopWatch(); }
-      expect(store.readEvents(p.id).filter(event => event.type === 'error').map(event => event.message)).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'error').map(event => event.message)).toEqual([]);
       expect(store.getRun(p.id)?.status).not.toBe('failed');
       expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
       expect(charged).toBe(1);
@@ -247,7 +247,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     const openingInput: AgentInput = { id: opening.id, source: agentInputSchema.shape.source.enum.agent, parentRunId: p.id, text: opening.text, createdAt: now,
       conversation: { senderRunId: p.id, recipientRunId: w.id, kind: 'request' } };
     expect(manager.continueRun(w.id, { text: opening.text }, true, { rootId: p.id, state: { messages: [opening], outcomes: [] }, input: openingInput }).ok).toBe(true);
-    await until(() => store.readEvents(w.id).some(event => event.type === 'error'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'error'));
     await until(() => !manager.isActive(w.id));
     expect(inputOf(w.id, opening.id)?.deliveredAt).toBeUndefined();
   });
@@ -255,17 +255,17 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
   it('flushes held messages that did not fit the answer bundle into the answering turn (#505 local review)', async () => {
     vi.stubEnv('CEZ_MOCK_STEER_MS', '4000');
     const p = await parent('mock:cezar-ask');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested'));
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id);
     const send = conversation(p.id);
     const big = (label: string) => `${label} ${'x'.repeat(60_000)}`;
     const held = [send(w.id, p.id, 'progress', big('first')), send(w.id, p.id, 'progress', big('second'))];
     manager.deliverConversationInput(p.id);
-    const seq = store.readEvents(p.id).at(-1)!.seq;
+    const seq = store.eventLog.readEvents(p.id).at(-1)!.seq;
     // The answer opens a long turn; only the first message fits its bundle.
     expect(manager.sendMessage(p.id, [{ type: 'text', text: 'mock:steer-tool answer' }])).toBe(true);
     await until(() => !!inputOf(p.id, held[1]!.id)?.deliveredAt);
-    expect(store.readEvents(p.id).some(event => event.seq > seq && event.type === 'turn-end'), timeline(p.id, seq)).toBe(false);
+    expect(store.eventLog.readEvents(p.id).some(event => event.seq > seq && event.type === 'turn-end'), timeline(p.id, seq)).toBe(false);
   });
 });

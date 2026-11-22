@@ -18,7 +18,7 @@ describe('committed message effects', () => {
   }
   const faultAt = (step: 'projection' | 'reconcile' | 'delivery') => {
     const fault = () => { throw Error(`${step} failed`); };
-    if (step === 'projection') return vi.spyOn(f.store, 'appendEvent').mockImplementation(fault);
+    if (step === 'projection') return vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementation(fault);
     if (step === 'reconcile') return vi.spyOn(f.manager, 'reconcileWorkerWaits').mockImplementation(fault);
     return vi.mocked(f.manager.deliverConversationInput).mockImplementation(fault);
   };
@@ -29,7 +29,7 @@ describe('committed message effects', () => {
       const request = { id: randomUUID(), recipientRunId, kind: 'request' as const, text: 'Question', timeoutSeconds: 600 };
       if (retry) {
         // Leave a committed message without projections, as a failed first repair would.
-        const blocked = step === 'projection' ? vi.spyOn(f.store, 'appendEvent').mockImplementation(() => { throw Error('initial projection failed'); }) : undefined;
+        const blocked = step === 'projection' ? vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementation(() => { throw Error('initial projection failed'); }) : undefined;
         await f.service.send(f.caller, request).catch(error => { if (!blocked) throw error; });
         blocked?.mockRestore();
       }
@@ -48,7 +48,7 @@ describe('committed message effects', () => {
       vi.spyOn(f.manager, 'deliverConversationInput').mockImplementation(() => {});
       expect(await f.service.send(f.caller, request)).toEqual({ ...receipt, effect: 'unchanged' });
       expect(f.store.getRun(recipientRunId)?.agentInputs).toHaveLength(1);
-      expect(f.store.readEvents(recipientRunId).filter(event => event.type === 'conversation-message')).toHaveLength(1);
+      expect(f.store.eventLog.readEvents(recipientRunId).filter(event => event.type === 'conversation-message')).toHaveLength(1);
     });
   }
 

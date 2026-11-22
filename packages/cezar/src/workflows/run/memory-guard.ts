@@ -43,11 +43,11 @@ export class MemoryGuard {
       if (!state?.liveSession.session?.open || state.liveSession.cancelled) continue;
       this.memory.write(runId, 'memoryPausing', true);
       const usedMb = Math.round(usage.rssBytes / (1024 * 1024));
-      this.context.store.appendEvent(runId, {
+      this.context.store.eventLog.appendEvent(runId, {
         type: 'note',
         message: `⚠ memory limit exceeded — this task's process tree is using ${usedMb} MiB (limit ${limitMb} MiB). Pausing it and letting the next queued task run; resume it with Continue.`,
       });
-      this.context.store.appendEvent(runId, {
+      this.context.store.eventLog.appendEvent(runId, {
         type: 'lifecycle',
         message: `paused — memory limit exceeded (${usedMb} MiB > ${limitMb} MiB)`,
       });

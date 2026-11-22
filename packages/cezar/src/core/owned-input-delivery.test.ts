@@ -22,18 +22,18 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const makeInput = (text: string) => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId, text, createdAt: new Date().toISOString() });
         const first = makeInput('mock:agent-echo delay-owned-ack first');
         expect(manager.steerWorker(runId, first)).toBe('queued');
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('delay-owned-ack first')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('delay-owned-ack first')));
         const rest = Array.from({ length: 31 }, (_, i) => makeInput(`mock:agent-echo next ${i}`));
         for (const input of rest) expect(manager.steerWorker(runId, input)).toBe('queued');
         expect(() => manager.steerWorker(runId, makeInput('over cap'))).toThrow(/capacity/i);
         expect(store.getRun(runId)?.agentInputs).toEqual([first, ...rest]);
-        expect(store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('mock:agent-echo next'))).toHaveLength(0);
+        expect(store.eventLog.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('mock:agent-echo next'))).toHaveLength(0);
         release();
         await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
         expect(store.getRun(runId)?.agentInputs?.map(input => input.id)).toEqual([first, ...rest].map(input => input.id));
-        expect(store.readEvents(runId).filter(e => e.type === 'agent-input')).toHaveLength(32);
-        expect(store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('delay-owned-ack first'))).toHaveLength(1);
+        expect(store.eventLog.readEvents(runId).filter(e => e.type === 'agent-input')).toHaveLength(32);
+        expect(store.eventLog.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('delay-owned-ack first'))).toHaveLength(1);
       });
     });
   }, 60_000);
@@ -47,14 +47,14 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const input = { id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId,
           text: `delay-owned-ack ${toolCall('cezar_done', {})} ${thenSay('delay-owned-ack finished')}`, createdAt: new Date().toISOString() };
         const session = [...fixtureWork(manager).liveSessions][0]!;
-        const turns = store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+        const turns = store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
         expect(manager.steerWorker(runId, input)).toBe('queued');
         // bound: the held-ACK turn must end before checking that DONE still waits for acceptance.
         if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
-          await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack finished')));
-          expect(store.readEvents(runId).filter(event => event.type === 'turn-end')).toHaveLength(turns);
+          await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack finished')));
+          expect(store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end')).toHaveLength(turns);
         } else {
-          await waitFor(() => store.readEvents(runId).filter(event => event.type === 'turn-end').length > turns);
+          await waitFor(() => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length > turns);
         }
         expect(manager.isActive(runId)).toBe(true);
         expect(session.open).toBe(true);

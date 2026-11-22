@@ -47,7 +47,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
       };
       return { id: peer.id, progress };
     }
-    const peerWakeNotes = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic peer message wake-up'));
+    const peerWakeNotes = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic peer message wake-up'));
 
     it(`${runner} U19p a peer message beside a pending portable question is delivered with its peer attribution and the question stays answerable`, async () => {
       const f = await conversingParent(runner);
@@ -56,7 +56,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
       await until(() => pendingQuestion(f.p.id) && asks(f.p.id).length === 1);
       const askSeq = asks(f.p.id)[0]!.seq;
       const turns = turnEnds(f.p.id);
-      const users = store.readEvents(f.p.id).filter(event => event.type === 'user-message').length;
+      const users = store.eventLog.readEvents(f.p.id).filter(event => event.type === 'user-message').length;
       const id = await peer.progress('Peer progress u19p');
       await until(() => delivered(f.p.id, id) && prompted(runner, 'Peer progress u19p').length > 0);
       // The agent reads who sent it: the peer task, as a peer, never the user.
@@ -64,7 +64,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
       expect(prompt).toContain(`"senderRunId":"${peer.id}"`);
       expect(prompt).toContain('"relationship":"peer"');
       await until(() => turnEnds(f.p.id) > turns && pendingQuestion(f.p.id));
-      expect(store.readEvents(f.p.id).filter(event => event.type === 'user-message')).toHaveLength(users);
+      expect(store.eventLog.readEvents(f.p.id).filter(event => event.type === 'user-message')).toHaveLength(users);
       expect(answered(f.p.id, askSeq)).toBe(false);
       expect(asks(f.p.id).map(event => event.seq)).toEqual([askSeq]);
       expect(humanOpen(f.p.id)).toEqual([expect.objectContaining({ phase: WAIT_PHASE.open, askSeq })]);

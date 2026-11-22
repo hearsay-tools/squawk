@@ -55,8 +55,10 @@ export function cutOffWork(events: Iterable<unknown>): CutOffWork | undefined {
 
 /** The event log a restart reads and closes the cut-off items in. */
 export interface CutOffLog {
-  readEvents(runId: string): Iterable<unknown>;
-  appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): unknown;
+  readonly eventLog: {
+    readEvents(runId: string): Iterable<unknown>;
+    appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): unknown;
+  };
 }
 
 /**
@@ -66,9 +68,9 @@ export interface CutOffLog {
  */
 export function recordCutOffWork(log: CutOffLog, runId: string): CutOffWork | undefined {
   let found: { tools: Snapshot[]; subagents: Snapshot[] };
-  try { found = openItems(log.readEvents(runId)); } catch { return undefined; }
+  try { found = openItems(log.eventLog.readEvents(runId)); } catch { return undefined; }
   for (const { item, stepId } of [...found.tools, ...found.subagents]) {
-    try { log.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, status: 'declined' } }); }
+    try { log.eventLog.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, status: 'declined' } }); }
     catch { /* the names still reach the resume */ }
   }
   return namesOf(found);

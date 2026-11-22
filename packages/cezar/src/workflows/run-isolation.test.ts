@@ -59,7 +59,7 @@ describe('RunManager repository-root isolation', () => {
     expect(store.getRun(record.id)?.status).toBe('failed');
     expect(store.getRun(record.id)?.error).toContain('worktree creation failed');
     expect(existsSync(join(root, 'root-was-touched'))).toBe(false);
-    const notes = store.readEvents(record.id).filter((event) => event.type === 'note');
+    const notes = store.eventLog.readEvents(record.id).filter((event) => event.type === 'note');
     expect(notes.some((event) => String(event.message).includes('worktree on'))).toBe(true);
     expect(notes.some((event) => String(event.message).includes('(default)'))).toBe(true);
     expect(notes.some((event) => String(event.message).includes('stopped before workflow execution'))).toBe(true);
@@ -90,7 +90,7 @@ describe('RunManager repository-root isolation', () => {
       try {
         // bound: step-start is the product signal; 15 seconds only detects a blocked second run.
         await waitForProduct(manager, store, () => [first.id, second.id].every(id =>
-          store.readEvents(id).some(event => event.type === 'step-start')));
+          store.eventLog.readEvents(id).some(event => event.type === 'step-start')));
         expect(store.getRun(first.id)?.status).toBe('running');
         expect(store.getRun(second.id)?.status).toBe('running');
       } finally {
@@ -103,7 +103,7 @@ describe('RunManager repository-root isolation', () => {
       expect(store.getRun(first.id)?.status).toBe('done');
       expect(store.getRun(second.id)?.status).toBe('done');
       for (const id of [first.id, second.id]) {
-        const notes = store.readEvents(id).filter((event) => event.type === 'note');
+        const notes = store.eventLog.readEvents(id).filter((event) => event.type === 'note');
         expect(notes.some((event) => String(event.message).includes('repository-root lock disabled'))).toBe(true);
         expect(notes.some((event) => String(event.message).includes('exclusive access'))).toBe(false);
       }

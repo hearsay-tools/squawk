@@ -32,7 +32,7 @@ describe('parent and worker conversation waits through RunManager', { timeout: 3
         // message, history read or turn end can incidentally reconcile the saved receipt.
         const accepted = store.getRun(f.w.id)!.agentInputs!.find(input => input.id === sent.message.id)!;
         for (const id of [f.p.id, f.w.id]) {
-          expect(store.readEvents(id).filter(event => event.type === 'conversation-message' &&
+          expect(store.eventLog.readEvents(id).filter(event => event.type === 'conversation-message' &&
             (event.message as { id: string }).id === sent.message.id && event.delivery === 'delivered'))
             .toEqual([expect.objectContaining({ deliveredAt: accepted.deliveredAt })]);
         }
@@ -54,7 +54,7 @@ describe('parent and worker conversation waits through RunManager', { timeout: 3
           kind: 'reply', requestId: sent.message.id, text: 'Fixed mock:hold', timeoutSeconds: 600 });
         expect(reply.outcome).toMatchObject({ status: 'replied-late', replyId: reply.message.id });
         await until(() => !!store.getRun(f.p.id)?.agentInputs?.find(input => input.id === reply.message.id)?.deliveredAt);
-        expect(store.readEvents(f.p.id).some(event => event.type === 'request-outcome' && requestOutcomeSchema.safeParse(event.outcome).data?.status === 'replied-late')).toBe(true);
+        expect(store.eventLog.readEvents(f.p.id).some(event => event.type === 'request-outcome' && requestOutcomeSchema.safeParse(event.outcome).data?.status === 'replied-late')).toBe(true);
       } finally { writeFileSync(release, 'release'); vi.useRealTimers(); f.close(); }
     });
   }

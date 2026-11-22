@@ -114,7 +114,7 @@ export class TurnBookkeeper {
         });
         if (this.host.isDisposedDelegatedRun(runId)) return;
         if (stat) this.context.store.updateRun(runId, { diffStat: stat });
-        else this.context.store.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
+        else this.context.store.eventLog.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
       }
       await this.maybeRefreshTitle(runId, turnText);
     } catch {
@@ -134,7 +134,7 @@ export class TurnBookkeeper {
   private applyTurnMarkers(runId: string, run: RunRecord, turnText: string): void {
     const markers = parseTaskMarkers(turnText);
     if (markers.pr !== undefined || markers.issue !== undefined) {
-      this.context.store.applyMarkerRefs(runId, { pr: markers.pr, prs: markers.prs, issue: markers.issue });
+      this.context.store.eventLog.applyMarkerRefs(runId, { pr: markers.pr, prs: markers.prs, issue: markers.issue });
     }
     if (markers.title && run.titleOrigin !== 'user') {
       const current = this.context.store.getRun(runId);

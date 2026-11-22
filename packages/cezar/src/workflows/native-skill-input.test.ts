@@ -71,7 +71,7 @@ it('holds a known trigger during a turn and sends it at the turn end', async () 
   emit({ type: 'turn-end' });
   await waitForProduct(f.manager, f.store, () => sent.length === 1 && !f.store.getRun(id)?.queuedMessages?.length);
   expect(sent[0]?.[0]).toEqual({ type: 'skill', id: 'known', path: '/listed/known', args: 'arguments' });
-  expect(f.store.readEvents(id).some(event => event.type === 'user-message' && event.text === '/known arguments')).toBe(true);
+  expect(f.store.eventLog.readEvents(id).some(event => event.type === 'user-message' && event.text === '/known arguments')).toBe(true);
 });
 
 it('skillTriggerMidTurn true sends a native trigger during a running turn', async () => {
@@ -93,11 +93,11 @@ it('skillUnknownName error still receives an unknown typed name as unchanged tex
 it('resolves an ambiguous held name at release and reports every path', async () => {
   const id = await start('claude', ['/one', '/two'].map(path => ({ id: 'known', name: 'Known', path, scope: 'repo' })));
   expect(say(id, '/known arguments')).toBe(true);
-  expect(f.store.readEvents(id).some(event => event.type === 'note' && String(event.message).includes('ambiguous'))).toBe(false); // Resolution is deferred, with no real-time absence wait.
+  expect(f.store.eventLog.readEvents(id).some(event => event.type === 'note' && String(event.message).includes('ambiguous'))).toBe(false); // Resolution is deferred, with no real-time absence wait.
   emit({ type: 'turn-end' });
   await readFinished();
   expect(sent[0]?.[0]).toEqual({ type: 'text', text: '/known arguments' });
-  const note = f.store.readEvents(id).find(event => event.type === 'note' && String(event.message).includes('ambiguous'));
+  const note = f.store.eventLog.readEvents(id).find(event => event.type === 'note' && String(event.message).includes('ambiguous'));
   expect(note?.message).toContain('/one'); expect(note?.message).toContain('/two');
 });
 
@@ -107,7 +107,7 @@ it('keeps the session snapshot and explains a name that appears only in a fresh 
   expect(say(id, '/new arguments')).toBe(true);
   await readFinished();
   expect(sent[0]?.[0]).toEqual({ type: 'text', text: '/new arguments' });
-  expect(f.store.readEvents(id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(true);
+  expect(f.store.eventLog.readEvents(id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(true);
   expect(f.manager.sessionSkills(id).map(skill => skill.id)).toEqual(['known']);
 });
 
@@ -161,7 +161,7 @@ it('fails a selected skill before a model call when its runner list is unavailab
   await waitForProduct(f.manager, f.store, () => f.store.getRun(record.id)?.status === 'failed' && !f.manager.isActive(record.id));
   expect(f.store.getRun(record.id)?.error).toContain('claude account "default" skill "known"');
   expect(f.store.getRun(record.id)?.error).toContain('runner skill list is unavailable: probe refused sentinel');
-  expect(f.store.readEvents(record.id).some(event => event.type === 'session')).toBe(false);
+  expect(f.store.eventLog.readEvents(record.id).some(event => event.type === 'session')).toBe(false);
 });
 
 it('passes an unknown opening command without probing the list a second time', async () => {
@@ -172,7 +172,7 @@ it('passes an unknown opening command without probing the list a second time', a
   f.currentId = record.id;
   await opened;
   expect(get).toHaveBeenCalledOnce();
-  expect(f.store.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
+  expect(f.store.eventLog.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
 });
 
 
@@ -233,7 +233,7 @@ it('surfaces a turn-ending question before a held trigger and delivers the answe
   expect(say(id, '/known after the answer')).toBe(true);
   f.store.commitWait(id, makeHumanWait({ questions: [{ header: 'Choice', question: 'Which implementation?' }] }));
   emit({ type: 'turn-end' });
-  expect(f.store.readEvents(id).some(event => event.type === 'ask.requested')).toBe(true);
+  expect(f.store.eventLog.readEvents(id).some(event => event.type === 'ask.requested')).toBe(true);
   expect(sent).toEqual([]); // The question is surfaced; the held trigger cannot answer it.
   expect(say(id, 'Use the first implementation')).toBe(true);
   expect(sent[0]?.[0]).toEqual({ type: 'text', text: 'Use the first implementation' });

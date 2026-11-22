@@ -71,7 +71,7 @@ export class HumanWaits {
    * `PROSE_HUMAN_GATE` names it in the transcript. Keep the checkpoint through idle closure/restart
    * and hold worker input until a successful human delivery, just as for a structured ask. */
   raiseHumanGate(runId: string, state: ActiveRun): void {
-    this.context.store.appendEvent(runId, { type: 'note', stepId: state.liveSession.currentStepId,
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', stepId: state.liveSession.currentStepId,
       code: PROSE_HUMAN_GATE, message: 'waiting for a human response to the assistant’s request' });
     this.prepareHumanAsk(state);
     clearUnreadInputTimer(state);
@@ -146,11 +146,11 @@ export class HumanWaits {
       const run = this.context.store.getRun(runId);
       const stepId = state?.liveSession.currentStepId ?? run?.currentStepId ?? run?.steps.at(-1)?.id;
       if (wait.questions) {
-        this.context.store.appendEvent(runId, { type: 'ask.requested', requestId: randomUUID(), ...askCardFields({ questions: wait.questions, context: wait.context }), ...(stepId ? { stepId } : {}) });
+        this.context.store.eventLog.appendEvent(runId, { type: 'ask.requested', requestId: randomUUID(), ...askCardFields({ questions: wait.questions, context: wait.context }), ...(stepId ? { stepId } : {}) });
         if (state) this.prepareHumanAsk(state);
       } else if (state) this.raiseHumanGate(runId, state);
       else {
-        this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), code: PROSE_HUMAN_GATE, message: 'waiting for a human response to the assistant’s request' });
+        this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), code: PROSE_HUMAN_GATE, message: 'waiting for a human response to the assistant’s request' });
       }
     } else if (state) transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'refresh-question', session: state.liveSession.session, pending: true });
     this.markHumanWaitSurfaced(runId, wait);
@@ -167,7 +167,7 @@ export class HumanWaits {
   showSquawkHumanWait(runId: string, state: ActiveRun | undefined, wait: HumanWaitEntry, note?: string): void {
     const run = this.context.store.getRun(runId);
     const stepId = state?.liveSession.currentStepId ?? run?.currentStepId ?? run?.steps.at(-1)?.id;
-    const shown = this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}),
+    const shown = this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}),
       message: note ?? (wait.via === 'no-wait' ? NO_WAIT_NOTE : wait.via === 'completion' ? 'completion blocked; waiting for you'
         : `automatic-wake budget spent (${this.maxAutoContinues}); waiting for you`) });
     const latest = WAIT_KINDS.human.select(run?.waits ?? []).find(entry => entry.id === wait.id);

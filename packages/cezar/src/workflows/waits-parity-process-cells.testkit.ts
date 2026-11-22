@@ -100,7 +100,7 @@ export function processCells(runners: string[], it: typeof registerTest = regist
       if (!('wait' in registered)) throw Error('registration refused');
       const wait = registered.wait;
       wire.release();
-      await until(() => store.readEvents(run.id).some(event => event.type === 'error'));
+      await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'error'));
       await until(() => !manager.isActive(run.id));
       expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');
       expect(store.getRun(run.id)?.status).not.toBe('failed');

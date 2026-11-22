@@ -105,7 +105,7 @@ export function inputDeliveryModule(policy: InputDeliveryPolicy): InputDeliveryM
     receipt: id => store.getRun(runId)?.agentInputs?.find(entry => entry.id === id),
     consumed: ids => inputReceipts.handleAgentInputConsumed(context, receiptHost, runId, state, session, ids),
     receiptEvent: event => inputReceipts.handleReceiptEvent(context, receiptHost, steps, runId, state, turn, event, 'task',
-      published => { store.appendEvent(runId, published as RunEventInput); }, session),
+      published => { store.eventLog.appendEvent(runId, published as RunEventInput); }, session),
     turnEnd: () => markTurnBoundary(context, unused<SessionHelperHost>('session helper host', { inputReceiptHost: receiptHost }), runId, state, { type: 'turn-end' }),
   };
 }

@@ -283,7 +283,7 @@ describe('B11: every exit to failed settles running steps to failed and keeps a 
 // cancellation.
 describe('B12: the cancel exits write the run cancelled event once, at every site', () => {
   const CANCELLING = SETTLING.filter(exit => RUN_EXITS[exit].to === RUN_STATUS.cancelled);
-  const cancelled = (store: RunStore, id: string) => store.readEvents(id)
+  const cancelled = (store: RunStore, id: string) => store.eventLog.readEvents(id)
     .filter(event => event.type === 'lifecycle' && /cancelled/.test(String(event.message))).map(event => event.message);
 
   it.each(CANCELLING)('%s writes it when it cancels the run, and not again on a cancelled run', (exit) => {
@@ -322,7 +322,7 @@ describe('B12: the cancel exits write the run cancelled event once, at every sit
 // records cancelled, its failed Continue session records failed, and the late Stop records
 // cancelled again; a later Continue starts a new execution, whose Stop writes its own event.
 describe('B12: one cancellation, one event, through the teardown that settles it', () => {
-  const cancelled = (store: RunStore, id: string) => store.readEvents(id)
+  const cancelled = (store: RunStore, id: string) => store.eventLog.readEvents(id)
     .filter(event => event.type === 'lifecycle' && /cancelled/.test(String(event.message))).map(event => event.message);
 
   it('stop-worker, fail-continue, then cancel-late write one event; a Stop after a Continue writes another', () => {

@@ -88,7 +88,7 @@ it.each([false, true])('monitoring synthetic delivery respects legacy pending Fi
           expect({ ...store.getRun(w.id), monitoringWakeAt: monitoringWakeOf(store.getRun(w.id)) }).toMatchObject({ status: RUN_STATUS.waiting, monitoringWakeAt: deadline });
           expect(session.open).toBe(true);
           expect(semaphore.busy()).toBe(1);
-          expect(store.readEvents(w.id).some(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('automatic monitoring wake-up'))).toBe(false);
+          expect(store.eventLog.readEvents(w.id).some(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('automatic monitoring wake-up'))).toBe(false);
           expect(manager.sendMessage(w.id, [{ type: 'text', text: 'synthetic retry' }])).toBe(false);
           expect(send).not.toHaveBeenCalled();
         } else {

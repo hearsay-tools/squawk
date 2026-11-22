@@ -24,15 +24,20 @@
     {
       "file": "packages/cezar/src/runs/store.ts",
       "kind": "historyPaths",
-      "reason": "appends events and checks archive eligibility"
+      "reason": "checks archive eligibility"
     },
     {
-      "file": "packages/cezar/src/runs/store.ts",
+      "file": "packages/cezar/src/runs/event-log.ts",
+      "kind": "historyPaths",
+      "reason": "locates the event log file"
+    },
+    {
+      "file": "packages/cezar/src/runs/event-log.ts",
       "kind": "eventsPath-declaration",
       "reason": "private writer path wrapper"
     },
     {
-      "file": "packages/cezar/src/runs/store.ts",
+      "file": "packages/cezar/src/runs/event-log.ts",
       "kind": "eventsPath-append",
       "reason": "appends to the restored plain transcript"
     },

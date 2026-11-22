@@ -119,7 +119,7 @@ describe('recover() and the autonomous flag (#489)', () => {
       await recovered.recover();
       expect(store.getRun(id)?.autonomous).toBe(autonomous);
       expect(store.getRun(id)?.status).toBe('queued');
-      expect(store.readEvents(id).some(event => event.type === 'lifecycle' &&
+      expect(store.eventLog.readEvents(id).some(event => event.type === 'lifecycle' &&
         typeof event.message === 'string' && event.message.includes('cezar restarted'))).toBe(true);
       const startSession = vi.fn(() => ({
         result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }), open: false,

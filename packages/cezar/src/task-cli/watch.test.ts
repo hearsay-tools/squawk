@@ -198,13 +198,13 @@ describe('cez task watching', () => {
   describe('log', () => {
     it('prints the six kinds as one JSON line each, oldest first, with their seq', async () => {
       const id = create();
-      harness.store.appendEvent(id, { type: 'step-start', stepId: 'work', name: 'Work', iteration: 1 });
-      harness.store.appendEvent(id, { type: 'text', stepId: 'work', text: 'hello' });
-      harness.store.appendEvent(id, { type: 'note', message: 'ignored' });
-      harness.store.appendEvent(id, { type: 'tool-call', tool: 'Bash', input: { command: 'ls' } });
-      harness.store.appendEvent(id, { type: 'tool-result', result: 'a\nb' });
-      harness.store.appendEvent(id, { type: 'user-message', text: 'steer' });
-      harness.store.appendEvent(id, { type: 'error', message: 'boom' });
+      harness.store.eventLog.appendEvent(id, { type: 'step-start', stepId: 'work', name: 'Work', iteration: 1 });
+      harness.store.eventLog.appendEvent(id, { type: 'text', stepId: 'work', text: 'hello' });
+      harness.store.eventLog.appendEvent(id, { type: 'note', message: 'ignored' });
+      harness.store.eventLog.appendEvent(id, { type: 'tool-call', tool: 'Bash', input: { command: 'ls' } });
+      harness.store.eventLog.appendEvent(id, { type: 'tool-result', result: 'a\nb' });
+      harness.store.eventLog.appendEvent(id, { type: 'user-message', text: 'steer' });
+      harness.store.eventLog.appendEvent(id, { type: 'error', message: 'boom' });
       expect(await run(['log', id])).toBe(0);
       const printed = lines();
       expect(printed.map((line) => line.type)).toEqual(['step-start', 'text', 'tool-call', 'tool-result', 'user-message', 'error']);
@@ -214,7 +214,7 @@ describe('cez task watching', () => {
 
     it('keeps only the newest lines within --max-chars and honours --since', async () => {
       const id = create();
-      for (let index = 0; index < 20; index += 1) harness.store.appendEvent(id, { type: 'text', text: `line ${index} ${'x'.repeat(50)}` });
+      for (let index = 0; index < 20; index += 1) harness.store.eventLog.appendEvent(id, { type: 'text', text: `line ${index} ${'x'.repeat(50)}` });
       expect(await run(['log', id, '--max-chars', '300'])).toBe(0);
       const tail = lines();
       expect(out.join('\n').length).toBeLessThanOrEqual(300);
@@ -227,8 +227,8 @@ describe('cez task watching', () => {
 
     it('--follow streams new events and exits on a terminal status', async () => {
       const id = create();
-      harness.store.appendEvent(id, { type: 'text', text: 'before' });
-      later(100, () => harness.store.appendEvent(id, { type: 'text', text: 'during' }));
+      harness.store.eventLog.appendEvent(id, { type: 'text', text: 'before' });
+      later(100, () => harness.store.eventLog.appendEvent(id, { type: 'text', text: 'during' }));
       later(200, () => setRunStatus(harness.store, id, RUN_STATUS.done));
       expect(await run(['log', id, '--follow', '--timeout-seconds', '10'])).toBe(0);
       const texts = lines().filter((line) => line.type === 'text').map((line) => line.text);
@@ -256,8 +256,8 @@ describe('cez task watching', () => {
 
       it('ends a default follow once an interactive task parks, exit 0, after every event', async () => {
         const id = create();
-        harness.store.appendEvent(id, { type: 'text', text: 'before' });
-        later(100, () => harness.store.appendEvent(id, { type: 'text', text: 'during' }));
+        harness.store.eventLog.appendEvent(id, { type: 'text', text: 'before' });
+        later(100, () => harness.store.eventLog.appendEvent(id, { type: 'text', text: 'during' }));
         later(200, () => setRunStatus(harness.store, id, RUN_STATUS.waiting));
         const started = Date.now();
         expect(await run(['log', id, '--follow', '--timeout-seconds', '10'])).toBe(0);
@@ -268,7 +268,7 @@ describe('cez task watching', () => {
 
       it('ends at the replay boundary when the task is already parked', async () => {
         const id = create();
-        harness.store.appendEvent(id, { type: 'text', text: 'turn' });
+        harness.store.eventLog.appendEvent(id, { type: 'text', text: 'turn' });
         setRunStatus(harness.store, id, RUN_STATUS.waiting);
         expect(await run(['log', id, '--follow', '--timeout-seconds', '10'])).toBe(0);
         expect(lines().map((line) => line.text ?? line.status)).toEqual(['turn', 'waiting']);
@@ -296,7 +296,7 @@ describe('cez task watching', () => {
       it.each(['attention', 'settled'])('reports a run deleted mid-follow as missing, exit 1, under --until %s', async (until) => {
         const id = create();
         setRunStatus(harness.store, id, RUN_STATUS.running);
-        harness.store.appendEvent(id, { type: 'text', text: 'before' });
+        harness.store.eventLog.appendEvent(id, { type: 'text', text: 'before' });
         // Under load a 200ms timer can fire before SSE replays `before`, so the cell
         // asserts [] instead of a mid-follow delete. Wait for the replay, then delete.
         const following = run(['log', id, '--follow', '--until', until, '--timeout-seconds', '10']);

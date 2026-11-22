@@ -28,7 +28,7 @@ const handlers = (runId: string) => manager.squawkToolHandlers(runId, toolGenera
 const entryOf = (runId: string, waitId: string): Wait | undefined => store.getRun(runId)?.waits?.find(wait => wait.id === waitId);
 const settledOf = (runId: string, waitId: string): Wait | undefined => store.getRun(runId)?.lastWaits?.filter(wait => wait.id === waitId).at(-1);
 const anyOf = (runId: string, waitId: string) => entryOf(runId, waitId) ?? settledOf(runId, waitId);
-const notes = (runId: string) => store.readEvents(runId).filter(event => event.type === 'note').map(event => String(event.message));
+const notes = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'note').map(event => String(event.message));
 const delivered = (runId: string, id: string) => !!store.getRun(runId)?.agentInputs?.find(input => input.id === id)?.deliveredAt;
 
 /** A parent whose first turn is held until `release()`: registrations happen mid-turn. */
@@ -103,7 +103,7 @@ describe('peer waits (R9)', { timeout: 45_000 }, () => {
     expect(semaphore.busy()).toBe(0);
     await clock.advance(IDLE_TIMEOUT_MS);
     await until(() => !manager.isActive(a));
-    expect(store.readEvents(a).some(event => event.type === 'lifecycle' && String(event.message).includes('inactivity'))).toBe(true);
+    expect(store.eventLog.readEvents(a).some(event => event.type === 'lifecycle' && String(event.message).includes('inactivity'))).toBe(true);
     expect(entryOf(a, entry.id)).toMatchObject({ phase: WAIT_PHASE.open });
     expect(deriveAttention(run)).toMatchObject({ rung: 'waiting-on-workers', bucket: 'none', label: 'waiting on 1 task' });
   });
@@ -139,7 +139,7 @@ describe('peer waits (R9)', { timeout: 45_000 }, () => {
   it('a human message wakes the run and the wait stays open', async () => {
     const { a, entry } = await parkedOnPeer();
     expect(manager.sendMessage(a, [{ type: 'text', text: 'human update' }])).toBe(true);
-    await until(() => store.readEvents(a).some(event => event.type === 'user-message'));
+    await until(() => store.eventLog.readEvents(a).some(event => event.type === 'user-message'));
     await until(() => store.getRun(a)?.status === RUN_STATUS.waiting && stateOf(store.getRun(a)!) === 'waiting:peer');
     expect(entryOf(a, entry.id)).toMatchObject({ phase: WAIT_PHASE.open });
   });
@@ -267,7 +267,7 @@ describe('peer waits (R9)', { timeout: 45_000 }, () => {
     const midTurn = (row: RunRecord): RunRecord => ({ ...row, status: RUN_STATUS.running, waits: undefined, steps: row.steps.map(step => ({ ...step, status: STEP_STATUS.running })) });
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).map(row => row.id === b.id ? midTurn(row) : row);
     await restart(false, disk);
-    await until(() => /interrupted/.test(store.getRun(b.id)?.error ?? '') || store.readEvents(b.id).some(event => String(event.message ?? '').includes('cezar restarted')));
+    await until(() => /interrupted/.test(store.getRun(b.id)?.error ?? '') || store.eventLog.readEvents(b.id).some(event => String(event.message ?? '').includes('cezar restarted')));
     expect(store.getRun(b.id)?.status).not.toBe(RUN_STATUS.failed);
     expect(entryOf(run.id, entry.id)).toMatchObject({ phase: WAIT_PHASE.open });
   });

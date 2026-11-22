@@ -54,16 +54,16 @@ describe('unread agent input is resubmitted (#505)', () => {
     try {
       await withOwnedInputRun('codex', 'steer-late', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
         const input = late(parentRunId);
         manager.steerWorker(runId, input);
         // The gated window is still open: the steer was accepted inside the turn.
         await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.deliveredAt, 10_000);
         release();
         await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.consumedAt, 15_000);
-        expect(store.readEvents(runId).some(e => e.type === 'note' && String(e.message).includes('did not read'))).toBe(true);
+        expect(store.eventLog.readEvents(runId).some(e => e.type === 'note' && String(e.message).includes('did not read'))).toBe(true);
         // Codex marks it read when it enters the thread history, before the reply text lands.
-        const echoes = () => store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
+        const echoes = () => store.eventLog.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
         await waitFor(() => echoes().length > 0, 15_000);
         await waitFor(() => settled(store, manager, runId), 15_000);
         expect(echoes()).toHaveLength(1);
@@ -79,20 +79,20 @@ describe('unread agent input is resubmitted (#505)', () => {
     try {
       await withOwnedInputRun('codex', 'steer-late', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
         manager.steerWorker(runId, late(parentRunId));
         // The gated window is still open: the steer was accepted inside the turn.
         await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.deliveredAt, 10_000);
         release();
         await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.consumedAt, 15_000);
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late parent guidance')), 15_000);
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late parent guidance')), 15_000);
         // The goal-achieved close never ran over the unread input.
-        const closed = store.readEvents(runId).findIndex(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'));
-        const echoed = store.readEvents(runId).findIndex(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
+        const closed = store.eventLog.readEvents(runId).findIndex(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'));
+        const echoed = store.eventLog.readEvents(runId).findIndex(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
         expect(echoed).toBeGreaterThan(-1);
         // The run did not close over the unread input: any close comes after it was read.
         expect(closed === -1 || closed > echoed).toBe(true);
-        const reads = store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
+        const reads = store.eventLog.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
         expect(reads).toHaveLength(1);
       }, { env: { CEZ_MOCK_STEER_GATE: gate } });
     } finally { adapter.scenarios['steer-late'] = original; cleanup(); }
@@ -104,7 +104,7 @@ describe('unread agent input is resubmitted (#505)', () => {
       await withOwnedInputRun('claude', 'steer-tool', async fixture => {
         const { runId, parentRunId } = fixture;
         fixture.manager.enqueueOwnedRun(runId);
-        await waitFor(() => fixture.store.readEvents(runId).some(e => e.type === 'tool-call'));
+        await waitFor(() => fixture.store.eventLog.readEvents(runId).some(e => e.type === 'tool-call'));
         const input = late(parentRunId);
         fixture.manager.steerWorker(runId, input);
         // The gated hold keeps the turn open: the steer was accepted inside it, and the restart
@@ -120,12 +120,12 @@ describe('unread agent input is resubmitted (#505)', () => {
           await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.consumedAt, 15_000);
         } catch (error) {
           console.error('DEBUG run record:', JSON.stringify(store.getRun(runId), null, 2));
-          console.error('DEBUG events:', JSON.stringify(store.readEvents(runId), null, 2));
+          console.error('DEBUG events:', JSON.stringify(store.eventLog.readEvents(runId), null, 2));
           throw error;
         }
         expect(store.getRun(runId)?.agentInputs?.[0]?.awaitingRead).toBeUndefined();
         // Re-delivered exactly once after the restart.
-        const echoes = () => store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
+        const echoes = () => store.eventLog.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('late parent guidance'));
         await waitFor(() => echoes().length > 0, 15_000);
         await waitFor(() => settled(store, manager, runId), 15_000);
         expect(echoes()).toHaveLength(1);
@@ -154,7 +154,7 @@ describe('unread agent input is resubmitted (#505)', () => {
     try {
       await withOwnedInputRun('opencode', 'steer-late', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
         manager.steerWorker(runId, late(parentRunId));
         // The steer POST is on the mock's request wire while the gated window still holds the
         // turn; its acknowledgement is deliberately still pending (CEZ_MOCK_OPENCODE_STEER_ACK_MS),
@@ -180,7 +180,7 @@ describe('unread agent input is resubmitted (#505)', () => {
           return commit(id, outcomes, ...rest);
         });
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('late window')));
         manager.steerWorker(runId, late(parentRunId));
         // The gated window is still open: the steer was accepted inside the turn, so the turn's
         // end requeues it and reaches the injected requeue failure, never a fresh turn's read.
@@ -188,7 +188,7 @@ describe('unread agent input is resubmitted (#505)', () => {
         release();
         await waitFor(() => !manager.isActive(runId), 15_000);
         expect(store.getRun(runId)?.status).toBe('failed');
-        expect(store.readEvents(runId).some(e => e.type === 'error' && String(e.message).includes('requeue'))).toBe(true);
+        expect(store.eventLog.readEvents(runId).some(e => e.type === 'error' && String(e.message).includes('requeue'))).toBe(true);
       }, { env: { CEZ_MOCK_STEER_GATE: gate } });
     } finally { adapter.scenarios['steer-late'] = original; vi.restoreAllMocks(); cleanup(); }
   }, 60_000);

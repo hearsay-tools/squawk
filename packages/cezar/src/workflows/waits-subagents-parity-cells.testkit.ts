@@ -41,7 +41,7 @@ function nativeWire(runner: string) {
 const subagentWait = (id: string): SubagentWaitEntry | undefined =>
   store.getRun(id)?.waits?.find((wait): wait is SubagentWaitEntry => wait.kind === WAIT_KIND.subagent && wait.phase === WAIT_PHASE.open);
 const settledOf = (id: string, waitId: string): Wait | undefined => store.getRun(id)?.lastWaits?.filter(wait => wait.id === waitId).at(-1);
-const nudges = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)).length;
+const nudges = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)).length;
 /** Wakes the waits spent: the count less the no-wait nudges a mock's markerless reply earns. */
 const wakes = (id: string) => (store.getRun(id)?.automaticWakes ?? 0) - nudges(id);
 const wakeInputs = (id: string, waitId: string) => (store.getRun(id)?.agentInputs ?? []).filter(input => input.id === waitId);
@@ -56,7 +56,7 @@ async function parkedOnSubagents(runner: string, tokens = '') {
   vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(0);
   const release = join(root, `release-${randomUUID()}`);
   const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: `${SCENARIO[runner]!} ${tokens} parity-release=${release}` });
-  await until(() => store.readEvents(run.id).some(event => event.type === 'turn-end'));
+  await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'turn-end'));
   expect(store.getRun(run.id)?.status).toBe(RUN_STATUS.waiting);
   expect(subagentWait(run.id)).toBeDefined();
   expect(semaphore.busy()).toBe(1);
@@ -92,13 +92,13 @@ export function subagentCells(runners: readonly RunnerDefinition[]): void {
         const timer: TimerWaitEntry = { id: randomUUID(), kind: WAIT_KIND.timer, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait, phase: WAIT_PHASE.open,
           turnId: 'seed', seconds: 600, registeredAt: new Date().toISOString(), deadline: new Date(Date.now() + 600_000).toISOString() };
         store.commitWait(id, timer);
-        const turns = store.readEvents(id).filter(event => event.type === 'turn.started').length;
+        const turns = store.eventLog.readEvents(id).filter(event => event.type === 'turn.started').length;
         const grace = graceClock();
         release();
         await until(() => settledOf(id, wait.id)?.phase === WAIT_PHASE.cancelled);
         expect(settledOf(id, wait.id)).toMatchObject({ result: { reason: 'superseded' } });
         expect(settledOf(id, timer.id)).toMatchObject({ phase: WAIT_PHASE.cancelled });
-        await until(() => store.readEvents(id).filter(event => event.type === 'turn.started').length > turns);
+        await until(() => store.eventLog.readEvents(id).filter(event => event.type === 'turn.started').length > turns);
         // The runner's own turn cleared the grace, and past it no wake goes.
         expect(grace.pending).toBe(0);
         await grace.advance(200);

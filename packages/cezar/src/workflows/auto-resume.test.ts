@@ -141,7 +141,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     expect(Number.isFinite(epochSeconds)).toBe(true);
     expect(Date.parse(failed?.autoResumeAt ?? '')).toBe(epochSeconds * 1_000 + AUTO_RESUME_GRACE_MS);
     // The transcript says so too — the cockpit is not the only place this is auditable.
-    const events = store.readEvents(record.id);
+    const events = store.eventLog.readEvents(record.id);
     expect(events.some((event) => String(event.message ?? '').includes('resuming automatically at'))).toBe(true);
   }, 30_000);
 
@@ -191,7 +191,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     const delay = Date.parse(held.autoResumeAt!) - before;
     expect(delay).toBeGreaterThanOrEqual(60_000);
     expect(delay).toBeLessThan(60_000 + 20_000);
-    const messages = store.readEvents(record.id).map(event => String(event.message ?? ''));
+    const messages = store.eventLog.readEvents(record.id).map(event => String(event.message ?? ''));
     expect(messages.some(message => /provider error \(rate limit: .*429.*\) — retrying automatically at .* \(attempt 1 of 12\)/.test(message))).toBe(true);
     // One status write: the run never read as failed on its way to the hold.
     expect(messages.some(message => message.startsWith('run failed'))).toBe(false);
@@ -206,7 +206,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     const second = createFixtureManager(store, repoRoot);
     await second.recover();
     await expect.poll(() => store.getRun(record.id)?.autoResumeAttempts, { timeout: 20_000 }).toBe(1);
-    await expect.poll(() => store.readEvents(record.id).some(event => String(event.message ?? '').includes('(attempt 2 of 12)')), { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => store.eventLog.readEvents(record.id).some(event => String(event.message ?? '').includes('(attempt 2 of 12)')), { timeout: 20_000 }).toBe(true);
     expect(store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeReason: 'provider-error' });
     second.dispose();
 
@@ -215,7 +215,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     await manager.recover();
     await expect.poll(() => store.getRun(record.id)?.status, { timeout: 20_000 }).toBe('failed');
     expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();
-    expect(store.readEvents(record.id).some(event => String(event.message ?? '').includes(`provider retry limit reached (${MAX_AUTO_RESUMES})`))).toBe(true);
+    expect(store.eventLog.readEvents(record.id).some(event => String(event.message ?? '').includes(`provider retry limit reached (${MAX_AUTO_RESUMES})`))).toBe(true);
   }, 60_000);
 
   it('retries a provider error that left no session in a fresh session', async () => {
@@ -229,7 +229,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     await manager.recover();
     await expect.poll(() => store.getRun(record.id)?.steps.find(step => step.id === 'continue-1')?.status, { timeout: 20_000 }).toBe('done');
     // Before hearsay-tools/squawk#3337 admission refused this resume: "no agent session to resume".
-    expect(store.readEvents(record.id).some(event => String(event.message ?? '').includes('could not start'))).toBe(false);
+    expect(store.eventLog.readEvents(record.id).some(event => String(event.message ?? '').includes('could not start'))).toBe(false);
   }, 40_000);
 
   it('runs the steps after the failed one once a provider retry succeeds', async () => {
@@ -537,7 +537,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     expect(store.getRun(waiting.id)?.status).not.toBe('queued');
     expect(
       store
-        .readEvents(waiting.id)
+        .eventLog.readEvents(waiting.id)
         .some((event) => String(event.message ?? '').includes('held in the queue')),
     ).toBe(false);
   }, 60_000);
@@ -566,7 +566,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     expect(manager.accountHolds().deadline.size).toBe(0);
     expect(
       store
-        .readEvents(record.id)
+        .eventLog.readEvents(record.id)
         .some((event) => String(event.message ?? '').includes('automatic resume cancelled')),
     ).toBe(true);
   }, 40_000);
@@ -692,7 +692,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();
     expect(store.getRun(record.id)?.status).toBe('failed');
     expect(store.getRun(record.id)?.steps.some((step) => step.id === 'continue-1')).toBe(false);
-    const events = store.readEvents(record.id);
+    const events = store.eventLog.readEvents(record.id);
     expect(events.some((event) => String(event.message ?? '').includes('automatic resume expired'))).toBe(true);
   }, 40_000);
 
@@ -758,7 +758,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     // resume that will never come.
     await expect.poll(() => store.getRun(record.id)?.autoResumeAt, { timeout: 20_000 }).toBeUndefined();
     expect(store.getRun(record.id)?.status).toBe('failed');
-    const events = store.readEvents(record.id);
+    const events = store.eventLog.readEvents(record.id);
     expect(events.some((event) => String(event.message ?? '').includes('automatic resume cancelled'))).toBe(true);
   }, 30_000);
 
@@ -771,7 +771,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
 
     expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();
     expect(store.getRun(record.id)?.status).toBe('failed');
-    const events = store.readEvents(record.id);
+    const events = store.eventLog.readEvents(record.id);
     expect(events.some((event) => String(event.message ?? '').includes('automatic resume cap reached'))).toBe(true);
   }, 30_000);
 
@@ -799,7 +799,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
       )
       .toBe('done');
     expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
-    const events = store.readEvents(record.id);
+    const events = store.eventLog.readEvents(record.id);
     expect(events.some((event) => String(event.message ?? '').includes('resuming automatically (1/12)'))).toBe(true);
   }, 40_000);
   it('re-arms a waiting usage-limit run across a restart without reopening it', async () => {
@@ -891,6 +891,6 @@ describe('a run stopped by a usage limit resumes itself', () => {
     await expect
       .poll(() => [...(store.getRun(record.id)?.waits ?? []), ...(store.getRun(record.id)?.lastWaits ?? [])].find((wait) => wait.id === timerId)?.phase, { timeout: 20_000 })
       .toBe('delivered');
-    expect(store.readEvents(record.id).some((event) => String(event.message ?? '').includes('resuming automatically (1/12)'))).toBe(true);
+    expect(store.eventLog.readEvents(record.id).some((event) => String(event.message ?? '').includes('resuming automatically (1/12)'))).toBe(true);
   }, 60_000);
 });

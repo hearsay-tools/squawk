@@ -60,21 +60,21 @@ describe('RunManager memory guard', () => {
   }
 
   function pauses(id: string) {
-    return f.store.readEvents(id).filter(event => event.type === 'lifecycle'
+    return f.store.eventLog.readEvents(id).filter(event => event.type === 'lifecycle'
       && typeof event.message === 'string' && event.message.startsWith('paused — memory limit exceeded'));
   }
 
   it('ignores an active run before its session attaches and preserves autonomous startup', async () => {
     let sampled = false;
-    let addedEvents: ReturnType<typeof f.store.readEvents> = [];
-    const append = f.store.appendEvent.bind(f.store);
-    vi.spyOn(f.store, 'appendEvent').mockImplementation((id, event) => {
+    let addedEvents: ReturnType<typeof f.store.eventLog.readEvents> = [];
+    const append = f.store.eventLog.appendEvent.bind(f.store.eventLog);
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       const result = append(id, event);
       if (event.type === 'step-start') {
         expect(f.manager.isActive(id)).toBe(true);
-        const before = f.store.readEvents(id);
+        const before = f.store.eventLog.readEvents(id);
         sample(id);
-        addedEvents = f.store.readEvents(id).slice(before.length);
+        addedEvents = f.store.eventLog.readEvents(id).slice(before.length);
         sampled = true;
       }
       return result;
@@ -97,12 +97,12 @@ describe('RunManager memory guard', () => {
     expect(session.end).toHaveBeenCalledOnce();
     expect(session.open).toBe(true);
     expect(pauses(id)).toMatchObject([{ message: 'paused — memory limit exceeded (20 MiB > 10 MiB)' }]);
-    expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
+    expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'note', message: expect.stringContaining('resume it with Continue'),
     })]));
     emit({ type: 'turn-end' });
     expect(session.sendAgentMessage).not.toHaveBeenCalledWith([{ type: 'text', text: AUTONOMOUS_NUDGE }], []);
-    expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
+    expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'note', message: expect.stringContaining(NO_WAIT_NUDGE_NOTE),
     })]));
     close();

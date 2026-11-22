@@ -60,9 +60,9 @@ async function sendHeldFollowUp(backend: string, continuation: boolean, releaseF
     store.updateRun(runId, { autonomous: true });
   }
   // The first run's park armed its own idle timer; the Continue's turn starts after it.
-  const start = { seq: store.readEvents(runId).length, armed: cell.clock().captured };
+  const start = { seq: store.eventLog.readEvents(runId).length, armed: cell.clock().captured };
   if (continuation) expect(manager.continueRun(runId, { text: promptFor(backend, 'hold-gated') }).ok).toBe(true);
-  await waitFor(() => store.readEvents(runId).slice(start.seq).some(e => e.type === 'turn.started'), STEP_MS);
+  await waitFor(() => store.eventLog.readEvents(runId).slice(start.seq).some(e => e.type === 'turn.started'), STEP_MS);
   expect(manager.sendMessage(runId, [{ type: 'text', text: followUpText(backend) }])).toBe(true);
   writeFileSync(releaseFile, '');
   return start;
@@ -79,10 +79,10 @@ async function assertRefusedUntilIdle(backend: string, { store, manager, runId }
   expect(store.getRun(runId)?.status).toBe('running');
   expect(manager.isActive(runId)).toBe(true);
   expect(cell.semaphore.busy()).toBe(1);
-  expect(continued(store.readEvents(runId).slice(start.seq))).toEqual([]);
+  expect(continued(store.eventLog.readEvents(runId).slice(start.seq))).toEqual([]);
   const sent = vi.spyOn(session, 'sendAgentMessage');
   await cell.clock().advance(IDLE_TIMEOUT_MS);
-  expect(store.readEvents(runId).some(e => e.type === 'lifecycle' && String(e.message).includes('of inactivity'))).toBe(true);
+  expect(store.eventLog.readEvents(runId).some(e => e.type === 'lifecycle' && String(e.message).includes('of inactivity'))).toBe(true);
   await waitFor(() => !manager.isActive(runId), STEP_MS);
   expect(cell.semaphore.busy()).toBe(0);
   expect(store.getRun(runId)?.status).toBe('waiting');
@@ -98,7 +98,7 @@ async function assertRefusedUntilIdle(backend: string, { store, manager, runId }
  *  the run continues to its done. */
 async function assertNudgeAdmitted({ store, runId }: Fixture, start: Start, cell: Cell): Promise<void> {
   await waitFor(() => store.getRun(runId)?.status === 'done', STEP_MS);
-  expect(continued(store.readEvents(runId).slice(start.seq)).length).toBeGreaterThanOrEqual(1);
+  expect(continued(store.eventLog.readEvents(runId).slice(start.seq)).length).toBeGreaterThanOrEqual(1);
   expect(cell.clock().captured).toBe(start.armed);
 }
 

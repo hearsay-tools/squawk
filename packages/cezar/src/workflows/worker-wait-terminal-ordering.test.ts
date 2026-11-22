@@ -38,7 +38,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
   it('preserves a delegated parent ask across restart and never uses a lifecycle prompt as its answer', async () => {
     const p = await parent('mock:cezar-ask'); const w = await worker(p.id);
-    await until(() => store.readEvents(p.id).some(e => e.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(e => e.type === 'ask.requested'));
     const delegation = store.getRun(p.id)!.delegation!;
     if (delegation.role !== 'root') throw Error('fixture');
     // hearsay-tools/cezarion#1235: upgraded into a list entry, an overdue wait would wake beside the
@@ -49,13 +49,13 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.status).toBe('waiting');
     expect(manager.isActive(p.id)).toBe(false);
     expect(manager.continueRun(p.id).ok).toBe(false);
-    expect(store.readEvents(p.id).filter(e => e.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'human-input-delivered')).toEqual([]);
     expect(manager.continueRun(p.id, { text: 'Vitest' }).ok).toBe(true);
     // hearsay-tools/cezarion#1235: the answer withdraws nothing; the answered turn parks on the wait.
     await until(() => store.getRun(p.id)?.status === 'waiting' && waitOf(store.getRun(p.id))?.phase === 'parked' &&
-      store.readEvents(p.id).some(e => e.type === 'human-input-delivered'));
+      store.eventLog.readEvents(p.id).some(e => e.type === 'human-input-delivered'));
     expect(waitOf(store.getRun(p.id))).toMatchObject({ id: wait.id, workerIds: [w.id] });
-    expect(store.readEvents(p.id).filter(e => e.type === 'human-input-delivered')).toHaveLength(1);
+    expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'human-input-delivered')).toHaveLength(1);
   });
   // hearsay-tools/squawk#3337: a failed parent clears its wait but leaves unfinished children running.
   it('parent failed clears wait and keeps unfinished children, preserving terminal artifacts', async () => {
@@ -95,7 +95,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     reopened.flush();
     manager.cancel(blocker.id);
     await until(() => store.getRun(p.id)?.status === 'waiting');
-    expect(store.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
   });
   it('backend activity restores an executing parent slot without withdrawing its durable wait', async () => {
     const p = await parent(); const w = await worker(p.id);

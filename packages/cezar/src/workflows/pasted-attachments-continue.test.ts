@@ -131,7 +131,7 @@ describe('pasted screenshots materialize to disk and reach the agent as file pat
       expect(opening?.userText).toContain(join(directory, 'pasted-2.png'));
       if (mode === 'missing') {
         expect(opening?.userText).not.toContain(join(directory, 'pasted-1.pdf'));
-        expect(fx.store.readEvents(record.id).some((event) => event.type === 'note' && String(event.message).includes('pasted-1.pdf could not be read'))).toBe(true);
+        expect(fx.store.eventLog.readEvents(record.id).some((event) => event.type === 'note' && String(event.message).includes('pasted-1.pdf could not be read'))).toBe(true);
       } else {
         expect(opening?.userText).toContain(join(directory, 'pasted-1.pdf'));
         expect(readFileSync(join(directory, 'pasted-1.pdf'), 'utf8')).toBe(TINY_PDF);

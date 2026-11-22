@@ -35,7 +35,7 @@ export const OWNED_WORKFLOWS_GROUPS = {
             expect(run.steps.map(step => ({ id: step.id, kind: step.kind, status: step.status }))).toEqual([
               { id: 'inspect', kind: STEP_KIND.agent, status: STEP_STATUS.done }, { id: 'verify', kind: STEP_KIND.check, status: STEP_STATUS.done },
             ]);
-            expect(store.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
             if (run.delegation?.role !== 'worker') throw new Error('expected worker');
             expect(readFileSync(cwdFile, 'utf8')).toBe(run.delegation.workspace.path);
           }, { workflowDef });
@@ -72,7 +72,7 @@ export const OWNED_WORKFLOWS_GROUPS = {
             manager.enqueueOwnedRun(runId);
             // The native probe skill returns text without tools. Its parent then asks it to finish.
             await waitFor(() => store.getRun(runId)?.status === 'waiting', 30_000);
-            expect(store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+            expect(store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
             await answer(promptFor(backend, 'cezar-done'));
             await waitFor(() => !manager.isActive(runId), 30_000);
             const run = store.getRun(runId)!;

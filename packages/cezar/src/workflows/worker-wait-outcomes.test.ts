@@ -24,7 +24,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     try {
       await until(() => store.getRun(w.id)?.status === 'waiting', explain);
       await until(() => store.getRun(blocker.id)?.status === 'running' &&
-        store.readEvents(blocker.id).some(event => event.type === 'turn.started'), explain);
+        store.eventLog.readEvents(blocker.id).some(event => event.type === 'turn.started'), explain);
       manager.finish(w.id);
       await until(() => terminal.includes(store.getRun(w.id)?.status ?? ''), explain);
       // Terminal status precedes execution cleanup; only the resolved wait proves the wake is owed.
@@ -42,7 +42,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
       const own = store.getRun(p.id)?.agentInputs?.filter(input => input.conversation?.senderRunId !== w.id);
       expect(own).toHaveLength(1);
       expect(own?.[0]).toMatchObject({ id: wake?.wakeId, source: 'lifecycle', parentRunId: p.id, deliveredAt: expect.any(String) });
-      expect(store.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
     } finally { writeFileSync(release, ''); }
   });
 
@@ -57,7 +57,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
       expect(inputs).toHaveLength(1);
       expect(inputs?.[0]?.text).toContain(a.id); expect(inputs?.[0]?.text).toContain(status);
       expect(inputs?.[0]?.text).toContain(b.id); expect(inputs?.[0]?.text).toContain('queued');
-      expect(store.readEvents(p.id).filter(e => e.type === 'worker-outcome')).toHaveLength(1);
+      expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'worker-outcome')).toHaveLength(1);
     });
   }
   it('delivers all 32 terminal outcomes within the input bound without dropping durable summaries', async () => {
@@ -73,7 +73,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const input = store.getRun(p.id)?.agentInputs?.[0];
     expect(input?.text.length).toBeLessThanOrEqual(100_000);
     for (const id of ids) expect(input?.text).toContain(id);
-    expect(store.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(32);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(32);
   });
 
   it('observes completion between registration and park and reports every selected status', async () => {
@@ -97,7 +97,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const input = store.getRun(p.id)?.agentInputs?.[0];
     for (const child of children) expect(input?.text).toContain(JSON.stringify({ workerId: child.run.id, status: child.status }));
     expect(input?.id).toBe(wait.id);
-    expect(store.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(4);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(4);
   });
 
 });

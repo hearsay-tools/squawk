@@ -34,10 +34,10 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const recovered = await fixture.restart();
         expect(recovered.manager.continueRun(runId, { text: 'baseline retry' }).ok).toBe(true);
         await waitFor(() => recovered.store.getRun(runId)?.status === 'waiting');
-        const texts = recovered.store.readEvents(runId).filter(event => event.type === 'text').map(event => event.text);
+        const texts = recovered.store.eventLog.readEvents(runId).filter(event => event.type === 'text').map(event => event.text);
         expect(texts.some(text => typeof text === 'string' && text.includes('reject-owned-turn'))).toBe(true);
         expect(recovered.store.getRun(runId)?.agentInputs).toEqual([delivered(input, recovered.store.getRun(runId)?.agentInputs?.[0])]);
-        expect(recovered.store.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
+        expect(recovered.store.eventLog.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
       });
     });
   }, 60_000);

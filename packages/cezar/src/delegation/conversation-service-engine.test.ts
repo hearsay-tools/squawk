@@ -146,7 +146,7 @@ describe('durable conversations', () => {
   });
   it('does not let --resume answer a human question or allow a worker to resume its parent', async () => {
     const w = await completedWorker();
-    f.store.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Approval', question: 'May I proceed?', options: [{ label: 'Yes' }, { label: 'No' }] }] });
+    f.store.eventLog.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Approval', question: 'May I proceed?', options: [{ label: 'Yes' }, { label: 'No' }] }] });
     await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'progress', text: 'Work', timeoutSeconds: 600, resume: true })).rejects.toThrow(/human question/);
     setRunStatus(f.store, w.id, RUN_STATUS.running);
     await expect(f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'progress', text: 'Work', timeoutSeconds: 600, resume: true })).rejects.toMatchObject({ code: 'denied_scope' });

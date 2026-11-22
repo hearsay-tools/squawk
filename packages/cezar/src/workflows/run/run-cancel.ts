@@ -120,7 +120,7 @@ export class RunCancel {
   private stopFailedRun(run: RunRecord, hadWaits: boolean, retiredRefusal: boolean): boolean {
     const liveWorkers = (isFamilyRecord(run) ? familyWorkers(this.context.store, run) : supervisedWorkers(this.context.store, run)).filter(isLiveWorker);
     if (!hadWaits && !retiredRefusal && !liveWorkers.length) return false;
-    if (hadWaits || retiredRefusal) this.context.store.appendEvent(run.id, { type: 'note', message: hadWaits ? WAITS_DISCARDED_NOTE : REFUSAL_DISCARDED_NOTE });
+    if (hadWaits || retiredRefusal) this.context.store.eventLog.appendEvent(run.id, { type: 'note', message: hadWaits ? WAITS_DISCARDED_NOTE : REFUSAL_DISCARDED_NOTE });
     this.host.cancelAutoResume(run.id);
     for (const child of liveWorkers) this.cancel(child.id);
     this.context.store.flush();

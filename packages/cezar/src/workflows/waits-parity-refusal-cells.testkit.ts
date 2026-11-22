@@ -37,8 +37,8 @@ export function refusalCells(runners: string[], it: typeof registerTest = regist
         // The run as the nudge note is written: the note follows the submission and the charge.
         let atNudge: { status?: string; waits?: Wait[]; automaticWakes?: number | undefined; delegation?: unknown } | undefined;
         const publicationFailures: unknown[] = [];
-        const append = store.appendEvent.bind(store);
-        vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+        const append = store.eventLog.appendEvent.bind(store.eventLog);
+        vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
           if (id === p.id && event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE) && !atNudge) {
             const run = store.getRun(p.id)!;
             try {
@@ -61,7 +61,7 @@ export function refusalCells(runners: string[], it: typeof registerTest = regist
         expect(publicationFailures).toEqual([]);
         expect(atNudge!.delegation).not.toHaveProperty('wait');
         expect(atNudge!.delegation).not.toHaveProperty('completion');
-        expect(store.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)))
+        expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)))
           .toEqual([expect.objectContaining({ message: `${COMPLETION_NUDGE_NOTE} (${wakes + 1}/${MAX_AUTO_CONTINUES}): ${settledWorker ? 'workers_uncollected' : 'workers_outstanding'}` })]);
         // The turn end writes nothing to the handoff file (hearsay-tools/cezarion#1809).
         expect(readFileSync(handoffPath(join(root, '.ai/cezar'), p.id), 'utf8')).not.toMatch(/turn complete|status=/);

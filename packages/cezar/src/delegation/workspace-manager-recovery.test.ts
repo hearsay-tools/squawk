@@ -49,7 +49,7 @@ describe('RunManager.enqueueOwnedRun', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, (
     expect(['done', 'review']).toContain(run.status);
     expect(run).toMatchObject({ worktreePath: workspace.path, branch: workspace.branch, baseBranch: second, runner: 'claude', model: 'sonnet', systemPrompt: 'Inherited worker instruction' });
     expect(run.worktree).toBeUndefined(); // Persisted isolation is absence of the explicit opt-out.
-    expect(store.readEvents(run.id).filter(event => event.type === 'step-start')).toHaveLength(1);
+    expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'step-start')).toHaveLength(1);
     expect(git(parentPath, 'rev-parse', 'HEAD')).toBe(second);
     expect(await readFile(join(parentPath, 'tracked.txt'), 'utf8')).toBe('dirty');
     expect(await readFile(join(workspace.path, 'tracked.txt'), 'utf8')).toBe('committed');
@@ -71,7 +71,7 @@ describe('RunManager.enqueueOwnedRun', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, (
     await finished(store, run.id);
     expect(run.status).toBe('failed');
     expect(run.error).toContain('worktree creation failed');
-    expect(store.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
+    expect(store.eventLog.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
   }, RUN_SETTLE_TEST_MS);
 
   it('rejects missing/root/terminal/destroying records before queueing', async () => {
@@ -104,7 +104,7 @@ describe('owned workspace continuation and queued recovery', { timeout: WORKSPAC
     await finished(store, run.id);
     expect(run.status).toBe('failed');
     expect(run.error).toContain('owned workspace unavailable');
-    expect(store.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
+    expect(store.eventLog.readEvents(run.id).some(event => event.type === 'step-start')).toBe(false);
     if (failure === 'missing') expect(existsSync(workspace.path)).toBe(false);
   }, RUN_SETTLE_TEST_MS);
 

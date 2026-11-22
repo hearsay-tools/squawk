@@ -61,7 +61,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     setRunStatus(store, p.id, RUN_STATUS.done);
     for (const id of [p.id, w.id]) expect(isLiveRecord(store.getRun(id)!)).toBe(false);
     const dataDir = join(root, '.ai/cezar'); const files = join(dataDir, 'runs');
-    const before = store.readEvents(w.id);
+    const before = store.eventLog.readEvents(w.id);
     expect(before.length).toBeGreaterThan(0);
     store.flush(); store.close();
     writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
@@ -80,7 +80,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
     expect(store.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
     expect(store.getRun(w.id)?.status).toBe('done'); expect(store.getRun(p.id)?.status).toBe('done');
-    const events = store.readEvents(w.id);
+    const events = store.eventLog.readEvents(w.id);
     const repaired = events.filter(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)));
     expect(repaired).toHaveLength(1);
     expect(repaired[0]!.seq).toBeGreaterThan(before.at(-1)!.seq);
@@ -123,7 +123,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
         await until(() => !survivor.running);
         const next = store.workerExecutions.readWorkerExecution(w.id)!;
         expect(next.generation).not.toBe(proof.generation);
-        const lifecycle = store.readEvents(w.id).filter(e => e.type === 'lifecycle').map(e => String(e.message));
+        const lifecycle = store.eventLog.readEvents(w.id).filter(e => e.type === 'lifecycle').map(e => String(e.message));
         expect(lifecycle.filter(message => /Continue stopped the processes/.test(message))).toHaveLength(1);
         expect(lifecycle.some(message => /execution was finalized/.test(message))).toBe(true);
         await until(() => store.getRun(w.id)?.status === 'waiting');
@@ -272,8 +272,8 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       // Exit proof, not abandonment: the generation completes and nothing cancels the task.
       expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
       expect(store.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
-      expect(store.readEvents(w.id).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(true);
-      expect(store.readEvents(w.id).some(e => e.type === 'lifecycle' && /abandoned/.test(String(e.message)))).toBe(false);
+      expect(store.eventLog.readEvents(w.id).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(true);
+      expect(store.eventLog.readEvents(w.id).some(e => e.type === 'lifecycle' && /abandoned/.test(String(e.message)))).toBe(false);
       expect(manager.finish(p.id)).toBe(false); // earlier partial collection cannot authorize Finish
       // A live mutation keeper must not be stolen, and the destroy must give up on it rather than
       // wait for it: the keeper is released only after the destroy returns. The timer ends a red

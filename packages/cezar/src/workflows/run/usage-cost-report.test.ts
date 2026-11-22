@@ -32,7 +32,7 @@ describe('reported cost follows the runner\'s declared cost report', () => {
   afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
 
   function report(runId: string, stepId: string, state: ReturnType<typeof createActiveRun>, backend: string, usd: number) {
-    store.appendEvent(runId, { type: 'cost', stepId, usd });
+    store.eventLog.appendEvent(runId, { type: 'cost', stepId, usd });
     recordReportedCost(store, runId, stepId, state, backend, usd);
   }
 
@@ -72,7 +72,7 @@ describe('reported cost follows the runner\'s declared cost report', () => {
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }] });
     store.updateStep(run.id, 'work', { backend: 'codex', sessionId: 'session-1' });
     // The process logged a report of 2 and exited before the step total was written.
-    store.appendEvent(run.id, { type: 'cost', stepId: 'work', usd: 2 });
+    store.eventLog.appendEvent(run.id, { type: 'cost', stepId: 'work', usd: 2 });
     const restarted = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
     beginUsageInvocation(store, run.id, restarted, 'work');
     report(run.id, 'work', restarted, 'codex', 5);

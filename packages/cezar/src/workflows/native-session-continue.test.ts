@@ -105,7 +105,7 @@ describe('Continue after a crash before the native session event', () => {
       finishedAt: new Date().toISOString(), workflowDef, worktree: false, error: 'boom',
     });
     if (options.launched) {
-      store.appendEvent(created.id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
+      store.eventLog.appendEvent(created.id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
     }
     store.updateStep(created.id, 'implement', { status: STEP_STATUS.failed, iterations: 1, sessionId, backend, error: 'boom' });
     return created.id;
@@ -116,7 +116,7 @@ describe('Continue after a crash before the native session event', () => {
     const read = () => rows(existsSync(argsFile) ? readFileSync(argsFile, 'utf8') : '');
     // A turn that ended or a run that settled has written whatever its mock records.
     const settled = () => ['failed', 'review', 'done'].includes(store.getRun(runId)?.status ?? '')
-      || store.readEvents(runId).some(event => event.type === 'turn-end');
+      || store.eventLog.readEvents(runId).some(event => event.type === 'turn-end');
     // bound: hang guard; the turn's first request on the wire is the product signal.
     await waitFor(() => wireOf(backend).started(read()) || settled(), 30_000);
     if (!existsSync(argsFile)) {
@@ -143,7 +143,7 @@ describe('Continue after a crash before the native session event', () => {
       expect(wireOf(backend).effort(wire)).toBe('high');
       if (source === 'native') {
         // bound: hang guard; the runner reports its own id, which the Continue step records.
-        await waitFor(() => store.readEvents(id).some(event => event.type === 'session' && event.stepId === 'continue-1'), 15_000);
+        await waitFor(() => store.eventLog.readEvents(id).some(event => event.type === 'session' && event.stepId === 'continue-1'), 15_000);
         expect(store.getRun(id)?.steps.find(step => step.id === 'continue-1')?.sessionId).not.toBe(LAUNCH_SESSION_ID);
       }
     }, 60_000);

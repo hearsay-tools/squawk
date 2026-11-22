@@ -212,10 +212,10 @@ describe('authenticated delegation HTTP family', () => {
   it.each(['stop', 'destroy'])('rejects malformed %s without lifecycle or intent changes, while accepting empty bodies', async operation => {
     const { workerId } = await spawn();
     const before = structuredClone(f.store.getRun(workerId));
-    const events = f.store.readEvents(workerId);
+    const events = f.store.eventLog.readEvents(workerId);
     const response = await app.request(`http://127.0.0.1/${workerId}/${operation}`, { method: 'POST', headers: { host: '127.0.0.1', authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: '{' });
     expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ code: 'invalid_input' });
-    expect(f.store.getRun(workerId)).toEqual(before); expect(f.store.readEvents(workerId)).toEqual(events);
+    expect(f.store.getRun(workerId)).toEqual(before); expect(f.store.eventLog.readEvents(workerId)).toEqual(events);
     for (const body of [undefined, {}]) {
       const accepted = await request(`/${workerId}/${operation}`, body, {}, 'POST');
       expect(accepted.status).toBe(200);
@@ -229,7 +229,7 @@ describe('authenticated delegation HTTP family', () => {
     const wait = await request('/wait', { workerIds: [workerId] }); expect(delegationErrorResponseSchema.parse(await wait.json()).code).toBe('incompatible_state');
     const stop = await request(`/${workerId}/stop`, {}); expect(workerStopResultSchema.parse(await stop.json())).toEqual({ workerId, state: 'terminated' });
     const destroy = await request(`/${workerId}/destroy`, {}); expect(workerDestroyResultSchema.parse(await destroy.json())).toEqual({ workerId, state: 'complete', remaining: [] });
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.readEvents(workerId))).not.toContain(f.token);
+    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
   });
   it.each(['', 'Bearer bad', 'Basic ignored'])('rejects invalid credentials %s', async authorization => {
     const response = await request('/spawn', { task: 'x', baseline: 'HEAD', requestId: randomUUID() }, { authorization });

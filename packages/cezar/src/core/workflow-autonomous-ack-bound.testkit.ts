@@ -34,15 +34,15 @@ type Fixture = { store: RunStore; manager: RunManager; runId: string };
 type Cell = { semaphore: WorkspaceSemaphore; clock: () => ReturnType<typeof observationClock>; state: () => activeRuns.ActiveRun };
 
 const notesOf = (store: RunStore, runId: string, text: string) =>
-  store.readEvents(runId).filter(e => e.type === 'note' && String(e.message).includes(text));
+  store.eventLog.readEvents(runId).filter(e => e.type === 'note' && String(e.message).includes(text));
 
 /** The held row: the bound is armed while the nudge waits for its acknowledgement, the run keeps
  *  running until it expires, then it notes the nudge and settles `waiting` once the process exits.
  *  Where the wire still runs the nudge's turn (`replies`), its activity stops the bound, and the turn
  *  end that finds the acknowledgement missing arms it again. */
 async function assertBoundCloses({ store, manager, runId }: Fixture, cell: Cell): Promise<void> {
-  const nudged = () => store.readEvents(runId).findIndex(e => e.type === 'note' && String(e.message).includes('continuing without pausing'));
-  const replied = () => nudged() >= 0 && store.readEvents(runId).slice(nudged()).some(e => e.type === 'text');
+  const nudged = () => store.eventLog.readEvents(runId).findIndex(e => e.type === 'note' && String(e.message).includes('continuing without pausing'));
+  const replied = () => nudged() >= 0 && store.eventLog.readEvents(runId).slice(nudged()).some(e => e.type === 'text');
   await waitFor(() => nudged() >= 0 && replied() && cell.clock().pending > 0, STEP_MS);
   // One bound at the submission; a reply stopped it and its turn end armed a second.
   expect(cell.clock().captured).toBe(2);

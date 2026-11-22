@@ -329,7 +329,7 @@ export class InputDelivery {
     if (this.host.executionBlockedByRootFinish(run)) throw new DelegationPolicyError('incompatible_state', 'parent finish is pending');
     const queue = enqueueAgentInput(run, input);
     this.context.store.commitAgentInputs(runId, queue);
-    this.context.store.appendEvent(runId, { type: 'agent-input', input: queue[queue.length - 1] });
+    this.context.store.eventLog.appendEvent(runId, { type: 'agent-input', input: queue[queue.length - 1] });
     this.flushAgentInputs(runId);
     const error = this.host.active.get(runId)?.inputState.agentInputError;
     if (error) throw new DelegationPolicyError('incompatible_state', error);
@@ -356,7 +356,7 @@ export class InputDelivery {
   latchAgentInputError(runId: string, state: ActiveRun, session: AgentSession, message: string): void {
     state.inputState.recordInputError(message);
     try { transitionTurnBoundary(runId, state, { kind: 'input-error', phase: 'interrupt', session }, { interruptSession: wire => wire.interrupt() }); } finally {
-      try { this.context.store.appendEvent(runId, { type: 'error', message }); }
+      try { this.context.store.eventLog.appendEvent(runId, { type: 'error', message }); }
       catch { console.error(`[hsq] ${message}`); }
     }
   }
@@ -410,7 +410,7 @@ export class InputDelivery {
     // It withdraws no wait (hearsay-tools/cezarion#1235).
     if (this.host.isActive(runId)) return;
     const result = this.host.continueRun(runId, { text, answerInputId: reply.id }, true);
-    if (!result.ok) this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: `parent answer not delivered: ${result.error}` });
+    if (!result.ok) this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: `parent answer not delivered: ${result.error}` });
     else if (fallback) this.host.workerQuestions.chargeWorkerFallbackReply(runId);
   }
 
@@ -433,7 +433,7 @@ export class InputDelivery {
     const opensTurn = state.boundary.atTurnBoundary === session;
     if (!handToTransport(state, session, delivered, wire => wire.sendMessage(content))) return;
     state.inputState.markTurnOpeners(delivered, opensTurn);
-    this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
+    this.context.store.eventLog.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
     inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
     if (this.host.line.retireAdmission(runId)) transitionTurnBoundary(state, { kind: 'input-ack', phase: 'wake-turn', session: state.liveSession.session });
@@ -501,7 +501,7 @@ export class InputDelivery {
       if (retried.length) {
         for (const id of retried) state.inputState.forgetUnreadInput(id);
         try { this.context.store.commitAgentInputsUnconfirmed(runId, retried); } catch { /* receipt stays awaiting; a restart replays it */ }
-        this.context.store.appendEvent(runId, { type: 'note', message: unreadInputUnconfirmedNote(retried.length) });
+        this.context.store.eventLog.appendEvent(runId, { type: 'note', message: unreadInputUnconfirmedNote(retried.length) });
       }
       if (fresh.length) {
         state.inputState.prepareUnreadRetry();
@@ -539,7 +539,7 @@ export class InputDelivery {
         }
         if (Date.now() - (state.inputState.heldHumanInputSince ?? 0) >= this.host.unreadInputGraceMs()) {
           const held = session.heldHumanInputCount?.() ?? 0;
-          this.context.store.appendEvent(runId, {
+          this.context.store.eventLog.appendEvent(runId, {
             type: 'note',
             message: held > 0
               ? unreadInputUnconfirmedNote(held)
@@ -637,7 +637,7 @@ export class InputDelivery {
   private noteAcceptedDone(runId: string, inputIds: readonly string[]): ReturnType<typeof acceptedDoneDelivery> {
     const run = this.context.store.getRun(runId);
     if (!run?.doneAccepted) return undefined;
-    const delivery = acceptedDoneDelivery(run, this.context.store.readEvents(runId), inputIds);
+    const delivery = acceptedDoneDelivery(run, this.context.store.eventLog.readEvents(runId), inputIds);
     if (delivery === 'free') spendDoneFreeTurn(this.context.store, runId);
     return delivery;
   }
@@ -732,7 +732,7 @@ export class InputDelivery {
     if (spent !== undefined) {
       flightWrites.reserve(flight, false);
       const kind = !timers.length && peers.length ? 'peer message' : waitDeliveryLabel(timers);
-      this.context.store.appendEvent(runId, { type: 'note', message: `automatic ${kind} wake-up (${spent}/${this.maxAutoContinues})` });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', message: `automatic ${kind} wake-up (${spent}/${this.maxAutoContinues})` });
     }
     // A wake of results always spends its admission; a wake of messages alone, only one it holds.
     if (resumes && (this.host.line.retireAdmission(runId) || resolvedIds.length > 0)) {
@@ -886,7 +886,7 @@ export class InputDelivery {
     // its parent, so refuse it before accepting a held message as well as before delivery.
     this.host.workerQuestions.supersedeWorkerFallback(runId);
     if (!this.host.workerQuestions.answeredElsewhere(runId)) return true;
-    this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: this.routedQuestionRefusal });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: this.routedQuestionRefusal });
     return false;
   }
 
@@ -913,7 +913,7 @@ export class InputDelivery {
   }
 
   private recordHumanMessage(runId: string, state: ActiveRun, content: PastedContent[], persisted: PersistedAttachment[]): void {
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'user-message', stepId: state.liveSession.currentStepId,
       text: content.filter(block => block.type === 'text').map(block => block.text).join('\n'),
       imageCount: content.filter(block => block.type === 'image').length,
@@ -929,7 +929,7 @@ export class InputDelivery {
     // A human message starts a fresh completion cycle (hearsay-tools/cezarion#1301).
     startCompletionCycle(state);
     if (answeringAskSeq !== undefined) {
-      this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq: answeringAskSeq });
+      this.context.store.eventLog.appendEvent(runId, { type: 'human-input-delivered', askSeq: answeringAskSeq });
     }
     inputReceipts.commitAnswer(this.context, runId, state, { askSeq: answeringAskSeq, bundle }, messageId);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) });

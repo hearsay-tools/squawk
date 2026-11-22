@@ -73,18 +73,18 @@ const entryOf = (runId: string, waitId: string): Wait | undefined => store.getRu
 const settledOf = (runId: string, waitId: string): Wait | undefined => store.getRun(runId)?.lastWaits?.filter(wait => wait.id === waitId).at(-1);
 const subagentWait = (runId: string): SubagentWaitEntry | undefined =>
   store.getRun(runId)?.waits?.find((wait): wait is SubagentWaitEntry => wait.kind === WAIT_KIND.subagent && wait.phase === WAIT_PHASE.open);
-const turnEnds = (runId: string) => store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+const turnEnds = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
 /** Wakes the waits spent: the record's count less the no-wait nudges, which the controlled wire's
  *  markerless reply to a wake earns as any turn end without a wait does. */
-const nudges = (runId: string) => store.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)).length;
+const nudges = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)).length;
 const wakes = (runId: string) => (store.getRun(runId)?.automaticWakes ?? 0) - nudges(runId);
 const inputsNaming = (runId: string, text: string) => (store.getRun(runId)?.agentInputs ?? []).filter(input => input.text.includes(text));
 
 /** The background children's `item.completed` events: id, status, title and step. */
-const backgroundEnds = (runId: string) => store.readEvents(runId).filter(event => event.type === 'item.completed' && (event.item as UiToolItem | undefined)?.background === true)
+const backgroundEnds = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'item.completed' && (event.item as UiToolItem | undefined)?.background === true)
   .map(event => [(event.item as UiToolItem).id, (event.item as UiToolItem).status, (event.item as UiToolItem).title, event.stepId]);
 /** The step a child's `item.started` was recorded under. */
-const startStep = (runId: string, childId: string) => store.readEvents(runId).find(event => event.type === 'item.started' && (event.item as UiToolItem | undefined)?.id === childId)?.stepId;
+const startStep = (runId: string, childId: string) => store.eventLog.readEvents(runId).find(event => event.type === 'item.started' && (event.item as UiToolItem | undefined)?.id === childId)?.stepId;
 
 /** A backgrounded native subagent's root task item, as a runner mapper marks it. */
 const child = (id: string, status: ToolStatus, background = true): UiToolItem => ({
@@ -132,7 +132,7 @@ describe('the subagent wait (hearsay-tools/cezarion#2431)', () => {
     // It keeps its session and a monitoring slot, so the idle close never applies.
     expect(semaphore.busy()).toBe(1);
     await noIdleClose(id);
-    expect(store.readEvents(id).some(event => event.type === 'note' && String(event.message).startsWith('no wait or done'))).toBe(false);
+    expect(store.eventLog.readEvents(id).some(event => event.type === 'note' && String(event.message).startsWith('no wait or done'))).toBe(false);
   });
 
   for (const kind of ['peer', 'worker'] as const) {
@@ -408,9 +408,9 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
 
   it('an interruption whose transcript write fails keeps the wait open and retries, so the wait never outruns the activity view', async () => {
     const { id, wait } = await parkedOnSubagents();
-    const real = store.appendEvent.bind(store);
+    const real = store.eventLog.appendEvent.bind(store.eventLog);
     let refuse = true;
-    const append = vi.spyOn(store, 'appendEvent').mockImplementation((runId, event) => {
+    const append = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (refuse && event.type === 'item.completed') { refuse = false; throw Error('injected: disk full'); }
       return real(runId, event);
     });
@@ -479,9 +479,9 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
     await until(() => turnEnds(id) > turns && store.getRun(id)?.status === RUN_STATUS.waiting);
     expect(subagentWait(id)).toBeUndefined();
     const retry = observationClock(() => /\bat SubagentWaits\.armRetry \(/.test(new Error().stack ?? ''));
-    const real = store.appendEvent.bind(store);
+    const real = store.eventLog.appendEvent.bind(store.eventLog);
     let refuse = true;
-    const append = vi.spyOn(store, 'appendEvent').mockImplementation((runId, event) => {
+    const append = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (refuse && event.type === 'item.completed') { refuse = false; throw Error('injected: disk full'); }
       return real(runId, event);
     });
@@ -604,6 +604,6 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
     await until(() => settledOf(id, wait.id)?.phase === WAIT_PHASE.cancelled);
     await until(() => stateOf(store.getRun(id)!) === 'waiting:human');
     expect(store.getRun(id)?.waits).toEqual([expect.objectContaining({ kind: WAIT_KIND.human, source: WAIT_SOURCE.cezar, via: WAIT_VIA.budget })]);
-    expect(store.readEvents(id).some(event => event.type === 'note' && String(event.message).includes(`subagent wait ${wait.id} cancelled`))).toBe(true);
+    expect(store.eventLog.readEvents(id).some(event => event.type === 'note' && String(event.message).includes(`subagent wait ${wait.id} cancelled`))).toBe(true);
   });
 });

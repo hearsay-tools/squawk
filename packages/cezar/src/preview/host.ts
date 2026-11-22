@@ -32,7 +32,7 @@ export type RunContext = {
   title: string;
   worktreePath: string;
   dataDir: string;
-  store: RunLookup & Pick<RunEventLog, 'appendEvent'> & Partial<Pick<RunAccess, 'writeRefusal'> & { readonly workerExecutions: Pick<WorkerExecutions, 'spawnScope'> }>;
+  store: RunLookup & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Partial<Pick<RunAccess, 'writeRefusal'> & { readonly workerExecutions: Pick<WorkerExecutions, 'spawnScope'> }>;
 };
 
 export type PreviewTarget = { port: number } | { url: string } | { agent: true };
@@ -705,7 +705,7 @@ export class PreviewHost implements PreviewHostLike {
     const { runId, store } = entry.ctx;
     if (!store.getRun(runId)) return;
     const reason = dev.stopReason;
-    store.appendEvent(runId, {
+    store.eventLog.appendEvent(runId, {
       type: 'preview.server-state',
       port,
       state,

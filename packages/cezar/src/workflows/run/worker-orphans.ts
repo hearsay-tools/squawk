@@ -71,7 +71,7 @@ export class WorkerOrphans {
       if (!this.context.store.workerExecutions.commitWorkerExecutionComplete(runId, orphan.generation, { interrupted: true })) return false;
     } catch { return false; }
     this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.orphanDue.delete(runId);
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
     this.host.reapTerminalScratch(runId);
     return true;
   }
@@ -164,7 +164,7 @@ export class WorkerOrphans {
     if (!orphan && !(proof?.phase === 'complete' && proof.interrupted)) return;
     if (probe?.liveness !== 'alive' && this.context.store.workerExecutions.scopes.empty(runId)) return;
     this.context.store.workerExecutions.scopes.kill(runId);
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
     // Nothing new starts until the old processes are gone, so none keeps a port or a file.
     const deadline = Date.now() + waitMs;
     const pause = new Int32Array(new SharedArrayBuffer(4));

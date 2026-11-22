@@ -74,7 +74,7 @@ const seed = (dir, projectId) => {
   for (let i = 0; i < active + archived; i++) {
     const run = store.createRun({ title: `Tab task ${i}`, task: `Tab task ${i}`, workflow: 'quick-task', steps: [] })
     store.updateRun(run.id, taskList ? { createdAt: new Date(Date.now() - (active + archived - i) * 1000).toISOString(), status: i < active ? 'running' : 'done', archived: i >= active, inputTokens: 12345, outputTokens: 678, costUsd: 0.12, ...(i >= active ? { finishedAt: new Date().toISOString() } : {}) } : { status: 'done' })
-    store.appendEvent(run.id, { type: 'item.completed', item: { kind: 'message', id: 'initial', role: 'assistant', text: `Tab fixture transcript ${run.id}` } })
+    store.eventLog.appendEvent(run.id, { type: 'item.completed', item: { kind: 'message', id: 'initial', role: 'assistant', text: `Tab fixture transcript ${run.id}` } })
   }
   return store
 }
@@ -128,7 +128,7 @@ function startStreams(command) {
     const selected = command.runs ?? runs
     for (const run of selected) stores.get(run.projectId)?.updateRun(run.runId, { status: 'running' })
     timer = setInterval(() => {
-      for (const run of selected) stores.get(run.projectId)?.appendEvent(run.runId, { type: 'item.completed', item: { kind: 'message', id: `stream-${++published}`, role: 'assistant', text: `stream-${published}` } })
+      for (const run of selected) stores.get(run.projectId)?.eventLog.appendEvent(run.runId, { type: 'item.completed', item: { kind: 'message', id: `stream-${++published}`, role: 'assistant', text: `stream-${published}` } })
     }, 50)
   }
   if (command.summaryStreaming) {
@@ -151,7 +151,7 @@ const control = createServer(async (req, res) => {
     if (command.ephemeral) for (const run of command.runs ?? runs) {
       const target = stores.get(run.projectId)
       target.updateRun(run.runId, { status: 'running' })
-      const sink = new UiEventSink({ persist: event => target.appendEvent(run.runId, event), emitLive: event => target.emitEphemeral(run.runId, event) })
+      const sink = new UiEventSink({ persist: event => target.eventLog.appendEvent(run.runId, event), emitLive: event => target.eventLog.emitEphemeral(run.runId, event) })
       const item = { kind: 'message', id: `ephemeral-${++published}`, role: 'assistant', text: '' }
       sink.handle({ type: 'item.started', item })
       if (command.snapshot) sink.handle({ type: 'item.updated', item: { ...item, text: command.ephemeral } })
@@ -160,7 +160,7 @@ const control = createServer(async (req, res) => {
     }
     if (command.disconnect) server.closeAllConnections()
     indexCommand(command)
-    if (command.publish) for (const run of command.runs ?? runs) stores.get(run.projectId)?.appendEvent(run.runId, { type: 'item.completed', item: { kind: 'message', id: `publish-${++published}`, role: 'assistant', text: command.publish } })
+    if (command.publish) for (const run of command.runs ?? runs) stores.get(run.projectId)?.eventLog.appendEvent(run.runId, { type: 'item.completed', item: { kind: 'message', id: `publish-${++published}`, role: 'assistant', text: command.publish } })
   }
   res.setHeader('content-type', 'application/json')
   res.end(JSON.stringify({ runs, published, ticks, family, indexRoots, ...reports.state(), reportIo, listeners: [...stores].map(([projectId, value]) => { const count = subscriptions.get(value); return { projectId, event: count('run.event'), run: count('run.updated'), deleted: count('run.deleted') } }) }))

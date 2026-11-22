@@ -99,5 +99,5 @@ export class RunSkills {
     if (fresh.skills.some(skill => skill.id === id)) this.note(runId, `Skill "${id}" is available after the next Continue.`);
   }
 
-  private note(runId: string, message: string): void { this.context.store.appendEvent(runId, { type: 'note', message }); }
+  private note(runId: string, message: string): void { this.context.store.eventLog.appendEvent(runId, { type: 'note', message }); }
 }

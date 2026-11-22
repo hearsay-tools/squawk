@@ -36,19 +36,19 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
       register(p.id, [w.id]); manager.enqueueOwnedRun(w.id);
       try {
         await until(() => sessionOf(w.id).open);
-        const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+        const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
         manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15000)).toBe(true);
         // The wake turn's own frames reach the runner while its acknowledgement is held. The wake is
         // Squawk's text, so the mock answers it with its ordinary turn rather than an echo.
-        await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
+        await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
         await Promise.all(bookkeeping);
         store.flush(); // Earlier turn bookkeeping/debounce cannot satisfy the measured ACK checkpoint.
         const wake = structuredClone(store.getRun(p.id)?.agentInputs?.find(input => input.source === 'lifecycle'));
         expect(wake?.deliveredAt).toBeUndefined();
         const charged = store.getRun(p.id)?.automaticWakes ?? 0; // the first turn's nudge
         let disk: RunRecord | undefined;
-        const append = store.appendEvent.bind(store);
-        const checkpoint = vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+        const append = store.eventLog.appendEvent.bind(store.eventLog);
+        const checkpoint = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
           // The charge precedes its note. Read before forwarding so this event cannot flush it.
           if (id === p.id && event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)) {
             disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === p.id);
@@ -101,7 +101,7 @@ it('a portable human ask still takes precedence over an accepted nonfinal worker
     await until(() => sessionOf(run.id).open);
     const w = await worker(run.id); register(run.id, [w.id]);
     await until(() => store.getRun(run.id)?.status === 'waiting');
-    expect(store.readEvents(run.id).some(event => event.type === 'ask.requested')).toBe(true);
+    expect(store.eventLog.readEvents(run.id).some(event => event.type === 'ask.requested')).toBe(true);
     // hearsay-tools/cezarion#1235 phase 3a: the worker wait is an open list entry beside the
     // question, and the question's park, like a worker park, holds no slot.
     expect(workerEntryOf(store.getRun(run.id))).toMatchObject({ phase: WAIT_PHASE.open, workerIds: [w.id] });
@@ -114,7 +114,7 @@ it('a portable human ask still takes precedence over an accepted nonfinal worker
     await collect(w.id);
     expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Vitest mock:cezar-done' }])).toBe(true);
     await until(() => store.getRun(run.id)?.steps.find(step => step.id === 'next')?.status === 'done');
-    expect(store.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
+    expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
   });
 
 it('an ordinary earlier step advances to the next check on its done without a worker wait', async () => {

@@ -53,7 +53,7 @@ export const SETTLEMENT_GROUPS = {
             expect(manager.finish(runId)).toBe(true);
             await waitFor(() => !manager.isActive(runId) && store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete');
             const unrelated = seedSettledFamily(store, repoRoot);
-            const reads = vi.spyOn(store, 'readEvents');
+            const reads = vi.spyOn(store.eventLog, 'readEvents');
             try {
               cleanupCheckpoint(store, runId);
               expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
@@ -160,7 +160,7 @@ export const SETTLEMENT_GROUPS = {
                   expect(after.status).toBe(before.status);
                   expect(after.steps).toEqual(before.steps);
                   expect(after.finishedAt).toBeUndefined();
-                  expect(store.readEvents(runId).some(event => event.type === 'lifecycle' &&
+                  expect(store.eventLog.readEvents(runId).some(event => event.type === 'lifecycle' &&
                     (event.message === 'run finished' || (typeof event.message === 'string' && event.message.startsWith('changes ready for review'))))).toBe(false);
                 } finally {
                   release?.('changed');
@@ -285,7 +285,7 @@ export const SETTLEMENT_GROUPS = {
             await withOwnedInputRun(backend, 'ask', async ({ manager, store, runId, repoRoot }) => {
               manager.enqueueOwnedRun(runId);
               // bound: the public native or portable ask frame identifies the parked question.
-              await waitFor(() => store.readEvents(runId).some(event => event.type === 'ask.requested'));
+              await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'ask.requested'));
               const scratch = resolveAgentTmpDir(join(repoRoot, '.ai/cezar'), runId);
               writeFileSync(join(scratch, 'notes'), 'pending answer');
               // bound: the parked question, native or portable, arms its shipped idle timer.
@@ -330,13 +330,13 @@ export const SETTLEMENT_GROUPS = {
               await waitFor(() => !manager.isActive(runId));
               const closedWhileAsking = { active: manager.isActive(runId), status: store.getRun(runId)?.status, pendingAsk: hasPendingAsk(store, runId) };
               idle.restore();
-              const answerSeq = store.readEvents(runId).length;
+              const answerSeq = store.eventLog.readEvents(runId).length;
               // The reopened session does not hear its task again (hearsay-tools/squawk#3882), so the
               // answer carries the mock's plan to finish once answered.
               await answer(`${ask.answer}\n\nmock:resume-cezar-done`);
               // bound: the answer reopens the session, whose turn ends the run.
               await waitFor(() => !manager.isActive(runId) && ['done', 'review', 'failed'].includes(store.getRun(runId)?.status ?? ''), 30_000);
-              const events = store.readEvents(runId);
+              const events = store.eventLog.readEvents(runId);
               const run = store.getRun(runId);
               observation = {
                 closedWhileAsking, status: run?.status, pendingAsk: hasPendingAsk(store, runId),
@@ -371,11 +371,11 @@ export const SETTLEMENT_GROUPS = {
             const observation = await driveRun(backend, 'approval', run => !!run && ['done', 'review'].includes(run.status), 30_000, async ({ store, manager, runId }) => {
               // Continue builds ActiveRun at a second site. Old capabilities must stay
               // retired while a fresh native approval parks the resumed generation.
-              const first = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+              const first = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
               await waitFor(() => !manager.isActive(runId));
               expect(manager.continueRun(runId, { text: 'mock:approval' })).toEqual({ ok: true });
-              await waitFor(() => store.readEvents(runId).filter(event => event.type === 'permission.requested').length === 2);
-              const request = store.readEvents(runId).filter(event => event.type === 'permission.requested')[1]!;
+              await waitFor(() => store.eventLog.readEvents(runId).filter(event => event.type === 'permission.requested').length === 2);
+              const request = store.eventLog.readEvents(runId).filter(event => event.type === 'permission.requested')[1]!;
               expect(request.requestId).not.toBe(first.requestId);
               expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
               const old = (first.options as Array<{ id: string }>)[0]!;
@@ -387,9 +387,9 @@ export const SETTLEMENT_GROUPS = {
               autonomous: true,
               beforeStart: context => { repoRoot = context.repoRoot; },
               during: async ({ store, manager, runId }) => {
-                await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+                await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
                 expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
-                const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+                const request = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
                 const options = request.options as Array<{ id: string; label: string }>;
                 const choice = options.find(option => option.label.toLowerCase().includes(decision));
                 expect(choice).toBeDefined();
@@ -460,9 +460,9 @@ export const SETTLEMENT_GROUPS = {
             const observation = await driveRun(backend, 'mcp-approval', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
               beforeStart: context => { repoRoot = context.repoRoot; },
               during: async ({ store, manager, runId }) => {
-                await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+                await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
                 expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
-                const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+                const request = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
                 expect(request.title).toBe('Codex requests an MCP tool call');
                 const choice = (request.options as Array<{ id: string; label: string }>).find(option => option.label === label)!;
                 expect(manager.sendMessage(runId, [{ type: 'text', text: 'accept' }])).toBe(false);

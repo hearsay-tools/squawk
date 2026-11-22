@@ -110,18 +110,18 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
           const input = agentInput(parentRunId);
           expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
           const { store, manager } = await fixture.restart();
-          const before = store.readEvents(runId).at(-1)!.seq;
+          const before = store.eventLog.readEvents(runId).at(-1)!.seq;
           // The parent's answer reopens the closed session as its opening input (hearsay-tools/cezarion#2410).
           const reply = await fixture.answer(outcome === 'rejected' ? 'mock:reject-agent-post' : 'mock:hold');
           // The reopened session waits for capacity, so it may not have started yet.
           await waitFor(() => manager.isActive(runId) || store.getRun(runId)?.status === 'failed');
           if (outcome !== 'rejected') {
-            await waitFor(() => store.readEvents(runId).some(e => e.seq > before && e.type === 'turn.started'));
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.seq > before && e.type === 'turn.started'));
             if (outcome === 'finished') expect(manager.finish(runId)).toBe(true);
             else manager.cancel(runId);
           }
           await waitFor(() => !manager.isActive(runId));
-          const events = store.readEvents(runId).filter(e => e.seq > before);
+          const events = store.eventLog.readEvents(runId).filter(e => e.seq > before);
           if (outcome === 'rejected') {
             // A parent's rejected answer stays queued for another try, so the worker waits.
             expect(store.getRun(runId)?.status).toBe('waiting');
@@ -136,7 +136,7 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
           // hearsay-tools/cezarion#1260: Finish closes the question it never saw answered, without a
           // delivery. A Stop closes it with the worker (hearsay-tools/cezarion#2410). A rejected answer
           // leaves it for another answer.
-          const askSeq = store.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
+          const askSeq = store.eventLog.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
           const closed = { finished: 'finish', cancelled: 'worker-stopped', rejected: undefined }[outcome];
           expect(events.filter(e => e.type === 'human-ask-closed')).toEqual(closed ? [expect.objectContaining({ askSeq, reason: closed })] : []);
           const recovered = await fixture.restart();
@@ -157,15 +157,15 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
             manager.finish(runId);
             await waitFor(() => !manager.isActive(runId));
             // The idle worker's park may already be Squawk's fallback question (hearsay-tools/cezarion#1301).
-            asked = store.readEvents(runId).filter(e => e.type === 'ask.requested').length;
+            asked = store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length;
             expect(manager.continueRun(runId, { text: prompt }).ok).toBe(true);
           }
-          await waitFor(() => store.readEvents(runId).filter(e => e.type === 'ask.requested').length > asked);
+          await waitFor(() => store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length > asked);
           const input = agentInput(parentRunId);
           expect(manager.steerWorker(runId, input)).toBe('queued');
           await answer('Vitest');
           await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.deliveredAt);
-          await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes(input.text)));
+          await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes(input.text)));
           expect(manager.isActive(runId)).toBe(true);
         });
       }, 60_000);
@@ -175,8 +175,8 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
           manager.enqueueOwnedRun(runId);
           await waitFor(() => store.getRun(runId)?.status === 'waiting');
           expect(manager.sendMessage(runId, [{ type: 'text', text: 'mock:reject-agent-post' }])).toBe(true);
-          await waitFor(() => store.readEvents(runId).some(e => e.type === 'note' && String(e.message).includes('prompt failed')));
-          expect(store.readEvents(runId).filter(e => e.type === 'error')).toEqual([]);
+          await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'note' && String(e.message).includes('prompt failed')));
+          expect(store.eventLog.readEvents(runId).filter(e => e.type === 'error')).toEqual([]);
           expect(manager.isActive(runId)).toBe(true);
           manager.finish(runId);
           await waitFor(() => !manager.isActive(runId));
@@ -198,7 +198,7 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
           expect(manager.steerWorker(runId, rejected)).toBe('queued');
           const pending = agentInput(parentRunId);
           expect(manager.steerWorker(runId, pending)).toBe('queued');
-          await waitFor(() => store.readEvents(runId).some(e => e.type === 'error'));
+          await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'error'));
           await waitFor(() => !manager.isActive(runId));
           expect(store.getRun(runId)?.status).toBe('failed');
           expect(store.getRun(runId)?.error).toContain('agent input failed');

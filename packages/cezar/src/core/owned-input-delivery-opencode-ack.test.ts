@@ -31,12 +31,12 @@ it.each(['fresh', 'continuation'] as const)('opencode %s provider failure before
       const input = { id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId,
         text: 'mock:provider-error', createdAt: new Date().toISOString() };
       expect(manager.steerWorker(runId, input)).toBe('queued');
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'session.error'));
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'session.error'));
       release();
       await waitFor(() => !manager.isActive(runId));
       expect(store.getRun(runId)?.status).toBe('failed');
       expect(store.getRun(runId)?.agentInputs).toEqual([delivered(input, store.getRun(runId)?.agentInputs?.[0])]);
-      expect(store.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
     });
   }, 'mock:provider-error');
 }, 60_000);

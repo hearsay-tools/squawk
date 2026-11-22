@@ -86,7 +86,7 @@ describe('successful run settlement (#473)', () => {
       release('changed');
       await pending;
       expect(store.getRun(id)).toEqual(snapshot);
-      expect(store.readEvents(id).some(event => event.type === 'lifecycle' && event.message === 'run finished')).toBe(false);
+      expect(store.eventLog.readEvents(id).some(event => event.type === 'lifecycle' && event.message === 'run finished')).toBe(false);
     });
   }
 

@@ -38,8 +38,8 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
         expect(wait).toMatchObject({ timeoutSeconds: 7200, phase: WAIT_PHASE.open, via: WAIT_VIA.cezar_wait });
         expect(Date.parse(('deadline' in wait! ? wait.deadline : undefined)!) - Date.parse(wait!.registeredAt)).toBe(7_200_000);
         // The native mock emits the tool's actual refusal as its response text.
-        expect(JSON.stringify(store.readEvents(p.id))).toContain('must be an integer between 1 and 7200');
-        expect(JSON.stringify(store.readEvents(p.id))).toContain('invalid_request');
+        expect(JSON.stringify(store.eventLog.readEvents(p.id))).toContain('must be an integer between 1 and 7200');
+        expect(JSON.stringify(store.eventLog.readEvents(p.id))).toContain('invalid_request');
       });
     }
 
@@ -133,7 +133,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       const ci = store.getRun(run.id)!.lastWaits!.find(wait => wait.kind === 'pr')!;
       expect(ci).toMatchObject({ phase: WAIT_PHASE.cancelled, via: WAIT_VIA.cezar_wait });
       expect(external.aborted()).toBe(true);
-      const turns = store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+      const turns = store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
       external.settle();
       await flushMicrotasks();
       expect(inputsFor(run.id, ci.id)).toEqual([]);
@@ -141,7 +141,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       const timerOpened = toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 60, note: 'u4' });
       expect(manager.sendMessage(run.id, [{ type: 'text', text: `${timerOpened} ${cancelled}` }])).toBe(true);
       await until(() => store.getRun(run.id)?.lastWaits?.some(wait => wait.kind === 'timer') === true
-        && store.readEvents(run.id).filter(event => event.type === 'turn-end').length > turns);
+        && store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length > turns);
       const timer = store.getRun(run.id)!.lastWaits!.find(wait => wait.kind === 'timer')!;
       expect(timer).toMatchObject({ phase: WAIT_PHASE.cancelled, note: 'u4' });
       fireTimer(timer.id);
@@ -157,7 +157,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       const release = join(root, 'u10-release');
       process.env.CEZ_MOCK_RELEASE_FILE = release;
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
-      await until(() => store.readEvents(run.id).some(event => event.type === 'turn.started'));
+      await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'turn.started'));
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const open = async (seconds: number, note: string) => {
         const registered = await tools.registerWait({ kind: WAIT_KIND.timer, seconds, note }, 'cezar_wait', new AbortController().signal);
@@ -176,7 +176,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       await until(() => prompted(runner, timerText(first, 'u10 first')).length > 0);
       expect(prompted(runner, timerText(first, 'u10 first')).at(-1)).toContain(timerText(second, 'u10 second'));
       expect(store.getRun(run.id)?.automaticWakes).toBe(40);
-      const charged = store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up ('));
+      const charged = store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up ('));
       expect(charged.map(event => event.message)).toEqual(['automatic timer wake-up (40/40)']);
       // The delivery, its charge and the cleared failure count are one commit: no committed row
       // holds a delivered timer without its charge.
@@ -192,7 +192,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       expect(inputsFor(run.id, last.id)).toEqual([]);
       expect(prompted(runner, `Timer ${last.id} fired`)).toEqual([]);
       expect(turnEnds(run.id)).toBe(turns);
-      expect(store.readEvents(run.id).some(event => event.type === 'note' && event.message === `automatic timer wake-up cap reached (40); timer ${last.id} cancelled`)).toBe(true);
+      expect(store.eventLog.readEvents(run.id).some(event => event.type === 'note' && event.message === `automatic timer wake-up cap reached (40); timer ${last.id} cancelled`)).toBe(true);
       // hearsay-tools/cezarion#1234: the spent budget leaves a Squawk human wait, so the run waits on the user.
       expect(store.getRun(run.id)?.waits ?? []).toMatchObject([{ kind: WAIT_KIND.human, via: WAIT_VIA.budget, source: WAIT_SOURCE.cezar, phase: WAIT_PHASE.open }]);
       expect(deriveAttention(store.getRun(run.id)!).label).toBe('needs you');
@@ -233,7 +233,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       release();
       await until(() => settled(run.id, first.id)?.phase === 'delivered');
       expect(store.getRun(run.id)?.automaticWakes).toBe(40);
-      const notes = () => store.readEvents(run.id).filter(event => event.type === 'note').map(event => String(event.message));
+      const notes = () => store.eventLog.readEvents(run.id).filter(event => event.type === 'note').map(event => String(event.message));
       expect(notes().filter(note => note.startsWith('automatic timer wake-up ('))).toEqual(['automatic timer wake-up (40/40)']);
       expect(notes()).toContain(`automatic timer wake-up cap reached (40); timer ${second.id} cancelled`);
       expect(prompted(runner, `Timer ${second.id} fired`)).toEqual([]);
@@ -255,7 +255,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
       fireTimer(timer.id);
       await until(() => settled(run.id, timer.id)?.phase === 'delivered');
       expect(store.getRun(run.id)?.automaticWakes).toBe(40);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up ('))
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up ('))
         .map(event => event.message)).toEqual(['automatic timer wake-up (40/40)']);
       await until(() => store.getRun(run.id)?.status === 'waiting' && manager.isActive(run.id));
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));

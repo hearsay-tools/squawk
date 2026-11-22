@@ -29,10 +29,10 @@ it.each(['agent', 'check'].flatMap(next => ['early', 'late'].map(timing => ({ ne
         await until(() => sessionOf(run.id).open);
         const first = sessionOf(run.id);
         const w = await worker(run.id, 'mock:slow');
-        if (timing === 'late') await until(() => store.readEvents(run.id).some(event => event.type === 'turn-end'));
+        if (timing === 'late') await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'turn-end'));
         register(run.id, [w.id]); manager.enqueueOwnedRun(w.id);
         await until(() => parkedOnWorkers(run.id) && sessionOf(w.id).open);
-        await until(() => store.readEvents(run.id).some(event => event.type === 'turn-end'));
+        await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'turn-end'));
         expect(clock.captured).toBe(0);
         await clock.advance(AUTO_END_DELAY_MS + 150);
         expect(clock.captured).toBe(0);
@@ -46,10 +46,10 @@ it.each(['agent', 'check'].flatMap(next => ['early', 'late'].map(timing => ({ ne
         expect(sessionOf(run.id)).toBe(first);
         expect(first?.open).toBe(true);
         expect(store.getRun(run.id)?.steps.find(step => step.id === 'next')?.status).toBe('pending');
-        const boundaries = store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+        const boundaries = store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
         release();
         await until(() => store.getRun(run.id)?.status === 'waiting'
-          && store.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries);
+          && store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries);
         expect(sessionOf(run.id)).toBe(first);
         expect(first?.open).toBe(true);
         expect(store.getRun(run.id)?.steps.find(step => step.id === 'next')?.status).toBe('pending');

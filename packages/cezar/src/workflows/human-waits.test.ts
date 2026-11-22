@@ -45,9 +45,9 @@ async function heldTurn(options: { autonomous?: boolean } = {}) {
 
 const tools = (id: string) => manager.squawkToolHandlers(id, toolGenerationOf(id));
 const ask = (id: string, questions: AskQuestion[], context = '## Draft\n\nThe plan.') => tools(id).ask({ context, questions }, new AbortController().signal);
-const turnStarted = (id: string) => store.readEvents(id).some(event => event.type === 'turn.started');
-const asks = (id: string) => store.readEvents(id).filter(event => event.type === 'ask.requested');
-const gates = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && event.code === PROSE_HUMAN_GATE);
+const turnStarted = (id: string) => store.eventLog.readEvents(id).some(event => event.type === 'turn.started');
+const asks = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'ask.requested');
+const gates = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && event.code === PROSE_HUMAN_GATE);
 const humanOpen = (id: string) => store.getRun(id)?.waits?.filter((wait): wait is HumanWaitEntry => wait.kind === 'human') ?? [];
 const settled = (id: string, waitId: string) => store.getRun(id)?.lastWaits?.find(wait => wait.id === waitId);
 // A card sets `hasPendingHumanAsk`; the gate (no card) reads Needs you from the park alone.
@@ -67,7 +67,7 @@ describe('human waits (hearsay-tools/cezarion#1234)', { timeout: 45_000 }, () =>
     expect(humanOpen(run.id)).toEqual([]);
     release();
     // The held turn ends, then the message runs as its own turn.
-    await until(() => store.getRun(run.id)?.status === 'waiting' && store.readEvents(run.id).filter(event => event.type === 'turn-end').length >= 2);
+    await until(() => store.getRun(run.id)?.status === 'waiting' && store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length >= 2);
     // The question is answered already: no turn end raises it again. The message's own turn end
     // gets the no-wait nudge, which the mock answers with a card of its own (phase 2b).
     expect(asks(run.id).map(event => event.questions)).toEqual([[expect.objectContaining({ header: 'Next step' })]]);
@@ -157,8 +157,8 @@ describe('human waits (hearsay-tools/cezarion#1234)', { timeout: 45_000 }, () =>
     const registered = await ask(w.id, card('Which module?'));
     if (!registered.ok) throw Error('registration refused');
     writeFileSync(gate, '');
-    await until(() => store.readEvents(w.id).some(event => event.type === 'worker-question-routed') && store.getRun(w.id)?.status === 'waiting');
-    const routed = store.readEvents(w.id).find(event => event.type === 'worker-question-routed')!;
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'worker-question-routed') && store.getRun(w.id)?.status === 'waiting');
+    const routed = store.eventLog.readEvents(w.id).find(event => event.type === 'worker-question-routed')!;
     expect(routed).toMatchObject({ askSeq: asks(w.id)[0]!.seq, parentRunId: p.id });
     // hearsay-tools/cezarion#1458: the parent reads the worker's context with the question.
     const parentDelegation = store.getRun(p.id)!.delegation!;
@@ -170,7 +170,7 @@ describe('human waits (hearsay-tools/cezarion#1234)', { timeout: 45_000 }, () =>
       const caller = callerFor(p.id);
       await service.send(caller, { id: randomUUID(), recipientRunId: w.id, kind: 'reply', requestId: String(routed.messageId), text: 'Choice: Parser', timeoutSeconds: 600 });
       await until(() => settled(w.id, registered.wait_id)?.phase === 'delivered');
-      expect(store.readEvents(w.id).filter(event => event.type === 'human-input-delivered')).toMatchObject([{ askSeq: asks(w.id)[0]!.seq, source: 'parent' }]);
+      expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'human-input-delivered')).toMatchObject([{ askSeq: asks(w.id)[0]!.seq, source: 'parent' }]);
     } finally { close(); }
   });
 
@@ -203,7 +203,7 @@ describe('human waits (hearsay-tools/cezarion#1234)', { timeout: 45_000 }, () =>
     expect(more).toEqual([]);
     expect(budget).toMatchObject({ via: WAIT_VIA.budget, source: WAIT_SOURCE.cezar, phase: WAIT_PHASE.open });
     // Squawk's own wait is shown as its note and raises no human gate (hearsay-tools/cezarion#1234).
-    expect(store.readEvents(run.id).find(event => event.seq === budget!.askSeq))
+    expect(store.eventLog.readEvents(run.id).find(event => event.seq === budget!.askSeq))
       .toMatchObject({ type: 'note', message: `automatic-wake budget spent (${MAX_AUTO_CONTINUES}); waiting for you` });
     expect(gates(run.id)).toEqual([]);
     expect(toRunSummary(store.getRun(run.id)!).waitingOn).toEqual({ kind: WAIT_KIND.human, shown: true });
@@ -273,11 +273,11 @@ describe('cezar_done refusals at worker capacity', { timeout: 45_000 }, () => {
     for (let index = 0; index < 32; index++) {
       const w = await worker(p.id);
       workers.push(w);
-      const requested = store.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), context: 'A worker decision.', questions: card('Which module?') });
+      const requested = store.eventLog.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), context: 'A worker decision.', questions: card('Which module?') });
       const message = questionMessage({ workerRunId: w.id, parentRunId: p.id, askSeq: requested.seq,
         request: { context: 'A worker decision.', questions: card('Which module?') }, now: new Date().toISOString() });
       messages.push(message);
-      store.appendEvent(w.id, { type: 'worker-question-routed', askSeq: requested.seq, messageId: message.id, parentRunId: p.id });
+      store.eventLog.appendEvent(w.id, { type: 'worker-question-routed', askSeq: requested.seq, messageId: message.id, parentRunId: p.id });
     }
     store.commitConversation(p.id, { messages, outcomes: [] });
     const questions = await done(p.id);

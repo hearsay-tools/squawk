@@ -43,10 +43,10 @@ export async function acknowledgedNudgeAnswerBound(backend: string): Promise<voi
       expect(clock!.pending).toBe(1);
       expect(store.getRun(runId)?.status).toBe('running');
       expect(semaphore.busy()).toBe(1);
-      expect(notesOf(store.readEvents(runId), AUTONOMOUS_NO_REPLY_NOTE)).toEqual([]);
+      expect(notesOf(store.eventLog.readEvents(runId), AUTONOMOUS_NO_REPLY_NOTE)).toEqual([]);
       await clock!.advance(NO_WAIT_NUDGE_REPLY_MS);
-      expect(notesOf(store.readEvents(runId), AUTONOMOUS_NO_REPLY_NOTE)).toHaveLength(1);
-      expect(notesOf(store.readEvents(runId), AUTONOMOUS_NO_ACK_NOTE)).toEqual([]);
+      expect(notesOf(store.eventLog.readEvents(runId), AUTONOMOUS_NO_REPLY_NOTE)).toHaveLength(1);
+      expect(notesOf(store.eventLog.readEvents(runId), AUTONOMOUS_NO_ACK_NOTE)).toEqual([]);
       await waitFor(() => !manager.isActive(runId), STEP_MS);
       expect(semaphore.busy()).toBe(0);
       expect(store.getRun(runId)?.status).toBe('waiting');

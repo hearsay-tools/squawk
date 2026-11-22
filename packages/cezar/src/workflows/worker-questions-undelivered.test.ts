@@ -84,7 +84,7 @@ it('closes the question without an answer when the worker spent its automatic-wa
     manager.enqueueOwnedRun(w.id);
     await until(() => eventsOf(w.id, 'ask.requested').length === 1 && store.getRun(w.id)?.status === 'waiting');
     const asked = eventsOf(w.id, 'ask.requested')[0]!;
-    store.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: asked.questions, context: 'x'.repeat(20_001) });
+    store.eventLog.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: asked.questions, context: 'x'.repeat(20_001) });
     route.mockRestore();
     await manager.recover(p.id);
     expect(eventsOf(w.id, 'worker-question-undelivered')).toEqual([expect.objectContaining({ reason: 'the question is not a valid request' })]);

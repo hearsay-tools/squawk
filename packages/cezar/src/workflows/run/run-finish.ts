@@ -119,7 +119,7 @@ export class RunFinish {
     // A legacy accepted Finish takes the same path as a done: its refusal reopens the session.
     if (refusal) { this.turnNudges.queueCompletionRefusal(runId, refusal); return 'held'; }
     // Every blocker but the pending human question is a refusal: the question parks for the user.
-    this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: 'Completion blocked: answer the pending human question.' });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: 'Completion blocked: answer the pending human question.' });
     this.host.move(runId, 'park', { finishedAt: undefined }, { stepId: state?.liveSession.currentStepId });
     this.context.store.flush();
     if (state) {
@@ -176,7 +176,7 @@ export class RunFinish {
   finish(runId: string): boolean {
     const decision = this.finishDecision(runId);
     if ('reason' in decision) {
-      if (decision.warn) this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: decision.reason });
+      if (decision.warn) this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: decision.reason });
       return false;
     }
     const state = this.completionGateHost.active.get(runId);
@@ -188,7 +188,7 @@ export class RunFinish {
       this.closeQuestionOnFinish(runId);
       state.liveSession.requestFinish();
       clearIdleTimer(state);
-      this.context.store.appendEvent(runId, { type: 'lifecycle', message: 'session closed by user' });
+      this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: 'session closed by user' });
       state.liveSession.session.end();
       return true;
     }
@@ -217,7 +217,7 @@ export class RunFinish {
       try { this.acceptRootRequestFinish(runId); } catch { return false; }
       this.closeQuestionOnFinish(runId);
       this.host.move(runId, 'accept-review');
-      this.context.store.appendEvent(runId, { type: 'lifecycle', message: 'review accepted — finished without a PR' });
+      this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: 'review accepted — finished without a PR' });
       return true;
     }
     return false;
@@ -237,7 +237,7 @@ export class RunFinish {
    * answer to reopen the run (open-mercato/cezar#505). */
   private closeQuestionOnFinish(runId: string): void {
     const askSeq = this.completionGateHost.pendingHumanAskSeq(runId);
-    if (askSeq !== undefined) this.context.store.appendEvent(runId, { type: 'human-ask-closed', askSeq, reason: 'finish' });
+    if (askSeq !== undefined) this.context.store.eventLog.appendEvent(runId, { type: 'human-ask-closed', askSeq, reason: 'finish' });
   }
 }
 

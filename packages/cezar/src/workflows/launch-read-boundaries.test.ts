@@ -600,7 +600,7 @@ it('P6-15 queued Continue omits an image deleted before task-head hydration', as
   manager.cancel(blocker.id);
   const continued = await waitForOpen(target.id, 3);
   expect(continued.images).toBeUndefined();
-  expect(store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).startsWith('queued attachment ') && String(event.message).endsWith(' could not be read — starting without it'))).toBe(true);
+  expect(store.eventLog.readEvents(target.id).some(event => event.type === 'note' && String(event.message).startsWith('queued attachment ') && String(event.message).endsWith(' could not be read — starting without it'))).toBe(true);
 });
 
 it('P6-ATT-C-OPEN Continue reads checkpoint files after native list discovery and retains live image precedence', async () => {
@@ -634,7 +634,7 @@ it('P6-ATT-C-OPEN Continue reads checkpoint files after native list discovery an
   const continued = await waitForOpen(target.id, 3);
   expect(continued.images).toEqual([pastedImage('live checkpoint'), pastedImage('queued image')]);
   expect(continued.userPrompt).not.toContain(checkpoint.images![0]!.split('/').pop()!);
-  expect(store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).startsWith('continuation attachment ') && String(event.message).endsWith(' could not be read — starting without it'))).toBe(true);
+  expect(store.eventLog.readEvents(target.id).some(event => event.type === 'note' && String(event.message).startsWith('continuation attachment ') && String(event.message).endsWith(' could not be read — starting without it'))).toBe(true);
 });
 
 it('P6-03 P6-27 Continue keeps the stored authored model after the catalog definition is removed', async () => {
@@ -674,7 +674,7 @@ it('P6-13 recovery without live blocks reads current persisted bytes and reports
   await manager.recover();
   const launched = await waitForOpen(target.id, 1);
   expect(launched.images).toEqual([pastedImage('replacement')]);
-  expect(store.readEvents(target.id).filter(event => event.type === 'note' && String(event.message).includes('deleted.png')))
+  expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'note' && String(event.message).includes('deleted.png')))
     .toEqual([expect.objectContaining({ message: 'task attachment deleted.png could not be read — starting without it' }),
       expect.objectContaining({ message: 'task attachment deleted.png could not be read — starting without it' })]);
 });
@@ -781,7 +781,7 @@ it('P6-14 opening attachments are selected after awaited worktree setup', async 
   expect(store.getRun(target.id)?.worktreeSetup?.status).toBe('done');
   expect(launched.images).toEqual([pastedImage('live bytes')]);
   expect(launched.userPrompt).not.toContain('also saved on disk at:');
-  expect(store.readEvents(target.id).filter(event => event.type === 'note' && String(event.message).includes('pasted-1.png')))
+  expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'note' && String(event.message).includes('pasted-1.png')))
     .toEqual([expect.objectContaining({ message: 'task attachment pasted-1.png could not be read — starting without it' })]);
 });
 
@@ -795,7 +795,7 @@ it('P6-17 P6-33 startup rechecks an account hold added after dequeue', async () 
   let holder!: string;
   try { await reached; holder = holdAccount('claude'); } finally { release(); }
   // bound: the durable requeue note is emitted by the startup hold gate after config completes.
-  await waitForProduct(manager, store, () => opened.length > 0 || store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('this agent account is waiting')));
+  await waitForProduct(manager, store, () => opened.length > 0 || store.eventLog.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('this agent account is waiting')));
   expect(opened).toHaveLength(0);
   expect(store.getRun(target.id)?.status).toBe('queued');
   setRunStatus(store, holder, 'failed', { autoResumeAt: undefined });
@@ -811,11 +811,11 @@ it('P6-17 P6-33 startup rechecks an account hold after the repository-root lease
   const head = await heldHead();
   const target = manager.startRun(acceptedWorkflow, { task: 'target', runner: 'codex', worktree: false });
   // bound: the lease wait note proves dequeue and initial hold admission completed.
-  await waitForProduct(manager, store, () => store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('waiting for exclusive access')));
+  await waitForProduct(manager, store, () => store.eventLog.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('waiting for exclusive access')));
   const holder = holdAccount('codex');
   manager.cancel(head);
   // bound: the post-lease gate emits this durable note after the holder releases the tree.
-  await waitForProduct(manager, store, () => opened.length > 1 || store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('this agent account is waiting')));
+  await waitForProduct(manager, store, () => opened.length > 1 || store.eventLog.readEvents(target.id).some(event => event.type === 'note' && String(event.message).includes('this agent account is waiting')));
   expect(opened).toHaveLength(1);
   expect(store.getRun(target.id)?.status).toBe('queued');
   setRunStatus(store, holder, 'failed', { autoResumeAt: undefined });

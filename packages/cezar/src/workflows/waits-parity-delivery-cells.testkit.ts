@@ -32,7 +32,7 @@ function expectHeldAtTheBound(id: string, waitId: string, { error = /^continue f
   expect(run.waits?.find(wait => wait.id === waitId)?.phase).toBe('resolved');
   expect(run.lastWaits?.find(wait => wait.id === waitId)).toBeUndefined();
   expect(inputsFor(id, waitId).map(input => input.deliveredAt)).toEqual([undefined]);
-  expect(store.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE)).toHaveLength(1);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE)).toHaveLength(1);
   expect(failedSteps(id)).toBe(failed);
   expect(manager.isActive(id)).toBe(false);
   expect(retryClock.pending).toBe(0);
@@ -128,7 +128,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         fireTimer(timer.id);
         const completesWithAck = runnerDefinition(runner).mock.promptResponseEndsTurn;
         if (completesWithAck) {
-          await until(() => store.readEvents(run.id).some(event => event.type === 'text' && String(event.text).includes(`Timer ${timer.id} fired`)));
+          await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'text' && String(event.text).includes(`Timer ${timer.id} fired`)));
           expect(turnEnds(run.id)).toBe(ends);
         } else {
           await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
@@ -197,7 +197,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         await until(() => settled(run.id, timer.id)?.phase === 'delivered' && answered(run.id, askSeq));
         // The timer spends one reserved unit on the restarted budget. The answer's own no-wait
         // turn may already have spent the next unit on its nudge by the time this ACK is observed.
-        expect(store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up (')).map(event => event.message))
+        expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith('automatic timer wake-up (')).map(event => event.message))
           .toEqual(['automatic timer wake-up (1/40)']);
         expect(manager.finish(run.id)).toBe(true);
         await until(() => terminal.includes(store.getRun(run.id)?.status ?? ''));
@@ -351,7 +351,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
       expect(inputsFor(run.id, later.id)).toEqual([]);
       expect(store.getRun(run.id)?.waitDeliveryFailures).toBeUndefined();
       await expectNoWakeFor(runner, run.id);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && event.message === WAITS_DISCARDED_NOTE)).toHaveLength(1);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && event.message === WAITS_DISCARDED_NOTE)).toHaveLength(1);
       expect(prompted(runner, TIMER_WAKE_OPENING)).toHaveLength(MAX_WAKE_DELIVERY_ATTEMPTS);
       // Continue is a plain continuation: nothing from the discarded waits reaches the agent.
       failure.lift();
@@ -381,11 +381,11 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
       const w = await blockedDone(p.id, () => worker(p.id));
       const refusal = liveRefusal(w);
       await until(() => turnEnds(p.id) > turns && parkedOn(p.id, waitOfKind(p.id, WAIT_KIND.timer)) &&
-        store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes(refusal)));
+        store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes(refusal)));
       expect(store.getRun(p.id)?.waits).toEqual([expect.objectContaining({ id: timer.id, phase: WAIT_PHASE.open, deadline: timer.deadline })]);
       expect(waitOf(store.getRun(p.id))).toBeUndefined();
       expect(store.getRun(p.id)?.delegation).not.toHaveProperty('completion');
-      expect(store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(false);
+      expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(false);
       expect(prompted(runner, refusal)).toEqual([]);
       // A timer park keeps its slot, and the timer's result wakes the agent.
       await expectPoolCapacity(runner, p.id, true);
@@ -410,7 +410,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         if (!('wait' in registered)) throw Error('registration refused');
         const wait = registered.wait;
         wire.release();
-        await until(() => store.readEvents(run.id).some(event => event.type === 'error'));
+        await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'error'));
         await until(() => !manager.isActive(run.id));
         expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');
         expect(store.getRun(run.id)?.status).not.toBe('failed');

@@ -96,7 +96,7 @@ export function foldEvent(facts: TranscriptFacts, event: RunEvent): boolean {
   return changed;
 }
 
-/** Fold NDJSON text. Unparsable lines are skipped, as `RunStore.readEvents` skips them. */
+/** Fold NDJSON text. Unparsable lines are skipped, as `RunEventLogTopic.readEvents` skips them. */
 export function foldText(facts: TranscriptFacts, text: string): boolean {
   let changed = false;
   for (const line of text.split('\n')) {

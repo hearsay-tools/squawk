@@ -248,13 +248,13 @@ export function launchSystemTail(context: RunModuleContext, host: SessionHelperH
  * evidence for collection without duplicating an already persisted transcript. */
 export function persistWorkerAssistantResult(context: RunModuleContext, host: SessionHelperHost, runId: string, stepId: string, text: string): void {
   if (context.store.getRun(runId)?.delegation?.role !== 'worker' || !text.trim()) return;
-  const present = context.store.readEvents(runId).some(event => {
+  const present = context.store.eventLog.readEvents(runId).some(event => {
     if (event.stepId !== stepId) return false;
     const item = event.item as { kind?: string; role?: string; text?: string; parentItemId?: string } | undefined;
     return (event.type === 'text' && typeof event.text === 'string' && !!event.text.trim()) ||
       (event.type === 'item.completed' && item?.kind === 'message' && item.role === 'assistant' && !item.parentItemId && !!item.text?.trim());
   });
-  if (!present) context.store.appendEvent(runId, { type: 'text', text, stepId });
+  if (!present) context.store.eventLog.appendEvent(runId, { type: 'text', text, stepId });
 }
 
 /**
@@ -268,8 +268,8 @@ export function persistWorkerAssistantResult(context: RunModuleContext, host: Se
  */
 export function makeUiSink(context: RunModuleContext, host: SessionHelperHost, runId: string, stepId: string): UiEventSink {
   return new UiEventSink({
-    persist: (event) => context.store.appendEvent(runId, { ...event, stepId }),
-    emitLive: (event) => context.store.emitEphemeral(runId, { ...event, stepId }),
+    persist: (event) => context.store.eventLog.appendEvent(runId, { ...event, stepId }),
+    emitLive: (event) => context.store.eventLog.emitEphemeral(runId, { ...event, stepId }),
     // The feed sees the event before the store redacts it: it redacts titles with the store's redactor.
     ...(context.toolActivity ? { observe: (event: UiEvent) => context.toolActivity?.observe(runId, event) } : {}),
   });

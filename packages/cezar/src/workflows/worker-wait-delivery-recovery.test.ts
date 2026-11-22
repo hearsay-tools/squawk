@@ -37,7 +37,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.agentInputs).toHaveLength(1);
     expect(store.getRun(p.id)?.agentInputs?.[0]?.deliveredAt).toBeDefined();
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
-    expect(store.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
   });
 
   /** A parked parent as an older build left it on disk: its agent worker wait in `delegation.wait`
@@ -83,7 +83,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.agentInputs?.filter(input => input.id === messageId)).toHaveLength(1);
     expect(store.getRun(p.id)?.agentInputs?.[0]?.deliveredAt).toBe(now);
     expect(store.getRun(p.id)?.delegation).not.toHaveProperty('wait');
-    expect(store.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
   });
 
   it('restart after a message stand-in an inbox read acknowledged leaves the parent parked', async () => {
@@ -123,7 +123,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.steps.some(step => step.id === 'continue-1')).toBe(true);
     expect(store.getRun(p.id)?.agentInputs?.filter(input => input.id === wait.id)).toHaveLength(1);
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
-    expect(store.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'user-message')).toEqual([]);
   });
 
 });

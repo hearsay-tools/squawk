@@ -204,7 +204,7 @@ async function idleClose(manager: RunManager, runId: string): Promise<void> {
   const owner = idleOwners.get(manager)!;
   expect(owner.timers.has(runId), 'the parked run armed its shipped idle timer').toBe(true);
   const message = `session closed after ${Math.round(IDLE_TIMEOUT_MS / 60_000)}m of inactivity`;
-  const closed = () => owner.store.readEvents(runId).filter(event => event.type === 'lifecycle' && event.message === message);
+  const closed = () => owner.store.eventLog.readEvents(runId).filter(event => event.type === 'lifecycle' && event.message === message);
   const before = closed().length;
   await owner.clock.advance(IDLE_TIMEOUT_MS);
   await waitFor(() => !manager.isActive(runId));
@@ -421,7 +421,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       // A user's Continue checkpoints its message before the session opens; it answers the
       // question the run parked on (hearsay-tools/cezarion#1234).
       setRunStatus(fixture.store, fixture.runId, RUN_STATUS.running, { currentStepId: 'continue-1', finishedAt: undefined, continuationMessage: { id: 'continue-1', text: promptFor(backend, 'baseline'), origin: 'human', createdAt: new Date().toISOString() } });
-      expect(fixture.store.readEvents(fixture.runId).some(event =>
+      expect(fixture.store.eventLog.readEvents(fixture.runId).some(event =>
         event.type === 'session' && event.stepId === 'continue-1')).toBe(false);
       const marked = fixture.markWire();
       await fixture.restart();
@@ -490,7 +490,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       expect(skillInPrompt(prompts[0]!, fixture.repoRoot)).toBe(true);
       expect(hasNativeTrigger('opencode', continued)).toBe(true);
       expect(launchPrompt).not.toContain(SKILL_BODY);
-      const events = fixture.store.readEvents(fixture.runId);
+      const events = fixture.store.eventLog.readEvents(fixture.runId);
       const notices = events.filter((event) => String(event.message).includes('no longer exists'));
       expect(notices).toHaveLength(1);
       expect(notices[0]?.type).toBe('note');

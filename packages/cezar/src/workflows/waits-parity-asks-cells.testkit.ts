@@ -70,8 +70,8 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
       await until(() => pendingQuestion(run.id) && humanOpen(run.id)[0]?.askSeq !== undefined);
       expect(humanOpen(run.id)).toMatchObject([{ via: WAIT_VIA.cezar_ask, questions }]);
       expect(asks(run.id)).toHaveLength(1);
-      expect(store.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
-      expect(JSON.stringify(store.readEvents(run.id))).toContain('human_question_pending');
+      expect(store.eventLog.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
+      expect(JSON.stringify(store.eventLog.readEvents(run.id))).toContain('human_question_pending');
       expect(deriveAttention(store.getRun(run.id)!).label).toBe('needs you');
     });
 
@@ -117,7 +117,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
       // Registered mid-turn, so nothing is shown before the turn ends.
       expect(asks(run.id)).toEqual([]);
       wire.release();
-      await until(() => store.readEvents(run.id).some(event => event.type === 'error'));
+      await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'error'));
       await until(() => !manager.isActive(run.id) && pendingQuestion(run.id));
       expect(asks(run.id)).toHaveLength(1);
       expect(humanOpen(run.id)).toMatchObject([{ id: registered.wait_id, askSeq: asks(run.id)[0]!.seq }]);
@@ -153,7 +153,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
       await until(() => pendingQuestion(run.id) && humanOpen(run.id)[0]?.askSeq !== undefined);
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(1);
       expect(turnEnds(run.id)).toBe(2);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
       const wait = await expectHumanWaitAnswered(run.id, 'cezar_ask');
       expect(wait).toMatchObject({ source: WAIT_SOURCE.agent, questions: [expect.objectContaining({ header: 'Next step' })] });
       expect(manager.finish(run.id)).toBe(true);
@@ -194,7 +194,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
       await until(() => gated(run.id));
       const noWait = humanOpen(run.id)[0]!;
       expect(noWait).toMatchObject({ via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar });
-      expect(store.readEvents(run.id).find(event => event.seq === noWait.askSeq)).toMatchObject({ type: 'note', message: NO_WAIT_NOTE });
+      expect(store.eventLog.readEvents(run.id).find(event => event.seq === noWait.askSeq)).toMatchObject({ type: 'note', message: NO_WAIT_NOTE });
       expect(store.transcriptFacts.transcriptFacts(run.id).pendingGateSeq).toBeUndefined();
       expect(hasPendingAsk(store, run.id)).toBeFalsy();
       expect(deriveAttention(store.getRun(run.id)!).label).toBe('needs you');
@@ -239,7 +239,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
         // Finish is a successful end that frees the run's slot.
         expect(store.getRun(run.id)?.status).toBe('done');
         expect(semaphore.busy()).toBe(0);
-        const events = store.readEvents(run.id);
+        const events = store.eventLog.readEvents(run.id);
         expect(events.filter(event => event.type === 'human-ask-closed')).toEqual([expect.objectContaining({ askSeq, reason: 'finish' })]);
         expect(events.filter(event => event.type === 'human-input-delivered').map(event => event.askSeq)).toEqual(answeredBefore);
         expect(pendingAskOf(events)).toBeUndefined();
@@ -260,7 +260,7 @@ export function asksCells(runners: string[], it: typeof registerTest = registerT
     it(`${runner} U17 a question in prose without a wait no longer parks the run by itself`, async () => {
       nativeWire(runner);
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: messagesPrompt(runner, ['Should I use Vitest?']) });
-      const proseGates = () => store.readEvents(run.id).filter(event => event.type === 'note' && event.code === PROSE_HUMAN_GATE);
+      const proseGates = () => store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && event.code === PROSE_HUMAN_GATE);
       await until(() => gated(run.id) || proseGates().length > 0);
       expect(proseGates()).toEqual([]);
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(1);

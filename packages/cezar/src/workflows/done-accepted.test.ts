@@ -22,8 +22,8 @@ const runner = 'claude';
 
 const prWait = (id: string) => store.getRun(id)?.waits?.find(wait => wait.kind === WAIT_KIND.pr);
 const finished = (id: string) => terminal.includes(store.getRun(id)?.status ?? '') && !manager.isActive(id);
-const closings = (id: string) => store.readEvents(id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
-const withdrawn = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith('cezar_done withdrawn: ')).map(event => event.message);
+const closings = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
+const withdrawn = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith('cezar_done withdrawn: ')).map(event => event.message);
 
 async function quietRun() {
   nativeWire(runner);
@@ -121,7 +121,7 @@ describeWaitCells(() => {
     await until(() => withdrawn(p.id).length > 0, () => timeline(p.id));
     expect(withdrawn(p.id)).toEqual(['cezar_done withdrawn: completion refused: workers_outstanding']);
     expect(store.getRun(p.id)?.doneAccepted).toBeUndefined();
-    await until(() => store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)), () => timeline(p.id));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)), () => timeline(p.id));
     expect(closings(p.id)).toEqual([]);
     expect(terminal).not.toContain(store.getRun(p.id)?.status);
   });

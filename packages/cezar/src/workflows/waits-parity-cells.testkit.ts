@@ -182,8 +182,8 @@ function singleRunnerCells(): void {
     const w = await blockedDone(p.id, () => blockingWorker(p.id), timerThen);
     await until(() => turnEnds(p.id) > turns && parkedOn(p.id, waitOfKind(p.id, 'timer')));
     const refusal = liveRefusal(w);
-    expect(store.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).includes(refusal))).toHaveLength(1);
-    expect(store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(false);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).includes(refusal))).toHaveLength(1);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(false);
     expect(prompted('claude', refusal)).toEqual([]);
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
     expect(store.getRun(p.id)?.delegation).not.toHaveProperty('completion');

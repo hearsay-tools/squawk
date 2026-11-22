@@ -20,7 +20,7 @@ describe('run states of an owned worker', { timeout: 45_000 }, () => {
     spendWorkerBudget(w.id);
     const clock = observeIdleClose();
     manager.enqueueOwnedRun(w.id);
-    await until(() => store.readEvents(w.id).some((event) => event.type === 'turn-end') && store.getRun(w.id)?.status === 'waiting');
+    await until(() => store.eventLog.readEvents(w.id).some((event) => event.type === 'turn-end') && store.getRun(w.id)?.status === 'waiting');
     expect(stateOf(store.getRun(w.id)!)).toBe('waiting:plain');
     await idleClose(clock, w.id, manager, store, until);
     await until(() => store.getRun(w.id)?.status === 'done');

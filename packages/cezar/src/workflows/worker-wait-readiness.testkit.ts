@@ -58,18 +58,18 @@ export async function idleClose(clock: ReturnType<typeof observeIdleClose>, id: 
   ownedManager: RunManager, ownedStore: RunStore, wait: (predicate: () => boolean) => Promise<void>) {
   const session = sessionOf(id);
   expect(session.open).toBe(true);
-  const before = ownedStore.readEvents(id).filter(event => event.type === 'lifecycle' &&
+  const before = ownedStore.eventLog.readEvents(id).filter(event => event.type === 'lifecycle' &&
     String(event.message).includes('of inactivity')).length;
   clock.fireRun(id);
   // bound: the caller bounds a missing session-settlement signal; inactivity is the predicate.
   await wait(() => !ownedManager.isActive(id));
   expect(session.open).toBe(false);
-  expect(ownedStore.readEvents(id).filter(event => event.type === 'lifecycle' &&
+  expect(ownedStore.eventLog.readEvents(id).filter(event => event.type === 'lifecycle' &&
     event.message === `session closed after ${Math.round(IDLE_TIMEOUT_MS / 60_000)}m of inactivity`)).toHaveLength(before + 1);
 }
 
 /** The refusal nudges a blocked done received (hearsay-tools/cezarion#1301), as their notes. */
-export const completionNudges = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE));
+export const completionNudges = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE));
 /** The agent inputs Squawk submitted on the session, by text. */
 export const sentTexts = (sent: string[], text: string) => sent.filter(entry => entry.includes(text));
 /** Record every text a session is sent through Squawk's agent-input seam. */

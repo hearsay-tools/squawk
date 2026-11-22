@@ -36,8 +36,8 @@ export const OWNED_INPUT_GROUPS = {
             expect(manager.steerWorker(runId, first)).toBe('queued');
             expect(store.getRun(runId)?.agentInputs).toEqual([first]);
             manager.enqueueOwnedRun(runId);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'ask.requested'));
-            const askSeq = store.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'ask.requested'));
+            const askSeq = store.eventLog.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
             const session = [...fixtureWork(manager).liveSessions].find(live => live.open)!;
             const offered = vi.spyOn(session, 'sendAgentMessage');
             expect(manager.steerWorker(runId, second)).toBe('queued');
@@ -58,23 +58,23 @@ export const OWNED_INPUT_GROUPS = {
             offered.mockRestore();
             expect(offers).toEqual([]);
             expect(delivered(second.id)).toBe(false);
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
-            expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([]);
-            const attributed = store.readEvents(runId).filter(e => e.type === 'agent-input').map(e => agentInputEventSchema.parse(e).input);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([]);
+            const attributed = store.eventLog.readEvents(runId).filter(e => e.type === 'agent-input').map(e => agentInputEventSchema.parse(e).input);
             expect(attributed).toEqual([first, second]);
             const reply = await answer('Vitest');
             await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('second steering')));
-            const texts = store.readEvents(runId).filter(e => e.type === 'text').map(e => e.text).join('\n');
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('second steering')));
+            const texts = store.eventLog.readEvents(runId).filter(e => e.type === 'text').map(e => e.text).join('\n');
             expect(texts).toContain(first.text);
             expect(texts).not.toContain('EXPANDED HUMAN SKILL');
             // The parent's reply answers it through the answer seam; no human message is shown.
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             expect(store.getRun(runId)?.agentInputs?.map(input => input.id)).toEqual([first.id, second.id, reply]);
             // The answer retired this ask; the answered turn's end may raise Squawk's fallback question
             // on the idle worker (hearsay-tools/cezarion#1301), which is a new one.
             expect(store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
-            expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
             await waitFor(() => store.getRun(runId)?.status === 'waiting');
             const afterAsk = agentInput(parentRunId, 'mock:agent-echo after ask');
             expect(manager.steerWorker(runId, afterAsk)).toBe('queued');
@@ -89,7 +89,7 @@ export const OWNED_INPUT_GROUPS = {
           await withOwnedInputRun(backend, 'cezar-ask', async ({ store, manager, runId, parentRunId, answer }) => {
             const held = agentInput(parentRunId, 'mock:agent-echo held behind the question');
             const offers: { answered: boolean }[] = [];
-            const answeredYet = () => store.readEvents(runId).some(e => e.type === 'human-input-delivered');
+            const answeredYet = () => store.eventLog.readEvents(runId).some(e => e.type === 'human-input-delivered');
             const commitWait = store.commitWait.bind(store);
             let steered: ReturnType<typeof manager.steerWorker> | undefined;
             // Mid-turn: the question's wait is open, its card not shown yet, and the turn not ended.
@@ -109,14 +109,14 @@ export const OWNED_INPUT_GROUPS = {
               return result;
             });
             manager.enqueueOwnedRun(runId);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'ask.requested') && store.getRun(runId)?.status === 'waiting');
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'ask.requested') && store.getRun(runId)?.status === 'waiting');
             const delivered = () => !!store.getRun(runId)?.agentInputs?.find(input => input.id === held.id)?.deliveredAt;
             expect(steered).toBe('queued');
             expect(offers).toEqual([]);
             expect(delivered()).toBe(false);
             await answer('Vitest');
             await waitFor(delivered);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('held behind the question')));
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('held behind the question')));
             expect(offers.length).toBeGreaterThan(0);
             expect(offers.every(offer => offer.answered)).toBe(true);
           });
@@ -126,7 +126,7 @@ export const OWNED_INPUT_GROUPS = {
           await withOwnedInputRun(backend, 'ask', async fixture => {
             const { runId, parentRunId } = fixture;
             fixture.manager.enqueueOwnedRun(runId);
-            await waitFor(() => fixture.store.readEvents(runId).some(e => e.type === 'ask.requested'));
+            await waitFor(() => fixture.store.eventLog.readEvents(runId).some(e => e.type === 'ask.requested'));
             const input = agentInput(parentRunId);
             expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
             const joins = vi.spyOn(TranscriptFactsQueue.prototype, 'join');
@@ -144,14 +144,14 @@ export const OWNED_INPUT_GROUPS = {
             // Neither a bare Continue nor a human answer drains it: the question is the parent's.
             expect(manager.continueRun(runId).ok).toBe(false);
             expect(manager.continueRun(runId, { text: 'Vitest' }).ok).toBe(false);
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             await fixture.answer('Vitest');
             await waitFor(() => store.getRun(runId)?.agentInputs?.[0]?.deliveredAt !== undefined);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('parent steering')));
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('parent steering')));
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             // Restarted answers are acknowledged at opening turn completion, after streamed text.
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'human-input-delivered'));
-            expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ source: 'parent' })]);
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'human-input-delivered'));
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ source: 'parent' })]);
           });
         }, 60_000);
 
@@ -159,8 +159,8 @@ export const OWNED_INPUT_GROUPS = {
           await withOwnedInputRun(backend, 'ask', async fixture => {
             const { manager, store, runId, parentRunId } = fixture;
             manager.enqueueOwnedRun(runId);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'ask.requested'));
-            const askSeq = store.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'ask.requested'));
+            const askSeq = store.eventLog.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
             await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined && store.getRun(runId)?.status === 'waiting');
             const session = [...fixtureWork(manager).liveSessions][0]!;
             // The session refuses the parent's answer once: it stays queued, and the ask stays pending.
@@ -170,19 +170,19 @@ export const OWNED_INPUT_GROUPS = {
             refuse.mockRestore();
             expect(store.getRun(runId)?.agentInputs?.find(entry => entry.id === reply)?.deliveredAt).toBeUndefined();
             expect(store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).toBe(askSeq);
-            expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([]);
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([]);
             expect(hasPendingAsk(store, runId)).toBe(true);
             const input = agentInput(parentRunId);
             expect(manager.steerWorker(runId, input)).toBe('queued');
             const recovered = await fixture.restart();
             // Recovery delivers the parent's accepted answer; no human answers it.
             expect(recovered.manager.continueRun(runId).ok).toBe(false);
-            expect(recovered.store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            expect(recovered.store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             await waitFor(() => !!recovered.store.getRun(runId)?.agentInputs?.find(entry => entry.id === input.id)?.deliveredAt);
             // #505: input can land mid-turn, so delivery no longer implies the answering turn
             // ended; the answer's durable checkpoint is still that turn's end.
-            await waitFor(() => recovered.store.readEvents(runId).some(e => e.type === 'human-input-delivered'));
-            expect(recovered.store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
+            await waitFor(() => recovered.store.eventLog.readEvents(runId).some(e => e.type === 'human-input-delivered'));
+            expect(recovered.store.eventLog.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
             // The answer retired this ask; the answered turn's end may raise Squawk's fallback question
             // on the idle worker (hearsay-tools/cezarion#1301), which is a new one.
             expect(recovered.store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
@@ -211,7 +211,7 @@ export const OWNED_INPUT_GROUPS = {
               await waitFor(() => !manager.isActive(runId));
               expect(store.getRun(runId)?.agentInputs?.[1]).toEqual(pending);
               expect(['review', 'done', 'cancelled']).toContain(store.getRun(runId)?.status);
-              expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+              expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             });
           }
         }, 60_000);
@@ -234,7 +234,7 @@ export const OWNED_INPUT_GROUPS = {
             const unmute = muteLockedDatabaseLogs();
             try {
               expect(manager.steerWorker(runId, input)).toBe('queued');
-              await waitFor(() => store.readEvents(runId).some(event => event.type === 'error' && String(event.message).includes('agent input delivery checkpoint failed')));
+              await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'error' && String(event.message).includes('agent input delivery checkpoint failed')));
               expect(store.getRun(runId)?.agentInputs).toEqual([input]);
             } finally {
               stopFailAfterEnqueue();
@@ -256,16 +256,16 @@ export const OWNED_INPUT_GROUPS = {
             await waitFor(() => !manager.isActive(runId));
             // The idle worker's park may already be Squawk's fallback question (hearsay-tools/cezarion#1301):
             // wait for the continuation's own ask.
-            const asked = store.readEvents(runId).filter(e => e.type === 'ask.requested').length;
+            const asked = store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length;
             expect(manager.continueRun(runId, { text: promptFor(backend, 'ask-reply-late') }).ok).toBe(true);
-            await waitFor(() => store.readEvents(runId).filter(e => e.type === 'ask.requested').length > asked);
+            await waitFor(() => store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length > asked);
             const input = agentInput(parentRunId);
             expect(manager.steerWorker(runId, input)).toBe('queued');
             // The continuation's ask is the worker's own: its parent answers it (hearsay-tools/cezarion#2410).
             await answer('Vitest');
             await waitFor(() => store.getRun(runId)?.agentInputs?.[0]?.deliveredAt !== undefined);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes(input.text)));
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message').map(e => e.text))
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes(input.text)));
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message').map(e => e.text))
               .toEqual([promptFor(backend, 'ask-reply-late')]);
           });
         }, 60_000);
@@ -278,7 +278,7 @@ export const OWNED_INPUT_GROUPS = {
             try {
               expect(() => fixture.manager.steerWorker(runId, agentInput(parentRunId))).toThrow();
               expect(fixture.store.getRun(runId)?.agentInputs).toBeUndefined();
-              expect(fixture.store.readEvents(runId).filter(e => e.type === 'agent-input')).toEqual([]);
+              expect(fixture.store.eventLog.readEvents(runId).filter(e => e.type === 'agent-input')).toEqual([]);
             } finally { unblock(); }
             const input = agentInput(parentRunId);
             expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
@@ -286,8 +286,8 @@ export const OWNED_INPUT_GROUPS = {
             const second = agentInput(parentRunId, 'mock:agent-echo during startup');
             expect(manager.steerWorker(runId, second)).toBe('queued');
             await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
-            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('during startup')));
-            expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
+            await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('during startup')));
+            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
             manager.finish(runId);
             await waitFor(() => !manager.isActive(runId));
             expect(() => manager.steerWorker(runId, agentInput(parentRunId))).toThrow(/state/i);

@@ -32,7 +32,7 @@ const refusalStep = (runner: string, id: string, step: string, predicate: () => 
  *  cell here, with its own error (hearsay-tools/squawk#3508). */
 function expectDeliveryCap(id: string) {
   expect(store.getRun(id)?.error, timeline(id)).toBe(`continue failed: ${WAKE_SESSION_CLOSED_ERROR}`);
-  expect(store.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE), timeline(id)).toHaveLength(1);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE), timeline(id)).toHaveLength(1);
 }
 
 async function refusalDeliveryBound(runner: string, id: string, cell: string, closed: () => number) {
@@ -77,7 +77,7 @@ function closeAtOpeningPark(release: () => void): () => string {
  *  delivery. The cell's own wake count then proves no later charge either. */
 function expectOpeningClosedClean(id: string, parked: string) {
   expect(parked).toBe(id);
-  expect(store.readEvents(id).filter(event => event.type === 'error'), timeline(id)).toEqual([]);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'error'), timeline(id)).toEqual([]);
   expect(store.getRun(id)?.waitDeliveryFailures, timeline(id)).toBeUndefined();
 }
 
@@ -337,7 +337,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       expect(manager.cancel(p.id)).toBe(true);
       expect(refusals()).toEqual([]);
       expect(store.getRun(p.id)?.status).toBe('failed');
-      expect(store.readEvents(p.id).filter(event => event.type === 'note' && event.message === REFUSAL_DISCARDED_NOTE)).toHaveLength(1);
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && event.message === REFUSAL_DISCARDED_NOTE)).toHaveLength(1);
       expect(manager.continueRun(p.id, { text: 'go on' })).toEqual({ ok: true });
       if (runner === 'claude') await refusalStep(runner, p.id, 'U22x: Continue native receipt', () => prompted(runner, 'go on').length > 0);
       await refusalStep(runner, p.id, 'U22x: Continue final park', () => prompted(runner, 'go on').length > 0 && store.getRun(p.id)?.status === 'waiting');
@@ -353,10 +353,10 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       await until(() => store.getRun(p.id)?.status === 'waiting');
       const w = await worker(p.id, HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       manager.enqueueOwnedRun(w.id);
-      const routed = () => store.readEvents(w.id).find(event => event.type === 'worker-question-routed');
+      const routed = () => store.eventLog.readEvents(w.id).find(event => event.type === 'worker-question-routed');
       await until(() => routed() !== undefined && store.getRun(w.id)?.status === 'waiting');
       const question = WORKER_FALLBACK_QUESTION(w.id);
-      expect(store.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
+      expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
       expect(asks(w.id)).toEqual([expect.objectContaining({ questions: [{ header: WORKER_FALLBACK_HEADER, question }] })]);
       expect(humanOpen(w.id)).toEqual([expect.objectContaining({ source: WAIT_SOURCE.cezar, via: WAIT_VIA['no-wait'], askSeq: asks(w.id)[0]!.seq })]);
       expect(routed()).toMatchObject({ askSeq: asks(w.id)[0]!.seq, parentRunId: p.id });
@@ -371,8 +371,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       const commits = recordCommits(join(root, '.ai/cezar'));
       const replyId = randomUUID();
       await service.send(parentCaller, { id: replyId, recipientRunId: w.id, kind: 'reply', requestId, text: `${WORKER_FALLBACK_HEADER}: cez-dev`, timeoutSeconds: 600 });
-      await until(() => store.readEvents(w.id).some(event => event.type === 'human-input-delivered' && event.source === 'parent' && event.askSeq === asks(w.id)[0]!.seq));
-      expect(store.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).startsWith(WORKER_FALLBACK_REPLY_NOTE)))
+      await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'human-input-delivered' && event.source === 'parent' && event.askSeq === asks(w.id)[0]!.seq));
+      expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).startsWith(WORKER_FALLBACK_REPLY_NOTE)))
         .toEqual([expect.objectContaining({ message: `${WORKER_FALLBACK_REPLY_NOTE} (${wakes + 1}/${MAX_AUTO_CONTINUES})` })]);
       await until(() => prompted(runner, `${WORKER_FALLBACK_HEADER}: cez-dev`).length > 0);
       // hearsay-tools/cezarion#1805: whichever way the reply reaches the worker (its live session, or a
@@ -394,7 +394,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       await until(() => store.getRun(p.id)?.status === 'waiting');
       const w = await worker(p.id, toolCall('cezar_ask', { context: ASK_CONTEXT, questions }), runner);
       manager.enqueueOwnedRun(w.id);
-      const routed = () => store.readEvents(w.id).find(event => event.type === 'worker-question-routed');
+      const routed = () => store.eventLog.readEvents(w.id).find(event => event.type === 'worker-question-routed');
       await until(() => routed() !== undefined && humanOpen(w.id)[0]?.askSeq !== undefined && store.getRun(w.id)?.status === 'waiting');
       const [question] = humanOpen(w.id);
       sessionOf(w.id).end();
@@ -403,7 +403,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       const commits = recordCommits(join(root, '.ai/cezar'));
       const replyId = randomUUID();
       await service.send(callerFor(p.id), { id: replyId, recipientRunId: w.id, kind: 'reply', requestId: String(routed()!.messageId), text: 'Choice: Parser', timeoutSeconds: 600 });
-      await until(() => store.readEvents(w.id).some(event => event.type === 'human-input-delivered' && event.source === 'parent'));
+      await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'human-input-delivered' && event.source === 'parent'));
       await until(() => !!store.getRun(w.id)?.agentInputs?.find(input => input.id === replyId)?.consumedAt && humanOpen(w.id).every(wait => wait.id !== question!.id));
       expect(settled(w.id, question!.id)?.phase).toBe('delivered');
       const reply = (row: RunRecord) => row.agentInputs?.find(input => input.id === replyId);
@@ -424,7 +424,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       store.commitDelegation([{ id: p.id, delegation: { ...delegation, permissions: [...delegation.permissions, 'steer'] } }]);
       const w = await worker(p.id, HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       manager.enqueueOwnedRun(w.id);
-      const routed = () => store.readEvents(w.id).find(event => event.type === 'worker-question-routed');
+      const routed = () => store.eventLog.readEvents(w.id).find(event => event.type === 'worker-question-routed');
       await until(() => routed() !== undefined && store.getRun(w.id)?.status === 'waiting');
       const askSeq = asks(w.id)[0]!.seq;
       const requestId = String(routed()!.messageId);
@@ -439,7 +439,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       const input = { id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: p.id, text, createdAt: new Date().toISOString() };
       expect(manager.steerWorker(w.id, input)).toBe('queued');
       await until(() => prompted(runner, text).length > 0);
-      expect(store.readEvents(w.id).filter(event => event.type === 'human-ask-closed'))
+      expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'human-ask-closed'))
         .toEqual([expect.objectContaining({ askSeq, reason: 'superseded' })]);
       expect(conversation()?.outcomes.filter(outcome => outcome.requestId === requestId)).toHaveLength(1);
       expect(store.getRun(w.id)?.agentInputs?.find(entry => entry.id === input.id)).toMatchObject(input);

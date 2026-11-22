@@ -627,9 +627,9 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
   it('retains every declaration and creation through replay and reopening', () => {
     const { store, run } = freshRun();
     store.setRepoHandle({ owner: 'o', name: 'r' });
-    store.applyMarkerRefs(run.id, { pr: 821, prs: Array.from({ length: 10 }, (_, i) => 812 + i) });
-    store.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812. Compared https://github.com/o/r/pull/999. Created a PR: https://github.com/o/r/pull/813' });
-    store.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 821, prs: Array.from({ length: 10 }, (_, i) => 812 + i) });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812. Compared https://github.com/o/r/pull/999. Created a PR: https://github.com/o/r/pull/813' });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
     expect(run.pullRequests?.map((pr) => pr.number)).toEqual([812, 813, 814, 815, 816, 817, 818, 819, 820, 821]);
     expect(run.pullRequests?.slice(0, 2).map((pr) => pr.source)).toEqual(['created', 'created']);
     expect(run.pullRequestUrl).toBe('https://github.com/o/r/pull/812');
@@ -645,19 +645,19 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
     store.setRepoHandle({ owner: 'o', name: 'r' });
     store.updateRun(run.id, { pullRequestUrl: 'https://github.com/o/r/pull/1', markerRefs: { pr: 2 } });
     store.updateRun(run.id, { pullRequestUrl: 'https://github.com/o/r/pull/3' });
-    store.applyMarkerRefs(run.id, { pr: 4 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 4 });
     expect(run.pullRequests?.map((pr) => pr.number)).toEqual([1, 3, 2, 4]);
     expect(run.pullRequestUrl).toBe('https://github.com/o/r/pull/3');
   });
 
   it('keeps bare declarations numeric until delayed repository metadata establishes scope', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, { type: 'result', result: 'Compare https://github.com/foreign/repo/pull/812' });
-    store.applyMarkerRefs(run.id, { pr: 812 });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: 'Compare https://github.com/foreign/repo/pull/812' });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 812 });
     expect(run.pullRequests).toEqual([{ number: 812, source: 'declared' }]);
     store.setRepoHandle({ owner: 'o', name: 'r' });
     expect(run.pullRequests).toEqual([{ number: 812, source: 'declared' }]);
-    store.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
+    store.eventLog.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
     expect(run.pullRequests).toEqual([{ number: 812, source: 'created', url: 'https://github.com/o/r/pull/812' }]);
     store.close();
     const reopened = RunStore.open(dataDir);
@@ -668,8 +668,8 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
   it('retains prompt-corroborated foreign declarations when metadata arrives', () => {
     const { store, run } = freshRun();
     store.updateRun(run.id, { task: 'Review foreign/repo PR 812' });
-    store.appendEvent(run.id, { type: 'result', result: 'Review https://github.com/foreign/repo/pull/812' });
-    store.applyMarkerRefs(run.id, { pr: 812 });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: 'Review https://github.com/foreign/repo/pull/812' });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 812 });
     const expected = [{ number: 812, source: 'declared', url: 'https://github.com/foreign/repo/pull/812' }];
     expect(run.pullRequests).toEqual(expected);
     store.setRepoHandle({ owner: 'o', name: 'r' });
@@ -696,7 +696,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('retains batched gh creation output without promoting an incidental adjacent URL', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, { type: 'item.completed', item: {
+    store.eventLog.appendEvent(run.id, { type: 'item.completed', item: {
       id: 'batch', kind: 'tool', title: 'Ran gh pr create --head first && gh pr create --head second',
       output: 'https://github.com/o/r/pull/812\nhttps://github.com/o/r/pull/813\nCompared https://github.com/o/r/pull/999',
     } });
@@ -706,7 +706,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('retains each URL-before-claim assistant report', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, { type: 'result', result:
+    store.eventLog.appendEvent(run.id, { type: 'result', result:
       'https://github.com/o/r/pull/812\nDraft pull request created.\nhttps://github.com/o/r/pull/813\nDraft pull request created.' });
     expect(run.pullRequests?.map(pr => pr.number)).toEqual([812, 813]);
     expect(run.pullRequestUrl).toBe('https://github.com/o/r/pull/812');
@@ -716,7 +716,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
     const { store, run } = freshRun();
     store.updateRun(run.id, { pullRequests: [{ number: 812, url: 'https://github.com/o/r/pull/812', source: 'created' }] });
     store.flush();
-    store.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
+    store.eventLog.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
     store.close();
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/o/r/pull/812');
@@ -725,16 +725,16 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('does not collect tool-output or reasoning creation claims', () => {
     const { store, run } = freshRun();
-    for (const kind of ['reasoning', 'tool']) store.appendEvent(run.id, {
+    for (const kind of ['reasoning', 'tool']) store.eventLog.appendEvent(run.id, {
       type: 'item.completed', item: { id: kind, kind, title: 'Read transcript', output: 'Created a PR: https://github.com/o/r/pull/999', text: 'Created a PR: https://github.com/o/r/pull/999' },
     });
-    store.appendEvent(run.id, { type: 'item.completed', item: { id: 'child', kind: 'message', role: 'assistant', parentItemId: 'task', text: 'Created a PR: https://github.com/o/r/pull/999' } });
+    store.eventLog.appendEvent(run.id, { type: 'item.completed', item: { id: 'child', kind: 'message', role: 'assistant', parentItemId: 'task', text: 'Created a PR: https://github.com/o/r/pull/999' } });
     expect(run.pullRequests).toBeUndefined();
   });
 
   it('does NOT adopt a PR URL the agent merely reviewed/referenced', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Reviewed https://github.com/open-mercato/cezar/pull/1 — looks good, no changes needed.',
     } as never);
@@ -743,7 +743,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('adopts a PR URL when the agent actually created one', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
     } as never);
@@ -752,7 +752,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('recognizes the raw `gh pr create` output form', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: '$ gh pr create --draft\nhttps://github.com/open-mercato/cezar/pull/7',
     } as never);
@@ -761,7 +761,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('spots creation reported through a v2 tool item (nested under `item`)', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'tool',
@@ -779,7 +779,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('adopts the CREATED PR, not one referenced earlier in the same event (#495)', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Read the linked PR https://github.com/open-mercato/cezar/pull/1 for context, then ' +
@@ -791,7 +791,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('falls back to the URL before the phrase when gh prints it first', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'https://github.com/open-mercato/cezar/pull/321\nDraft pull request created.',
     } as never);
@@ -804,7 +804,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
   // adopted a PR in a different repository as its own, forever (the first created URL wins).
   it('does not believe a creation phrase that arrives inside tool OUTPUT', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'tool',
@@ -828,7 +828,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('does not believe a creation phrase the agent merely WROTE into a file', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'tool',
@@ -847,7 +847,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('still adopts the PR from a real `gh pr create`, whose URL only appears in the output', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'tool',
@@ -887,7 +887,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     delete process.env.CEZ_REDACT_SECRETS;
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'tool-result',
       result: 'printenv output: GITHUB_TOKEN=gho_thisisarealsecrettoken123456',
     } as never);
@@ -900,7 +900,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     delete process.env.CEZ_REDACT_SECRETS;
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'tool-result',
       result: 'cat ~/.aws: AKIAIOSFODNN7EXAMPLE and sk-ant-api03-abcdefghijklmnopqrst',
     } as never);
@@ -913,7 +913,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     process.env.CEZ_REDACT_SECRETS = '0';
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'tool-result',
       result: 'GITHUB_TOKEN=gho_thisisarealsecrettoken123456',
     } as never);
@@ -1076,7 +1076,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     if (optOut) process.env.CEZ_REDACT_SECRETS = '0';
     else delete process.env.CEZ_REDACT_SECRETS;
     const store = RunStore.open(dataDir);
-    store.registerSessionSecret(session);
+    store.redaction.registerSessionSecret(session);
     const both = `${session} ${host}`;
     const hostLeft = optOut ? host : '[REDACTED]';
     const expected = `[REDACTED] ${hostLeft}`;
@@ -1085,7 +1085,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     store.updateStep(run.id, 'task', { error: both });
     store.flush();
 
-    expect(store.redactText(both)).toBe(expected);
+    expect(store.redaction.redactText(both)).toBe(expected);
     const saved = store.getRun(run.id);
     expect([saved?.title, saved?.titleSummary, saved?.error, saved?.steps[0]?.error]).toEqual([expected, expected, expected, expected]);
     const raw = readPersistedText(dataDir);
@@ -1097,7 +1097,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     delete process.env.CEZ_REDACT_SECRETS;
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
     } as never);
@@ -1122,7 +1122,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('adopts the referenced tier for a reviewed PR — without touching the created tier', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Reviewed https://github.com/open-mercato/cezar/pull/1 — looks good.',
     });
@@ -1133,7 +1133,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('sees PR URLs nested in v2 message items', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'message',
@@ -1149,7 +1149,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('ignores reasoning items — thinking text speculates about PRs it never touches', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'reasoning',
@@ -1162,14 +1162,14 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('clears the referenced tier when a second distinct PR makes the subject ambiguous', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/1',
     });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/1',
     );
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Also related: https://github.com/open-mercato/cezar/pull/2',
     });
@@ -1178,7 +1178,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('disambiguates several referenced PRs by the number named in the task prompt', () => {
     const { store, run } = freshRun('om-auto-review-pr 4170');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Reviewing https://github.com/open-mercato/cezar/pull/4170; it supersedes https://github.com/open-mercato/cezar/pull/12.',
@@ -1190,7 +1190,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('disambiguates by a PR number the prompt names as a pasted URL, not just a bare number', () => {
     const { store, run } = freshRun('review https://github.com/open-mercato/cezar/pull/3777 please');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'It supersedes https://github.com/open-mercato/cezar/pull/12.',
     });
@@ -1203,7 +1203,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('does not treat a substring of a longer number as a prompt match', () => {
     const { store, run } = freshRun('om-auto-review-pr 4170');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'https://github.com/open-mercato/cezar/pull/170 and https://github.com/open-mercato/cezar/pull/70',
@@ -1214,11 +1214,11 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('the created tier still wins and stops discovery', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Compare with https://github.com/open-mercato/cezar/pull/50',
     });
@@ -1236,7 +1236,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
 
   it('round-trips the new fields through the run database and keeps loading old records', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/1',
     });
@@ -1272,7 +1272,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('marker numbers land on the record and persist', () => {
     const { store, run } = freshRun();
-    store.applyMarkerRefs(run.id, { pr: 442, issue: 433 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 442, issue: 433 });
     store.flush();
     const loaded = RunStore.open(dataDir).getRun(run.id);
     expect(loaded?.prNumber).toBe(442);
@@ -1282,13 +1282,13 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('a declared PR picks the matching candidate among several — where fuzzy resolution gave up', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Comparing https://github.com/open-mercato/cezar/pull/500 with https://github.com/open-mercato/cezar/pull/777',
     });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined(); // ambiguous
-    store.applyMarkerRefs(run.id, { pr: 500 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 500 });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/500',
     );
@@ -1296,14 +1296,14 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('a declared PR clears a fuzzily-adopted chip that contradicts it (the #777 failure)', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Related work: https://github.com/open-mercato/cezar/pull/777',
     });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/777',
     );
-    store.applyMarkerRefs(run.id, { pr: 500 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 500 });
     const loaded = store.getRun(run.id);
     expect(loaded?.referencedPullRequestUrl).toBeUndefined();
     expect(loaded?.prNumber).toBe(500);
@@ -1311,13 +1311,13 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('later candidates resolve against the declared number, not the fuzzy rules', () => {
     const { store, run } = freshRun();
-    store.applyMarkerRefs(run.id, { pr: 500 });
-    store.appendEvent(run.id, {
+    store.eventLog.applyMarkerRefs(run.id, { pr: 500 });
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/777 for prior art.',
     });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Now updating https://github.com/open-mercato/cezar/pull/500.',
     });
@@ -1328,11 +1328,11 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('an issue-only declaration leaves the referenced tier alone', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/777',
     });
-    store.applyMarkerRefs(run.id, { issue: 500 });
+    store.eventLog.applyMarkerRefs(run.id, { issue: 500 });
     const loaded = store.getRun(run.id);
     expect(loaded?.referencedPullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/777');
     expect(loaded?.issueNumber).toBe(500);
@@ -1341,11 +1341,11 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('the created tier is untouched by markers', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
     });
-    store.applyMarkerRefs(run.id, { pr: 500 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 500 });
     expect(store.getRun(run.id)?.pullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/42',
     );
@@ -1353,7 +1353,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('an empty declaration is a no-op', () => {
     const { store, run } = freshRun();
-    store.applyMarkerRefs(run.id, {});
+    store.eventLog.applyMarkerRefs(run.id, {});
     expect(store.getRun(run.id)?.markerRefs).toBeUndefined();
   });
 
@@ -1363,16 +1363,16 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
   // referenced tier cleared #4326 (no candidate ends in /5366), so the cockpit painted one chip.
   it('a declaration naming the PR the task CREATED keeps the PR it is about', () => {
     const { store, run } = freshRun('Address GitHub pull request #4326');
-    store.applyMarkerRefs(run.id, { pr: 4326 });
-    store.appendEvent(run.id, {
+    store.eventLog.applyMarkerRefs(run.id, { pr: 4326 });
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Reviewing https://github.com/open-mercato/open-mercato/pull/4326.',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Ran gh pr create … → https://github.com/open-mercato/open-mercato/pull/5366',
     });
-    store.applyMarkerRefs(run.id, { pr: 5366 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 5366 });
 
     const loaded = store.getRun(run.id);
     expect(loaded?.pullRequestUrl).toBe('https://github.com/open-mercato/open-mercato/pull/5366');
@@ -1387,13 +1387,13 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('restores the about-PR when the declaration arrives BEFORE the creation evidence', () => {
     const { store, run } = freshRun('Address GitHub pull request #4326');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Reviewing https://github.com/open-mercato/open-mercato/pull/4326.',
     });
-    store.applyMarkerRefs(run.id, { pr: 5366 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 5366 });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined(); // nothing created yet
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Ran gh pr create … → https://github.com/open-mercato/open-mercato/pull/5366',
     });
@@ -1404,11 +1404,11 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('still fills an unknown prNumber from a declaration that names the created PR', () => {
     const { store, run } = freshRun('ship the devices work');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Created a pull request: https://github.com/open-mercato/cezar/pull/42',
     });
-    store.applyMarkerRefs(run.id, { pr: 42 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 42 });
     expect(store.getRun(run.id)?.prNumber).toBe(42);
   });
 
@@ -1458,11 +1458,11 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
 
   it('a declaration naming some OTHER PR still overrides the fuzzy tier', () => {
     const { store, run } = freshRun('task');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Created a pull request: https://github.com/open-mercato/cezar/pull/42',
     });
-    store.applyMarkerRefs(run.id, { pr: 500 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 500 });
     const loaded = store.getRun(run.id);
     expect(loaded?.prNumber).toBe(500);
     expect(loaded?.referencedPullRequestUrl).toBeUndefined(); // no candidate ends in /500
@@ -1493,15 +1493,15 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
     'keeps the originating issue after filing a follow-up: %s', (task) => {
       const { store, run } = freshRun(task);
       store.updateRun(run.id, { issueNumber: 1200 });
-      store.applyMarkerRefs(run.id, { issue: 1200 });
-      store.applyMarkerRefs(run.id, { pr: 1210 });
-      store.appendEvent(run.id, { type: 'result', result:
+      store.eventLog.applyMarkerRefs(run.id, { issue: 1200 });
+      store.eventLog.applyMarkerRefs(run.id, { pr: 1210 });
+      store.eventLog.appendEvent(run.id, { type: 'result', result:
         'Created https://github.com/open-mercato/cezar/issues/1216' });
-      store.applyMarkerRefs(run.id, { issue: 1216 });
+      store.eventLog.applyMarkerRefs(run.id, { issue: 1216 });
       expect(run.issueNumber).toBe(1200);
       expect(run.referencedIssueUrl).not.toBe('https://github.com/open-mercato/cezar/issues/1216');
       expect(run.referencedIssueCandidates).toContain('https://github.com/open-mercato/cezar/issues/1216');
-      store.appendEvent(run.id, { type: 'result', result:
+      store.eventLog.appendEvent(run.id, { type: 'result', result:
         'Working https://github.com/open-mercato/cezar/issues/1200' });
       expect(run.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/1200');
       store.flush();
@@ -1511,9 +1511,9 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
   it('lets the marker replace incidental issue mentions in a comparison prompt', () => {
     const { store, run } = freshRun('Compare against issue #1200 while fixing issue #1216');
     store.updateRun(run.id, { issueNumber: 1200 });
-    store.appendEvent(run.id, { type: 'result', result:
+    store.eventLog.appendEvent(run.id, { type: 'result', result:
       'https://github.com/open-mercato/cezar/issues/1200 https://github.com/open-mercato/cezar/issues/1216' });
-    store.applyMarkerRefs(run.id, { issue: 1216 });
+    store.eventLog.applyMarkerRefs(run.id, { issue: 1216 });
     expect(run.issueNumber).toBe(1216);
     expect(run.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/1216');
     store.close();
@@ -1525,7 +1525,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
   it('keeps equal-number prompt issues across repositories ambiguous', () => {
     const urls = ['https://github.com/one/repo/issues/1200', 'https://github.com/two/repo/issues/1200'];
     const { store, run } = freshRun(`Compare ${urls.join(' and ')}`);
-    store.applyMarkerRefs(run.id, { issue: 1200 });
+    store.eventLog.applyMarkerRefs(run.id, { issue: 1200 });
     expect(run.referencedIssueUrl).toBeUndefined();
   });
 
@@ -1544,7 +1544,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
   it('does not decode normalized issue history on repeated store opens', () => {
     const { store, run } = freshRun('Fix issue #1200');
     setRunStatus(store, run.id, RUN_STATUS.done, { issueNumber: 1200 });
-    store.applyMarkerRefs(run.id, { issue: 1216 });
+    store.eventLog.applyMarkerRefs(run.id, { issue: 1216 });
     store.close();
     const scan = vi.spyOn(RunDatabase.prototype, 'listWhere');
     try {
@@ -1587,7 +1587,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('adopts a single issue link and seeds issueNumber', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Fixing https://github.com/open-mercato/cezar/issues/433 now.',
     });
@@ -1599,7 +1599,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
   it('keeps issue links from tool output display-only until the agent names them', () => {
     const { store, run } = freshRun();
     const issueUrl = 'https://github.com/open-mercato/cezar/issues/99';
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'item.completed',
       item: {
         kind: 'tool',
@@ -1615,7 +1615,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
     expect(store.getRun(run.id)?.referencedIssueUrl).toBe(issueUrl);
     expect(store.getRun(run.id)?.issueNumber).toBeUndefined();
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: `This run is about ${issueUrl}.`,
     });
@@ -1632,7 +1632,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('tracks issues independently of a created PR', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42 closing https://github.com/open-mercato/cezar/issues/7',
@@ -1645,14 +1645,14 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('ambiguity clears the chip and takes back the number the janitor seeded', () => {
     const { store: firstStore, run } = freshRun();
-    firstStore.appendEvent(run.id, {
+    firstStore.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/issues/1',
     });
     expect(firstStore.getRun(run.id)?.issueNumber).toBe(1);
     firstStore.close();
     const store = RunStore.open(dataDir, { keepLive: true });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Also https://github.com/open-mercato/cezar/issues/2',
     });
@@ -1664,11 +1664,11 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
   it('ambiguity preserves a prompt-derived issueNumber equal to the previous resolution', () => {
     const { store, run } = freshRun('port the fix from issue 12 into issue 433');
     store.updateRun(run.id, { issueNumber: 12 });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/issues/12',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Also https://github.com/open-mercato/cezar/issues/433',
     });
@@ -1679,7 +1679,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('disambiguates several issue links by the number named in the task prompt', () => {
     const { store, run } = freshRun('om-auto-fix-issue 433');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Working https://github.com/open-mercato/cezar/issues/433, related to https://github.com/open-mercato/cezar/issues/12.',
@@ -1691,12 +1691,12 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('a declared CEZ:ISSUE filters the candidates and owns issueNumber', () => {
     const { store, run } = freshRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'See https://github.com/open-mercato/cezar/issues/1 and https://github.com/open-mercato/cezar/issues/2',
     });
-    store.applyMarkerRefs(run.id, { issue: 2 });
+    store.eventLog.applyMarkerRefs(run.id, { issue: 2 });
     const loaded = store.getRun(run.id);
     expect(loaded?.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/2');
     expect(loaded?.issueNumber).toBe(2);
@@ -1704,8 +1704,8 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
 
   it('never overwrites a marker-owned issueNumber from a stray link', () => {
     const { store, run } = freshRun();
-    store.applyMarkerRefs(run.id, { issue: 500 });
-    store.appendEvent(run.id, {
+    store.eventLog.applyMarkerRefs(run.id, { issue: 500 });
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Mentioned in https://github.com/open-mercato/cezar/issues/9',
     });
@@ -1736,7 +1736,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     // "assessing Phase 0 SQL safety": a research task cites one upstream PR, and the
     // one-distinct-candidate rule made it the task's identity.
     const { store, run } = scopedRun('assessing Phase 0 SQL safety');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Migration safety is discussed in https://github.com/supabase/cli/pull/6056.',
     });
@@ -1749,7 +1749,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
   it('drops a lone foreign issue AND refuses to seed issueNumber from it', () => {
     const { store, run } = scopedRun('assessing Phase 0 SQL safety');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Tracked upstream as https://github.com/supabase/cli/issues/6056.',
     });
@@ -1765,7 +1765,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     const { store, run } = scopedRun(
       'om-auto-fix-pr https://github.com/open-mercato/open-mercato/pull/1977',
     );
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Working on https://github.com/open-mercato/open-mercato/pull/1977 now.',
     });
@@ -1776,7 +1776,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
   it('corroboration accepts the bare owner/repo, not only a pasted URL', () => {
     const { store, run } = scopedRun('port the fix over to open-mercato/open-mercato');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/open-mercato/pull/1977.',
     });
@@ -1791,7 +1791,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
     it.each(['fix the local bug', 'review other/repo2'])('revokes references no longer corroborated by: %s', (task) => {
       const { store, run } = scopedRun('review other/repo');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       expect(run.issueNumber).toBe(43);
       const seen: Array<string | undefined> = [];
@@ -1829,10 +1829,10 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
     it('does not match a prompt URL number prefix or override an explicit marker', () => {
       const { store, run } = scopedRun('review other/repo');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} https://github.com/other/repo/pull/420` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} https://github.com/other/repo/pull/420` });
       store.updateRun(run.id, { task: 'review https://github.com/other/repo/pull/420' });
       expect(run.referencedPullRequestUrl).toBe('https://github.com/other/repo/pull/420');
-      store.applyMarkerRefs(run.id, { pr: 42 });
+      store.eventLog.applyMarkerRefs(run.id, { pr: 42 });
       store.updateRun(run.id, { task: 'review https://github.com/other/repo/pull/420 again' });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       store.flush();
@@ -1888,7 +1888,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       const original = `review ${foreignPr} and ${foreignIssue}`;
       const { store, run } = scopedRun(original);
       store.updateRun(run.id, { prNumber: 42, issueNumber: 7, pullRequestUrl: 'https://github.com/other/repo/pull/99' });
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       for (const task of ['fix the local bug', original, 'review other/repo2', original]) {
         store.updateRun(run.id, { task });
         expect(run.referencedPullRequestUrl).toBe(task === original ? foreignPr : undefined);
@@ -1905,7 +1905,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
     it('resolves retained candidates on a newly corroborating prompt without inventing number ownership', () => {
       const { store, run } = scopedRun('local task');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       expect(run.referencedIssueUrl).toBeUndefined();
       store.updateRun(run.id, { task: 'review other/repo' });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
@@ -1918,7 +1918,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it('reapplies ambiguity before repository scoping after every edit', () => {
       const localPr = 'https://github.com/open-mercato/cezar/pull/8';
       const { store, run } = scopedRun('compare references');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${localPr}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${localPr}` });
       for (const task of ['review other/repo #42', 'local task', 'review other/repo #42']) {
         store.updateRun(run.id, { task });
         expect(run.referencedPullRequestUrl).toBe(task.includes('#42') ? foreignPr : undefined);
@@ -1930,7 +1930,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it('updates only janitor-owned issue numbers as the selected candidate changes', () => {
       const second = 'https://github.com/other/repo/issues/44';
       const { store, run } = scopedRun('review other/repo #43');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignIssue} ${second}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignIssue} ${second}` });
       expect(run.issueNumber).toBe(43);
       store.updateRun(run.id, { task: 'review other/repo #44' });
       expect(run.referencedIssueUrl).toBe(second);
@@ -1948,9 +1948,9 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it('keeps marker authority separate from the created PR when resolving edited prompts', () => {
       const secondPr = 'https://github.com/other/repo/pull/44';
       const { store, run } = scopedRun('review other/repo #42');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${secondPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${secondPr} ${foreignIssue}` });
       store.updateRun(run.id, { pullRequestUrl: 'https://github.com/other/repo/pull/99' });
-      store.applyMarkerRefs(run.id, { pr: 99, issue: 43 });
+      store.eventLog.applyMarkerRefs(run.id, { pr: 99, issue: 43 });
       store.updateRun(run.id, { task: 'local task' });
       store.updateRun(run.id, { task: 'review other/repo #44' });
       expect(run.referencedPullRequestUrl).toBe(secondPr);
@@ -1963,7 +1963,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
     it('preserves created PR ownership and an independently supplied issue number', () => {
       const { store, run } = scopedRun('review other/repo');
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       store.updateRun(run.id, { pullRequestUrl: 'https://github.com/other/repo/pull/99' });
       store.updateRun(run.id, { task: 'fix local issue 7', issueNumber: 7 });
       expect(run.referencedIssueUrl).toBeUndefined();
@@ -1977,7 +1977,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       ['fix the local bug', null],
     ] as const)('keeps an allowed reference when edited to %s', (task, handle) => {
       const { store, run } = scopedRun('review other/repo', handle);
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       store.updateRun(run.id, { task });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       expect(run.referencedIssueUrl).toBe(foreignIssue);
@@ -2015,7 +2015,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it.each(editCases.flatMap(edit => writePaths.map(write => ({ ...edit, ...write }))))(
       'resolves $name on the $path path', ({ task, evidence, edit, extra, expected }) => {
         const { store, run } = scopedRun(task);
-        if (evidence) store.appendEvent(run.id, { type: 'result', result: evidence });
+        if (evidence) store.eventLog.appendEvent(run.id, { type: 'result', result: evidence });
         const seen: Array<ReturnType<typeof referenceFields>> = [];
         onRunWrite(store.lifecycle, (record: RunRecord) => seen.push(referenceFields(record)));
 
@@ -2043,7 +2043,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
     it.each(collisions)('rejects a different repository in the prompt: %s', (task) => {
       const { store, run } = scopedRun(task, project);
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       const record = store.getRun(run.id);
       expect(record?.referencedPullRequestUrl).toBeUndefined();
       expect(record?.referencedIssueUrl).toBeUndefined();
@@ -2056,7 +2056,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it.each(collisions)('repairs a stored collision after reload: %s', (task) => {
       const seed = RunStore.open(dataDir);
       const run = seed.createRun({ title: 't', workflow: 'w', task, steps: [] });
-      seed.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      seed.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       seed.close();
       const store = RunStore.open(dataDir);
       expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(foreignPr);
@@ -2076,7 +2076,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       `fix ${foreignIssue}`,
     ])('preserves an exact repository match: %s', (task) => {
       const { store, run } = scopedRun(task, project);
-      store.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+      store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(foreignPr);
       expect(store.getRun(run.id)?.referencedIssueUrl).toBe(foreignIssue);
       store.flush();
@@ -2085,7 +2085,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
   it("leaves the project's own PRs alone — the ordinary #407 path", () => {
     const { store, run } = scopedRun();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Reviewed https://github.com/open-mercato/cezar/pull/407 — looks good.',
     });
@@ -2096,7 +2096,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
 
   it('matches the handle case-insensitively', () => {
     const { store, run } = scopedRun('task', { owner: 'Open-Mercato', name: 'Cezar' });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/407.',
     });
@@ -2109,7 +2109,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     // No `gh`, no remote, a non-git root, hosted mode: `resolveRepoHandle` answers null and the
     // foreign URL is adopted exactly as it was before this guard existed.
     const { store, run } = scopedRun('assessing Phase 0 SQL safety', null);
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'Migration safety is discussed in https://github.com/supabase/cli/pull/6056.',
     });
@@ -2121,7 +2121,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
   it('a store that was never armed keeps pre-#945 behavior too', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/supabase/cli/pull/6056.',
     });
@@ -2134,11 +2134,11 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     // The marker owns the resolution, but it can only ever pick from the candidate list — and a
     // foreign candidate is not adoptable, so the chip stays empty rather than pointing away.
     const { store, run } = scopedRun('task');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result: 'See https://github.com/supabase/cli/pull/6056.',
     });
-    store.applyMarkerRefs(run.id, { pr: 6056 });
+    store.eventLog.applyMarkerRefs(run.id, { pr: 6056 });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined();
   });
 
@@ -2243,7 +2243,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it('persists a late heal after the caller has already flushed for shutdown', () => {
       const store = RunStore.open(dataDir);
       const run = store.createRun({ title: 't', workflow: 'w', task: 'research SQL safety', steps: [] });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'result',
         result: 'See https://github.com/supabase/cli/pull/6056 and https://github.com/supabase/cli/issues/42.',
       });
@@ -2282,7 +2282,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     // Strictly subtractive: two candidates, one foreign, still resolves to nothing. Filtering the
     // list before resolving would have promoted the local one — a wider change than the fix needs.
     const { store, run } = scopedRun('task');
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'result',
       result:
         'Compare https://github.com/open-mercato/cezar/pull/1 with https://github.com/supabase/cli/pull/6056.',
@@ -2305,23 +2305,23 @@ describe('RunStore — seq survives a restart (#424 symptom class)', () => {
   it('continues numbering above the NDJSON max after reopen, so replayed clients keep receiving', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'one' });
-    store.appendEvent(run.id, { type: 'note', message: 'two' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'one' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'two' });
     store.close();
 
     // A client that replayed the file now dedups with maxSeq = 2. A restarted
     // process restarting seqs at 1 would have every resumed event dropped.
     const reopened = RunStore.open(dataDir, { keepLive: true });
-    const resumed = reopened.appendEvent(run.id, { type: 'note', message: 'after restart' });
+    const resumed = reopened.eventLog.appendEvent(run.id, { type: 'note', message: 'after restart' });
     expect(resumed.seq).toBe(3);
-    const seqs = reopened.readEvents(run.id).map((e) => e.seq);
+    const seqs = reopened.eventLog.readEvents(run.id).map((e) => e.seq);
     expect(seqs).toEqual([1, 2, 3]);
   });
 
   it('starts at 1 for a run with no event file', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
-    expect(store.appendEvent(run.id, { type: 'note', message: 'first' }).seq).toBe(1);
+    expect(store.eventLog.appendEvent(run.id, { type: 'note', message: 'first' }).seq).toBe(1);
   });
 });
 
@@ -2340,21 +2340,21 @@ describe('RunStore — provider authorization callouts', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'provider-auth-required',
       provider: 'claude',
       authFailureId: 'auth-incident-1',
       stepId: 'implementation',
     });
 
-    expect(store.readEvents(run.id)).toEqual([expect.objectContaining({
+    expect(store.eventLog.readEvents(run.id)).toEqual([expect.objectContaining({
       type: 'provider-auth-required',
       provider: 'claude',
       authFailureId: 'auth-incident-1',
       stepId: 'implementation',
     })]);
-    expect(JSON.stringify(store.readEvents(run.id))).not.toContain('OAuth');
-    expect(JSON.stringify(store.readEvents(run.id))).not.toContain('token');
+    expect(JSON.stringify(store.eventLog.readEvents(run.id))).not.toContain('OAuth');
+    expect(JSON.stringify(store.eventLog.readEvents(run.id))).not.toContain('token');
   });
 });
 

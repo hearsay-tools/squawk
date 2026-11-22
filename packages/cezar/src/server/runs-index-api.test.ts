@@ -380,7 +380,7 @@ describe('workspace runs index API', () => {
     const delegation = { role: 'root' as const, permissions: [], receipts: [], wait: { id: live.id, workerIds: [live.id], deadline: '2026-09-09T00:00:00.000Z', phase: 'parked' as const, outcomes: [] } };
     const question = { type: 'ask.requested', requestId: 'question', questions: [{ header: 'Choice', question: 'Which option?', options: [{ label: 'First' }, { label: 'Second' }] }] };
     setRunStatus(store, live.id, RUN_STATUS.waiting, { delegation });
-    store.appendEvent(live.id, question);
+    store.eventLog.appendEvent(live.id, question);
     // Every ask opens a human wait (phase 2); a cold row an older Squawk stored keeps the summary,
     // which the read upgrades into one (phase 4b, hearsay-tools/cezarion#1236).
     store.commitWait(live.id, { id: '00000000-0000-4000-8000-0000000000ac', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_ask, registeredAt: '2026-09-05T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn-1' });

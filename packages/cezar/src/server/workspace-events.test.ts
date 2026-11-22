@@ -307,7 +307,7 @@ describe('GET /api/v1/workspace/events', () => {
         steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }],
       });
       other.store.updateStep(run.id, 'work', { backend: 'opencode' });
-      other.store.appendEvent(run.id, {
+      other.store.eventLog.appendEvent(run.id, {
         type: 'session.error',
         stepId: 'work',
         message: 'OAuth access token is invalid',
@@ -363,7 +363,7 @@ describe('GET /api/v1/workspace/events', () => {
 
     try {
       delete process.env.CEZ_DRY_RUN;
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
       });

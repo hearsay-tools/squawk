@@ -50,7 +50,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
       await until(() => turnEnds(run.id) > turns && store.getRun(run.id)?.status === 'waiting');
       expect(hasPendingAsk(store, run.id)).toBe(true);
       expect(label(run.id)).toBe('needs you');
-      expect(store.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
       expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Vitest' }])).toBe(true);
       await until(() => answered(run.id, askSeq));
       // The answer's own turn end gets the no-wait nudge (hearsay-tools/cezarion#1234): the card
@@ -75,7 +75,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     expect(existsSync(join(root, 'args')) && readFileSync(join(root, 'args'), 'utf8').includes(ci.id)).toBe(false);
     expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Library: Vitest' }])).toBe(true);
     await until(() => settled(run.id, ci.id)?.phase === 'delivered' && prompted('codex', `CI wait observation ${ci.id}`).length > 0);
-    const events = store.readEvents(run.id);
+    const events = store.eventLog.readEvents(run.id);
     const answer = events.find(event => event.type === 'human-input-delivered')!;
     const answeredTurnEnd = events.find(event => event.type === 'turn-end' && event.seq > answer.seq)!;
     expect(answeredTurnEnd).toBeDefined();
@@ -123,7 +123,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     await Promise.all([...work.pending].filter(([, label]) => label === 'pump').map(([task]) => task));
     expect(manager.cancel(first.id)).toBe(true);
     await until(() => store.getRun(third.id)?.status === 'waiting');
-    expect(store.readEvents(third.id).filter(event => event.type === 'step-start')).toHaveLength(1);
+    expect(store.eventLog.readEvents(third.id).filter(event => event.type === 'step-start')).toHaveLength(1);
     expect(store.getRun(second.id)?.waits?.[0]?.phase).toBe('open');
   });
 });

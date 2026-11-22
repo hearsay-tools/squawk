@@ -26,16 +26,16 @@ it('readiness repeated done with live workers: one nudge, then a park on the re-
     await until(() => completionNudges(p.id).length === 1 && store.getRun(p.id)?.status === 'waiting');
     const timer = store.getRun(p.id)?.waits?.find(wait => wait.kind === 'timer' && wait.via === 'monitoring-line');
     expect(timer).toBeDefined();
-    const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+    const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
     // Deliver Squawk's own lifecycle input through the public route, without a human budget reset.
     const input = { id: randomUUID(), source: 'lifecycle' as const, parentRunId: p.id,
       text: toolCall('cezar_done', {}), createdAt: new Date().toISOString() };
     store.updateRun(p.id, { agentInputs: [...store.getRun(p.id)?.agentInputs ?? [], input] });
     manager.deliverConversationInput(p.id);
-    const refused = () => store.readEvents(p.id).filter(event => event.type === 'text' && String(event.text).includes('workers_outstanding') && String(event.text).includes(`worker stop ${w.id}`));
+    const refused = () => store.eventLog.readEvents(p.id).filter(event => event.type === 'text' && String(event.text).includes('workers_outstanding') && String(event.text).includes(`worker stop ${w.id}`));
     // The child reply and stdin delivery receipt arrive on independent pipes.
     // bound: fail if either lifecycle signal is missing; neither signal requires a refusal.
-    await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries &&
+    await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries &&
       !!store.getRun(p.id)?.agentInputs?.find(found => found.id === input.id)?.deliveredAt);
     expect(refused()).toHaveLength(1);
     expect(store.getRun(p.id)?.status).toBe('waiting');
@@ -50,14 +50,14 @@ it('a blocked done with the automatic-wake budget spent opens the budget human w
     await until(() => store.getRun(p.id)?.status === 'waiting');
     store.commitOutcome(p.id, { kind: 'charged', automaticWakes: MAX_AUTO_CONTINUES });
     const sent = recordAgentInput(p.id);
-    const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+    const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
     // Straight to the session: a human message would restart the budget.
     const w = await blockedDone(p.id, () => worker(p.id), text => sessionOf(p.id).sendMessage([{ type: 'text', text }]));
-    await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && store.getRun(p.id)?.status === 'waiting');
+    await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && store.getRun(p.id)?.status === 'waiting');
     expect(completionNudges(p.id)).toEqual([]);
     expect(sentTexts(sent, `Workers are still live: ${w.id}.`)).toEqual([]);
     expect(store.getRun(p.id)?.waits).toEqual([expect.objectContaining({ kind: WAIT_KIND.human, source: WAIT_SOURCE.cezar, via: WAIT_VIA.budget, phase: WAIT_PHASE.open })]);
-    expect(store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes(`Workers are still live: ${w.id}.`))).toBe(true);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes(`Workers are still live: ${w.id}.`))).toBe(true);
     expect(store.getRun(p.id)?.automaticWakes).toBe(MAX_AUTO_CONTINUES);
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
     expect(manager.finish(p.id)).toBe(false);

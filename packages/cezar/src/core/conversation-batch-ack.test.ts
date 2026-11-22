@@ -24,7 +24,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const first = enqueue('mock:agent-echo delay-owned-ack first');
         const second = enqueue('mock:agent-echo second in same batch');
         manager.deliverConversationInput(runId);
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(second.text)));
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(second.text)));
         const third = enqueue('mock:agent-echo arrived during acknowledgement');
         manager.deliverConversationInput(runId);
         expect(store.getRun(runId)?.agentInputs).toEqual([first, second, third]);
@@ -40,8 +40,8 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
           expect(inputs[0]!.deliveredAt).toBe(inputs[1]!.deliveredAt);
           // OpenCode's HTTP ACK and SSE text arrive independently. Wait for
           // the final observed turn before asserting how messages were batched.
-          await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(third.text)));
-          const turns = store.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes('Agent conversation'));
+          await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(third.text)));
+          const turns = store.eventLog.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes('Agent conversation'));
           expect(turns).toHaveLength(2);
           expect(String(turns[0]!.text)).toContain(first.text);
           expect(String(turns[0]!.text)).toContain(second.text);
@@ -67,7 +67,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         };
         const first = enqueue('mock:agent-echo delay-owned-ack provider owns this');
         manager.deliverConversationInput(runId);
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(first.text)));
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(first.text)));
         const second = enqueue('mock:agent-echo inbox owns this'); const generation = randomUUID();
         expect(manager.canClaimInboxInput(runId, first.id)).toBe(false);
         expect(manager.reserveInboxInputs(runId, generation, [first.id])).toBeUndefined();
@@ -79,7 +79,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
           receiptId: receipt.receiptId, expiresAt: receipt.expiresAt, generation, memberIds: [second.id],
         } });
         expect(manager.acknowledgeInbox(runId, generation, receipt.receiptId)).toBe('acknowledged');
-        const turns = store.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes('Agent conversation'));
+        const turns = store.eventLog.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes('Agent conversation'));
         expect(turns).toHaveLength(1); expect(String(turns[0]!.text)).not.toContain(second.id);
       });
     });

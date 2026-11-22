@@ -56,10 +56,10 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     if (target === 'worker') cleanupCheckpoint(store, a.workerId);
     else store.commitDelegation([{ id: a.parentId, delegation: store.getRun(a.parentId)!.delegation! }]);
     for (const id of [a.parentId, a.workerId]) {
-      expect(store.readEvents(id).some(e => e.type === 'conversation-message' && e.projectionId === `conversation-message:${a.messageId}:not-delivered`)).toBe(true);
+      expect(store.eventLog.readEvents(id).some(e => e.type === 'conversation-message' && e.projectionId === `conversation-message:${a.messageId}:not-delivered`)).toBe(true);
     }
     for (const id of [b.parentId, b.workerId]) {
-      expect(store.readEvents(id).some(e => e.type === 'conversation-message')).toBe(false);
+      expect(store.eventLog.readEvents(id).some(e => e.type === 'conversation-message')).toBe(false);
     }
   });
 
@@ -67,7 +67,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     // The full pass recovery runs (#779): settled families are no longer in memory, and the
     // pass over live families would skip them.
     await manager.recover();
-    for (const family of [a, b]) expect(store.readEvents(family.parentId).some(e => e.type === 'conversation-message')).toBe(true);
+    for (const family of [a, b]) expect(store.eventLog.readEvents(family.parentId).some(e => e.type === 'conversation-message')).toBe(true);
   });
 
   it('leaves fallback conversation families readable and unchanged during boot recovery', async () => {
@@ -78,11 +78,11 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     manager = new RunManager(store, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     const writes = vi.spyOn(store, 'commitConversation');
     const prepare = vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts');
-    const before = store.readEvents(a.parentId);
+    const before = store.eventLog.readEvents(a.parentId);
     await manager.recover();
     store.flush();
     expect(store.getRun(a.parentId)).toBeDefined();
-    expect(store.readEvents(a.parentId)).toEqual(before);
+    expect(store.eventLog.readEvents(a.parentId)).toEqual(before);
     expect(writes).not.toHaveBeenCalled();
     expect(prepare.mock.calls).not.toContainEqual([a.parentId]);
     expect(existsSync(join(root, '.ai/cezar/runs.db'))).toBe(false);
@@ -152,7 +152,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     else expect(await manager.adoptOrphanedRun(a.parentId)).toBe(true);
     expect(joins).not.toHaveBeenCalled();
     for (const id of [a.parentId, a.workerId]) {
-      expect(store.readEvents(id).some(e => e.type === 'conversation-message')).toBe(true);
+      expect(store.eventLog.readEvents(id).some(e => e.type === 'conversation-message')).toBe(true);
     }
     store.close();
   });
@@ -169,14 +169,14 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts').mockImplementationOnce(async family => {
       await gate; await prepare(family);
     });
-    const before = store.readEvents(a.parentId);
+    const before = store.eventLog.readEvents(a.parentId);
     const recovery = manager.recover(a.parentId);
     try {
       await vi.advanceTimersByTimeAsync(QUEUE_WATCHDOG_MS);
       const rescues = tracked.mock.calls.filter(([label]) => label === 'rescueStalledQueue');
       expect(rescues).toHaveLength(1);
       await rescues[0]![1];
-      expect(store.readEvents(a.parentId)).toEqual(before);
+      expect(store.eventLog.readEvents(a.parentId)).toEqual(before);
       expect(store.getRun(a.parentId)?.status).toBe('queued');
     } finally {
       manager.dispose(); release(); await recovery;
@@ -200,7 +200,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     // The watchdog/global and delegation-checkpoint paths must not project this family yet.
     manager.reconcileWorkerWaits(a.parentId);
     store.commitDelegation([{ id: a.parentId, delegation: store.getRun(a.parentId)!.delegation! }]);
-    expect(store.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(false);
+    expect(store.eventLog.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(false);
     if (outcome === 'dispose') manager.dispose();
     if (outcome === 'failure') {
       const rejected = expect(recovery).rejects.toThrow('facts failed');
@@ -209,7 +209,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
       // A retry must enter recovery, rather than finding a stranded in-flight scope.
       await manager.recover(a.parentId);
     } else { release(); await recovery; }
-    expect(store.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(outcome !== 'dispose');
+    expect(store.eventLog.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(outcome !== 'dispose');
     store.close();
   });
 
@@ -258,23 +258,23 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     release(); if (rejection) await rejection; else await recovery;
     expect(settlement).not.toHaveBeenCalled();
     expect(store.workerExecutions.readWorkerExecution(a.workerId)?.phase).toBe(outcome === 'completed' ? 'complete' : 'starting');
-    expect(store.readEvents(a.workerId).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(false);
+    expect(store.eventLog.readEvents(a.workerId).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(false);
     store.close();
   });
 
   it('reconciles only the families with a live member when no family is named', () => {
     setRunStatus(store, b.workerId, RUN_STATUS.running);
     manager.reconcileWorkerWaits();
-    expect(store.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(false);
-    expect(store.readEvents(b.parentId).some(e => e.type === 'conversation-message')).toBe(true);
+    expect(store.eventLog.readEvents(a.parentId).some(e => e.type === 'conversation-message')).toBe(false);
+    expect(store.eventLog.readEvents(b.parentId).some(e => e.type === 'conversation-message')).toBe(true);
   });
 
   it.each(['family', 'live'] as const)('does not lose a %s request emitted during reconciliation', scope => {
     // A live family is reached by the unnamed pass; the settled one by its checkpoint.
     if (scope === 'live') setRunStatus(store, b.workerId, RUN_STATUS.running);
-    const append = store.appendEvent.bind(store);
+    const append = store.eventLog.appendEvent.bind(store.eventLog);
     let changed = false;
-    vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+    vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       if (!changed && id === a.parentId && event.type === 'conversation-message') {
         changed = true;
         if (scope === 'family') cleanupCheckpoint(store, b.workerId);
@@ -284,7 +284,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     });
     cleanupCheckpoint(store, a.workerId);
     expect(changed).toBe(true);
-    expect(store.readEvents(b.parentId).some(e => e.type === 'conversation-message')).toBe(true);
+    expect(store.eventLog.readEvents(b.parentId).some(e => e.type === 'conversation-message')).toBe(true);
   });
 });
 
@@ -372,7 +372,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
       expect(run.agentInputs).toEqual([expect.objectContaining({ source: 'lifecycle', text: expect.stringContaining(`Workers are still live: ${workerId}.`) })]);
       expect(run.agentInputs?.[0]?.text).toContain(COMPLETION_WILL_WAIT);
       expect(run.waits ?? []).toEqual([]);
-      expect(store.readEvents(parent.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(true);
+      expect(store.eventLog.readEvents(parent.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(true);
     });
   });
 

@@ -38,7 +38,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(queued.id)?.status).toBe('queued');
     expect(store.workerExecutions.readWorkerExecution(queued.id)?.phase).toBe('queued');
     expect(store.getRun(queued.id)?.worktreePath).toBeUndefined();
-    expect(store.readEvents(queued.id).some(event => event.type === 'session')).toBe(false);
+    expect(store.eventLog.readEvents(queued.id).some(event => event.type === 'session')).toBe(false);
     // bound: the unrelated run's turn end proves it passed the held child in the shared queue.
     await until(() => store.getRun(unrelated.id)?.status === 'waiting');
     await semaphore.release(); await pumps();
@@ -62,7 +62,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const environment = vi.spyOn(profiles, 'resolveProfileEnvForRoot').mockImplementation(async (...args) => {
       entered = true; await gate; return env(...args);
     });
-    const sessions = store.readEvents(w.id).filter(event => event.type === 'session').length;
+    const sessions = store.eventLog.readEvents(w.id).filter(event => event.type === 'session').length;
     let spawned!: () => void;
     const sessionStarted = new Promise<void>(resolve => { spawned = resolve; });
     const trackSession = work.trackSession.bind(work);
@@ -80,7 +80,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
       // Either requeue settles execution or a regression opens a tracked runner session.
       await Promise.race([Promise.all(executions.slice(firstExecution)), sessionStarted]);
       expect(store.getRun(w.id)?.status).toBe('queued');
-      expect(store.readEvents(w.id).filter(event => event.type === 'session')).toHaveLength(sessions);
+      expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'session')).toHaveLength(sessions);
       expect(semaphore.busy()).toBe(0);
     } finally { release(); environment.mockRestore(); sessionLaunch.mockRestore(); }
     await manager.recover(p.id);

@@ -66,8 +66,8 @@ describe('project run sources', () => {
     expect(store.getRun(run.id)?.title).toBe('fallback');
     expect(store.listRunSummaries().runs.map(item => item.id)).toEqual([run.id]);
     expect(store.listRunIds()).toEqual([run.id]);
-    expect(store.readEvents(run.id)[0]?.text).toBe('source history');
-    expect((await store.readEventsAsync(run.id))[0]?.text).toBe('source history');
+    expect(store.eventLog.readEvents(run.id)[0]?.text).toBe('source history');
+    expect((await store.eventLog.readEventsAsync(run.id))[0]?.text).toBe('source history');
     expect(readHandoff(store.sourceDataDir(run.id), run.id)).toBe('# fallback handoff');
     expect(store.workerExecutions.readWorkerExecution(run.id)).toBeUndefined();
     expect(store.workerExecutions.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
@@ -122,8 +122,8 @@ describe('project run sources', () => {
     const store = open();
     expect(new Set(store.listRunSummaries().runs.map(item => item.id))).toEqual(new Set([duplicate.id, old.id, fallback.id]));
     expect(store.getRun(duplicate.id)?.title).toBe('legacy duplicate');
-    expect(store.readEvents(duplicate.id)).toEqual([]);
-    expect(store.readEvents(fallback.id)[0]?.text).toBe('fallback');
+    expect(store.eventLog.readEvents(duplicate.id)).toEqual([]);
+    expect(store.eventLog.readEvents(fallback.id)[0]?.text).toBe('fallback');
     expect(store.sourceDataDir(duplicate.id)).toBe(root('cezar'));
     expect(searchRunIndexFromDisk(root('cezar'), 'wrong fallback', { limit: 10 }).runs).toEqual([]);
   });
@@ -147,16 +147,16 @@ describe('project run sources', () => {
     writeFileSync(join(source, 'runs', `${run.id}.handoff.md`), '# preserved');
     const store = open();
     expect(readdirSync(root('cezar'))).toEqual([]);
-    expect(() => store.appendEvent(run.id, { type: 'text', text: 'automatic' })).toThrow(/\.ai\/squawk.*binary that migrated/);
+    expect(() => store.eventLog.appendEvent(run.id, { type: 'text', text: 'automatic' })).toThrow(/\.ai\/squawk.*binary that migrated/);
     expect(store.updateRun(run.id, { title: 'automatic' })).toBeUndefined();
     expect(store.writeRefusal(run.id)).toMatch(/\.ai\/squawk/);
     expect(readdirSync(root('cezar'))).toEqual([]);
     expect(store.adoptFallbackFamily(run.id)).toBe(true);
-    store.appendEvent(run.id, { type: 'text', text: 'new' });
+    store.eventLog.appendEvent(run.id, { type: 'text', text: 'new' });
     store.updateRun(run.id, { title: 'changed' });
     store.flush();
     expect(store.sourceDataDir(run.id)).toBe(root('cezar'));
-    expect(store.readEvents(run.id).map(event => event.text)).toEqual(['original', 'new']);
+    expect(store.eventLog.readEvents(run.id).map(event => event.text)).toEqual(['original', 'new']);
     expect(readFileSync(history, 'utf8')).toBe(bytes);
     expect(readHandoff(root('cezar'), run.id)).toBe('# preserved');
     expect(open().getRun(run.id)?.title).toBe('changed');
@@ -421,7 +421,7 @@ describe('project run sources', () => {
     store.updateRun(run.id, { title: 'retry' });
     store.flush();
     expect(store.getRun(run.id)?.title).toBe('retry');
-    expect(store.readEvents(run.id)[0]?.text).toBe('original');
+    expect(store.eventLog.readEvents(run.id)[0]?.text).toBe('original');
   });
 
 });

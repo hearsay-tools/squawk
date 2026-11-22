@@ -129,7 +129,7 @@ function restoreCumulativeSessionCost(
   // The current cost event was appended immediately before this call. Rebuild
   // the checkpoint from raw reports, since older records summed cumulative
   // reports into costUsd and cannot be used as the baseline on Continue.
-  const events = store.readEvents(runId);
+  const events = store.eventLog.readEvents(runId);
   let currentReportIndex = -1;
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index]!;

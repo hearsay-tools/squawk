@@ -74,7 +74,7 @@ function observeNudgeAcknowledgement(id: string, text: string): () => Promise<vo
 
 export function entriesCells(runners: string[], it: typeof registerTest = registerTest): void {
   for (const runner of runners) {
-    const noWaitNudges = (id: string) => store.readEvents(id).filter(event =>
+    const noWaitNudges = (id: string) => store.eventLog.readEvents(id).filter(event =>
       event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE));
     const noWaitOrder = (id: string, count: number) => observeWaitPublication(id, WAIT_VIA['no-wait'], () => {
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(count);
@@ -212,7 +212,7 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
       await until(() => turnEnds(id) > turns && parkedOn(id, viaOf(id, WAIT_VIA.cezar_wait)));
       return viaOf(id, WAIT_VIA.cezar_wait)!;
     };
-    const refusalNoted = (id: string, refusal: string) => store.readEvents(id).some(event => event.type === 'note' && String(event.message).includes(refusal));
+    const refusalNoted = (id: string, refusal: string) => store.eventLog.readEvents(id).some(event => event.type === 'note' && String(event.message).includes(refusal));
     const expectTimerPark = async (id: string, timer: Wait, refusal: string) => {
       expect(store.getRun(id)?.waits).toEqual([expect.objectContaining({ id: timer.id, phase: WAIT_PHASE.open })]);
       expect(nudgeNotes(id)).toEqual([]);
@@ -274,7 +274,7 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
         const before = turnEnds(p.id), summary = 'held done summary shipped';
         const text = `${toolCall('cezar_done', { summary })} delay-human-ack`;
         expect(manager.sendMessage(p.id, [{ type: 'text', text }])).toBe(true);
-        const refused = () => store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith('Completion blocked:'));
+        const refused = () => store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith('Completion blocked:'));
         await until(() => turnEnds(p.id) > before && (refused() || nudgeNotes(p.id).length === 1), () => timeline(p.id));
         expect(accepted.mock.results.some(result => result.type === 'return' && result.value.ok)).toBe(true);
         // A runner whose human-prompt hold ends when the wire reports the prompt read takes the
@@ -283,7 +283,7 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
           expect(humanPromptReadReleases()).toContain(runner);
           expect(nudgeNotes(p.id)).toHaveLength(1);
           release();
-          expect(store.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toEqual([]);
+          expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toEqual([]);
           expect(manager.isActive(p.id)).toBe(true);
           return;
         }
@@ -292,8 +292,8 @@ export function entriesCells(runners: string[], it: typeof registerTest = regist
         await collect(w.id);
         release();
         await until(() => !manager.isActive(p.id) && terminal.includes(store.getRun(p.id)?.status ?? ''), () => timeline(p.id));
-        expect(store.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toHaveLength(1);
-        expect(store.readEvents(p.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed'))
+        expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toHaveLength(1);
+        expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed'))
           .toEqual([expect.objectContaining({ via: 'cezar_done' })]);
       }, 'delay-human-ack');
     });

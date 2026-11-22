@@ -99,15 +99,15 @@ describe('CI wait registration', { timeout: 30_000 }, () => {
     github(); const release = join(root, 'ci-answer');
     const wire = controlledWire({ humanAnswerGate: release });
     const p = await parent('mock:cezar-ask');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'ask.requested'));
     await restart();
     expect(manager.continueRun(p.id, { text: 'human answer mock:hold' }).ok).toBe(true);
     await until(() => wire.received() === 1);
     try {
       const wait = await register(p.id);
       expect(wait.phase).toBe('open');
-      expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
-      store.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'New', question: 'Approve?', options: [{ label: 'Yes' }, { label: 'No' }] }] });
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      store.eventLog.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'New', question: 'Approve?', options: [{ label: 'Yes' }, { label: 'No' }] }] });
       await expect(register(p.id)).resolves.toMatchObject({ id: wait.id });
     } finally { writeFileSync(release, 'go'); }
   });

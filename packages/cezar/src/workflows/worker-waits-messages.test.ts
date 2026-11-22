@@ -33,7 +33,7 @@ describe('messages wake without being waits', { timeout: 45_000 }, () => {
     if (!session) throw new Error(`No owned session for ${runId}`);
     return session;
   };
-  const eventsOf = (runId: string, type: string) => store.readEvents(runId).filter(event => event.type === type);
+  const eventsOf = (runId: string, type: string) => store.eventLog.readEvents(runId).filter(event => event.type === type);
   const answered = (runId: string) => eventsOf(runId, 'human-input-delivered').filter(event => event.source === 'parent');
   const delivered = (runId: string, id: string) => !!inputOf(runId, id)?.deliveredAt;
 
@@ -91,7 +91,7 @@ describe('messages wake without being waits', { timeout: 45_000 }, () => {
     const entry = manager.registerWorkerListWait(f.w.id, { requestIds: [own], timeoutSeconds: 600 }, 'cezar_wait');
     await f.service.send(f.parentCaller, { id: randomUUID(), recipientRunId: f.w.id, kind: 'reply', requestId: question, text: 'mock:agent-echo Use the parser', timeoutSeconds: 600 });
     await until(() => answered(f.w.id).length === 1);
-    await until(() => store.readEvents(f.w.id).some(event => event.type === 'text' && String(event.text).includes('Use the parser')));
+    await until(() => store.eventLog.readEvents(f.w.id).some(event => event.type === 'text' && String(event.text).includes('Use the parser')));
     expect(entryOf(f.w.id, entry.id)).toMatchObject({ phase: WAIT_PHASE.open, requestIds: [own] });
   });
 
@@ -99,7 +99,7 @@ describe('messages wake without being waits', { timeout: 45_000 }, () => {
     const f = await conversing();
     const entry = await parkedOnWorker(f);
     expect(manager.sendMessage(f.p.id, [{ type: 'text', text: 'mock:agent-echo human update' }])).toBe(true);
-    await until(() => store.readEvents(f.p.id).some(event => event.type === 'text' && String(event.text).includes('human update')));
+    await until(() => store.eventLog.readEvents(f.p.id).some(event => event.type === 'text' && String(event.text).includes('human update')));
     await until(() => store.getRun(f.p.id)?.status === 'waiting');
     expect(entryOf(f.p.id, entry.id)).toMatchObject({ phase: WAIT_PHASE.open, workerIds: [f.w.id] });
   });
@@ -172,7 +172,7 @@ describe('messages wake without being waits', { timeout: 45_000 }, () => {
     const w = await worker(p.id);
     writeFileSync(opened, '');
     const f = { p, w, service, parentCaller: callerFor(p.id), workerCaller: callerFor(w.id) };
-    await until(() => store.readEvents(f.p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)) &&
+    await until(() => store.eventLog.readEvents(f.p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)) &&
       store.getRun(f.p.id)?.status === 'waiting');
     expect(waitOf(store.getRun(f.p.id))).toBeUndefined();
     manager.enqueueOwnedRun(w.id);

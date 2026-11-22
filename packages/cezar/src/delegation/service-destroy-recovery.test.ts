@@ -48,7 +48,7 @@ describe('destroy backoff recovery', { timeout: 90_000 }, () => {
   it('a thrown attempt records why, and the next tick attempts in full', async () => {
     await cadence();
     const { workerId } = await settled(false);
-    vi.spyOn(f.store, 'readEventsAsync').mockRejectedValueOnce(new Error('transcript unreadable'));
+    vi.spyOn(f.store.eventLog, 'readEventsAsync').mockRejectedValueOnce(new Error('transcript unreadable'));
     await expect(f.service.destroy(f.caller, { workerId })).rejects.toThrow('transcript unreadable');
     expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'], error: 'transcript unreadable' });
     // Nothing a tick can observe explains a throw, so it is never skipped: the next tick completes.

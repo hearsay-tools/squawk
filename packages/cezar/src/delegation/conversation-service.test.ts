@@ -162,7 +162,7 @@ describe('durable conversations', () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-22T15:00:00.000Z'));
     try {
       projectConversationEvents(f.store, f.store.getRun(f.parent.id)!);
-      for (const id of [f.parent.id, w.id]) expect(f.store.readEvents(id).find(event => event.type === 'conversation-message' && event.delivery === 'delivered'))
+      for (const id of [f.parent.id, w.id]) expect(f.store.eventLog.readEvents(id).find(event => event.type === 'conversation-message' && event.delivery === 'delivered'))
         .toMatchObject({ message: { id: message.message.id }, deliveredAt, ts: '2026-09-22T15:00:00.000Z' });
     } finally { vi.useRealTimers(); }
   });
@@ -250,7 +250,7 @@ describe('durable conversations', () => {
       expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { outcomes: [reply.outcome] } });
       reopened.flush();
       for (const id of [f.parent.id, w.id]) {
-        const events = f.store.readEvents(id).filter(event => event.type === 'request-outcome');
+        const events = f.store.eventLog.readEvents(id).filter(event => event.type === 'request-outcome');
         expect(events.at(-1)).toMatchObject({ outcome: { status: 'replied-late', replyId: request.id } });
         expect(events.filter(event => event.type === 'request-outcome' && requestOutcomeSchema.safeParse(event.outcome).data?.status === 'replied-late')).toHaveLength(1);
       }
@@ -279,7 +279,7 @@ describe('durable conversations', () => {
     const req = { id: randomUUID(), recipientRunId: b.id, kind: 'request' as const, text: 'hello', timeoutSeconds: 600 };
     await expect(f.service.send(a.caller, req)).rejects.toMatchObject({ code: 'denied_scope' });
     await expect(f.service.send({ ...f.caller }, req)).rejects.toMatchObject({ code: 'denied_scope' });
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     await expect(f.service.send(f.caller, { ...req, text: f.token })).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(f.service.reply(f.caller, { ...req, kind: 'reply', requestId: randomUUID() })).rejects.toMatchObject({ code: 'denied_scope' });
     expect(f.store.getRun(b.id)?.agentInputs ?? []).toEqual([]);
@@ -306,7 +306,7 @@ describe('durable conversations', () => {
     setRunStatus(f.store, w.id, RUN_STATUS.running);
     expect(await f.service.send(f.caller, request)).toEqual({ ...first, effect: 'unchanged' });
     expect(f.store.getRun(w.id)?.agentInputs ?? []).toEqual([]);
-    expect(f.store.readEvents(w.id).filter(event => event.type === 'conversation-message')).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(w.id).filter(event => event.type === 'conversation-message')).toHaveLength(1);
     expect(await f.service.send(f.caller, { ...request, id: randomUUID() })).toMatchObject({ message: { state: 'accepted' }, delivery: 'queued' });
   });
   it('caps undelivered inputs without evicting receipts', async () => {
@@ -344,7 +344,7 @@ describe('durable conversations', () => {
     expect(inspected.messages[0]?.text).toBe('Inspect [REDACTED]');
     expect(f.store.getRun(w.id)?.agentInputs?.[0]?.text).toBe('Inspect [REDACTED]');
     const surfaces = [f.store.getRun(f.parent.id)?.delegation, f.store.getRun(w.id)?.agentInputs, sent, inspected,
-      f.store.readEvents(f.parent.id), f.store.readEvents(w.id), readPersistedText(join(f.root, '.ai/cezar'))];
+      f.store.eventLog.readEvents(f.parent.id), f.store.eventLog.readEvents(w.id), readPersistedText(join(f.root, '.ai/cezar'))];
     for (const surface of surfaces) { expect(JSON.stringify(surface)).not.toContain(token); expect(JSON.stringify(surface)).toContain('[REDACTED]'); }
   });
 
@@ -352,24 +352,24 @@ describe('durable conversations', () => {
     const w = await worker();
     const request = { id: randomUUID(), recipientRunId: w.id, kind: 'progress' as const, text: 'update', timeoutSeconds: 600 };
     const notify = vi.spyOn(f.manager, 'deliverConversationInput');
-    vi.spyOn(f.store, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
     await expect(f.service.send(f.caller, request)).resolves.toMatchObject({ effect: 'applied', delivery: 'queued', message: { id: request.id, state: 'accepted' } });
     expect(f.store.getRun(w.id)?.agentInputs).toHaveLength(1); expect(notify).not.toHaveBeenCalled();
     expect(await f.service.send(f.caller, request)).toMatchObject({ delivery: 'queued' });
     expect(notify).toHaveBeenCalledWith(w.id);
     expect(f.store.getRun(w.id)?.agentInputs).toHaveLength(1);
-    expect(f.store.readEvents(w.id).filter(event => event.type === 'conversation-message')).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(w.id).filter(event => event.type === 'conversation-message')).toHaveLength(1);
   });
   it('repairs cancellation projection and wake reconciliation on retry without another settlement', async () => {
     const w = await worker();
     const sent = await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'question', timeoutSeconds: 600 });
     const reconcile = vi.spyOn(f.manager, 'reconcileWorkerWaits');
-    vi.spyOn(f.store, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
     await expect(f.service.cancelRequest(f.caller, { requestId: sent.message.id })).rejects.toThrow('projection unavailable');
     reconcile.mockClear();
     const outcome = await f.service.cancelRequest(f.caller, { requestId: sent.message.id });
     expect(outcome.status).toBe('cancelled'); expect(reconcile).toHaveBeenCalled();
-    expect(f.store.readEvents(w.id).filter(event => event.type === 'request-outcome')).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(w.id).filter(event => event.type === 'request-outcome')).toHaveLength(1);
     expect((await f.service.conversation(f.caller, { recipientRunId: w.id })).outcomes).toHaveLength(1);
   });
 

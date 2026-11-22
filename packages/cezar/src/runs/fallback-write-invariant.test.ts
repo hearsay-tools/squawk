@@ -56,20 +56,20 @@ function buildFixture() {
   /** A worker question its parent settled without a reply: recovery retires it (B1 class). */
   const routedQuestion = (f: ReturnType<typeof family>) => {
     const questions = [{ header: 'Pick', question: 'Which?', options: [{ label: 'A' }, { label: 'B' }] }];
-    const ask = store.appendEvent(f.workerId, { type: 'ask.requested', requestId: 'q', questions });
+    const ask = store.eventLog.appendEvent(f.workerId, { type: 'ask.requested', requestId: 'q', questions });
     const messageId = randomUUID();
     const parent = store.getRun(f.parentId)!;
     const conversation = parent.delegation?.role === 'root' ? parent.delegation.conversation ?? { messages: [], outcomes: [] } : { messages: [], outcomes: [] };
     store.commitConversation(f.parentId, { messages: [...conversation.messages, { id: messageId, senderRunId: f.workerId, recipientRunId: f.parentId,
       kind: 'request', question: { questions }, text: 'Which?', createdAt: new Date().toISOString(), requestHash: 'c'.repeat(64), state: 'accepted' }],
     outcomes: [...conversation.outcomes, { requestId: messageId, status: requestOutcomeSchema.shape.status.enum.cancelled, observedAt: new Date().toISOString() }] });
-    store.appendEvent(f.workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId, parentRunId: f.parentId });
+    store.eventLog.appendEvent(f.workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId, parentRunId: f.parentId });
   };
   /** A merged PR on the root (archive on merge) and a pending archive-when-done action. */
   const finishing = (f: ReturnType<typeof family>, n: number) => {
     // A settled worker execution, so archive collection reaches the whole family.
     writeFileSync(join(primary, 'runs', `${f.workerId}.execution.json`), JSON.stringify({ generation: randomUUID(), phase: 'complete' }));
-    store.recordCreatedPr(f.parentId, pr(n));
+    store.eventLog.recordCreatedPr(f.parentId, pr(n));
     store.updateRun(f.parentId, { archiveWhenDone: true, completionAction: { id: randomUUID(), phase: 'pending' } });
   };
   const legacy = family(false); routedQuestion(legacy); finishing(legacy, 1);
@@ -79,7 +79,7 @@ function buildFixture() {
   const fallbackLive = family(true);
   const archived = store.createRun({ title: 'archived fallback', task: 'a', workflow: 'quick-task', steps: [] });
   setRunStatus(store, archived.id, RUN_STATUS.done);
-  store.appendEvent(archived.id, { type: 'text', text: 'archived history' });
+  store.eventLog.appendEvent(archived.id, { type: 'text', text: 'archived history' });
   store.setArchived(archived.id, true);
   const worktreeRun = store.createRun({ title: 'fallback worktree', task: 'w', workflow: 'quick-task', steps: [] });
   const worktreePath = join(fallback, 'worktrees', worktreeRun.id);
@@ -162,7 +162,7 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
     store.flush();
 
     // Positive control: the same sweeps did act on the legacy-only family.
-    expect(store.readEvents(fixture.legacy.workerId).some(event => event.type === 'human-ask-closed')).toBe(true);
+    expect(store.eventLog.readEvents(fixture.legacy.workerId).some(event => event.type === 'human-ask-closed')).toBe(true);
     expect(store.getRun(fixture.legacy.parentId)?.archived).toBe(true);
     // Fallback and mixed families stay visible with their stored status.
     expect(store.getRun(fixture.fallbackLive.parentId)?.status).toBe(RUN_STATUS.running);

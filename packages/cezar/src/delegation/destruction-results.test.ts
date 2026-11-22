@@ -260,11 +260,11 @@ describe('verified destruction retains results through explicit history deletion
   });
   it('refuses construction from a deleting parent without recreating its resources', () => {
     interruptedParentDeletion();
-    const before = f.store.readEvents(f.parent.id);
+    const before = f.store.eventLog.readEvents(f.parent.id);
     const stopped = vi.fn(() => false);
     expect(workerExecutionStopped(f.store, f.parent.id, stopped)).toBe(true);
     expect(stopped).not.toHaveBeenCalled();
-    expect(f.store.readEvents(f.parent.id)).toEqual(before);
+    expect(f.store.eventLog.readEvents(f.parent.id)).toEqual(before);
     expect(existsSync(join(f.root, '.ai/cezar/worktrees', f.parent.id))).toBe(false);
     expect(f.manager.isActive(f.parent.id)).toBe(false);
     expect(f.store.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });

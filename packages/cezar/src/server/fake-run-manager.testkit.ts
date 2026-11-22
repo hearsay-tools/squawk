@@ -168,7 +168,7 @@ export class FakeRunManager implements ProjectRunManager {
     const run = this.#store.getRun(runId);
     if (run?.status !== 'review' || this.#queued.has(runId)) return false;
     this.#store.move(runId, 'accept-review');
-    this.#store.appendEvent(runId, { type: 'lifecycle', message: 'review accepted — finished without a PR' });
+    this.#store.eventLog.appendEvent(runId, { type: 'lifecycle', message: 'review accepted — finished without a PR' });
     return true;
   }
 
@@ -221,7 +221,7 @@ export class FakeRunManager implements ProjectRunManager {
     }
     const queue = enqueueAgentInput(run, input);
     this.#store.commitAgentInputs(runId, queue);
-    this.#store.appendEvent(runId, { type: 'agent-input', input: queue[queue.length - 1]! });
+    this.#store.eventLog.appendEvent(runId, { type: 'agent-input', input: queue[queue.length - 1]! });
     return 'queued';
   }
 

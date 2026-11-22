@@ -25,7 +25,7 @@ beforeEach(() => {
 afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
 
 function report(runId: string, stepId: string, state: ReturnType<typeof createActiveRun>, backend: string, usd: number) {
-  store.appendEvent(runId, { type: 'cost', stepId, usd });
+  store.eventLog.appendEvent(runId, { type: 'cost', stepId, usd });
   recordReportedCost(store, runId, stepId, state, backend, usd);
 }
 

@@ -54,7 +54,7 @@ function projectContext(vision = 'VISION-V1') {
 
 const handoffBlock = (id: string) => `<cezar-context id="handoff" source="${handoffPath(join(root, '.ai/cezar'), id)}">`;
 const count = (text: string, needle: string) => text.split(needle).length - 1;
-const contextLines = (id: string) => store.readEvents(id)
+const contextLines = (id: string) => store.eventLog.readEvents(id)
   .filter((event) => event.type === 'lifecycle' && String(event.message).startsWith('session context: '))
   .map((event) => String(event.message));
 

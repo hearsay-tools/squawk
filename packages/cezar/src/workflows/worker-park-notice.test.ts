@@ -25,7 +25,7 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
   const notices = (parentId: string, workerId: string) => conversationOf(parentId).filter(message =>
     message.senderRunId === workerId && message.kind === 'progress' && message.text.startsWith(`Squawk notice: `));
   const parked = (id: string) => store.getRun(id)?.status === 'waiting';
-  const turnEnds = (id: string) => store.readEvents(id).filter(event => event.type === 'turn-end').length;
+  const turnEnds = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'turn-end').length;
   /** A root parent, parked, that may message its workers, with a delegation service for both. */
   async function family() {
     const { p, service, callerFor } = await delegatingParent({ permissions: ['spawn', 'wait', 'steer'] });
@@ -156,7 +156,7 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     register(p.id, [(await worker(p.id)).id]);
     register(p.id, [(await worker(p.id)).id]);
     expect(notices(p.id, w.id)).toEqual([]);
-    expect(store.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('park notice ID is already in use'))).toHaveLength(1);
+    expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('park notice ID is already in use'))).toHaveLength(1);
     expect(store.getRun(p.id)?.agentInputs?.filter(input => input.id === id)).toEqual([
       expect.objectContaining({ text: 'Peer progress first', conversation: expect.objectContaining({ senderRunId: peer.id, relationship: 'peer' }) })]);
   });
@@ -171,7 +171,7 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     const w = await parkedWorker(p.id, 'Parked beside a held slot.');
     register(p.id, [w.id]);
     expect(notices(p.id, w.id)).toEqual([]);
-    expect(store.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('no park notice was sent'))).toHaveLength(1);
+    expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('no park notice was sent'))).toHaveLength(1);
     const reply = await service.send(callerOf(peer.id), { id: randomUUID(), recipientRunId: p.id, kind: 'reply', requestId: request.message.id, text: 'zod 4', timeoutSeconds: 600 });
     expect(reply.outcome).toMatchObject({ status: 'replied' });
     expect(store.getRun(p.id)?.agentInputs?.filter(input => !input.deliveredAt)).toHaveLength(32);
@@ -188,6 +188,6 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     register(p.id, [(await worker(p.id)).id]);
     expect(store.getRun(p.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');
     expect(notices(p.id, w.id)).toEqual([]);
-    expect(store.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('no park notice was sent'))).toHaveLength(1);
+    expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).includes('no park notice was sent'))).toHaveLength(1);
   });
 });

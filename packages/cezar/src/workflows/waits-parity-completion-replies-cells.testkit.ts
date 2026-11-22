@@ -24,7 +24,7 @@ export function completionRepliesCells(runners: string[], it: typeof registerTes
       const refusal = `${uncollectedRefusal(w)}, then call cezar_done again.`;
       expect(humanOpen(p.id)).toEqual([expect.objectContaining({ kind: WAIT_KIND.human, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, phase: WAIT_PHASE.open })]);
       expect(workerWaits(p.id)).toEqual([]);
-      const shown = store.readEvents(p.id).find(event => event.seq === humanOpen(p.id)[0]!.askSeq);
+      const shown = store.eventLog.readEvents(p.id).find(event => event.seq === humanOpen(p.id)[0]!.askSeq);
       expect(shown).toMatchObject({ type: 'note', message: refusal });
       expect(asks(p.id)).toEqual([]);
       expect(deriveAttention(store.getRun(p.id)!).label).toBe('needs you');
@@ -41,8 +41,8 @@ export function completionRepliesCells(runners: string[], it: typeof registerTes
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });
       await until(() => gated(run.id));
       const atNudges: Wait[][] = [];
-      const append = store.appendEvent.bind(store);
-      vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+      const append = store.eventLog.appendEvent.bind(store.eventLog);
+      vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
         if (id === run.id && event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)) atNudges.push(store.getRun(run.id)?.waits ?? []);
         return append(id, event);
       });
@@ -86,7 +86,7 @@ export function completionRepliesCells(runners: string[], it: typeof registerTes
       expect(prompted(runner, refusal)).toEqual([expect.stringContaining(COMPLETION_WILL_WAIT)]);
       expect(refusals()).toEqual([expect.objectContaining({ source: 'lifecycle', deliveredAt: expect.any(String) })]);
       expect(store.getRun(p.id)?.automaticWakes).toBe(wakes + 1);
-      expect(store.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)))
+      expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)))
         .toEqual([expect.objectContaining({ message: `${COMPLETION_NUDGE_NOTE} (${wakes + 1}/${MAX_AUTO_CONTINUES}): workers_outstanding` })]);
       expect(workerWaits(p.id)).toEqual([expect.objectContaining({ source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, workerIds: [next.id] })]);
       expect(store.getRun(p.id)?.delegation).not.toHaveProperty('wait');

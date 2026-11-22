@@ -205,7 +205,7 @@ describe('cez task', () => {
       const id = await start();
       ctx.store.commitWait(id, makeHumanWait({ id: randomUUID() }));
       setRunStatus(ctx.store, id, RUN_STATUS.waiting);
-      ctx.store.appendEvent(id, { type: 'ask.requested', requestId: 'ask-1', questions: [{ header: 'Choice', question: 'Which module?' }] });
+      ctx.store.eventLog.appendEvent(id, { type: 'ask.requested', requestId: 'ask-1', questions: [{ header: 'Choice', question: 'Which module?' }] });
       const response = await fetch(`${ctx.cockpit.api}/runs/${id}/history-context`);
       const data: unknown = status === 503 ? await response.json() : context;
       const spy = respond(`/runs/${id}/history-context`, data, status);

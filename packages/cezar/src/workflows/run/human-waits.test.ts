@@ -37,7 +37,7 @@ describe('isQuestionPending', () => {
 describe('openHumanAlias owner-matched reuse', () => {
   const card = (question: string) => [{ header: 'Pick', question, options: [{ label: 'A' }, { label: 'B' }] }];
   const ask = (f: ReturnType<typeof boundaryOrderFixture>, question: string) =>
-    f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: card(question) }).seq;
+    f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: card(question) }).seq;
 
   it('an agent question never inherits a Squawk wait whose withdrawal was refused', () => {
     const f = boundaryOrderFixture();
@@ -75,7 +75,7 @@ describe('the answered question\'s wait yields its slot at the wait limit', () =
   const card = (question: string) => [{ header: 'Pick', question, options: [{ label: 'A' }, { label: 'B' }] }];
   function answeringAtLimit() {
     const f = boundaryOrderFixture();
-    const ask = (question: string) => f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: card(question) }).seq;
+    const ask = (question: string) => f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: card(question) }).seq;
     const answeredSeq = ask('Answered?');
     const answered = makeHumanWait({ askSeq: answeredSeq });
     f.store.commitWait(f.run.id, answered);

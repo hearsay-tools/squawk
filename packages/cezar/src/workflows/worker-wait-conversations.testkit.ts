@@ -23,7 +23,7 @@ export async function conversationPair(runner: string = 'claude'): Promise<Conve
 // A parent with a live worker parks on a monitoring timer after handling a request
 // (hearsay-tools/cezarion#1233). The parked state before delivery looks the same, and waiting
 // for it raced the scheduler's Git probe, so the request's own turn must have ended.
-export const turnEnds = (runId: string) => store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+export const turnEnds = (runId: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
 export async function parentHandledRequest(parentId: string, inputId: string, boundaries: number) {
   await until(() => {
     const run = store.getRun(parentId);

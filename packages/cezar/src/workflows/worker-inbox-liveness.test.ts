@@ -41,7 +41,7 @@ describe('worker inbox holds nonfinal agent completion', { timeout: 30_000 }, ()
     expect(receipt).toBeDefined();
     const session = sessionOf(run.id);
     writeFileSync(gate, 'release');
-    await until(() => store.readEvents(run.id).some(event => event.type === 'turn-end'));
+    await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'turn-end'));
     await vi.advanceTimersByTimeAsync(400); // Beyond the runner's actual auto-end window.
     // The turn's done waits behind the claimed input: the step neither completes nor closes.
     expect(session.open).toBe(true);
@@ -56,7 +56,7 @@ describe('worker inbox holds nonfinal agent completion', { timeout: 30_000 }, ()
     await until(() => terminal.includes(store.getRun(run.id)!.status));
     expect(store.getRun(run.id)?.steps.map(step => step.status)).toEqual(['done', 'done']);
     expect(store.getRun(run.id)?.agentInputs?.[0]?.deliveredAt).toBeDefined();
-    expect(store.readEvents(run.id).filter(event => event.type === 'turn-end')).toHaveLength(action === 'ack' ? 1 : 2);
+    expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end')).toHaveLength(action === 'ack' ? 1 : 2);
     expect(semaphore.busy()).toBe(0);
   });
 

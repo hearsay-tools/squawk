@@ -633,7 +633,7 @@ describe('RunManager waiting recovery', () => {
     const record = fixture.manager.startRun(SINGLE_STEP, { task: 'plain markerless turn', runner: 'codex', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
-    fixture.store.appendEvent(record.id, {
+    fixture.store.eventLog.appendEvent(record.id, {
       type: 'ask.requested',
       requestId: 'persisted-question',
       questions: [{
@@ -662,7 +662,7 @@ describe('RunManager waiting recovery', () => {
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
     fixture.manager.dispose();
     seedWaits(fixture.store, record.id, { waits: undefined });
-    const ask = fixture.store.appendEvent(record.id, { type: 'ask.requested', requestId: 'legacy-question',
+    const ask = fixture.store.eventLog.appendEvent(record.id, { type: 'ask.requested', requestId: 'legacy-question',
       questions: [{ header: 'Choice', question: 'Which implementation?', options: [{ label: 'First' }, { label: 'Second' }] }] });
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();
@@ -670,7 +670,7 @@ describe('RunManager waiting recovery', () => {
     expect(human).toEqual([expect.objectContaining({ source: WAIT_SOURCE.agent, askSeq: ask.seq })]);
     expect(fixture.store.getRun(record.id)?.status).toBe('waiting');
     expect(deriveAttention(fixture.store.getRun(record.id)!).label).toBe('needs you');
-    expect(fixture.store.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
+    expect(fixture.store.eventLog.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
   }, 30_000);
 
   it('replaces an open Squawk human wait at recovery with the unanswered ask it was not replaced by', async () => {
@@ -681,14 +681,14 @@ describe('RunManager waiting recovery', () => {
     const cezar = { id: '00000000-0000-4000-8000-0000000000ac', kind: WAIT_KIND.human, source: WAIT_SOURCE.cezar, via: WAIT_VIA['no-wait'],
       registeredAt: '2026-10-21T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'no-wait' };
     seedWaits(fixture.store, record.id, { waits: [cezar] });
-    const ask = fixture.store.appendEvent(record.id, { type: 'ask.requested', requestId: 'crashed-question',
+    const ask = fixture.store.eventLog.appendEvent(record.id, { type: 'ask.requested', requestId: 'crashed-question',
       questions: [{ header: 'Choice', question: 'Which implementation?', options: [{ label: 'First' }, { label: 'Second' }] }] });
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();
     const human = fixture.store.getRun(record.id)?.waits?.filter(wait => wait.kind === 'human' && wait.phase === 'open') ?? [];
     expect(human).toEqual([expect.objectContaining({ source: WAIT_SOURCE.agent, askSeq: ask.seq })]);
     expect(asksQuestion(fixture.store.getRun(record.id)!)).toBe(true);
-    expect(fixture.store.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
+    expect(fixture.store.eventLog.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
   }, 30_000);
 
   it('settles an upgraded legacy human wait at recovery when the transcript holds its answer', async () => {
@@ -696,9 +696,9 @@ describe('RunManager waiting recovery', () => {
     fixture.currentId = record.id;
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
     fixture.manager.dispose();
-    const ask = fixture.store.appendEvent(record.id, { type: 'ask.requested', requestId: 'answered-question',
+    const ask = fixture.store.eventLog.appendEvent(record.id, { type: 'ask.requested', requestId: 'answered-question',
       questions: [{ header: 'Choice', question: 'Which implementation?', options: [{ label: 'First' }, { label: 'Second' }] }] });
-    fixture.store.appendEvent(record.id, { type: 'human-input-delivered', askSeq: ask.seq });
+    fixture.store.eventLog.appendEvent(record.id, { type: 'human-input-delivered', askSeq: ask.seq });
     const legacy = { id: '00000000-0000-4000-8000-0000000000aa', kind: WAIT_KIND.human, source: WAIT_SOURCE.agent, via: WAIT_VIA['ask-line'],
       registeredAt: '2026-10-21T00:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'legacy' };
     seedWaits(fixture.store, record.id, { waits: [legacy] });
@@ -706,7 +706,7 @@ describe('RunManager waiting recovery', () => {
     await fixture.manager.recover();
     expect(fixture.store.getRun(record.id)?.waits?.filter(wait => wait.kind === 'human' && wait.phase === 'open') ?? []).toEqual([]);
     expect(fixture.store.getRun(record.id)?.lastWaits).toEqual(expect.arrayContaining([expect.objectContaining({ id: legacy.id })]));
-    expect(fixture.store.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
+    expect(fixture.store.eventLog.readEvents(record.id).filter(event => event.type === 'ask.requested')).toHaveLength(1);
   }, 30_000);
 
   it('keeps an upgraded legacy human wait at recovery when the transcript facts cannot be read', async () => {
@@ -752,7 +752,7 @@ describe('RunManager workflow remainder opening', () => {
       setRunStatus(fixture.store, hold.id, RUN_STATUS.waiting, { autoResumeAt: new Date(Date.now() + 60_000).toISOString() });
     });
     await fixture.manager.recover();
-    await waitForProduct(fixture.manager, fixture.store, () => fixture.store.readEvents(record.id).some(event =>
+    await waitForProduct(fixture.manager, fixture.store, () => fixture.store.eventLog.readEvents(record.id).some(event =>
       event.type === 'note' && String(event.message).includes('held in the queue')));
     expect(fixture.store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.queued, startedAt });
   });
@@ -932,7 +932,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
     const r = seedQueued();
     writeFileSync(imagesDir(r.id), 'not a directory');
     manager.enqueueMessage(r.id, [{ type: 'file', mediaType: 'application/pdf', data: 'YQ==' }]);
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('could not be saved'))).toBe(true);
+    expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('could not be saved'))).toBe(true);
     store.flush();
     const reopened = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(r.id)?.queuedMessages?.[0]?.text).toContain('could not be saved');
@@ -1130,7 +1130,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
     await semaphore.refresh();
     await semaphore.release();
     await waitForProduct(manager, store, () => !!session && delivered.length === 1);
-    expect(store.readEvents(record.id).some(event => event.type === 'user-message')).toBe(true);
+    expect(store.eventLog.readEvents(record.id).some(event => event.type === 'user-message')).toBe(true);
     return { delivered, session };
   }
 
@@ -1278,7 +1278,7 @@ describe('QueuedInput.hydrateQueuedInput (#472)', () => {
     const hydrated = hydrate(r.id, r.task);
     expect(hydrated.images).toBeUndefined();
     expect(hydrated.task).toBe('keep text');
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes(name))).toBe(true);
+    expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes(name))).toBe(true);
   });
 
   it('notes an unreadable document instead of advertising its path on recovery', () => {
@@ -1291,7 +1291,7 @@ describe('QueuedInput.hydrateQueuedInput (#472)', () => {
     expect(resolveAttachmentPath(join(repoRoot, '.ai/cezar'), r.id, 'pasted-1.pdf')).toBeNull();
     store.updateRun(r.id, { taskImages: [`/api/v1/runs/${r.id}/images/pasted-1.pdf`] });
     expect(hydrate(r.id, r.task).task).toBe('keep text');
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('pasted-1.pdf'))).toBe(true);
+    expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('pasted-1.pdf'))).toBe(true);
   });
 
   it('re-encodes initial task images from disk after a queued-run restart (#612)', () => {
@@ -1346,7 +1346,7 @@ describe('QueuedInput.hydrateQueuedInput (#472)', () => {
     const hydrated = hydrate(r.id, r.task);
     expect(hydrated.task).toBe('look at this\n\nsee the mock');
     expect(hydrated.stackedImages).toBeUndefined();
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('gone-1.png'))).toBe(true);
+    expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('gone-1.png'))).toBe(true);
   });
 
   /** A file has no bytes to fail on — it is only ever `stat`ed — so it needs its own case: a
@@ -1357,7 +1357,7 @@ describe('QueuedInput.hydrateQueuedInput (#472)', () => {
 
     const hydrated = hydrate(r.id, r.task);
     expect(hydrated.stackedImages).toBeUndefined();
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('pasted-7.md'))).toBe(true);
+    expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('pasted-7.md'))).toBe(true);
   });
 });
 

@@ -122,7 +122,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     });
     store.updateStep(run.id, 'implement', { backend: 'codex' });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       stepId: 'implement',
       message: 'authentication failed with HTTP 401',
@@ -134,7 +134,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       hint: expect.any(String),
       authFailureId: 'auth-incident-1',
     });
-    expect(store.readEvents(run.id)).toEqual(expect.arrayContaining([
+    expect(store.eventLog.readEvents(run.id)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         type: 'provider-auth-required',
         provider: 'codex',
@@ -154,7 +154,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }],
     });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       stepId: 'missing',
       message: 'unauthorized credential returned HTTP 401',
@@ -175,7 +175,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       steps: [],
     });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       message: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
@@ -198,7 +198,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [],
       });
 
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type,
         message: 'OAuth access token is invalid',
       });
@@ -220,15 +220,15 @@ describe('watchProviderRuntimeAuthFailures', () => {
       steps: [],
     });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       message: 'the compiler rejected this TypeScript program',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       text: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'tool.result',
       message: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
@@ -246,17 +246,17 @@ describe('watchProviderRuntimeAuthFailures', () => {
       steps: [],
     });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       message: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'session.error',
       message: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
 
     expect(onInvalidated).toHaveBeenCalledTimes(1);
-    const required = store.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required');
+    const required = store.eventLog.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required');
     expect(required).toHaveLength(1);
     const { seq: _seq, ts: _ts, ...safe } = required[0]!;
     expect(safe).toEqual({
@@ -284,7 +284,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     });
 
     for (const run of [first, second]) {
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
       });
@@ -292,7 +292,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
 
     expect(onInvalidated).toHaveBeenCalledTimes(1);
     for (const run of [first, second]) {
-      expect(store.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required'))
+      expect(store.eventLog.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required'))
         .toEqual([expect.objectContaining({
           provider: 'claude',
           authFailureId: 'auth-incident-1',
@@ -309,7 +309,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         runner,
         steps: [],
       });
-      store_.appendEvent(run.id, {
+      store_.eventLog.appendEvent(run.id, {
         type: 'error',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
       });
@@ -362,7 +362,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
 
       // Same run, same incident: the second and third line describe the latch already standing.
       for (const type of ['session.error', 'note'] as const) {
-        store.appendEvent(run.id, { type, message: 'unauthorized: 401 token expired' });
+        store.eventLog.appendEvent(run.id, { type, message: 'unauthorized: 401 token expired' });
       }
       await verified(verifying);
 
@@ -376,7 +376,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       await verified(verifying);
 
       // Recovery repairs workspace status, not history: the task still shows why it stopped.
-      expect(store.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required'))
+      expect(store.eventLog.readEvents(run.id).filter(({ type }) => type === 'provider-auth-required'))
         .toEqual([expect.objectContaining({ provider: 'claude', authFailureId: 'auth-incident-1' })]);
     });
 
@@ -412,7 +412,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'work' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -450,7 +450,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'work' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -502,7 +502,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { backend: 'codex' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'codex: turn failed: unauthorized',
@@ -532,7 +532,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'gone' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -564,7 +564,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         agentProfile: 'work',
         steps: [],
       });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
       });
@@ -596,7 +596,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'work' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -638,14 +638,14 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'work' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
       });
       await vi.waitFor(() => expect(gatingResolver).toHaveBeenCalled(), { timeout: HANG_GUARD_MS });
       // The newer failure advances the incident while A's resolution is still pending.
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -701,7 +701,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
         steps: [{ id: 'implement', name: 'Implement', kind: STEP_KIND.agent }],
       });
       store.updateStep(run.id, 'implement', { profileId: 'work' });
-      store.appendEvent(run.id, {
+      store.eventLog.appendEvent(run.id, {
         type: 'error',
         stepId: 'implement',
         message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -740,7 +740,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     });
 
     unwatch();
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       message: 'Failed to authenticate. API Error: 401 OAuth token has been revoked.',
     });
@@ -763,7 +763,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     onTestFinished(() => report.mockRestore());
     observer.watch(store);
     observer.watch(store);
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
     });
@@ -788,7 +788,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
     await recoverWithProviderRuntimeAuthObservation(
       store,
       async () => {
-        store.appendEvent(run.id, {
+        store.eventLog.appendEvent(run.id, {
           type: 'error',
           message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
         });

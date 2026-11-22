@@ -80,7 +80,7 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
   const workflow = await host.reviveWorkflow(run);
   if (!workflow) {
     host.move(run.id, 'fail-start', { error: 'interrupted — workflow definition not recoverable after a restart' });
-    context.store.appendEvent(run.id, {
+    context.store.eventLog.appendEvent(run.id, {
       type: 'lifecycle',
       message: `${reason} — workflow definition not recoverable, task failed`,
     });
@@ -92,7 +92,7 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
     // Rehydrate again at dequeue so edits and stacked messages keep their admission-time reads.
     input: host.hydrateQueuedInput(run.id, atTaskHead.recoveryInput(run)),
   });
-  context.store.appendEvent(run.id, { type: 'lifecycle', message: `${reason} — task re-queued` });
+  context.store.eventLog.appendEvent(run.id, { type: 'lifecycle', message: `${reason} — task re-queued` });
 }
 
 export function reviveQueuedContinuation(context: RunModuleContext, host: QueuedRevivalHost, run: RunRecord, reason: string, queuedStepId: string, sessionStep: RunRecord['steps'][number]): void {
@@ -111,7 +111,7 @@ export function reviveQueuedContinuation(context: RunModuleContext, host: Queued
     images: [],
     lineJoinedAt: Date.now(),
   });
-  context.store.appendEvent(run.id, {
+  context.store.eventLog.appendEvent(run.id, {
     type: 'lifecycle',
     message: `${reason} — interrupted continuation re-queued`,
   });
@@ -128,7 +128,7 @@ export function reviveQueuedWorker(context: RunModuleContext, host: QueuedReviva
     // Use the privately bound workflow, and the same durable pending-step
     // cursor as root recovery. A queued tail must not replay a failed source.
     host.enqueueJob(run.id, atTaskHead.resumedJob(run, job));
-    context.store.appendEvent(run.id, { type: 'lifecycle', message: `${reason} — owned task re-queued` });
+    context.store.eventLog.appendEvent(run.id, { type: 'lifecycle', message: `${reason} — owned task re-queued` });
   } catch (error) {
     host.move(run.id, 'fail-start', { error: String(error) });
   }
@@ -167,5 +167,5 @@ export const reviveWorkflow = atTaskHead.reviveWorkflow;
 function failRemovedRunner(context: RunModuleContext, host: QueuedRevivalHost, runId: string, removedRunner: string, reason: string): void {
   const error = removedRunnerMessage(removedRunner);
   host.move(runId, 'fail-start', { error, finishedAt: new Date().toISOString() });
-  context.store.appendEvent(runId, { type: 'lifecycle', message: `${reason} — task failed: ${error}` });
+  context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: `${reason} — task failed: ${error}` });
 }

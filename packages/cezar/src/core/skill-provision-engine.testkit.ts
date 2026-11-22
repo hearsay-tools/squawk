@@ -27,12 +27,12 @@ async function heldTrigger(runner: string): Promise<void> {
       env: { CEZ_MOCK_STDIN_FILE: wire, CEZ_MOCK_RELEASE_FILE: release },
       beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', path: '/listed/SKILL.md', scope: 'repo' }])),
       during: async ({ store, manager, runId }) => {
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'turn.started'));
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'turn.started'));
         expect(manager.sendMessage(runId, [{ type: 'text', text: '/probe-project held arguments' }])).toBe(true);
         expect(store.getRun(runId)?.queuedMessages?.[0]?.text).toBe('/probe-project held arguments');
         expect(read(wire)).not.toContain('probe-project'); // The gate holds the turn; no time-based absence wait.
         writeFileSync(release, 'baseline');
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
         expect(read(wire)).toContain('probe-project');
       },
     });
@@ -117,14 +117,14 @@ const ENGINE_CELLS: SkillProvisionEngineCells = {
   typedTrigger: runner => async () => {
     await driveRun(runner, 'baseline', run => run?.status === 'waiting', 30_000, async ({ store, manager, runId }) => {
       expect(manager.sendMessage(runId, [{ type: 'text', text: '/probe-project typed arguments' }])).toBe(true);
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
       const cwd = manager.delegationExecutionSettings(runId)?.cwd;
       if (!cwd) throw new Error('expected live session cwd');
       expect(existsSync(join(cwd, '.claude/skills'))).toBe(false);
       expect(existsSync(join(cwd, '.agents/skills'))).toBe(false);
       const run = store.getRun(runId)!;
       expect(run.queuedMessages ?? []).toEqual([]);
-      expect(store.readEvents(runId).some(event => event.type === 'user-message' && event.text === '/probe-project typed arguments')).toBe(true);
+      expect(store.eventLog.readEvents(runId).some(event => event.type === 'user-message' && event.text === '/probe-project typed arguments')).toBe(true);
     }, {
       beforeStart: ({ manager, repoRoot }) => {
         manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(repoRoot, 'SKILL.md') }]));

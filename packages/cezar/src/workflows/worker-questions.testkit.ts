@@ -16,7 +16,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 
 export const conversationOf = (rootId: string) => { const d = store.getRun(rootId)?.delegation; return d?.role === 'root' ? d.conversation : undefined; };
 
-export const eventsOf = (runId: string, type: string) => store.readEvents(runId).filter(event => event.type === type);
+export const eventsOf = (runId: string, type: string) => store.eventLog.readEvents(runId).filter(event => event.type === type);
 
 export const squawkAnswered = (runId: string) => eventsOf(runId, 'human-input-delivered').filter(event => event.source === 'cezar');
 
@@ -94,7 +94,7 @@ export async function askedPair(parentTask = 'mock:hold'): Promise<{
 
 export const answered = (runId: string) => eventsOf(runId, 'human-input-delivered').filter(event => event.source === 'parent');
 
-export const said = (runId: string, text: string) => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(text));
+export const said = (runId: string, text: string) => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(text));
 
 export async function replyAfterRestart(holdResources = false) {
     const f = await askedPair();
@@ -162,10 +162,10 @@ export async function replyAfterRestart(holdResources = false) {
 
 export const expectSettledParentRefusal = (workerId: string, parentId: string, status: string) => {
     const before = JSON.stringify(store.getRun(workerId));
-    const events = store.readEvents(workerId).length;
+    const events = store.eventLog.readEvents(workerId).length;
     expect(manager.continueRun(workerId, { text: 'mock:agent-echo human answer' })).toEqual({ ok: false, error: `Parent task ${parentId} is ${status}; continue the parent before its worker.` });
     expect(JSON.stringify(store.getRun(workerId))).toBe(before);
-    expect(store.readEvents(workerId)).toHaveLength(events);
+    expect(store.eventLog.readEvents(workerId)).toHaveLength(events);
   };
 
 export function fillConversation(parentId: string, workerId: string, count: number) {

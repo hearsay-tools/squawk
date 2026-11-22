@@ -144,7 +144,7 @@ function sweepPreviewOnce(dataDir: string, host: PreviewHost | undefined): Promi
  * is not swept again, and what the live host runs is spared either way), and a deleted run's
  * preview is released with its profile. Returns the unsubscribe of that release.
  */
-export function armPreview(store: { readonly lifecycle: RunLifecycleSource } & RunLookup & Pick<RunEventLog, 'appendEvent'>, dataDir: string, host: PreviewHost | undefined): () => void {
+export function armPreview(store: { readonly lifecycle: RunLifecycleSource } & RunLookup & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> }, dataDir: string, host: PreviewHost | undefined): () => void {
   // Before the sweep's first await: a crash's agent state is reconciled before any agent can connect.
   reconcileAgentMarkers(dataDir, store, runId => host?.hasAgents(runId) ?? false);
   void sweepPreviewOnce(dataDir, host);

@@ -64,9 +64,9 @@ const EXEMPTION_CELLS: Record<string, (backend: string) => CellBody> = {
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId }) => {
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
-      const started = store.readEvents(runId).filter(e => e.type === 'turn.started').length;
+      const started = store.eventLog.readEvents(runId).filter(e => e.type === 'turn.started').length;
       expect(manager.sendMessage(runId, [{ type: 'text', text: 'mock:hold' }])).toBe(true);
-      await waitFor(() => store.readEvents(runId).filter(e => e.type === 'turn.started').length > started);
+      await waitFor(() => store.eventLog.readEvents(runId).filter(e => e.type === 'turn.started').length > started);
     });
   },
   F9: backend => async () => {
@@ -88,19 +88,19 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
-      const startSeq = store.readEvents(runId).length;
+      const startSeq = store.eventLog.readEvents(runId).length;
       const inputId = randomUUID();
       expect(manager.steerWorker(runId, {
         id: inputId, source: agentInputSchema.shape.source.enum.agent, parentRunId,
         text: promptFor(backend, 'silent-tail-ack-delay'), createdAt: new Date().toISOString(),
       })).toBe('queued');
-      await waitFor(() => store.readEvents(runId).slice(startSeq).some(e => e.type === 'turn-end'));
+      await waitFor(() => store.eventLog.readEvents(runId).slice(startSeq).some(e => e.type === 'turn-end'));
       const input = store.getRun(runId)?.agentInputs?.find(input => input.id === inputId);
       expect(input).toBeDefined();
       expect(input?.deliveredAt).toBeUndefined();
-      expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(0);
+      expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(0);
       await waitFor(() => store.getRun(runId)?.agentInputs?.find(input => input.id === inputId)?.deliveredAt !== undefined);
-      expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toEqual([expect.objectContaining({
+      expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toEqual([expect.objectContaining({
         stepId: store.getRun(runId)?.steps.at(-1)?.id,
       })]);
     }, { semaphore });
@@ -108,24 +108,24 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
   F8: backend => async () => {
     const semaphore = new WorkspaceSemaphore({ home: testHome() });
     await withOwnedInputRun(backend, 'silent-tail-no-reply', async ({ store, manager, runId }) => {
-      const startSeq = store.readEvents(runId).length;
+      const startSeq = store.eventLog.readEvents(runId).length;
       const clock = replyObservationClock();
       try {
         manager.enqueueOwnedRun(runId);
         await waitForNativeContent(() => clock.captured === 1 && clock.pending === 1);
-        expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
+        expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
         expect(store.getRun(runId)?.status).toBe('running');
         expect(semaphore.busy()).toBe(1);
         await clock.advance(150);
         expect(store.getRun(runId)?.status).toBe('running');
         expect(semaphore.busy()).toBe(1);
-        expect(noReplyNotes(store.readEvents(runId))).toHaveLength(0);
+        expect(noReplyNotes(store.eventLog.readEvents(runId))).toHaveLength(0);
         await clock.advance(150);
         expect(clock.captured).toBe(1);
       } finally { clock.restore(); }
       expectParkedOutsidePool(semaphore);
-      expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
-      expect(noReplyNotes(store.readEvents(runId))).toHaveLength(1);
+      expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
+      expect(noReplyNotes(store.eventLog.readEvents(runId))).toHaveLength(1);
       expect(store.getRun(runId)?.status).toBe('waiting');
     }, { semaphore, noWaitNudgeReplyMs: 300 });
   },
@@ -135,9 +135,9 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
     const release = join(gateRoot, 'release');
     try {
       await withOwnedInputRun(backend, 'silent-tail-late-reply', async ({ store, manager, runId }) => {
-        const startSeq = store.readEvents(runId).length;
+        const startSeq = store.eventLog.readEvents(runId).length;
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => noReplyNotes(store.readEvents(runId).slice(startSeq)).length === 1);
+        await waitFor(() => noReplyNotes(store.eventLog.readEvents(runId).slice(startSeq)).length === 1);
         expect(store.getRun(runId)?.status).toBe('waiting');
         expectParkedOutsidePool(semaphore);
         // The native reply stays blocked until parking and slot release are observed.
@@ -153,8 +153,8 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
           expect(resumedSlots).toBe(1);
           await waitFor(() => store.getRun(runId)?.status === 'done');
         } finally { stopOnRun(); }
-        expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
-        expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
+        expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
+        expect(noReplyNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
       }, { semaphore, noWaitNudgeReplyMs: 300, env: { CEZ_MOCK_RELEASE_FILE: release } });
     } finally { rmSync(gateRoot, { recursive: true, force: true }); }
   },
@@ -164,34 +164,34 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
     const release = join(gateRoot, 'release');
     try {
       await withOwnedInputRun(backend, 'silent-tail-late-turn-start', async ({ store, manager, runId }) => {
-        const startSeq = store.readEvents(runId).length;
+        const startSeq = store.eventLog.readEvents(runId).length;
         manager.enqueueOwnedRun(runId);
-        await waitFor(() => noReplyNotes(store.readEvents(runId).slice(startSeq)).length === 1);
+        await waitFor(() => noReplyNotes(store.eventLog.readEvents(runId).slice(startSeq)).length === 1);
         expect(store.getRun(runId)?.status).toBe('waiting');
         expectParkedOutsidePool(semaphore);
-        const parkedSeq = store.readEvents(runId).length;
+        const parkedSeq = store.eventLog.readEvents(runId).length;
         // The mock waits for observed parking instead of racing a 200 ms window.
         writeFileSync(release, 'go');
         // Content has its own gate, so only native turn-start can resume the run here.
         await waitFor(() => store.getRun(runId)?.status === 'running');
         expect(semaphore.busy()).toBe(1);
-        expect(lateDoneContent(store.readEvents(runId).slice(parkedSeq))).toBe(false);
+        expect(lateDoneContent(store.eventLog.readEvents(runId).slice(parkedSeq))).toBe(false);
         writeFileSync(`${release}.content`, 'go');
         await waitFor(() => store.getRun(runId)?.status === 'done');
-        expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
-        expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
+        expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
+        expect(noReplyNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
       }, { semaphore, noWaitNudgeReplyMs: 300, env: { CEZ_MOCK_RELEASE_FILE: release } });
     } finally { rmSync(gateRoot, { recursive: true, force: true }); }
   },
   F10: backend => async () => {
     const semaphore = new WorkspaceSemaphore({ home: testHome() });
     await withOwnedInputRun(backend, 'silent-tail-slow-done', async ({ store, manager, runId }) => {
-      const startSeq = store.readEvents(runId).length;
+      const startSeq = store.eventLog.readEvents(runId).length;
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.status === 'done' || store.getRun(runId)?.status === 'waiting');
       expect(store.getRun(runId)?.status).toBe('done');
-      expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
-      expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(0);
+      expect(nudgeNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(1);
+      expect(noReplyNotes(store.eventLog.readEvents(runId).slice(startSeq))).toHaveLength(0);
     }, { semaphore, noWaitNudgeReplyMs: 300 });
   },
 };

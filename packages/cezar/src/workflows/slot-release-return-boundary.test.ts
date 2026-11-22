@@ -65,7 +65,7 @@ it('release arms due-now timer before return', async () => {
   clock.fire(0);
   expect(f.store.getRun(id)?.status).toBe('failed');
   expect(f.store.getRun(id)?.autoResumeAt).toBeUndefined();
-  expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([
+  expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([
     expect.objectContaining({ type: 'note', message: expect.stringContaining('automatic resume could not start') }),
   ]));
 });
@@ -80,7 +80,7 @@ it('release withdraws missed hold before return', async () => {
   expect(atReturn?.autoResumeAt).toBeUndefined();
   expect(clock.pending).toBe(0);
   expect(delays).toEqual([]);
-  expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([
+  expect(f.store.eventLog.readEvents(id)).toEqual(expect.arrayContaining([
     expect.objectContaining({ type: 'note', message: expect.stringContaining('automatic resume expired') }),
   ]));
 });

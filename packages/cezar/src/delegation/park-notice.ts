@@ -91,8 +91,8 @@ export function parkNoticeMessage(input: {
 
 /** A peer already took the notice's deterministic ID in the parent conversation (hearsay-tools/cezarion#1990
  *  review): no notice can be sent for this wait, and the worker's log says so once. */
-export function parkNoticeIdInUse(store: RunEventLog, workerId: string, waitId: string): void {
+export function parkNoticeIdInUse(store: { readonly eventLog: RunEventLog }, workerId: string, waitId: string): void {
   const projectionId = `park-notice-id-in-use:${waitId}`;
-  if (store.hasProjection(workerId, projectionId)) return;
-  store.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the park notice ID is already in use in the parent conversation: no park notice was sent.' });
+  if (store.eventLog.hasProjection(workerId, projectionId)) return;
+  store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the park notice ID is already in use in the parent conversation: no park notice was sent.' });
 }
