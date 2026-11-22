@@ -466,7 +466,7 @@ export class ProjectContexts {
     if (opts.releasePreviews !== false && this.deps.preview) {
       // Every run id, not only the held ones: a finished run's dev server may still be up. A run
       // without one is a no-op for the host.
-      for (const id of ctx.store.listRunIds()) void this.deps.preview.release(id).catch(() => undefined);
+      for (const id of ctx.store.queries.listRunIds()) void this.deps.preview.release(id).catch(() => undefined);
     }
     this.repoHandleControllers.get(ctx.store)!.abort();
     this.sweepControllers.get(ctx.store)?.abort();
@@ -545,7 +545,7 @@ export class ProjectContexts {
       // best-effort sweeps serveCommand runs for the boot project, gated on the
       // root actually being a git repo.
       if (await getRepoInfo(project.root)) {
-        await pruneOrphans(project.root, new Set(store.listRunIds())).catch(
+        await pruneOrphans(project.root, new Set(store.queries.listRunIds())).catch(
           () => [] as string[],
         );
         const keep = await resolveWorktreeRetention(project.root, this.deps.home).catch(

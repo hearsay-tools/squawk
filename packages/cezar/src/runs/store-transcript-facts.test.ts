@@ -46,7 +46,7 @@ describe('RunStore transcript facts (#880)', () => {
     try {
       const reopened = openStore(dir).store;
       await reopened.transcriptFacts.factsWarmIdle();
-      expect(reopened.listRunSummaries().runs).toHaveLength(3);
+      expect(reopened.queries.listRunSummaries().runs).toHaveLength(3);
       expect(dispatch).not.toHaveBeenCalled();
     } finally {
       dispatch.mockRestore();

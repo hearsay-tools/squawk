@@ -13,7 +13,7 @@ describe('peer conversations', () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { f = fixture(); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
     await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
   const permissions = ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'] as const;
@@ -109,12 +109,12 @@ describe('peer conversations', () => {
     await f.service.send(d.caller, message(c.id, 'progress'));
     setRunStatus(f.store, c.id, RUN_STATUS.done);
     f.store.persistence.flush();
-    expect(f.store.heldIds()).not.toContain(c.id);
-    expect(f.store.listConversationRootIds(b.id)).toEqual([f.parent.id]);
+    expect(f.store.queries.heldIds()).not.toContain(c.id);
+    expect(f.store.queries.listConversationRootIds(b.id)).toEqual([f.parent.id]);
     const read = vi.spyOn(f.store, 'getRun');
     expect(f.store.retention.deleteRun(b.id)).toBe(true);
     expect(read.mock.calls.map(([id]) => id)).not.toContain(c.id);
     expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: 'deleted' })]);
-    expect(f.store.listConversationRootIds()).toEqual(expect.arrayContaining([f.parent.id, c.id, d.id]));
+    expect(f.store.queries.listConversationRootIds()).toEqual(expect.arrayContaining([f.parent.id, c.id, d.id]));
   });
 });

@@ -53,9 +53,9 @@ export async function measureAutomationLookups(options: AutomationBenchOptions):
       for (let i = 0; i < options.passes; i++) { const t = performance.now(); call(); samples.push(performance.now() - t); }
       return Math.round(median(samples));
     };
-    const list = () => ids.reduce((sum, id) => sum + store.countAutomationRuns(id), 0);
+    const list = () => ids.reduce((sum, id) => sum + store.queries.countAutomationRuns(id), 0);
     return { runs: options.runs, launched: rows.filter(run => run.automation).length, counted: list(),
-      listMs: time(list), receiptMs: time(() => store.findRunIdsByAutomationReceipt(receipts)) };
+      listMs: time(list), receiptMs: time(() => store.queries.findRunIdsByAutomationReceipt(receipts)) };
   });
 }
 

@@ -65,8 +65,8 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
         expect(disk!.agentInputs?.find(input => input.id === wake?.id)?.deliveredAt).toEqual(expect.any(String));
       } finally {
         release();
-        for (const run of store.listRuns()) manager.cancel(run.id);
-        await until(() => store.listRuns().every(run => !manager.isActive(run.id)));
+        for (const run of store.queries.listRuns()) manager.cancel(run.id);
+        await until(() => store.queries.listRuns().every(run => !manager.isActive(run.id)));
       }
     }, 'Worker wait');
   });

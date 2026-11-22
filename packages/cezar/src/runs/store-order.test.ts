@@ -29,9 +29,9 @@ const record = (id: string, status = 'done') => ({
 /** Every order a list read answers, as ids. */
 function orders(store: RunStore) {
   return {
-    live: store.listRuns().map((run) => run.id),
-    summaries: store.listRunSummaries().runs.map((run) => run.id),
-    all: store.listAllRunsForLegacyRoute().map((run) => run.id),
+    live: store.queries.listRuns().map((run) => run.id),
+    summaries: store.queries.listRunSummaries().runs.map((run) => run.id),
+    all: store.queries.listAllRunsForLegacyRoute().map((run) => run.id),
   };
 }
 
@@ -59,7 +59,7 @@ describe('runs with the same createdAt', () => {
     const store = open({ keepLive: true });
     expect(orders(store)).toEqual({ live: expected, summaries: expected, all: expected });
     // Memory holds them in that order too, as the map loaded from runs.json did.
-    expect(store.heldIds()).toEqual(['run-b', 'run-c', 'run-a', 'older']);
+    expect(store.queries.heldIds()).toEqual(['run-b', 'run-c', 'run-a', 'older']);
 
     // A write keeps a row where it was inserted.
     store.updateRun('run-c', { title: 'renamed' });
@@ -74,7 +74,7 @@ describe('runs with the same createdAt', () => {
   it('list finished runs (read cold) in runs.json order too, interleaved with a held one', () => {
     writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('run-b'), record('run-c', 'running'), record('run-a')]));
     const store = open({ keepLive: true });
-    expect(store.heldIds()).toEqual(['run-c']);
+    expect(store.queries.heldIds()).toEqual(['run-c']);
     expect(orders(store)).toEqual({ live: ['run-c'], summaries: fileOrder, all: fileOrder });
   });
 
@@ -84,17 +84,17 @@ describe('runs with the same createdAt', () => {
     let store = open();
     // Random ids: six of them make an id order that happens to match creation order 1 in 720.
     const created = Array.from({ length: 6 }, (_, index) => store.createRun({ title: `t${index}`, workflow: 'w', task: 'task', steps: [] }).id);
-    expect(store.listRuns().map((run) => run.id)).toEqual(created);
-    expect(store.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRuns().map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
 
     store.persistence.flush();
-    expect(store.listRuns().map((run) => run.id)).toEqual(created);
-    expect(store.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRuns().map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
 
     store.close();
     store = open({ keepLive: true });
-    expect(store.listRuns().map((run) => run.id)).toEqual(created);
-    expect(store.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRuns().map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
   });
 
   it('list in creation order when a durable commit of the newest writes them all', () => {
@@ -104,10 +104,10 @@ describe('runs with the same createdAt', () => {
     const created = Array.from({ length: 3 }, (_, index) => store.createRun({ title: `t${index}`, workflow: 'w', task: 'task', steps: [] }).id);
     // Stages the newest, and the same transaction writes the two a debounced save still owes.
     store.commitAgentInputs(created[2]!, []);
-    expect(store.listRuns().map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRuns().map((run) => run.id)).toEqual(created);
 
     store.close();
     store = open({ keepLive: true });
-    expect(store.listRuns().map((run) => run.id)).toEqual(created);
+    expect(store.queries.listRuns().map((run) => run.id)).toEqual(created);
   });
 });

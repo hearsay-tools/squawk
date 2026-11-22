@@ -15,7 +15,7 @@ describe('task access', () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { f = fixture(workerCleanups()); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
     await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
 

@@ -115,14 +115,14 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     store = RunStore.open(primary, { keepLive: true });
     manager = new RunManager(store, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     vi.spyOn(manager, 'continueRun').mockReturnValue({ ok: false, error: 'fixture stops agent launch' });
-    expect(store.listWorkersOf(a.parentId).map(run => run.id)).toContain(a.workerId);
+    expect(store.queries.listWorkersOf(a.parentId).map(run => run.id)).toContain(a.workerId);
     await manager.recover();
     store.persistence.flush();
     // Automatic recovery treats the whole family as read only: both runs keep their stored status.
     expect(store.claims.runOwnership(a.parentId)).toBe('fallback');
     expect(store.getRun(a.parentId)?.status).toBe(RUN_STATUS.running);
     expect(store.getRun(a.workerId)?.status).toBe(RUN_STATUS.running);
-    expect(store.listRuns().map(run => run.id)).toEqual([]);
+    expect(store.queries.listRuns().map(run => run.id)).toEqual([]);
     expect(rootRow()).toEqual(rootBefore);
     const db = new DatabaseSync(join(primary, RUNS_DB_FILE), { readOnly: true });
     try { expect(db.prepare('SELECT id FROM runs WHERE id = ?').get(a.workerId)).toBeUndefined(); }
@@ -340,8 +340,8 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
       store.persistence.flush();
       expect(readPersistedRuns(dataDir).find(run => run.id === parentId)?.delegation).not.toHaveProperty('finishRequestedAt');
       // Repaired, the root is finished like any other and leaves memory with its family.
-      expect(store.heldIds()).not.toContain(parentId);
-      expect(store.heldIds()).not.toContain(workerId);
+      expect(store.queries.heldIds()).not.toContain(parentId);
+      expect(store.queries.heldIds()).not.toContain(workerId);
       expect(manager.continueRun(parentId, { text: 'Pick it back up' }, true)).toEqual({ ok: true });
     });
   });
@@ -396,7 +396,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
       expect(root?.waits ?? []).toEqual([]);
       expect(root?.lastWaits).toEqual([expect.objectContaining({ id: waitId, kind: WAIT_KIND.worker, phase: WAIT_PHASE.cancelled })]);
       store.persistence.flush();
-      expect(store.heldIds()).not.toContain(parentId);
+      expect(store.queries.heldIds()).not.toContain(parentId);
     });
   });
 });

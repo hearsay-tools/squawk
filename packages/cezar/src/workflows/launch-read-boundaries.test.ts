@@ -105,7 +105,7 @@ async function heldHead(): Promise<string> {
 async function releaseHead(head: string): Promise<AgentRunSpec> {
   manager.cancel(head);
   // bound: the target must reach its real runner after the held task releases capacity.
-  await waitForProduct(manager, store, () => opened.length === 2 || store.listRuns().some(run => run.status === 'failed'));
+  await waitForProduct(manager, store, () => opened.length === 2 || store.queries.listRuns().some(run => run.status === 'failed'));
   expect(opened).toHaveLength(2);
   return opened[1]!;
 }

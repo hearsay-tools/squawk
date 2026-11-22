@@ -163,11 +163,11 @@ export function usePastedAttachmentsFixture(): PastedAttachmentsFixture {
 
   afterEach(async () => {
     for (const release of [...pendingHolderReleases]) release();
-    for (const run of fx.store.listRuns()) {
+    for (const run of fx.store.queries.listRuns()) {
       if (!['done', 'review', 'failed', 'cancelled'].includes(run.status)) fx.manager.cancel(run.id);
     }
     await Promise.all(
-      fx.store.listRuns().map((run) =>
+      fx.store.queries.listRuns().map((run) =>
         fx.waitForStatus(run.id, ['done', 'review', 'failed', 'cancelled'], 5_000),
       ),
     );

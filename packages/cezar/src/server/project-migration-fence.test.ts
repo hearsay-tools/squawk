@@ -229,7 +229,7 @@ describe('the write backstop', () => {
         finally { db.close(); }
       };
       // The delayed repository discovery repairs the foreign reference: nothing reaches the project.
-      store.setRepoHandle({ owner: 'acme', name: 'demo' });
+      store.repoScope.setRepoHandle({ owner: 'acme', name: 'demo' });
       // A family claimed before the fence: its debounced save is skipped and kept.
       store.updateRun(early.id, { title: 'during' });
       store.persistence.flush();

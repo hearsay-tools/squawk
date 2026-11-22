@@ -85,6 +85,6 @@ it('dedupes a --runner retry of a --backend spawn under the same request id', as
   expect(store.getRun(first.workerId)?.runner).toBe('codex');
   const retry = await command(args('--runner'));
   expect(retry.workerId).toBe(first.workerId);
-  expect(store.listRuns().filter(run => run.delegation?.role === 'worker')).toHaveLength(1);
+  expect(store.queries.listRuns().filter(run => run.delegation?.role === 'worker')).toHaveLength(1);
   expect(enqueued).toEqual([first.workerId]);
 });

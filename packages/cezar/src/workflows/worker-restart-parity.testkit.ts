@@ -71,7 +71,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     for (const id of [p.id, w.id]) rmSync(historyPaths(dataDir, id).facts, { force: true });
     const joins = vi.spyOn(TranscriptFactsQueue.prototype, 'join');
     reopenRuntime();
-    expect(store.listRuns()).toEqual([]); // no live, legacy or deferred family anchor
+    expect(store.queries.listRuns()).toEqual([]); // no live, legacy or deferred family anchor
     expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
     expect(existsSync(historyPaths(dataDir, w.id).facts)).toBe(false);
     // No pre-awaited global warming: boot recovery itself owns readiness.

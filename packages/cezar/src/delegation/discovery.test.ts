@@ -33,7 +33,7 @@ describe('parent discovery and model admission', () => {
   const spawn = (extra = {}) => f.service.spawn(f.caller, { task: 'work', baseline: 'parent-head', requestId: randomUUID(), backend: 'codex', model: 'gpt-retired', ...extra });
   it('rejects a catalog miss with choices and alternative runners before allocating a worker', async () => {
     await expect(spawn()).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/gpt-retired.*codex.*gpt-current.*low.*high.*claude/s) });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
     expect(f.store.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [] });
     expect(existsSync(join(f.root, '.ai/cezar/worktrees'))).toBe(false);
   });
@@ -101,7 +101,7 @@ describe('parent discovery and model admission', () => {
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'chain.yaml'), 'name: chain\nsteps:\n  - id: first\n    prompt: "{{task}}"\n    runner: codex\n    model: gpt-current\n  - id: second\n    prompt: review\n    runner: codex\n    model: gpt-retired\n');
     await expect(spawn({ workflow: 'chain', model: undefined })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   it('serves scoped runner status and model metadata, refusing workers and forged inputs', async () => {
     const app = createDelegationRoutes(f.service, f.credentials);

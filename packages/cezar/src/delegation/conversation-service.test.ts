@@ -73,7 +73,7 @@ describe('durable conversations', () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { f = fixture(); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
     await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
   async function worker() {

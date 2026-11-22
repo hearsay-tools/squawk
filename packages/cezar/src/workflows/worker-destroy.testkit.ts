@@ -49,9 +49,9 @@ export function useWorkerDestroyFixture(): void {
   afterEach(async () => {
     for (const release of releases.splice(0)) release();
     // A test that restarted disposed this manager and closed this store: nothing to cancel here.
-    if (!managerDisposed(manager)) for (const run of store.listRuns()) manager.cancel(run.id);
+    if (!managerDisposed(manager)) for (const run of store.queries.listRuns()) manager.cancel(run.id);
     await fixtureWorkSettled(root);
-    await until(() => store.listRuns().every(run => !manager.isActive(run.id)));
+    await until(() => store.queries.listRuns().every(run => !manager.isActive(run.id)));
     await drainFixtureManagers(root);
     manager.dispose(); store.persistence.flush(); vi.restoreAllMocks(); vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });

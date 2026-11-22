@@ -23,7 +23,7 @@ describe('peer conversations', () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { f = fixture(); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) if (f.manager.isActive(run.id)) f.manager.cancel(run.id);
     await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
   const permissions = ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'] as const;

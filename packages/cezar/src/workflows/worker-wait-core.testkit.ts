@@ -73,7 +73,7 @@ export function checkpoint(value: string) { phase = value; checkpoints.push({ ph
 export function captureState() { return { root, phase, checkpoints: checkpoints.map(entry => ({ ...entry })), elapsedMs: Math.round(performance.now() - began), busy: semaphore?.busy(),
   ownedOperations: [...(work?.pending.values() ?? [])],
   sessions: [...(work?.liveSessions ?? [])].map(session => ({ pid: session.pid, open: session.open })),
-  runs: store?.listRunIds().flatMap(id => store!.getRun(id) ?? []).map(run => ({ id: run.id, status: run.status, error: run.error, step: run.currentStepId, wait: waitOf(run)?.phase,
+  runs: store?.queries.listRunIds().flatMap(id => store!.getRun(id) ?? []).map(run => ({ id: run.id, status: run.status, error: run.error, step: run.currentStepId, wait: waitOf(run)?.phase,
     active: manager.isActive(run.id), toolGenerationPresent: toolGenerations.has(run.id),
     hasSessionId: run.steps.some(step => !!step.sessionId),
     steps: run.steps.map(step => ({ id: step.id, sessionId: step.sessionId ?? null })),
@@ -143,16 +143,16 @@ export function useWorkerWaitFixture(options: { processScope?: false; nudgeReply
       // Cancellation during the dequeue/spawn gap is covered by Task 6's barrier;
       // this fixture waits for its real runner handles before stopping processes.
       await until(() => {
-        const active = store.listRunIds().filter(id => {
+        const active = store.queries.listRunIds().filter(id => {
           const run = store.getRun(id);
           return manager.isActive(id) && run?.status !== 'queued';
         });
         return active.every(id => store.getRun(id)?.steps.some(step => !!step.sessionId)) && active.length <= work.liveSessions.size;
       }, () => JSON.stringify(captureState()));
       checkpoint('teardown-cancel');
-      for (const id of store.listRunIds()) cleanup(() => manager.cancel(id));
+      for (const id of store.queries.listRunIds()) cleanup(() => manager.cancel(id));
       checkpoint('teardown-termination');
-      await until(() => store.listRunIds().every(id => !manager.isActive(id)), () => JSON.stringify(captureState()));
+      await until(() => store.queries.listRunIds().every(id => !manager.isActive(id)), () => JSON.stringify(captureState()));
     } catch (error) {
       errors.push(error);
       // Capture AFTER cancellation, while the active registry and store still exist.
@@ -335,8 +335,8 @@ export async function restart(fakeClock = false, diskCheckpoint?: readonly unkno
     const record = JSON.parse(content) as { controller: object };
     return [path, JSON.stringify({ ...record, controller: { ...record.controller, pid: ABSENT_PROCESS_PID } })] as const;
   })];
-  for (const id of store.listRunIds()) manager.cancel(id);
-  await until(() => store.listRunIds().every(id => !manager.isActive(id)));
+  for (const id of store.queries.listRunIds()) manager.cancel(id);
+  await until(() => store.queries.listRunIds().every(id => !manager.isActive(id)));
   await Promise.all(executions.splice(0));
   await Promise.all(bookkeeping.splice(0)); manager.dispose(); store.close(); checkpoint('restart-stopped');
   seedRuns(join(root, '.ai/cezar'), disk);

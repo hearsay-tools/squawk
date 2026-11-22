@@ -64,8 +64,8 @@ it.each(['agent', 'check'].flatMap(next => ['early', 'late'].map(timing => ({ ne
         clock.restore();
         setFailureState(captureState());
         release();
-        for (const record of store.listRuns()) manager.cancel(record.id);
-        await until(() => store.listRuns().every(record => !manager.isActive(record.id)));
+        for (const record of store.queries.listRuns()) manager.cancel(record.id);
+        await until(() => store.queries.listRuns().every(record => !manager.isActive(record.id)));
       }
     }, 'Worker wait');
   });

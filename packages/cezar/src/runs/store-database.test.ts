@@ -439,7 +439,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
     const later = writes(again);
     again.persistence.flush();
     expect(later).toEqual([]);
-    expect(again.listRunSummaries().runs.find((run) => run.id === 'sched')).toHaveProperty('automationId', 'auto-s');
+    expect(again.queries.listRunSummaries().runs.find((run) => run.id === 'sched')).toHaveProperty('automationId', 'auto-s');
   });
 
   it('a store with nothing to normalize writes nothing', () => {

@@ -61,7 +61,7 @@ export async function recoverServeProject(
   recover = recoverWithProviderRuntimeAuthObservation,
 ): Promise<void> {
   const recovered = store
-    .listRuns()
+    .queries.listRuns()
     .filter((r) => ['queued', 'waiting', 'running'].includes(r.status)).length;
   if (!store.unavailable) {
     await recover(

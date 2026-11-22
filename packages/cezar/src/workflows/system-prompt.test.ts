@@ -224,7 +224,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
   /** Every run here starts on a free slot. A run an earlier test left queued would run first,
    *  on this test's time (hearsay-tools/cezarion#1316). */
   function expectNoLiveRun(): void {
-    expect(store.listRuns().filter((record) => !TERMINAL.has(record.status)).map((record) => record.task)).toEqual([]);
+    expect(store.queries.listRuns().filter((record) => !TERMINAL.has(record.status)).map((record) => record.task)).toEqual([]);
   }
 
   /** Returns once the run is terminal and the bookkeeping it started (turn-end markers, the

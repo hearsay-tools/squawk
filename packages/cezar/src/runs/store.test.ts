@@ -139,7 +139,7 @@ describe('RunStore save lifecycle (#124)', () => {
       archived: true, tokensUsed: 42, costUsd: 1.25,
       pullRequestUrl: 'https://github.com/o/r/pull/42', title: 'keep me',
     });
-    expect(store.listRunSummaries().runs.some((run) => run.id === oldestId && run.archived && run.title === 'keep me')).toBe(true);
+    expect(store.queries.listRunSummaries().runs.some((run) => run.id === oldestId && run.archived && run.title === 'keep me')).toBe(true);
     store.persistence.flush();
     await store.archive.historyIdle();
     const indexed = readRunIndexFromDisk(dataDir).runs.find((run) => run.id === oldestId);
@@ -203,7 +203,7 @@ describe('RunStore save lifecycle (#124)', () => {
     }, ...kept]);
     const store = RunStore.open(dataDir);
     expect(store.runPins.pin(pinnedId, 'active')?.pinned).toBe(true);
-    expect(store.heldIds()).toContain(pinnedId);
+    expect(store.queries.heldIds()).toContain(pinnedId);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(store.getRun(pinnedId)).toMatchObject({ archived: false, pinned: true, title: 'held pinned overflow' });
     store.persistence.flush();
@@ -253,7 +253,7 @@ describe('RunStore save lifecycle (#124)', () => {
     const store = RunStore.open(dataDir);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     store.persistence.flush();
-    expect(store.listRunSummaries().runs.filter((run) => run.archived)).toHaveLength(501);
+    expect(store.queries.listRunSummaries().runs.filter((run) => run.archived)).toHaveLength(501);
     expect(store.getRun('archived-0')).toMatchObject({ archived: true });
     expect(store.getRun('archived-500')).toMatchObject({ archived: true });
   });
@@ -635,7 +635,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('retains every declaration and creation through replay and reopening', () => {
     const { store, run } = freshRun();
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     store.eventLog.applyMarkerRefs(run.id, { pr: 821, prs: Array.from({ length: 10 }, (_, i) => 812 + i) });
     store.eventLog.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812. Compared https://github.com/o/r/pull/999. Created a PR: https://github.com/o/r/pull/813' });
     store.eventLog.appendEvent(run.id, { type: 'result', result: 'Created a PR: https://github.com/o/r/pull/812' });
@@ -651,7 +651,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
   it('preserves legacy creation and declaration before authoritative replacement', () => {
     const { store, run } = freshRun();
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     store.updateRun(run.id, { pullRequestUrl: 'https://github.com/o/r/pull/1', markerRefs: { pr: 2 } });
     store.updateRun(run.id, { pullRequestUrl: 'https://github.com/o/r/pull/3' });
     store.eventLog.applyMarkerRefs(run.id, { pr: 4 });
@@ -664,7 +664,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
     store.eventLog.appendEvent(run.id, { type: 'result', result: 'Compare https://github.com/foreign/repo/pull/812' });
     store.eventLog.applyMarkerRefs(run.id, { pr: 812 });
     expect(run.pullRequests).toEqual([{ number: 812, source: 'declared' }]);
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     expect(run.pullRequests).toEqual([{ number: 812, source: 'declared' }]);
     store.eventLog.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
     expect(run.pullRequests).toEqual([{ number: 812, source: 'created', url: 'https://github.com/o/r/pull/812' }]);
@@ -681,11 +681,11 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
     store.eventLog.applyMarkerRefs(run.id, { pr: 812 });
     const expected = [{ number: 812, source: 'declared', url: 'https://github.com/foreign/repo/pull/812' }];
     expect(run.pullRequests).toEqual(expected);
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     expect(run.pullRequests).toEqual(expected);
     store.close();
     const reopened = RunStore.open(dataDir);
-    reopened.setRepoHandle({ owner: 'o', name: 'r' });
+    reopened.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     expect(reopened.getRun(run.id)?.pullRequests).toEqual(expected);
     reopened.close();
   });
@@ -696,7 +696,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
       { number: 812, source: 'declared', url: 'https://github.com/foreign/repo/pull/812' },
       { number: 813, source: 'created', url: 'https://github.com/foreign/repo/pull/813' },
     ] });
-    store.setRepoHandle({ owner: 'o', name: 'r' });
+    store.repoScope.setRepoHandle({ owner: 'o', name: 'r' });
     expect(run.pullRequests).toEqual([
       { number: 812, source: 'declared' },
       { number: 813, source: 'created', url: 'https://github.com/foreign/repo/pull/813' },
@@ -1588,7 +1588,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
     store.close();
     expect(readRunIndexFromDisk(dataDir).runs.find(row => row.id === run.id)?.issueNumber).toBe(1200);
     const reopened = RunStore.open(dataDir);
-    expect(reopened.listRunSummaries().runs.find(row => row.id === run.id)?.issueNumber).toBe(1200);
+    expect(reopened.queries.listRunSummaries().runs.find(row => row.id === run.id)?.issueNumber).toBe(1200);
     const loaded = reopened.getRun(run.id);
     expect(loaded?.issueNumber).toBe(1200);
     expect(loaded?.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/1200');
@@ -1736,7 +1736,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
   /** A store that already knows which repository it is, as the background arming leaves it. */
   const scopedRun = (task = 'task', handle: typeof HANDLE | null = HANDLE) => {
     const store = RunStore.open(dataDir);
-    store.setRepoHandle(handle);
+    store.repoScope.setRepoHandle(handle);
     const run = store.createRun({ title: 't', workflow: 'w', task, steps: [] });
     return { store, run };
   };
@@ -2069,7 +2069,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       seed.close();
       const store = RunStore.open(dataDir);
       expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(foreignPr);
-      store.setRepoHandle(project);
+      store.repoScope.setRepoHandle(project);
       const saved = readPersistedRuns(dataDir)[0];
       expect(saved.referencedPullRequestUrl).toBeUndefined();
       expect(saved.referencedIssueUrl).toBeUndefined();
@@ -2166,7 +2166,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       // Snapshot the VALUE, not the record: `getRun` hands back the live object the sweep
       // mutates in place, so holding the reference would show the healed state either way.
       const before = reopened.getRun(run.id)?.referencedPullRequestUrl;
-      reopened.setRepoHandle(handle);
+      reopened.repoScope.setRepoHandle(handle);
       return { before, after: reopened.getRun(run.id) };
     };
 
@@ -2258,7 +2258,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       });
       store.persistence.flush(); // headless run completes before repository discovery
 
-      store.setRepoHandle(HANDLE);
+      store.repoScope.setRepoHandle(HANDLE);
 
       // Read the wire immediately: an unref'd debounce may never fire after the lookup finishes.
       const saved = readPersistedRuns(dataDir)[0];
@@ -2282,7 +2282,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       });
       const seen: string[] = [];
       onRunWrite(seed.lifecycle, (r: RunRecord) => seen.push(r.id));
-      seed.setRepoHandle(HANDLE);
+      seed.repoScope.setRepoHandle(HANDLE);
       expect(seen).toContain(run.id);
     });
   });
@@ -3294,7 +3294,7 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     seedRuns(dataDir, [BAD]);
     overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
     const store = RunStore.open(dataDir);
-    expect(store.listRunSummaries().runs.map((run) => [run.id, run.title])).toEqual([[BAD.id, BAD.title]]);
+    expect(store.queries.listRunSummaries().runs.map((run) => [run.id, run.title])).toEqual([[BAD.id, BAD.title]]);
     store.persistence.flush();
     expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, title: BAD.title });
     store.close();
@@ -3314,7 +3314,7 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     seedRuns(dataDir, [BAD]);
     overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
     const store = RunStore.open(dataDir);
-    expect(() => store.setRepoHandle(HANDLE)).not.toThrow();
+    expect(() => store.repoScope.setRepoHandle(HANDLE)).not.toThrow();
     expect(store.getRun(BAD.id)?.title).toBe(BAD.title);
     store.close();
   });
@@ -3326,13 +3326,13 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     const store = RunStore.open(dataDir);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('1 run(s)'));
     expect(runIds(store)).toEqual([LEGACY_RUN.id]);
-    store.setRepoHandle(HANDLE);
+    store.repoScope.setRepoHandle(HANDLE);
     expect(store.readFlags.markAllRead()).toBe(0);
-    expect(store.listQuarantinedRunIds()).toEqual([]);
-    expect(store.countAutomationRuns('automation')).toBe(0);
-    expect(store.findNonArchivedRunByIssue('o/r', 1)).toBeUndefined();
-    expect(store.findRunIdsByAutomationReceipt(['receipt']).size).toBe(0);
-    expect(store.listBranchOwners()).toEqual([]);
+    expect(store.queries.listQuarantinedRunIds()).toEqual([]);
+    expect(store.queries.countAutomationRuns('automation')).toBe(0);
+    expect(store.queries.findNonArchivedRunByIssue('o/r', 1)).toBeUndefined();
+    expect(store.queries.findRunIdsByAutomationReceipt(['receipt']).size).toBe(0);
+    expect(store.queries.listBranchOwners()).toEqual([]);
     expect(store.archive.archiveFinished().ids).toEqual([LEGACY_RUN.id]);
     store.close();
     const db = RunDatabase.open(join(dataDir, RUNS_DB_FILE));

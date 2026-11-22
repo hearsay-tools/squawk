@@ -73,19 +73,19 @@ describe('request-origin guard (#426)', () => {
     const res = await postRuns({ host: LOOPBACK, origin: 'https://evil.tld' });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain('cross-origin');
-    expect(store.listRuns()).toHaveLength(0); // never reached the manager
+    expect(store.queries.listRuns()).toHaveLength(0); // never reached the manager
   });
 
   it('rejects a request carrying Sec-Fetch-Site: cross-site with 403', async () => {
     const res = await postRuns({ host: LOOPBACK, 'sec-fetch-site': 'cross-site' });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('rejects an opaque "null" Origin (sandboxed iframe) with 403', async () => {
     const res = await postRuns({ host: LOOPBACK, origin: 'null' });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   // ---- DNS rebinding: foreign Host ----------------------------------------
@@ -94,7 +94,7 @@ describe('request-origin guard (#426)', () => {
     const res = await postRuns({ host: 'evil.tld', origin: 'http://evil.tld' });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toContain('Host');
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('rejects even a READ with a foreign Host header (rebinding exfiltration) with 403', async () => {
@@ -124,7 +124,7 @@ describe('request-origin guard (#426)', () => {
         'sec-fetch-site': 'same-origin',
       });
       expect(res.status).toBe(403);
-      expect(store.listRuns()).toHaveLength(0); // no run created — RCE path closed
+      expect(store.queries.listRuns()).toHaveLength(0); // no run created — RCE path closed
     });
   }
 
@@ -133,7 +133,7 @@ describe('request-origin guard (#426)', () => {
   it('rejects a write with no Host and no Origin header → 403', async () => {
     const res = await postRuns({});
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('rejects a read with no Host header → 403', async () => {
@@ -146,7 +146,7 @@ describe('request-origin guard (#426)', () => {
   it('allows a trailing-dot FQDN loopback Host (localhost.) → 201', async () => {
     const res = await postRuns({ host: 'localhost.:4321', origin: 'http://localhost.:4321' });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   // Guard-layer behavior only: over a real socket `@hono/node-server` rejects an
@@ -160,13 +160,13 @@ describe('request-origin guard (#426)', () => {
       origin: 'http://[0:0:0:0:0:0:0:1]:4321',
     });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('allows other addresses inside 127.0.0.0/8 (127.0.0.2) → 201', async () => {
     const res = await postRuns({ host: '127.0.0.2:4321', origin: 'http://127.0.0.2:4321' });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   // ---- the cockpit's own same-origin traffic passes -----------------------
@@ -174,13 +174,13 @@ describe('request-origin guard (#426)', () => {
   it('allows the cockpit same-origin write (Origin === Host, loopback) → 201', async () => {
     const res = await postRuns({ host: LOOPBACK, origin: 'http://127.0.0.1:4321' });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('allows a same-origin write with no Origin header (non-browser caller) → 201', async () => {
     const res = await postRuns({ host: LOOPBACK });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('allows the dev-proxy write where a loopback Origin differs from a loopback Host → 201', async () => {
@@ -194,7 +194,7 @@ describe('request-origin guard (#426)', () => {
       'sec-fetch-site': 'same-origin',
     });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   // ---- a different port is a different origin -----------------------------
@@ -210,13 +210,13 @@ describe('request-origin guard (#426)', () => {
       'sec-fetch-site': 'same-site',
     });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('rejects a cross-port loopback write that sends no Sec-Fetch-Site → 403', async () => {
     const res = await postRuns({ host: '127.0.0.1:4321', origin: 'http://127.0.0.1:9999' });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('rejects a cross-scheme write on the matching port → 403', async () => {
@@ -224,7 +224,7 @@ describe('request-origin guard (#426)', () => {
     // authority comparison catches it because URL.port keeps the explicit 4321.
     const res = await postRuns({ host: '127.0.0.1:443', origin: 'https://127.0.0.1' });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   it('does not let a forged Sec-Fetch-Site readmit a NON-loopback cross-origin write → 403', async () => {
@@ -234,7 +234,7 @@ describe('request-origin guard (#426)', () => {
       'sec-fetch-site': 'same-origin',
     });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 
   // ---- malformed authorities must not normalize down to a loopback name ----
@@ -254,7 +254,7 @@ describe('request-origin guard (#426)', () => {
   it('allows an IPv6 loopback same-origin write ([::1]) → 201', async () => {
     const res = await postRuns({ host: '[::1]:4321', origin: 'http://[::1]:4321' });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   // ---- reads and the SSE / health surfaces stay unaffected ----------------
@@ -339,12 +339,12 @@ describe('request-origin guard — hosted mode (#426)', () => {
   it('allows the public-domain same-origin write (Origin === forwarded Host) → 201', async () => {
     const res = await postRuns({ host: 'cez.example.com', origin: 'https://cez.example.com' });
     expect(res.status).toBe(201);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('still rejects a cross-origin write in hosted mode → 403', async () => {
     const res = await postRuns({ host: 'cez.example.com', origin: 'https://evil.tld' });
     expect(res.status).toBe(403);
-    expect(store.listRuns()).toHaveLength(0);
+    expect(store.queries.listRuns()).toHaveLength(0);
   });
 });

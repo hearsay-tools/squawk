@@ -594,7 +594,7 @@ describe('RunStore.unavailable', () => {
     try {
       expect(store.unavailable).toBe(failure);
       expect(() => store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] })).toThrow(failure);
-      expect(store.listRunSummaries().runs).toEqual([]);
+      expect(store.queries.listRunSummaries().runs).toEqual([]);
       store.persistence.flush();
       expect(vi.getTimerCount()).toBe(0);
     } finally {

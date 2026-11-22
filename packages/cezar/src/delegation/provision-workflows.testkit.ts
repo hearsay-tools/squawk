@@ -68,10 +68,10 @@ export function provisionWorkflowFixture() {
   });
   afterEach(async () => {
     for (const manager of recoveredManagers) {
-      for (const run of f.store.listRuns()) manager.cancel(run.id);
+      for (const run of f.store.queries.listRuns()) manager.cancel(run.id);
     }
     // After a restart the fixture's manager is the dead process: the recovered ones cancel.
-    if (!managerDisposed(f.manager)) for (const run of f.store.listRuns()) f.manager.cancel(run.id);
+    if (!managerDisposed(f.manager)) for (const run of f.store.queries.listRuns()) f.manager.cancel(run.id);
     for (const s of sessions) s.finish();
     for (const manager of recoveredManagers) {
       await waitForOwnedWork(manager, f.store);

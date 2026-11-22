@@ -103,7 +103,7 @@ export class RunRecovery {
     this.settleOrphanWorkerGenerations(orphanWorkerIds, inScope);
     this.host.reconcileWorkerWaits(familyRootId);
     const live = this.context.store
-      .listRuns()
+      .queries.listRuns()
       .filter((r) => inScope(r) && ['queued', 'waiting', 'running'].includes(r.status))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     // Scratch cleanup discovers private evidence independently of the salvageable run index.
@@ -160,7 +160,7 @@ export class RunRecovery {
     familyRootId: string | undefined,
     inScope: (run: RunRecord) => boolean,
   ): { orphanWorkerIds: string[]; orphanFactIds: Set<string> } {
-    const workerIds = familyRootId === undefined ? this.context.store.listWorkerIds() : this.context.store.listWorkersOf(familyRootId).map((run) => run.id);
+    const workerIds = familyRootId === undefined ? this.context.store.queries.listWorkerIds() : this.context.store.queries.listWorkersOf(familyRootId).map((run) => run.id);
     const orphanWorkerIds: string[] = [];
     const orphanFactIds = new Set<string>();
     for (const id of workerIds) {
@@ -168,14 +168,14 @@ export class RunRecovery {
       const run = this.context.store.getRun(id);
       if (run?.delegation?.role !== 'worker' || !inScope(run)) continue;
       orphanWorkerIds.push(id);
-      for (const member of this.context.store.listFamilyRunIds(run.delegation.parentRunId)) orphanFactIds.add(member);
+      for (const member of this.context.store.queries.listFamilyRunIds(run.delegation.parentRunId)) orphanFactIds.add(member);
     }
     return { orphanWorkerIds, orphanFactIds };
   }
 
   /** Recovery's first pass over the live set: the input state a dead controller left behind. */
   private recoverUnreadInputs(inScope: (run: RunRecord) => boolean): void {
-    for (const run of this.context.store.listRuns().filter(inScope)) {
+    for (const run of this.context.store.queries.listRuns().filter(inScope)) {
       // A restarted controller cannot answer an old transport's permission RPC.
       if (!this.host.isActive(run.id) && run.hasPendingPermission) {
         // A permission wait interrupted an unfinished native turn. Route it
@@ -417,12 +417,12 @@ export class RunRecovery {
 
   /** Delivers the parent replies routed to each worker in scope. */
   private answerRecoveredRoutedQuestions(inScope: (run: RunRecord) => boolean): void {
-    for (const run of this.context.store.listRuns().filter(inScope)) if (run.delegation?.role === 'worker') this.host.answerRoutedQuestion(run.id);
+    for (const run of this.context.store.queries.listRuns().filter(inScope)) if (run.delegation?.role === 'worker') this.host.answerRoutedQuestion(run.id);
   }
 
   /** Re-arms each live run's waits, or queues the wake it owes. */
   private rearmRecoveredWakes(): void {
-    for (const run of this.context.store.listRuns()) {
+    for (const run of this.context.store.queries.listRuns()) {
       // A terminal row keeps its waits (and stays live) until something cancels them. A failed run
       // that owes results keeps them for a human, and its open waits still resolve without a wake.
       if (run.waits?.length && holdsOwedResults(run)) this.host.waitEngine.rearm(run);

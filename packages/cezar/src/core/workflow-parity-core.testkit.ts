@@ -485,8 +485,8 @@ export async function withSkillParentRun(
     });
     await body({ repoRoot, parentRunId: parent.id, runId: child.workerId, store, manager });
   } finally {
-    for (const id of store?.listRunIds() ?? []) manager?.cancel(id);
-    if (manager && store) await waitFor(() => store!.listRunIds().every(id => !manager!.isActive(id)), 30_000);
+    for (const id of store?.queries.listRunIds() ?? []) manager?.cancel(id);
+    if (manager && store) await waitFor(() => store!.queries.listRunIds().every(id => !manager!.isActive(id)), 30_000);
     await drainBookkeeping();
     await controller?.close();
     await drainFixtureManagers(repoRoot);

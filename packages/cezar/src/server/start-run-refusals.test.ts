@@ -98,7 +98,7 @@ describe('POST /api/v1/runs refusals', () => {
         status: 400,
         body: { error: 'duplicate step id "work"' },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('404 for a workflow that does not exist', async () => {
@@ -106,7 +106,7 @@ describe('POST /api/v1/runs refusals', () => {
         status: 404,
         body: { error: 'unknown workflow: no-such-workflow' },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it.each([
@@ -118,7 +118,7 @@ describe('POST /api/v1/runs refusals', () => {
         status: 409,
         body: { error: LOCKED_MESSAGE },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('starts a locked project run whose pins are blank', async () => {
@@ -131,13 +131,13 @@ describe('POST /api/v1/runs refusals', () => {
         status: 409,
         body: { error: DISABLED_MESSAGE },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('gates the configured default runner when the body names none', async () => {
       writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'codex' }), 'utf8');
       expect(await answer(await post(quickTask))).toEqual({ status: 409, body: { error: DISABLED_MESSAGE } });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('400 for an agent account that does not exist', async () => {
@@ -145,7 +145,7 @@ describe('POST /api/v1/runs refusals', () => {
         status: 400,
         body: { error: 'unknown claude account: ghost' },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('names the account of the runner the body picked', async () => {
@@ -162,7 +162,7 @@ describe('POST /api/v1/runs refusals', () => {
         status: 400,
         body: { error: NO_WEBHOOK_MESSAGE },
       });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('starts a run with notify:false on a project with no task webhook', async () => {
@@ -186,7 +186,7 @@ describe('POST /api/v1/runs refusals', () => {
     ] as const)('%s', async (_name, locked, body, status, error) => {
       if (locked) lockModels();
       expect(await answer(await post(body))).toEqual({ status, body: { error } });
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
   });
 
@@ -201,7 +201,7 @@ describe('POST /api/v1/runs refusals', () => {
       const again = await post({ ...idempotent, model: 'some-model', runner: 'claude' });
       expect(again.status).toBe(200);
       expect(((await again.json()) as { id: string }).id).toBe(id);
-      expect(store.listRuns()).toHaveLength(1);
+      expect(store.queries.listRuns()).toHaveLength(1);
     });
 
     it('answers a changed payload with a conflict before the model lock', async () => {
@@ -211,13 +211,13 @@ describe('POST /api/v1/runs refusals', () => {
         status: 409,
         body: { error: CONFLICT_MESSAGE },
       });
-      expect(store.listRuns()).toHaveLength(1);
+      expect(store.queries.listRuns()).toHaveLength(1);
     });
 
     it('does not start a new run when a refusal meets a new id', async () => {
       expect((await post({ ...idempotent, workflow: 'nope' })).status).toBe(404);
       expect((await post({ ...idempotent, runner: 'codex' })).status).toBe(409);
-      expect(store.listRuns()).toHaveLength(0);
+      expect(store.queries.listRuns()).toHaveLength(0);
     });
 
     it('hands the manager the id and the payload hash', async () => {

@@ -190,8 +190,8 @@ describe('a held wake does not advertise itself to the workspace line', () => {
       await vi.waitFor(() => expect(launched.map(session => session.id)).toEqual([eligible, parked]), { timeout: 15_000 });
       expect(store.getRun(fresh.id)?.status).toBe('queued');
     } finally {
-      for (const id of store.listRunIds()) manager.cancel(id);
-      for (const id of otherStore.listRunIds()) other.cancel(id);
+      for (const id of store.queries.listRunIds()) manager.cancel(id);
+      for (const id of otherStore.queries.listRunIds()) other.cancel(id);
       await drainFixtureManagers(otherRoot);
       otherStore.close(); rmSync(otherRoot, { recursive: true, force: true });
     }

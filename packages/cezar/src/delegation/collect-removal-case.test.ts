@@ -15,7 +15,7 @@ describe('worker collect during a pending history deletion', { timeout: 15_000 }
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { onTestFinished(scopeFixtureProcesses()); f = fixture(workerCleanups()); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) f.manager.cancel(run.id);
     vi.restoreAllMocks(); await f.close();
   });
 

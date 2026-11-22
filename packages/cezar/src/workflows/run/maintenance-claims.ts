@@ -52,7 +52,7 @@ export class MaintenanceClaims {
 
   /** A directory a live worker works in is not reclaimed, and its branch is not deleted. */
   private hostsLiveSharedWorker(run: RunRecord | undefined): boolean {
-    return !!run && hostsLiveSharedWorker(run, (rootId) => this.context.store.listWorkersOf(rootId));
+    return !!run && hostsLiveSharedWorker(run, (rootId) => this.context.store.queries.listWorkersOf(rootId));
   }
 
   /**
@@ -64,7 +64,7 @@ export class MaintenanceClaims {
   claimWorktreeReclaim(runId: string): (() => void) | null {
     if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.claims.writeRefusal(runId)) return null;
     const run = this.context.store.getRun(runId);
-    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id), (rootId) => this.context.store.listWorkersOf(rootId))) return null;
+    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id), (rootId) => this.context.store.queries.listWorkersOf(rootId))) return null;
     return this.host.holdForMaintenance([runId]);
   }
 

@@ -149,7 +149,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     for (const release of releaseSlotHolders.splice(0)) release();
     // Let released checks close naturally before cancelling parked agents, so
     // their gate is not removed between the shell exit and the child's read.
-    await waitFor(() => stores.every(store => store.listRuns().every(run =>
+    await waitFor(() => stores.every(store => store.queries.listRuns().every(run =>
       !run.steps.some(step => step.kind === 'check' && step.status === 'running'))),
     'released check processes to finish');
     for (const root of roots) await drainFixtureManagers(root);
@@ -441,16 +441,16 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
       await firstManager.recover();
       await waitFor(() => controllers.length === 1, 'first recovered continuation to reach prelaunch');
       await waitFor(
-        () => store.listRuns().filter((run) => run.status === 'running').length === 1,
+        () => store.queries.listRuns().filter((run) => run.status === 'running').length === 1,
         'one recovered continuation to take the project slot',
       );
-      expect(store.listRuns().filter((run) => run.status === 'running')).toHaveLength(1);
-      expect(store.listRuns().filter((run) => run.status === 'queued')).toHaveLength(2);
+      expect(store.queries.listRuns().filter((run) => run.status === 'running')).toHaveLength(1);
+      expect(store.queries.listRuns().filter((run) => run.status === 'queued')).toHaveLength(2);
       expect(semaphore.busy()).toBe(1);
 
       const queuedStepCounts = new Map(
         store
-          .listRuns()
+          .queries.listRuns()
           .filter((run) => run.status === 'queued')
           .map((run) => [run.id, run.steps.filter((step) => step.id.startsWith('continue-')).length]),
       );
@@ -470,7 +470,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
       await secondManager.recover();
       await waitFor(() => controllers.length === 2, 'second recovered continuation to reach prelaunch');
       await waitFor(
-        () => store.listRuns().filter((run) => run.status === 'running').length === 1,
+        () => store.queries.listRuns().filter((run) => run.status === 'running').length === 1,
         'one continuation to take the project slot after the second restart',
       );
       for (const [runId, stepCount] of queuedStepCounts) {
@@ -487,14 +487,14 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
             ),
         ).toBe(true);
       }
-      expect(store.listRuns().filter((run) => run.status === 'running')).toHaveLength(1);
-      expect(store.listRuns().filter((run) => run.status === 'queued')).toHaveLength(2);
+      expect(store.queries.listRuns().filter((run) => run.status === 'running')).toHaveLength(1);
+      expect(store.queries.listRuns().filter((run) => run.status === 'queued')).toHaveLength(2);
       expect(semaphore.busy()).toBe(1);
 
     } finally {
       // Stop on assertion failures too. Changing only the records leaves executable
       // continuations in its queue, which a released slot can still admit.
-      for (const run of store.listRuns()) {
+      for (const run of store.queries.listRuns()) {
         recoveryManager.cancel(run.id);
       }
       releaseContinuation();
@@ -502,7 +502,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
       setup.mockRestore();
       for (const controller of controllers) await controller.close();
     }
-    expect(store.listRuns().every(run => run.status === 'cancelled')).toBe(true);
+    expect(store.queries.listRuns().every(run => run.status === 'cancelled')).toBe(true);
   });
 
   it('restart continuation releases its starting slot after becoming active', async () => {

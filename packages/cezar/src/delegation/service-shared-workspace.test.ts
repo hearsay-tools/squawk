@@ -60,7 +60,7 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     await expect(f.service.spawn(f.caller, { ...shared(), context: { artifacts: [{ kind: 'parent-file', path: '.env' }] } }))
       .rejects.toMatchObject({ code: 'invalid_input', message: SHARED_ATTACH_REFUSAL });
     await expect(f.service.spawn(f.caller, { task: 'isolated without a baseline', requestId: randomUUID() })).rejects.toThrow();
-    expect(f.store.listWorkerIds()).toEqual([]);
+    expect(f.store.queries.listWorkerIds()).toEqual([]);
   });
 
   it('returns the same worker for the same request, with or without --baseline parent-head, and refuses another kind under the same request id', async () => {
@@ -74,7 +74,7 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
       .rejects.toMatchObject({ code: 'invalid_input', message: 'Request ID payload conflict' });
     await expect(f.service.spawn(f.caller, { ...request, workspace: 'isolated', baseline: 'parent-head' }))
       .rejects.toMatchObject({ message: 'Request ID payload conflict' });
-    expect(f.store.listWorkerIds()).toEqual([first.workerId]);
+    expect(f.store.queries.listWorkerIds()).toEqual([first.workerId]);
   });
 
   it('keeps an isolated request\'s identity whether or not it names the default workspace', async () => {

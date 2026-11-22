@@ -465,7 +465,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
   ])('rejects invalid skill flags $flags', async ({ flags, error }) => {
     expect(await runWorkerCommand(['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), ...flags, 'work'], env)).toBe(1);
     expect(json()).toMatchObject({ code: 'invalid_input', error });
-    expect(f.store.listRuns()).toHaveLength(1);
+    expect(f.store.queries.listRuns()).toHaveLength(1);
   });
   it('parses conversation commands and validates their returned contract', async () => {
     const recipientRunId = randomUUID(), id = randomUUID(), requestId = randomUUID();

@@ -57,7 +57,7 @@ describe('POST /api/v1/runs clientRequestId', () => {
     const again = await post(body);
     expect(again.status).toBe(200);
     expect(((await again.json()) as { id: string }).id).toBe(created.id);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('refuses a repeat whose payload differs with 409 and starts nothing', async () => {
@@ -65,7 +65,7 @@ describe('POST /api/v1/runs clientRequestId', () => {
     const conflict = await post({ ...body, task: 'something else' });
     expect(conflict.status).toBe(409);
     expect(await conflict.json()).toEqual({ error: 'request id payload conflict' });
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it.each([
@@ -77,7 +77,7 @@ describe('POST /api/v1/runs clientRequestId', () => {
     const conflict = await post({ ...body, ...changed });
     expect(conflict.status).toBe(409);
     expect(await conflict.json()).toEqual({ error: 'request id payload conflict' });
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('replays an existing start after its workflow is removed, but validates new starts', async () => {
@@ -98,13 +98,13 @@ describe('POST /api/v1/runs clientRequestId', () => {
     expect(conflict.status).toBe(409);
     expect(await conflict.json()).toEqual({ error: 'request id payload conflict' });
     expect((await post({ ...payload, clientRequestId: '1f1c1b5e-2a7d-4c8e-9f3b-1d2e3f4a5b6c' })).status).toBe(404);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('creates exactly one run for two concurrent identical retries', async () => {
     const statuses = (await Promise.all([post(body), post(body)])).map((res) => res.status).sort();
     expect(statuses).toEqual([200, 201]);
-    expect(store.listRuns()).toHaveLength(1);
+    expect(store.queries.listRuns()).toHaveLength(1);
   });
 
   it('still answers with an archived match', async () => {
@@ -123,6 +123,6 @@ describe('POST /api/v1/runs clientRequestId', () => {
     const { clientRequestId: _omit, ...plain } = body;
     expect((await post(plain)).status).toBe(201);
     expect((await post(plain)).status).toBe(201);
-    expect(store.listRuns()).toHaveLength(2);
+    expect(store.queries.listRuns()).toHaveLength(2);
   });
 });

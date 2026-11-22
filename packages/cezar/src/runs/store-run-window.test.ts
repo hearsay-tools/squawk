@@ -75,7 +75,7 @@ afterEach(() => {
 describe('RunStore.listRunSummaries({ archivedWindow })', () => {
   it('keeps every unarchived run and only the newest archived roots', () => {
     seedIncident();
-    const { runs, truncated } = open().listRunSummaries({ archivedWindow: ARCHIVED_WINDOW });
+    const { runs, truncated } = open().queries.listRunSummaries({ archivedWindow: ARCHIVED_WINDOW });
 
     expect(ARCHIVED_WINDOW).toBe(200);
     const unarchived = runs.filter((run) => !run.archived);
@@ -93,11 +93,11 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
 
   it('says truncated only when an archived root was left out', () => {
     seedIncident(200);
-    expect(open().listRunSummaries({ archivedWindow: 200 }).truncated).toBe(false);
+    expect(open().queries.listRunSummaries({ archivedWindow: 200 }).truncated).toBe(false);
     for (const store of stores.splice(0)) store.close();
     rmSync(dataDir, { recursive: true, force: true });
     seedIncident(201);
-    expect(open().listRunSummaries({ archivedWindow: 200 }).truncated).toBe(true);
+    expect(open().queries.listRunSummaries({ archivedWindow: 200 }).truncated).toBe(true);
   });
 
   it('ranks a held archived root by its record, not its row', () => {
@@ -106,7 +106,7 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
     const fresh = store.createRun({ title: 'fresh', task: 'fresh', workflow: 'quick-task', steps: [] });
     store.archive.setArchived(fresh.id, true);
 
-    const { runs, truncated } = store.listRunSummaries({ archivedWindow: 200 });
+    const { runs, truncated } = store.queries.listRunSummaries({ archivedWindow: 200 });
     const archived = ids(runs.filter((run) => run.archived));
     expect(archived).toHaveLength(200);
     expect(archived[0]).toBe(fresh.id);
@@ -119,7 +119,7 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
     const store = open();
     store.archive.setArchived('arch-1', false);
 
-    const listed = store.listRunSummaries({ archivedWindow: 200 }).runs.find((run) => run.id === 'arch-1');
+    const listed = store.queries.listRunSummaries({ archivedWindow: 200 }).runs.find((run) => run.id === 'arch-1');
     expect(listed?.archived).toBe(false);
   });
 
@@ -133,9 +133,9 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
     ]);
     const store = open();
     expect(store.getRun(heldWorker)?.delegation?.role).toBe('worker');
-    expect(store.heldIds()).toContain(heldWorker);
-    expect(ids(store.listRunSummaries({ archivedWindow: 200 }).runs)).toEqual([parent]);
-    expect(ids(store.listRunSummaries().runs)).toEqual([heldWorker, parent]);
+    expect(store.queries.heldIds()).toContain(heldWorker);
+    expect(ids(store.queries.listRunSummaries({ archivedWindow: 200 }).runs)).toEqual([parent]);
+    expect(ids(store.queries.listRunSummaries().runs)).toEqual([heldWorker, parent]);
   });
 
   it('with roots, leaves every worker out, unarchived and held ones too (the runs index)', () => {
@@ -152,15 +152,15 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
       worker('w-active', 'active', 2, { archived: false }),
     ]);
     const reopened = open();
-    expect(reopened.heldIds()).toContain(heldWorker);
-    expect(ids(reopened.listRunSummaries({ archivedWindow: 200, roots: true }).runs)).toEqual([parent, 'active']);
+    expect(reopened.queries.heldIds()).toContain(heldWorker);
+    expect(ids(reopened.queries.listRunSummaries({ archivedWindow: 200, roots: true }).runs)).toEqual([parent, 'active']);
     // The cockpit's own list keeps them: a parent's workers are rows there.
-    expect(ids(reopened.listRunSummaries({ archivedWindow: 200 }).runs)).toEqual([heldWorker, parent, 'w-active', 'active']);
+    expect(ids(reopened.queries.listRunSummaries({ archivedWindow: 200 }).runs)).toEqual([heldWorker, parent, 'w-active', 'active']);
   });
 
   it('still lists every run without the option', () => {
     seedIncident();
-    expect(open().listRunSummaries().runs).toHaveLength(1 + 4 + 2 + 250 + 300);
+    expect(open().queries.listRunSummaries().runs).toHaveLength(1 + 4 + 2 + 250 + 300);
   });
 });
 
@@ -168,7 +168,7 @@ it('archived search retains summaries whose only match is a PR in the collection
   seedRuns(dataDir, [root('split', 1, { pullRequests: [812, 813, 814, 815, 816].map(number => ({ number, source: 'declared' })) })]);
   const store = open();
   for (const number of [812, 813, 814, 815, 816]) {
-    const found = store.listArchivedRuns({ q: `#${number}`, limit: 50 });
+    const found = store.queries.listArchivedRuns({ q: `#${number}`, limit: 50 });
     expect('error' in found).toBe(false);
     if (!('error' in found)) expect(found.runs.map(run => run.id)).toEqual(['split']);
   }
@@ -185,7 +185,7 @@ describe('RunStore.listArchivedRuns', () => {
   const unreadableSteps = [{ id: 's', name: 's', kind: STEP_KIND.agent, status: 'bogus', iterations: 1, tokensUsed: 0 }];
 
   const list = (store: RunStore, options: Parameters<RunQueries['listArchivedRuns']>[0]) => {
-    const found = store.listArchivedRuns(options);
+    const found = store.queries.listArchivedRuns(options);
     if ('error' in found) throw new Error(found.error);
     return found;
   };
@@ -217,7 +217,7 @@ describe('RunStore.listArchivedRuns', () => {
     const { keys, search, summaries } = spyOnReads();
     // `{"c":1}`: JSON, but not a cursor this store wrote.
     for (const before of ['garbage', 'eyJjIjoxfQ']) {
-      expect(store.listArchivedRuns({ before, limit: 10 })).toEqual({ error: 'before is not a cursor this server wrote' });
+      expect(store.queries.listArchivedRuns({ before, limit: 10 })).toEqual({ error: 'before is not a cursor this server wrote' });
     }
     for (const spy of [keys, search, summaries]) expect(spy).not.toHaveBeenCalled();
   });
@@ -335,7 +335,7 @@ describe('RunStore.listArchivedRuns', () => {
       worker(heldWorker, parent, 3, { status: RUN_STATUS.running, archived: true, finishedAt: undefined }),
     ]);
     const store = open();
-    expect(store.heldIds()).toContain(heldWorker);
+    expect(store.queries.heldIds()).toContain(heldWorker);
     for (const q of [undefined, 'run']) {
       const found = list(store, { limit: 10, ...(q === undefined ? {} : { q }) });
       expect(ids(found.runs), `q=${q}`).toEqual(['a1']);

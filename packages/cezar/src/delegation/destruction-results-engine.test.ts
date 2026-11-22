@@ -35,7 +35,7 @@ describe('verified destruction retains results through explicit history deletion
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { onTestFinished(scopeFixtureProcesses()); f = fixture(workerCleanups()); });
   afterEach(async () => {
-    for (const run of f.store.listRuns()) f.manager.cancel(run.id);
+    for (const run of f.store.queries.listRuns()) f.manager.cancel(run.id);
     vi.restoreAllMocks(); await f.close(); vi.unstubAllEnvs();
   });
   const completed = () => completedWorker(f);

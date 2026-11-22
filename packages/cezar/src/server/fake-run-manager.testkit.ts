@@ -98,7 +98,7 @@ export class FakeRunManager implements ProjectRunManager {
   }
 
   startRunIdempotent(...[workflow, input, request]: Method<'startRunIdempotent'>): ReturnType<RunManager['startRunIdempotent']> {
-    const existing = this.#store.findRunByClientRequestId(request.id);
+    const existing = this.#store.queries.findRunByClientRequestId(request.id);
     if (existing) return existing.clientRequestHash === request.hash ? { run: existing, created: false } : { conflict: true };
     return { run: this.startRun(workflow, input, request), created: true };
   }

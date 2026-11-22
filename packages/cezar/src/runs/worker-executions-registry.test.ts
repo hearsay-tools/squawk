@@ -46,7 +46,7 @@ describe('a process that registered no worker-executions factory (hearsay-tools/
     store.commitDelegation([{ id: parent.id, delegation: root }]);
     const id = randomUUID();
     expect(() => store.createOwnedRun(input, parent.id, randomUUID(), worker(parent.id, id), 'b'.repeat(64), spawnCapacityRefusal)).toThrow(MISSING);
-    expect(store.listRuns().map(run => run.id)).toEqual([parent.id]);
+    expect(store.queries.listRuns().map(run => run.id)).toEqual([parent.id]);
     expect(store.getRun(parent.id)?.delegation).toEqual(root);
     expect(workerFiles()).toEqual([]);
   });

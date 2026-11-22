@@ -83,7 +83,7 @@ export async function measureRetention(options: RetentionBenchOptions): Promise<
     for (let i = 0; i < options.passes; i++) {
       passMs.push(await pass());
       const t = performance.now();
-      candidates = store.listRunsWithWorktree().length;
+      candidates = store.queries.listRunsWithWorktree().length;
       listMs.push(performance.now() - t);
     }
     return { workers: options.workers, parents: Math.ceil(options.workers / options.workersPerParent), candidates,

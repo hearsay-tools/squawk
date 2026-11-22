@@ -131,7 +131,7 @@ function startClaimedRun(store: RunStore, receiptId: string, start: () => { id: 
   try {
     return { runId: start().id };
   } catch (error) {
-    const runId = store.findRunIdsByAutomationReceipt([receiptId]).get(receiptId);
+    const runId = store.queries.findRunIdsByAutomationReceipt([receiptId]).get(receiptId);
     if (runId) return { runId };
     throw error;
   }
@@ -155,7 +155,7 @@ export async function launchAutomationRun(options: {
   // Check after workflow loading: no async gap between the final check and run creation.
   // This shared launcher also covers manual execute checks and explicit receipt retries.
   for (const repository of issueRepositories) {
-    const existing = options.store.findNonArchivedRunByIssue(repository, candidate.number);
+    const existing = options.store.queries.findNonArchivedRunByIssue(repository, candidate.number);
     if (existing) return { runId: existing, existing: true };
   }
   const provenance = {
@@ -213,7 +213,7 @@ export function reconcileAutomationReceipts(automationStore: AutomationStore, ru
     .filter((receipt) => receipt.status === 'reserved' && !automationStore.isReservationInFlight(receipt.receiptId));
   if (leftovers.length === 0) return 0;
   // By receipt, not by listing every run: the launched run may long since have finished (#779).
-  const byReceipt = runStore.findRunIdsByAutomationReceipt(leftovers.map((receipt) => receipt.receiptId));
+  const byReceipt = runStore.queries.findRunIdsByAutomationReceipt(leftovers.map((receipt) => receipt.receiptId));
   for (const receipt of leftovers) {
     const runId = byReceipt.get(receipt.receiptId);
     const error = `Squawk restarted before run creation completed; explicit retry is available.`;

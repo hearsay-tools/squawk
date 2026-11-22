@@ -497,7 +497,7 @@ export class RunManager {
   // ---- usage-limit auto-resume (spec 2026-08-03-auto-resume-after-usage-limit) --------------
 
   accountHolds(now = Date.now()): AccountHolds {
-    return deriveAccountHolds(this.#store.listRuns(), run => this.#modules.wakeAdmission.withExecutionAccount(run), now);
+    return deriveAccountHolds(this.#store.queries.listRuns(), run => this.#modules.wakeAdmission.withExecutionAccount(run), now);
   }
 
   cancelAutoResume(runId: string): boolean { return this.#modules.autoResumeScheduler.cancelAutoResume(runId); }
