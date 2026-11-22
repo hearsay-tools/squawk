@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { removeWorktreesRepo, seedWorktreeRun, worktreesRepo } from '../server/worktrees-api.testkit.ts';
+import { releaseEndedWorkerBranches } from '../delegation/family-end.ts';
+import { createOwnedWorkspace } from '../delegation/workspace.ts';
+import { fixture as workspaceRepo, git } from '../delegation/workspace-fixture.testkit.ts';
+import { projectPaths } from '../project-paths.ts';
 import { provisionArtifactDirectory } from '../artifacts/lifecycle.ts';
 import { reclaimWorktree } from './retention.ts';
 import { runSlotsSealed } from './removal-slots.ts';
@@ -78,4 +82,15 @@ it('a family archive throws and keeps the family unarchived with its tmp directo
   expect(store.getRun(old.id)?.archived).toBe(false);
   expect(existsSync(tmp)).toBe(true);
   store.close();
+});
+
+it('a worker family end throws and keeps an orphan receipt\'s clean worktree and its branch', async () => {
+  const { root, first } = await workspaceRepo();
+  const orphan = await createOwnedWorkspace(root, randomUUID(), first);
+  const store = RunStore.open(projectPaths(root).write);
+  cleanups.unshift(() => store.close());
+
+  await expect(releaseEndedWorkerBranches(root, store, () => () => undefined)).rejects.toThrow(UNSEALED);
+  expect(existsSync(orphan.path)).toBe(true);
+  expect(git(root, 'branch', '--list', orphan.branch)).not.toBe('');
 });
