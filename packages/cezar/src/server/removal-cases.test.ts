@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { testHome } from '../home/test-home.testkit.ts';
 import { autosaveRemovalCleanup } from '../autosave-removal-slots.ts';
 import { cleanupSafety, reclaimWorktree } from '../runs/retention.ts';
@@ -59,7 +59,7 @@ describe('removal cases on a real repository', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.close();
     removeWorktreesRepo({ repoRoot, cezHome }, savedHome);
   });
 
@@ -166,6 +166,7 @@ describe('removal cases in a run store', () => {
       ...Array.from({ length: 299 }, (_, index) => ({ ...run, id: `newer-${index}`, createdAt: '2026-02-01T00:00:00.000Z' }))]);
     for (const id of ids) mkdirSync(join(dataDir, 'tmp', id), { recursive: true });
     const store = RunStore.open(dataDir, { keepLive: true });
+    onTestFinished(() => store.close());
     const refuseKept: DeletionGate = { name: 'kept', refuse: (runId, kind) => kind === 'archive-tmp' && runId === 'kept-tmp' ? 'a job runs' : undefined };
     gate.refuse = (runId, kind) => { calls.push(`gate ${kind} ${runId}`); return refuseKept.refuse(runId, kind, dataDir); };
     try {
@@ -175,7 +176,6 @@ describe('removal cases in a run store', () => {
     }
     expect(ids.map(id => [store.getRun(id)?.archived, existsSync(join(dataDir, 'tmp', id))])).toEqual([[true, true], [true, false]]);
     expect(calls).toEqual(['gate archive-tmp kept-tmp', 'gate archive-tmp reaped-tmp']);
-    store.flush();
   });
 
   it('plain run history delete asks the history gate, then runs the cleanups after the commit; a failure is logged and the row stays gone', () => {
