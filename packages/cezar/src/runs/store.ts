@@ -2967,6 +2967,11 @@ export class RunStore {
     z.uuid().parse(id);
     const dir = join(runDataDir(this.dataDir, id), 'runs');
     if (realpathSync(dir) !== resolve(dir)) throw new Error('History storage redirected');
+    this.removeHistoryFiles(id);
+  }
+
+  /** The run's history, handoff and images, then the removal cleanups (`runs/removal-slots.ts`). */
+  private removeHistoryFiles(id: string): void {
     this.facts.forget(id);
     removeHistory(this.dataDir, id);
     rmSync(this.handoffPath(id), { force: true });
@@ -3068,13 +3073,9 @@ export class RunStore {
    *  Best effort: a failure is logged, and the row stays deleted. */
   private removeOwedHistory(id: string): void {
     if (!this.historyOwed.delete(id)) return;
-    try {
-      this.facts.forget(id);
-      removeHistory(this.dataDir, id);
-      rmSync(this.handoffPath(id), { force: true });
-      rmSync(this.imagesDir(id), { recursive: true, force: true });
-      runRemovalCleanups(id, this.dataDir);
-    } catch (error) { console.warn(`[hsq] History cleanup of run ${id} is incomplete: ${error instanceof Error ? error.message : String(error)}`); }
+    try { this.removeHistoryFiles(id); } catch (error) {
+      console.warn(`[hsq] History cleanup of run ${id} is incomplete: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

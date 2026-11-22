@@ -98,9 +98,9 @@ export function selectReclaimableWorktrees(
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
 type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & WorkerExecutions & WorkerResults>;
 
-/** The slice of the runs store the enforcer needs. Kept structural so the
- *  enforcer stays easy to test and never imports the concrete store. */
-export interface RetentionStore {
+/** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
+ *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
+export interface RetentionStore extends WorkerResults {
   /** The candidates: runs with a materialized worktree (an indexed query, #779). */
   listRunsWithWorktree(): RunRecord[];
   getRun(id: string): RunRecord | undefined;
@@ -254,7 +254,7 @@ export async function reclaimWorktree(
   if (!pinned) { release(); return null; }
   try {
     assertSafe();
-    if (!(await prepareReclaim(run, { repoRoot, store: real }).then(() => true, () => false))) return null;
+    if (!(await prepareReclaim(run, { repoRoot, store }).then(() => true, () => false))) return null;
     if (opts.remove) assertSafe(); // injected reclaimer has no final callback
     await remove(repoRoot, run.worktreePath);
     if (existsSync(run.worktreePath)) return null; // reclaim failed; retry next pass

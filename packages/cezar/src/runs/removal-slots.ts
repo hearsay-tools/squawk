@@ -26,9 +26,8 @@ export interface DeletionGate {
 /** What a reclaim preparation gets from the reclaim: the repository and the store it reclaims in. */
 export interface ReclaimContext {
   readonly repoRoot: string;
-  /** The retention store. A structural test store may lack these members; a preparation that
-   *  needs one skips the run without it. */
-  readonly store: Partial<WorkerResults>;
+  /** The store the reclaim runs in. */
+  readonly store: WorkerResults;
 }
 
 /** Work that must finish before a reclaimed worktree goes. A rejection stops the reclaim. */
