@@ -351,9 +351,9 @@ async function runChild(options: ChildOptions, resultPath: string): Promise<void
       // #779 plan step 3: every durable commit is fenced (claim and revision checked in its
       // transaction). A run already held and claimed pays the fence alone; a run that left memory
       // is claimed first. Its claim is released when it leaves again — the untimed flush.
-      s.pin(singleTarget, 'cleanup');
+      s.runPins.pin(singleTarget, 'cleanup');
       sync['commit (held run)'] = await sampleSync(options, () => { commit([singleTarget]); });
-      s.unpin(singleTarget, 'cleanup');
+      s.runPins.unpin(singleTarget, 'cleanup');
       gc();
       sync['commit (cold run)'] = await sampleSync(options, () => {
         s.flush();

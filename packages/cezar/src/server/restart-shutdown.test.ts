@@ -146,7 +146,7 @@ describe('restart shutdown', () => {
       const replacement = RunStore.open(dataDir, { keepLive: true });
       try {
         expect(replacement.getRun(run.id)?.status).toBe('running');
-        expect(replacement.listForeignClaimedRunIds()).toEqual([]);
+        expect(replacement.claims.listForeignClaimedRunIds()).toEqual([]);
       } finally { replacement.close(); }
     } finally {
       if (!shutDown) {

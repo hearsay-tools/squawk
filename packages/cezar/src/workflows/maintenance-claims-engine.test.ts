@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
+import { RunStore } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-no-runner.testkit.ts';
 import type { RunManager } from './run.ts';
@@ -60,7 +61,7 @@ describe('claims that admit work on a finished run', () => {
       const id = settledRun(store);
       const manager = managerFor(store);
       // Another process claimed the run between the ownership check and the hold.
-      vi.spyOn(store, 'pin').mockReturnValue(undefined);
+      vi.spyOn(store.runPins, 'pin').mockReturnValue(undefined);
       const result = manager.continueRun(id);
       expect(result).toEqual({ ok: false, error: RUN_IN_USE_ELSEWHERE });
       expect(store.getRun(id)?.status).toBe('done');

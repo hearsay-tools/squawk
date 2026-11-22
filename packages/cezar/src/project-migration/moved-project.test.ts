@@ -45,7 +45,7 @@ function newTask(root: string): string {
     // Settled, as a task that finished before the next start: a live one would block a move.
     setRunStatus(store, run.id, 'review');
     store.flush();
-    expect(store.sourceDataDir(run.id)).toBe(projectPaths(root).write);
+    expect(store.claims.sourceDataDir(run.id)).toBe(projectPaths(root).write);
     return run.id;
   } finally { store.close(); }
 }
@@ -80,15 +80,15 @@ describe('a moved project', { timeout: TIMEOUT }, () => {
     await migrate(project);
     const store = RunStore.open(projectPaths(project.root).write, { keepLive: true });
     try {
-      expect(store.isFallbackRun(TASK)).toBe(false);
-      expect(store.runOwnership(TASK)).not.toBe('fallback');
-      expect(store.writeRefusal(TASK)).toBeUndefined();
+      expect(store.claims.isFallbackRun(TASK)).toBe(false);
+      expect(store.claims.runOwnership(TASK)).not.toBe('fallback');
+      expect(store.claims.writeRefusal(TASK)).toBeUndefined();
       expect(store.updateRun(TASK, { title: 'continued' })?.title).toBe('continued');
       store.flush();
       // The preview host's check: the moved worktree and the run are both writable.
       const worktree = store.getRun(TASK)!.worktreePath!;
       expect(worktree).toBe(moved(project, project.taskPath));
-      expect(fallbackProjectWriteError(worktree) ?? store.writeRefusal(TASK)).toBeUndefined();
+      expect(fallbackProjectWriteError(worktree) ?? store.claims.writeRefusal(TASK)).toBeUndefined();
       expect(fallbackProjectWriteError(store.getRun(WORKER)!.worktreePath!)).toBeUndefined();
     } finally { store.close(); }
     // `.ai/cezar/` is the fallback now: a write there is refused.
@@ -125,7 +125,7 @@ describe('a moved project', { timeout: TIMEOUT }, () => {
     const after = newTask(project.root);
     const store = RunStore.open(projectPaths(project.root).write, { keepLive: true });
     try {
-      expect(store.writeRefusal(before)).toBeUndefined();
+      expect(store.claims.writeRefusal(before)).toBeUndefined();
       expect(store.getRun(after)).toBeDefined();
     } finally { store.close(); }
     expect(existsSync(join(project.dataDir, RUNS_DB_FILE))).toBe(false);
@@ -141,8 +141,8 @@ describe('a moved project', { timeout: TIMEOUT }, () => {
       expect(context.dataDir).toBe(project.newDir);
       const run = context.store.createRun({ title: 'after', task: 'after', workflow: 'quick-task', steps: [] });
       context.store.flush();
-      expect(context.store.sourceDataDir(run.id)).toBe(project.newDir);
-      expect(context.store.writeRefusal(TASK)).toBeUndefined();
+      expect(context.store.claims.sourceDataDir(run.id)).toBe(project.newDir);
+      expect(context.store.claims.writeRefusal(TASK)).toBeUndefined();
     } finally { await contexts.disposeAll(); ownership.releaseAll(); }
     expect(existsSync(join(project.dataDir, RUNS_DB_FILE))).toBe(false);
     // The next cockpit run finds the marker: nothing to move, no plan, no journal.

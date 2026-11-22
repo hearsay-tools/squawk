@@ -12,7 +12,8 @@ import {
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '../runs/store.ts';
-import { RunStore, RunWriteRefusedError } from '../runs/store.ts';
+import { RunStore } from '../runs/store.ts';
+import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import { fixture } from './service.testkit.ts';
 import { projectConversationEvents } from './conversations.ts';
 

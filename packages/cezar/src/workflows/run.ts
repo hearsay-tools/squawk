@@ -65,7 +65,8 @@ import type { ContentBlock } from '../core/agent-runner.ts';
 import type { ToolActivityFeed, ToolActivityTracker } from '../activity/tool-activity.ts';
 import * as queuedRevival from './run/queued-revival.ts';
 import type { RunUpdateSource } from '../runs/lifecycle.ts';
-import { RUN_IN_USE_ELSEWHERE, type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
+import { type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import type { RunWrites } from '../runs/ports.ts';
 import { WorkspaceSemaphore, type AccountHolds } from '../workspace/semaphore.ts';
 import { type WorkflowDef } from './types.ts';
@@ -463,7 +464,7 @@ export class RunManager {
     state.liveSession.resetPermissions();
     if (this.#store.getRun(runId)?.hasPendingPermission) this.#store.updateRun(runId, { hasPendingPermission: false });
     this.#active.set(runId, state);
-    this.#store.pin(runId, 'active');
+    this.#store.runPins.pin(runId, 'active');
   }
 
   /** Remove a run from the live registries — keeps `waiting ⊆ active`. */
@@ -481,7 +482,7 @@ export class RunManager {
     this.#modules.liveness.clearScope(runId, 'execution');
     this.#modules.line.forget(runId);
     this.#active.delete(runId);
-    this.#store.unpin(runId, 'active');
+    this.#store.runPins.unpin(runId, 'active');
     this.#modules.runSettlement.afterDropActive(runId);
     // The session held the run's native subagents: an open subagent wait resolves interrupted (hearsay-tools/cezarion#2431).
     this.#modules.subagentWaits.afterSessionGone(runId, state);
@@ -636,20 +637,20 @@ export class RunManager {
     const fallback = workspace && fallbackProjectWriteError(workspace);
     if (fallback) return { ok: false, error: fallback };
     // Another process's run (#779, plan step 3) is its owner's to continue.
-    const refusal = this.#store.writeRefusal(runId);
+    const refusal = this.#store.claims.writeRefusal(runId);
     if (refusal) return { ok: false, error: refusal };
     // A finished run is loaded and held for the whole admission (#779): every read below sees
     // the record its own writes change, exactly as for a live run. Admission makes it live
     // (queued or running) or refuses it; either way the `continue` pin ends here.
     // The check above is a moment: another process may claim the run before the hold lands
     // (PR #851 review). Holding it is what claims it, so a failed hold refuses the Continue.
-    if (!this.#store.pin(runId, 'continue')) {
-      return { ok: false, error: this.#store.getRun(runId) ? this.#store.writeRefusal(runId) ?? RUN_IN_USE_ELSEWHERE : 'not found' };
+    if (!this.#store.runPins.pin(runId, 'continue')) {
+      return { ok: false, error: this.#store.getRun(runId) ? this.#store.claims.writeRefusal(runId) ?? RUN_IN_USE_ELSEWHERE : 'not found' };
     }
     try {
       return this.#modules.continuationAcceptance.admitContinuation(runId, opts, deferForCapacity, conversation);
     } finally {
-      this.#store.unpin(runId, 'continue');
+      this.#store.runPins.unpin(runId, 'continue');
     }
   }
 

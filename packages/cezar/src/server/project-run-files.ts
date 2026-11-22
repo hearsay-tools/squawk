@@ -36,8 +36,8 @@ export const adoptFallbackControl: MiddlewareHandler<ProjectApiEnv> = async (con
   const { method, path } = context.req;
   if (id === undefined || !controlRoute(context) || /\/(?:read|unread)$/.test(path) || (method === 'DELETE' && path.endsWith(`/runs/${id}`))) return next();
   const store = context.get('project').store;
-  if (store.runOwnership(id) !== 'fallback') return next();
-  try { store.adoptFallbackFamily(id); }
+  if (store.claims.runOwnership(id) !== 'fallback') return next();
+  try { store.claims.adoptFallbackFamily(id); }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // The delegation route answers in the delegation error shape, as `requireRunControl` does.
@@ -48,6 +48,6 @@ export const adoptFallbackControl: MiddlewareHandler<ProjectApiEnv> = async (con
 };
 
 /** All artifact routes bind their reads to the directory that owns the selected run. */
-export function runArtifactDirectory(store: RunAccess, runId: string): string {
-  return artifactDirectory(store.sourceDataDir(runId), runId);
+export function runArtifactDirectory(store: { readonly claims: Pick<RunAccess, 'sourceDataDir'> }, runId: string): string {
+  return artifactDirectory(store.claims.sourceDataDir(runId), runId);
 }

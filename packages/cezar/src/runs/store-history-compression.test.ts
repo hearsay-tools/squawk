@@ -179,7 +179,7 @@ describe('RunStore history compression', () => {
     const run = owner.createRun({ title: 'theirs', workflow: 'w', task: 'task', steps: [] });
     owner.eventLog.appendEvent(run.id, { type: 'note', message: 'owned' });
     finish(owner, run.id);
-    expect(owner.pin(run.id, 'active')).toBeDefined();
+    expect(owner.runPins.pin(run.id, 'active')).toBeDefined();
     const historyFile = await import('./history-file.ts');
     const spy = vi.spyOn(historyFile, 'compressHistory').mockResolvedValue('skipped');
     owner.archive.setArchived(run.id, true);
@@ -195,7 +195,7 @@ describe('RunStore history compression', () => {
     );
 
     const other = openStore(dir).store;
-    expect(other.runOwnership(run.id)).toBe('foreign');
+    expect(other.claims.runOwnership(run.id)).toBe('foreign');
     other.archive.compressArchivedHistory();
     await other.archive.historyIdle();
 
@@ -495,7 +495,7 @@ describe('RunStore history compression', () => {
     store.archive.setArchived(run.id, true);
     store.flush();
     const other = openStore(dir).store;
-    expect(other.pin(run.id, 'active')).toBeDefined();
+    expect(other.runPins.pin(run.id, 'active')).toBeDefined();
     await store.archive.historyIdle();
     expect(existsSync(plain)).toBe(true);
     expect(readFileSync(plain).equals(before)).toBe(true);
@@ -524,7 +524,7 @@ describe('RunStore history compression', () => {
       await vi.waitFor(() => expect(spy).toHaveBeenCalled(), { timeout: HANG_GUARD_MS });
       store.flush();
       const other = openStore(dir).store;
-      expect(other.pin(run.id, 'active')).toBeDefined();
+      expect(other.runPins.pin(run.id, 'active')).toBeDefined();
       release();
       await store.archive.historyIdle();
       expect(existsSync(plain)).toBe(true);

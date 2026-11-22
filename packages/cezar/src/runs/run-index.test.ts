@@ -9,7 +9,8 @@ import { readRunIndexFromDisk, searchRunIndexFromDisk } from './run-index.ts';
 import { RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from './run-store.testkit.ts';
-import { decodeRunRecord, reconcileLoadedRun, RunStore, type RunRecord } from './store.ts';
+import { decodeRunRecord, RunStore, type RunRecord } from './store.ts';
+import { reconcileLoadedRun } from './loaded-run-exits.ts';
 import { rescopeRun } from './run-references.ts';
 
 const handle = { owner: 'local', name: 'repo' };
@@ -269,7 +270,7 @@ describe('the cold reader and the store read every repaired row alike', () => {
     const owner = RunStore.open(dir, { keepLive: true });
     const other = RunStore.open(dir, { keepLive: true });
     try {
-      expect(other.runOwnership('held')).toBe('foreign');
+      expect(other.claims.runOwnership('held')).toBe('foreign');
       const cold = readRunIndexFromDisk(dir).runs;
       expect(cold).toEqual(other.listRunSummaries().runs);
       expect(cold).toEqual(owner.listRunSummaries().runs);

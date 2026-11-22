@@ -53,8 +53,8 @@ export const OWNERSHIP_GROUPS = {
               leftAgain = await leavesMemory(store, runId);
             },
             { beforeStart: ({ store }) => {
-              const pin = store.pin.bind(store);
-              store.pin = (id, holder) => { pins.push(holder); return pin(id, holder); };
+              const pin = store.runPins.pin.bind(store.runPins);
+              store.runPins.pin = (id, holder) => { pins.push(holder); return pin(id, holder); };
             } });
           return { pins, left, heldWhileContinuing, leftAgain, obs };
         });

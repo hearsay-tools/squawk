@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
 import { generateRunFixture, isLiveRun, liveRunCount, pickSaveTarget } from '../../scripts/benchmark-run-store-fixture.ts';
-import { parseRunRecords, reconcileLoadedRun, upgradeLegacyWaits } from './store.ts';
+import { parseRunRecords, upgradeLegacyWaits } from './store.ts';
+import { reconcileLoadedRun } from './loaded-run-exits.ts';
 
 /** Smoke test for the #779 benchmark fixture: it must be reproducible and must be what the real
  *  store would load, or the benchmark measures a file Squawk never writes. */

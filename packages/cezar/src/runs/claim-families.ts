@@ -1,5 +1,5 @@
 /**
- * Acquire run-family claims for a store. `RunStore.claimFamilies` is a thin call into
+ * Acquire run-family claims for a store. `RunClaimsTopic.claimFamilies` (run-claims-topic.ts) is a thin call into
  * `claimStoreFamilies`; liveness is judged here (`claimOwnerLive`), outside the write
  * transaction.
  */

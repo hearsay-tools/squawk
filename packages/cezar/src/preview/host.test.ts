@@ -40,7 +40,7 @@ describe('PreviewHost', () => {
   it('refuses a start for a run this store may not write before reserving a port, and other tasks start', async () => {
     const { host, ctx, devServers, store } = make();
     const refusal = 'Cannot write read-only project data in /repo/.ai/squawk. Use the binary that migrated the project.';
-    ctx.store = { ...ctx.store, writeRefusal: (id: string) => id === 'run-1' ? refusal : undefined };
+    ctx.store = { ...ctx.store, claims: { writeRefusal: (id: string) => id === 'run-1' ? refusal : undefined } };
     const viewer = fakeViewer();
     await host.open(ctx, viewer, { port: 5173 });
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -50,7 +50,7 @@ describe('PreviewHost', () => {
     expect(devServers).toEqual([]);
     expect(host.portOwner(5173)).toBeUndefined();
     expect(store.stateEvents()).toEqual([]);
-    const other = { ...ctx, runId: 'run-2', store: { ...ctx.store, writeRefusal: () => undefined } };
+    const other = { ...ctx, runId: 'run-2', store: { ...ctx.store, claims: { writeRefusal: () => undefined } } };
     await host.open(other, fakeViewer(), { port: 5173 });
     await host.run('run-2', 5173);
     expect(host.portOwner(5173)?.runId).toBe('run-2');

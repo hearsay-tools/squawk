@@ -137,7 +137,7 @@ export class RunSettlement {
   republishFinishVerdict(runId: string): void {
     if (this.context.disposed() || this.host.isActive(runId)) return;
     const status = this.context.store.getRun(runId)?.status;
-    if (status === 'waiting' || status === 'review') this.context.store.republish(runId);
+    if (status === 'waiting' || status === 'review') this.context.store.runPins.republish(runId);
   }
 
   /** A clean process exit cannot complete a workflow still blocked on a question.

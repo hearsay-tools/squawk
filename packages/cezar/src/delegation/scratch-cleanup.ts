@@ -46,7 +46,7 @@ export class WorkerScratchCleanup {
     // their scratch is theirs.
     if (autosaves) sweepAgentTmpDirs(this.dataDir, [...new Set([...live.filter(run =>
       this.busy(run.id) || ['queued', 'running', 'waiting'].includes(run.status)).map(run => run.id), ...owners,
-      ...this.store.listForeignClaimedRunIds(), ...(autosaves ?? [])])], dir => jobRunsIn([dir]));
+      ...this.store.claims.listForeignClaimedRunIds(), ...(autosaves ?? [])])], dir => jobRunsIn([dir]));
     if (!retained || !autosaves) { // failed enumeration must not permanently lose a wake source
       this.recoveryTimer = setTimeout(() => this.recover(), 60_000); this.recoveryTimer.unref?.();
     }
@@ -69,7 +69,7 @@ export class WorkerScratchCleanup {
     if (!agentTmpDirMayExist(this.dataDir, id)) return false;
     // Another process's run (#779, plan step 3): cleaning up after it is its owner's job, or the
     // job of whoever adopts it once that owner is gone.
-    if (this.store.writeRefusal(id)) return false;
+    if (this.store.claims.writeRefusal(id)) return false;
     const run = this.store.getRun(id);
     if (run && (['queued', 'running', 'waiting'].includes(run.status) ||
       (run.delegation?.role !== 'worker' && run.delegation?.role !== 'invalid'))) return false;

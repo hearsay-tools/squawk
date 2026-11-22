@@ -205,14 +205,14 @@ describe('pins', () => {
     const done = record();
     seedRuns(dataDir, [done]);
     const store = open();
-    const pinned = store.pin(done.id, 'active')!;
-    store.pin(done.id, 'continue');
+    const pinned = store.runPins.pin(done.id, 'active')!;
+    store.runPins.pin(done.id, 'continue');
     expect(store.getRun(done.id)).toBe(pinned);
     expect(store.listRuns()).toEqual([pinned]);
-    store.unpin(done.id, 'continue');
+    store.runPins.unpin(done.id, 'continue');
     store.flush();
     expect(store.getRun(done.id)).toBe(pinned);
-    store.unpin(done.id, 'active');
+    store.runPins.unpin(done.id, 'active');
     store.flush();
     expect(held(store)).toEqual([]);
     expect(store.listRuns()).toEqual([]);
@@ -220,7 +220,7 @@ describe('pins', () => {
 
   it('answers nothing for a run that does not exist', () => {
     const store = open();
-    expect(store.pin('missing', 'active')).toBeUndefined();
+    expect(store.runPins.pin('missing', 'active')).toBeUndefined();
     expect(held(store)).toEqual([]);
   });
 });

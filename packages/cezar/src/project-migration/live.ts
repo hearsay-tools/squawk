@@ -128,7 +128,7 @@ export function readLiveTaskView(root: string): LiveRunReads & {
     throw new Error(`Cannot migrate ${root}: these tasks are marked live but their records cannot be read: ${unreadable.join(', ')}. `
       + 'Open the project with the binary that wrote them, finish or cancel each one, then retry');
   }
-  return { listRuns: () => [], persistedLiveRunIds: () => ({ live: [...live], foreign: [...foreign] }), getRun: (id) => runs.get(id),
+  return { listRuns: () => [], claims: { persistedLiveRunIds: () => ({ live: [...live], foreign: [...foreign] }) }, getRun: (id) => runs.get(id),
     allRuns: () => [...runs.values()], unreadableUnarchived: () => [...unparsed].filter(id => !runs.has(id)).sort() };
 }
 
@@ -156,8 +156,8 @@ export function projectLiveTasksOffline(root: string): LiveProjectTask[] {
 /** The tasks of families another live process claims, read without writing anything: the fence's check. */
 export function projectForeignTasksOffline(root: string): LiveProjectTask[] {
   const view = readLiveTaskView(root);
-  const { foreign } = view.persistedLiveRunIds();
-  return projectLiveTasks({ ...view, persistedLiveRunIds: () => ({ live: [], foreign }) });
+  const { foreign } = view.claims.persistedLiveRunIds();
+  return projectLiveTasks({ ...view, claims: { persistedLiveRunIds: () => ({ live: [], foreign }) } });
 }
 
 /**

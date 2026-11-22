@@ -145,7 +145,7 @@ export class RunRecovery {
     const adoption = this.adoptionTail.then(async () => {
       while (this.recovering && this.recoveryInFlight) await this.recoveryInFlight;
       if (this.context.disposed()) return false;
-      const family = this.context.store.adoptFamily(runId, opts);
+      const family = this.context.store.claims.adoptFamily(runId, opts);
       if (family === undefined) return false;
       await this.host.recover(family);
       return true;
@@ -164,7 +164,7 @@ export class RunRecovery {
     const orphanWorkerIds: string[] = [];
     const orphanFactIds = new Set<string>();
     for (const id of workerIds) {
-      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase !== 'starting' || this.context.store.writeRefusal(id)) continue;
+      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase !== 'starting' || this.context.store.claims.writeRefusal(id)) continue;
       const run = this.context.store.getRun(id);
       if (run?.delegation?.role !== 'worker' || !inScope(run)) continue;
       orphanWorkerIds.push(id);
@@ -199,7 +199,7 @@ export class RunRecovery {
     for (const id of orphanWorkerIds) {
       const run = this.context.store.getRun(id);
       if (!run || !inScope(run)) continue;
-      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase === 'starting' && !this.context.store.writeRefusal(id) &&
+      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase === 'starting' && !this.context.store.claims.writeRefusal(id) &&
         !this.host.settleOrphanedWorkerExecution(id)) this.host.orphans.armOrphanReprobe(id);
     }
   }

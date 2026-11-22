@@ -202,7 +202,7 @@ describe('RunStore save lifecycle (#124)', () => {
       ...LEGACY_RUN, id: pinnedId, title: 'held pinned overflow', pinned: true, pinnedAt: '2026-01-01T00:00:00.000Z',
     }, ...kept]);
     const store = RunStore.open(dataDir);
-    expect(store.pin(pinnedId, 'active')?.pinned).toBe(true);
+    expect(store.runPins.pin(pinnedId, 'active')?.pinned).toBe(true);
     expect(store.heldIds()).toContain(pinnedId);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(store.getRun(pinnedId)).toMatchObject({ archived: false, pinned: true, title: 'held pinned overflow' });
@@ -221,7 +221,7 @@ describe('RunStore save lifecycle (#124)', () => {
         try { edit(raw); } finally { raw.close(); }
       }
       const store = RunStore.open(dataDir);
-      if (path === 'held') expect(store.pin(record.id, 'active')).toBeDefined();
+      if (path === 'held') expect(store.runPins.pin(record.id, 'active')).toBeDefined();
       store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
       const run = store.getRun(record.id);
       store.flush();

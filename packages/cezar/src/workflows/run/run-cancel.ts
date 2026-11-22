@@ -38,7 +38,7 @@ export class RunCancel {
 
   cancel(runId: string): boolean {
     // Another process's run (#779, plan step 3): only its owner can stop it.
-    if (this.context.store.writeRefusal(runId)) return false;
+    if (this.context.store.claims.writeRefusal(runId)) return false;
     this.cancelWorkerExecution(runId);
     const hadWaits = !!this.context.store.getRun(runId)?.waits?.length;
     this.waitEngine.cancelAll(runId);

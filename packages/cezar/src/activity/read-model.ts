@@ -90,7 +90,7 @@ function loggingUnreadable(store: ActivityStore, log: (runId: string) => void): 
     getRun,
     isUnreadable: (id) => store.isUnreadable(id),
     listRuns: () => store.listRuns(),
-    listForeignClaimedRunIds: () => store.listForeignClaimedRunIds(),
+    get claims() { return store.claims; },
     get workerExecutions() { return store.workerExecutions; },
     listRunSummaries: (options) => store.listRunSummaries(options),
     withReadCache: (fn) => store.withReadCache(fn),

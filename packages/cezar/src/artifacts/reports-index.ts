@@ -17,7 +17,8 @@ export { REPORTS_BACKFILL_KEY } from '../runs/report-rows.ts';
 const cursorSchema = z.tuple([z.iso.datetime(), z.uuid()]);
 /** What the index reads from a run store: its database, a run's record and files, the write-out
  *  before a read, and the lifecycle whose run changes drive the report watch. */
-export interface ReportsStore extends RunLookup, Pick<RunAccess, 'sourceDataDir'>, Pick<StoreHandle, 'flush'> {
+export interface ReportsStore extends RunLookup, Pick<StoreHandle, 'flush'> {
+  readonly claims: Pick<RunAccess, 'sourceDataDir'>;
   reportSource(): { db: RunDatabase | null; dataDir: string; openFailure: Error | undefined };
   readonly lifecycle: RunLifecycleSource;
 }
@@ -56,7 +57,7 @@ export class ReportsIndex {
   private async storage<T>(runId: string, read: (directory: string) => Promise<T>) {
     try {
       // A fallback run and a task the project move left in `.ai/cezar/` keep their artifacts there.
-      const source = this.store.sourceDataDir(runId);
+      const source = this.store.claims.sourceDataDir(runId);
       return await read(join(source === this.dataDir ? this.root() : artifactRunsRoot(source), `${runId}-artifacts`));
     }
     catch (error) { return { state: 'indeterminate' as const, error }; }

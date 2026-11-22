@@ -61,7 +61,7 @@ export interface DeliveryResult {
 }
 
 /** The run store methods a task webhook and `sendAgentReport` call. */
-export type TaskWebhookStore = RunLookup & Pick<RunAccess, 'sourceDataDir' | 'runOwnership'> & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Pick<RunWrites, 'updateRun'>;
+export type TaskWebhookStore = RunLookup & { readonly claims: Pick<RunAccess, 'sourceDataDir' | 'runOwnership'> } & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Pick<RunWrites, 'updateRun'>;
 
 export const WEBHOOK_TIMEOUT_MS = 10_000;
 export const WEBHOOK_ATTEMPTS = 3;
@@ -260,7 +260,7 @@ export class TaskWebhook {
     const seq = (this.seqs.get(seqKey) ?? 0) + 1;
     this.seqs.set(seqKey, seq);
     const url = threadUrl(this.options.origin(), projectId, run.id);
-    const question = asksQuestion(run) ? await pendingQuestion(this.store.sourceDataDir(run.id), run.id) : undefined;
+    const question = asksQuestion(run) ? await pendingQuestion(this.store.claims.sourceDataDir(run.id), run.id) : undefined;
     return {
       event: pending.event,
       deliveryId: randomUUID(),
@@ -419,7 +419,7 @@ export async function sendAgentReport(options: AgentReportOptions): Promise<Agen
         ...(result.ok ? {} : { error: (result.error ?? 'delivery failed').slice(0, 500) }),
       }));
   // A run read from `.ai/squawk/` stays unchanged: the report was delivered, its transcript note is skipped.
-  if (run && options.store && options.store.runOwnership(run.id) !== 'fallback') {
+  if (run && options.store && options.store.claims.runOwnership(run.id) !== 'fallback') {
     options.store.eventLog.appendEvent(run.id, {
       type: 'webhook.report',
       webhookId: webhook.id,

@@ -107,7 +107,7 @@ describe('a family where a worker supervises a worker', () => {
   });
 
   it('reads for a supervising worker the requests the root gate reads, and none for a worker that supervises nobody', () => {
-    const store = { ...family(), listConversationRootIds: () => [], writeRefusal: () => undefined } as never;
+    const store = { ...family(), listConversationRootIds: () => [], claims: { writeRefusal: () => undefined } } as never;
     const ids = (runId: string) => { const open = openCompletionRequests(store, runId); return [open.sent.map(message => message.id), open.incoming.map(message => message.id)]; };
     expect(ids(R)).toEqual([[ASKED_BY_R], []]);
     expect(ids(W)).toEqual([[ASKED_BY_W], [ASKED_BY_R]]);

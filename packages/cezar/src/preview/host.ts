@@ -32,7 +32,7 @@ export type RunContext = {
   title: string;
   worktreePath: string;
   dataDir: string;
-  store: RunLookup & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Partial<Pick<RunAccess, 'writeRefusal'> & { readonly workerExecutions: Pick<WorkerExecutions, 'spawnScope'> }>;
+  store: RunLookup & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Partial<{ readonly claims: Pick<RunAccess, 'writeRefusal'>; readonly workerExecutions: Pick<WorkerExecutions, 'spawnScope'> }>;
 };
 
 export type PreviewTarget = { port: number } | { url: string } | { agent: true };
@@ -218,7 +218,7 @@ export class PreviewHost implements PreviewHostLike {
     const server = entry && this.registration(entry, port);
     if (!entry || entry.released || !server || live(entry.servers.get(port))) return;
     // A run this store may not write (another process's, or read from .ai/squawk/) reserves nothing.
-    const refusal = fallbackProjectWriteError(entry.ctx.worktreePath) ?? entry.ctx.store.writeRefusal?.(runId);
+    const refusal = fallbackProjectWriteError(entry.ctx.worktreePath) ?? entry.ctx.store.claims?.writeRefusal(runId);
     if (refusal) return this.tell(entry, { t: 'state', stage: 'server-exited', server, exitCode: null, logTail: refusal });
     const previous = entry.servers.get(port);
     if (owned(previous) && this.stopping.has(previous)) return;

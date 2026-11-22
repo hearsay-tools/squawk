@@ -141,7 +141,7 @@ export class FamilyReconciler {
    */
   async reconcileRecoveryWorkerFamilies(): Promise<void> {
     for (const rootId of this.context.store.listConversationRootIds()) {
-      if (this.context.store.writeRefusal(rootId)) continue;
+      if (this.context.store.claims.writeRefusal(rootId)) continue;
       this.recoveryFactsPending = true;
       await this.context.store.transcriptFacts.prepareRecoveryFacts(rootId);
       if (this.context.disposed()) return;
@@ -174,7 +174,7 @@ export class FamilyReconciler {
    *  names its sender and recipient on every message. */
   private reconcileWorkerFamily(familyRootId?: string): void {
     // As the global pass: a family this store may not write (foreign, fallback) is not repaired here.
-    if (familyRootId !== undefined && this.context.store.writeRefusal(familyRootId)) return;
+    if (familyRootId !== undefined && this.context.store.claims.writeRefusal(familyRootId)) return;
     this.context.store.withReadCache(() => this.reconcileFamilyPass(familyRootId));
   }
 

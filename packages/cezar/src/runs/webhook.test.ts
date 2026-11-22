@@ -57,8 +57,7 @@ function fakeRuns(dataDir: string) {
   };
   const store: TaskWebhookStore = {
     getRun: (id) => runs.get(id),
-    sourceDataDir: () => dataDir,
-    runOwnership: (id) => (runs.has(id) ? 'held' : undefined),
+    claims: { sourceDataDir: () => dataDir, runOwnership: (id) => (runs.has(id) ? 'held' : undefined) },
     updateRun: (id, patch) => write(id, patch),
     eventLog: {
       appendEvent: (runId, event) => {

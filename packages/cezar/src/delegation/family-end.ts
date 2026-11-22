@@ -16,13 +16,13 @@ import { cleanupSafety, workerFamilyEnded } from '../runs/retention.ts';
 import { assertRunSlotsSealed } from '../runs/removal-slots.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunAccess, RunFamilyReads, RunLookup, RunWrites, WorkerExecutions } from '../runs/ports.ts';
+import type { RunAccess, RunFamilyReads, RunLookup, RunWrites, StoreHandle, WorkerExecutions } from '../runs/ports.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 
 export type FamilyEndStore = RunLookup & Pick<RunFamilyReads, 'listWorkersOf'> & Pick<RunWrites, 'commitDelegation'> &
-  { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> } & Pick<RunAccess, 'sourceDataDir' | 'unavailable'>;
+  { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> } & Pick<StoreHandle, 'unavailable'> & { readonly claims: Pick<RunAccess, 'sourceDataDir'> };
 
 const SETTLED: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled', 'review']);
 

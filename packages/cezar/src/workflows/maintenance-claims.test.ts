@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
+import { RunStore } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import { MaintenanceClaims } from './run/maintenance-claims.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { unused } from './unused.testkit.ts';
@@ -67,12 +68,12 @@ describe('claims that admit work on a finished run', () => {
       const release = claim(claimsFor(ours), id);
       expect(release).not.toBeNull();
       // While the claim stands, the other process sees the run as ours and cannot act on it.
-      expect(theirs.runOwnership(id)).toBe('foreign');
-      expect(theirs.writeRefusal(id)).toBe(RUN_IN_USE_ELSEWHERE);
+      expect(theirs.claims.runOwnership(id)).toBe('foreign');
+      expect(theirs.claims.writeRefusal(id)).toBe(RUN_IN_USE_ELSEWHERE);
       release!();
       // A released run leaves memory, and its family claim, at the next save.
       ours.flush();
-      expect(theirs.writeRefusal(id)).toBeUndefined();
+      expect(theirs.claims.writeRefusal(id)).toBeUndefined();
     } finally {
       ours.close();
       theirs.close();
@@ -89,8 +90,8 @@ describe('claims that admit work on a finished run', () => {
     try {
       const claimer = claimsFor(ours);
       // The other process takes the claim after our ownership check would have passed.
-      vi.spyOn(ours, 'writeRefusal').mockReturnValue(undefined);
-      expect(theirs.pin(id, 'cleanup')).toBeDefined();
+      vi.spyOn(ours.claims, 'writeRefusal').mockReturnValue(undefined);
+      expect(theirs.runPins.pin(id, 'cleanup')).toBeDefined();
       expect(claim(claimer, id)).toBeNull();
     } finally {
       ours.close();

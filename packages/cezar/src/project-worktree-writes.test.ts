@@ -38,7 +38,7 @@ it('refuses Continue before claiming or copying a fallback family; record-only e
     expect(createRunner).not.toHaveBeenCalled();
     expect(existsSync(join(root, '.ai/cezar/runs.db'))).toBe(false);
     expect(store.updateRun(run.id, { title: 'automatic edit' })).toBeUndefined();
-    expect(store.adoptFallbackFamily(run.id)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(run.id)).toBe(true);
     store.updateRun(run.id, { title: 'record-only edit' });
     store.flush();
     expect(store.getRun(run.id)?.title).toBe('record-only edit');

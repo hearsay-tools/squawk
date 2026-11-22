@@ -432,7 +432,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         expect(response.status).toBe(noScratch ? 409 : 200);
         if (noScratch) {
           expect(response.headers.get('content-type')).toContain('application/json');
-          expect(await response.json()).toEqual({ error: autosaveCleanupBlocker(store.sourceDataDir(id), id) });
+          expect(await response.json()).toEqual({ error: autosaveCleanupBlocker(store.claims.sourceDataDir(id), id) });
         } else {
           expect(await response.text()).toContain('untracked.txt');
         }

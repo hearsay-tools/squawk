@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { runSummarySchema, toRunSummary, type RunSummary } from '@open-mercato/cezar-contract/runs';
 
 import { RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, type RunSummaryRow } from './run-database.ts';
-import { decodeRunRecord, LEGACY_INDEX_FILE, LOAD_REPAIR_SQL, reconcileLoadedRun, parseRunRecords, type RepoHandle, type RunRecord } from './store.ts';
+import { decodeRunRecord, LEGACY_INDEX_FILE, parseRunRecords, type RepoHandle, type RunRecord } from './store.ts';
+import { LOAD_REPAIR_SQL } from './store-open.ts';
+import { reconcileLoadedRun } from './loaded-run-exits.ts';
 import { namesForeignReference, rescopeRun } from './run-references.ts';
 import { matchesRunSearch, searchTokens, sqlPrefilterTokens } from '@open-mercato/cezar-contract/run-search';
 

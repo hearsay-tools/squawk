@@ -75,8 +75,8 @@ describe.each([{ linked: false }, { linked: true }])('a project migration (linke
     const store = RunStore.open(project.newDir);
     try {
       expect(store.getRun(TASK)?.worktreePath).toBe(moved(project, project.taskPath));
-      expect(store.sourceDataDir(TASK)).toBe(project.newDir);
-      const artifact = await readArtifact(artifactDirectory(store.sourceDataDir(TASK), TASK), TASK, project.artifactId);
+      expect(store.claims.sourceDataDir(TASK)).toBe(project.newDir);
+      const artifact = await readArtifact(artifactDirectory(store.claims.sourceDataDir(TASK), TASK), TASK, project.artifactId);
       expect(artifact?.bytes.toString()).toBe('<title>Report</title>report');
       expect(artifact?.metadata.sourcePath).toBe(join(moved(project, project.taskPath), 'report.html'));
       const handoff = readFileSync(join(project.newDir, 'runs', `${TASK}.handoff.md`), 'utf8');

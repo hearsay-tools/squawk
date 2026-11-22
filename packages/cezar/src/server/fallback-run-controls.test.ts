@@ -25,7 +25,7 @@ import { createApp } from './server.ts';
 import { sendAgentReport } from '../runs/webhook.ts';
 import { commitAccepted } from '../delegation/conversations.ts';
 import { delegationFailure } from '../delegation/routes.ts';
-import { RunWriteRefusedError } from '../runs/store.ts';
+import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
@@ -71,7 +71,7 @@ it('keeps a mixed family visible after boot, and Stop adopts it, then settles it
   const fallbackBytes = readFileSync(join(fallback, RUNS_DB_FILE));
   start();
   await manager.recover();
-  expect(store.runOwnership(family.parentId)).toBe('fallback');
+  expect(store.claims.runOwnership(family.parentId)).toBe('fallback');
   expect(store.getRun(family.parentId)?.status).toBe(RUN_STATUS.running);
   expect(store.getRun(family.workerId)?.status).toBe(RUN_STATUS.running);
   const stopped = await post(`${family.parentId}/cancel`);
@@ -79,7 +79,7 @@ it('keeps a mixed family visible after boot, and Stop adopts it, then settles it
   expect(store.getRun(family.parentId)?.status).toBe(RUN_STATUS.cancelled);
   store.flush();
   expect(primaryIds()).toEqual(expect.arrayContaining([family.parentId, family.workerId]));
-  expect(store.isFallbackRun(family.workerId)).toBe(false);
+  expect(store.claims.isFallbackRun(family.workerId)).toBe(false);
   expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(fallbackBytes);
 });
 
@@ -94,7 +94,7 @@ it('Archive adopts a fallback-only family; read state and deletion never copy it
   expect(existsSync(join(primary, RUNS_DB_FILE))).toBe(false);
   const archived = await post(`${family.parentId}/archive`, { archived: true });
   expect(archived.status).toBe(200);
-  expect(store.runOwnership(family.parentId)).not.toBe('fallback');
+  expect(store.claims.runOwnership(family.parentId)).not.toBe('fallback');
   expect(store.getRun(family.workerId)?.archived).toBe(true);
   store.flush();
   expect(primaryIds()).toEqual(expect.arrayContaining([family.parentId, family.workerId]));
@@ -165,7 +165,7 @@ it('refuses to adopt a family whose legacy root another live process claims, and
     expect(response.status).toBe(409);
     expect(primaryIds()).not.toContain(family.workerId);
     expect(existsSync(join(primary, 'runs', `${family.workerId}.ndjson`))).toBe(false);
-    expect(store.isFallbackRun(family.workerId)).toBe(true);
+    expect(store.claims.isFallbackRun(family.workerId)).toBe(true);
   } finally { other.close(); closeClaimSession(owner.session); }
 });
 
@@ -194,7 +194,7 @@ it('adopts only for a matched same-origin control: no preflight, read, unknown p
   for (const [method, suffix, headers] of requests) {
     await apiRequest(app, `/api/v1/runs/${family.parentId}${suffix ? `/${suffix}` : ''}`, { method, headers: headers ?? {}, ...(method === 'POST' ? { body: '{"pinned":true}' } : {}) });
     expect(existsSync(join(primary, RUNS_DB_FILE)), `${method} ${suffix}`).toBe(false);
-    expect(store.runOwnership(family.parentId)).toBe('fallback');
+    expect(store.claims.runOwnership(family.parentId)).toBe('fallback');
   }
   expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(before);
   expect((await post(`${family.parentId}/pin`, { pinned: true })).status).toBe(200);

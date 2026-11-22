@@ -13,12 +13,14 @@ import { processStartToken } from '../core/process-stat.ts';
 import * as legacyIndex from './legacy-index.ts';
 import { RUN_DATABASE_SCHEMA_VERSION, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, RunDatabaseDiskFullError } from './run-database.ts';
 import { blockRunWrites, readPersistedRuns, runIds } from './run-store.testkit.ts';
-import { LEGACY_INDEX_BACKUP_FILE, RunStore, __setLegacyImportHookForTests } from './store.ts';
+import { LEGACY_INDEX_BACKUP_FILE, RunStore } from './store.ts';
+import { __setLegacyImportHookForTests } from './store-open.ts';
 import { RunStoreOpenError } from './store-open-error.ts';
 
 /** Import and recovery hardening of the run database (#779, plan step 4). */
 
 const STORE_MODULE = fileURLToPath(new URL('./store.ts', import.meta.url));
+const STORE_OPEN_MODULE = fileURLToPath(new URL('./store-open.ts', import.meta.url));
 
 const step = (id: string, over: Record<string, unknown> = {}) => ({
   id, name: id, kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, ...over,
@@ -73,7 +75,8 @@ const snapshot = (names: string[]) => Object.fromEntries(names.map((name) => [na
 function runChild(name: string, body: string, args: string[] = []): ChildProcess {
   const script = join(scratch, `${name}.mts`);
   writeFileSync(script, `
-    import { RunStore, __setLegacyImportHookForTests } from ${JSON.stringify(STORE_MODULE)};
+    import { RunStore } from ${JSON.stringify(STORE_MODULE)};
+    import { __setLegacyImportHookForTests } from ${JSON.stringify(STORE_OPEN_MODULE)};
     import { existsSync, writeFileSync } from 'node:fs';
     const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
     const waitFor = (path: string) => { while (!existsSync(path)) sleep(10); };

@@ -38,7 +38,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
   const changes = await readWorkspaceChanges(store, run);
-  const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
+  const artifacts = await listWorkerArtifacts(store.claims.sourceDataDir(run.id), run, delegation, allEvents);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
     status: run.status, outcome: destroyed ? 'destroyed' : lastExecutionOutcome, lastExecutionOutcome,
@@ -54,7 +54,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
  *  Only a worker that is queued, running or waiting counts as still running: one that stopped in any
  *  other way, with or without a complete execution record, is never compared with the directory as it is. */
 async function readWorkspaceChanges(store: RunStore, run: RunRecord): Promise<Pick<WorkerCollectedResult, 'changes'>> {
-  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run,
+  const changes = await workspaceKindOf(run).changeReport(store.claims.sourceDataDir(run.id), run,
     { generation: store.workerExecutions.readWorkerExecution(run.id)?.generation, settled: !isLiveStatus(run.status) });
   return changes ? { changes } : {};
 }

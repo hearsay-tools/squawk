@@ -86,8 +86,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     expect(writes).not.toHaveBeenCalled();
     expect(prepare.mock.calls).not.toContainEqual([a.parentId]);
     expect(existsSync(join(root, '.ai/cezar/runs.db'))).toBe(false);
-    expect(store.isFallbackRun(a.parentId)).toBe(true);
-    expect(store.isFallbackRun(a.workerId)).toBe(true);
+    expect(store.claims.isFallbackRun(a.parentId)).toBe(true);
+    expect(store.claims.isFallbackRun(a.workerId)).toBe(true);
   });
 
   it('leaves a mixed legacy/fallback family untouched at boot until an explicit control adopts it', async () => {
@@ -119,7 +119,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     await manager.recover();
     store.flush();
     // Automatic recovery treats the whole family as read only: both runs keep their stored status.
-    expect(store.runOwnership(a.parentId)).toBe('fallback');
+    expect(store.claims.runOwnership(a.parentId)).toBe('fallback');
     expect(store.getRun(a.parentId)?.status).toBe(RUN_STATUS.running);
     expect(store.getRun(a.workerId)?.status).toBe(RUN_STATUS.running);
     expect(store.listRuns().map(run => run.id)).toEqual([]);
@@ -130,10 +130,10 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(databaseBytes);
     expect(readFileSync(history)).toEqual(historyBytes);
     // An explicit control adopts the family, then the existing orphan adoption recovers it.
-    expect(store.adoptFallbackFamily(a.parentId)).toBe(true);
+    expect(store.claims.adoptFallbackFamily(a.parentId)).toBe(true);
     expect(await manager.adoptOrphanedRun(a.parentId, { stop: true })).toBe(true);
     store.flush();
-    expect(store.isFallbackRun(a.workerId)).toBe(false);
+    expect(store.claims.isFallbackRun(a.workerId)).toBe(false);
     expect(store.getRun(a.parentId)?.status).not.toBe(RUN_STATUS.running);
     expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(databaseBytes);
     expect(readFileSync(history)).toEqual(historyBytes);
@@ -251,8 +251,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     expect(store.workerExecutions.readWorkerExecution(a.workerId)).toMatchObject({ phase: 'starting', generation });
     if (outcome === 'dispose') manager.dispose();
     if (outcome === 'foreign') {
-      const refusal = store.writeRefusal.bind(store);
-      vi.spyOn(store, 'writeRefusal').mockImplementation(id => id === a.workerId ? 'RUN_IN_USE_ELSEWHERE' : refusal(id));
+      const refusal = store.claims.writeRefusal.bind(store.claims);
+      vi.spyOn(store.claims, 'writeRefusal').mockImplementation(id => id === a.workerId ? 'RUN_IN_USE_ELSEWHERE' : refusal(id));
     }
     if (outcome === 'completed') expect(store.workerExecutions.commitWorkerExecutionComplete(a.workerId, generation)).toBe(true);
     release(); if (rejection) await rejection; else await recovery;

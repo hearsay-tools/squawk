@@ -168,7 +168,7 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
     expect(store.getRun(fixture.fallbackLive.parentId)?.status).toBe(RUN_STATUS.running);
     expect(store.getRun(fixture.mixedLive.parentId)?.status).toBe(RUN_STATUS.running);
     expect(store.getRun(fixture.mixed.parentId)?.archived).toBe(false);
-    expect(store.runOwnership(fixture.mixed.parentId)).toBe('fallback');
+    expect(store.claims.runOwnership(fixture.mixed.parentId)).toBe('fallback');
   } finally { manager.dispose(); store.close(); }
 
   expect(primaryIds().filter(id => fixture.fallbackIds.has(id))).toEqual([]);
@@ -203,7 +203,7 @@ it('the database guard refuses a fallback row write loudly, never claims its fam
     // The adoption intent copies the whole family first, so the same write then commits.
     db.transaction({ upserts: [upsert], deletes: [], adoptFallback: [fixture.mixed.parentId] });
     expect(primaryIds()).toEqual(expect.arrayContaining([fixture.mixed.parentId, fixture.mixed.workerId]));
-    expect(store.isFallbackRun(fixture.mixed.workerId)).toBe(false);
+    expect(store.claims.isFallbackRun(fixture.mixed.workerId)).toBe(false);
   } finally { store.close(); }
   expect(fallbackBytes()).toEqual(before);
 });

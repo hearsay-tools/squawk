@@ -197,7 +197,7 @@ describe('lifecycle delivery cases', () => {
     setRunStatus(gone, orphan.id, RUN_STATUS.running);
     gone.flush();
     crashStore(gone);
-    expect(store.adoptFamily(orphan.id)).toBe(orphan.id);
+    expect(store.claims.adoptFamily(orphan.id)).toBe(orphan.id);
     expect(store.getRun(orphan.id)?.status).toBe(RUN_STATUS.failed);
     expect(deliveries).toEqual([]);
   });
@@ -383,7 +383,7 @@ describe('each write path publishes its before, source and exit', () => {
     { key: 'commitWorkerExecutionComplete second publish', arrange: (f) => { const { workerId } = f.family(); f.store.move(workerId, 'stop-worker'); return workerId; },
       act: ({ store }, workerId) => { expect(store.workerExecutions.commitWorkerExecutionComplete(workerId, store.workerExecutions.readWorkerExecution(workerId)!.generation)).toBe(true); },
       before: { status: RUN_STATUS.cancelled }, after: { status: RUN_STATUS.cancelled } },
-    { key: 'republish', act: ({ store }, id) => store.republish(id), before: { title: 'lifecycle' }, after: { title: 'lifecycle' }, source: 'live-release' },
+    { key: 'republish', act: ({ store }, id) => store.runPins.republish(id), before: { title: 'lifecycle' }, after: { title: 'lifecycle' }, source: 'live-release' },
   ])('$key', ({ arrange, act, before, after, exit, source }) => {
     const fixture = setup();
     const f: Fixture = { ...fixture, id: fixture.created(), family: () => family(fixture) };

@@ -123,7 +123,7 @@ export function restoreOriginatingIssue(run: RunRecord): void {
 }
 
 /** Whether a stored summary names a referenced PR or issue, or a declared PR, outside `handle`'s
- *  repository: a row `rescopeRun` may change once the handle is known (`LOAD_REPAIR_SQL`, store.ts). */
+ *  repository: a row `rescopeRun` may change once the handle is known (`LOAD_REPAIR_SQL`, store-open.ts). */
 export function namesForeignReference(summary: Pick<RunRecord, 'referencedPullRequestUrl' | 'referencedIssueUrl' | 'pullRequests'>, handle: RepoHandle): boolean {
   const own = `${handle.owner}/${handle.name}`.toLowerCase();
   const declared = (summary.pullRequests ?? []).filter((entry) => entry.source === 'declared').map((entry) => entry.url);

@@ -43,7 +43,7 @@ describe('the branch sweep', () => {
       root,
       // No owned-workspace receipts here, so the family-end step reads no run.
       store: { listBranchOwners: () => owners(runs), unavailable: undefined, getRun: () => undefined, commitDelegation: () => undefined, listWorkersOf: () => [],
-        workerExecutions: { readWorkerExecution: () => undefined, workerResourcesSafe: () => false }, sourceDataDir: () => root },
+        workerExecutions: { readWorkerExecution: () => undefined, workerResourcesSafe: () => false }, claims: { sourceDataDir: () => root } },
       manager: { isActive: () => false, claimForBranchCleanup: claim },
     };
   }
