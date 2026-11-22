@@ -54,7 +54,7 @@ export class AcpSession {
       notice: message => this.events.notice(message),
       ...(options.onActivity ? { activity: options.onActivity } : {}),
     });
-    void this.transport.completion.then(() => { this.closed = true; this.cancelPermissions(); });
+    void this.transport.completion.then(() => { this.closed = true; this.cancelPermissions(); this.events.flush(); });
   }
 
   async initialize(): Promise<AcpInitializeResult> {
@@ -215,7 +215,7 @@ export class AcpSession {
     return true;
   }
 
-  close(): void { this.closed = true; this.turnCancelled = true; this.cancelPermissions(); this.transport.close(); }
+  close(): void { this.closed = true; this.turnCancelled = true; this.cancelPermissions(); this.events.flush(); this.transport.close(); }
 
   private requireSession(): string {
     if (!this.sessionId) throw new Error('ACP session is not open');

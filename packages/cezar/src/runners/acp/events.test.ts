@@ -78,3 +78,51 @@ it('ends the turn that carried an executor error as failed, and lets a prompt ad
   events.finish('end_turn');
   expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'error' });
 });
+
+const texts = (events: AcpEvents, chunks: string[]): void => {
+  for (const text of chunks) events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
+};
+
+function v1Texts(): { events: AcpEvents; v1: string[] } {
+  const v1: string[] = [];
+  const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
+  events.begin();
+  return { events, v1 };
+}
+
+it('streams v1 text per chunk but holds a line that may become a marker until it is whole', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.\n']);
+  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n\n- done', '.\n']);
+  texts(events, ['All done. C', 'E', 'Z:DONE']);
+  expect(v1).toHaveLength(3);
+  events.finish('end_turn');
+  expect(v1.slice(3)).toEqual(['All done. CEZ:DONE']);
+});
+
+it('keeps prose and a marker on one line in one v1 text', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['I will emit CEZ:PR=442']);
+  events.finish('end_turn');
+  expect(v1).toEqual(['I will emit CEZ:PR=442']);
+});
+
+it('releases a held prefix once the line grows past it', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['See C', 'I logs']);
+  expect(v1).toEqual(['See CI logs']);
+});
+
+it('emits held text once when a text listener flushes again', () => {
+  const v1: string[] = [];
+  const completed: UiEvent[] = [];
+  const events: AcpEvents = new AcpEvents({
+    event: event => { if (event.type === 'text') { v1.push(event.text); events.flush(); } },
+    uiEvent: event => { if (event.type === 'item.completed') completed.push(event); },
+  }, hooks);
+  events.begin();
+  texts(events, ['Done. CEZ:D']);
+  events.flush();
+  expect(v1).toEqual(['Done. CEZ:D']);
+  expect(completed).toHaveLength(1);
+});

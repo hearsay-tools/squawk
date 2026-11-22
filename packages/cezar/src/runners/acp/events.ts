@@ -31,6 +31,8 @@ export class AcpEvents {
   /** A provider failure reported as text in the open turn. */
   private failure: string | undefined;
   private block: UiMessageItem | UiReasoningItem | undefined;
+  /** How much of the open message block v1 `text` has carried. */
+  private released = 0;
   private tools = new Map<string, UiToolItem>();
   constructor(private readonly sink: AcpEventSink, private readonly hooks: AcpHooks) {}
 
@@ -99,7 +101,7 @@ export class AcpEvents {
     const next = new AcpEvents(sink, this.hooks);
     next.serial = this.serial; next.turnId = this.turnId;
     next.agentStarted = this.agentStarted; next.lastWork = this.lastWork; next.failure = this.failure;
-    next.block = this.block ? { ...this.block } : undefined;
+    next.block = this.block ? { ...this.block } : undefined; next.released = this.released;
     // Updates replace tool snapshots; their nested input/output values are never mutated.
     next.tools = new Map(this.tools);
     return next;
@@ -140,7 +142,7 @@ export class AcpEvents {
     }
     this.block!.text += content.text;
     this.sink.uiEvent?.({ type: 'item.delta', itemId: this.block!.id, field: kind === 'message' ? 'text' : 'reasoning', delta: content.text });
-    if (kind === 'message') this.sink.event?.({ type: 'text', text: content.text });
+    if (kind === 'message') this.release(markerSafeEnd(this.block!.text, this.released));
   }
 
   private plan(value: unknown): void {
@@ -151,9 +153,22 @@ export class AcpEvents {
     this.sink.uiEvent?.({ type: 'plan.updated', entries });
   }
 
-  private flush(): void {
-    if (this.block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...this.block } });
-    this.block = undefined;
+  /** Close the open block and release its held v1 text. The session also flushes when the
+   *  wire closes: an agent-started turn has no prompt response to finish it. */
+  flush(): void {
+    if (this.block?.kind === 'message') this.release(this.block.text.length);
+    const block = this.block;
+    // State settles before the sinks run: a listener may close the session, which flushes again.
+    this.block = undefined; this.released = 0;
+    if (block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...block } });
+  }
+
+  /** v1 `text` follows the stream chunk by chunk: each event is a progress signal. */
+  private release(end: number): void {
+    if (this.block?.kind !== 'message' || end <= this.released) return;
+    const text = this.block.text.slice(this.released, end);
+    this.released = end;
+    this.sink.event?.({ type: 'text', text });
   }
 
   private finishTools(reason: StopReason): void {
@@ -206,6 +221,24 @@ export class AcpEvents {
       this.sink.uiEvent?.({ type: 'image', itemId, mediaType: content.mimeType, data: content.data });
     }
   }
+}
+
+const MARKER = 'CEZ:';
+
+/**
+ * Where v1 text may end now. The server strips protocol markers per v1 event, line by line
+ * (`stripTaskMarkers`), and joins events into the turn text with a newline (`appendTurnText`).
+ * So an open line that holds, or may still grow into, `CEZ:` is held whole until it ends: a
+ * split would leak a marker's tail, or turn prose before `CEZ:` into a marker line.
+ */
+function markerSafeEnd(text: string, released: number): number {
+  const lineStart = text.lastIndexOf('\n') + 1;
+  const line = text.slice(lineStart);
+  let at = line.indexOf(MARKER);
+  for (let length = MARKER.length - 1; at < 0 && length > 0; length--) {
+    if (line.endsWith(MARKER.slice(0, length))) at = line.length - length;
+  }
+  return at < 0 ? text.length : Math.max(released, lineStart);
 }
 
 function toolItem(wire: AcpTool, previous: UiToolItem | undefined): UiToolItem {
