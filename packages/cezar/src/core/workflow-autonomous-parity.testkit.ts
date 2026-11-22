@@ -74,7 +74,7 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
       }
       await prepareContinuation();
       store.updateRun(runId, { autonomous: row.id !== 'A6' });
-      if (row.id === 'A10') store.appendEvent(runId, {
+      if (row.id === 'A10') store.eventLog.appendEvent(runId, {
         type: 'ask.requested', requestId: randomUUID(),
         questions: [{ header: 'Prior', question: 'A prior unanswered question?', options: [{ label: 'Yes' }, { label: 'No' }] }],
       });
@@ -94,7 +94,7 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
       // A refused cezar_ask answers the agent and leaves no run event; the registry's warning is its trace.
       const warnings = vi.spyOn(console, 'warn');
       const askRefusals = () => warnings.mock.calls.filter(([message]) => String(message).includes('wait registration refused: autonomous_run')).length;
-      const startSeq = store.readEvents(runId).length;
+      const startSeq = store.eventLog.readEvents(runId).length;
       // A native ask parks mid-turn, and nothing may answer it on the wire. Every write to a
       // session this run opens after the ask is recorded, so a synthetic answer shows when it is
       // sent, without waiting for the wire to react to it.
@@ -107,7 +107,7 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
             const original = session[method] as ((...args: unknown[]) => unknown) | undefined;
             if (!original) continue;
             Object.assign(session, { [method]: (...args: unknown[]) => {
-              if (store.readEvents(runId).slice(startSeq).some(e => e.type === 'ask.requested')) writesAfterAsk.push(method);
+              if (store.eventLog.readEvents(runId).slice(startSeq).some(e => e.type === 'ask.requested')) writesAfterAsk.push(method);
               return original.apply(session, args);
             } });
           }
@@ -127,7 +127,7 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
         () => store.getRun(runId)?.automaticWakes,
         ROW_SETTLE_MS,
       );
-      const events = store.readEvents(runId).slice(startSeq);
+      const events = store.eventLog.readEvents(runId).slice(startSeq);
       const notes = nudges(events);
       function assertCapOutcome(): void {
         expect(store.getRun(runId)?.status).toBe('waiting');

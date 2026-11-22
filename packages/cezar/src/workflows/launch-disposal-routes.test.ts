@@ -82,7 +82,7 @@ describe('launch disposal routes', { timeout: 30_000 }, () => {
     if (outcome === 'stop') expect(f.manager.cancel(run.id)).toBeTruthy();
     if (outcome === 'finish') expect(f.manager.finish(run.id)).toBe(true);
     if (outcome === 'ordinary') expect(f.store.getRun(run.id)?.waits?.length ?? 0).toBe(0);
-    const eventsBefore = f.store.readEvents(run.id).length;
+    const eventsBefore = f.store.eventLog.readEvents(run.id).length;
     f.manager.dispose(); sessions.at(-1)!.close(outcome === 'failure');
     await fixtureWorkSettled(f.root);
     const record = f.store.getRun(run.id)!;
@@ -90,7 +90,7 @@ describe('launch disposal routes', { timeout: 30_000 }, () => {
     expect(record.status).toBe(status);
     if (outcome === 'preserve' || outcome === 'failure') {
       expect(record.steps.at(-1)?.tokensUsed).toBe(0);
-      expect(f.store.readEvents(run.id).slice(eventsBefore).filter(event => event.type === 'session.ended' || event.type === 'session.error')).toEqual([]);
+      expect(f.store.eventLog.readEvents(run.id).slice(eventsBefore).filter(event => event.type === 'session.ended' || event.type === 'session.error')).toEqual([]);
     }
     expect(record.steps.map(step => step.status)).toEqual(path === 'fresh' ? [status] : ['done', status]);
   });

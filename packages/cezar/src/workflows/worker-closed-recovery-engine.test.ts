@@ -28,7 +28,7 @@ describe('restart recovery of a running worker', { timeout: 30_000 }, () => {
       return open(...args);
     });
     await restart();
-    await until(() => store.readEvents(w.id).some(event => event.type === 'lifecycle' && event.message === 'cezar restarted — resuming the interrupted task from its last session'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'lifecycle' && event.message === 'cezar restarted — resuming the interrupted task from its last session'));
     await until(() => store.getRun(w.id)?.status === RUN_STATUS.running && manager.isActive(w.id));
     expect(store.getRun(w.id)?.delegation).toMatchObject({ executionRevision: 1 });
     expect(readFileSync(edit, 'utf8')).toBe('uncommitted edit');

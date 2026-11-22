@@ -57,7 +57,7 @@ export function deadlineCells(runners: string[], it: typeof registerTest = regis
             expect(store.getRun(run.id)?.automaticWakes).toBe(budget);
             expect(store.getRun(run.id)?.waits).toContainEqual(expect.objectContaining({ id: waits[3]!.id, phase: WAIT_PHASE.open }));
           }
-          expect(store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).includes('cap reached'))).toEqual([]);
+          expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).includes('cap reached'))).toEqual([]);
         });
       }
     }

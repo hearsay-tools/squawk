@@ -103,7 +103,7 @@ export class StepSession {
     const stepProfile = await sessionEvents.stepProfileFor(this.context, this.sharedHost, runId, stepBackend, { stepId: step.id });
     if (typeof stepProfile === 'string') return stepProfile;
     await cleanupTaskWorktreeSkills(state.liveSession.cwd, this.context.store.getRun(runId)?.worktreePath, this.context.repoRoot,
-      message => this.context.store.appendEvent(runId, { type: 'note', message }));
+      message => this.context.store.eventLog.appendEvent(runId, { type: 'note', message }));
     await this.runSkills.loadRunSkills(state, stepBackend, stepProfile);
     let skill: import('../../core/agent-runner.ts').SkillTrigger | undefined;
     try { skill = await this.openingSkill(runId, state, step, opening); }

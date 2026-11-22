@@ -57,12 +57,12 @@ export function watchProviderRuntimeAuthFailures(
     if (!report) return;
     if (report.transitioned) onProviderStatus(report.status);
 
-    const duplicate = store.readEvents(runId).some((candidate) =>
+    const duplicate = store.eventLog.readEvents(runId).some((candidate) =>
       candidate.type === 'provider-auth-required'
       && candidate.provider === provider
       && candidate.authFailureId === report.status.authFailureId);
     if (!duplicate) {
-      store.appendEvent(runId, {
+      store.eventLog.appendEvent(runId, {
         type: 'provider-auth-required',
         provider,
         authFailureId: report.status.authFailureId,

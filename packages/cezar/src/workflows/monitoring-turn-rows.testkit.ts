@@ -60,12 +60,12 @@ async function monitoringSurvivesAck({ runId, send, attention, run }: RowContext
   await send(script(WAIT, thenSay(ACK_TEXT)));
   attention('monitoring', false);
   const wait = expectAgentTimer(run());
-  const boundaries = store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+  const boundaries = store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
   fireCapturedTimer(wait.id);
-  await until(() => store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('automatic timer wake-up (1/')));
+  await until(() => store.eventLog.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('automatic timer wake-up (1/')));
   // The fired timer reads `waiting` until its wake is admitted; the wake's own turn ends it.
   // Its mock response names no wait or done.
-  await until(() => store.readEvents(runId).filter(event => event.type === 'turn-end').length > boundaries && run().status === 'waiting' && !agentTimer(run()));
+  await until(() => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length > boundaries && run().status === 'waiting' && !agentTimer(run()));
   attention('needs you', true);
 }
 function sawMonitoringDelivery(calls: TaskWebhookPayload[]): void {
@@ -78,7 +78,7 @@ async function proseQuestionLeavesMonitoring({ runId, send, attention, run }: Ro
   attention('monitoring', false);
   expectAgentTimer(run());
   expect(hasPendingAsk(store, runId)).toBe(false);
-  expect(store.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
+  expect(store.eventLog.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
 }
 // Live workers alone keep a markerless turn monitoring: the `monitoring-line` timer.
 async function reviewRequestLeavesMonitoring({ runId, send, attention, run }: RowContext): Promise<void> {
@@ -86,7 +86,7 @@ async function reviewRequestLeavesMonitoring({ runId, send, attention, run }: Ro
   attention('monitoring', false);
   expect(monitoringWakeOf(run())).toBeDefined();
   expect(hasPendingAsk(store, runId)).toBe(false);
-  expect(store.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
+  expect(store.eventLog.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
 }
 async function withLiveWorker({ runId }: RowContext): Promise<void> {
   store.commitDelegation([{ id: runId, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
@@ -130,21 +130,21 @@ async function idleClosureKeepsQuestion(ctx: RowContext): Promise<void> {
   await answerClearsMonitoringAfterIdleClosure(ctx);
 }
 async function answerClearsMonitoringAfterIdleClosure({ runId, attention, run, idleClock }: RowContext): Promise<void> {
-  const askSeq = store.readEvents(runId).filter(event => event.type === 'ask.requested').at(-1)!.seq;
+  const askSeq = store.eventLog.readEvents(runId).filter(event => event.type === 'ask.requested').at(-1)!.seq;
   // Other observed wait timers stay frozen: this row expires only the idle close.
   expect(idleClock.pending).toBe(1);
   idleClock.fire(idleClock.captured - 1);
   await until(() => !manager.isActive(runId));
   await Promise.all(executions);
-  expect(store.readEvents(runId)).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'lifecycle', message: `session closed after ${IDLE_TIMEOUT_MS / 60_000}m of inactivity` })]));
+  expect(store.eventLog.readEvents(runId)).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'lifecycle', message: `session closed after ${IDLE_TIMEOUT_MS / 60_000}m of inactivity` })]));
   expect(hasPendingAsk(store, runId)).toBe(true);
   attention('needs you', true);
-  const boundaries = store.readEvents(runId).filter(event => event.type === 'turn-end').length;
+  const boundaries = store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length;
   expect(manager.continueRun(runId, { text: script(WAIT, thenSay(ACK_TEXT)) }).ok).toBe(true);
-  await until(() => run().status === 'waiting' && store.readEvents(runId).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
+  await until(() => run().status === 'waiting' && store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
   attention('monitoring', false);
   expect(hasPendingAsk(store, runId)).toBe(false);
-  expect(store.readEvents(runId).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq)).toBe(true);
+  expect(store.eventLog.readEvents(runId).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq)).toBe(true);
 }
 
 async function structuredAskSurvivesAck(ctx: RowContext): Promise<void> {
@@ -152,8 +152,8 @@ async function structuredAskSurvivesAck(ctx: RowContext): Promise<void> {
   await send(script(WAIT, ASK, thenSay(ACK_TEXT)));
   attention('needs you', true);
   expect(hasPendingAsk(store, runId)).toBe(true);
-  expect(store.readEvents(runId).filter(event => event.type === 'ask.requested').at(-1)?.questions).toEqual(QUESTIONS);
-  expect(store.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
+  expect(store.eventLog.readEvents(runId).filter(event => event.type === 'ask.requested').at(-1)?.questions).toEqual(QUESTIONS);
+  expect(store.eventLog.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
   await answerClearsMonitoringAfterIdleClosure(ctx);
 }
 
@@ -172,7 +172,7 @@ async function doneRefusedBesideQuestion({ runId, send, attention, run }: RowCon
   attention('needs you', true);
   expect(run().status).toBe(RUN_STATUS.waiting);
   expect(hasPendingAsk(store, runId)).toBe(true);
-  expect(store.readEvents(runId).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
+  expect(store.eventLog.readEvents(runId).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
   expect(manager.isActive(runId)).toBe(true);
 }
 
@@ -210,9 +210,9 @@ export async function runMonitoringRow(backend: string, mode: 'fresh' | 'continu
     expect(projectStatus(record as unknown as ApiRun, 'http://localhost/task')).toMatchObject({ attentionLabel: label });
   };
   const send = async (prompt: string) => {
-    const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
+    const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
     expect(manager.sendMessage(p.id, [{ type: 'text', text: prompt }])).toBe(true);
-    await until(() => store.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
+    await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries && semaphore.busy() === 0);
   };
   const ctx: RowContext = { backend, runId: p.id, run, attention, send, idleClock };
   const spec = ROW_SPECS[row.id];
@@ -248,7 +248,7 @@ export function registerAutonomousProse(backend: string, mode: 'fresh' | 'contin
     }
     await until(() => store.getRun(p.id)?.status === 'waiting' || !manager.isActive(p.id));
     expect(store.getRun(p.id)?.status).toBe('done');
-    expect(store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('autonomous — continuing without pausing'))).toBe(true);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('autonomous — continuing without pausing'))).toBe(true);
   });
 
 }

@@ -21,8 +21,8 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       const { runId, parentRunId } = fixture;
       let { store, manager } = fixture;
       manager.enqueueOwnedRun(runId);
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'ask.requested'));
-      const ask = store.readEvents(runId).find(event => event.type === 'ask.requested')!;
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'ask.requested'));
+      const ask = store.eventLog.readEvents(runId).find(event => event.type === 'ask.requested')!;
       const requestId = randomUUID();
       // The worker's question is routed to the parent first: its message stays in the ledger.
       await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
@@ -51,7 +51,7 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       if (portable) {
         await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
         // The beside turn ends and parks for the question again before the restart.
-        await waitFor(() => inputs.every(input => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(input.text))));
+        await waitFor(() => inputs.every(input => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(input.text))));
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
       }
       // Delivered beside a portable question (one submission), held behind a native one.
@@ -61,16 +61,16 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       expect(store.getRun(runId)?.agentInputs).toEqual(beforeAnswer);
       // The card stays answerable either way.
       expect(question()).toMatchObject({ askSeq: ask.seq });
-      expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
-      expect(store.readEvents(runId).filter(event => event.type === 'user-message')).toEqual([]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'user-message')).toEqual([]);
 
       ({ store, manager } = await fixture.restart());
       replay(); replay();
       expect(manager.continueRun(runId).ok).toBe(false);
       expect(store.getRun(runId)?.agentInputs).toEqual(beforeAnswer);
       expect(question()).toMatchObject({ askSeq: ask.seq });
-      expect(store.readEvents(runId).filter(event => event.type === 'ask.requested')).toEqual([ask]);
-      expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'ask.requested')).toEqual([ask]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
 
       // The worker's own question is its parent's to answer (hearsay-tools/cezarion#2410).
       expect(manager.continueRun(runId, { text: 'Vitest' }).ok).toBe(false);
@@ -78,33 +78,33 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
       for (const input of inputs) {
-        const echoed = store.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(input.text));
+        const echoed = store.eventLog.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(input.text));
         expect(echoed).toHaveLength(1);
         expect(String(echoed[0]!.text)).toContain(JSON.stringify({ id: input.id, ...input.conversation }));
       }
       const checkpoints = store.getRun(runId)!.agentInputs;
       // The parent's two messages go in one submission; its reply is the answer, delivered on its own.
       expect(new Set(checkpoints!.filter(entry => inputs.some(input => input.id === entry.id)).map(input => input.deliveredAt)).size).toBe(1);
-      expect(store.readEvents(runId).filter(event => event.type === 'text' &&
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'text' &&
         inputs.every(input => String(event.text).includes(input.text)))).toHaveLength(1);
       replay(); replay();
       // A genuine human follow-up is a transport barrier after repeated replay:
       // no correlated turn should have been re-enqueued by observing the ledger.
       expect(manager.sendMessage(runId, [{ type: 'text', text: 'mock:agent-echo human barrier' }])).toBe(true);
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('human barrier')));
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('human barrier')));
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
       expect(store.getRun(runId)?.agentInputs).toEqual(checkpoints);
       for (const input of inputs) {
-        expect(store.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(input.text))).toHaveLength(1);
+        expect(store.eventLog.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(input.text))).toHaveLength(1);
       }
-      const projections = store.readEvents(runId).filter(event => event.type === 'conversation-message' &&
+      const projections = store.eventLog.readEvents(runId).filter(event => event.type === 'conversation-message' &&
         inputs.some(input => input.id === (event.message as ConversationMessage).id));
       // The worker's own ask is routed to its parent (hearsay-tools/cezarion#505); a routed
       // question projects here too, so only the parent's two messages are counted. The echo turns
       // end with no wait or done, so after their nudge Squawk asks the parent too: every other
       // routed question is that fallback (hearsay-tools/cezarion#1301, § A worker's no-wait fallback).
-      const routing = store.readEvents(runId).filter(event => event.type === 'worker-question-routed');
-      const fallbackAsks = new Set(store.readEvents(runId).filter(event => event.type === 'ask.requested' &&
+      const routing = store.eventLog.readEvents(runId).filter(event => event.type === 'worker-question-routed');
+      const fallbackAsks = new Set(store.eventLog.readEvents(runId).filter(event => event.type === 'ask.requested' &&
         (event.questions as { header?: string }[])[0]?.header === WORKER_FALLBACK_HEADER).map(event => event.seq));
       expect(routing.filter(event => event.askSeq === ask.seq)).toHaveLength(1);
       expect(routing.every(event => event.askSeq === ask.seq || fallbackAsks.has(event.askSeq as number))).toBe(true);
@@ -115,8 +115,8 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
       expect(new Set(projections.map(event => event.projectionId)).size).toBe(projections.length);
       // The parent's 'Vitest' answers the worker's own question; the barrier supersedes Squawk's
       // fallback one, which no human answers (hearsay-tools/cezarion#2410).
-      expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered' && event.askSeq === ask.seq)).toEqual([expect.objectContaining({ source: 'parent' })]);
-      expect(store.readEvents(runId).filter(event => event.type === 'user-message').map(event => event.text))
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered' && event.askSeq === ask.seq)).toEqual([expect.objectContaining({ source: 'parent' })]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'user-message').map(event => event.text))
         .toEqual(['mock:agent-echo human barrier']);
     });
   }, 60_000);

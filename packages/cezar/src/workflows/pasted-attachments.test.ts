@@ -319,7 +319,7 @@ describe('pasted screenshots materialize to disk and reach the agent as file pat
     await waitForStatus(record.id, ['done', 'review']);
     const message = readStdinLines().find((line) => line.userText.includes('read my missing brief'))!;
     expect(message.userText).not.toContain(path);
-    expect(fx.store.readEvents(record.id).some((event) => event.type === 'note' && String(event.message).includes('pasted-1.pdf could not be read'))).toBe(true);
+    expect(fx.store.eventLog.readEvents(record.id).some((event) => event.type === 'note' && String(event.message).includes('pasted-1.pdf could not be read'))).toBe(true);
   }, 30_000);
 
   it('a follow-up pasted image is saved and its path is appended to the delivered message', async () => {

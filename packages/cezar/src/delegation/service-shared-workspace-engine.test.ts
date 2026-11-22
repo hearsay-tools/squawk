@@ -38,7 +38,7 @@ let onSession: (cwd: string) => void = () => {};
 
 const until = (predicate: () => boolean) => vi.waitFor(() => expect(predicate()).toBe(true), { timeout: 15_000, interval: 10 });
 const worker = (workerId: string) => f.store.getRun(workerId)!;
-const notes = (workerId: string) => f.store.readEvents(workerId).filter(event => event.type === 'note').map(event => String(event.message));
+const notes = (workerId: string) => f.store.eventLog.readEvents(workerId).filter(event => event.type === 'note').map(event => String(event.message));
 
 /** Launch the queued worker, let its session act, end the session and wait for its execution to settle. */
 async function runSession(workerId: string, act: (cwd: string) => void = () => {}): Promise<AgentRunSpec> {

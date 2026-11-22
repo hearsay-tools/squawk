@@ -227,7 +227,7 @@ describe('adopting a dead owner\'s run for a control', () => {
     // bound: the resumed run reaches the runner through the pump; the bound only ends a hang.
     await vi.waitFor(() => expect(started).toEqual([shape === 'running' ? 'runContinuation' : 'execute']), { timeout: 10_000 });
     // bound: the continuation records the user's message as it starts; the bound only ends a hang.
-    if (shape === 'running') await vi.waitFor(() => expect(store.readEvents(id).some((event) => JSON.stringify(event).includes('carry on from here'))).toBe(true), { timeout: 10_000 });
+    if (shape === 'running') await vi.waitFor(() => expect(store.eventLog.readEvents(id).some((event) => JSON.stringify(event).includes('carry on from here'))).toBe(true), { timeout: 10_000 });
     else expect(store.getRun(id)?.status).not.toBe('cancelled');
   });
 });

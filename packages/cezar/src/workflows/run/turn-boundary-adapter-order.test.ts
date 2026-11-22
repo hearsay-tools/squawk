@@ -49,7 +49,7 @@ it('wait park records the child hold before durable park then pool admission wak
 
 it('an existing human question refreshes its fact before surfacing and routing the alias', () => {
   const f = boundaryOrderFixture();
-  f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: 'question', questions: [{ header: 'Choice', question: 'Next?' }] });
+  f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: 'question', questions: [{ header: 'Choice', question: 'Next?' }] });
   const wait = makeHumanWait({ source: WAIT_SOURCE.agent, askSeq: undefined }); seedWaits(f.store, f.run.id, { waits: [wait] });
   const mark = f.humanWaits.markHumanWaitSurfaced.bind(f.humanWaits);
   vi.spyOn(f.humanWaits, 'markHumanWaitSurfaced').mockImplementation((...args) => { f.log.push('surface'); mark(...args); });

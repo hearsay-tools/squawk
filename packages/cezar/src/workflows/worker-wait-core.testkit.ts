@@ -45,7 +45,7 @@ import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 /** The test file's runners, read when a run starts one (hearsay-tools/cezarion#2939). */
 const fixtureRunners: import('../core/agent-runner.ts').RunnerFactory = backend => runnersUnderTest()(backend);
 
-export const timeline = (runId: string, afterSeq = 0) => formatTimeline(runId, store.readEvents(runId), afterSeq);
+export const timeline = (runId: string, afterSeq = 0) => formatTimeline(runId, store.eventLog.readEvents(runId), afterSeq);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.
@@ -79,7 +79,7 @@ export function captureState() { return { root, phase, checkpoints: checkpoints.
     steps: run.steps.map(step => ({ id: step.id, sessionId: step.sessionId ?? null })),
     stopping: run.stopping, execution: store.workerExecutions.readWorkerExecution(run.id),
     inputs: run.agentInputs?.map(input => ({ id: input.id, deliveredAt: input.deliveredAt })),
-    events: formatTimeline(run.id, store.readEvents(run.id).slice(-6)), })),
+    events: formatTimeline(run.id, store.eventLog.readEvents(run.id).slice(-6)), })),
 }; }
 async function settleTrackedWork(): Promise<void> {
   while (work.pending.size) await Promise.allSettled([...work.pending.keys()]);

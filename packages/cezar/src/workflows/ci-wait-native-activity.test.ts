@@ -24,7 +24,7 @@ describe('CI wait native activity', { timeout: 30_000 }, () => {
     const [session] = work.liveSessions;
     expect(work.liveSessions.size).toBe(1);
     // Counted from here: the no-wait nudge's turn came before the park (hearsay-tools/cezarion#1234).
-    const started = () => store.readEvents(run.id).filter(event => event.type === 'turn.started').length;
+    const started = () => store.eventLog.readEvents(run.id).filter(event => event.type === 'turn.started').length;
     const before = started();
     // Resume the backend itself, bypassing the manager's human-input path.
     // Native frames resume the run; it works in the monitoring slot its park kept

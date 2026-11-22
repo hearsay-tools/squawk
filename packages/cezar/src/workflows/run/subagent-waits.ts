@@ -294,7 +294,7 @@ export class SubagentWaits {
    */
   private endStoppedChildren(runId: string): boolean {
     const last = new Map<string, { item: UiToolItem; stepId: string | undefined }>();
-    for (const event of this.context.store.readEvents(runId)) {
+    for (const event of this.context.store.eventLog.readEvents(runId)) {
       const item = (event as { item?: unknown }).item as UiToolItem | undefined;
       if (item?.kind !== 'tool' || item.parentItemId !== undefined) continue;
       if (!last.has(item.id) && item.background !== true) continue;
@@ -303,7 +303,7 @@ export class SubagentWaits {
     let written = true;
     for (const { item, stepId } of last.values()) {
       if (item.status !== 'running' && item.status !== 'pending') continue;
-      try { this.context.store.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, background: true, status: 'declined' } }); }
+      try { this.context.store.eventLog.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, background: true, status: 'declined' } }); }
       catch (error) { written = false; console.warn(`[hsq] subagent end write failed: ${error instanceof Error ? error.message : String(error)}`); }
     }
     return written;

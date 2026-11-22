@@ -451,7 +451,7 @@ export class DelegationService {
     if (request.resume && !(pair.relationship === 'family' && pair.relation === 'supervised')) {
       throw new DelegationPolicyError('denied_scope', 'Only an active parent may use --resume for its owned worker');
     }
-    if (project.store.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
+    if (project.store.redaction.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
   }
   private retrySend(pair: ConversationPair, root: RunRecord, existing: ConversationMessage, requestHash: string): ConversationSendResult {
     const { project, recipient } = pair;
@@ -469,7 +469,7 @@ export class DelegationService {
     const { project, recipient, relationship } = pair;
     const peer = relationship === 'peer';
     if (resume) {
-      try { assertConversationIdFree(root, input, id => project.store.getRun(id), (runId, id) => project.store.hasProjection(runId, id)); }
+      try { assertConversationIdFree(root, input, id => project.store.getRun(id), (runId, id) => project.store.eventLog.hasProjection(runId, id)); }
       catch (error) { if (error instanceof ConversationIdInUseError) throw new DelegationPolicyError('invalid_input', error.message); throw error; }
       const fresh = freshWorkerSession(recipient) ? `${FRESH_SESSION_NOTICE}\n` : '';
       const result = project.manager.continueRun(recipient.id, {
@@ -648,7 +648,7 @@ export class DelegationService {
       authorizeSpawnReplay(caller, parent, project.id);
       const family = familyRecordOf(parent, id => project.store.getRun(id));
       if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-      if (project.store.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
+      if (project.store.redaction.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
       // A spawn that names no workspace plans the first kind the caller's grant allows.
       const choice = request.workspace ?? workspaceChoiceOf(defaultSpawnKind(parent)!);
       const refusal = sharedSpawnRefusal({ ...request, workspace: choice }) ?? (choice === 'isolated' && request.baseline === undefined ? ISOLATED_BASELINE_REFUSAL : undefined);
@@ -680,7 +680,7 @@ export class DelegationService {
       const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory });
       const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
-        parentCwd: hostDirectory, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
+        parentCwd: hostDirectory, context: request.context, containsSecret: text => project.store.redaction.containsSessionSecret(text),
       });
       return acceptSpawnedWorker({
         project, parent, family, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared,
@@ -777,7 +777,7 @@ export class DelegationService {
   async steer(caller: Caller, params: WorkerParams, value: WorkerSteerRequest) {
     const request = workerSteerRequestSchema.parse(value);
     const { project, worker } = this.target(caller, params, 'steer');
-    if (project.store.containsSessionSecret(request.text)) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
+    if (project.store.redaction.containsSessionSecret(request.text)) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
     // `parentRunId` names the family record, as every agent input of a family does.
     const state = project.manager.steerWorker(worker.id, { id: randomUUID(), source: 'agent', parentRunId: familyRecordOf(worker, id => project.store.getRun(id))?.id ?? caller.runId, text: request.text, createdAt: new Date().toISOString() });
     return { workerId: worker.id, state };

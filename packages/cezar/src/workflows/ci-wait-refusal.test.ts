@@ -62,7 +62,7 @@ describe('CI registration beside worker waits — hearsay-tools/cezarion#1235', 
       await until(() => waitOf(store.getRun(run.id))?.phase === 'wake-pending');
       const queued = () => store.getRun(run.id)?.agentInputs?.find(input => input.id === wait.id);
       expect(queued()?.deliveredAt).toBeUndefined();
-      expect(store.readEvents(run.id).filter(e => e.type === 'turn-end')).toHaveLength(0);
+      expect(store.eventLog.readEvents(run.id).filter(e => e.type === 'turn-end')).toHaveLength(0);
       // The same CI registration is answered again while the worker result is owed.
       await expect(callSquawkWait({ kind: WAIT_KIND.pr, pr }, tools.env)).resolves.toMatchObject({ ok: true, kind: WAIT_KIND.pr });
       expect(ciWaitOf(run.id)?.id).toBe(ci!.id);
@@ -107,7 +107,7 @@ describe('CI registration beside worker waits — hearsay-tools/cezarion#1235', 
             outcomes: [{ workerId: child.id, status: WORKER_OUTCOME_STATUS.done }] });
           expect(store.getRun(run.id)?.agentInputs?.filter(input => input.id === wait.id && !input.deliveredAt)).toEqual([]);
         }
-        expect(store.readEvents(run.id).filter(event => event.type === 'turn-end')).toHaveLength(0);
+        expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end')).toHaveLength(0);
         // A new worker wait and then CI can both register before releasing the held turn.
         const next = manager.registerWorkerWait(run.id, workerWaitRequestSchema.parse({ workerIds: [child.id] }));
         manager.reconcileWorkerWaits();

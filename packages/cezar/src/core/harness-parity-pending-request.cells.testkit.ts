@@ -60,13 +60,13 @@ export const PENDING_REQUEST_GROUPS = {
               const observation = await driveRun(backend, scenario, settled, 30_000, undefined, {
                 env: { CEZ_MOCK_RELEASE_FILE: release },
                 during: async ({ store, manager, runId }) => {
-                  await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
-                  const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+                  await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
+                  const request = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
                   requestId = request.requestId as string;
                   expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
                   expect(manager.sendMessage(runId, [{ type: 'text', text: 'accept' }])).toBe(false);
                   writeFileSync(release, 'go');
-                  await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.resolved' && event.requestId === requestId));
+                  await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.resolved' && event.requestId === requestId));
                   // The retired card answers nothing, whether or not the run has moved on yet.
                   expect(manager.respondPermission(runId, requestId, (request.options as Array<{ id: string }>)[0]!.id)).toBe(false);
                 },
@@ -98,7 +98,7 @@ export const PENDING_REQUEST_GROUPS = {
           const observation = await driveRun(backend, 'approval-reply-fails', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
             beforeStart: context => { repoRoot = context.repoRoot; },
             during: async ({ store, manager, runId }) => {
-              const requests = () => store.readEvents(runId).filter(event => event.type === 'permission.requested');
+              const requests = () => store.eventLog.readEvents(runId).filter(event => event.type === 'permission.requested');
               await waitFor(() => requests().length === 1);
               const first = requests()[0]!;
               const firstChoice = optionPicked(first, pick);
@@ -113,10 +113,10 @@ export const PENDING_REQUEST_GROUPS = {
                 expect(response.status).toBe(200);
                 expect(await response.json()).toEqual({ delivered: true });
                 await waitFor(() => requests().length === 2 &&
-                  store.readEvents(runId).some(event => event.type === 'permission.resolved' && event.requestId === first.requestId));
+                  store.eventLog.readEvents(runId).some(event => event.type === 'permission.resolved' && event.requestId === first.requestId));
               } finally { stopRecordChange(); }
               for (const change of changes) expect(change).toEqual({ status: RUN_STATUS.waiting, hasPendingPermission: true });
-              const events = store.readEvents(runId);
+              const events = store.eventLog.readEvents(runId);
               const fresh = requests()[1]!;
               freshId = fresh.requestId as string;
               expect(freshId).not.toBe(first.requestId);
@@ -270,10 +270,10 @@ export const PENDING_REQUEST_GROUPS = {
               workflowDef,
               beforeStart: context => { repoRoot = context.repoRoot; },
               during: async ({ store, manager, runId }) => {
-                await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+                await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
                 expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
                 expect(store.getRun(runId)?.steps.map(step => step.status)).toEqual(steps.map((_, index) => index === 0 ? STEP_STATUS.waiting : STEP_STATUS.pending));
-                const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+                const request = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
                 allowId = (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes('allow once'))!.id;
                 const response = await answerThroughRoute(repoRoot, store, manager, runId, request, allowId);
                 expect(response.status).toBe(200);
@@ -296,9 +296,9 @@ export const PENDING_REQUEST_GROUPS = {
           const observation = await driveRun(backend, 'cezar-done', run => !!run && ['done', 'review'].includes(run.status), 30_000, async ({ store, manager, runId }) => {
             await waitFor(() => !manager.isActive(runId));
             expect(manager.continueRun(runId, { text: promptFor(backend, 'permission-late') })).toEqual({ ok: true });
-            await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+            await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
             expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
-            const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+            const request = store.eventLog.readEvents(runId).find(event => event.type === 'permission.requested')!;
             allowId = (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes('allow once'))!.id;
             const response = await answerThroughRoute(repoRoot, store, manager, runId, request, allowId);
             expect(await response.json()).toEqual({ delivered: true });
@@ -318,7 +318,7 @@ export const PENDING_REQUEST_GROUPS = {
           const observation = await driveRun(backend, 'permission-late', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
             beforeStart: context => { repoRoot = context.repoRoot; },
             during: async ({ store, manager, runId }) => {
-              await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+              await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'permission.requested'));
               expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
               expect(manager.finishBlockedReason(runId)).toBeUndefined();
               const response = await apiRequest(createApp({ home: testHome(), repoRoot, store, manager, version: 'test' }), `/api/v1/runs/${runId}/finish`, { method: 'POST' });

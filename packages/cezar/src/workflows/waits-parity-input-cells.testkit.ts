@@ -59,7 +59,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
       await until(() => settled(run.id, ci.id)?.phase === 'delivered' && prompted(runner, `CI wait observation ${ci.id}`).length > 0);
       expect(prompted(runner, `CI wait observation ${ci.id}`).at(-1)).not.toContain('Please also update the docs');
       expect(inputsFor(run.id, ci.id)).toHaveLength(1);
-      expect(store.readEvents(run.id).filter(event => event.type === 'user-message').map(event => event.text)).toContain(text);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'user-message').map(event => event.text)).toContain(text);
     });
 
     it(`${runner} U7 cezar_wait and ScheduleWakeup land in the same wait list`, async () => {
@@ -112,7 +112,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
         const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
         try {
           checkpoint(`u8-blocker-started:${blocker.id}`);
-          await until(() => store.readEvents(blocker.id).some(event => event.type === 'turn.started'));
+          await until(() => store.eventLog.readEvents(blocker.id).some(event => event.type === 'turn.started'));
           const parkedSession = sessionOf(parked.id);
           checkpoint('u8-wake-delivered');
           if (kind === 'pr') external.settle(); else fireTimer(wait.id);
@@ -145,7 +145,7 @@ export function inputCells(runners: string[], it: typeof registerTest = register
         const restoreSessionStore = useSessionStore(runner, join(root, 'u8l-blocker-sessions.json'));
         try {
           const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['hold-gated']!, runner });
-          await until(() => store.readEvents(blocker.id).some(event => event.type === 'turn.started'));
+          await until(() => store.eventLog.readEvents(blocker.id).some(event => event.type === 'turn.started'));
         } finally {
           restoreSessionStore();
         }
@@ -159,15 +159,15 @@ export function inputCells(runners: string[], it: typeof registerTest = register
         }
         fireTimer(wait.id);
         await until(() => store.getRun(parked.id)?.waits?.find(entry => entry.id === wait.id)?.phase === 'resolved');
-        expect(store.readEvents(task.id).some(event => event.type === 'turn.started')).toBe(false);
+        expect(store.eventLog.readEvents(task.id).some(event => event.type === 'turn.started')).toBe(false);
         expect(inputsFor(parked.id, wait.id).every(input => !input.deliveredAt)).toBe(true);
       } finally { writeFileSync(release, ''); }
       await until(() => settled(parked.id, wait.id)?.phase === 'delivered');
       const deliveredAt = Date.parse(settled(parked.id, wait.id)!.deliveredAt!);
-      await until(() => store.readEvents(task!.id).some(event => event.type === 'turn.started'));
+      await until(() => store.eventLog.readEvents(task!.id).some(event => event.type === 'turn.started'));
       // A mock with a session store: the task's own store left the parked session open.
       if (sessionStoreEnv(runner)) expect(sessionOf(parked.id).open).toBe(true);
-      const taskStarted = Date.parse(store.readEvents(task.id).find(event => event.type === 'turn.started')!.ts);
+      const taskStarted = Date.parse(store.eventLog.readEvents(task.id).find(event => event.type === 'turn.started')!.ts);
       expect(taskStarted).toBeGreaterThanOrEqual(deliveredAt);
       await until(() => terminal.includes(store.getRun(task!.id)?.status ?? '') || store.getRun(task!.id)?.status === 'waiting');
     });

@@ -33,7 +33,7 @@ it('native ask routes only after synchronous release withdraws expired parent ho
   expect(atReturn?.delegation?.role).toBe('root');
   expect(atReturn?.delegation?.role === 'root' ? atReturn.delegation.conversation?.messages ?? [] : []).toEqual([]);
   expect(atReturn?.agentInputs ?? []).toEqual([]);
-  const events = f.store.readEvents(worker.id);
+  const events = f.store.eventLog.readEvents(worker.id);
   expect(events.filter(event => event.type === 'human-ask-closed')).toEqual([
     expect.objectContaining({ reason: 'parent-stopped' }),
   ]);

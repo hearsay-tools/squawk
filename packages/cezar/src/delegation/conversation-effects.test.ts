@@ -48,7 +48,7 @@ describe('committed message effects', () => {
       vi.spyOn(f.manager, 'deliverConversationInput').mockImplementation(() => {});
       expect(await f.service.send(f.caller, request)).toEqual({ ...receipt, effect: 'unchanged' });
       expect(f.store.getRun(recipientRunId)?.agentInputs).toHaveLength(1);
-      expect(f.store.readEvents(recipientRunId).filter(event => event.type === 'conversation-message')).toHaveLength(1);
+      expect(f.store.eventLog.readEvents(recipientRunId).filter(event => event.type === 'conversation-message')).toHaveLength(1);
     });
   }
 

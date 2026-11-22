@@ -110,7 +110,7 @@ describe('RunManager monitoring timers', () => {
       const events = readFileSync(join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8');
       return events.includes('automatic monitoring wake-up (1/40)');
     });
-    const events = fixture.store.readEvents(record.id);
+    const events = fixture.store.eventLog.readEvents(record.id);
     expect(events.some(event => event.type === 'note' && String(event.message).includes('(1/40)'))).toBe(true);
     expect(events.some(event => event.type === 'user-message')).toBe(false);
   }, 30_000);

@@ -101,7 +101,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     // Earlier human amendments and a current ask must not disappear when the
     // lifecycle opening is superseded. Acceptance alone is not answer delivery.
     store.updateRun(p.id, { queuedMessages: [{ id: randomUUID(), text: 'earlier human update', createdAt: new Date().toISOString() }] });
-    store.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
+    store.eventLog.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
       header: 'Choice', question: 'Which option?', options: [{ label: 'One' }, { label: 'Two' }],
     }] });
     const queued = manager.enqueueMessage(p.id, [{ type: 'text', text: 'new human update' },
@@ -112,17 +112,17 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.agentInputs?.map(input => [input.id, input.deliveredAt])).toEqual([[wait.id, undefined]]);
     expect(store.getRun(p.id)?.continuationMessage?.origin).toBe('human');
     expect(store.getRun(p.id)?.status).toBe('queued'); expect(semaphore.busy()).toBe(1);
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
     store.flush();
     const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.flush();
     manager.cancel(w.id);
     await until(() => store.getRun(p.id)?.status === 'waiting');
-    const opening = store.readEvents(p.id).find(event => event.type === 'user-message');
+    const opening = store.eventLog.readEvents(p.id).find(event => event.type === 'user-message');
     expect(String(opening?.text).match(/new human update/g)).toHaveLength(1);
     expect(String(opening?.text).indexOf('earlier human update')).toBeLessThan(String(opening?.text).indexOf('new human update'));
     expect(opening?.images).toEqual(queued?.images);
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
   });
 
   it('a failed queued human message checkpoint publishes no wait, wake, message or admission changes', async () => {
@@ -164,24 +164,24 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
           };
         }
       } finally { release(); }
-      await until(() => store.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('startup human update')));
+      await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('startup human update')));
       if (crash === 'checkpoint-failure') {
         // hearsay-tools/cezarion#1233/#1235: the result is still owed, so the failed session counts a
         // failed wake delivery and the run waits for the retry instead of settling `failed`.
         await until(() => store.getRun(p.id)?.error?.includes('human input delivery checkpoint failed') === true);
         expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting, waitDeliveryFailures: 1 });
         expect(store.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('startup human update');
-        expect(store.readEvents(p.id).filter(event => event.type === 'user-message' && String(event.text).includes('startup human update'))).toHaveLength(1);
+        expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'user-message' && String(event.text).includes('startup human update'))).toHaveLength(1);
         return;
       }
       if (crash === 'after-delivery') {
         expect(store.getRun(p.id)?.queuedMessages?.some(message => message.text === 'startup human update')).not.toBe(true);
         store.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
       }
-      const eventStart = store.readEvents(p.id).length;
+      const eventStart = store.eventLog.readEvents(p.id).length;
       await restart(false, checkpoint!);
       await until(() => store.getRun(p.id)?.status === 'waiting');
-      const afterRestart = store.readEvents(p.id).slice(eventStart).filter(event => event.type === 'user-message');
+      const afterRestart = store.eventLog.readEvents(p.id).slice(eventStart).filter(event => event.type === 'user-message');
       const mentions = afterRestart.flatMap(event => String(event.text).match(/startup human update/g) ?? []);
       expect(mentions).toHaveLength(crash === 'before-delivery' ? 1 : 0);
       if (crash === 'before-delivery') expect(afterRestart.find(event => String(event.text).includes('startup human update'))?.images).toHaveLength(1);

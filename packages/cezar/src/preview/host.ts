@@ -705,7 +705,7 @@ export class PreviewHost implements PreviewHostLike {
     const { runId, store } = entry.ctx;
     if (!store.getRun(runId)) return;
     const reason = dev.stopReason;
-    store.appendEvent(runId, {
+    store.eventLog.appendEvent(runId, {
       type: 'preview.server-state',
       port,
       state,

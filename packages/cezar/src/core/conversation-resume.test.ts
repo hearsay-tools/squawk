@@ -48,15 +48,15 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
         await waitFor(() => !!store.getRun(runId)?.agentInputs?.find(input => input.id === request.id)?.deliveredAt);
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
         expect(store.getRun(runId)?.continuationMessage).toBeUndefined();
-        const echoed = store.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(request.text));
+        const echoed = store.eventLog.readEvents(runId).filter(event => event.type === 'text' && String(event.text).includes(request.text));
         expect(echoed)
           .toEqual([expect.objectContaining({ text: expect.stringContaining(request.id) })]);
         if (mode === 'restart') {
           expect(String(echoed[0]!.text)).toContain('Amended task before capacity admission');
           expect(String(echoed[0]!.text)).toContain('Keep the later human context');
         }
-        expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
-        expect(store.readEvents(runId).filter(event => event.type === 'user-message' && String(event.text).includes(request.text))).toEqual([]);
+        expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+        expect(store.eventLog.readEvents(runId).filter(event => event.type === 'user-message' && String(event.text).includes(request.text))).toEqual([]);
         manager.finish(runId);
         await waitFor(() => !manager.isActive(runId));
         const revision = structuredClone(store.getRun(runId)?.delegation);

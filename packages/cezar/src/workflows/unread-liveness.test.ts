@@ -26,14 +26,14 @@ describe('unread input liveness bound (#505)', { timeout: 45_000 }, () => {
     vi.stubEnv('CEZ_MOCK_DROP_LINES', 'drop-me'); vi.stubEnv('CEZ_MOCK_DROP_ONCE', '1');
     const { p, id } = await sendDropped('drop-me once');
     await until(() => !!inputOf(p.id, id)?.consumedAt);
-    expect(store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('did not read'))).toBe(true);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('did not read'))).toBe(true);
     await until(() => parked(p.id));
   });
 
   it('stops tracking input the harness never reads, and the run parks normally', async () => {
     vi.stubEnv('CEZ_MOCK_DROP_LINES', 'drop-me');
     const { p, id } = await sendDropped('drop-me always');
-    await until(() => store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('did not confirm')));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes('did not confirm')));
     expect(inputOf(p.id, id)).toMatchObject({ deliveredAt: expect.any(String) });
     expect(inputOf(p.id, id)?.awaitingRead).toBeUndefined();
     await until(() => parked(p.id));

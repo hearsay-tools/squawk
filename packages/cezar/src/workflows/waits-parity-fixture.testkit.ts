@@ -145,12 +145,12 @@ function observeBackoffs() {
 export const stepStatus = (id: string, stepId: string) => store.getRun(id)?.steps.find(step => step.id === stepId)?.status;
 export const fireTimer = (waitId: string) => fireCapturedTimer(waitId);
 export const flushMicrotasks = async () => { for (let n = 0; n < 5; n++) await Promise.resolve(); };
-export const turnEnds = (id: string) => store.readEvents(id).filter(event => event.type === 'turn-end').length;
+export const turnEnds = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'turn-end').length;
 export const viaOf = (id: string, via: Wait['via']) => store.getRun(id)?.waits?.find((wait): wait is TimedWait => wait.via === via && wait.kind !== 'human');
 export const parkedOn = (id: string, wait: Wait | undefined) => wait?.phase === 'open' && store.getRun(id)?.status === 'waiting';
 export const prompted = (runner: string, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
-export const asks = (id: string) => store.readEvents(id).filter(event => event.type === 'ask.requested');
-export const answered = (id: string, askSeq: number) => store.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
+export const asks = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'ask.requested');
+export const answered = (id: string, askSeq: number) => store.eventLog.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
 export const pendingQuestion = (id: string) => hasPendingAsk(store, id) === true && store.getRun(id)?.status === 'waiting';
 
 // hearsay-tools/cezarion#1234: one human wait per run, shown as one card.
@@ -293,12 +293,12 @@ export async function ignoreRefusal(runner: string, id: string, reply: DoneReply
   checkpoint('completion-refusal-repark');
   await until(() => store.getRun(id)?.status === 'waiting' && parked(), () => timeline(id));
   expect(prompted(runner, refusal)).toHaveLength(1);
-  expect(store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toHaveLength(1);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toHaveLength(1);
   return { first, second, refusal, entry: workerWaits(id)[0]! };
 }
 
-export const nudgeNotes = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE));
-export const noReplyNotes = (id: string) => store.readEvents(id).filter(event => event.type === 'note' && event.message === COMPLETION_NO_REPLY_NOTE);
+export const nudgeNotes = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE));
+export const noReplyNotes = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && event.message === COMPLETION_NO_REPLY_NOTE);
 
 /** A harness that acknowledges Squawk's completion refusal on its own native wire and never
  *  answers it (hearsay-tools/cezarion#1301): the mocks' `mock:ack-only` reply accepts the prompt,
@@ -389,11 +389,11 @@ export const timerText = (wait: Wait, note: string) => `Timer ${wait.id} fired: 
 export async function expectAdmissionRetryCleared(runner: string, id: string) {
   expect(admissionClock.captured).toBeGreaterThan(0);
   expect(admissionClock.pending).toBe(0);
-  const before = structuredClone({ inputs: store.getRun(id)?.agentInputs, events: store.readEvents(id),
+  const before = structuredClone({ inputs: store.getRun(id)?.agentInputs, events: store.eventLog.readEvents(id),
     failures: store.getRun(id)?.waitDeliveryFailures, attempts: ciNativeMessages(runner, root) });
   await admissionClock.advance(1001);
   await semaphore.release();
-  expect({ inputs: store.getRun(id)?.agentInputs, events: store.readEvents(id),
+  expect({ inputs: store.getRun(id)?.agentInputs, events: store.eventLog.readEvents(id),
     failures: store.getRun(id)?.waitDeliveryFailures, attempts: ciNativeMessages(runner, root) }).toEqual(before);
 }
 export async function timerWaits(id: string) {

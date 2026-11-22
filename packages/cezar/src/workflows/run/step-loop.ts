@@ -296,7 +296,7 @@ export class StepLoop {
     if (state) { state.liveSession.clearRepoRootRelease(); clearAutosaveTimer(state); }
     this.line.enqueueJob(runId, atTaskHead.requeueJob(workflow, input, startAt));
     this.host.move(runId, 'requeue', startAt !== undefined && startAt > 0 ? {} : { startedAt: undefined });
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'note',
       message: finishHeld ? 'held in the queue — parent finish is pending' : 'held in the queue — this agent account is waiting out a usage limit',
     });

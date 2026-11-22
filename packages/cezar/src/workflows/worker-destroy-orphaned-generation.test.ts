@@ -101,7 +101,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         await other.recover();
         await until(() => !other.isActive(w.id) && reopened.getRun(w.id)?.status !== 'queued');
         expect(launches()).toBe(2);
-        expect(reopened.readEvents(w.id).some(event => event.type === 'lifecycle' && String(event.message).includes('processes are gone'))).toBe(true);
+        expect(reopened.eventLog.readEvents(w.id).some(event => event.type === 'lifecycle' && String(event.message).includes('processes are gone'))).toBe(true);
         expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
@@ -177,7 +177,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       // The question waits for the parent's answer (hearsay-tools/cezarion#2410): a parent that may
       // not message its workers would have Squawk answer it, and resume the worker, instead.
       reopened.commitDelegation([{ id: parent.id, delegation: { role: 'root', permissions: ['spawn', 'steer'], receipts: [] } }]);
-      reopened.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
+      reopened.eventLog.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
         header: 'Choice', question: 'Which option?', options: [{ label: 'A' }, { label: 'B' }],
       }] });
       try {

@@ -708,7 +708,7 @@ export class RunManager {
     if (removedRunner !== undefined) {
       const error = removedRunnerMessage(removedRunner);
       this.#move(runId, 'fail-start', { error, finishedAt: new Date().toISOString() });
-      this.#store.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${error}` });
+      this.#store.eventLog.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${error}` });
       this.#modules.line.unmarkStarting(runId);
       return;
     }
@@ -721,7 +721,7 @@ export class RunManager {
     this.#activate(runId, state);
     this.#modules.line.unmarkStarting(runId);
     const emit = (event: { type: string; stepId?: string; [k: string]: unknown }) =>
-      this.#store.appendEvent(runId, event);
+      this.#store.eventLog.appendEvent(runId, event);
     const execution: Execution = atTaskHead.executionPayload(runId, workflow, { input: bindLaunchSource(input), startAt, state, emit });
 
     const launch = await this.#modules.stepLoop.startExecution(execution);

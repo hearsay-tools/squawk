@@ -29,7 +29,7 @@ describe('peer conversations', () => {
   const message = (recipientRunId: string, kind: ConversationSendRequest['kind'] = 'request', extra: Partial<ConversationSendRequest> = {}): ConversationSendRequest =>
     ({ id: randomUUID(), recipientRunId, kind, text: `${kind} text`, timeoutSeconds: 600, ...extra });
   const ledger = (id: string) => { const run = f.store.getRun(id); return run?.delegation?.role === 'root' ? run.delegation.conversation : undefined; };
-  const projections = (id: string) => f.store.readEvents(id).filter(event => event.type === 'conversation-message' || event.type === 'request-outcome').map(event => String(event.projectionId));
+  const projections = (id: string) => f.store.eventLog.readEvents(id).filter(event => event.type === 'conversation-message' || event.type === 'request-outcome').map(event => String(event.projectionId));
 
   it('R15 after a peer\'s deletion the requester\'s history, wait and cancel still work, and its request settles deleted', async () => {
     const b = peer();

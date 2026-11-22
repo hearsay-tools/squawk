@@ -111,7 +111,7 @@ export const RUN_GROUPS = {
                 expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting });
                 const wake = timerWakeOf(store.getRun(runId));
                 expect(wake).toBeDefined();
-                const before = store.readEvents(runId).length;
+                const before = store.eventLog.readEvents(runId).length;
                 const changes: Array<{ status: string; monitoringWakeAt?: string | undefined }> = [];
                 const recordChange = (record: NonNullable<RunObservation['record']>) => {
                   if (record.id === runId) changes.push({ status: record.status, monitoringWakeAt: timerWakeOf(record) });
@@ -120,15 +120,15 @@ export const RUN_GROUPS = {
                 try {
                   writeFileSync(release, 'go');
                   const discarded = runnerGolden(backend, 'postParkChildFrames') === 'discarded';
-                  await waitFor(() => store.readEvents(runId).slice(before).some(event =>
+                  await waitFor(() => store.eventLog.readEvents(runId).slice(before).some(event =>
                     discarded
                       ? event.type === 'usage.updated' && (event.usage as { total?: number } | undefined)?.total === 424242
                       : JSON.stringify(event).includes('Post-park child update processed.')));
                   expect({ ...store.getRun(runId), monitoringWakeAt: timerWakeOf(store.getRun(runId)) }).toMatchObject({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
                   for (const change of changes) expect(change).toEqual({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
-                  const after = store.readEvents(runId).slice(before);
+                  const after = store.eventLog.readEvents(runId).slice(before);
                   expect(after.some(event => event.type === 'turn.started')).toBe(false);
-                  const childItems = (discarded ? store.readEvents(runId).slice(0, before) : after)
+                  const childItems = (discarded ? store.eventLog.readEvents(runId).slice(0, before) : after)
                     .filter(event => event.type.startsWith('item.') && event.item && (event.item as { parentItemId?: string }).parentItemId);
                   expect(childItems.length).toBeGreaterThan(0);
                   if (discarded) expect(after.some(event => event.type.startsWith('item.'))).toBe(false);
@@ -165,7 +165,7 @@ export const RUN_GROUPS = {
                 expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting });
                 const wake = timerWakeOf(store.getRun(runId));
                 expect(wake).toBeDefined();
-                const before = store.readEvents(runId).length;
+                const before = store.eventLog.readEvents(runId).length;
                 const changes: Array<{ status: string; monitoringWakeAt?: string | undefined }> = [];
                 const recordChange = (record: NonNullable<RunObservation['record']>) => {
                   if (record.id === runId) changes.push({ status: record.status, monitoringWakeAt: timerWakeOf(record) });
@@ -173,11 +173,11 @@ export const RUN_GROUPS = {
                 const stopRecordChange = onRunWrite(store.lifecycle, recordChange);
                 try {
                   writeFileSync(release, 'go');
-                  await waitFor(() => store.readEvents(runId).slice(before).some(event => JSON.stringify(event).includes('Late hook processed.')));
+                  await waitFor(() => store.eventLog.readEvents(runId).slice(before).some(event => JSON.stringify(event).includes('Late hook processed.')));
                   expect({ ...store.getRun(runId), monitoringWakeAt: timerWakeOf(store.getRun(runId)) }).toMatchObject({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
                   for (const change of changes) expect(change).toEqual({ status: RUN_STATUS.waiting, monitoringWakeAt: wake });
-                  expect(store.readEvents(runId).slice(before).some(event => event.type === 'turn.started')).toBe(false);
-                  const hooks = store.readEvents(runId)
+                  expect(store.eventLog.readEvents(runId).slice(before).some(event => event.type === 'turn.started')).toBe(false);
+                  const hooks = store.eventLog.readEvents(runId)
                     .filter(event => event.type === 'item.completed' && (event.item as { kind?: string } | undefined)?.kind === 'hook')
                     .map(event => (event.item as { id: string }).id);
                   expect(hooks).toHaveLength(2);
@@ -215,7 +215,7 @@ export const RUN_GROUPS = {
               // plan fixture must not silently remove create_plan coverage.
               const expectedHeader = runnerDefinition(backend).mock.askResumeCases.find(entry => entry.kind === ask.kind)?.header ?? (ask.kind === 'cursor/create_plan' ? 'Plan'
                 : ask.kind === 'cursor/ask_question' ? 'Tests' : 'Library');
-              expect(store.readEvents(runId).find(event => event.type === 'ask.requested')?.questions)
+              expect(store.eventLog.readEvents(runId).find(event => event.type === 'ask.requested')?.questions)
                 .toMatchObject([{ header: expectedHeader }]);
               const statuses: string[] = [];
               const recordStatus = (run: { id: string; status: string }) => {
@@ -235,7 +235,7 @@ export const RUN_GROUPS = {
               } finally {
                 stopRecordStatus();
               }
-              const events = store.readEvents(runId);
+              const events = store.eventLog.readEvents(runId);
               expect(events.filter(event => event.type === 'ask.requested')).toHaveLength(1);
               // The parent's answer is its conversation reply, never a human message.
               expect(events.filter(event => event.type === 'user-message')).toEqual([]);
@@ -251,7 +251,7 @@ export const RUN_GROUPS = {
         it(`${backend} R130 a question asked in its answer's turn gets its own human wait`, async () => {
           await withOwnedInputRun(backend, 'ask', async fixture => {
             fixture.manager.enqueueOwnedRun(fixture.runId);
-            const asks = (store: typeof fixture.store) => store.readEvents(fixture.runId).filter(event => event.type === 'ask.requested');
+            const asks = (store: typeof fixture.store) => store.eventLog.readEvents(fixture.runId).filter(event => event.type === 'ask.requested');
             await waitFor(() => asks(fixture.store).length === 1 && fixture.store.getRun(fixture.runId)?.status === 'waiting');
             const { store } = await fixture.restart();
             const first = store.getRun(fixture.runId)!.waits!.find(wait => wait.kind === WAIT_KIND.human)!;
@@ -363,7 +363,7 @@ export const RUN_GROUPS = {
                 const wake = messages(backend, dir)[1]!;
                 expect(wake).toContain(`Timer ${waitId} fired: Re-check the downstream work.`);
                 expect(wake).toContain('Continue toward the task goal; register another wait if you are still waiting.');
-                expect(store.readEvents(runId).some(event => event.type === 'user-message')).toBe(false);
+                expect(store.eventLog.readEvents(runId).some(event => event.type === 'user-message')).toBe(false);
               });
           });
         }, 60_000);
@@ -373,7 +373,7 @@ export const RUN_GROUPS = {
             async ({ store, manager, runId }) => {
               const prose = 'The PR merged. No further monitoring is needed. Everything is complete.';
               expect(manager.sendMessage(runId, [{ type: 'text', text: `mock:agent-echo ${prose}` }])).toBe(true);
-              await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(prose)));
+              await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(prose)));
               await waitFor(() => store.getRun(runId)?.status === 'waiting');
               expect(manager.isActive(runId)).toBe(true);
             });

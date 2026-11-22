@@ -87,7 +87,7 @@ describe('cez task', () => {
       const id = await start();
       expect(await run(['notify', id, '--message', 'take over'])).toBe(0);
       expect(last()).toEqual({ id, notify: true, message: true });
-      expect(ctx.store.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ notify: true, message: 'take over' });
+      expect(ctx.store.eventLog.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ notify: true, message: 'take over' });
       expect(await run(['notify', id, '--off'])).toBe(0);
       expect(last()).toEqual({ id, notify: false });
     });
@@ -96,7 +96,7 @@ describe('cez task', () => {
       await withWebhook();
       const id = await start();
       expect(await run(['notify', id, '--message-file', '-'], 'from stdin')).toBe(0);
-      expect(ctx.store.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ message: 'from stdin' });
+      expect(ctx.store.eventLog.readEvents(id).find((event) => event.type === 'handoff')).toMatchObject({ message: 'from stdin' });
       expect(await run(['notify', id, '--off', '--message', 'x'])).toBe(64);
     });
 

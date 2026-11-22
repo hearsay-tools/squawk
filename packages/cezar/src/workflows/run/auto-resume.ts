@@ -101,7 +101,7 @@ export class AutoResumeScheduler {
     if (!limit && !provider) return undefined;
     const attempts = run.autoResumeAttempts ?? 0;
     if (attempts >= MAX_AUTO_RESUMES) {
-      this.context.store.appendEvent(runId, { type: 'note', message: limit
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', message: limit
         ? `automatic resume cap reached (${MAX_AUTO_RESUMES}) — continue this task manually`
         : `provider retry limit reached (${MAX_AUTO_RESUMES}) — continue this task manually` });
       return undefined;
@@ -127,7 +127,7 @@ export class AutoResumeScheduler {
     const resumeStep = run ? atContinue.heldStep(run) : undefined;
     this.host.move(runId, 'hold-failure', { error, autoResumeAt: plan.autoResumeAt, autoResumeReason: plan.autoResumeReason },
       resumeStep ? { stepId: resumeStep, cursor: 'resume' } : {});
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: plan.message });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: plan.message });
     return true;
   }
 
@@ -178,7 +178,7 @@ export class AutoResumeScheduler {
       return;
     }
     this.context.store.updateRun(runId, { autoResumeAttempts: attempts });
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'lifecycle',
       message: provider ? `provider error — retrying automatically (${attempts}/${MAX_AUTO_RESUMES})`
         : `usage limit reset — resuming automatically (${attempts}/${MAX_AUTO_RESUMES})`,
@@ -292,6 +292,6 @@ export class AutoResumeScheduler {
     // note is written only once the withdrawal is on disk (hearsay-tools/cezarion#1236).
     if (this.context.store.getRun(runId)) this.context.store.commitAutoResumeWithdrawal(runId);
     this.timers.clear('auto-resume', runId);
-    if (note && this.context.store.getRun(runId)) this.context.store.appendEvent(runId, { type: 'note', message: note });
+    if (note && this.context.store.getRun(runId)) this.context.store.eventLog.appendEvent(runId, { type: 'note', message: note });
   }
 }

@@ -37,9 +37,9 @@ describe('delegation paths read no transcript (#880)', () => {
     store = RunStore.open(join(root, '.ai/cezar'));
     family = seedSettledFamily(store, root);
     // A worker that asked, and routed the ask, before it settled.
-    const ask = store.appendEvent(family.workerId, { type: 'ask.requested', requestId: 'q', questions });
-    store.appendEvent(family.workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: randomUUID(), parentRunId: family.parentId });
-    for (let i = 0; i < 50; i++) store.appendEvent(family.parentId, { type: 'text', text: `parent token ${i}` });
+    const ask = store.eventLog.appendEvent(family.workerId, { type: 'ask.requested', requestId: 'q', questions });
+    store.eventLog.appendEvent(family.workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: randomUUID(), parentRunId: family.parentId });
+    for (let i = 0; i < 50; i++) store.eventLog.appendEvent(family.parentId, { type: 'text', text: `parent token ${i}` });
     manager = new RunManager(store, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     const ids = [family.parentId, family.workerId];
     familyPaths = (path) => ids.some((id) => path.includes(id));
@@ -53,24 +53,24 @@ describe('delegation paths read no transcript (#880)', () => {
 
   it('a terminal worker checkpoint commit reads no transcript', () => {
     checkpoint(family.workerId); // projects the family once
-    const projected = store.readEvents(family.parentId).length;
+    const projected = store.eventLog.readEvents(family.parentId).length;
     const reads = countTranscriptReads(familyPaths);
     const reconcile = vi.spyOn(manager, 'reconcileWorkerWaits');
     checkpoint(family.workerId);
     expect(reconcile).toHaveBeenCalled();
     expect(reads.counts).toEqual({ files: [], decompress: 0 });
     restoreTranscriptReads();
-    expect(store.readEvents(family.parentId)).toHaveLength(projected);
+    expect(store.eventLog.readEvents(family.parentId)).toHaveLength(projected);
   });
 
   it('projectConversationEvents reads no transcript', () => {
     checkpoint(family.workerId);
-    const before = store.readEvents(family.workerId).filter((event) => event.type === 'conversation-message').length;
+    const before = store.eventLog.readEvents(family.workerId).filter((event) => event.type === 'conversation-message').length;
     const reads = countTranscriptReads(familyPaths);
     projectConversationEvents(store, store.getRun(family.parentId)!);
     expect(reads.counts).toEqual({ files: [], decompress: 0 });
     restoreTranscriptReads();
-    expect(store.readEvents(family.workerId).filter((event) => event.type === 'conversation-message')).toHaveLength(before);
+    expect(store.eventLog.readEvents(family.workerId).filter((event) => event.type === 'conversation-message')).toHaveLength(before);
   });
 
   const destroyPhase = (phase: 'terminating' | 'cleaning' | 'complete') => {
@@ -97,7 +97,7 @@ describe('delegation paths read no transcript (#880)', () => {
   });
 
   it('collectWorkerEvidence reads an archived worker asynchronously', async () => {
-    store.appendEvent(family.workerId, { type: 'text', text: 'the worker summary' });
+    store.eventLog.appendEvent(family.workerId, { type: 'text', text: 'the worker summary' });
     const paths = historyPaths(join(root, '.ai/cezar'), family.workerId);
     writeFileSync(paths.compressed, brotliCompressSync(readFileSync(paths.plain)));
     rmSync(paths.plain);
@@ -116,7 +116,7 @@ describe('delivering a message to a worker reads no transcript (#880)', { timeou
     const { p } = await delegatingParent({ permissions: ['spawn', 'wait', 'steer'] });
     await until(() => liveStore.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:cezar-ask'); liveManager.enqueueOwnedRun(w.id);
-    await until(() => liveStore.readEvents(w.id).some((event) => event.type === 'worker-question-routed') && liveStore.getRun(w.id)?.status === 'waiting');
+    await until(() => liveStore.eventLog.readEvents(w.id).some((event) => event.type === 'worker-question-routed') && liveStore.getRun(w.id)?.status === 'waiting');
     const reads = countTranscriptReads((path) => path.includes(w.id));
     expect(liveManager.sendMessage(w.id, [{ type: 'text', text: 'a human answer' }])).toBe(false);
     expect(reads.counts).toEqual({ files: [], decompress: 0 });
@@ -126,15 +126,15 @@ describe('delivering a message to a worker reads no transcript (#880)', { timeou
     const { p } = await delegatingParent({ permissions: ['spawn', 'wait', 'steer'] });
     await until(() => liveStore.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:cezar-ask'); liveManager.enqueueOwnedRun(w.id);
-    await until(() => liveStore.readEvents(w.id).some((event) => event.type === 'worker-question-routed') && liveStore.getRun(w.id)?.status === 'waiting');
+    await until(() => liveStore.eventLog.readEvents(w.id).some((event) => event.type === 'worker-question-routed') && liveStore.getRun(w.id)?.status === 'waiting');
     // A fresh ask checkpoint has no routing marker. answeredElsewhere must consult pendingAnswer,
     // which calls routedAsk, before the public delivery can answer this question.
-    const ask = liveStore.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions });
+    const ask = liveStore.eventLog.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions });
     expect(liveStore.transcriptFacts.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeUndefined();
     const reads = countTranscriptReads((path) => path.includes(w.id));
     expect(liveManager.sendMessage(w.id, [{ type: 'text', text: 'Pick: A' }])).toBe(true);
     expect(reads.counts).toEqual({ files: [], decompress: 0 });
     restoreTranscriptReads();
-    expect(liveStore.readEvents(w.id)).toContainEqual(expect.objectContaining({ type: 'human-input-delivered', askSeq: ask.seq }));
+    expect(liveStore.eventLog.readEvents(w.id)).toContainEqual(expect.objectContaining({ type: 'human-input-delivered', askSeq: ask.seq }));
   });
 });

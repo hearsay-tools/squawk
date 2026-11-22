@@ -12,16 +12,16 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   // opening the human's, keeping its text.
   it('restart preserves a queued human answer beside an owed wait that made the lifecycle opening human', async () => {
     const { p } = await queuedWake();
-    store.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
+    store.eventLog.appendEvent(p.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
       header: 'Choice', question: 'Which option?', options: [{ label: 'One' }, { label: 'Two' }],
     }] });
     manager.enqueueMessage(p.id, [{ type: 'text', text: 'queued human answer mock:hold' }]);
     expect(store.getRun(p.id)?.continuationMessage).toMatchObject({ origin: 'human',
       text: `Resume to receive the queued worker wait result. End this opening turn so Squawk can deliver it.` });
     await restart();
-    await until(() => store.readEvents(p.id).some(event => event.type === 'human-input-delivered'));
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
-    expect(store.readEvents(p.id).filter(event => event.type === 'user-message').at(-1)?.text).toContain('queued human answer');
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'human-input-delivered'));
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'user-message').at(-1)?.text).toContain('queued human answer');
   });
 
 it('restart with an empty human-origin checkpoint preserves the ask without a synthetic answer', async () => {
@@ -33,7 +33,7 @@ it('restart with an empty human-origin checkpoint preserves the ask without a sy
     await restart();
     expect(store.getRun(p.id)?.status).toBe('waiting');
     expect(manager.isActive(p.id)).toBe(false);
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 
 it('restart preserves an ordinary parked root without a wait or ask, including after children finish', async () => {

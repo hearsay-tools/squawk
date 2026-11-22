@@ -63,7 +63,7 @@ it('keeps original live image blocks when the best-effort persistence has no fil
   store.updateRun(id, { taskImages: ['/images/missing.png'] });
   const hydrated = atTaskHead.hydrateQueuedInput(context, attachments, id, { task: 'accepted', images: [pasted] });
   expect(hydrated.images).toEqual([pasted]);
-  expect(store.readEvents(id).filter(event => event.type === 'note')).toEqual([]);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note')).toEqual([]);
 });
 
 it('reads replacement bytes and omits removed persisted attachments at hydration', () => {
@@ -72,7 +72,7 @@ it('reads replacement bytes and omits removed persisted attachments at hydration
   imageFile('current.png', 'replacement');
   const hydrated = atTaskHead.hydrateQueuedInput(context, attachments, id, { task: 'accepted' });
   expect(hydrated.images).toEqual([{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: Buffer.from('replacement').toString('base64') } }]);
-  expect(store.readEvents(id).filter(event => event.type === 'note').map(event => event.message)).toEqual(['task attachment removed.png could not be read — starting without it']);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note').map(event => event.message)).toEqual(['task attachment removed.png could not be read — starting without it']);
 });
 
 it('refreshes queued Continue text without replacing accepted session or backend pins', () => {
@@ -123,7 +123,7 @@ it('reads Continue checkpoint files at opening and prefers live blocks before ap
 it('ignores checkpoint URLs owned by another continuation', () => {
   const result = atContinue.openingImages({ readPersistedAttachments: attachments, answerSource: () => undefined }, id, 'new-step', { ...message('Continue', ['/images/old.png']), id: 'old-step' }, { images: [], persistedImages: [], persistedAttachments: [] });
   expect(result).toEqual({ openingImages: [], attachments: [] });
-  expect(store.readEvents(id)).toEqual([]);
+  expect(store.eventLog.readEvents(id)).toEqual([]);
 });
 
 it('selects amended run effort before input fallback and preserves authored explicit unset', () => {
@@ -193,7 +193,7 @@ it('P6-13 unsafe attachment names and symlinks preserve omission and note behavi
   mkdirSync(dir, { recursive: true });
   symlinkSync(outside, join(dir, 'unsafe.png'));
   expect(attachments(id, ['/images/unsafe.png', '/images/..png'], 'task')).toEqual({ attachments: [], blocks: [] });
-  expect(store.readEvents(id).filter(event => event.type === 'note').map(event => event.message))
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'note').map(event => event.message))
     .toEqual(['task attachment unsafe.png could not be read — starting without it']);
 });
 
@@ -276,7 +276,7 @@ it('resolves a registered custom runner to itself on Continue', () => {
   registerRunner(defineRunner({ ...codexRunner, id: 'custom-runner' }));
   store.updateRun(id, { runner: 'custom-runner' });
   store.updateStep(id, 'first', { backend: 'custom-runner', sessionId: 'custom-session' });
-  store.appendEvent(id, { type: 'step-start', stepId: 'first', name: 'First', kind: STEP_KIND.agent, iteration: 1 });
+  store.eventLog.appendEvent(id, { type: 'step-start', stepId: 'first', name: 'First', kind: STEP_KIND.agent, iteration: 1 });
   const step = store.getRun(id)!.steps[0]!;
   expect(atContinue.resumableSessionId(store, id, step)).toBeUndefined();
   const host = { workerStep: () => undefined, resumableSessionId: () => undefined } as unknown as Parameters<typeof atTaskHead.queuedResumeSession>[1];

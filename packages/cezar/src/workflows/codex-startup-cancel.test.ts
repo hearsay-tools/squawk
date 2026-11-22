@@ -100,7 +100,7 @@ describe('Stop before the first Codex turn (#493)', { timeout: 15_000 }, () => {
     const pid = await vi.waitFor(() => requirePid(ready), waitOptions);
     const stepId = a.store.getRun(runId)!.currentStepId!;
     expect(a.store.getRun(runId)).toMatchObject({ status: RUN_STATUS.running, tokensUsed: 0 });
-    expect(a.store.readEvents(runId).some(event => ['session', 'turn.started', 'turn-end', 'text'].includes(event.type))).toBe(false);
+    expect(a.store.eventLog.readEvents(runId).some(event => ['session', 'turn.started', 'turn-end', 'text'].includes(event.type))).toBe(false);
 
     const queued = b.manager.startRun({ name: 'next', source: 'built-in', steps: [{ id: 'check', command: 'true' }] }, { task: 'next project', worktree: false });
     // Observe B's real initial sweep finishing while capacity is unavailable.
@@ -120,9 +120,9 @@ describe('Stop before the first Codex turn (#493)', { timeout: 15_000 }, () => {
     expect([a.store.getRun(runId)?.currentStepId, a.store.getRun(runId)?.stopping]).toEqual([undefined, undefined]);
     expect(a.store.getRun(runId)?.steps.find(step => step.id === stepId)?.status).toBe('cancelled');
     expect(a.manager.isActive(runId)).toBe(false);
-    expect(a.store.readEvents(runId).filter(event => event.type === 'lifecycle' && event.message === 'run cancelled')).toHaveLength(1);
-    expect(a.store.readEvents(runId)).toContainEqual(expect.objectContaining({ type: 'session.ended', reason: 'cancelled' }));
-    expect(a.store.readEvents(runId)).toContainEqual(expect.objectContaining({ type: 'note', message: 'Codex startup: waiting for initialize' }));
+    expect(a.store.eventLog.readEvents(runId).filter(event => event.type === 'lifecycle' && event.message === 'run cancelled')).toHaveLength(1);
+    expect(a.store.eventLog.readEvents(runId)).toContainEqual(expect.objectContaining({ type: 'session.ended', reason: 'cancelled' }));
+    expect(a.store.eventLog.readEvents(runId)).toContainEqual(expect.objectContaining({ type: 'note', message: 'Codex startup: waiting for initialize' }));
 
     // Nothing pokes pump/refresh: RunManager's actual teardown must broadcast
     // the released slot through the shared workspace semaphore.

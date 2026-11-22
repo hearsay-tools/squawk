@@ -91,7 +91,7 @@ const openingMessages = (f: Fixture): string[] =>
   readFileSync(f.stdinFile, 'utf8').split('\n').filter(Boolean).map((line) => (JSON.parse(line) as { userText: string }).userText);
 
 const messages = (f: Fixture, id: string) =>
-  f.store.readEvents(id).map((event) => String((event as { message?: unknown }).message ?? ''));
+  f.store.eventLog.readEvents(id).map((event) => String((event as { message?: unknown }).message ?? ''));
 
 async function runToEnd(f: Fixture, task: string, worktree?: false): Promise<string> {
   const record = f.manager.startRun(WORKFLOW, { task, ...(worktree === false ? { worktree } : {}) });
@@ -107,7 +107,7 @@ describe('worktree setup on task start (#917)', () => {
     const id = await runToEnd(f, 'do the thing');
     const record = f.store.getRun(id)!;
     expect(realpathSync(readFileSync(join(f.repoRoot, '.setup-cwd'), 'utf8').trim())).toBe(realpathSync(record.worktreePath!));
-    const events = f.store.readEvents(id) as Array<Record<string, unknown>>;
+    const events = f.store.eventLog.readEvents(id) as Array<Record<string, unknown>>;
     const at = (pred: (e: Record<string, unknown>) => boolean) => events.findIndex(pred);
     const start = at((e) => e.type === 'note' && String(e.message).startsWith('preparing the worktree — 1 command'));
     const output = at((e) => e.type === 'check-output' && String(e.command).startsWith('pwd >'));
@@ -127,7 +127,7 @@ describe('worktree setup on task start (#917)', () => {
   it('a failing setup still starts the agent and tells it', async () => {
     const f = await fixture({ worktreeSetup: { commands: ['echo boom-output; exit 3', 'echo never'] } });
     const id = await runToEnd(f, 'do the thing');
-    const outputs = f.store.readEvents(id).filter((e) => e.type === 'check-output' && String((e as { command?: unknown }).command).startsWith('echo'));
+    const outputs = f.store.eventLog.readEvents(id).filter((e) => e.type === 'check-output' && String((e as { command?: unknown }).command).startsWith('echo'));
     expect(outputs).toHaveLength(1);
     expect((outputs[0] as { exitCode?: unknown }).exitCode).toBe(3);
     const record = f.store.getRun(id)!;
@@ -142,7 +142,7 @@ describe('worktree setup on task start (#917)', () => {
     const f = await fixture({ worktreeSetup: { commands: 'npm ci' } });
     const id = await runToEnd(f, 'do the thing');
     expect(messages(f, id).some((m) => m.startsWith('worktree setup skipped — worktreeSetup in .ai/cezar/config.json is invalid (commands:'))).toBe(true);
-    expect(f.store.readEvents(id).filter((e) => e.type === 'check-output' && (e as { stepId?: unknown }).stepId === undefined)).toHaveLength(0);
+    expect(f.store.eventLog.readEvents(id).filter((e) => e.type === 'check-output' && (e as { stepId?: unknown }).stepId === undefined)).toHaveLength(0);
     expect(openingMessages(f)[0]).toContain(`Squawk's worktree setup did not run`);
     expect(f.store.getRun(id)?.worktreeSetup?.status).toBe('failed');
   }, 60_000);
@@ -161,7 +161,7 @@ describe('worktree setup on task start (#917)', () => {
     const f = await fixture({ worktreeSetup: { commands: ['echo setup-ran'] } });
     const id = await runToEnd(f, 'do the thing', false);
     expect(f.store.getRun(id)?.worktreeSetup).toBeUndefined();
-    expect(f.store.readEvents(id).some((e) => e.type === 'check-output' && (e as { command?: unknown }).command === 'echo setup-ran')).toBe(false);
+    expect(f.store.eventLog.readEvents(id).some((e) => e.type === 'check-output' && (e as { command?: unknown }).command === 'echo setup-ran')).toBe(false);
   }, 60_000);
 
   it('Stop during setup cancels the run and kills the group', async () => {
@@ -278,7 +278,7 @@ describe('worktree setup in an owned worker (#917)', () => {
       writeFileSync(join(repoRoot, '.ai/cezar', 'config.json'), JSON.stringify({ worktreeSetup: { commands: ['echo worker-setup'] } }));
       manager.enqueueOwnedRun(runId);
       await waitFor(() => store.getRun(runId)?.worktreeSetup?.status === 'done', 'the worker setup to finish', 30_000);
-      expect(store.readEvents(runId).some((e) => e.type === 'check-output' && (e as { command?: unknown }).command === 'echo worker-setup')).toBe(true);
+      expect(store.eventLog.readEvents(runId).some((e) => e.type === 'check-output' && (e as { command?: unknown }).command === 'echo worker-setup')).toBe(true);
     });
   }, 60_000);
 });

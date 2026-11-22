@@ -300,7 +300,7 @@ describe('delegation service durable authority', () => {
     const before = readFileSync(path, 'utf8');
     vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', agentProfile: 'other', accountBinding: { provider: 'claude', profileId: 'other', homePath: '/different', claudeLayout: { kind: 'relocated' } } });
     expect(await f.service.spawn(f.caller, request)).toEqual(worker); expect(readFileSync(path, 'utf8')).toBe(before);
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.readEvents(worker.workerId))).not.toContain('homePath');
+    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(worker.workerId))).not.toContain('homePath');
   });
   it('cannot accept a worker without a concrete account binding', async () => {
     vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', agentProfile: 'default' });
@@ -347,11 +347,11 @@ describe('delegation service durable authority', () => {
   });
   it('serializes cleanup, preserves tombstone/history, and permits inspection and human retry with workers off', async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
-    f.store.appendEvent(workerId, { type: 'note', message: 'history retained' });
+    f.store.eventLog.appendEvent(workerId, { type: 'note', message: 'history retained' });
     const result = await Promise.all([f.service.destroy(f.caller, { workerId }), f.service.destroy(f.caller, { workerId })]);
     expect(result).toEqual([{ workerId, state: 'complete', remaining: [] }, { workerId, state: 'complete', remaining: [] }]);
     expect(f.store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } });
-    expect(f.store.readEvents(workerId).some(e => e.message === 'history retained')).toBe(true);
+    expect(f.store.eventLog.readEvents(workerId).some(e => e.message === 'history retained')).toBe(true);
     f.store.updateRun(f.parent.id, { allowWorkers: false, allowMessaging: false });
     expect(await f.service.inspect(f.caller, { workerId })).toMatchObject({ workerId });
     expect(await f.service.destroyForHuman('project', workerId)).toEqual({ workerId, state: 'complete', remaining: [] });
@@ -592,12 +592,12 @@ describe('delegation service durable authority', () => {
     expect(f.store.getRun(workerId)?.agentInputs?.[0]).toMatchObject({ source: agentInputSchema.shape.source.enum.agent, parentRunId: f.parent.id, text: '/skill note 0' });
   });
   it('rejects generated credentials in agent task/steering text before persistence or delivery', async () => {
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     await expect(f.service.spawn(f.caller, { ...input(), task: `use ${f.token}` })).rejects.toMatchObject({ code: 'invalid_input' });
     expect(f.store.listRuns()).toHaveLength(1);
     const { workerId } = await f.service.spawn(f.caller, input());
     await expect(f.service.steer(f.caller, { workerId }, { text: `use ${f.token}` })).rejects.toMatchObject({ code: 'invalid_input' });
-    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.readEvents(workerId))).not.toContain(f.token);
+    expect(JSON.stringify(f.store.listRuns()) + JSON.stringify(f.store.eventLog.readEvents(workerId))).not.toContain(f.token);
     expect(f.store.getRun(workerId)?.agentInputs ?? []).toEqual([]);
   });
   it('does not reveal absent or unrelated workers for any targeted operation', async () => {

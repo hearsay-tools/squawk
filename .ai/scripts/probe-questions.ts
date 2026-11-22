@@ -55,7 +55,7 @@ store.createOwnedRun({ title: 'worker', task: TASK, workflow: 'quick-task', runn
   steps: [{ id: 'task', name: 'Task', kind: 'agent' }] }, parent.id, randomUUID(), { role: 'worker', parentRunId: parent.id, permissions: [], workspace },
 'a'.repeat(64), spawnCapacityRefusal, { kind: 'internal' });
 const manager = new RunManager(store, repoRoot, { home, createRunner, acquireCiResources });
-const events = (type: string) => store.readEvents(workerId).filter(event => event.type === type);
+const events = (type: string) => store.eventLog.readEvents(workerId).filter(event => event.type === type);
 const until = async (predicate: () => boolean, ms = 240_000) => {
   const start = Date.now();
   while (!predicate()) { if (Date.now() - start > ms) throw new Error('timed out'); await new Promise(resolve => setTimeout(resolve, 100)); }
@@ -90,7 +90,7 @@ try {
 } catch (error) {
   failed = true;
   rec('ERROR', String(error));
-  rec('TAIL', store.readEvents(workerId).slice(-10).map(event => event.type + ('message' in event ? `:${String(event.message).slice(0, 80)}` : '')));
+  rec('TAIL', store.eventLog.readEvents(workerId).slice(-10).map(event => event.type + ('message' in event ? `:${String(event.message).slice(0, 80)}` : '')));
 } finally {
   manager.cancel(workerId);
   await until(() => !manager.isActive(workerId), 30_000).catch(() => {});

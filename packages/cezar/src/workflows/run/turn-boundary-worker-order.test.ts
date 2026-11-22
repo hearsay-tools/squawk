@@ -50,9 +50,9 @@ it('worker turn-end no-wait routes parent ask before park and slot release', () 
   expect(messages).toHaveLength(1); expect(messages[0]?.senderRunId).toBe(f.run.id);
   expect(parent.agentInputs?.map(input => input.id)).toEqual([messages[0]!.id]);
   expect(parent.status).toBe(RUN_STATUS.failed);
-  expect(f.store.readEvents(f.run.id).filter(event => event.type === 'human-ask-closed')).toEqual([]);
+  expect(f.store.eventLog.readEvents(f.run.id).filter(event => event.type === 'human-ask-closed')).toEqual([]);
   expect(f.store.getRun(f.run.id)?.status).toBe(RUN_STATUS.waiting);
-  expect(f.store.readEvents(f.run.id).some(event => event.message === WORKER_FALLBACK_NOTE)).toBe(true);
+  expect(f.store.eventLog.readEvents(f.run.id).some(event => event.message === WORKER_FALLBACK_NOTE)).toBe(true);
 });
 
 it.each(['full', 'existing'] as const)('worker turn-end no-wait with %s ask parks without duplicate routing', mode => {
@@ -60,15 +60,15 @@ it.each(['full', 'existing'] as const)('worker turn-end no-wait with %s ask park
   const f = workerFixture();
   if (mode === 'full') seedWaits(f.store, f.run.id, { waits: Array.from({ length: WAIT_LIMIT }, () => makeTimerWait()) });
   else {
-    const event = f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Choice', question: 'Next?' }] });
+    const event = f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Choice', question: 'Next?' }] });
     seedWaits(f.store, f.run.id, { waits: [makeHumanWait({ askSeq: event.seq })] });
   }
-  const before = f.store.readEvents(f.run.id).filter(event => event.type === 'ask.requested').length;
+  const before = f.store.eventLog.readEvents(f.run.id).filter(event => event.type === 'ask.requested').length;
   f.log.length = 0;
   f.settler.openTurnEndHumanWait(f.run.id, f.state, 'step', 'no-wait', 'cause', true);
   order(f.log, ['event:note', 'alias', 'move', 'release', 'reconcile', 'wake']);
   expect(f.log).not.toContain('route'); expect(f.log).not.toContain('prepare');
-  expect(f.store.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toHaveLength(before);
+  expect(f.store.eventLog.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toHaveLength(before);
   expect(f.store.getRun(f.parent.id)?.agentInputs ?? []).toEqual([]);
 });
 
@@ -78,7 +78,7 @@ it('worker budget fallback writes note and parks without alias or parent request
   f.settler.openTurnEndHumanWait(f.run.id, f.state, 'step', 'budget', 'budget cause', true);
   order(f.log, ['event:note', 'move', 'flush', 'line-park', 'release', 'reconcile', 'wake']);
   expect(f.log).not.toContain('alias'); expect(f.log).not.toContain('route');
-  expect(f.store.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toEqual([]);
+  expect(f.store.eventLog.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toEqual([]);
   expect(f.store.getRun(f.run.id)?.waits ?? []).toEqual([]);
 });
 
@@ -99,5 +99,5 @@ it('worker reply-bound fallback parks without alias or parent request', () => {
   expect(f.log).not.toContain('alias'); expect(f.log).not.toContain('route');
   expect(f.state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   expect(f.state.boundary.noWaitNudgeParked).toBe(f.wire);
-  expect(f.store.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toEqual([]);
+  expect(f.store.eventLog.readEvents(f.run.id).filter(event => event.type === 'ask.requested')).toEqual([]);
 });

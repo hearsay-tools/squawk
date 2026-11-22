@@ -192,7 +192,7 @@ export class ToolActivityTracker implements ToolActivitySource {
       'run.updated': ({ run, source }) => onRun(source === 'conflict' ? run : store.getRun(run.id) ?? run),
       'run.deleted': ({ runId }) => this.drop(runId),
     });
-    const redact = (text: string) => store.redactText(text);
+    const redact = (text: string) => store.redaction.redactText(text);
     return {
       observe: (runId, event) => {
         if (attached) this.record(owner, runId, event, redact);

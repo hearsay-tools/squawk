@@ -87,7 +87,7 @@ describe('preview registration (open-mercato/cezar#781)', { timeout: 30_000 }, (
     const registered = await first({ command: 'npm run dev -- --port 5173 --strictPort', port: 5173, label: 'vite' });
     expect(registered).toMatchObject({ ok: true, code: 'registered' });
     expect(store.getRun(record.id)?.previewServers?.[0]).toMatchObject({ port: 5173, label: 'vite', answeredAtRegistration: false });
-    expect(store.readEvents(record.id).at(-1)).toMatchObject({ type: 'preview.server-registered', server: { port: 5173 } });
+    expect(store.eventLog.readEvents(record.id).at(-1)).toMatchObject({ type: 'preview.server-registered', server: { port: 5173 } });
 
     sessions.release[0]!();
     await expect.poll(() => store.getRun(record.id)?.status, { timeout: 15_000 }).toSatisfy(status => ['done', 'review'].includes(String(status)));
@@ -102,7 +102,7 @@ describe('preview registration (open-mercato/cezar#781)', { timeout: 30_000 }, (
       [5173, 'npm run dev -- --port 5173 --strictPort --host'],
       [6006, 'npm run storybook'],
     ]);
-    expect(store.readEvents(record.id).at(-1)).toMatchObject({ type: 'preview.server-registered', server: { port: 5173, label: 'npm' } });
+    expect(store.eventLog.readEvents(record.id).at(-1)).toMatchObject({ type: 'preview.server-registered', server: { port: 5173, label: 'npm' } });
     // A changed command must not leave the old one running behind the new registration.
     expect(preview.replaced).toHaveBeenCalledTimes(1);
     expect(preview.replaced).toHaveBeenCalledWith(record.id, 5173);
@@ -155,7 +155,7 @@ describe('preview registration (open-mercato/cezar#781)', { timeout: 30_000 }, (
     preview.probe = async () => { lifetime.abort(); return false; };
     await expect(register({ command: 'npm run dev', port: 5173 }, lifetime.signal)).rejects.toThrow();
     expect(store.getRun(record.id)?.previewServers ?? []).toEqual([]);
-    expect(store.readEvents(record.id).some(event => event.type === 'preview.server-registered')).toBe(false);
+    expect(store.eventLog.readEvents(record.id).some(event => event.type === 'preview.server-registered')).toBe(false);
   });
 
   it('records a port that answers at registration and refuses one held by another task', async () => {

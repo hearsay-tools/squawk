@@ -90,7 +90,7 @@ export class WorktreeAutosave {
       if (previous.blocker) return;
     }
     const note = (message: string) => {
-      try { this.context.store.appendEvent(runId, { type: 'note', message }); }
+      try { this.context.store.eventLog.appendEvent(runId, { type: 'note', message }); }
       catch { /* Cleanup may outlive the store or its history; reporting cannot interrupt it. */ }
     };
     let settle!: () => void;

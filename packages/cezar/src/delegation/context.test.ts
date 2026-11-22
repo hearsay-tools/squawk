@@ -114,7 +114,7 @@ describe('explicit owned worker context', () => {
     expect(readdirSync(join(f.root, '.ai/cezar/runs')).sort()).toEqual(before);
   });
   it('rejects known credential bytes in binary attachments before publishing copies', async () => {
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     attachment('binary.bin', Buffer.concat([Buffer.from([0xff, 0x00]), Buffer.from(f.token), Buffer.from([0xfe])]));
     await expect(f.service.spawn(f.caller, input({ artifacts: [{ kind: 'parent-attachment', id: 'binary.bin' }] }))).rejects.toMatchObject({ code: 'invalid_input' });
     expect(f.store.listRuns()).toHaveLength(1);
@@ -136,7 +136,7 @@ describe('explicit owned worker context', () => {
   });
   it('bounds combined text, reference count, aggregate copied bytes and rejects credentials in context', async () => {
     attachment('large.bin', Buffer.alloc(8 * 1024 * 1024 + 1));
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     for (const context of [{ text: 'x'.repeat(100_000) }, { text: f.token }, { artifacts: Array.from({ length: 33 }, () => ({ kind: 'parent-attachment' as const, id: 'large.bin' })) }, { artifacts: [{ kind: 'parent-attachment' as const, id: 'large.bin' }] }]) {
       await expect(f.service.spawn(f.caller, input(context))).rejects.toThrow();
     }
@@ -283,7 +283,7 @@ describe('parent-file references', () => {
     const before = runsDir();
     await expect(f.service.spawn(f.caller, input({ artifacts: [{ kind: 'parent-attachment', id: 'large.bin' }, { kind: 'parent-file', path: 'qa/large.bin' }] }))).rejects.toMatchObject({ code: 'invalid_input' });
     expect(runsDir()).toEqual(before);
-    f.store.registerSessionSecret(f.token);
+    f.store.redaction.registerSessionSecret(f.token);
     write('qa/leak.md', `token ${f.token}`);
     await expect(f.service.spawn(f.caller, input(files('qa/leak.md')))).rejects.toMatchObject({ code: 'invalid_input' });
     expect(f.store.listRuns()).toHaveLength(1);

@@ -68,7 +68,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
           return result;
         });
         expect(manager.steerWorker(runId, input)).toBe('queued');
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('stopped')));
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('stopped')));
         expect(accepted).toBeInstanceOf(Promise);
         try {
           if (stop === 'dispose') manager.dispose();

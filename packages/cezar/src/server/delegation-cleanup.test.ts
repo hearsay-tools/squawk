@@ -18,11 +18,11 @@ describe('human owned-worker cleanup', () => {
     const { workerId } = await f.service.spawn(f.caller, { task: 'child', baseline: 'HEAD', requestId: randomUUID() });
     f.store.updateRun(f.parent.id, { allowWorkers: false, allowMessaging: false });
     const app = createApp({ home: testHome(), repoRoot: f.root, store: f.store, manager: f.manager, version: 'test', bootProjectId: 'project', workerCleanup: workerCleanups() });
-    const before = structuredClone(f.store.getRun(workerId)); const events = f.store.readEvents(workerId);
+    const before = structuredClone(f.store.getRun(workerId)); const events = f.store.eventLog.readEvents(workerId);
     const url = `http://127.0.0.1/api/v1/runs/${workerId}/worker-destroy`;
     const response = await app.request(url, { method: 'POST', headers: { host: '127.0.0.1', 'content-type': 'application/json' }, body: '{' });
     expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ code: 'invalid_input' });
-    expect(f.store.getRun(workerId)).toEqual(before); expect(f.store.readEvents(workerId)).toEqual(events);
+    expect(f.store.getRun(workerId)).toEqual(before); expect(f.store.eventLog.readEvents(workerId)).toEqual(events);
     for (const body of [undefined, '{}']) {
       expect((await app.request(url, { method: 'POST', headers: { host: '127.0.0.1', 'content-type': 'application/json' }, ...(body === undefined ? {} : { body }) })).status).toBe(200);
     }

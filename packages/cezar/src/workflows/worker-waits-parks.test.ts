@@ -57,14 +57,14 @@ describe('worker parks, slots and session close', { timeout: 45_000 }, () => {
     const wire = controlledWire({ firstResultGate: join(root, 'worker-release') });
     manager.enqueueOwnedRun(w.id);
     await until(wire.initialReceived);
-    await until(() => store.readEvents(w.id).some(event => event.type === 'turn.started'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'turn.started'));
     expect(semaphore.busy()).toBe(1);
     expect(store.getRun(p.id)?.status).toBe('waiting');
     expect(entryOf(p.id, entry.id)?.phase).toBe('open');
     // The parked parent's idle timer bounds its open session.
     await clock.advance(IDLE_TIMEOUT_MS);
     await until(() => !manager.isActive(p.id));
-    expect(store.readEvents(p.id).some(event => event.type === 'lifecycle' && String(event.message).includes('of inactivity'))).toBe(true);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'lifecycle' && String(event.message).includes('of inactivity'))).toBe(true);
   });
 
   it('a worker park idle-closes after IDLE_TIMEOUT_MS and a resolution reopens it', async () => {
@@ -79,7 +79,7 @@ describe('worker parks, slots and session close', { timeout: 45_000 }, () => {
     expect(manager.isActive(p.id)).toBe(true);
     await clock.advance(1_000);
     await until(() => !manager.isActive(p.id));
-    expect(store.readEvents(p.id).some(event => event.type === 'lifecycle' && String(event.message).includes('of inactivity'))).toBe(true);
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'lifecycle' && String(event.message).includes('of inactivity'))).toBe(true);
     expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });
     expect(store.getRun(p.id)?.error).toBeUndefined();
     expect(entryOf(p.id, entry.id)?.phase).toBe('open');
@@ -115,7 +115,7 @@ describe('worker parks, slots and session close', { timeout: 45_000 }, () => {
     const w = await worker(p.id);
     const entry = manager.registerWorkerListWait(p.id, { workerIds: [w.id], timeoutSeconds: 600 }, 'cezar_wait');
     wire.release();
-    await until(() => store.readEvents(p.id).some(event => event.type === 'error'));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'error'));
     await until(() => !manager.isActive(p.id));
     expect(store.getRun(p.id)?.status).toBe('waiting');
     expect(entryOf(p.id, entry.id)?.phase).toBe('open');

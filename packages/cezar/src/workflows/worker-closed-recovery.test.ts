@@ -72,6 +72,6 @@ describe('restart recovery of a closed waiting worker', () => {
     // Settlement itself is RunSettlement's: recovery hands the worker to it once.
     expect(host.settleSuccess).toHaveBeenCalledExactlyOnceWith(id);
     expect(store.getRun(id)?.steps.map(step => step.status)).toEqual([STEP_STATUS.done]);
-    expect(store.readEvents(id).some(event => event.type === 'lifecycle' && event.message === 'cezar restarted — the open worker session was settled')).toBe(true);
+    expect(store.eventLog.readEvents(id).some(event => event.type === 'lifecycle' && event.message === 'cezar restarted — the open worker session was settled')).toBe(true);
   });
 });

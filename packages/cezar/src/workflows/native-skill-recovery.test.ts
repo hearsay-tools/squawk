@@ -85,7 +85,7 @@ async function releaseHeld(id: string): Promise<Session> {
   expect(current.sent[0]?.some(block => block.type === 'text' && block.text.includes(heldAttachment.split('/').at(-1)!))).toBe(true);
   expect(store.getRun(id)?.queuedMessages?.some(message => message.id === heldMessageId)).toBe(false);
   expect(current.sent[1]?.[0]).toEqual({ type: 'text', text: 'later live input' });
-  expect(store.readEvents(id).filter(event => event.type === 'user-message' && event.text === '/known saved arguments')).toHaveLength(1);
+  expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message' && event.text === '/known saved arguments')).toHaveLength(1);
   return current;
 }
 

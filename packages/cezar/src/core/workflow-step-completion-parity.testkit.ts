@@ -56,12 +56,12 @@ export const describeWorkflowStepCompletionParity = workflowStepCompletionParity
     const run = () => store.getRun(runId)!;
     // The workflow's own steps; a Continue adds a synthetic step beside them.
     const statuses = () => run().steps.filter(step => workflowDef.steps.some(def => def.id === step.id)).map(step => [step.id, step.status]);
-    const notes = (message: string) => store.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith(message));
+    const notes = (message: string) => store.eventLog.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith(message));
     const complete = async () => {
       await waitFor(() => finished(run()) && !manager.isActive(runId), 15_000);
       expect(run().status).toBe('done');
       expect(statuses()).toEqual([['implement', 'done'], ['review', 'done'], ['verify', 'done']]);
-      expect(store.readEvents(runId).filter(event => event.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
     };
     // The session closed without done: the step stays resumable and the tail never starts.
     const incomplete = async () => {
@@ -137,7 +137,7 @@ export const describeWorkflowStepCompletionParity = workflowStepCompletionParity
       git('checkout', '-q', branch!);
       expect(manager.continueRun(runId, { text: 'Branch restored. mock:cezar-done' }).ok).toBe(true);
       await complete();
-      const started = store.readEvents(runId).filter(event => event.type === 'step-start').map(event => event.stepId);
+      const started = store.eventLog.readEvents(runId).filter(event => event.type === 'step-start').map(event => event.stepId);
       expect(started.filter(id => workflowDef.steps.some(def => def.id === id))).toEqual(['implement', 'review', 'verify']);
       return;
     }

@@ -57,7 +57,7 @@ export async function registerPreviewServer(store: RunStore, preview: PreviewHos
       ? existing.map(entry => entry.port === server.port ? server : entry)
       : [...existing, server];
     store.updateRun(runId, { previewServers });
-    store.appendEvent(runId, { type: 'preview.server-registered', server });
+    store.eventLog.appendEvent(runId, { type: 'preview.server-registered', server });
     // A copy Squawk runs from the old command must not keep answering for the new registration.
     if (changed) await preview.replaced(runId, server.port).catch(() => {});
     return checked.answer();

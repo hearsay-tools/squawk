@@ -93,6 +93,6 @@ export function parkNoticeMessage(input: {
  *  review): no notice can be sent for this wait, and the worker's log says so once. */
 export function parkNoticeIdInUse(store: { readonly eventLog: RunEventLog }, workerId: string, waitId: string): void {
   const projectionId = `park-notice-id-in-use:${waitId}`;
-  if (store.hasProjection(workerId, projectionId)) return;
-  store.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the park notice ID is already in use in the parent conversation: no park notice was sent.' });
+  if (store.eventLog.hasProjection(workerId, projectionId)) return;
+  store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the park notice ID is already in use in the parent conversation: no park notice was sent.' });
 }

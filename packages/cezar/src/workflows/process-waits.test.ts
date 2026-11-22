@@ -28,7 +28,7 @@ const register = async (id: string, request: { pid: number; exit_file?: string; 
 const waitById = (id: string, waitId: string) => store.getRun(id)?.waits?.find(entry => entry.id === waitId);
 const settledById = (id: string, waitId: string) => store.getRun(id)?.lastWaits?.find(entry => entry.id === waitId);
 const inputsFor = (id: string, waitId: string) => store.getRun(id)?.agentInputs?.filter(input => input.id === waitId) ?? [];
-const notes = (id: string, text: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).includes(text));
+const notes = (id: string, text: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).includes(text));
 
 async function waitingParent() {
   const run = await parent(); await until(() => store.getRun(run.id)?.status === 'waiting');

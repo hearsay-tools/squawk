@@ -265,13 +265,13 @@ describe('golden-fixture replay through a real RunStore', () => {
       const busTypes: string[] = [];
       store.lifecycle.subscribe({ 'run.event': ({ event }) => { busTypes.push(event.type); } });
       const sink = new UiEventSink({
-        persist: (e) => store.appendEvent(run.id, { ...e, stepId: 's1' }),
-        emitLive: (e) => store.emitEphemeral(run.id, { ...e, stepId: 's1' }),
+        persist: (e) => store.eventLog.appendEvent(run.id, { ...e, stepId: 's1' }),
+        emitLive: (e) => store.eventLog.emitEphemeral(run.id, { ...e, stepId: 's1' }),
       });
       for (const event of codexFixture()) sink.handle(event);
       sink.sessionEnded('end_turn');
 
-      const lines = store.readEvents(run.id);
+      const lines = store.eventLog.readEvents(run.id);
       expect(lines.map((l) => l.type)).toEqual([
         'session.started',
         'turn.started',

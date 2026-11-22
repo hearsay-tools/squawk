@@ -58,13 +58,13 @@ describe('the worktrees API on the real engine', { timeout: 30_000 }, () => {
     const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
       { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, 'a'.repeat(64), spawnCapacityRefusal);
     setRunStatus(store, worker.id, RUN_STATUS.cancelled, { worktreePath: workspace.path, branch: workspace.branch });
-    store.appendEvent(worker.id, { type: 'note', message: 'preserved worker history' });
+    store.eventLog.appendEvent(worker.id, { type: 'note', message: 'preserved worker history' });
     for (const id of [worker.id, parent.id]) {
       expect((await apiRequest(app, `/api/v1/runs/${id}`, { method: 'DELETE' })).status).toBe(409);
       expect((await apiRequest(app, `/api/v1/runs/${id}/remove-worktree`, { method: 'POST' })).status).toBe(409);
     }
     expect(existsSync(workspace.path)).toBe(true);
-    expect(store.readEvents(worker.id)).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'preserved worker history' })]));
+    expect(store.eventLog.readEvents(worker.id)).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'preserved worker history' })]));
     store.updateRun(worker.id, { delegation: { role: 'invalid' } });
     expect((await apiRequest(app, `/api/v1/runs/${worker.id}`, { method: 'DELETE' })).status).toBe(409);
     expect(existsSync(workspace.path)).toBe(true);

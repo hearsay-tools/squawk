@@ -62,7 +62,7 @@ describe('family reconcile decodes each cold run once per pass', () => {
 
   it('a pass that projects the conversation decodes each member once', () => {
     manager.reconcileWorkerWaits(family.parentId);
-    expect(store.readEvents(family.workerId).filter((event) => event.type === 'conversation-message')).toHaveLength(61);
+    expect(store.eventLog.readEvents(family.workerId).filter((event) => event.type === 'conversation-message')).toHaveLength(61);
     expect(memberDecodes()).toEqual([1, 1]);
   });
 

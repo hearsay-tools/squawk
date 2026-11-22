@@ -50,7 +50,7 @@ it.each(['fresh', 'continuation'] as const)('%s acknowledged input checkpoint re
       const { store, manager, runId, repoRoot, parentRunId } = fixture;
       const session = ownedSession!;
       const interrupt = session.interrupt.bind(session);
-      const checkpointReports = () => store.readEvents(runId).filter(event => event.type === 'error' &&
+      const checkpointReports = () => store.eventLog.readEvents(runId).filter(event => event.type === 'error' &&
         typeof event.message === 'string' && event.message.includes('agent input delivery checkpoint failed'));
       const reportsAtInterrupt: number[] = [];
       let injected = false;
@@ -76,7 +76,7 @@ it.each(['fresh', 'continuation'] as const)('%s acknowledged input checkpoint re
         await waitFor(() => injected);
         unblock?.();
         await waitFor(() => !manager.isActive(runId));
-        const errors = store.readEvents(runId).filter(event => event.type === 'error').map(event => event.message);
+        const errors = store.eventLog.readEvents(runId).filter(event => event.type === 'error').map(event => event.message);
         expect(reportsAtInterrupt.length).toBeGreaterThan(0);
         expect(reportsAtInterrupt.every(count => count === 0)).toBe(true);
         expect(checkpointReports()).toHaveLength(1);
@@ -103,14 +103,14 @@ it.each(['fresh', 'continuation'] as const)('%s provider failure is recorded bef
     let observedProviderInterrupt = false;
     vi.spyOn(session, 'interrupt').mockImplementation(() => {
       observedProviderInterrupt = true;
-      expect(store.readEvents(runId).some(event => event.type === 'error' &&
+      expect(store.eventLog.readEvents(runId).some(event => event.type === 'error' &&
         typeof event.message === 'string' && event.message.includes('invalid_request_error'))).toBe(true);
       interrupt();
     });
     expect(manager.sendMessage(runId, [{ type: 'text', text: 'mock:provider-error' }])).toBe(true);
     await waitFor(() => !manager.isActive(runId));
     expect(observedProviderInterrupt).toBe(true);
-    expect(store.readEvents(runId).some(event => event.type === 'error' && typeof event.message === 'string' && event.message.includes('invalid_request_error'))).toBe(true);
+    expect(store.eventLog.readEvents(runId).some(event => event.type === 'error' && typeof event.message === 'string' && event.message.includes('invalid_request_error'))).toBe(true);
     expect(store.getRun(runId)?.status).toBe('failed');
     expect(store.getRun(runId)?.error).toContain('(HTTP 400)');
   });

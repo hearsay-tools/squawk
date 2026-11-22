@@ -57,7 +57,7 @@ export const describeWorkflowAsk = workflowAsk((backend, row) => async () => {
     15_000, async (fixture) => {
       let { manager, store } = fixture;
       const { runId } = fixture;
-      const events = () => store.readEvents(runId);
+      const events = () => store.eventLog.readEvents(runId);
       const run = () => store.getRun(runId)!;
       const checks = () => events().filter(e => e.type === 'check-output');
       const complete = async () => {

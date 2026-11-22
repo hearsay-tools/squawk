@@ -48,13 +48,13 @@ describe('bounded persisted feed', () => {
     expect(b.events[0]?.seq).toBe(1);
   });
   it('requests rehydration for an oversized event rather than looping without progress', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + 1) });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + 1) });
     await expect(readRunEventBatch(dataDir, demand(), signal())).rejects.toMatchObject({ status: 413 });
   });
   it('resumes both snapshot and disk prefixes across byte-limited pages', async () => {
-    store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'item', text: '' } });
-    store.emitEphemeral(runId, { type: 'item.delta', itemId: 'item', field: 'text', delta: 'latest text' });
-    store.appendEvent(runId, { type: 'note', text: 'following' });
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'item', text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'item', field: 'text', delta: 'latest text' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'following' });
     const snapshots = store.liveReadSnapshot(runId);
     let cursor: string | undefined;
     let afterSeq = 0;
@@ -84,12 +84,12 @@ describe('bounded persisted feed', () => {
     controller.abort();
     await expect(reading).rejects.toMatchObject({ name: 'AbortError' });
     expect(listeners('run.event')).toBe(before);
-    store.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + 1) });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + 1) });
     await expect(readFiniteRunFeed({ store, dataDir }, demand(), signal())).rejects.toMatchObject({ status: 413 });
     expect(listeners('run.event')).toBe(before);
   });
   it('rejects expired cursors and pre-aborted requests', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'old' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'old' });
     const a = await readRunEventBatch(dataDir, demand(), signal());
     writeFileSync(join(dataDir, 'runs', `${runId}.ndjson`), '');
     await expect(readRunEventBatch(dataDir, { ...demand(), cursor: a.cursor }, signal())).rejects.toMatchObject({ status: 409 });
@@ -100,7 +100,7 @@ describe('bounded persisted feed', () => {
 
 describe('ordered replay/live handoff', () => {
   it('attaches before replay, deduplicates overlap, and releases every listener on abort', async () => {
-    store.appendEvent(runId, { type: 'note', text: 'persisted' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'persisted' });
     const controller = new AbortController();
     const seen: number[] = [];
     let sawLive!: () => void;
@@ -109,12 +109,12 @@ describe('ordered replay/live handoff', () => {
     const task = subscribeRunFeed({ store, dataDir }, demand(), {
       async event(event) {
         seen.push(event.seq);
-        if (event.seq === 1) store.appendEvent(runId, { type: 'note', text: 'during replay' });
+        if (event.seq === 1) store.eventLog.appendEvent(runId, { type: 'note', text: 'during replay' });
         if (event.seq === 3) sawLive();
       }, reset: () => { throw new Error('unexpected reset'); },
     }, controller.signal);
     expect(listeners('run.event')).toBe(baseline + 1);
-    store.appendEvent(runId, { type: 'note', text: 'during read' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'during read' });
     await received;
     controller.abort(); await task;
     expect(seen).toEqual([1, 2, 3]);

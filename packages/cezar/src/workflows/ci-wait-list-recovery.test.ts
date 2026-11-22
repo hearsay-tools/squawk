@@ -92,7 +92,7 @@ describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {
     await until(() => store.getRun(run.id)?.status === 'waiting');
     const ci = await registerPr(run.id, 12);
     const timer = await registerTimer(run.id, 600);
-    const turns = () => store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+    const turns = () => store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
     const before = turns();
     if (action === 'cancel') expect(manager.cancel(run.id)).toBe(true);
     else if (action === 'finish') expect(manager.finish(run.id)).toBe(true);

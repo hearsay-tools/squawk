@@ -29,11 +29,11 @@ it.each(['codex', 'opencode', 'pi', 'omp'].flatMap(backend => ['agent', 'check']
         try {
           await until(() => parkedOnWorkers(run.id) && store.getRun(w.id)?.steps.some(step => !!step.sessionId) === true);
           expect(semaphore.busy()).toBe(1);
-          const boundaries = store.readEvents(run.id).filter(event => event.type === 'turn-end').length;
+          const boundaries = store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length;
           manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15000)).toBe(true);
           // The wake turn's own frames reach the runner while its acknowledgement is held. The wake is
           // Squawk's text, so the mock answers it with its ordinary turn rather than an echo.
-          await until(() => store.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries);
+          await until(() => store.eventLog.readEvents(run.id).filter(event => event.type === 'turn-end').length > boundaries);
           expect(clock.captured).toBe(0);
           await clock.advance(AUTO_END_DELAY_MS + 150);
           expect(clock.captured).toBe(0);

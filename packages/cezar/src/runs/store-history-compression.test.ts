@@ -63,16 +63,16 @@ describe('RunStore history compression', () => {
   it('archiving a finished run compresses its transcript', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'one' });
-    store.appendEvent(run.id, { type: 'note', message: 'two' });
-    const before = store.readEvents(run.id);
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'one' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'two' });
+    const before = store.eventLog.readEvents(run.id);
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
-    expect(store.readEvents(run.id).map((event) => ({ seq: event.seq, type: event.type, message: event.message }))).toEqual(
+    expect(store.eventLog.readEvents(run.id).map((event) => ({ seq: event.seq, type: event.type, message: event.message }))).toEqual(
       before.map((event) => ({ seq: event.seq, type: event.type, message: event.message })),
     );
   });
@@ -80,7 +80,7 @@ describe('RunStore history compression', () => {
   it('unarchiving restores the plain transcript synchronously', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'keep' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -94,7 +94,7 @@ describe('RunStore history compression', () => {
   it('deleting an archived run removes the compressed transcript', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'gone' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'gone' });
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -109,11 +109,11 @@ describe('RunStore history compression', () => {
   it('the startup sweep compresses archived runs left plain and resolves both-present leftovers', async () => {
     const { dir, store } = openStore();
     const leftPlain = store.createRun({ title: 'plain', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(leftPlain.id, { type: 'note', message: 'plain-body' });
+    store.eventLog.appendEvent(leftPlain.id, { type: 'note', message: 'plain-body' });
     finish(store, leftPlain.id);
     store.setArchived(leftPlain.id, true);
     const both = store.createRun({ title: 'both', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(both.id, { type: 'note', message: 'A' });
+    store.eventLog.appendEvent(both.id, { type: 'note', message: 'A' });
     finish(store, both.id);
     store.setArchived(both.id, true);
     store.flush();
@@ -161,7 +161,7 @@ describe('RunStore history compression', () => {
     const { store } = openStore();
     const runs = Array.from({ length: 3 }, () => {
       const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-      store.appendEvent(run.id, { type: 'note', message: 'x' });
+      store.eventLog.appendEvent(run.id, { type: 'note', message: 'x' });
       finish(store, run.id);
       store.setArchived(run.id, true);
       return run.id;
@@ -177,7 +177,7 @@ describe('RunStore history compression', () => {
   it('does not compress or clean a transcript another live store holds', async () => {
     const { dir, store: owner } = openStore();
     const run = owner.createRun({ title: 'theirs', workflow: 'w', task: 'task', steps: [] });
-    owner.appendEvent(run.id, { type: 'note', message: 'owned' });
+    owner.eventLog.appendEvent(run.id, { type: 'note', message: 'owned' });
     finish(owner, run.id);
     expect(owner.pin(run.id, 'active')).toBeDefined();
     const historyFile = await import('./history-file.ts');
@@ -208,10 +208,10 @@ describe('RunStore history compression', () => {
   it('re-compresses after archive then append (variant-pick race)', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'before' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'before' });
     finish(store, run.id);
     store.setArchived(run.id, true);
-    store.appendEvent(run.id, { type: 'lifecycle', message: 'variant picked' });
+    store.eventLog.appendEvent(run.id, { type: 'lifecycle', message: 'variant picked' });
     await store.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
@@ -224,7 +224,7 @@ describe('RunStore history compression', () => {
   it('compresses when a run archived while live later finishes', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'live' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'live' });
     setRunStatus(store, run.id, RUN_STATUS.running);
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -240,13 +240,13 @@ describe('RunStore history compression', () => {
   it('re-compresses after appendEvent restores an archived transcript', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'old' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'old' });
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
-    store.appendEvent(run.id, { type: 'note', message: 'after-restore' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'after-restore' });
     expect(existsSync(plain)).toBe(true);
     await store.historyIdle();
     expect(existsSync(compressed)).toBe(true);
@@ -257,10 +257,10 @@ describe('RunStore history compression', () => {
   it('compressArchivedHistory swallows an fs error on one id and continues', async () => {
     const { dir, store } = openStore();
     const ok = store.createRun({ title: 'ok', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(ok.id, { type: 'note', message: 'ok-body' });
+    store.eventLog.appendEvent(ok.id, { type: 'note', message: 'ok-body' });
     finish(store, ok.id);
     const boom = store.createRun({ title: 'boom', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(boom.id, { type: 'note', message: 'boom-body' });
+    store.eventLog.appendEvent(boom.id, { type: 'note', message: 'boom-body' });
     finish(store, boom.id);
     store.setArchived(ok.id, true);
     store.setArchived(boom.id, true);
@@ -296,7 +296,7 @@ describe('RunStore history compression', () => {
   it('leaves the record unchanged when restoreHistory throws on unarchive', async () => {
     const { store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'keep' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -318,10 +318,10 @@ describe('RunStore history compression', () => {
   it('drops a prefix .br on the startup sweep and orphans a non-prefix leftover', async () => {
     const { dir, store } = openStore();
     const prefixRun = store.createRun({ title: 'prefix', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(prefixRun.id, { type: 'note', message: 'same' });
+    store.eventLog.appendEvent(prefixRun.id, { type: 'note', message: 'same' });
     finish(store, prefixRun.id);
     const other = store.createRun({ title: 'other', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(other.id, { type: 'note', message: 'A' });
+    store.eventLog.appendEvent(other.id, { type: 'note', message: 'A' });
     finish(store, other.id);
     store.setArchived(prefixRun.id, true);
     store.setArchived(other.id, true);
@@ -364,7 +364,7 @@ describe('RunStore history compression', () => {
   it('archiveFinished compresses finished runs', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'bulk' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'bulk' });
     finish(store, run.id);
     expect(store.archiveFinished().ids).toEqual([run.id]);
     await store.historyIdle();
@@ -376,7 +376,7 @@ describe('RunStore history compression', () => {
   it('updateRun({ archived }) compresses and restores through applyArchived', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'via-update' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'via-update' });
     finish(store, run.id);
     store.updateRun(run.id, { archived: true });
     await store.historyIdle();
@@ -416,7 +416,7 @@ describe('RunStore history compression', () => {
       'a'.repeat(64),
       spawnCapacityRefusal,
     );
-    store.appendEvent(worker.id, { type: 'note', message: 'old' });
+    store.eventLog.appendEvent(worker.id, { type: 'note', message: 'old' });
     store.updateStep(worker.id, 'task', { status: STEP_STATUS.done, sessionId: 'old-session' });
     setRunStatus(store, worker.id, RUN_STATUS.done);
     store.setArchived(worker.id, true);
@@ -432,7 +432,7 @@ describe('RunStore history compression', () => {
   it('orphans a non-prefix .br when re-archiving a run an older Squawk continued', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'placeholder' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'placeholder' });
     finish(store, run.id);
     const { plain, compressed } = historyPaths(dir, run.id);
     writeFileSync(plain, 'new');
@@ -448,7 +448,7 @@ describe('RunStore history compression', () => {
   it('uses a unique orphan when re-archiving beside an existing .orphaned', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'placeholder' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'placeholder' });
     finish(store, run.id);
     const { plain, compressed } = historyPaths(dir, run.id);
     writeFileSync(plain, 'new');
@@ -467,7 +467,7 @@ describe('RunStore history compression', () => {
     const { dir, store } = openStore();
     for (let i = 0; i < 8; i++) {
       const run = store.createRun({ title: `t${i}`, workflow: 'w', task: 'task', steps: [] });
-      store.appendEvent(run.id, { type: 'note', message: `m${i}` });
+      store.eventLog.appendEvent(run.id, { type: 'note', message: `m${i}` });
       finish(store, run.id);
       store.setArchived(run.id, true);
     }
@@ -488,7 +488,7 @@ describe('RunStore history compression', () => {
   it('skips compression when another store claims the run before the job starts', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'keep' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
     const { plain, compressed } = historyPaths(dir, run.id);
     const before = readFileSync(plain);
@@ -505,7 +505,7 @@ describe('RunStore history compression', () => {
   it('skips compression when another store claims the run before commit', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'keep' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
     const { plain, compressed } = historyPaths(dir, run.id);
     const before = readFileSync(plain);
@@ -538,7 +538,7 @@ describe('RunStore history compression', () => {
   it('setArchived(false) leaves the record unchanged when restoreHistory throws', async () => {
     const { store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'keep' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -561,7 +561,7 @@ describe('RunStore history compression', () => {
   it('retries compression when the plain file grows after the job starts', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'before' });
+    store.eventLog.appendEvent(run.id, { type: 'note', message: 'before' });
     finish(store, run.id);
     const extra = '{"type":"lifecycle","message":"variant picked"}\n';
     const historyFile = await import('./history-file.ts');

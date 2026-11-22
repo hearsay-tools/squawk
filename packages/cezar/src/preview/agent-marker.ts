@@ -41,7 +41,7 @@ export function recordAgentBrowser(ctx: Pick<RunContext, 'runId' | 'store' | 'da
   try {
     const run = store.getRun(runId);
     if (run && state === 'connected') markAgentConnected(dataDir, runId);
-    if (run) store.appendEvent(runId, { type: 'preview.agent-browser', state });
+    if (run) store.eventLog.appendEvent(runId, { type: 'preview.agent-browser', state });
   } catch {
     return false;
   }

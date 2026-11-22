@@ -302,7 +302,7 @@ function readPersistedAttachments(context: RunModuleContext,
       } catch {
         // Degrade, never fail the boot (AGENTS.md): the user deleted `.ai/cezar/`
         // or the file is unreadable — start with the text and say which attachment went.
-        context.store.appendEvent(runId, {
+        context.store.eventLog.appendEvent(runId, {
           type: 'note',
           message: `${kind} attachment ${name} could not be read — starting without it`,
         });
@@ -354,7 +354,7 @@ function continuationOpening(
   let prompt = input.prompt;
   if (openingInput && !answerSource) prompt += agentInputOutcomeText(openingInput, store.getRun(openingInput.parentRunId));
   const { openingImages, attachments } = continuationImages(host, runId, stepId, checkpoint, input);
-  if (checkpoint?.origin !== 'lifecycle' && !answerSource) store.appendEvent(runId, {
+  if (checkpoint?.origin !== 'lifecycle' && !answerSource) store.eventLog.appendEvent(runId, {
     type: 'user-message',
     stepId,
     text: prompt,
@@ -363,7 +363,7 @@ function continuationOpening(
   });
   // Delivery puts this notice in front of the prompt; show the human what the agent receives.
   const notice = resumeNotice(checkpoint);
-  if (notice) store.appendEvent(runId, { type: 'note', stepId, message: `Sent to the agent with this Continue: ${notice}` });
+  if (notice) store.eventLog.appendEvent(runId, { type: 'note', stepId, message: `Sent to the agent with this Continue: ${notice}` });
   return { prompt, checkpoint, ...(answerSource ? { answerSource } : {}), openingImages, attachments };
 }
 
@@ -418,7 +418,7 @@ function openingInputs(store: RunStore, dataDir: string, execution: Execution): 
       if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) return null;
       const path = resolveAttachmentPath(dataDir, runId, name);
       if (!path) {
-        store.appendEvent(runId, {
+        store.eventLog.appendEvent(runId, {
           type: 'note',
           message: `task attachment ${name} could not be read — starting without it`,
         });
@@ -710,7 +710,7 @@ function resumableSessionId(store: RunLookup & { readonly eventLog: RunEventLog 
   if (!sessionId) return undefined;
   const run = store.getRun(runId);
   if (RUNNER_FACTS[resolveRunnerId(sessionRunner(sessionStep, run))]!.sessionIdSource === 'launch') return sessionId;
-  const events = store.readEvents(runId);
+  const events = store.eventLog.readEvents(runId);
   if (events.some(event => event.type === 'session' && event.sessionId === sessionId)) return sessionId;
   const owner = run?.steps.find(step => step.sessionId === sessionId) ?? sessionStep;
   return events.some(event => event.type === 'step-start' && event.stepId === owner.id) ? undefined : sessionId;

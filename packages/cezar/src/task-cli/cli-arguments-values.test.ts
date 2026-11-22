@@ -92,7 +92,7 @@ describe('cez task', () => {
 
     it.each(['attention', 'settled'])('accepts log --follow --until %s and inclusive numeric limits', async (until) => {
       const id = await start();
-      ctx.store.appendEvent(id, { type: 'text', text: 'visible log line' });
+      ctx.store.eventLog.appendEvent(id, { type: 'text', text: 'visible log line' });
       setRunStatus(ctx.store, id, RUN_STATUS.done);
       const offset = ctx.out.length;
       expect(await run(['log', id, '--follow', '--until', until, '--since', '0', '--max-chars', '1000000', '--timeout-seconds', '1800'])).toBe(0);

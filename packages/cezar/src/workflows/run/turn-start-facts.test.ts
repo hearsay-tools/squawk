@@ -31,7 +31,7 @@ function answerAtCap(runner: string) {
     return true;
   });
   transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'ui-completed', session: f.wire });
-  f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Choice', question: 'Next?' }] });
+  f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{ header: 'Choice', question: 'Next?' }] });
   f.store.updateRun(f.run.id, { automaticWakes: MAX_AUTO_CONTINUES });
   expect(f.delivery.sendMessage(f.run.id, [{ type: 'text', text: 'Answer' }])).toBe(true);
   return vi.mocked(f.delivery.flushAgentInputs).mock.calls;

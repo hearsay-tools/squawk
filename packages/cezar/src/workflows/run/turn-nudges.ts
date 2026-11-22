@@ -129,7 +129,7 @@ export class TurnNudges {
    */
   queueCompletionRefusal(runId: string, refusal: CompletionRefusal): boolean {
     const state = this.host.active.get(runId);
-    this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: `Completion blocked: ${refusal.message}` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: `Completion blocked: ${refusal.message}` });
     this.host.move(runId, 'park', { finishedAt: undefined });
     this.context.store.flush();
     const decision = completionRefusalQueueDecision(runId, {
@@ -160,8 +160,8 @@ export class TurnNudges {
       console.warn(`[hsq] completion refusal not queued: ${error instanceof Error ? error.message : String(error)}`);
       return true;
     }
-    this.context.store.appendEvent(runId, { type: 'agent-input', input });
-    this.context.store.appendEvent(runId, { type: 'note', message: `${COMPLETION_NUDGE_NOTE} (${spent}/${this.maxAutoContinues}): ${refusal.code}` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'agent-input', input });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', message: `${COMPLETION_NUDGE_NOTE} (${spent}/${this.maxAutoContinues}): ${refusal.code}` });
     try { this.host.queueWaitWake(runId); } catch { this.host.retryWaitAdmission(runId); }
     return true;
   }
@@ -208,7 +208,7 @@ export class TurnNudges {
     clearIdleTimer(state);
     // One budget with the timer wakes (hearsay-tools/cezarion#1234).
     if (this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) {
-      this.context.store.appendEvent(runId, { type: 'note', stepId, message: `autonomous — safety cap reached (${this.maxAutoContinues}); automatic continuation paused` });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', stepId, message: `autonomous — safety cap reached (${this.maxAutoContinues}); automatic continuation paused` });
       return false;
     }
     const content: ContentBlock[] = [{ type: 'text', text }];
@@ -229,7 +229,7 @@ export class TurnNudges {
       return false;
     }
     const spent = this.host.chargeAutomaticWake(runId);
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'note', stepId,
       message: `autonomous — continuing without pausing (${spent}/${this.maxAutoContinues})`,
     });
@@ -306,7 +306,7 @@ export class TurnNudges {
     clearIdleTimer(state);
     this.armNoWaitNudgeReplyTimer(runId, state);
     const spent = this.host.chargeAutomaticWake(runId);
-    this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: `${NO_WAIT_NUDGE_NOTE} (${spent}/${this.maxAutoContinues})` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: `${NO_WAIT_NUDGE_NOTE} (${spent}/${this.maxAutoContinues})` });
     return true;
   }
 

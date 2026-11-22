@@ -165,7 +165,7 @@ export function mixedCells(runners: string[], it: typeof registerTest = register
       manager.enqueueOwnedRun(w.id);
       await until(() => settled(p.id, workers.id)?.phase === 'delivered' && prompted(runner, workerWake(workers)).length > 0, () => timeline(w.id));
       expect(terminal).toContain(store.getRun(w.id)?.status);
-      expect(store.readEvents(w.id).some(event => event.type === 'turn-end')).toBe(true);
+      expect(store.eventLog.readEvents(w.id).some(event => event.type === 'turn-end')).toBe(true);
       expect(conversationOf(p.id).filter(message => message.senderRunId === w.id)).toEqual([]);
       expect(prompted(runner, `Squawk notice:`)).toEqual([]);
     });

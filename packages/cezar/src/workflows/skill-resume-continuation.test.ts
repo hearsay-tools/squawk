@@ -280,7 +280,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     expect(launches[0]!.spec.userPrompt).toContain('/unknown keep the command');
     expect(launches[0]!.spec.skill).toBeUndefined();
     expect(launches[0]!.spec.resumeFallbackSkill).toBeUndefined();
-    expect(store.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
+    expect(store.eventLog.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
     sessions[0]!.finish();
   });
 

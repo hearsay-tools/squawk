@@ -73,7 +73,7 @@ export class TurnSettler {
   private heldDone(runId: string, state: ActiveRun, scheduledWake: boolean): NonNullable<RunRecord['doneAccepted']> | undefined {
     const run = this.context.store.getRun(runId);
     if (!run?.doneAccepted) return undefined;
-    const decision = acceptedDoneHolds(run, this.context.store.readEvents(runId), { scheduledWake, nativeAsk: !!state.boundary.pendingHumanAsk });
+    const decision = acceptedDoneHolds(run, this.context.store.eventLog.readEvents(runId), { scheduledWake, nativeAsk: !!state.boundary.pendingHumanAsk });
     if (decision.holds || (decision.byInput && undeliveredInput(run))) return run.doneAccepted;
     retireDoneAccepted(this.context.store, runId, 'reconsidered', decision.reason);
     return undefined;
@@ -95,8 +95,8 @@ export class TurnSettler {
     const step = !!session && state.boundary.nextStep?.session === session;
     transitionTurnBoundary(state, { kind: 'done-step-consumed', phase: 'completed', session: state.liveSession.session, stepId: state.liveSession.currentStepId });
     retireDoneAccepted(this.context.store, runId, 'completed', step ? 'step complete' : 'goal achieved');
-    if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
+    if (close?.summary) this.context.store.eventLog.appendEvent(runId, { type: 'note', message: close.summary });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
     if (session?.endWhenQuiet) session.endWhenQuiet();
     else session?.end();
@@ -192,7 +192,7 @@ export class TurnSettler {
     const noteRefusal = () => {
       if (!refused || noted) return;
       noted = true;
-      this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', ...(stepId ? { stepId } : {}), message: `Completion blocked: ${refused.message}` });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', ...(stepId ? { stepId } : {}), message: `Completion blocked: ${refused.message}` });
     };
     const { decision, tried } = this.decideSettledTurn(runId, state, session, entry, turn, refused, noteRefusal);
     if (entry === 'turn-end' && !this.settleTurnEndInput(runId, state, turn, tried, decision)) return false;
@@ -408,7 +408,7 @@ export class TurnSettler {
     }
     this.host.awaitCompletionNudgeReply(runId, state, session);
     const spent = this.host.chargeAutomaticWake(runId);
-    this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: `${COMPLETION_NUDGE_NOTE} (${spent}/${this.maxAutoContinues}): ${refused!.code}` });
+    this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: `${COMPLETION_NUDGE_NOTE} (${spent}/${this.maxAutoContinues}): ${refused!.code}` });
     return { kind: 'nudge', cause: 'completion', autonomous: !!state.boundary.autonomous };
   }
 
@@ -434,7 +434,7 @@ export class TurnSettler {
     const wait = worker ? undefined : this.host.humanWaits.openHumanAlias(runId, state, via);
     if (wait?.source === 'cezar' && wait.askSeq === undefined) this.host.humanWaits.showSquawkHumanWait(runId, state, wait, note);
     else {
-      this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: note });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: note });
       if (wait) this.host.humanWaits.surfaceHumanWait(runId, state, wait);
     }
     this.parkForUser(runId, state, stepId);
@@ -456,7 +456,7 @@ export class TurnSettler {
     const session = state.liveSession.session;
     if (!session?.open || state.liveSession.cancelled) return;
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session });
-    this.context.store.appendEvent(runId, event);
+    this.context.store.eventLog.appendEvent(runId, event);
     session.end();
   }
 
@@ -511,7 +511,7 @@ export class TurnSettler {
     const minutes = this.context.semaphore.monitoringWakeIntervalMinutes();
     if (minutes === null) {
       if (WAIT_KINDS.timer.timersDisabled) {
-        this.context.store.appendEvent(runId, { type: 'note', message: 'automatic re-checks are off; waiting for you' });
+        this.context.store.eventLog.appendEvent(runId, { type: 'note', message: 'automatic re-checks are off; waiting for you' });
         this.host.humanWaits.openHumanAlias(runId, state, 'monitoring-line');
       }
       return;
@@ -519,7 +519,7 @@ export class TurnSettler {
     if (this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) {
       if (!state.boundary.monitoringCapNoted) {
         transitionTurnBoundary(state, { kind: 'turn-end', phase: 'monitoring-cap', session: state.liveSession.session });
-        this.context.store.appendEvent(runId, {
+        this.context.store.eventLog.appendEvent(runId, {
           type: 'note',
           message: `automatic monitoring wake-up cap reached (${this.maxAutoContinues}); session remains parked`,
         });
@@ -542,7 +542,7 @@ export class TurnSettler {
 export function retireDoneAccepted(store: RunLookup & RunWrites & { readonly eventLog: RunEventLog }, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
   if (!store.getRun(runId)?.doneAccepted) return false;
   store.commitOutcome(runId, { kind: 'done-retired', as, reason }, {}, { bestEffort: true });
-  if (as === 'reconsidered') store.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });
+  if (as === 'reconsidered') store.eventLog.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });
   return true;
 }
 

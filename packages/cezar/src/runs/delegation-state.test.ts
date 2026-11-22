@@ -469,7 +469,7 @@ describe('RunStore durable delegation', () => {
     const id = metadata.workspace.ownerRunId;
     store.createOwnedRun(input, run.id, randomUUID(), metadata, requestHash, spawnCapacityRefusal);
     const secret = `session-${randomUUID()}`;
-    store.registerSessionSecret(secret);
+    store.redaction.registerSessionSecret(secret);
     const agentInput = (text: string) => ({ id: randomUUID(), source: WAIT_SOURCE.agent, parentRunId: run.id, text, createdAt: now });
     store.commitWorkerContinuation(id, 'continue-line', { agentInputs: [agentInput(`patched ${secret}`)] }, undefined,
       withDelivery ? { rootId: run.id, state: { messages: [], outcomes: [] }, input: agentInput(`delivered ${secret}`) } : undefined);

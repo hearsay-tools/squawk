@@ -61,7 +61,7 @@ export function sendMessage(pair: ConversationPair, request: ConversationSendReq
   const { destroyed, resumable, resume, instruction } = admission;
   const message: ConversationMessage = { id: request.id, senderRunId: sender.id, recipientRunId: recipient.id,
     kind: request.kind, ...(request.requestId ? { requestId: request.requestId } : {}), ...(peer ? { relationship } : {}),
-    text: project.store.redactText(request.text), createdAt: now, requestHash,
+    text: project.store.redaction.redactText(request.text), createdAt: now, requestHash,
     ...(request.kind === 'request' && !destroyed && (!resumable || resume) ? { deadline: new Date(Date.parse(now) + request.timeoutSeconds * 1000).toISOString() } : {}),
     ...(resume ? { resumed: true as const } : {}), ...(instruction ? { instruction } : {}),
     state: request.kind === 'reply' && settled ? 'late' : destroyed ? 'destroyed' : resumable && !resume ? 'continuation-required' : 'accepted' };

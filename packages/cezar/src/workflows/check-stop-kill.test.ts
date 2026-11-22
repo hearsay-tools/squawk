@@ -78,7 +78,7 @@ describe('Stop on a workflow check (#496)', () => {
     const f = fixture();
     const id = startCheck(f, 'echo hello; echo oops >&2; exit 3');
     await waitFor(() => !f.manager.isActive(id), 'run to finish');
-    const ev = f.store.readEvents(id).find((e) => e.type === 'check-output') as { text: string; exitCode: number } | undefined;
+    const ev = f.store.eventLog.readEvents(id).find((e) => e.type === 'check-output') as { text: string; exitCode: number } | undefined;
     expect(ev?.exitCode).toBe(3);
     expect(ev?.text).toContain('hello');
     expect(ev?.text).toContain('oops');

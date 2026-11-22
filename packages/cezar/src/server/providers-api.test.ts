@@ -384,7 +384,7 @@ describe('workspace provider API', () => {
     });
     store.updateStep(run.id, 'work', { backend: 'claude' });
 
-    store.appendEvent(run.id, {
+    store.eventLog.appendEvent(run.id, {
       type: 'error',
       stepId: 'work',
       message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
@@ -425,7 +425,7 @@ describe('workspace provider API', () => {
       listProjects: async () => [{ id: 'lazy', root: lazyRoot, status: 'not-git' }],
       prepareManager: ({ store: recoveringStore, manager }) => {
         const recover = vi.spyOn(manager, 'recover').mockImplementationOnce(async () => {
-          recoveringStore.appendEvent(run.id, {
+          recoveringStore.eventLog.appendEvent(run.id, {
             type: 'error',
             message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
           });

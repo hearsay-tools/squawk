@@ -56,11 +56,11 @@ describe('RunStore transcript facts (#880)', () => {
   it('appendEvent keeps the pending-ask fact without re-reading the transcript', () => {
     const { store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    for (let i = 0; i < 200; i++) store.appendEvent(run.id, { type: 'text', text: `token ${i}` });
+    for (let i = 0; i < 200; i++) store.eventLog.appendEvent(run.id, { type: 'text', text: `token ${i}` });
     const reads = countTranscriptReads();
-    const ask = store.appendEvent(run.id, { type: 'ask.requested', requestId: 'q', questions });
+    const ask = store.eventLog.appendEvent(run.id, { type: 'ask.requested', requestId: 'q', questions });
     expect(hasPendingAsk(store, run.id)).toBe(true);
-    store.appendEvent(run.id, { type: 'human-input-delivered', askSeq: ask.seq });
+    store.eventLog.appendEvent(run.id, { type: 'human-input-delivered', askSeq: ask.seq });
     expect(hasPendingAsk(store, run.id)).toBe(false);
     expect(reads.counts.files).toEqual([]);
     expect(store.transcriptFacts.transcriptFacts(run.id).pendingAsk).toBeUndefined();
@@ -69,33 +69,33 @@ describe('RunStore transcript facts (#880)', () => {
   it('answers projection lookups from the index', () => {
     const { store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'conversation-message:m:queued' });
-    expect(store.hasProjection(run.id, 'conversation-message:m:queued')).toBe(true);
-    expect(store.hasProjection(run.id, 'conversation-message:m:delivered')).toBe(false);
+    store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'conversation-message:m:queued' });
+    expect(store.eventLog.hasProjection(run.id, 'conversation-message:m:queued')).toBe(true);
+    expect(store.eventLog.hasProjection(run.id, 'conversation-message:m:delivered')).toBe(false);
   });
 
   it('rehydrates seq from the facts after reopen', () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    for (let i = 0; i < 3; i++) store.appendEvent(run.id, { type: 'text', text: `t${i}` });
+    for (let i = 0; i < 3; i++) store.eventLog.appendEvent(run.id, { type: 'text', text: `t${i}` });
     store.close(); stores.pop();
     const reopened = openStore(dir).store;
     const reads = countTranscriptReads();
-    expect(reopened.appendEvent(run.id, { type: 'text', text: 'after' }).seq).toBe(4);
+    expect(reopened.eventLog.appendEvent(run.id, { type: 'text', text: 'after' }).seq).toBe(4);
     expect(reads.counts.files).toEqual([]);
   });
 
   it('appending to an archived run keeps facts without a rebuild', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:before' });
+    store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:before' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
     store.setArchived(run.id, true);
     await store.historyIdle();
     expect(existsSync(historyPaths(dir, run.id).plain)).toBe(false);
     const reads = countTranscriptReads();
     store.setArchived(run.id, false);
-    store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:after' });
+    store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:after' });
     expect(store.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:before', 'p:after']);
     // Only restoreHistory decodes the archive; the facts never re-read it.
     expect(reads.counts.decompress).toBe(1);
@@ -104,7 +104,7 @@ describe('RunStore transcript facts (#880)', () => {
   it('deleting a run removes its facts sidecar', () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
+    store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
     expect(existsSync(historyPaths(dir, run.id).facts)).toBe(true);
     store.retention.deleteRun(run.id);
     store.close(); stores.pop();
@@ -116,15 +116,15 @@ describe('RunStore transcript facts across processes (#880 review)', () => {
   it('sees appends another store made after it cached the facts', () => {
     const { dir, store: a } = openStore();
     const run = a.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    a.appendEvent(run.id, { type: 'text', text: 'one' });
+    a.eventLog.appendEvent(run.id, { type: 'text', text: 'one' });
     const b = openStore(dir).store;
     expect(b.transcriptFacts.transcriptFacts(run.id).lastSeq).toBe(1); // cached, as warm-up caches a family
-    a.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:two' });
-    a.appendEvent(run.id, { type: 'text', text: 'three' });
+    a.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:two' });
+    a.eventLog.appendEvent(run.id, { type: 'text', text: 'three' });
     a.close(); stores.splice(stores.indexOf(a), 1);
     expect(b.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:two']);
     expect(b.adoptFamily(run.id)).toBeDefined();
-    expect(b.appendEvent(run.id, { type: 'text', text: 'four' }).seq).toBe(4);
+    expect(b.eventLog.appendEvent(run.id, { type: 'text', text: 'four' }).seq).toBe(4);
   });
 });
 
@@ -132,7 +132,7 @@ describe('RunStore transcript facts off the request path (#880)', () => {
   it('stamps the archive when the compressor runs', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
+    store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -149,7 +149,7 @@ describe('RunStore transcript facts off the request path (#880)', () => {
   it('warms conversation families without sync brotli', async () => {
     const { dir, store } = openStore();
     const { parentId, workerId } = seedSettledFamily(store, dir);
-    store.appendEvent(workerId, { type: 'conversation-message', projectionId: 'p:worker' });
+    store.eventLog.appendEvent(workerId, { type: 'conversation-message', projectionId: 'p:worker' });
     store.close(); stores.pop();
     // An archive an older Squawk wrote: no sidecar describes it.
     const paths = historyPaths(dir, workerId);
@@ -168,14 +168,14 @@ describe('RunStore transcript facts off the request path (#880)', () => {
   it('readEventsAsync reads an archive with the async API', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'text', text: 'one' });
-    store.appendEvent(run.id, { type: 'text', text: 'two' });
-    const expected = store.readEvents(run.id);
+    store.eventLog.appendEvent(run.id, { type: 'text', text: 'one' });
+    store.eventLog.appendEvent(run.id, { type: 'text', text: 'two' });
+    const expected = store.eventLog.readEvents(run.id);
     const paths = historyPaths(dir, run.id);
     writeFileSync(paths.compressed, brotliCompressSync(readFileSync(paths.plain)));
     rmSync(paths.plain);
     const reads = countTranscriptReads();
-    expect(await store.readEventsAsync(run.id)).toEqual(expected);
+    expect(await store.eventLog.readEventsAsync(run.id)).toEqual(expected);
     expect(reads.counts.decompress).toBe(0);
     expect(reads.counts.files).toEqual([]);
   });
@@ -186,7 +186,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
   it('yields between selected ready sidecars instead of chaining all work in microtasks', async () => {
     const { store } = openStore();
     const run = store.createRun({ title: 'ready', task: 'task', workflow: 'w', steps: [] });
-    store.appendEvent(run.id, { type: 'text', text: 'cached' });
+    store.eventLog.appendEvent(run.id, { type: 'text', text: 'cached' });
     let ticked = false;
     const tick = new Promise<void>(resolve => setImmediate(() => { ticked = true; resolve(); }));
     await store.transcriptFacts.prepareTranscriptFacts([run.id]);
@@ -202,7 +202,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     const live = seedSettledFamily(store, dir);
     setRunStatus(store, live.parentId, RUN_STATUS.waiting);
     const ids = [historical.parentId, historical.workerId, other.id, live.parentId, live.workerId];
-    for (const id of ids) store.appendEvent(id, { type: 'text', text: id });
+    for (const id of ids) store.eventLog.appendEvent(id, { type: 'text', text: id });
     store.close(); stores.pop();
     for (const id of ids) rmSync(historyPaths(dir, id).facts, { force: true });
     const completed: string[] = [];

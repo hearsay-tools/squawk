@@ -21,8 +21,8 @@ describe('native permission recovery (hearsay-tools/cezarion#1049)', () => {
         // a fresh approval instead of treating recovery as the baseline scenario.
         fixture.store.updateRun(fixture.runId, { systemPrompt: 'mock:approval' });
         fixture.manager.enqueueOwnedRun(fixture.runId);
-        await waitFor(() => fixture.store.readEvents(fixture.runId).some(event => event.type === 'permission.requested'));
-        const original = fixture.store.readEvents(fixture.runId).find(event => event.type === 'permission.requested')!;
+        await waitFor(() => fixture.store.eventLog.readEvents(fixture.runId).some(event => event.type === 'permission.requested'));
+        const original = fixture.store.eventLog.readEvents(fixture.runId).find(event => event.type === 'permission.requested')!;
         const originalOption = (original.options as Array<{ id: string }>)[0]!;
         expect(fixture.store.getRun(fixture.runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
 
@@ -30,8 +30,8 @@ describe('native permission recovery (hearsay-tools/cezarion#1049)', () => {
         expect(recovered.store.getRun(fixture.runId)?.status).not.toBe('done');
         expect(recovered.store.getRun(fixture.runId)?.status).not.toBe('review');
         expect(recovered.manager.respondPermission(fixture.runId, original.requestId as string, originalOption.id)).toBe(false);
-        await waitFor(() => recovered.store.readEvents(fixture.runId).filter(event => event.type === 'permission.requested').length === 2);
-        const next = recovered.store.readEvents(fixture.runId).filter(event => event.type === 'permission.requested')[1]!;
+        await waitFor(() => recovered.store.eventLog.readEvents(fixture.runId).filter(event => event.type === 'permission.requested').length === 2);
+        const next = recovered.store.eventLog.readEvents(fixture.runId).filter(event => event.type === 'permission.requested')[1]!;
         expect(next.requestId).not.toBe(original.requestId);
         expect(recovered.store.getRun(fixture.runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
         const { pick } = HARNESS_ADAPTERS[backend]!.approvalDecisions![0]!;

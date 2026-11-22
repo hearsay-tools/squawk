@@ -14,9 +14,9 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
     await withOwnedInputRun(backend, 'ask', async ({ runId, parentRunId, store, manager }) => {
       // The fixture's parent holds the steer grant, as provisioned roots do.
       manager.enqueueOwnedRun(runId);
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'worker-question-routed'));
-      const ask = store.readEvents(runId).find(event => event.type === 'ask.requested')!;
-      const routed = store.readEvents(runId).find(event => event.type === 'worker-question-routed')!;
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'worker-question-routed'));
+      const ask = store.eventLog.readEvents(runId).find(event => event.type === 'ask.requested')!;
+      const routed = store.eventLog.readEvents(runId).find(event => event.type === 'worker-question-routed')!;
       expect(routed).toMatchObject({ askSeq: ask.seq, parentRunId });
       const conversation = () => { const d = store.getRun(parentRunId)!.delegation!; return d.role === 'root' ? d.conversation! : undefined; };
       const question = conversation()!.messages.find(message => message.id === routed.messageId)!;
@@ -34,11 +34,11 @@ for (const backend of BUILT_IN_RUNNER_IDS) {
         outcomes: [...state.outcomes, { requestId: question.id, status: 'replied', observedAt: now, replyId: id }] }, { recipientRunId: runId, input });
       manager.deliverConversationInput(runId);
 
-      await waitFor(() => store.readEvents(runId).some(event => event.type === 'human-input-delivered'));
-      expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq: ask.seq, source: 'parent' })]);
+      await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'human-input-delivered'));
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq: ask.seq, source: 'parent' })]);
       await waitFor(() => !!store.getRun(runId)?.agentInputs?.find(entry => entry.id === id)?.deliveredAt);
       // The parent's answer is its conversation reply, never a human message.
-      expect(store.readEvents(runId).filter(event => event.type === 'user-message')).toEqual([]);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'user-message')).toEqual([]);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
     });
   }, 60_000);

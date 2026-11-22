@@ -57,7 +57,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(ci).toMatchObject({ phase: WAIT_PHASE.cancelled, via: WAIT_VIA.cezar_wait });
       expect(store.getRun(p.id)?.waits ?? []).toEqual([]);
       expect(external.aborted()).toBe(true);
-      const closed = store.readEvents(p.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
+      const closed = store.eventLog.readEvents(p.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
       expect(closed).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
     });
 
@@ -84,7 +84,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(finished.automaticWakes).toBe(MAX_AUTO_CONTINUES);
       expect(finished.doneAccepted).toBeUndefined();
       expect(prompted(runner, DONE_KEPT_NOTE)).toHaveLength(1);
-      const closed = store.readEvents(run.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
+      const closed = store.eventLog.readEvents(run.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
       expect(closed).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
     });
 
@@ -112,7 +112,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(store.getRun(run.id)?.doneAccepted).toBeUndefined();
       // The turn end delivers the result as the next turn's wake.
       await until(() => !!store.getRun(run.id)?.lastWaits?.some(entry => entry.id === wait.id && entry.phase === WAIT_PHASE.delivered), () => timeline(run.id));
-      expect(store.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
+      expect(store.eventLog.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
     });
 
     // hearsay-tools/cezarion#1620: every agent step accepts the done. In a step that is not the
@@ -130,17 +130,17 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       const answer = JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\n')[0]);
       expect(answer).toMatchObject({ ok: true, finishes: 'at_turn_end', completes: 'step', next_step: 'Review' });
       expect(store.getRun(run.id)!.steps.map(step => [step.id, step.status])).toEqual([['implement', 'done'], ['review', 'waiting']]);
-      const closings = store.readEvents(run.id).filter(event => event.type === 'lifecycle' && String(event.message).endsWith('session closed'));
+      const closings = store.eventLog.readEvents(run.id).filter(event => event.type === 'lifecycle' && String(event.message).endsWith('session closed'));
       expect(closings).toEqual([expect.objectContaining({ message: 'step complete — session closed', via: 'cezar_done' })]);
-      expect(store.readEvents(run.id).some(event => event.type === 'note' && event.message === 'step shipped')).toBe(true);
+      expect(store.eventLog.readEvents(run.id).some(event => event.type === 'note' && event.message === 'step shipped')).toBe(true);
       // The step that signalled done is never nudged; only the next step's quiet turn end is.
-      const noWaitNudges = store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE));
+      const noWaitNudges = store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE));
       expect(noWaitNudges.map(event => event.stepId)).toEqual(['review']);
     });
 
     it(`${runner} U7d cezar_done finishes through the done path in a message turn and in a Continue`, async () => {
       nativeWire(runner);
-      const closings = (id: string) => store.readEvents(id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
+      const closings = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
       const finished = (id: string) => terminal.includes(store.getRun(id)?.status ?? '') && !manager.isActive(id);
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
       await until(() => store.getRun(run.id)?.status === 'waiting');
@@ -152,7 +152,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(closings(run.id)).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(nudged);
       // The summary is the note right before the closing event.
-      const events = store.readEvents(run.id);
+      const events = store.eventLog.readEvents(run.id);
       expect(events[events.findIndex(event => event.seq === closings(run.id)[0]!.seq) - 1]).toMatchObject({ type: 'note', message: 'u7d shipped' });
       // A Continue turn finishes through the same path on its own handler.
       expect(manager.continueRun(run.id, { text: toolCall('cezar_done', {}) }).ok).toBe(true);
@@ -160,7 +160,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(closings(run.id).map(event => event.via)).toEqual(['cezar_done', 'cezar_done']);
       expect(store.getRun(run.id)!.status).toBe(status);
       expect(prompted(runner, NO_WAIT_NUDGE)).toHaveLength(nudged);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(nudged);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(nudged);
     });
 
     // The answer a Continue opens with is no longer a pending question to cezar_done.
@@ -191,7 +191,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       // after the native turn has finished, when the child has completed the write.
       await until(() => terminal.includes(store.getRun(run.id)?.status ?? '') && !manager.isActive(run.id));
       expect(JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\n')[0])).toMatchObject({ ok: true, finishes: 'at_turn_end' });
-      expect(store.readEvents(run.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed'))
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed'))
         .toEqual([expect.objectContaining({ via: 'cezar_done' })]);
       expect(settled(run.id, wait!.id)?.phase).toBe('delivered');
     });
@@ -208,7 +208,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       expect(wait).toMatchObject({ kind: WAIT_KIND.human, via: WAIT_VIA['no-wait'], source: WAIT_SOURCE.cezar, phase: WAIT_PHASE.open });
       expect(wait!.questions).toBeUndefined();
       expect(store.getRun(run.id)?.automaticWakes).toBe(1);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && event.message === NO_WAIT_NOTE)).toHaveLength(1);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && event.message === NO_WAIT_NOTE)).toHaveLength(1);
       expect(toRunSummary(store.getRun(run.id)!).waitingOn).toEqual({ kind: WAIT_KIND.human, shown: true });
       expect(deriveAttention(store.getRun(run.id)!).label).toBe('needs you');
       // The user's reply answers it and restarts the budget; the reply's own turn is nudged again.

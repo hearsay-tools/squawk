@@ -52,7 +52,7 @@ describe('Wait list registration and resolution', { timeout: 30_000 }, () => {
       await until(() => settledById(run.id, wait.id)?.phase === 'delivered');
       expect(inputsFor(run.id, wait.id)).toHaveLength(1);
       // A timer expiry is a self-generated wake: its admitted turn counts against the session's budget.
-      expect(store.readEvents(run.id).filter(event => event.type === 'note' && event.message === `automatic timer wake-up (${charged + 1}/40)`)).toHaveLength(1);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note' && event.message === `automatic timer wake-up (${charged + 1}/40)`)).toHaveLength(1);
     } finally { vi.useRealTimers(); }
   });
 

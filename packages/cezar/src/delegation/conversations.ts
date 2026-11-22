@@ -79,7 +79,7 @@ export function projectConversationEvents(store: import('../runs/store.ts').RunS
 /** Project delivery steps for one participant, preserving their order and indexed IDs. */
 function projectDelivery(store: RunStore, runId: string, message: ConversationMessage): void {
   // The run's indexed projection ids (open-mercato/cezar#880): appendEvent keeps them, so no transcript read.
-  const ids = { has: (id: string) => store.hasProjection(runId, id) };
+  const ids = { has: (id: string) => store.eventLog.hasProjection(runId, id) };
   const input = store.getRun(message.recipientRunId)?.agentInputs?.find(input => input.id === message.id);
   const delivery = input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered';
   // A read message was delivered first, even when both landed between two projections;
@@ -87,7 +87,7 @@ function projectDelivery(store: RunStore, runId: string, message: ConversationMe
   for (const step of delivery === 'consumed' ? ['delivered', 'consumed'] as const : [delivery] as const) {
     const projectionId = `conversation-message:${message.id}:${step}`;
     if (ids.has(projectionId)) continue;
-    store.appendEvent(runId, { type: 'conversation-message', projectionId, message, delivery: step, ...deliveryReceipts(input, step) });
+    store.eventLog.appendEvent(runId, { type: 'conversation-message', projectionId, message, delivery: step, ...deliveryReceipts(input, step) });
   }
 }
 
@@ -95,7 +95,7 @@ function projectDelivery(store: RunStore, runId: string, message: ConversationMe
 function projectOutcome(store: { readonly eventLog: RunEventLog }, runId: string, outcome: RequestOutcome | undefined): void {
   if (!outcome) return;
   const projectionId = `request-outcome:${outcome.requestId}${outcome.status === 'replied-late' ? ':replied-late' : ''}`;
-  if (!store.hasProjection(runId, projectionId)) store.appendEvent(runId, { type: 'request-outcome', projectionId, outcome });
+  if (!store.eventLog.hasProjection(runId, projectionId)) store.eventLog.appendEvent(runId, { type: 'request-outcome', projectionId, outcome });
 }
 
 /** The record that makes a run a root task: every worker operation, no receipts yet. */

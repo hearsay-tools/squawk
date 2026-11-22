@@ -84,7 +84,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
     hold.release(); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     expect(store.getRun(w.id)?.status).toBe('cancelled');
-    expect(store.readEvents(w.id).some(event => event.type === 'session')).toBe(false);
+    expect(store.eventLog.readEvents(w.id).some(event => event.type === 'session')).toBe(false);
     expect(existsSync(workspace(w).path)).toBe(false);
   });
 
@@ -180,7 +180,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(existsSync(workspace(w).path)).toBe(true);
     hold.release(); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'complete' });
-    expect(store.getRun(w.id)).toBeDefined(); expect(store.readEvents(w.id).length).toBeGreaterThan(0);
+    expect(store.getRun(w.id)).toBeDefined(); expect(store.eventLog.readEvents(w.id).length).toBeGreaterThan(0);
   });
 
   it.each(['fresh', 'Continue'])('%s post-spawn human flush failure retains resources until the session process closes', async mode => {
@@ -286,7 +286,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       expect.soft(existsSync(scratch)).toBe(true);
       expect.soft(child!.exitCode).toBeNull(); expect.soft(child!.signalCode).toBeNull();
       expect.soft(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
-      expect(reopened.getRun(w.id)).toBeDefined(); expect(reopened.readEvents(w.id).length).toBeGreaterThan(0);
+      expect(reopened.getRun(w.id)).toBeDefined(); expect(reopened.eventLog.readEvents(w.id).length).toBeGreaterThan(0);
     } finally { other.dispose(); reopened.flush(); child?.kill('SIGKILL'); }
   });
 
@@ -348,7 +348,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       manager.requestWorkerStop(w.id);
       expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
       hold.release(); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
-      expect(store.readEvents(w.id).some(event => event.type === 'session')).toBe(false);
+      expect(store.eventLog.readEvents(w.id).some(event => event.type === 'session')).toBe(false);
       expect(store.getRun(w.id)?.status).toBe('cancelled');
     }
   });
@@ -405,7 +405,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     destroy(w); await vi.advanceTimersByTimeAsync(Date.parse(deadline) - Date.now() + 1);
     // An automatic wake must neither advance the durable deadline nor publish a wake event.
     expect(monitoringWakeOf(store.getRun(w.id))).toBe(deadline);
-    expect(store.readEvents(w.id).some(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('automatic monitoring wake-up'))).toBe(false);
+    expect(store.eventLog.readEvents(w.id).some(event => event.type === 'note' && typeof event.message === 'string' && event.message.includes('automatic monitoring wake-up'))).toBe(false);
     vi.useRealTimers();
   });
 });

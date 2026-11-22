@@ -33,11 +33,11 @@ describe('session provisioning', () => {
     expect(f.credentials.authenticate(second.env.CEZ_DELEGATION_TOKEN!)).toMatchObject({ runId: f.parent.id });
     // Finishing the previous wrapper must not revoke the newer session.
     first.revoke(); expect(f.credentials.authenticate(second.env.CEZ_DELEGATION_TOKEN!)).toBeDefined();
-    f.store.appendEvent(f.parent.id, { type: 'text', text: `echo ${second.env.CEZ_DELEGATION_TOKEN}` });
-    expect(JSON.stringify(f.store.readEvents(f.parent.id))).not.toContain(second.env.CEZ_DELEGATION_TOKEN!);
+    f.store.eventLog.appendEvent(f.parent.id, { type: 'text', text: `echo ${second.env.CEZ_DELEGATION_TOKEN}` });
+    expect(JSON.stringify(f.store.eventLog.readEvents(f.parent.id))).not.toContain(second.env.CEZ_DELEGATION_TOKEN!);
     vi.stubEnv('CEZ_REDACT_SECRETS', '0');
-    f.store.appendEvent(f.parent.id, { type: 'text', text: `echo ${second.env.CEZ_DELEGATION_TOKEN}` });
-    expect(JSON.stringify(f.store.readEvents(f.parent.id))).not.toContain(second.env.CEZ_DELEGATION_TOKEN!);
+    f.store.eventLog.appendEvent(f.parent.id, { type: 'text', text: `echo ${second.env.CEZ_DELEGATION_TOKEN}` });
+    expect(JSON.stringify(f.store.eventLog.readEvents(f.parent.id))).not.toContain(second.env.CEZ_DELEGATION_TOKEN!);
     second.revoke(); expect(f.credentials.authenticate(second.env.CEZ_DELEGATION_TOKEN!)).toBeUndefined();
     expect(old.runId).toBe(f.parent.id);
   });

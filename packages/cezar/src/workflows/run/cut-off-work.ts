@@ -68,9 +68,9 @@ export interface CutOffLog {
  */
 export function recordCutOffWork(log: CutOffLog, runId: string): CutOffWork | undefined {
   let found: { tools: Snapshot[]; subagents: Snapshot[] };
-  try { found = openItems(log.readEvents(runId)); } catch { return undefined; }
+  try { found = openItems(log.eventLog.readEvents(runId)); } catch { return undefined; }
   for (const { item, stepId } of [...found.tools, ...found.subagents]) {
-    try { log.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, status: 'declined' } }); }
+    try { log.eventLog.appendEvent(runId, { type: 'item.completed', ...(stepId ? { stepId } : {}), item: { ...item, status: 'declined' } }); }
     catch { /* the names still reach the resume */ }
   }
   return namesOf(found);

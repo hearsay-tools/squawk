@@ -63,7 +63,7 @@ describe('destroy backoff holder', { timeout: 30_000 }, () => {
     const failing = `echo run >> '${calls}'; [ "$(wc -l < '${calls}')" -gt 1 ] || exit 3`;
     useTeardown(failing);
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect(f.store.readEvents(workerId).filter(event => event.type === 'lifecycle' && String(event.message).startsWith('worktree teardown failed:')))
+    expect(f.store.eventLog.readEvents(workerId).filter(event => event.type === 'lifecycle' && String(event.message).startsWith('worktree teardown failed:')))
       .toEqual([expect.objectContaining({ message: expect.stringMatching(/^worktree teardown failed: `echo run .*` exited 3$/) })]);
     blocker!.release();
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });

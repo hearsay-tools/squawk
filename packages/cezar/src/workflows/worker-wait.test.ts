@@ -99,13 +99,13 @@ for (const mode of ['fresh', 'continuation'] as const) {
             // misses it when the turn ends first (hearsay-tools/cezarion#1355).
             const note = completionNudges(p.id)[0]!.seq;
             checkpoint('nudge turn-end');
-            await until(() => store.readEvents(p.id).some(event => event.type === 'turn-end' && event.seq > note));
+            await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'turn-end' && event.seq > note));
             expect(acknowledgement).toBeInstanceOf(Promise);
             checkpoint('acknowledgement settled'); release(); await acknowledgement;
           }
           if (!delayedAck) {
             const note = completionNudges(p.id)[0]!.seq;
-            await until(() => store.readEvents(p.id).some(event => event.type === 'turn-end' && event.seq > note));
+            await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'turn-end' && event.seq > note));
             expect(acknowledgement).toBeInstanceOf(Promise);
             await acknowledgement;
           }

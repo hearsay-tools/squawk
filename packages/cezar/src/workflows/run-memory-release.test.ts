@@ -102,7 +102,7 @@ describe('run memory release (hearsay-tools/squawk#2064)', () => {
     await waitForProduct(manager, store, () => continued !== undefined && !manager.isActive(record.id));
 
     expect(delivered).toEqual([]);
-    expect(store.readEvents(record.id).some(event => event.type === 'user-message' && JSON.stringify(event).includes('buffer me'))).toBe(false);
+    expect(store.eventLog.readEvents(record.id).some(event => event.type === 'user-message' && JSON.stringify(event).includes('buffer me'))).toBe(false);
   });
 
   it('releases the attachment counter of a queued run that is cancelled', () => {

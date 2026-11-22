@@ -53,7 +53,7 @@ describe('successful run settlement on the engine', () => {
   it.each(['before diff', 'during diff'])('parent attention deferral %s leaves live steps untouched', async timing => {
     const id = seed(true);
     const steps = structuredClone(store.getRun(id)!.steps);
-    const ask = () => store.appendEvent(id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
+    const ask = () => store.eventLog.appendEvent(id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
       header: 'Choice', question: 'Which option?', options: [{ label: 'One' }, { label: 'Two' }],
     }] });
     const family = () => store.commitDelegation([{ id, delegation: { role: 'root', permissions: [], receipts: [{ requestId: randomUUID(), workerId: randomUUID(), requestHash: 'b'.repeat(64) }] } }]);
@@ -125,7 +125,7 @@ describe('successful run settlement on the engine', () => {
       expect(startSession).toHaveBeenCalledOnce();
       expect(release).toHaveBeenCalled();
       expect(store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
-      expect(store.readEvents(record.id).filter(event => String(event.message).includes('continu'))).toEqual([]);
+      expect(store.eventLog.readEvents(record.id).filter(event => String(event.message).includes('continu'))).toEqual([]);
     } finally {
       stopCommitLateWait();
     }

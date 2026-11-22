@@ -12,7 +12,7 @@ import { manager, parent, store, until, useWorkerWaitFixture, worker, work } fro
 const pids = new Map<string, number>();
 const liveSession = (id: string) => [...work.liveSessions].find(session => session.pid === pids.get(id) && session.open);
 
-const cancellations = (id: string) => store.readEvents(id)
+const cancellations = (id: string) => store.eventLog.readEvents(id)
   .filter(event => event.type === 'lifecycle' && /cancelled/.test(String(event.message))).map(event => event.message);
 
 // Real Git, native mock sessions and process shutdown share this budget.

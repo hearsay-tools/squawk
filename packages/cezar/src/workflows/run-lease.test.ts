@@ -129,7 +129,7 @@ async function holdsTheLease(fixture: Fixture, runId: string): Promise<void> {
   await waitFor(
     () =>
       fixture.store
-        .readEvents(runId)
+        .eventLog.readEvents(runId)
         .some((event) => event.type === 'step-start' && event.stepId === 'hold'),
     'the holder to take the repository-root lease',
   );
@@ -200,7 +200,7 @@ describe('RunManager repository-root lease scheduling', () => {
         [blocked.id, 'step-start'], [blocked.id, 'step-end'],
       ]);
       for (const id of [holder.id, blocked.id]) {
-        const notes = store.readEvents(id).filter(event => event.type === 'note');
+        const notes = store.eventLog.readEvents(id).filter(event => event.type === 'note');
         expect(notes.some(event => String(event.message).includes('worktree off'))).toBe(true);
         expect(notes.some(event => String(event.message).includes('exclusive access'))).toBe(true);
       }
@@ -223,7 +223,7 @@ describe('RunManager repository-root lease scheduling', () => {
       await waitFor(
         () =>
           store
-            .readEvents(blocked.id)
+            .eventLog.readEvents(blocked.id)
             .some((event) => event.type === 'note' && String(event.message).includes('exclusive access')),
         'the blocked run to reach the lease',
       );

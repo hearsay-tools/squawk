@@ -262,7 +262,7 @@ describe('a resumed session keeps its workflow step tools', () => {
       status: RUN_STATUS.failed,
       error: 'boom',
     });
-    store.appendEvent(id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
+    store.eventLog.appendEvent(id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
 
     expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
     const spec = await specAt(0);
@@ -303,13 +303,13 @@ describe('a resumed session keeps its workflow step tools', () => {
       ],
     };
     const id = terminalRun({ def, steps: [{ id: 'implement', sessionId: 'launch-uuid', backend: 'codex' }], status: RUN_STATUS.failed, error: 'boom' });
-    store.appendEvent(id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
+    store.eventLog.appendEvent(id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
     expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
     expect((await specAt(0)).resume).toBe(false);
     await settled(id);
     expect(store.getRun(id)?.steps.find(step => step.id === 'continue-1')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
 
-    store.appendEvent(id, { type: 'session', stepId: 'continue-1', sessionId: 'continue-thread' });
+    store.eventLog.appendEvent(id, { type: 'session', stepId: 'continue-1', sessionId: 'continue-thread' });
     store.updateStep(id, 'continue-1', { status: STEP_STATUS.failed, sessionId: 'continue-thread', backend: 'codex', error: 'interrupted — cezar process exited during the run' });
     setRunStatus(store, id, RUN_STATUS.failed, { finishedAt: new Date().toISOString(), error: 'interrupted — cezar process exited during the run' });
 

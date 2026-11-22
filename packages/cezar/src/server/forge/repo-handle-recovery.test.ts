@@ -45,11 +45,11 @@ describe('live repository identity recovery', () => {
   it('recovers without restart, repairs persisted records, and scopes new events while retaining evidence and ownership', async () => {
     execFileMock.mockImplementationOnce(reply(new Error('network is unreachable'))).mockImplementation(reply(null));
     const old = create(store);
-    store.appendEvent(old.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
+    store.eventLog.appendEvent(old.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
     const owned = create(store);
     store.updateRun(owned.id, { referencedIssueUrl: foreignIssue, issueNumber: 99 });
     const explicit = create(store, `Work on ${foreignPr}`);
-    store.appendEvent(explicit.id, { type: 'result', result: foreignPr });
+    store.eventLog.appendEvent(explicit.id, { type: 'result', result: foreignPr });
     // A restart: the old store goes, or it would still own these queued runs.
     store.close();
     // Recovery must heal retained records too, not just runs created in this process.
@@ -68,7 +68,7 @@ describe('live repository identity recovery', () => {
     const saved = readPersistedRuns(root);
     expect(saved.find((r: { id: string }) => r.id === old.id).referencedPullRequestUrl).toBeUndefined();
     const fresh = create(store);
-    store.appendEvent(fresh.id, { type: 'result', result: foreignPr });
+    store.eventLog.appendEvent(fresh.id, { type: 'result', result: foreignPr });
     expect(store.getRun(fresh.id)?.referencedPullRequestUrl).toBeUndefined();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execFileMock).toHaveBeenCalledTimes(2);
@@ -85,7 +85,7 @@ describe('live repository identity recovery', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execFileMock).toHaveBeenCalledTimes(1);
     const run = create(store);
-    store.appendEvent(run.id, { type: 'result', result: foreignPr });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: foreignPr });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(foreignPr);
   });
 
@@ -136,7 +136,7 @@ describe('live repository identity recovery', () => {
     await resolveRepoHandle(root);
     await vi.advanceTimersByTimeAsync(1000);
     const run = create(store);
-    store.appendEvent(run.id, { type: 'result', result: foreignPr });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: foreignPr });
     expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined();
     expect(execFileMock).toHaveBeenCalledTimes(2);
   });
@@ -166,7 +166,7 @@ describe('live repository identity recovery', () => {
       expect((args[2] as { signal: AbortSignal }).signal.aborted).toBe(false);
     });
     const run = create(store);
-    store.appendEvent(run.id, { type: 'result', result: foreignPr });
+    store.eventLog.appendEvent(run.id, { type: 'result', result: foreignPr });
     armRepoHandle(store, root, resolveForgeRoot, controller.signal);
     await vi.advanceTimersByTimeAsync(1000);
     expect(release).toBeTypeOf('function');

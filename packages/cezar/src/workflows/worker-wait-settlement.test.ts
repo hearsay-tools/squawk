@@ -69,7 +69,7 @@ it('readiness Finish preserves pending parent human questions', async () => {
     await worker(p.id);
     expect(manager.finish(p.id)).toBe(false);
     expect(store.getRun(p.id)?.status).toBe('waiting');
-    expect(store.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 it('all-mode replaces old observations when a selected worker accepts another execution', async () => {
     const p = await parent(); const first = await worker(p.id); const second = await worker(p.id);
@@ -84,7 +84,7 @@ it('all-mode replaces old observations when a selected worker accepts another ex
     fixtureUpdateRun(first.id, { status: RUN_STATUS.review }); manager.reconcileWorkerWaits();
     await until(() => !waitOf(store.getRun(p.id)));
     expect(lastWaitOf(store.getRun(p.id))).toMatchObject({ outcomes: expect.arrayContaining([{ workerId: first.id, revision: 1, status: RUN_STATUS.review, observedAt: expect.any(String) }]) });
-    expect(store.readEvents(p.id)).toContainEqual(expect.objectContaining({ type: 'worker-outcome', outcome: expect.objectContaining({ workerId: first.id, revision: 1 }) }));
+    expect(store.eventLog.readEvents(p.id)).toContainEqual(expect.objectContaining({ type: 'worker-outcome', outcome: expect.objectContaining({ workerId: first.id, revision: 1 }) }));
   });
 it('all-mode stays parked after one outcome and wakes exactly once after both', async () => {
     const p = await parent(); const first = await worker(p.id); const second = await worker(p.id);

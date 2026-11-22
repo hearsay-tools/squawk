@@ -13,12 +13,12 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
   it("a parent timeout leaves a waiting child's question unanswered", async () => {
     const p = await parent(); grantSteer(p.id); const w = await worker(p.id, 'mock:cezar-ask');
     const wait = register(p.id, [w.id]); manager.enqueueOwnedRun(w.id);
-    await until(() => store.readEvents(w.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(w.id).some(event => event.type === 'ask.requested'));
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(wait.deadline!);
     manager.reconcileWorkerWaits(); vi.useRealTimers();
     await until(() => !waitOf(store.getRun(p.id)));
     expect(store.getRun(w.id)?.status).toBe('waiting');
-    expect(store.readEvents(w.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
     expect(store.transcriptFacts.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeDefined();
     // The worker's question is a conversation message; the wait's timeout notice is the parent's own.
     expect(store.getRun(p.id)?.agentInputs?.find(input => !input.conversation)?.text).toContain('waiting');
@@ -36,7 +36,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(register(p.id, [w.id]).id).toBe(wait.id);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
     manager.sendMessage(p.id, [{ type: 'text', text: 'mock:cezar-ask' }]);
-    await until(() => store.readEvents(p.id).some(e => e.type === 'ask.requested'));
+    await until(() => store.eventLog.readEvents(p.id).some(e => e.type === 'ask.requested'));
     expect(waitOf(store.getRun(p.id))?.id).toBe(wait.id);
     expect(register(p.id, [w.id]).id).toBe(wait.id);
   });
@@ -62,7 +62,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     await until(() => !waitOf(store.getRun(p.id)));
     expect(store.getRun(w.id)?.status).not.toBe('cancelled');
     expect(store.getRun(p.id)?.agentInputs?.[0]?.id).toBe(wait.id);
-    expect(store.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
   });
   for (const phase of ['registered', 'parked', 'wake-pending'] as const) {
     it(`restart reconciles ${phase} before generic waiting settlement and deduplicates recovery`, async () => {
@@ -77,7 +77,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
       await until(() => !waitOf(store.getRun(p.id)));
       expect(store.getRun(p.id)?.agentInputs?.filter(i => i.id === wait.id)).toHaveLength(1);
       expect(store.getRun(p.id)?.steps.filter(s => s.id.startsWith('continue-'))).toHaveLength(1);
-      expect(store.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
+      expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
       // The continued handler must also park before DONE/monitoring behavior.
       const again = register(p.id, [w.id]);
       await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');

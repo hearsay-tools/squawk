@@ -145,7 +145,7 @@ describe('closed-session refusal effects through public recovery', () => {
     expect(outcome.mock.calls.filter(([runId]) => runId === id)).toEqual([]);
     expect(wait.mock.calls.filter(([runId]) => runId === id)).toEqual([]);
     expect(inputs.mock.calls.filter(([runId]) => runId === id)).toEqual([]);
-    expect(store.readEvents(id).filter(event => event.type === 'agent-input' || String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toEqual([]);
+    expect(store.eventLog.readEvents(id).filter(event => event.type === 'agent-input' || String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toEqual([]);
   });
 
   it('commits the budget alias before surfacing its note, with no refusal charge', async () => {
@@ -168,7 +168,7 @@ describe('closed-session refusal effects through public recovery', () => {
         } else {
           expect(gate.trace).toEqual(['warning', 'park', 'flush', 'alias', 'event:note']);
           expect(args[1].id).toBe(aliasId);
-          expect(args[1].askSeq).toBe(store.readEvents(id).at(-1)?.seq);
+          expect(args[1].askSeq).toBe(store.eventLog.readEvents(id).at(-1)?.seq);
           gate.trace.push('surfaced');
         }
       }
@@ -183,7 +183,7 @@ describe('closed-session refusal effects through public recovery', () => {
     expect(store.getRun(id)?.automaticWakes).toBe(MAX_AUTO_CONTINUES);
     expect(store.getRun(id)?.waits).toEqual([expect.objectContaining({ id: aliasId, askSeq: expect.any(Number) })]);
     expect(outcome.mock.calls.filter(([runId]) => runId === id)).toEqual([]);
-    expect(store.readEvents(id).filter(event => String(event.message).includes('automatic-wake budget spent'))).toHaveLength(1);
+    expect(store.eventLog.readEvents(id).filter(event => String(event.message).includes('automatic-wake budget spent'))).toHaveLength(1);
   });
 
   it.each([false, true])('enqueues with an atomic charge, persistence failure=%s', async failure => {
@@ -297,7 +297,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     expect(f.store.getRun(record.id)?.status).toBe(RUN_STATUS.running);
     return { id: record.id, session };
   }
-  const boundNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_ACK_NOTE);
+  const boundNotes = (id: string) => f.store.eventLog.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_ACK_NOTE);
 
   async function expectClosedWaiting(id: string, nudged: AgentSession): Promise<void> {
     expect(nudged.end).toHaveBeenCalledOnce();
@@ -318,7 +318,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
   });
 
   // hearsay-tools/squawk#3741: an ACK means the transport took the nudge, not that a turn started.
-  const answerNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_REPLY_NOTE);
+  const answerNotes = (id: string) => f.store.eventLog.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_REPLY_NOTE);
 
   it('an acknowledged nudge that gets no turn closes the run after the answer bound, heartbeats or not', async () => {
     const { id, session: nudged } = await startNudged();
@@ -510,10 +510,10 @@ describe('the no-wait nudge reply bound across workflow steps', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     second.emit({ type: 'turn-end' });
     expect(second.session.sendAgentMessage).toHaveBeenCalledOnce();
-    expect(f.store.readEvents(record.id).filter(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(record.id).filter(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
     return { id: record.id, first, second };
   }
-  const unanswered = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === NO_WAIT_NO_REPLY_NOTE);
+  const unanswered = (id: string) => f.store.eventLog.readEvents(id).filter(e => e.type === 'note' && e.message === NO_WAIT_NO_REPLY_NOTE);
 
   it('a late reply from the first step\'s session leaves the second step\'s bound armed', async () => {
     const { id, first } = await secondStepNudged();

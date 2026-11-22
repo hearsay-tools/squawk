@@ -2882,7 +2882,7 @@ export function createApp(deps: ServerDeps) {
       }
       const run = project.store.updateRun(id, { notify: notify ? true : undefined });
       if (!run) return c.json({ error: 'not found' }, 404);
-      project.store.appendEvent(id, {
+      project.store.eventLog.appendEvent(id, {
         type: 'handoff',
         notify,
         ...(message === undefined ? {} : { message }),
@@ -3537,7 +3537,7 @@ export function createApp(deps: ServerDeps) {
           return c.json({ error: outcome.error, manual: `git merge ${run.branch}` }, 409);
         }
         store.move(id, 'draft-pr', { pullRequestUrl: outcome.url });
-        store.appendEvent(id, {
+        store.eventLog.appendEvent(id, {
           type: 'note',
           message: `draft PR created: ${outcome.url}${outcome.dryRun ? ' (dry run — no real PR)' : ''}`,
         });

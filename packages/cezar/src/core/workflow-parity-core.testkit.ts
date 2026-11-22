@@ -298,7 +298,7 @@ function createOwnedInputParent(store: RunStore): RunRecord {
   // It may message its workers, as provisioned roots do, so it answers their questions
   // (hearsay-tools/cezarion#2410).
   store.commitDelegation([{ id: parent.id, delegation: { role: 'root', permissions: ['spawn', 'steer'], receipts: [] } }]);
-  store.appendEvent(parent.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
+  store.eventLog.appendEvent(parent.id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
     header: 'Parent', question: 'Which parent task should follow?',
     options: [{ label: 'First task' }, { label: 'Second task' }],
   }] });
@@ -513,7 +513,7 @@ export async function driveUnavailableProvider(backend: string, scenario: Scenar
       during: async ({ store, runId }) => {
         // bound: the real native mock must deliver both retry frames before the
         // product's no-progress timer can report its stored latest reason.
-        await waitFor(() => store.readEvents(runId).some(event => event.type === 'session.error' &&
+        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'session.error' &&
           String(event.message).includes('Connection failed: error sending request')));
         if (clock!.captured !== 1) throw new Error(`Expected one stream retry timer, got ${clock!.captured}`);
         await clock!.advance(60_000);

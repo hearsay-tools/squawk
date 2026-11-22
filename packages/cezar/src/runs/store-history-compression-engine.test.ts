@@ -72,7 +72,7 @@ describe('RunStore history compression', () => {
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }],
     });
     store.updateStep(run.id, 'work', { status: STEP_STATUS.done, sessionId: 'old-session' });
-    const first = store.appendEvent(run.id, { type: 'note', message: 'before' });
+    const first = store.eventLog.appendEvent(run.id, { type: 'note', message: 'before' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
     store.setArchived(run.id, true);
     await store.historyIdle();
@@ -84,10 +84,10 @@ describe('RunStore history compression', () => {
     expect(existsSync(compressed)).toBe(false);
 
     await vi.waitFor(() => {
-      const seqs = store.readEvents(run.id).map((event) => event.seq).filter((seq): seq is number => typeof seq === 'number');
+      const seqs = store.eventLog.readEvents(run.id).map((event) => event.seq).filter((seq): seq is number => typeof seq === 'number');
       expect(Math.max(0, ...seqs)).toBeGreaterThan(first.seq);
     }, { timeout: HANG_GUARD_MS });
-    const events = store.readEvents(run.id);
+    const events = store.eventLog.readEvents(run.id);
     expect(events).toContainEqual(expect.objectContaining({ seq: first.seq, type: 'note', message: 'before' }));
     const seqs = events.map((event) => event.seq).filter((seq): seq is number => typeof seq === 'number');
     expect(new Set(seqs).size).toBe(seqs.length);

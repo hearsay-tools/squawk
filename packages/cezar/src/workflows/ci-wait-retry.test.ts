@@ -40,6 +40,6 @@ describe('CI wait retry', { timeout: 30_000 }, () => {
     await until(() => !!lastCiWaitOf(run.id)?.deliveredAt);
     expect(ciWaitOf(run.id)).toBeUndefined();
     expect(store.getRun(run.id)?.agentInputs?.filter(input => input.id === receipt.id)).toHaveLength(1);
-    expect(store.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
+    expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 });

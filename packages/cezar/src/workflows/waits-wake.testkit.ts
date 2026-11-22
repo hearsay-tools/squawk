@@ -75,17 +75,17 @@ export async function parkedOnTimers<const T extends readonly { seconds: number;
   return { run, waits };
 }
 export const fireTimer = (waitId: string) => fireCapturedTimer(waitId);
-export const turnStarted = (id: string) => store.readEvents(id).some(event => event.type === 'turn.started');
-export const turnEnds = (id: string) => store.readEvents(id).filter(event => event.type === 'turn-end').length;
-export const asks = (id: string) => store.readEvents(id).filter(event => event.type === 'ask.requested');
+export const turnStarted = (id: string) => store.eventLog.readEvents(id).some(event => event.type === 'turn.started');
+export const turnEnds = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'turn-end').length;
+export const asks = (id: string) => store.eventLog.readEvents(id).filter(event => event.type === 'ask.requested');
 export const waitById = (id: string, waitId: string) => store.getRun(id)?.waits?.find(wait => wait.id === waitId);
 export const settled = (id: string, waitId: string) => store.getRun(id)?.lastWaits?.find(wait => wait.id === waitId);
 export const prompted = (runner: string, text: string) => ciNativeMessages(runner, root).filter(prompt => prompt.includes(text));
 export const label = (id: string) => deriveAttention(store.getRun(id)!).label;
-export const answered = (id: string, askSeq: number) => store.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
+export const answered = (id: string, askSeq: number) => store.eventLog.readEvents(id).some(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
 export const flushMicrotasks = async () => { for (let n = 0; n < 5; n++) await Promise.resolve(); };
 export const FOOTER_END = 'Call cezar_cancel_wait for any you no longer need.';
-export const notes = (id: string, text: string) => store.readEvents(id).filter(event => event.type === 'note' && String(event.message).includes(text));
+export const notes = (id: string, text: string) => store.eventLog.readEvents(id).filter(event => event.type === 'note' && String(event.message).includes(text));
 
 /** A portable question parked beside an open CI wait registered during its turn. */
 export async function questionBesideCi(runner: string) {

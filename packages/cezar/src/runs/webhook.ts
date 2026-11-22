@@ -286,14 +286,14 @@ export class TaskWebhook {
     const payload = await this.payload(pending, projectId, target);
     const runId = pending.run.id;
     if (this.options.dryRun ?? productEnv('DRY_RUN') === '1') {
-      this.store.appendEvent(runId, { type: 'webhook.dry-run', event: payload.event, payload });
+      this.store.eventLog.appendEvent(runId, { type: 'webhook.dry-run', event: payload.event, payload });
       this.recordOutcome(runId, target, { ok: true });
       return;
     }
     const { result, attempts } = await deliverWithRetries(target, payload, this.options);
     this.recordOutcome(runId, target, result);
     if (result.ok) return;
-    this.store.appendEvent(runId, {
+    this.store.eventLog.appendEvent(runId, {
       type: 'webhook.failed',
       event: payload.event,
       deliveryId: payload.deliveryId,
@@ -420,7 +420,7 @@ export async function sendAgentReport(options: AgentReportOptions): Promise<Agen
       }));
   // A run read from `.ai/squawk/` stays unchanged: the report was delivered, its transcript note is skipped.
   if (run && options.store && options.store.runOwnership(run.id) !== 'fallback') {
-    options.store.appendEvent(run.id, {
+    options.store.eventLog.appendEvent(run.id, {
       type: 'webhook.report',
       webhookId: webhook.id,
       webhookName: webhook.name,

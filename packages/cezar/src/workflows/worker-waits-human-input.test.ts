@@ -34,9 +34,9 @@ describe('human messages beside an owed timer wait', { timeout: 45_000 }, () => 
     if (!answer.ok) throw Error('refused');
     const timer = entryOf(p.id, answer.wait_id)!;
     if (timer.kind === 'human') throw Error('unexpected human wait');
-    const before = store.readEvents(blocker.id).at(-1)?.seq ?? 0;
+    const before = store.eventLog.readEvents(blocker.id).at(-1)?.seq ?? 0;
     await restart();
-    await until(() => store.readEvents(blocker.id).some(event => event.seq > before && event.type === 'turn.started'));
+    await until(() => store.eventLog.readEvents(blocker.id).some(event => event.seq > before && event.type === 'turn.started'));
     fireCapturedTimer(timer.id);
     await until(() => store.getRun(p.id)?.status === 'queued');
     expect(entryOf(p.id, timer.id)?.phase).toBe('resolved');
@@ -55,7 +55,7 @@ describe('human messages beside an owed timer wait', { timeout: 45_000 }, () => 
     expect(reopened.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('human update beside the timer');
     expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.flush();
     manager.cancel(blocker.id);
-    await until(() => store.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('human update beside the timer')));
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('human update beside the timer')));
     await until(() => settledOf(p.id, timer.id)?.phase === 'delivered');
   });
 
@@ -76,12 +76,12 @@ describe('human messages beside an owed timer wait', { timeout: 45_000 }, () => 
       expect(store.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('startup update beside the timer');
       store.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
     } finally { release(); }
-    await until(() => store.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('startup update beside the timer')));
-    const eventStart = store.readEvents(p.id).length;
+    await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('startup update beside the timer')));
+    const eventStart = store.eventLog.readEvents(p.id).length;
     await restart(false, checkpoint!);
     // Replayed exactly once from the durable record.
-    await until(() => store.readEvents(p.id).slice(eventStart).some(event => event.type === 'user-message' && String(event.text).includes('startup update beside the timer')));
-    expect(store.readEvents(p.id).slice(eventStart).filter(event => event.type === 'user-message')
+    await until(() => store.eventLog.readEvents(p.id).slice(eventStart).some(event => event.type === 'user-message' && String(event.text).includes('startup update beside the timer')));
+    expect(store.eventLog.readEvents(p.id).slice(eventStart).filter(event => event.type === 'user-message')
       .flatMap(event => String(event.text).match(/startup update beside the timer/g) ?? [])).toHaveLength(1);
   });
 });

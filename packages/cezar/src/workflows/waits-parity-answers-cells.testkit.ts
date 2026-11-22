@@ -181,7 +181,7 @@ export function answersCells(runners: string[], it: typeof registerTest = regist
       const timer = { ...registered.wait, phase: WAIT_PHASE.resolved, resolvedAt: new Date().toISOString() };
       store.commitWait(run.id, timer, { id: timer.id, parentRunId: run.id, source: 'lifecycle', createdAt: timer.resolvedAt, text: 'answer cap guard' });
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES, waitDeliveryFailures: 2 });
-      const notesBefore = store.readEvents(run.id).filter(event => event.type === 'note').length;
+      const notesBefore = store.eventLog.readEvents(run.id).filter(event => event.type === 'note').length;
       const commits = recordCommits(join(root, '.ai/cezar'));
       expect(manager.sendMessage(run.id, [{ type: 'text', text: answerOf(run.id) }])).toBe(true);
       commits.stop();
@@ -191,7 +191,7 @@ export function answersCells(runners: string[], it: typeof registerTest = regist
       expect(inputsFor(run.id, timer.id).map(input => input.deliveredAt)).toEqual([undefined]);
       expect(store.getRun(run.id)).toMatchObject({ automaticWakes: 0 });
       expect(store.getRun(run.id)?.waitDeliveryFailures).toBeUndefined();
-      expect(store.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore)).toEqual([]);
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore)).toEqual([]);
       commits.expectEveryCommit(run.id, row => !row.lastWaits?.some(wait => wait.id === human!.id && wait.phase === 'delivered') ||
         (row.automaticWakes === 0 && row.waitDeliveryFailures === undefined), 'a live answer and its reset wake budget');
       await until(() => answered(run.id, human!.askSeq!));
@@ -224,9 +224,9 @@ export function answersCells(runners: string[], it: typeof registerTest = regist
       refuse.mockRestore();
       expect(settled(run.id, timer.id)).toBeUndefined();
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });
-      const notesBefore = store.readEvents(run.id).filter(event => event.type === 'note').length;
+      const notesBefore = store.eventLog.readEvents(run.id).filter(event => event.type === 'note').length;
       expect(manager.sendMessage(run.id, [{ type: 'text', text: answerOf(run.id) }])).toBe(true);
-      expect(store.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore).map(event => event.message))
+      expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore).map(event => event.message))
         .toEqual([`automatic timer wake-up cap reached (${MAX_AUTO_CONTINUES}); timer ${timer.id} cancelled`]);
       expect(settled(run.id, timer.id)?.phase).toBe(WAIT_PHASE.cancelled);
       expect(inputsFor(run.id, timer.id)).toEqual([]);

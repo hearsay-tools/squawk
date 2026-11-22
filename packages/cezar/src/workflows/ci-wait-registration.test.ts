@@ -76,7 +76,7 @@ describe('CI registration guards before and after metadata lookup', () => {
 
   it('registers CI and a timer with an unanswered human question in the record', async () => {
     const f = waitRegistryFixture();
-    f.store.appendEvent(f.run.id, { type: 'ask.requested', requestId: 'unanswered-question', questions: [{ header: 'Review', question: 'Approve?' }] });
+    f.store.eventLog.appendEvent(f.run.id, { type: 'ask.requested', requestId: 'unanswered-question', questions: [{ header: 'Review', question: 'Approve?' }] });
     const ci = await f.registry.registerWait(f.run.id, { kind: WAIT_KIND.pr, pr, timeout_seconds: 30 }, 'cezar_wait', GENERATION);
     const timer = await f.registry.registerWait(f.run.id, { kind: WAIT_KIND.timer, seconds: 60 }, 'cezar_wait', GENERATION);
     expect(f.store.getRun(f.run.id)?.waits?.map(wait => wait.id)).toEqual([ci.id, timer.id]);

@@ -139,7 +139,7 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
     expect(['queued', 'delivered']).toContain((await command(parentId, ['steer', id, `Commit ${change} and report the result`])).state);
     expect((await input(id, 2)).text).toContain(`Commit ${change}`);
     await until(() => store.getRun(id)?.agentInputs?.some(item => item.source === 'agent' && !!item.deliveredAt) === true, 'steering delivery persisted');
-    expect(store.readEvents(id).filter(event => event.type === 'user-message')).toEqual([]);
+    expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message')).toEqual([]);
     reply(id, 2, { commit: change, text: `Implemented ${change}; Git commit ready for inspection.`, done: true });
     await settled(id);
   }
@@ -258,7 +258,7 @@ if (group === 'reviewed-integration') {
     expect(store.workerResults.readWorkerResultDiff(p.id, b)).toContain('+beta');
     expect(git(parentPath, 'show', 'HEAD:shared.txt')).toBe('alpha');
     expect(git(parentPath, 'rev-parse', 'HEAD')).toBe(integratedHead);
-    const publicState = JSON.stringify([store.listRuns(), ...store.listRuns().map(run => store.readEvents(run.id))]);
+    const publicState = JSON.stringify([store.listRuns(), ...store.listRuns().map(run => store.eventLog.readEvents(run.id))]);
     for (const env of environments.values()) expect(publicState).not.toContain(env.CEZ_DELEGATION_TOKEN!);
     reply(p.id, 1, { text: 'Reviewed alpha integration; beta conflict deliberately aborted.', done: true });
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.review, 'collected deleted workers permit honest parent review');

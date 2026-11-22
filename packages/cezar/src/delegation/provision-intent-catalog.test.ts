@@ -81,7 +81,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     expect(worker.steps.map(step => ({ id: step.id, kind: step.kind, status: step.status, iterations: step.iterations }))).toEqual([
       { id: 'inspect', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 2 }, { id: 'verify', kind: STEP_KIND.check, status: STEP_STATUS.done, iterations: 2 },
     ]);
-    expect(f.store.readEvents(child.workerId).filter(event => event.type === 'check-output')).toHaveLength(2);
+    expect(f.store.eventLog.readEvents(child.workerId).filter(event => event.type === 'check-output')).toHaveLength(2);
     expect(f.store.getRun(parent.id)?.delegation).toMatchObject({ role: 'root' });
   });
   // hearsay-tools/cezarion#1620: an earlier step that ends without done settles the worker as a
@@ -102,13 +102,13 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     await until(() => f.store.getRun(child.workerId)?.status === 'done');
     const steps = () => f.store.getRun(child.workerId)!.steps.filter(step => step.id === 'inspect' || step.id === 'verify').map(step => [step.id, step.status]);
     expect(steps()).toEqual([['inspect', 'waiting'], ['verify', 'pending']]);
-    expect(f.store.readEvents(child.workerId).filter(event => event.type === 'check-output')).toEqual([]);
+    expect(f.store.eventLog.readEvents(child.workerId).filter(event => event.type === 'check-output')).toEqual([]);
     await controller.service.send(caller, { id: randomUUID(), recipientRunId: child.workerId, kind: 'request', text: 'Finish the review', resume: true, timeoutSeconds: 600 });
     await until(() => sessions.length === 3);
     doneTurn(sessions[2]!, 'reviewed');
     await until(() => f.store.getRun(child.workerId)?.status === 'done' && steps()[1]?.[1] === 'done');
     expect(steps()).toEqual([['inspect', 'done'], ['verify', 'done']]);
-    expect(f.store.readEvents(child.workerId).filter(event => event.type === 'check-output')).toHaveLength(1);
+    expect(f.store.eventLog.readEvents(child.workerId).filter(event => event.type === 'check-output')).toHaveLength(1);
   });
   it.each(PROVISION_ROWS.catalogMutation)('refuses a catalog worker whose public workflow definition was edited after acceptance on %s (#451)', async mode => {
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });

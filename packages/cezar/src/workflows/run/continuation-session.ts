@@ -132,7 +132,7 @@ export class ContinuationSession {
     const finishedAt = new Date().toISOString();
     this.context.store.updateStep(runId, stepId, { status: 'failed', error: message, finishedAt });
     this.host.move(runId, 'fail-start', { error: message, finishedAt });
-    this.context.store.appendEvent(runId, { type: 'lifecycle', message });
+    this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', message });
     this.line.unmarkStarting(runId);
     this.host.dropActive(runId);
   }
@@ -152,13 +152,13 @@ export class ContinuationSession {
   private continuationRepoRootLease(runId: string, state: ActiveRun): Promise<boolean> | undefined {
     if (state.liveSession.cwd !== this.context.repoRoot || state.liveSession.sharesDirectory) return undefined;
     if (this.host.repositoryRootLockDisabled()) {
-      this.context.store.appendEvent(runId, {
+      this.context.store.eventLog.appendEvent(runId, {
         type: 'note',
         message: REPOSITORY_ROOT_LOCK_DISABLED_NOTE,
       });
       return undefined;
     }
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'note',
       message: 'waiting for exclusive access to the repository working tree',
     });
@@ -188,7 +188,7 @@ export class ContinuationSession {
       runId,
       state,
       atContinue.worktreeSetup(await atContinue.config(this.context.repoRoot, this.context.home)),
-      (event) => this.context.store.appendEvent(runId, event),
+      (event) => this.context.store.eventLog.appendEvent(runId, event),
       rematerialized ? 'rematerialized' : 'resume',
     );
   }
@@ -213,7 +213,7 @@ export class ContinuationSession {
       sessionId,
       backend,
     });
-    this.context.store.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
+    this.context.store.eventLog.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
   }
 
   /** The human ask a human Continue answers, and the human waits that answer settles. */
@@ -247,7 +247,7 @@ export class ContinuationSession {
     catch (error) { this.host.latchAgentInputError(runId, state, session!, `agent input delivery checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); return false; }
     if (opening) { state.inputState.selectOpeningInput(undefined); this.host.reconcileWorkerWaits(); }
     if (askSeq !== undefined) {
-      this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, ...(answer.answerSource ? { source: answer.answerSource } : {}) });
+      this.context.store.eventLog.appendEvent(runId, { type: 'human-input-delivered', askSeq, ...(answer.answerSource ? { source: answer.answerSource } : {}) });
       answer.askSeq = undefined;
       state.inputState.clearOpeningAnswer();
     }
@@ -320,7 +320,7 @@ export class ContinuationSession {
       finishedAt: failedAt,
     });
     this.host.move(runId, 'fail-start', { error: `continue failed: ${message}`, finishedAt: failedAt });
-    this.context.store.appendEvent(runId, {
+    this.context.store.eventLog.appendEvent(runId, {
       type: 'lifecycle',
       message: `continue failed — ${message}`,
     });
@@ -397,7 +397,7 @@ export class ContinuationSession {
     this.applyContinuationSettings(runId, stepId, state, backend, settings);
     const { runner } = await continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
     await cleanupTaskWorktreeSkills(state.liveSession.cwd, this.context.store.getRun(runId)?.worktreePath, this.context.repoRoot,
-      message => this.context.store.appendEvent(runId, { type: 'note', message }));
+      message => this.context.store.eventLog.appendEvent(runId, { type: 'note', message }));
     await this.runSkills.loadRunSkills(state, backend, settings.profile);
     if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
     const opening = continuationOpening(this.context.store, {
@@ -410,7 +410,7 @@ export class ContinuationSession {
 
     const onEvent = createSessionEventHandler(this.context, this.sessionEventHost, {
       runId, state, turn, stepId, backend, sink, tokenBase: 0,
-      emit: event => this.context.store.appendEvent(runId, event),
+      emit: event => this.context.store.eventLog.appendEvent(runId, event),
       acknowledge: () => this.acknowledgeOpeningTurn(runId, state, answer),
     });
 

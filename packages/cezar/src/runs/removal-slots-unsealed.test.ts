@@ -35,7 +35,7 @@ it('a deletion throws and removes no row, history, artifact or tmp directory', (
   const dataDir = join(scratch('cez-unsealed-delete-'), '.ai/cezar');
   const store = RunStore.open(dataDir);
   const run = store.createRun({ title: 'kept', task: 'kept', workflow: 'quick-task', steps: [] });
-  store.appendEvent(run.id, { type: 'note', message: 'kept history' });
+  store.eventLog.appendEvent(run.id, { type: 'note', message: 'kept history' });
   setRunStatus(store, run.id, RUN_STATUS.done);
   const artifacts = provisionArtifactDirectory(dataDir, run.id);
   writeFileSync(join(artifacts, 'snapshot'), 'kept');
@@ -49,7 +49,7 @@ it('a deletion throws and removes no row, history, artifact or tmp directory', (
 
   const reopened = RunStore.open(dataDir);
   expect(reopened.getRun(run.id)?.status).toBe(RUN_STATUS.done);
-  expect(reopened.readEvents(run.id).map(event => event.type)).toContain('note');
+  expect(reopened.eventLog.readEvents(run.id).map(event => event.type)).toContain('note');
   expect([existsSync(join(artifacts, 'snapshot')), existsSync(tmp)]).toEqual([true, true]);
   reopened.close();
 });

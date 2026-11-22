@@ -339,7 +339,7 @@ export class WorkerCleanup {
       const reason = taken && (taken.blocker.kind === 'unreadable' ? 'worker process record is unreadable; termination cannot be proven'
         : taken.blocker.kind === 'controller' ? controllerRefusal(taken.blocker.pid).message
         : `the previous execution's ${taken.blocker.pids.length === 1 ? 'process' : 'processes'} ${describeProcesses(taken.blocker.pids)} still ${taken.blocker.pids.length === 1 ? 'runs' : 'run'}`);
-      if (taken?.changed) project.store.appendEvent(workerId, { type: 'lifecycle', message: `destroy blocked: ${reason}` });
+      if (taken?.changed) project.store.eventLog.appendEvent(workerId, { type: 'lifecycle', message: `destroy blocked: ${reason}` });
       const result: WorkerDestroyResult = { workerId, state: 'incomplete', remaining: ['process', ...resources], error: !taken ? 'Worker termination is not proven; retry cleanup later'
         : taken.blocker.kind === 'unreadable' ? reason! : `Worker termination is not proven: ${reason}; retry cleanup later` };
       persist(result.state, result.remaining, result.error);
@@ -435,7 +435,7 @@ export class WorkerCleanup {
       const teardownError = await kind.teardown(project.root, teardown, workspace);
       // A project replaced during the teardown keeps its old manager alive: never reap through it.
       assertAttached();
-      if (teardownError) project.store.appendEvent(workerId, { type: 'lifecycle', message: `worktree teardown failed: ${teardownError}` });
+      if (teardownError) project.store.eventLog.appendEvent(workerId, { type: 'lifecycle', message: `worktree teardown failed: ${teardownError}` });
       const terminated = await project.manager.awaitRunTermination(workerId, this.terminationTimeoutMs, { reapOrphans: true });
       assertAttached();
       if (!terminated) return terminationFailure();

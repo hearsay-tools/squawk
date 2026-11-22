@@ -33,7 +33,7 @@ export class AttachmentWriter {
             ? this.host.persistAttachment(runId, b.mediaType, b.data, 'pasted')
             : null;
         if (b.type === 'file' && !saved) {
-          this.context.store.appendEvent(runId, {
+          this.context.store.eventLog.appendEvent(runId, {
             type: 'note', tone: 'danger',
             message: `${b.mediaType} attachment could not be saved — please attach it again`,
           });

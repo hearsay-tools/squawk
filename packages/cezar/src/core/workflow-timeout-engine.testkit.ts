@@ -34,11 +34,11 @@ const engineCell: WorkflowTimeoutCell = (backend, criterion) => async () => {
       expect(run.status).toBe('failed');
       expect(run.error).toContain('timed out');
       expect(run.steps[0]?.status).toBe('failed');
-      expect(store.readEvents(runId).some(e => e.type === 'check-output')).toBe(false);
+      expect(store.eventLog.readEvents(runId).some(e => e.type === 'check-output')).toBe(false);
     } else {
       expect(run.error).toBeUndefined();
       expect(run.steps.map(s => s.status)).toEqual(['done', 'done']);
-      expect(store.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([
+      expect(store.eventLog.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([
         { stepId: 'verify', exitCode: 0 },
       ]);
     }

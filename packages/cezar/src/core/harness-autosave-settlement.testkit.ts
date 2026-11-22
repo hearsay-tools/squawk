@@ -60,7 +60,7 @@ async function parkForSettlement({ store, manager, runId }: SettlementFixture,
         if (outcome === 'cancelled') {
           expect(idleClock?.pending).toBe(1);
           await idleClock!.advance(IDLE_TIMEOUT_MS);
-          expect(store.readEvents(runId).some(event => event.type === 'lifecycle' &&
+          expect(store.eventLog.readEvents(runId).some(event => event.type === 'lifecycle' &&
             event.message === 'session closed after 15m of inactivity')).toBe(true);
         } else manager.finish(runId);
         // bound: the first Finish saves through real Git under the product budget.
@@ -174,7 +174,7 @@ async function settleAndAssertRefusal({ store, manager, runId }: SettlementFixtu
   // bound: the first blocked report can precede the first holder poll under load ("process
   // inspection pending; retained cwd holder PIDs: none", seen in the full suite at load
   // 30+); the refusal below quotes the latest report, so wait for the one naming the holder.
-  await waitFor(() => store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('termination not confirmed') &&
+  await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('termination not confirmed') &&
     String(event.message).includes(`holder PIDs: ${holder}`)), 5000);
   // bound: wait for settlement and the real turn-end diff stat. Independence
   // from cleanup is proven by the live holder below, not by elapsed time.
@@ -295,7 +295,7 @@ export function describeAutosaveSettlement(outcome: 'failed' | 'cancelled' | 'su
                 }
                 if (!replacement) {
                   // bound: wait for autosave's cleanup confirmation after the holder exits.
-                  await waitFor(() => store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('cleanup confirmed')));
+                  await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('cleanup confirmed')));
                 }
                 if (!replacement) {
                   const release = manager.claimForPublish(runId);
@@ -379,7 +379,7 @@ export function describeAutosaveChurn(registration = { describe, it }): void {
                 await waitFor(() => saves.length > 0 && saves.every(task => settled.has(task)), 30_000);
                 expect(await Promise.all(saves)).toContain('committed');
                 await waitFor(() => !manager.isActive(runId));
-                const notes = store.readEvents(runId).filter(event => event.type === 'note').map(event => String(event.message));
+                const notes = store.eventLog.readEvents(runId).filter(event => event.type === 'note').map(event => String(event.message));
                 expect(notes.filter(note => /autosave (failed|unsuccessful)|termination not confirmed|cleanup/.test(note))).toEqual([]);
                 expect(execFileSync('git', ['show', 'HEAD:progress.txt'], { cwd: dir, encoding: 'utf8' })).toBe('save me\n');
                 const release = manager.claimForPublish(runId);

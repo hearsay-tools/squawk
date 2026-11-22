@@ -26,11 +26,11 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.mode === 'steer'
       // hearsay-tools/cezarion#505: an observable harness may also have reported reading it before the failure.
       if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
         expect(store.getRun(runId)?.agentInputs).toEqual([input]);
-        expect(store.readEvents(runId).filter(event => event.type === 'agent-input-consumed')).toEqual([]);
+        expect(store.eventLog.readEvents(runId).filter(event => event.type === 'agent-input-consumed')).toEqual([]);
       } else {
         expect(store.getRun(runId)?.agentInputs).toEqual([delivered(input, store.getRun(runId)?.agentInputs?.[0])]);
       }
-      expect(store.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
+      expect(store.eventLog.readEvents(runId).filter(event => event.type === 'agent-input')).toHaveLength(1);
     });
   }, 60_000);
 }

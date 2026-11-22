@@ -306,7 +306,7 @@ export class FamilyReconciler {
       const recorded = this.context.store.transcriptFacts.transcriptFacts(parent.id).workerOutcomeKeys;
       for (const outcome of next.outcomes ?? []) {
         if (!recorded.includes(workerOutcomeKey(entry.id, outcome.workerId, outcome.revision ?? 0))) {
-          this.context.store.appendEvent(parent.id, { type: 'worker-outcome', waitId: entry.id, outcome });
+          this.context.store.eventLog.appendEvent(parent.id, { type: 'worker-outcome', waitId: entry.id, outcome });
         }
       }
     }

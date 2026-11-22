@@ -97,7 +97,7 @@ describe('worker waits in the wait list', { timeout: 30_000 }, () => {
     release();
     await until(() => settledOf(p.id, entry.id)?.phase === 'delivered');
     expect(inputOf(p.id, entry.id)?.deliveredAt).toBeDefined();
-    expect(store.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(1);
+    expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'worker-outcome')).toHaveLength(1);
   });
 
   it('an outcome whose resolution write fails resolves once storage recovers, with no further family events', async () => {

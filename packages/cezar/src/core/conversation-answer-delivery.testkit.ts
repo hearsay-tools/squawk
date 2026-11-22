@@ -39,9 +39,9 @@ async function withAnsweredWorker(backend: string, env: Record<string, string>, 
   await withOwnedInputRun(backend, 'ask', async fixture => {
     const { repoRoot, runId, parentRunId } = fixture;
     fixture.manager.enqueueOwnedRun(runId);
-    await waitFor(() => fixture.store.readEvents(runId).some(event => event.type === 'worker-question-routed'));
+    await waitFor(() => fixture.store.eventLog.readEvents(runId).some(event => event.type === 'worker-question-routed'));
     await waitFor(() => fixture.store.getRun(runId)?.status === RUN_STATUS.waiting);
-    const askSeq = fixture.store.readEvents(runId).find(event => event.type === 'ask.requested')!.seq;
+    const askSeq = fixture.store.eventLog.readEvents(runId).find(event => event.type === 'ask.requested')!.seq;
     // Native question turns stay open, so a restart is the session close every wire shares.
     let { store, manager } = await fixture.restart();
     expect(manager.isActive(runId)).toBe(false);
@@ -55,7 +55,7 @@ async function withAnsweredWorker(backend: string, env: Record<string, string>, 
         ...(requestId ? { kind: 'reply' as const, requestId } : { kind: 'progress' as const }) });
       return id;
     };
-    const questionId = String(store.readEvents(runId).find(event => event.type === 'worker-question-routed' && event.askSeq === askSeq)!.messageId);
+    const questionId = String(store.eventLog.readEvents(runId).find(event => event.type === 'worker-question-routed' && event.askSeq === askSeq)!.messageId);
     const answer = (text: string) => send(text, questionId);
     const answerFixture: AnswerFixture = { store, manager, runId, askSeq, send, answer, restart: async () => {
       ({ store, manager } = await fixture.restart());
@@ -67,13 +67,13 @@ async function withAnsweredWorker(backend: string, env: Record<string, string>, 
 }
 
 const input = (store: RunStore, runId: string, id: string) => store.getRun(runId)?.agentInputs?.find(entry => entry.id === id);
-const projectionSeq = (store: RunStore, runId: string, id: string, delivery: string) => store.readEvents(runId)
+const projectionSeq = (store: RunStore, runId: string, id: string, delivery: string) => store.eventLog.readEvents(runId)
   .find(event => event.type === 'conversation-message' && (event.message as ConversationMessage).id === id && event.delivery === delivery)?.seq;
-const checkpoints = (store: RunStore, runId: string, askSeq: number) => store.readEvents(runId)
+const checkpoints = (store: RunStore, runId: string, askSeq: number) => store.eventLog.readEvents(runId)
   .filter(event => event.type === 'human-input-delivered' && event.askSeq === askSeq);
-const firstAfter = (store: RunStore, runId: string, type: string, seq: number) => store.readEvents(runId)
+const firstAfter = (store: RunStore, runId: string, type: string, seq: number) => store.eventLog.readEvents(runId)
   .find(event => event.type === type && event.seq > seq)?.seq;
-const lastSeq = (store: RunStore, runId: string) => store.readEvents(runId).at(-1)?.seq ?? 0;
+const lastSeq = (store: RunStore, runId: string) => store.eventLog.readEvents(runId).at(-1)?.seq ?? 0;
 
 export const answerDeliveryCells = answerDeliveryFamilies({
   steerExemption: (backend, steer, steerExemption) => async () => {
@@ -155,13 +155,13 @@ export const answerDeliveryCells = answerDeliveryFamilies({
         } else {
           await waitFor(() => !!input(store, runId, id)?.deliveredAt);
           // The beside turn ends and parks for a question again.
-          await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(input(store, runId, id)!.text)));
+          await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(input(store, runId, id)!.text)));
           await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting && store.transcriptFacts.transcriptFacts(runId).pendingAsk !== undefined);
           // Delivered beside the card, not instead of it: the original question is still open.
           expect(question(seq)).toBeDefined();
         }
         expect(checkpoints(store, runId, seq)).toEqual([]);
-        expect(store.readEvents(runId).filter(event => event.type === 'user-message' && String(event.text).includes(input(store, runId, id)!.text))).toEqual([]);
+        expect(store.eventLog.readEvents(runId).filter(event => event.type === 'user-message' && String(event.text).includes(input(store, runId, id)!.text))).toEqual([]);
       };
       const early = await send('mock:agent-echo progress before the answer');
       await expectBesideOrHeld(early, askSeq);
@@ -191,7 +191,7 @@ export const answerDeliveryCells = answerDeliveryFamilies({
 
       // With the steer grant the newer question reaches the parent (#505), whose reply is
       // the one input it answers, through the answer seam. Every message is delivered by then.
-      const routedTo = () => store.readEvents(runId).find(event => event.type === 'worker-question-routed' && event.askSeq === newer);
+      const routedTo = () => store.eventLog.readEvents(runId).find(event => event.type === 'worker-question-routed' && event.askSeq === newer);
       await waitFor(() => routedTo() !== undefined);
       const routed = routedTo()!;
       answers.set(newer, await send('Vitest', String(routed.messageId)));
