@@ -108,6 +108,8 @@ function skipAutosave(head: string | null, status: string, onOutcome: AutosaveCo
  * REVERT_HEAD are root refs in the ref backend, which a reftable repository keeps in
  * its reftable stack, so a file check would miss them there. */
 async function pendingAutosaveOperation(dir: string, reason: AutosaveReason, git: AutosaveGitFn): Promise<'refused' | 'failed' | null> {
+  // Do not batch with log --ignore-missing: it hides a ref to a missing object,
+  // which is still a recorded operation. rev-parse also works on an unborn HEAD.
   for (const pending of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']) {
     const found = await git(dir, ['rev-parse', '--verify', '-q', pending]);
     if (found.ok) {
@@ -117,6 +119,29 @@ async function pendingAutosaveOperation(dir: string, reason: AutosaveReason, git
     if (found.code !== 1) return 'failed';
   }
   return null;
+}
+
+/** NUL-delimited values preserve embedded newlines; the last value wins as with config --get. */
+async function autosaveTaskConfig(dir: string, git: AutosaveGitFn): Promise<{ identityArgs: string[]; hasSigning: boolean } | 'failed'> {
+  const config = await git(dir, ['config', '--null', '--get-regexp', '^(user\\.(name|email)|commit\\.gpgsign)$']);
+  if (!config.ok && config.code !== 1) return 'failed';
+  const values = new Map<string, string>();
+  for (const entry of config.stdout.split('\0').filter(Boolean)) {
+    const split = entry.indexOf('\n');
+    values.set(split < 0 ? entry : entry.slice(0, split), split < 0 ? '' : entry.slice(split + 1));
+  }
+  const identityArgs = values.get('user.name')?.trim() && values.get('user.email')?.trim()
+    ? [] : ['-c', 'user.name=cezar', '-c', 'user.email=cezar@local'];
+  return { identityArgs, hasSigning: values.has('commit.gpgsign') };
+}
+
+async function autosaveSigningArgs(dir: string, hasSigning: boolean, git: AutosaveGitFn): Promise<string[] | 'failed'> {
+  // Let Git normalize explicit booleans, including valueless keys and numeric
+  // forms, and reject invalid ones. With no key, the batched config read suffices.
+  if (!hasSigning) return [];
+  const sign = await git(dir, ['config', '--type=bool', 'commit.gpgsign']);
+  if (!sign.ok && sign.code !== 1) return 'failed';
+  return sign.ok && sign.stdout.trim() === 'true' ? ['-S'] : [];
 }
 
 /** Commit as the CURRENT git user, so the branch's commits (and any PR opened from it) are
@@ -159,27 +184,29 @@ async function commitAutosaveOnHead(
  * stopped reading commit.gpgSign in Git 2.9 (its release notes tell scripts to read
  * it and pass -S), so it is read here: a user who signs every commit still does. */
 async function writeAutosaveCommit(
-  dir: string, taskBranch: string, identityArgs: string[], message: string, git: AutosaveGitFn,
+  dir: string, taskBranch: string, config: { identityArgs: string[]; hasSigning: boolean }, message: string, git: AutosaveGitFn,
 ): Promise<{ sha: string; parent: string } | 'failed' | 'nothing-to-do'> {
   const ref = `refs/heads/${taskBranch}`;
-  const tip = await git(dir, ['rev-parse', '--verify', '-q', ref]);
-  if (!tip.ok && tip.code !== 1) return 'failed';
-  const parent = tip.ok ? tip.stdout.trim() : '';
+  // Read the branch tip and its tree together. for-each-ref also matches descendants
+  // of a missing ref (task/sub), so require the exact ref name before using the tip.
+  const tip = await git(dir, ['for-each-ref', '--format=%(refname) %(objectname) %(tree)', ref]);
+  if (!tip.ok) return 'failed';
+  const entry = tip.stdout.split('\n').find(line => line.startsWith(`${ref} `));
+  const [, parent = '', parentTree = ''] = entry?.split(' ') ?? [];
   const written = await git(dir, ['write-tree']);
   const tree = written.stdout.trim();
   if (!written.ok || !tree) return 'failed';
   if (parent) {
     // Dirty when status looked, identical once staged: nothing to save.
-    const parentTree = await git(dir, ['rev-parse', '--verify', '-q', `${parent}^{tree}`]);
-    if (!parentTree.ok) return 'failed';
-    if (parentTree.stdout.trim() === tree) return 'nothing-to-do';
+    if (!parentTree) return 'failed';
+    if (parentTree === tree) return 'nothing-to-do';
   }
-  const sign = await git(dir, ['config', '--type=bool', 'commit.gpgsign']);
-  if (!sign.ok && sign.code !== 1) return 'failed';
+  const signingArgs = await autosaveSigningArgs(dir, config.hasSigning, git);
+  if (signingArgs === 'failed') return 'failed';
   const created = await git(dir, [
-    ...identityArgs,
+    ...config.identityArgs,
     'commit-tree',
-    ...(sign.ok && sign.stdout.trim() === 'true' ? ['-S'] : []),
+    ...signingArgs,
     tree,
     ...(parent ? ['-p', parent] : []),
     '-m',
@@ -290,13 +317,15 @@ export async function autosaveCommit(dir: string, reason: AutosaveReason, option
       if (pending) return pending;
     }
     if (!(await git(dir, ['add', '-A'])).ok) return 'failed';
-    const identityArgs = await autosaveIdentityArgs(dir, git);
-    if (identityArgs === 'failed') return 'failed';
     const message = `cezar autosave (${reason})`;
     if (taskBranch === undefined) {
+      const identityArgs = await autosaveIdentityArgs(dir, git);
+      if (identityArgs === 'failed') return 'failed';
       return commitAutosaveOnHead(dir, identityArgs, message, branch, onOutcome, git);
     }
-    const written = await writeAutosaveCommit(dir, taskBranch, identityArgs, message, git);
+    const config = await autosaveTaskConfig(dir, git);
+    if (config === 'failed') return 'failed';
+    const written = await writeAutosaveCommit(dir, taskBranch, config, message, git);
     if (written === 'failed' || written === 'nothing-to-do') return written;
     return publishAutosaveCommit(dir, taskBranch, written.sha, written.parent, message, status.stdout, onOutcome, reason, git);
   }
