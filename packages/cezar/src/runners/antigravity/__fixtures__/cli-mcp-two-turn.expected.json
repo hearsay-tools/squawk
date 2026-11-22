@@ -72,8 +72,8 @@
     "item": {
       "kind": "tool",
       "id": "call_8780525026460829537",
-      "name": "mcp_squawk_echo",
-      "title": "Run mcp_squawk_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -87,8 +87,8 @@
     "item": {
       "kind": "tool",
       "id": "call_8780525026460829537",
-      "name": "mcp_squawk_echo",
-      "title": "Run mcp_squawk_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -102,8 +102,8 @@
     "item": {
       "kind": "tool",
       "id": "call_8780525026460829537",
-      "name": "mcp_squawk_echo",
-      "title": "Run mcp_squawk_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "completed",
       "input": {
@@ -111,11 +111,6 @@
         "toolSummary": "Echo probe text"
       }
     }
-  },
-  {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
   },
   {
     "type": "item.started",
@@ -381,8 +376,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -396,8 +391,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -411,8 +406,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -426,8 +421,8 @@
     "item": {
       "kind": "tool",
       "id": "call_7889892387134202802",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_echo",
+      "name": "echo",
+      "title": "echo",
       "toolKind": "other",
       "status": "completed",
       "input": {

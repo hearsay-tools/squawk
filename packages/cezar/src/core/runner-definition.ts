@@ -82,7 +82,7 @@ export interface RunnerMock {
   /** Permission-policy runners prove tool admission through recorded native responses. */
   readonly toolGrantObservation?: 'permission-policy';
   /** ACP idle session/prompt replies are turn completion, not an independent receipt
-   * (antigravity-acp 1.5.0 prompt-*.ndjson in its recorded fixtures). */
+   * (Antigravity CLI cli-prompt-*.ndjson in its recorded fixtures). */
   readonly promptResponseEndsTurn?: true;
   readonly defaultApprovalEcho?: string;
   /** The env var the runner reads to locate its binary; a test points it at the mock script. */
@@ -194,6 +194,11 @@ export interface RunnerDetection {
   /** The executable the host configured through the runner's `*_BIN` setting, if any. It replaces `binary`. */
   readonly binOverride: () => string | undefined;
   /**
+   * Where the CLI is when no override is set and `binary` on PATH is not it: a managed install, or
+   * another name on PATH. Each candidate it returns is already known to be this CLI.
+   */
+  readonly locate?: () => string | undefined;
+  /**
    * What `DRY_RUN=1` reports. `always`: the bundled mock stands in, so the CLI counts as present
    * without a spawn. `unless-bin-override`: the same, except that an explicit `binOverride`
    * outranks the mock in the runner, so the probe still spawns it.
@@ -204,6 +209,8 @@ export interface RunnerDetection {
    * this CLI (a shell wrapper or an unrelated tool on PATH), and the probe reports it absent.
    */
   readonly banner?: { readonly pattern: RegExp; readonly label: string };
+  /** A check beyond the banner that a resolved executable is this CLI, such as its help text. */
+  readonly identify?: (bin: string) => Promise<boolean>;
   /** First capture is the version in a multiline banner. Identity still checks the full banner. */
   readonly versionPattern?: RegExp;
   /** The hint that goes with a CLI that answered. */

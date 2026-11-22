@@ -94,7 +94,7 @@
       "input": {
         "command": "echo probe-42"
       },
-      "output": "{\"output\":\"Created At: 2026-11-22T00:33:42+01:00\\nCompleted At: 2026-11-22T00:33:43+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nprobe-42\\r\\n\",\"exit_code\":0}",
+      "output": "Created At: 2026-11-22T00:33:42+01:00\nCompleted At: 2026-11-22T00:33:43+01:00\nCommand exited with code 0.\n\nCommand output:\nprobe-42\r\n",
       "diffs": [],
       "exitCode": 0
     }

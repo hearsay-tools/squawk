@@ -2,6 +2,7 @@ import { commandText, oldCommandNotice } from './home/command.ts';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { operatorHomeEntry, prepareOperatorHome } from './home/entry.ts';
+import { bindManagedCliHome } from './managed-install/runtime-home.ts';
 import type { Home } from './home/home.ts';
 import { runSubcommand } from './subcommands.ts';
 import { getRepoInfo } from './server/git.ts';
@@ -127,7 +128,7 @@ async function dispatch(deps: CliDeps): Promise<void> {
   let resolvedHome: Home | undefined;
   let homeEntry = deps.operatorHomeEntry(deps.process.argv.slice(2));
   // Dispatch task commands without invoking this factory or giving them a Home.
-  const home = () => resolvedHome ??= deps.prepareOperatorHome(deps.resolveCliHome(), homeEntry);
+  const home = () => resolvedHome ??= bindManagedCliHome(deps.prepareOperatorHome(deps.resolveCliHome(), homeEntry));
   // Subcommands with flags of their own run before the global parseArgs (#504, #774, #1576).
   const subcommandExit = await deps.runSubcommand(deps.process.argv.slice(2), deps.process.env, home);
   if (subcommandExit !== undefined) {

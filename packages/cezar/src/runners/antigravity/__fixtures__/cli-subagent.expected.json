@@ -229,7 +229,7 @@
       "input": {
         "command": "sleep 0"
       },
-      "output": "{\"output\":\"Created At: 2026-11-22T00:34:04+01:00\\nCompleted At: 2026-11-22T00:34:04+01:00\\nCommand exited with code 0.\\n\\nNo output from the command.\",\"exit_code\":0}",
+      "output": "Created At: 2026-11-22T00:34:04+01:00\nCompleted At: 2026-11-22T00:34:04+01:00\nCommand exited with code 0.\n\nNo output from the command.",
       "diffs": [],
       "exitCode": 0
     }
@@ -558,7 +558,7 @@
       "input": {
         "command": "sleep 2"
       },
-      "output": "{\"output\":\"Command exited with code 0.\\n\\nNo output from the command.\",\"exit_code\":0}",
+      "output": "Command exited with code 0.\n\nNo output from the command.",
       "diffs": [],
       "exitCode": 0
     }
@@ -1540,7 +1540,7 @@
       "input": {
         "command": "echo sub-ok"
       },
-      "output": "{\"output\":\"Created At: 2026-11-22T00:34:22+01:00\\nCompleted At: 2026-11-22T00:34:22+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nsub-ok\\r\\n\",\"exit_code\":0}",
+      "output": "Created At: 2026-11-22T00:34:22+01:00\nCompleted At: 2026-11-22T00:34:22+01:00\nCommand exited with code 0.\n\nCommand output:\nsub-ok\r\n",
       "diffs": [],
       "exitCode": 0
     }

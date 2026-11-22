@@ -229,11 +229,6 @@
     "turnId": "acp-turn-4"
   },
   {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
-  },
-  {
     "type": "item.started",
     "item": {
       "kind": "reasoning",
@@ -311,8 +306,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -326,8 +321,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "pending",
       "input": {
@@ -341,8 +336,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "running",
       "input": {
@@ -356,8 +351,8 @@
     "item": {
       "kind": "tool",
       "id": "call_2205662253417639058",
-      "name": "mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
-      "title": "Run mcp_cezar_ci_a1b2c3d4e5f60718293a4b5c6d7e8f90_t64_aaaaaaaaaaaaaa",
+      "name": "t64_aaaaaaaaaaaaaa",
+      "title": "t64_aaaaaaaaaaaaaa",
       "toolKind": "other",
       "status": "completed",
       "input": {

@@ -80,7 +80,7 @@
       "input": {
         "command": "echo probe-denied"
       },
-      "output": "{\"output\":\"\"}",
+      "output": "",
       "diffs": []
     }
   },

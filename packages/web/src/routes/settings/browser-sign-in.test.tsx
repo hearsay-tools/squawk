@@ -28,12 +28,12 @@ it('opens consent for the chosen account and submits a pasted remote redirect', 
   fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
   expect((await screen.findByRole('link', { name: 'Open Google sign-in' })).getAttribute('href')).toBe(consent)
   expect(requests[0]).toMatchObject({ method: 'POST', body: { provider: 'antigravity', profileId: 'work' } })
-  const redirect = 'http://127.0.0.1:12345/?state=fixture&code=fixture-only'
-  fireEvent.change(screen.getByRole('textbox', { name: 'Redirect URL' }), { target: { value: redirect } })
+  const redirect = 'https://antigravity.google/oauth-callback?state=fixture&code=fixture-only'
+  fireEvent.change(screen.getByRole('textbox', { name: 'Code or page address' }), { target: { value: redirect } })
   fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }))
   expect(await screen.findByText('Connected.')).toBeTruthy()
   expect(requests.find(request => request.url.endsWith('/redirect'))?.body).toEqual({ redirectUrl: redirect })
-  expect(screen.queryByRole('textbox', { name: 'Redirect URL' })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: 'Code or page address' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(screen.queryByRole('dialog')).toBeNull()
 })
@@ -83,14 +83,14 @@ it('offers status retry after a transient read failure and observes native compl
   expect(await screen.findByText('Connected.')).toBeTruthy()
 })
 
-it('requires pasted redirects on a hosted cockpit with settings administration', async () => {
+it('asks for the pasted code on a hosted cockpit with settings administration', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => response({ id, state: 'waiting', url: consent })))
   render(<QueryClientProvider client={signInClient(false)}><BrowserSignInButton provider="antigravity" label="Personal" /></QueryClientProvider>)
   fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
   await screen.findByRole('link', { name: 'Open Google sign-in' })
-  expect(screen.getByText(/Open the sign-in link in your browser/).textContent).toContain('Copy that full address and paste it below')
+  expect(screen.getByText(/Open the sign-in link in your browser/).textContent).toContain('Copy that code, or the full address of that page, and paste it below.')
   expect(screen.queryByText(/sign-in completes here/)).toBeNull()
-  expect(screen.getByRole('textbox', { name: 'Redirect URL' })).toBeTruthy()
+  expect(screen.getByRole('textbox', { name: 'Code or page address' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 })
 

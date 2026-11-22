@@ -13,7 +13,7 @@ Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/`
 Explicit-shutdown parity reads the declared `shutdownDescendants` scope: `process-group` retains
 the detached-survivor checks, while `observed-tree` requires observed detached children to die
 after Stop, end escalation and EOF exit after end (S27/S28/S30). It makes no wider claim
-about abrupt leader exits before a snapshot (S31). Antigravity declares `observed-tree`.
+about abrupt leader exits before a snapshot (S31). Antigravity declares `observed-tree`: a CLI command runs in its own session and survives the ACP process.
 
 ## Runner definitions
 
@@ -360,7 +360,7 @@ Squawk is not married to one vendor. Every agent step runs through a single
 | **OpenCode** _(experimental)_ | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; OpenCode's own permission config governs. Squawk answers OpenCode's built-in asks (outside-worktree reads, `.env` reads, the repeated-call guard) once, unless your config has a rule for that permission. Any other ask shows a permission card in the cockpit, and the run waits for your answer. |
 | **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi tool names. The default list, which adds the harness extras `Subagent`, `SubagentSupervisor` and `SubagentWait`, sends no allowlist: `--no-builtin-tools` plus a bundled extension that activates those built-ins, so MCP servers (`direct`, `codemode` and `deferred` exposure) and other pi extensions' tools stay callable. The six base tools alone, the list a worker inherits from a Claude parent, take the same path. A narrowed `allowedTools`, or one that names any tool outside that default set (an `mcp__` tool, `WebFetch` or a custom tool), uses pi's `--tools` allowlist, so a step that grants named tools reaches only those; a list that maps to nothing becomes `--no-tools` (or only the Squawk tools). A configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
 | **OMP** _(experimental)_ | [`omp`](https://github.com/can1357/oh-my-pi) | Persistent `--mode rpc` over JSONL (Oh My Pi, a pi fork); models use the `provider/model` convention and are discovered from `omp models --json`. | Maps `allowedTools` onto OMP's `--tools` allowlist (`[]` becomes `--no-tools`); default sessions also pass `todo`, `lsp`, `ast_edit`, `task` and `wait`. A configured `bashAllowlist` disables `bash` because OMP cannot express command-prefix rules. `--tools` filters built-in tools only, so MCP and extension tools stay callable under a narrowed list. |
-| **Antigravity** | `agy` from the [ACP registry archive](https://antigravity.google) | `agy` over ACP stdio, with `--uid=` on Linux only, per the [ACP registry](https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json). Uses the shared ACP layer. No interactive terminal handoff. Browser sign-in uses `settingsAdmin`, including host-granted hosted cockpits. | Native permission requests follow the task grant and Bash prefixes. Granted requests proceed; ungranted requests fail, or reach the approval card with `HSQ_APPROVAL_GATE=1`. Client reads require Read. Native `interaction_` asks always reach the question card. See [Antigravity tool access](#antigravity-tool-access). |
+| **Antigravity** | The Google Antigravity CLI, installed from Settings > Accounts > Install CLI (or `agy` on PATH, or `HSQ_ANTIGRAVITY_BIN`) | `antigravity acp --gemini-dir <account> --app-data-dir antigravity-cli` over ACP stdio. Uses the shared ACP layer. No interactive terminal handoff. Browser sign-in uses `settingsAdmin`, including host-granted hosted cockpits. | Native permission requests follow the task grant and Bash prefixes. Granted requests proceed; ungranted requests fail, or reach the approval card with `HSQ_APPROVAL_GATE=1`. A native `ask_question` reaches the question card. See [Antigravity tool access](#antigravity-tool-access). |
 
 ### Minimal sessions
 
@@ -462,75 +462,82 @@ can slot in the same way.
 
 ### Antigravity tool access
 
-Antigravity ACP 1.5.0 runs in `default` mode on every fresh or resumed session. Squawk
-answers native permission requests from the tool grant and Bash command prefixes. Granted
-requests proceed; ungranted requests fail. With `HSQ_APPROVAL_GATE=1`, ungranted requests
-reach the native approval card instead. This matches Claude's approval gate. Native
-`interaction_` questions always reach the question card. Client file reads require Read;
-they cannot request interactive approval. The wire's `ask_question`, `schedule`, and `finish`
-need no tool admission. Read/search built-ins that have no separate native tool are not invented.
-Squawk loads its lifecycle MCP server eagerly and disables only agy's native `run_workflow`
-on new and resumed sessions. Squawk owns workflows; the native tool would also write its
-built-in skill into the task checkout. Native `start_subagent` stays available. Squawk sends
-only the task checkout as a workspace, because agy sorts workspace roots to choose the shell
-cwd. Absolute handoff and temp paths remain usable through shell tools. Native option
-questions allow only the offered answers; unsupported option counts cancel with a notice.
-See [the recorded wire](../runners/antigravity-wire.md).
+Squawk runs the Google Antigravity CLI. It resolves the executable in this order:
+`HSQ_ANTIGRAVITY_BIN`, the managed install's active release, then `agy` or `antigravity` on
+PATH. On PATH it checks each entry until one is the CLI, off the event loop: `--help` starts `Usage of
+antigravity:` and lists `acp`, and `--version` prints a bare version. Detection stamps and status reads use only finished
+checks; a candidate that is not the CLI is never run as one. A session, a model probe
+and a sign-in lease the managed release before spawn, bind the lease to the child at once and
+release it after exit, so an update cannot remove a running release. The cockpit binds its
+Home for these leases once, at its operator entry.
 
+Every fresh or resumed session runs in `default` mode. Squawk answers native permission
+requests from the tool grant and Bash command prefixes. Granted requests proceed; ungranted
+requests fail. With `HSQ_APPROVAL_GATE=1`, ungranted requests reach the native approval card
+instead. MCP tools arrive as `mcp_<server>_<tool>`; Squawk reads the server and tool from that
+name, so its own `squawk` tools stay trusted. CLI 1.5.14 runs `read_file` with no permission
+request, so a tool grant cannot withhold native file reads; a step whose grant lacks Read gets a
+note that says so. A native
+`ask_question` call ends the prompt with the question as text; Squawk shows it as a question
+card that keeps the free-text answer, and sends the chosen answer as the next prompt.
+
+The CLI keeps working after a turn ends: a background command or a `schedule` timer wakes the
+idle session, which then streams, runs tools and can ask for permission with no prompt open.
+Squawk maps that work to a new turn that the agent started (`nativePermission: 'after-turn'`).
+A usage update right after message text ends it. A prompt sent while it runs joins it. A
+steered prompt ends the running prompt at once and carries the turn; Squawk keeps one turn,
+with the usage of both prompts. `schedule` is the native timer (`nativeTimerTool`), so its
+delay lands in the wait list like `cezar_wait`.
+
+The CLI saves the session/new system prompt with the session and appends a resent one, so
+Squawk sends it on session/new only and never resends it on session/resume. A resumed session
+gets it prepended to its opening turn instead, as Codex and OpenCode do
+(`systemPromptOnResume: 'in-thread'`), so a Continue or a recovery still reads the current
+instructions. When the CLI refuses `session/resume` (a session the retired registry server saved,
+or a removed conversation), the runner opens a fresh session with the full system prompt and the
+skill, and says so in a note.
 
 Antigravity status reports credential presence. `GEMINI_API_KEY` (or `GOOGLE_API_KEY`, mapped
 in the child) connects without an account folder; Settings names the environment source.
-Personal OAuth requires `auth.type: oauth-personal` in `antigravity-acp/settings.json` and
-`antigravity-acp/acp_token.json` under the selected `GEMINI_HOME` (default `~/.gemini`).
-Status does not read token contents or validate credentials against the API. Business and
-agent-platform sign-in are unsupported.
+Without a key, a short ACP probe asks the CLI to authenticate `oauth-personal`. With
+`SSH_CONNECTION` set, which Squawk always sets, the CLI refuses at once when the account holds
+no Google sign-in and opens no browser. Status does not read credentials or validate them
+against the API. Business and agent-platform sign-in are unsupported.
 
-Named accounts set their own `GEMINI_HOME`, `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`.
-Only native instruction files (`AGENTS.md`, `GEMINI.md`) and skill folders (`config/skills`,
-`antigravity-cli/skills`) link back to the user's default Gemini home; existing account files
-are preserved. Settings, conversations and credentials stay separate. The default account
-continues to use the discovered host home.
+The CLI ignores `GEMINI_HOME`. Squawk passes the account folder as `--gemini-dir` (default
+`~/.gemini`) and the app data folder `antigravity-cli`, the CLI's own default, so the default
+account shares the terminal CLI's skills. `SSH_CONNECTION` makes the CLI keep a Google sign-in
+in a file per account, `<gemini-dir>/antigravity-cli/antigravity-oauth-token`, instead of one OS
+keyring entry for every account. Named accounts also set
+their own `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`. Only native instruction files (`AGENTS.md`,
+`GEMINI.md`) and skill folders (`config/skills`, `antigravity-cli/skills`, `skills`) link back to
+the user's default Gemini home; existing account files are preserved.
 
-Settings → Agent accounts offers personal Google sign-in through the browser. The consent URL
-stays in memory. If the browser cannot reach agy's loopback listener on the Squawk host, paste
-the failed redirect URL into that same dialog. The host replays only the captured listener's
-origin/path with matching state and a single code; it never follows redirect responses. Codes,
-URLs and tokens are not logged or saved by Squawk. Only agy writes credentials inside the account.
-The flow expires after five minutes and closes on Cancel. Browser sign-in requires `settingsAdmin`:
-a local cockpit, or a loopback-hosted cockpit whose operator granted its port with
-`hsq remote-settings enable`. The grant permits sign-in to the discovered account and any existing
-named account. Hosted mode shows Connect for the discovered account without listing account paths.
-It instructs the user to open the link in their browser and paste the failed `127.0.0.1` address;
-the server never opens a host browser. Account creation, editing and listing still require `localHandoff`.
-
-### Changing working behavior
-
-Browser sign-in previously returned 409 on every hosted cockpit. It now accepts requests with
-`settingsAdmin`, because sign-in writes credentials on the host under its existing host-granted
-permission. Hosted requests without the grant still return 409 and name the host command.
-`localHandoff` and strict consent/redirect validation keep their current behavior.
+Settings → Agent accounts offers personal Google sign-in through `antigravity acp --login`. The
+CLI prints a consent link whose redirect is `https://antigravity.google/oauth-callback`; that page
+shows a code. The user pastes the code, or the full address of that page, into the same dialog.
+Squawk accepts a bare code, or an address with this sign-in's single state and a single code, and
+writes it once to the CLI's stdin. Codes, URLs and tokens are not logged or saved by Squawk; only
+the CLI writes credentials inside the account. The flow expires after ten minutes and closes on
+Cancel. Browser sign-in requires `settingsAdmin`: a local cockpit, or a loopback-hosted cockpit
+whose operator granted its port with `hsq remote-settings enable`. The server never opens a host
+browser. Account creation, editing and listing still require `localHandoff`.
 
 Model discovery is lazy: a picker request opens one bounded ACP session in a temporary working
-folder and disposable Gemini home. It copies only the selected account's native OAuth settings
-and token files when needed, then removes the copy and every probe conversation on exit.
-The account's settings, credentials and conversation list stay unchanged. The probe reads `model`
-plus each model's `thinking_level` options. No prompt/model turn runs. An explicit empty effort
-list means auto only in every picker; missing metadata keeps the generic fallback. If a caller
-still requests effort for a model without `thought_level`, or a level its options exclude,
-the runner skips it with a notice.
-Library `SyntaxWarning` startup noise is excluded from task failures. The memory cache separates accounts and
-rechecks agy's Build label and an in-memory credential digest before using its five-minute TTL;
-auth/build changes discard the previous entry. Discovery failure leaves suggested presets usable.
-Before cleaning a failed task or catalog probe's private temporary folder, Squawk writes a
-bounded stderr and native INFO/ERROR log tails to the server log. It reads at most four regular
-log files, up to 16 KiB from each, plus up to 16 KiB of stderr. It redacts URLs and credentials
-with the sign-in diagnostic redaction. `HSQ_ANTIGRAVITY_DEBUG=1` enables native `--debug` traces
-for new sessions and probes; the default is off. macOS can write these traces only to stderr.
-Successful sessions remove their temporary logs without retaining a tail.
-Antigravity's private MCP bridge uses the short server alias `squawk` in its descriptor,
-eager server list and permission identities. The agent qualifies tools as
-`mcp_<server>_<tool>` and rejects names over 64 characters; the shared per-session server
-name can exceed that limit. Tool display uses native MCP metadata to retain the bare tool name.
-Other runners keep the shared descriptor name.
+folder. With an API key it uses an empty Gemini folder, so discovery adds nothing to the account;
+with a Google sign-in it uses the account folder. The probe reads `model` plus each model's
+`thought_level` options; model ids pass through. No prompt/model turn runs. If a caller still
+requests effort for a model without `thought_level`, or a level its options exclude, the runner
+skips it with a notice. The memory cache key holds the executable's file identity, the account
+folder and an in-memory credential digest; an update or a new sign-in discards the entry.
+Discovery failure leaves suggested presets usable. Before a failed task or probe ends, Squawk
+writes bounded stderr and the tail of the process's own CLI log
+(`<gemini-dir>/antigravity-cli/log/acp-server-<time>-<pid>.log`) to the server log, redacted with
+the sign-in diagnostic redaction.
+
+Antigravity's private MCP bridge uses the short server alias `squawk` in its descriptor and
+permission identities. The CLI qualifies tools as `mcp_<server>_<tool>` and drops a tool whose
+name passes 64 characters; the shared per-session server name can exceed that limit. Other
+runners keep the shared descriptor name.
 The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same
 selected account home (ADR 0066).

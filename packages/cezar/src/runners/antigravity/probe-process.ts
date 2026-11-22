@@ -7,12 +7,15 @@ import { antigravityEnv } from './runtime-env.ts';
 import type { AcpHooks } from '../acp/protocol.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure } from './native-diagnostics.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 
 /** Short-lived authentication/catalog process. No prompt or tools; bounded stderr stays in memory. */
 export class AntigravityProbe {
   readonly acp: AcpSession;
   readonly cwd: string;
   readonly env: NodeJS.ProcessEnv;
+  private readonly geminiDir: string;
+  private readonly launch: AntigravityLaunch;
   private readonly child;
   private readonly descendants;
   private readonly exited: Promise<void>;
@@ -22,19 +25,26 @@ export class AntigravityProbe {
   private spawnError: Error | undefined;
   private signalled = false;
 
-  constructor(bin: string, env: Record<string, string>, timeoutMs: number, hooks: AcpHooks = {}) {
-    const runtime = antigravityEnv(bin, { cwd: process.cwd(), userPrompt: '', toolGrant: { kind: 'unset' }, env });
-    this.cwd = runtime.temp; this.env = runtime.env;
-    try { this.child = spawnSessionLeader(bin, antigravityLaunchArgs(process.platform, this.env), { cwd: this.cwd, env: this.env }); }
-    catch (error) { rmSync(this.cwd, { recursive: true, force: true }); throw error; }
+  /** `bin` is HSQ_ANTIGRAVITY_BIN when set; otherwise the managed install is leased, or PATH is used. */
+  constructor(bin: string | undefined, env: Record<string, string>, timeoutMs: number, hooks: AcpHooks = {}) {
+    const runtime = antigravityEnv({ env });
+    this.cwd = runtime.temp; this.env = runtime.env; this.geminiDir = runtime.geminiDir;
+    this.launch = launchAntigravity(bin) ?? missingAntigravity(this.cwd);
+    try {
+      this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.geminiDir), { cwd: this.cwd, env: this.env });
+      if (this.child.pid) this.launch.bindProcess(this.child.pid);
+    } catch (error) { this.launch.release(); rmSync(this.cwd, { recursive: true, force: true }); throw error; }
     this.descendants = new SessionDescendants(this.child);
     this.acp = new AcpSession({ input: this.child.stdin, output: this.child.stdout }, {
       backend: 'antigravity', clientInfo: { name: 'squawk-discovery', version: '1' },
-      hooks: { ...hooks, sessionParams: () => ({ _meta: { antigravity: { disabledTools: ['run_workflow'] } } }) },
+      hooks,
     });
     this.child.stderr.setEncoding('utf8');
     this.child.stderr.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-32_768); });
-    this.child.on('error', error => { this.spawnError = error; this.acp.transport.close(error); });
+    this.child.on('error', error => {
+      this.spawnError = (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error(ANTIGRAVITY_MISSING) : error;
+      this.acp.transport.close(error);
+    });
     this.exited = new Promise(resolve => this.child.once('close', () => resolve()));
     this.deadline = setTimeout(() => { void this.close(new Error(`Probe timed out after ${timeoutMs}ms`)).catch(() => {}); }, timeoutMs);
     this.deadline.unref();
@@ -56,7 +66,8 @@ export class AntigravityProbe {
     try { await this.exited; }
     finally {
       clearTimeout(term); clearTimeout(kill);
-      if (failure !== undefined) await logAntigravityFailure(this.cwd, 'probe', failure, this.env, this.stderr);
+      try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
+      if (failure !== undefined) await logAntigravityFailure(this.geminiDir, this.child.pid, 'probe', failure, this.env, this.stderr);
       await rm(this.cwd, { recursive: true, force: true });
     }
   }

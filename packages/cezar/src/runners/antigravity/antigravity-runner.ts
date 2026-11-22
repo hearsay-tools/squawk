@@ -17,8 +17,9 @@ export class AntigravityRunner implements AgentRunner {
   }
   async interrupt(): Promise<void> { this.lastSession?.interrupt(); }
   startSession(spec: AgentRunSpec, onEvent?: (event: AgentEvent) => void, options: SessionOptions = {}): AgentSession {
-    const bin = this.options.bin ?? productEnv('ANTIGRAVITY_BIN') ?? (productEnv('DRY_RUN') === '1'
-      ? fileURLToPath(new URL('../../../scripts/mock-acp.mjs', import.meta.url)) : 'agy');
+    // Unset: the session leases the managed install, else finds the CLI on PATH.
+    const bin = this.options.bin || productEnv('ANTIGRAVITY_BIN') || (productEnv('DRY_RUN') === '1'
+      ? fileURLToPath(new URL('../../../scripts/mock-acp.mjs', import.meta.url)) : undefined);
     return this.lastSession = new AntigravitySession(bin, spec, onEvent, options, this.options.timeoutMs);
   }
 }

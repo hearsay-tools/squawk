@@ -97,9 +97,9 @@ it('starts, replays and observes the selected native account through the typed A
     const started = await app.request('/providers/sign-in/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'antigravity', profileId: 'work' }) });
     const flow = providerSignInSchema.parse(await started.json());
     expect(started.headers.get('cache-control')).toBe('no-store'); expect(create).toHaveBeenCalledWith('/private/work');
-    const redirected = await app.request(`/providers/sign-in/${flow.id}/redirect`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirectUrl: 'http://127.0.0.1:5555/?code=fixture' }) });
+    const redirected = await app.request(`/providers/sign-in/${flow.id}/redirect`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirectUrl: ' 4/fixture-code ' }) });
     expect(redirected.status).toBe(200);
-    expect(native.redirect).toHaveBeenCalledWith('http://127.0.0.1:5555/?code=fixture');
+    expect(native.redirect).toHaveBeenCalledWith('4/fixture-code');
     // bound: native completion awaits only the injected account cache refresh before publishing.
     await vi.waitFor(async () => expect(await (await app.request(`/providers/sign-in/${flow.id}`)).json()).toEqual({ id: flow.id, state: 'connected' }));
     expect(invalidate).toHaveBeenCalledWith('antigravity');
@@ -132,7 +132,7 @@ it.each([undefined, 'work'])('allows hosted sign-in for account %s only while it
     expect(create).toHaveBeenCalledWith(profileId ? '/private/account' : undefined);
     expect((await app.request(`/providers/sign-in/${flow.id}`)).status).toBe(200);
     expect((await app.request(`/providers/sign-in/${flow.id}/redirect`, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ redirectUrl: 'http://127.0.0.1:5555/?state=fixture&code=fixture' }) })).status).toBe(200);
+      body: JSON.stringify({ redirectUrl: 'https://antigravity.google/oauth-callback?state=fixture&code=fixture' }) })).status).toBe(200);
     await disableRemoteSettings({}, port, home);
     for (const [method, path] of [['POST', 'start'], ['GET', flow.id], ['POST', `${flow.id}/redirect`], ['DELETE', flow.id]] as const) {
       expect((await app.request(`/providers/sign-in/${path}`, { method })).status).toBe(409);

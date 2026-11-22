@@ -1,132 +1,108 @@
-import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { createInterface } from 'node:readline';
+import { rm } from 'node:fs/promises';
 import { inspect } from 'node:util';
 import type { RunnerBrowserSignIn } from '../../core/runner-definition.ts';
 import { profileEnv } from '../../core/agent-profiles.ts';
 import { productEnv } from '../../core/product-env.ts';
-import { shellQuote } from '../../core/shell-env.ts';
-import { AntigravityProbe } from './probe-process.ts';
-import { antigravityStderr } from './stderr.ts';
+import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
 import { BrowserSignInStartError, redactBrowserSignInDetails } from '../../core/browser-sign-in-error.ts';
-import { AcpRpcError } from '../acp/transport.ts';
+import { antigravityEnv } from './runtime-env.ts';
+import { antigravityLaunchArgs } from './launch-args.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity } from './executable.ts';
 
-// No OAuth value is written by the helper. It forwards the browser argument to memory only.
-const helperSource = `const url = process.argv[2];
-fetch(process.env.SQUAWK_AGY_BROWSER_CAPTURE, {method:'POST',body:url,signal:AbortSignal.timeout(5000)})
- .then(r=>{if(!r.ok)process.exitCode=1}).catch(()=>{process.exitCode=1});\n`;
+/** Where `agy acp --login` sends Google. That page shows a code; its URL also carries it. */
+export const ANTIGRAVITY_CODE_REDIRECT = 'https://antigravity.google/oauth-callback';
+const SIGN_IN_TIMEOUT_MS = 600_000;
+const URL_TIMEOUT_MS = 15_000;
 
 function consentUrl(value: string): URL {
   const url = new URL(value);
-  if (url.protocol !== 'https:' || url.hostname !== 'accounts.google.com' || url.username || url.password
-    || !url.pathname.startsWith('/o/oauth2/') || !url.searchParams.get('state')) throw new Error('Invalid consent URL');
-  callbackUrl(url.searchParams.get('redirect_uri') ?? '');
+  if (url.origin !== 'https://accounts.google.com' || url.pathname !== '/o/oauth2/auth' || url.username || url.password || url.hash
+    || url.searchParams.getAll('state').length !== 1 || !url.searchParams.get('state')
+    || url.searchParams.getAll('redirect_uri').length !== 1 || url.searchParams.get('redirect_uri') !== ANTIGRAVITY_CODE_REDIRECT
+    || url.searchParams.get('response_type') !== 'code') throw new Error('Invalid consent URL');
   return url;
 }
 
-function callbackUrl(value: string): URL {
-  const url = new URL(value);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || Number(url.port) < 1024
-    || url.username || url.password || url.hash) throw new Error('Invalid loopback redirect');
-  return url;
-}
-
-/** A redirect can reach only the listener named by this exact native consent flow. */
-export function validateAntigravityRedirect(consent: string, value: string): URL {
-  const original = consentUrl(consent);
-  const target = callbackUrl(original.searchParams.get('redirect_uri')!);
-  const pasted = callbackUrl(value);
-  if (pasted.origin !== target.origin || pasted.pathname !== target.pathname
-    || pasted.searchParams.getAll('state').length !== 1
-    || pasted.searchParams.get('state') !== original.searchParams.get('state')
-    || pasted.searchParams.getAll('code').length !== 1 || !pasted.searchParams.get('code')) {
-    throw new Error('Paste the complete redirect URL from this sign-in window.');
+/**
+ * What the CLI may read after its link: the code the Antigravity page shows, or that page's URL,
+ * which must answer this sign-in. Anything else, including a line break, is refused.
+ */
+export function antigravityLoginResponse(consent: string, value: string): string {
+  const text = value.trim();
+  if (/^[\w./~-]{1,2048}$/.test(text)) return text;
+  const state = consentUrl(consent).searchParams.get('state');
+  let url: URL | undefined;
+  try { url = new URL(text); } catch { /* refused below */ }
+  if (!url || /\s/.test(text) || `${url.origin}${url.pathname}` !== ANTIGRAVITY_CODE_REDIRECT || url.username || url.password
+    || url.searchParams.getAll('state').length !== 1 || url.searchParams.get('state') !== state
+    || url.searchParams.getAll('code').length !== 1 || !url.searchParams.get('code')) {
+    throw new Error('Paste the code shown after Google sign-in, or the full address of that page.');
   }
-  return pasted;
+  return text;
 }
 
+/** `agy acp --login` prints a consent link and reads the pasted code on stdin. No code or URL is logged. */
 export async function startAntigravitySignIn(accountHome?: string): Promise<RunnerBrowserSignIn> {
-  const helperDir = await mkdtemp(join(tmpdir(), 'squawk-agy-browser-'));
-  const helper = join(helperDir, 'browser.cjs');
-  const nonce = randomUUID();
-  let receive!: (url: string) => void;
-  const captured = new Promise<string>(resolve => { receive = resolve; });
-  const server = createServer(async (req, res) => {
-    if (req.method !== 'POST' || req.url !== `/${nonce}`) { res.writeHead(404).end(); return; }
-    let body = '';
-    try {
-      for await (const chunk of req) {
-        body += String(chunk);
-        if (body.length > 16_384) { res.writeHead(413).end(); return; }
-      }
-      receive(consentUrl(body).href); res.writeHead(204).end();
+  const runtime = antigravityEnv({ env: { ...profileEnv('antigravity', accountHome), BROWSER: '/bin/false' } });
+  const launch = launchAntigravity(productEnv('ANTIGRAVITY_BIN')) ?? missingAntigravity(runtime.temp);
+  let stderr = '';
+  let spawnError: Error | undefined;
+  const child = spawnSessionLeader(launch.executable, antigravityLaunchArgs(runtime.geminiDir, ['--login']), { cwd: runtime.temp, env: runtime.env });
+  const exited = new Promise<number | null>(resolve => child.once('close', code => resolve(code)));
+  let cleanup: Promise<void> | undefined;
+  const close = () => cleanup ??= (async () => {
+    if (child.exitCode === null && child.signalCode === null) signalSession(child, 'SIGTERM');
+    const kill = setTimeout(() => signalSession(child, 'SIGKILL'), 2_000);
+    try { await exited; }
+    finally {
+      clearTimeout(kill); clearTimeout(deadline);
+      try { launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
+      await rm(runtime.temp, { recursive: true, force: true });
     }
-    catch { res.writeHead(400).end(); }
-  });
-  let probe: AntigravityProbe | undefined;
-  let cleanupPromise: Promise<void> | undefined;
-  const cleanup = () => cleanupPromise ??= (async () => {
-    server.closeAllConnections(); server.close();
-    try { await probe?.close(); }
-    finally { await rm(helperDir, { recursive: true, force: true }); }
   })();
-  let captureDeadline: NodeJS.Timeout | undefined;
-  let phase = 'setup';
+  const deadline = setTimeout(() => { void close(); }, SIGN_IN_TIMEOUT_MS);
   try {
-    await writeFile(helper, helperSource, { mode: 0o700 });
-    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-    const address = server.address();
-    if (!address || typeof address === 'string') throw new Error('Browser capture is unavailable');
-    probe = new AntigravityProbe(productEnv('ANTIGRAVITY_BIN') ?? 'agy', {
-      ...profileEnv('antigravity', accountHome),
-      BROWSER: `${shellQuote(process.execPath)} ${shellQuote(helper)} %s`,
-      SSH_CONNECTION: 'squawk-browser-sign-in',
-      SQUAWK_AGY_BROWSER_CAPTURE: `http://127.0.0.1:${address.port}/${nonce}`,
-    }, 300_000);
-    phase = 'initialize';
-    await probe.acp.initialize();
-    phase = 'authenticate';
-    const completion = probe.acp.authenticate('oauth-personal').finally(cleanup);
-    // Observe rejection immediately, even if startup is still waiting for the browser helper.
+    if (child.pid) launch.bindProcess(child.pid);
+    child.stdin.on('error', () => { /* A write after the CLI exited; redirect() reports it. */ });
+    child.on('error', error => { spawnError = (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error(ANTIGRAVITY_MISSING) : error; });
+    child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk: string) => { stderr = (stderr + chunk).slice(-16_384); });
+    const lines = createInterface({ input: child.stdout });
+    let url = await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Sign-in did not offer a Google link.')), URL_TIMEOUT_MS);
+      lines.on('line', line => {
+        const candidate = line.trim();
+        if (!candidate.startsWith('https://accounts.google.com/')) return;
+        try { resolve(consentUrl(candidate).href); clearTimeout(timer); } catch { /* Not this flow's link. */ }
+      });
+      void exited.then(code => { clearTimeout(timer); reject(spawnError ?? new Error(`Sign-in exited (code ${code}) before it offered a Google link.`)); });
+    });
+    const completion = exited.then(async code => {
+      url = '';
+      if (code !== 0) throw new Error('Google sign-in did not complete. Start a new sign-in.');
+    }).finally(close);
     void completion.catch(() => {});
-    let url = await Promise.race([
-      captured,
-      completion.then(() => { throw new Error('Sign-in finished before a browser URL was offered. Check the account again.'); }),
-      new Promise<never>((_, reject) => { captureDeadline = setTimeout(() => reject(new Error('Sign-in did not offer a browser URL.')), 15_000); }),
-    ]);
-    clearTimeout(captureDeadline);
-    server.closeAllConnections(); server.close();
-    let replayed = false;
+    let submitted = false;
     return {
-      get url() { return url; }, completion: completion.finally(() => { url = ''; }),
+      get url() { return url; }, completion,
       async redirect(value) {
-        if (replayed) throw new Error('The redirect has already been submitted. Check sign-in status.');
-        const target = validateAntigravityRedirect(url, value);
-        replayed = true;
-        try {
-          const response = await fetch(target, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
-          if (response.status >= 400) throw new Error('Native listener refused the redirect');
-          await response.body?.cancel();
-        }
-        catch { throw new Error('The sign-in listener could not accept the redirect. Start a new sign-in.'); }
+        if (submitted) throw new Error('The code has already been submitted. Check sign-in status.');
+        const response = antigravityLoginResponse(url, value);
+        submitted = true;
+        // The CLI may already have closed its input or exited: fail this sign-in, not the cockpit.
+        await new Promise<void>((resolve, reject) => {
+          if (!child.stdin.writable) { reject(new Error('The sign-in has ended. Start a new sign-in.')); return; }
+          child.stdin.end(`${response}\n`, (error?: Error | null) => error ? reject(new Error('The sign-in has ended. Start a new sign-in.')) : resolve());
+        });
       },
-      close: async () => { url = ''; await cleanup(); },
+      close: async () => { url = ''; await close(); },
     };
   } catch (error) {
-    clearTimeout(captureDeadline); await cleanup();
-    const diagnostics = probe?.diagnostics;
-    console.error('Antigravity personal sign-in start failed:', redactBrowserSignInDetails(inspect(error)), diagnostics && {
-      ...diagnostics, stderr: redactBrowserSignInDetails(diagnostics.stderr),
-      spawnError: diagnostics.spawnError && redactBrowserSignInDetails(inspect(diagnostics.spawnError)),
+    await close();
+    console.error('Antigravity personal sign-in start failed:', redactBrowserSignInDetails(inspect(error)), {
+      code: child.exitCode, signal: child.signalCode, stderr: redactBrowserSignInDetails(stderr),
     });
-    let cause = `${phase}: ${error instanceof Error ? error.message : String(error)}`;
-    const transportClosed = error instanceof Error && error.message === 'ACP input/output transport closed';
-    if (!(error instanceof AcpRpcError) && diagnostics && (diagnostics.code !== null && (diagnostics.code !== 0 || transportClosed) || diagnostics.signal)) {
-      const line = redactBrowserSignInDetails(antigravityStderr(diagnostics.stderr)).split(/\r?\n/).find(line => line.trim());
-      cause = `Agent exited (${diagnostics.signal ?? `code ${diagnostics.code}`})${line ? `: ${line.trim()}` : ''}`;
-    }
-    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${cause}`);
+    const line = redactBrowserSignInDetails(stderr).split(/\r?\n/).find(text => text.trim());
+    throw new BrowserSignInStartError(`Antigravity personal sign-in could not start. ${error instanceof Error ? error.message : String(error)}${line ? ` ${line.trim()}` : ''}`);
   }
 }

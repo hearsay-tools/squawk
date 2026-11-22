@@ -173,11 +173,6 @@
     }
   },
   {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
-  },
-  {
     "type": "item.started",
     "item": {
       "kind": "reasoning",
@@ -245,21 +240,6 @@
     }
   },
   {
-    "type": "item.completed",
-    "item": {
-      "kind": "tool",
-      "id": "call_13466194841907764102",
-      "name": "Bash",
-      "title": "sleep 10 && echo bg2",
-      "toolKind": "execute",
-      "status": "failed",
-      "input": {
-        "command": "sleep 10 && echo bg2"
-      },
-      "output": "Turn ended before the tool completed"
-    }
-  },
-  {
     "type": "turn.completed",
     "turnId": "acp-turn-1",
     "stopReason": "end_turn",
@@ -273,6 +253,10 @@
     }
   },
   {
+    "type": "turn.started",
+    "turnId": "acp-turn-5"
+  },
+  {
     "type": "item.completed",
     "item": {
       "kind": "tool",
@@ -284,7 +268,7 @@
       "input": {
         "command": "sleep 10 && echo bg2"
       },
-      "output": "{\"output\":\"Command exited with code 0.\\n\\nCommand output:\\nbg2\\r\\n\",\"exit_code\":0}",
+      "output": "Command exited with code 0.\n\nCommand output:\nbg2\r\n",
       "diffs": [],
       "exitCode": 0
     }
@@ -293,37 +277,37 @@
     "type": "item.started",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-5",
+      "id": "acp-item-6",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": "The background task"
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": " has finished with output `bg2`.\nNow the user request states:\n\"When the background"
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": " command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\"\n\nLet'"
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": "s run `echo after-bg` using `run_command` with `WaitMsBeforeAsync: 500"
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": "` (or normal execution, since `echo after-bg` is instantaneous)."
   },
@@ -340,7 +324,7 @@
     "type": "item.completed",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-5",
+      "id": "acp-item-6",
       "text": "The background task has finished with output `bg2`.\nNow the user request states:\n\"When the background command finishes, run exactly `echo after-bg` with your shell command tool and report its output.\"\n\nLet's run `echo after-bg` using `run_command` with `WaitMsBeforeAsync: 500` (or normal execution, since `echo after-bg` is instantaneous)."
     }
   },
@@ -398,7 +382,7 @@
       "input": {
         "command": "echo after-bg"
       },
-      "output": "{\"output\":\"Created At: 2026-11-22T00:38:07+01:00\\nCompleted At: 2026-11-22T00:38:07+01:00\\nCommand exited with code 0.\\n\\nCommand output:\\nafter-bg\\r\\n\",\"exit_code\":0}",
+      "output": "Created At: 2026-11-22T00:38:07+01:00\nCompleted At: 2026-11-22T00:38:07+01:00\nCommand exited with code 0.\n\nCommand output:\nafter-bg\r\n",
       "diffs": [],
       "exitCode": 0
     }
@@ -407,13 +391,13 @@
     "type": "item.started",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-6",
+      "id": "acp-item-7",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-6",
+    "itemId": "acp-item-7",
     "field": "reasoning",
     "delta": "The output is `after-bg`. Let's report it to the user."
   },
@@ -421,7 +405,7 @@
     "type": "item.completed",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-6",
+      "id": "acp-item-7",
       "text": "The output is `after-bg`. Let's report it to the user."
     }
   },
@@ -429,14 +413,14 @@
     "type": "item.started",
     "item": {
       "kind": "message",
-      "id": "acp-item-7",
+      "id": "acp-item-8",
       "role": "assistant",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-7",
+    "itemId": "acp-item-8",
     "field": "text",
     "delta": "\n\nafter-bg"
   },
@@ -448,5 +432,19 @@
       "total": 10046,
       "contextWindow": 1048576
     }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-8",
+      "role": "assistant",
+      "text": "\n\nafter-bg"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-5",
+    "stopReason": "end_turn"
   }
 ]

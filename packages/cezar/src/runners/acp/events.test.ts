@@ -22,3 +22,59 @@ it.each(['end_turn', 'cancelled'] as const)('fails open tools before the %s turn
   expect(completed).toContainEqual(expect.objectContaining({ item: expect.objectContaining({ id: 'open', status: 'failed', output: expect.stringContaining(reason === 'cancelled' ? 'Cancelled' : 'Turn ended') }) }));
   expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: reason });
 });
+
+const hooks = { agentWorkEnds: (update: Record<string, unknown>, previous: string | undefined) => update.sessionUpdate === 'usage_update' && previous === 'agent_message_chunk' };
+
+it('opens an agent-started turn for work with no prompt and ends it after the closing usage update', () => {
+  const ui: UiEvent[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, hooks);
+  events.update({ sessionUpdate: 'usage_update', used: 1, size: 10 });
+  expect(events.turnOpen).toBe(false);
+  events.update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'woke' } });
+  expect(events.agentTurn).toBe(true);
+  events.update({ sessionUpdate: 'usage_update', used: 2, size: 10 });
+  expect(events.turnOpen).toBe(true);
+  events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'done' } });
+  events.update({ sessionUpdate: 'usage_update', used: 3, size: 10 });
+  expect(events.turnOpen).toBe(false);
+  expect(ui.map(event => event.type).filter(type => type.startsWith('turn.'))).toEqual(['turn.started', 'turn.completed']);
+});
+
+it('keeps a call open across a normal turn end and closes it once when it completes later', () => {
+  const ui: UiEvent[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, hooks);
+  events.begin();
+  events.update({ sessionUpdate: 'tool_call', toolCallId: 'bg', title: 'sleep 9', kind: 'execute', status: 'in_progress' });
+  events.finish('end_turn');
+  expect(ui.filter(event => event.type === 'item.completed')).toEqual([]);
+  events.update({ sessionUpdate: 'tool_call_update', toolCallId: 'bg', status: 'completed' });
+  events.update({ sessionUpdate: 'tool_call_update', toolCallId: 'bg', status: 'completed' });
+  expect(ui.filter(event => event.type === 'item.completed')).toHaveLength(1);
+  expect(events.agentTurn).toBe(true);
+});
+
+it('ignores a late update for a call the cancelled turn already closed', () => {
+  const ui: UiEvent[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, hooks);
+  events.begin();
+  events.update({ sessionUpdate: 'tool_call', toolCallId: 'fg', title: 'sleep 30', kind: 'execute', status: 'in_progress' });
+  events.finish('cancelled');
+  // oxlint-disable-next-line cez/test-enum-literal -- ACP tool status has its own vocabulary.
+  events.update({ sessionUpdate: 'tool_call_update', toolCallId: 'fg', status: 'failed' });
+  expect(events.turnOpen).toBe(false);
+  expect(ui.filter(event => event.type === 'item.completed')).toHaveLength(1);
+});
+
+it('ends the turn that carried an executor error as failed, and lets a prompt adopt an agent-started turn', () => {
+  const ui: UiEvent[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, { ...hooks,
+    updateError: update => update.sessionUpdate === 'agent_message_chunk' && JSON.stringify(update).includes('⚠') ? 'failed' : undefined });
+  events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'working' } });
+  events.adopt();
+  expect(events.agentTurn).toBe(false);
+  events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '⚠ agent executor error: 400' } });
+  events.update({ sessionUpdate: 'usage_update', used: 3, size: 10 });
+  expect(events.turnOpen).toBe(true);
+  events.finish('end_turn');
+  expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'error' });
+});

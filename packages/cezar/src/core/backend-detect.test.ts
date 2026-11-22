@@ -201,14 +201,16 @@ describe('probeRunner: the Claude version banner', () => {
 });
 
 
-it('extracts the Antigravity build label after checking the full native banner', async () => {
+it('accepts the Antigravity CLI by its bare version and its help, and refuses a look-alike', async () => {
   const root = mkdtempSync(join(tmpdir(), 'agy-version-'));
   try {
-    const bin = join(root, 'agy');
-    writeFileSync(bin, '#!/bin/sh\nprintf \'Build label: 1.5.0\\nBuilt as //antigravity_extensions/acp_server\\nBuild timestamp: fixture\\n\'\n', { mode: 0o755 });
+    const cli = join(root, 'agy'); const ide = join(root, 'antigravity');
+    writeFileSync(cli, '#!/bin/sh\nif [ "$1" = "--help" ]; then printf \'Usage of antigravity:\\n  acp  Start the Agent Client Protocol (ACP) stdio server\\n\'; else echo 1.5.14; fi\n', { mode: 0o755 });
+    writeFileSync(ide, '#!/bin/sh\nif [ "$1" = "--help" ]; then echo "Usage: antigravity [options][paths...]"; else echo 1.5.14; fi\n', { mode: 0o755 });
     vi.stubEnv('HSQ_DRY_RUN', undefined); vi.stubEnv('CEZ_DRY_RUN', undefined);
-    await expect(probeRunner('antigravity', { ...runnerDefinition('antigravity').detection, binOverride: () => bin }))
-      .resolves.toMatchObject({ available: true, version: '1.5.0' });
+    const detection = runnerDefinition('antigravity').detection;
+    await expect(probeRunner('antigravity', { ...detection, binOverride: () => cli })).resolves.toMatchObject({ available: true, version: '1.5.14' });
+    await expect(probeRunner('antigravity', { ...detection, binOverride: () => ide })).resolves.toMatchObject({ available: false });
   } finally { vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -11,9 +11,12 @@ export const ANTIGRAVITY_SESSION_WIRE: SessionWire = {
   resumed: wire => requests(wire, 'session/resume').map(params => String(params.sessionId)),
   freshSessions: wire => requests(wire, 'session/new').length,
   started: wire => requests(wire, 'session/prompt').length > 0,
-  effort: wire => requests(wire, 'session/set_config_option').filter(params => params.configId === 'thinking_level').at(-1)?.value as string | undefined,
+  effort: wire => requests(wire, 'session/set_config_option').filter(params => params.configId === 'thought_level').at(-1)?.value as string | undefined,
   prompts: recording => prompts(recording.stdin), steers: () => [],
-  systemPrompt: recording => [...requests(recording.args, 'session/new'), ...requests(recording.args, 'session/resume')].map(params => (params._meta as { antigravity?: { systemPrompt?: { append?: string } } })?.antigravity?.systemPrompt?.append ?? '').join('\n'),
+  // session/new carries it on the saved channel; a resume prepends it to the opening turn.
+  systemPrompt: recording => requests(recording.args, 'session/new').length
+    ? requests(recording.args, 'session/new').map(params => (params._meta as { antigravity?: { systemPrompt?: { append?: string } } })?.antigravity?.systemPrompt?.append ?? '').join('\n')
+    : prompts(recording.stdin)[0] ?? '',
   skillTriggers: (recording, name) => prompts(recording.stdin).filter(text => name ? text.startsWith(`/${name} `) || text.startsWith(`/${name}\n`) || text === `/${name}` : /^\/[\w-]+(?:\s|$)/.test(text)),
   expectSkillTrigger: (recording, trigger) => {
     expect(prompts(recording.stdin)).toContain(`/${trigger.name}${trigger.args ? ` ${trigger.args}` : ''}${trigger.context ? `\n${trigger.context}` : ''}`);

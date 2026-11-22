@@ -59,22 +59,22 @@ The scratch-runner simulation appends to the current roster, without naming its 
 
 ## Live acceptance fixes
 
-The follow-up fixes for hearsay-tools/squawk#4004 preserve native model ids, extract the
-build label from the version banner, and send only the task checkout as an ACP workspace.
-Lifecycle MCP tools load eagerly. Squawk disables native `run_workflow` on new and resume
-because it owns workflows and the native tool writes a skill into the checkout. Native
-`start_subagent` remains. Known command updates are silent; terminal turns close open tools.
-Native option questions set `allowFreeText=false`; unsupported counts cancel visibly.
+The follow-up fixes for hearsay-tools/squawk#4004 preserve native model ids and send only the
+task checkout as an ACP workspace. Known command updates are silent. hearsay-tools/squawk#4060
+moved the runner to the Antigravity CLI: Squawk no longer sends `disabledTools` or
+`eagerMcpServers` (the CLI ignores the first, does not know the second, and `run_workflow` writes
+no skill into the checkout), a tool still running at a normal turn end completes in a later turn,
+and a native `ask_question` keeps the free-text answer. See docs/runners/antigravity-wire.md.
 
 ### Worktree cases
 
 | Case | Files written, kept or removed | Next step, Continue and restart |
 | --- | --- | --- |
-| Native catalog not loaded | Native workflow tool disabled before session setup; no generated skill | Same filter sent on new and resume |
+| Native catalog not loaded | The CLI writes no generated skill into the checkout | Nothing to resend on new or resume |
 | User already owns skills/system/run-workflow | Leave the file unchanged; never delete or ignore it | User content remains visible to git |
 | Same skill name from two sources | Existing native catalog precedence; this fix installs no skill | Existing catalog behavior remains |
 | Old runner already wrote a generated skill | Do not remove existing content automatically | Existing tracked or untracked file stays user-owned |
-| Crash during native startup | No Squawk skill writes or two-write transaction | Fresh session resends the filter |
+| Crash during native startup | No Squawk skill writes or two-write transaction | Fresh session starts as before |
 | Source removes a user skill | No cleanup writer in this fix | Native catalog sees its current sources |
 | Handoff or TMPDIR outside workspace | Shell writes to absolute task paths remain usable; proved live | Paths come from the resumed task spec |
 
@@ -92,8 +92,9 @@ Native option questions set `allowFreeText=false`; unsupported counts cancel vis
 | Missing or forged stop handle | No new durable handle; only observed descendants | Refuse unreadable or changed process identities; never signal an unrelated PID |
 | Zombie, unreadable or reused identity | Ignore dead entries; compare live start identities | Skip an identity that cannot be proved |
 
-Existing Continue admission, workflow cursors and run exit triggers remain unchanged. The
-only session-resume changes are resending the workflow filter and eager MCP server name.
+Existing Continue admission, workflow cursors and run exit triggers remain unchanged. A
+session resume sends no system prompt on the native channel, which the CLI saved at session/new; it
+prepends it to the opening turn instead (hearsay-tools/squawk#4060).
 
 Explicit shutdown parity (S27/S28/S30) reads `shutdownDescendants`: Antigravity declares `observed-tree` and must kill the detached fixture as well as its process group; other runners declare `process-group` and retain their original detached-survivor assertion. S30 calls end and captures before EOF; S31 abrupt external exit remains unchanged because no pre-shutdown snapshot is guaranteed.
 
@@ -147,7 +148,7 @@ build and credential digest. Other runners keep their existing login and admissi
 | Caller requests effort but selected model has no thought_level | Skip effort with a visible notice and run the prompt |
 | Caller requests a level excluded by the selected model's thought_level options | Skip that effort with a visible notice and use the model default |
 | Same account/build/auth inside TTL | Reuse the cached model/thinking list |
-| Account, build label or auth changes | Discard that account's old identity entry and discover again |
+| Account, executable or auth changes | Discard that account's old identity entry and discover again |
 | Auth invalidated during identity read | Recheck identity before consulting the cache |
 | Probe fails or credentials absent | Suggested presets/auto stay usable; boot and task/worker admission never await this probe |
 | New task, GitHub handoff or Continue selects a named account | Request/cache key carries its selected account id |

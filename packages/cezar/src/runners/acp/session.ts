@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { StopReason, TokenUsage } from '../../core/ui-events.ts';
 import { AcpEvents, type AcpEventSink } from './events.ts';
 import { AcpRpcError, AcpTransport } from './transport.ts';
+import { addUsage } from './usage.ts';
 import { initializeSchema, permissionSchema, recordSchema, type AcpAsk, type AcpHooks, type AcpInitializeResult, type AcpPermissionRequest } from './protocol.ts';
 
 const updateSchema = z.object({ sessionId: z.string(), update: recordSchema });
@@ -41,6 +42,8 @@ export class AcpSession {
   private readonly prompts = new Set<symbol>();
   private get promptActive(): boolean { return this.promptOwner !== undefined; }
   private turnCancelled = false;
+  private turnUsage: TokenUsage | undefined;
+  private readonly acknowledgements = new Map<symbol, () => void>();
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
     this.hooks = options.hooks ?? {};
@@ -107,48 +110,71 @@ export class AcpSession {
     return this.requestPrompt(content);
   }
 
-  /** An early concurrent response acknowledges steering. If the original response
-   * arrives first, the pending prompt owns a successor turn and its permission lifetime. */
-  async steer(content: readonly Record<string, unknown>[]): Promise<void> {
+  /** Steering adds input to the running turn. The turn is one logical turn: if the running prompt
+   * answers first, the steered prompt carries the turn and its response ends it. That early answer
+   * is the agent taking the steer: `onAcknowledged` runs then, or at the steer's own response. */
+  async steer(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<void> {
     if (!this.promptActive) throw new Error('ACP steering requires an active prompt');
-    await this.requestPrompt(content);
+    await this.requestPrompt(content, onAcknowledged);
   }
 
-  private async requestPrompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
+  /** A prompt is open: new input steers into it. */
+  get promptOpen(): boolean { return this.promptActive; }
+
+  /** An agent-started turn is open: the agent works on its own, with no prompt carrying it. */
+  get agentWorking(): boolean { return this.events.agentTurn; }
+
+  private async requestPrompt(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<z.infer<typeof promptResultSchema>> {
     const sessionId = this.requireSession();
     const token = Symbol('prompt');
     this.prompts.add(token);
+    if (onAcknowledged) this.acknowledgements.set(token, onAcknowledged);
     if (!this.promptOwner) this.beginPrompt(token);
     let result: z.infer<typeof promptResultSchema>;
     try {
       result = promptResultSchema.parse(await this.transport.request('session/prompt', { sessionId, prompt: content }));
-      if (this.promptOwner === token) {
-        const message = this.hooks.promptError?.();
-        if (message) throw new Error(message);
-      }
+      const failure = this.promptOwner === token ? this.events.turnFailure : undefined;
+      if (failure) throw new Error(failure);
     } catch (error) {
+      this.acknowledgements.delete(token);
       this.finishPrompt(token, this.turnCancelled ? 'cancelled' : 'error');
       throw error;
     }
+    this.acknowledge(token);
     const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
     this.finishPrompt(token, reason, this.hooks.normalizeUsage?.(result.usage));
     return result;
   }
 
+  private acknowledge(token: symbol): void {
+    const acknowledged = this.acknowledgements.get(token);
+    this.acknowledgements.delete(token);
+    acknowledged?.();
+  }
+
   private beginPrompt(token: symbol): void {
     this.promptOwner = token;
     this.turnCancelled = false;
-    this.events.begin();
+    this.turnUsage = undefined;
+    if (this.events.agentTurn) this.events.adopt();
+    else this.events.begin();
   }
 
   private finishPrompt(token: symbol, reason: StopReason, usage?: TokenUsage): void {
     this.prompts.delete(token);
+    if (usage) this.turnUsage = addUsage(this.turnUsage, usage);
     if (this.promptOwner !== token) return;
-    this.cancelPermissions();
-    this.events.finish(reason, usage);
-    this.promptOwner = undefined;
     const next = this.prompts.values().next().value;
-    if (next && !this.closed) this.beginPrompt(next);
+    // A steer still pending carries the running turn: the agent ended this prompt to read it.
+    if (next && reason === 'end_turn' && !this.closed) { this.promptOwner = next; this.acknowledge(next); return; }
+    this.cancelPermissions();
+    // A turn-end listener may send input at once: it must find no prompt open, and open its own turn.
+    const carried = this.turnUsage;
+    this.promptOwner = undefined;
+    this.turnUsage = undefined;
+    this.events.finish(reason, carried);
+    const waiting = this.prompts.values().next().value;
+    if (waiting && !this.promptOwner && !this.closed) this.beginPrompt(waiting);
   }
 
   cancel(): void {
@@ -208,7 +234,8 @@ export class AcpSession {
     if (method !== 'session/request_permission') throw new AcpRpcError(-32601, `Unsupported ACP client method: ${method}`);
     const request = permissionSchema.parse(params);
     if (request.sessionId !== this.sessionId) throw new AcpRpcError(-32602, 'Permission requested for another session');
-    if (!this.promptActive || this.turnCancelled) return { outcome: { outcome: 'cancelled' } };
+    // An agent-started turn asks too: its idle session woke on its own.
+    if (!(this.promptActive || this.events.turnOpen) || this.turnCancelled) return { outcome: { outcome: 'cancelled' } };
     const policy = this.hooks.permissionPolicy?.(request);
     if (policy) return { outcome: policy };
     // Native JSON-RPC string IDs have no length bound; UI permission IDs do.

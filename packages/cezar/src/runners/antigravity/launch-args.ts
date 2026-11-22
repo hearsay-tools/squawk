@@ -1,6 +1,7 @@
-import { productEnv } from '../../core/product-env.ts';
+/** The CLI's own app data folder name, so the default account shares the terminal CLI's skills and sign-in. */
+export const ANTIGRAVITY_APP_DATA_DIR = 'antigravity-cli';
 
-/** The ACP registry specifies --uid= only for Linux archives. */
-export function antigravityLaunchArgs(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
-  return [...(platform === 'linux' ? ['--uid='] : []), ...(productEnv('ANTIGRAVITY_DEBUG', env) === '1' ? ['--debug'] : [])];
+/** The CLI ignores GEMINI_HOME: the account folder is passed by flag, and the app data folder must be relative. */
+export function antigravityLaunchArgs(geminiDir: string, extra: readonly string[] = []): string[] {
+  return ['acp', '--gemini-dir', geminiDir, '--app-data-dir', ANTIGRAVITY_APP_DATA_DIR, ...extra];
 }

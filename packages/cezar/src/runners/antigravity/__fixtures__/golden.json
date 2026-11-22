@@ -1,17 +1,17 @@
 {
   "resumeCommand": null,
   "toolActivity": {
-    "fixture": "prompt-command",
+    "fixture": "cli-prompt-command",
     "calls": 1,
     "latest": { "title": "echo probe-42", "toolKind": "execute", "status": "completed" }
   },
   "providerAuth": {
     "connectedEnv": { "GEMINI_API_KEY": "fixture-present" },
-    "command": { "executable": "agy", "args": ["--version"] },
-    "connected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 },
-    "disconnected": { "stdout": "antigravity_extensions/acp_server 1.5.0", "stderr": "", "exitCode": 0 }
+    "command": { "executable": "antigravity-cli-not-installed", "args": ["--version"] },
+    "connected": { "stdout": "1.5.14", "stderr": "", "exitCode": 0 },
+    "disconnected": { "stdout": "1.5.14", "stderr": "", "exitCode": 0 }
   },
-  "installerDryRun": "note antigravity: Install Antigravity ACP registry archive from https://antigravity.google, then re-run.",
+  "installerDryRun": "note antigravity: Install antigravity from Settings → Agent accounts in the cockpit.",
   "plannerModels": {},
   "workerAccountBinding": { "provider": "antigravity", "profileId": "default" },
   "runnerEntry": {
@@ -19,10 +19,10 @@
     "modelListName": "Antigravity",
     "modelIdScope": "own",
     "pickerLabel": "Antigravity",
-    "pickerDescription": "Google Antigravity over ACP",
+    "pickerDescription": "Google Antigravity CLI over ACP",
     "icon": "bot",
-    "installHint": "https://antigravity.google",
-    "loginCommand": "Set GEMINI_API_KEY or GOOGLE_API_KEY, or use your Antigravity sign-in in GEMINI_HOME (default ~/.gemini)",
+    "installHint": "Settings > Accounts > Install CLI",
+    "loginCommand": "Set GEMINI_API_KEY or GOOGLE_API_KEY, or connect a personal Google account in Settings > Accounts",
     "accountFolderExample": "~/.gemini",
     "suggested": [""],
     "retired": [],
@@ -31,7 +31,7 @@
     "showsUserMcp": false,
     "emptyGroups": ["settings", "mcp", "memory"]
   },
-  "askKinds": ["interaction"],
+  "askKinds": ["ask_question"],
   "toolGrant": {
     "wire": "permission-policy",
     "cases": {
@@ -48,5 +48,5 @@
     }
   },
   "rejectedAgentInput": "keeps-session",
-  "systemPromptOnResume": "resent"
+  "systemPromptOnResume": "in-thread"
 }

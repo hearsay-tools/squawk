@@ -62,8 +62,8 @@
       "toolKind": "other",
       "status": "running",
       "input": {
-        "DurationSeconds": 20,
-        "Prompt": "reply with the word TIMER-FIRED"
+        "delaySeconds": 20,
+        "prompt": "reply with the word TIMER-FIRED"
       }
     }
   },
@@ -147,22 +147,6 @@
     }
   },
   {
-    "type": "item.completed",
-    "item": {
-      "kind": "tool",
-      "id": "call_6027393927065967360",
-      "name": "schedule",
-      "title": "Run schedule",
-      "toolKind": "other",
-      "status": "failed",
-      "input": {
-        "DurationSeconds": 20,
-        "Prompt": "reply with the word TIMER-FIRED"
-      },
-      "output": "Turn ended before the tool completed"
-    }
-  },
-  {
     "type": "turn.completed",
     "turnId": "acp-turn-1",
     "stopReason": "end_turn",
@@ -176,6 +160,10 @@
     }
   },
   {
+    "type": "turn.started",
+    "turnId": "acp-turn-5"
+  },
+  {
     "type": "item.completed",
     "item": {
       "kind": "tool",
@@ -185,29 +173,28 @@
       "toolKind": "other",
       "status": "completed",
       "input": {
-        "DurationSeconds": 20,
-        "Prompt": "reply with the word TIMER-FIRED"
-      },
-      "output": "Turn ended before the tool completed"
+        "delaySeconds": 20,
+        "prompt": "reply with the word TIMER-FIRED"
+      }
     }
   },
   {
     "type": "item.started",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-5",
+      "id": "acp-item-6",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": "The timer fired, and the prompt received is \"reply with the word TIMER-FIRED\".\nLet'"
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-5",
+    "itemId": "acp-item-6",
     "field": "reasoning",
     "delta": "s reply with `TIMER-FIRED`."
   },
@@ -215,7 +202,7 @@
     "type": "item.completed",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-5",
+      "id": "acp-item-6",
       "text": "The timer fired, and the prompt received is \"reply with the word TIMER-FIRED\".\nLet's reply with `TIMER-FIRED`."
     }
   },
@@ -223,14 +210,14 @@
     "type": "item.started",
     "item": {
       "kind": "message",
-      "id": "acp-item-6",
+      "id": "acp-item-7",
       "role": "assistant",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-6",
+    "itemId": "acp-item-7",
     "field": "text",
     "delta": "\n\nTIMER-FIRED"
   },
@@ -244,29 +231,34 @@
     }
   },
   {
-    "type": "turn.started",
-    "turnId": "acp-turn-7"
-  },
-  {
     "type": "item.completed",
     "item": {
       "kind": "message",
-      "id": "acp-item-6",
+      "id": "acp-item-7",
       "role": "assistant",
       "text": "\n\nTIMER-FIRED"
     }
   },
   {
+    "type": "turn.completed",
+    "turnId": "acp-turn-5",
+    "stopReason": "end_turn"
+  },
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-8"
+  },
+  {
     "type": "item.started",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-8",
+      "id": "acp-item-9",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-8",
+    "itemId": "acp-item-9",
     "field": "reasoning",
     "delta": "The user asks: \"Did the timer fire? Reply YES or NO.\"\nSince the timer fired and we received the message `reply with the word TIMER-FIRED`, the answer is YES."
   },
@@ -274,7 +266,7 @@
     "type": "item.completed",
     "item": {
       "kind": "reasoning",
-      "id": "acp-item-8",
+      "id": "acp-item-9",
       "text": "The user asks: \"Did the timer fire? Reply YES or NO.\"\nSince the timer fired and we received the message `reply with the word TIMER-FIRED`, the answer is YES."
     }
   },
@@ -282,14 +274,14 @@
     "type": "item.started",
     "item": {
       "kind": "message",
-      "id": "acp-item-9",
+      "id": "acp-item-10",
       "role": "assistant",
       "text": ""
     }
   },
   {
     "type": "item.delta",
-    "itemId": "acp-item-9",
+    "itemId": "acp-item-10",
     "field": "text",
     "delta": "YES"
   },
@@ -306,14 +298,14 @@
     "type": "item.completed",
     "item": {
       "kind": "message",
-      "id": "acp-item-9",
+      "id": "acp-item-10",
       "role": "assistant",
       "text": "YES"
     }
   },
   {
     "type": "turn.completed",
-    "turnId": "acp-turn-7",
+    "turnId": "acp-turn-8",
     "stopReason": "end_turn",
     "usage": {
       "input": 3251,

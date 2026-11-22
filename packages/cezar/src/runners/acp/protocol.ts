@@ -23,8 +23,16 @@ export interface AcpAsk {
 }
 export interface AcpAskRefusal { refused: string }
 export interface AcpHooks {
-  /** Some ACP agents report execution failures as text followed by end_turn. */
-  promptError?(): string | undefined;
+  /** Some ACP agents report execution failures as text followed by end_turn. A matching update
+   *  makes the turn that carries it end as `error`. */
+  updateError?(update: Record<string, unknown>): string | undefined;
+  /**
+   * Agents whose idle session can wake on its own (a background command or timer ends) send work
+   * with no prompt open. Providing this hook maps such work to an agent-started turn, which ends
+   * when it returns true for an update (`previous` is the preceding work update's kind). Tools still
+   * running when a prompt turn ends stay open and complete in a later turn.
+   */
+  agentWorkEnds?(update: Record<string, unknown>, previous: string | undefined): boolean;
   normalizeUsage?(usage: unknown): TokenUsage | undefined;
   /** Provider diagnostics or updates the adapter consumes itself. */
   filterUpdate?(update: Record<string, unknown>): boolean;

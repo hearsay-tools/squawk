@@ -1,19 +1,11 @@
-# The Antigravity ACP wire (registry server 1.5.0, CLI 1.5.14)
+# The Antigravity ACP wire (CLI 1.5.14)
 
-This note records what Google's Antigravity ACP server does on its wire, measured live on
-2026-11-21 for hearsay-tools/squawk#4000. The Antigravity runner (hearsay-tools/squawk#4004)
-reads its facts from here. The recorded frames are in
+This note records what Google's Antigravity CLI does on its ACP wire (`antigravity acp`),
+measured live on 2026-11-22 for hearsay-tools/squawk#4058. The Antigravity runner reads its
+facts from here since hearsay-tools/squawk#4060. The recorded frames are in
 [`packages/cezar/src/runners/antigravity/__fixtures__/`](../../packages/cezar/src/runners/antigravity/__fixtures__/).
-
-Two builds are recorded. [The Antigravity CLI](#the-antigravity-cli-antigravity-acp-1514)
-(`antigravity acp`, 1.5.14, hearsay-tools/squawk#4058) is the build the runner moves to in
-hearsay-tools/squawk#4060. Its section lists every difference from the registry server. All
-sections after it record the registry server `agy_acp_server.par` 1.5.0.
-
-In short: agy speaks ACP protocol version 1 over stdio. It mints its own session ids, steers a
-second prompt into the running turn, asks native questions through `session/request_permission`,
-holds a turn open while subagents, background commands and timers run, and reports tokens per
-turn with no cost. The system prompt does not survive `session/resume`.
+The registry server `agy_acp_server.par` 1.5.0, which the runner ran before, is no longer
+supported; its record is in git history (hearsay-tools/squawk#4000).
 
 ## The Antigravity CLI (`antigravity acp` 1.5.14)
 
@@ -95,7 +87,7 @@ per launch did not show here. The host load average was 23–28.
 | `authenticate oauth-personal` with no display | -32603 "No browser is available here (no graphical display is available to open a browser). Run \`agy acp --login\` in a terminal on this machine, then retry; or use a Gemini API key." (`cli-oauth-headless.ndjson`) | a loopback listener on 127.0.0.1 and `$BROWSER` |
 | `antigravity acp --login` | Prints a Google consent URL with `redirect_uri=https://antigravity.google/oauth-callback`, then "Then paste the authorization code, or the full URL of the page you land on, and press Enter:". With empty stdin it prints "login cancelled: no authorization code was entered" and exits 1. | no such flag |
 
-Where a Google sign-in is stored was not measured: no Google account was used. The binary
+Where a Google sign-in is stored: see [Runner integration probes](#runner-integration-probes-hearsay-toolssquawk4060). The binary
 holds a Secret Service keyring with a file fallback ("Using file-based token storage because a
 keyring timeout was recorded within …"). t3code reports that 1.5 ignores
 `AGY_ACP_FORCE_FILE_STORAGE` and keeps one keyring entry for every profile unless
@@ -251,399 +243,67 @@ and `swarm_pane`.
 - `plan.updated with entries`: `plan` is now a mode and a command; no ACP `plan` frame was
   seen, but it was not probed.
 
-### What today's mapper does with CLI frames
+### How the runner maps CLI frames
 
-Each `cli-*.expected.json` records what the current mapper (written for 1.5.0) makes of the
-frames. These are the cases hearsay-tools/squawk#4060 must change:
+hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected files record it.
 
-1. A tool that completes after the turn's response is closed twice: `item.completed failed` at
-   the response, then `completed` (`cli-midturn-prompt`, `cli-permission-after-turn`,
-   `cli-interaction-question`, `cli-background-command`).
-2. The steered prompt's early-ended first prompt maps to a full `turn.completed`, then a second
-   turn (`cli-midturn-prompt`).
-3. Work after the turn (`cli-permission-after-turn`, `cli-schedule-timer`,
-   `cli-background-command`) maps to items with no open turn.
-4. "⚠ agent executor error:" maps to `end_turn`, not `error` (`cli-config-options`).
-5. MCP items are named `mcp_<server>_<tool>`, since `_meta.mcp` is absent
-   (`cli-mcp-two-turn`). The permission policy also reads `_meta.mcp`, so a trusted Squawk
-   tool would not be recognized.
-6. `ask_question` maps to a plain tool item, with no ask (`cli-interaction-question`).
+1. A tool still running when a prompt turn ends with `end_turn` stays open: a background
+   command, a timer or a question completes in a later turn. A cancelled or failed turn closes
+   it as failed, and a later update for a closed tool is dropped.
+2. A steered prompt carries the turn: when the running prompt answers `end_turn` while a later
+   prompt is pending, the turn stays open and the later prompt's response ends it, with the
+   usage of both.
+3. Work with no prompt open opens a turn the agent started. A `usage_update` right after
+   message text ends it: every recorded agent step that makes no further tool call ends so, and
+   after thoughts or a tool the same update starts the next step. A prompt sent while it runs
+   joins it.
+4. Message text starting "⚠ agent executor error:" makes the turn end as `error`.
+5. MCP items take their server and tool from `mcp_<server>_<tool>`; Squawk's `squawk` server is
+   matched by name, so its tools stay trusted.
+6. An `ask_question` call becomes a question card. The answer goes as the next prompt.
+7. The system prompt goes on `session/new` only, never on `session/resume`, so a resume adds no
+   copy to the saved one. A resumed session gets it prepended to its opening turn
+   (`systemPromptOnResume: 'in-thread'`).
+8. `_meta.antigravity.disabledTools` and `eagerMcpServers` are no longer sent: the CLI ignores
+   the first, does not know the second, and `run_workflow` writes no skill into the workspace.
 
-## What was run
+### Runner integration probes (hearsay-tools/squawk#4060)
 
-| Item | Value |
-| --- | --- |
-| Build | ACP registry archive `antigravity-acp` 1.5.0, `agy-acp-server-1.5.0-linux-x86_64.zip` (sha256 `36f373e8…808c9f`) |
-| Files | `agy_acp_server.par` (714 MB, an embedded Python 3.14 program) and `localharness_external` (140 MB, a Go harness that the `.par` starts per session and talks to over a localhost websocket) |
-| Command | `agy_acp_server.par`, with `--uid=` on Linux only, per the [ACP registry](https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json); macOS and Windows use no launch arguments. There is no `acp` subcommand and no `--login`, `--gemini-dir` or `--app-data-dir` flag. The program's own flags are `--debug` and `--notices` |
-| Environment | `PATH`, `HOME`, `GEMINI_HOME`, `TMPDIR` (each a scratch folder), `AGY_ACP_FORCE_FILE_STORAGE=1`, `AGY_CLI_DISABLE_AUTO_UPDATE=1`, `GEMINI_API_KEY`, `GOOGLE_GEMINI_BASE_URL`, the host's proxy and CA variables |
-| Sign-in | `authenticate {methodId: "gemini-api-key"}` with the key from `GEMINI_API_KEY` |
-| Model route | The owner's CLI Proxy, a Gemini API compatible endpoint, through `GOOGLE_GEMINI_BASE_URL` (see [Models and the API host](#models-and-the-api-host)) |
-| Client | A small JSON-RPC driver that answers `session/request_permission` and `fs/read_text_file`, and advertises `fs.readTextFile: true`, `fs.writeTextFile: false`, `terminal: false` |
-| Host | The shared development host, load average 23–27 during every measurement |
+Measured live on Linux x86-64 on 2026-11-22 with the same driver and shim.
 
-An earlier probe reported that `session/new` hangs. It does not. That probe called `select()` on
-the pipe and then a buffered `readline()`. agy writes `usage_update`, `available_commands_update`
-and the `session/new` response in one write, so the response stayed in Python's read buffer and
-`select()` never fired again. With a reader thread, `session/new` answers in 0.11–0.2 s (0.173 s in `handshake.ndjson`).
-
-The agent's Python sources are inside the `.par` (a zip archive). Code references below name
-files under `google3/cloud/developer_experience/antigravity_extensions/acp_server/` in that
-archive (`server.py` and others) and the SDK under `google3/third_party/py/google/antigravity/`.
-
-## RunnerFacts
-
-Each value is what agy 1.5.0 did, with the fixture or code that shows it. `RunnerFacts` is in
-`packages/cezar/src/core/runner-facts.ts`.
-
-| Field | Value | Evidence |
-| --- | --- | --- |
-| `transport` | `stdio` | NDJSON JSON-RPC on the stdin and stdout of `agy_acp_server.par --uid=`. Every fixture. |
-| `sessionIdSource` | `native` | `session/new` takes no id and returns an agent-minted UUID (`handshake.ndjson`). `session/resume` and `session/load` need that id. |
-| `systemPromptOnResume` | `resent` | `_meta.antigravity.systemPrompt.append` is not saved. After a plain `session/resume` the model answered "NONE" when asked for the secret word from its system instructions; after a resume that resent the `_meta` it answered the word (`resume-without-system-prompt.ndjson`, `resume-with-system-prompt.ndjson`; the history never held the word). `_restore_session` reads the prompt only from the request. |
-| `inputDelivery.mode` | `steer` | A second `session/prompt` sent while a turn runs reaches the running turn: its text shows in that turn's answer (`midturn-prompt.ndjson`, `midturn-prompt-late.ndjson`). |
-| `inputDelivery.consumption` | `unobservable` | No frame echoes the steered prompt or marks it read. |
-| `inputDelivery.acknowledgement` | `response` | The steered `session/prompt` gets its own response, before the running turn ends. See [Wire hazards](#wire-hazards). |
-| `inputDelivery.humanInputAtTurnEnd` | `held-when-late` | Observed: steers sent after the last tool result, and during the final answer, were read in the running turn. A prompt that arrives after the agent's step loop has ended runs as a turn of its own, so `held-when-late` is the safe value. Not observed: a steer lost at turn end. |
-| `nativePermission` | `in-turn` | `session/request_permission` comes only inside `session/prompt`. After a background command's turn and after a timer's turn, neither side sent a frame until the client's next prompt, 30 s and 45 s later (`background-command.ndjson`, `schedule-timer.ndjson`); the command and the timer both ended inside their own turn. `prompt()` in `server.py` is the only reader of the step stream. |
-| `nativeAsk` | `answerable` | The `ask_question` tool shows as `tool_call` id `interaction_<8 hex>` plus `session/request_permission` whose options are the answers; the selected `optionId` is the answer (`interaction-question.ndjson`). |
-| `nativeSubagents` | `turn-held` | `invoke_subagent` completes at once; the child runs inside the same `session/prompt`, which ends after the child returns (`subagent.ndjson`). Background commands and `schedule` timers also hold the turn open. |
-| `childWork` | `none` | The child's tool calls arrive as top-level `tool_call` frames with no link to the `invoke_subagent` call. Child text is never streamed: `_stream_live_step` drops steps with a `parent_trajectory_id`. |
-| `hookEvents` | `none` | Hooks from `hooks.json` run in-process (`hooks.py`, `ExternalPreToolCallDecideHook` and others). No hook frame exists in the ACP stream. |
-| `humanPromptHold` | `acknowledgement` | The wire has no consumption signal; the prompt's own response is the only acknowledgement. |
-| `nativeTimerTool` | `null` | The built-in `schedule` tool works, but its timer fires inside the same held turn (`schedule-timer.ndjson`: the turn stayed open 20 s and ended after the timer), so it never wakes an idle session. It also sends no `tool_call` frame. Squawk reads this field only to match a tool-call event by name (`workflows/run/turn-markers.ts`), and no event can carry `schedule`. |
-| `costReport` | `per-turn` | The `session/prompt` result carries this turn's tokens (`usage.totalTokens`, `inputTokens`, `outputTokens`, `thoughtTokens`, `cachedReadTokens`, `cachedWriteTokens`). No frame carries a cost. See [Usage](#usage). |
-| `claudeModelAliases` | `false` | Models are Gemini ids from `configOptions` (`config-options.ndjson`). |
-| `turnStart` | `on-write` | No frame starts a turn; the turn is the `session/prompt` request. The runner reports `turn.started` when it writes the request. |
-| `skillTriggerMidTurn` | `true` | `/probe-alpha` steered into a running turn ran the skill in that turn (`skill-midturn.ndjson`). |
-| `skillUnknownName` | `silent` | `/no-such-skill` gets a model reply that names the known skills; no error frame (`skill-slash.ndjson`). |
-| `skillsSeenBySession` | `live` | The probe created `probe-alpha` before `session/new` and `probe-beta` on disk after several turns of the same session; the next turn listed both (`skills-live.ndjson`, that turn only: a folder change sends no frame). That turn read 0 cached tokens. Earlier turns of the same session (`prompt-command.ndjson`, `prompt-edit.ndjson`, `permission-reject.ndjson`, `interaction-question.ndjson`) read 20,307 to 34,466 cached tokens. |
-
-## Launch, detection and the host probe
-
-| Measure | Value |
-| --- | --- |
-| `--version` | 2.6 s wall, 260 MB peak RSS, exit 0, no files written. Ten lines on stdout, including `Build label: 1.5.0` and `Built as //cloud/developer_experience/antigravity_extensions/acp_server:_agy_acp_server_bin`; two `SyntaxWarning` lines on stderr. |
-| `initialize` | 2.1–3.2 s from spawn, no sign-in needed. `agentInfo {name: "antigravity-acp", title: "Google Antigravity", version: "1.5.0"}`. t3code expects the name "Antigravity ACP Server"; 1.5.0 does not send it. |
-| `session/new` | 0.11–0.2 s; this starts the Go harness. |
-| Disk | The `.par` runs from memory (`memfd`). Nothing unpacks to disk at launch; the t3code note of about 1 GB per launch does not hold for 1.5.0 on Linux. A first session writes a 17 MB `webm_encoder` to `$HOME/.gemini/antigravity/bin/`, about 1.5 MB for a session of ten turns under `$GEMINI_HOME/antigravity-acp/conversations/`, and glog files under `$TMPDIR`. |
-
-**The host probe may spawn `agy --version`.** It costs about 2.6 s and 260 MB of memory once,
-writes nothing and needs no credential. Its timeout must allow at least 5 s on a loaded host.
-Read the version from the `Build label:` line. Model-catalog identity requests share one
-version probe for the resolved executable’s file identity (path, device/inode, size, timestamps
-and mode); replacing or modifying it triggers another probe. Credential identity is still read
-on every catalog request.
-
-**Launch through a symlink (owner decision D1).** The `.par` looks for `localharness_external`
-in `dirname(abspath(argv[0]))`, which does not resolve symlinks, then next to
-`sys.executable`; `ANTIGRAVITY_HARNESS_PATH` overrides both (`main.py`,
-`_configure_localharness_path`). A bare `agy` symlink in another folder passes `initialize` but
-fails `session/new` with error -32603 "Could not find default localharness binary"
-(`harness-missing.ndjson`). Setting `ANTIGRAVITY_HARNESS_PATH` to the `localharness_external`
-next to the symlink's real target fixes it. So the runner sets that variable from the resolved
-binary path, or the install hint tells the user to link the whole folder.
-
-## Sign-in
-
-| Method | Headless | How |
-| --- | --- | --- |
-| `gemini-api-key` | Yes | `authenticate {methodId: "gemini-api-key"}` takes the key from `_meta` (`api-key`, `apiKey` or `api_key`) or from `GEMINI_API_KEY`. It writes `{"auth":{"type":"gemini-api-key"}}` to `$GEMINI_HOME/antigravity-acp/settings.json`, so later launches infer it. The code shows that without a key it still answers `{}` and `session/new` then fails with an auth error (not run). |
-| `oauth-personal` | No, unless the browser can reach the agy host | The server opens a one-shot loopback listener at `http://127.0.0.1:<random port>/` for 300 s, prints the Google consent URL to stderr and opens it through `webbrowser` (`$BROWSER`). The redirect must reach that port, agy itself has no device-code or paste flow (`oauth/credential_manager.py`). Squawk captures `$BROWSER` in memory and offers a pasted redirect in its cockpit, then replays it to this listener on the host. Personal consent URL capture/cancellation was verified live; completing consent with real Google accounts remains the owner’s check. |
-| `oauth-business` | Not probed | Gemini Enterprise sign-in through the same kind of browser flow. |
-| `agent-platform` | Not probed | Vertex AI; needs `gcp.project` and `gcp.location` in `settings.json` and Google credentials. |
-
-`AGY_ACP_FORCE_FILE_STORAGE=1` keeps ACP OAuth credentials in files instead of a keyring
-(`oauth/credential_store.py`). Personal OAuth uses
-`$GEMINI_HOME/antigravity-acp/acp_token.json` (`ccpa_connection/oauth_manager.py`;
-confirmed by native file-access tracing). The harness's separately logged
-`$HOME/.config/antigravity/plugin-secrets.json` is plugin state, not this OAuth token.
-Named Squawk accounts relocate HOME and XDG_CONFIG_HOME too, while retaining links to
-user native instructions and skills. Read-only Go symbol/disassembly inspection of 1.5.0
-confirms `authstore.pluginFallbackPath` calls `os.UserConfigDir()` then joins
-`antigravity/plugin-secrets.json`; on Linux that uses XDG_CONFIG_HOME or HOME/.config.
-The live API-key runs did not access this plugin store. No credential values are copied into Squawk state.
-
-## Models and the API host
-
-Squawk's catalog opens a short-lived ACP session and reads native `configOptions`. It sets
-each listed model with `session/set_config_option` to read that model's thinking choices,
-without sending a prompt. On 1.5.0 the live table offered gemini-3.8/3.7/3.6/3.5-flash
-(low/medium/high) and gemini-3.1-pro (low/high). A proxy-configured gemini-3-flash also
-appeared with no thinking choices. Cache identity includes account, Build label and auth
-material digested only in memory. A failed probe falls back to suggested presets.
-
-The Go harness calls the Gemini API at `GOOGLE_GEMINI_BASE_URL` (it inherits the server's
-environment) and sends the key as `x-goog-api-key`. The model list comes from a table in the
-server (`model_selection.py`): `gemini-3.8-flash`, `3.7`, `3.6`, `3.5` and `gemini-3.1-pro`, each
-with thinking levels. The API request names the base model and sends the thinking level apart.
-
-CLI Proxy answers `gemini-3-flash` but refuses every base name in that table with 400
-`model_not_found` (`model-error.ndjson`). Two routes worked:
-
-- `AGY_ACP_DEFAULT_MODEL=gemini-3-flash`. agy sends an id that is not in its table to the API
-  unchanged. But it then knows no context size for the model and sends **no `usage_update`**.
-- A local shim that renames the model in the request path. The usage, background, subagent,
-  timer, skill and option fixtures were recorded through it with agy's default model.
-
-An API error does not become a JSON-RPC error. It becomes an `agent_message_chunk` starting
-"Agent execution error:" and the turn ends with `stopReason: "end_turn"` (`model-error.ndjson`).
-On task or catalog failure, Squawk captures bounded, redacted tails of stderr and native glog
-INFO/ERROR files from the process's private TMPDIR in the server log before removing that directory.
-This preserves native failure details that the ACP error message can omit.
-`HSQ_ANTIGRAVITY_DEBUG=1` adds native `--debug` traces; it is off by default. macOS can write
-these traces only to stderr, including the native `RAW WS MSG` trajectory entries.
-
-## Usage
-
-- The `session/prompt` result's `usage` sums this turn's model calls only, not the session so
-  far (`prompt-text-usage.ndjson`). The first turn made one call: 14,264 tokens, equal to its
-  `usage_update.used`. The second turn made two calls (`used` 14,585 then 14,709), and its
-  result counts 29,294, about their sum.
-- `usage_update {used, size}` comes after each model call and once at `session/new`
-  (`used: 0`). `used` is the tokens now in the context window and `size` is the window
-  (1,048,576). It is a snapshot of occupancy, not a running sum and not a cost.
-- No frame reports a cost. The `/usage` slash command ("Show model token usage and quota
-  limits") was not run.
-
-## Tool frames
-
-Squawk gives this agent's private MCP server the alias `squawk`. The native name
-`mcp_<server>_<tool>` must fit 64 characters. With the shared `cezar_ci_<32 hex>` name,
-1.5.0 rejects the longest Squawk tools at startup, then can fail the second prompt with
-`unexpected end of JSON input` while rebuilding its executor. Both the failure and the
-short-alias two-turn success were reproduced on Linux with personal OAuth and the full tool list.
-
-- **Command** (`prompt-command.ndjson`): `tool_call` kind `execute`, status `pending`, `rawInput`
-  `{CommandLine, Cwd, WaitMsBeforeAsync[, NotificationTimeoutSeconds]}`; then the permission
-  request with the same `toolCallId`; then `tool_call_update` `in_progress` with `rawInput`
-  `{command_line, working_dir}`; then `completed` with `rawOutput` `{commandLine, workingDir,
-  exitCode, exit_code, combinedOutput, formatted_output}`.
-- **Edit** (`prompt-edit.ndjson`): `tool_call` kind `edit`, title `Run edit_file?`, `content`
-  `[{type: "diff", path, oldText, newText, _meta: {kind: "modify"}}]`, `rawInput` `{TargetFile,
-  TargetContent, ReplacementContent, StartLine, EndLine, …}`; completed `rawOutput`
-  `"Edit notes.txt"`. The harness writes the file itself, since the client did not advertise
-  `fs.writeTextFile`. With `fs.readTextFile` advertised, agy reads files through
-  `fs/read_text_file` (tool title `Running client_view_file`).
-- **Permission options**: a command offers `allow_always` (with `_meta["agy.security.warning"]`),
-  `allow` (`allow_once`) and `deny` (`reject_once`); an edit offers `allow` and `deny`. A denial
-  closes the call with status `failed`, `rawOutput: "Rejected by user"`
-  (`permission-reject.ndjson`).
-- **Question** (`interaction-question.ndjson`): `tool_call {toolCallId: "interaction_<8 hex>",
-  title: <question>, status: "pending", rawInput: {}}`, then `session/request_permission` whose
-  options are the answers, each with kind `allow_once` (`{optionId: "1", name: "red"}`). Select an
-  `optionId` to answer; agy closes the call with `rawOutput: "Response received"`. Route by the
-  `interaction_` prefix, since every option has kind `allow_once`.
-- **Subagent** (`subagent.ndjson`): `tool_call` kind `other`, title `Run invoke_subagent?`,
-  status `pending`, `rawInput` `{Subagents: [{Model, Prompt, Role, TypeName}]}`; the permission
-  request carries the same `rawInput`. The `in_progress` update has title
-  `Running invoke_subagent` and an empty `rawInput`, and the call completes at once with
-  `rawOutput: "Tool execution"`. The child's own calls follow as ordinary top-level calls.
-- **Tool call ids** take three forms: 32 hex digits, `call_<digits>`, and `<sessionId>:<n>` (yolo
-  mode).
-- **Modes** `default`, `auto_edit` and `yolo` are accepted; `session/set_mode` answers `{}`. In
-  `yolo` a command runs with no permission request (`mode-yolo.ndjson`). The mode is saved with
-  the session and comes back on resume.
-- **Options**: `session/new` returns `configOptions` `model`, `thinking_level` (category
-  `thought_level`) and `mode`. `session/set_config_option` changes them and returns the new
-  list; an unknown model returns error -32602 with `availableModels` (`config-options.ndjson`).
-- **Other frames at `session/new`**: `usage_update` and `available_commands_update` (`plan`,
-  `logout`, `usage`) come before the response.
-- **MCP**: `mcpCapabilities` offers `http` and `sse`, not `stdio`.
-
-## Permissions in default mode
-
-In the `default` mode agy allows its read-only tools and asks for every other tool
-(`policy.safe_defaults` in the SDK: `allow` for the read-only set, then `ask_user("*")`).
-`server.py` adds an explicit allow for `ask_question`, an explicit ask for `read_url_content`,
-and a pre-tool hook that denies file access outside the allowed folders. A live probe with
-`fs.readTextFile` and `fs.writeTextFile` both `false` and one HTTP MCP server gave:
-
-| Tool | Asks | Evidence |
-| --- | --- | --- |
-| `view_file` in the workspace | No | `tool_call` `Running view_file`, kind `read`, no request (`permission-view-list-search.ndjson`) |
-| `view_file` outside the workspace | No: denied | The pre-tool hook denies it ("Access to path … is denied. It is outside the allowed workspace directories") with no frame and no request. The model then ran `cat` through `run_command`, which asked (`view-file-outside-workspace.ndjson`). An allowed `run_command` therefore reaches files outside the workspace. |
-| `list_directory`, `search_directory`, `find_file` | Not offered | Off by default in the SDK; the model answered that it had no such tool (`permission-view-list-search.ndjson`). There is no grep tool; a search runs through `run_command`. |
-| `run_command` | Yes | `prompt-command.ndjson` |
-| `create_file` | Yes | `Run create_file?`, kind `edit`, options `allow` and `deny` (`permission-create-file.ndjson`) |
-| `edit_file` | Yes | `prompt-edit.ndjson` |
-| `invoke_subagent` | Yes | `Run invoke_subagent?`, kind `other`; the child's own tools ask again (`subagent.ndjson`) |
-| `search_web` | Yes | `Run search_web?`, kind `search`; it then called `read_url_content`, which asked too (`permission-search-web.ndjson`) |
-| `read_url_content` | Yes | `Run read_url_content?`, kind `fetch` (`permission-read-url.ndjson`) |
-| MCP tool | Yes | Title `<server>_<tool>` (`probe_echo`), kind `other` (`permission-mcp-echo.ndjson`; the HTTP server is in `permission-handshake-mcp.ndjson`) |
-| `generate_image` | Yes | `Run generate_image?`, kind `other`; the image call itself failed at CLI Proxy (`permission-generate-image.ndjson`) |
-| `ask_question` | No | The question is itself the request (`interaction-question.ndjson`) |
-| `schedule`, `finish` | No | Read-only set; `schedule` sends no `tool_call` at all (`schedule-timer.ndjson`) |
-
-In `yolo` mode nothing asks (`mode-yolo.ndjson`). `auto_edit` was not probed.
-
-## Session lifecycle
-
-- **Cancel** (`cancel.ndjson`): after the `session/cancel` notification, agy sends the chunks
-  "context canceled" and "The request was cancelled by the client.", closes the open tool call
-  as `failed`, and answers the prompt with `stopReason: "cancelled"` 13 ms later. The next
-  prompt works.
-- **Resume**: `session/resume` answers in about 0.2 s with `modes`, `models` and `configOptions`, and replays
-  nothing (one `available_commands_update`). The conversation history is kept.
-- **Load** (`load-replay.ndjson`): `session/load` replays the history as `user_message_chunk`,
-  `agent_message_chunk`, `tool_call` and `tool_call_update` frames before its response.
-- **List** (`session-list.ndjson`): `session/list` returns `{sessionId, cwd, title}` per saved
-  session.
-
-## Skills
-
-The skill list at `session/new` (the reason hearsay-tools/cezarion#1267 removed Cursor's ACP
-runner) is not fixed for agy: skills are read live each turn. agy reads these folders, in this
-order (`resolve_skills_paths` in `server.py`; confirmed live in `skill-folders.ndjson` with one
-skill per candidate folder):
-
-1. `$GEMINI_HOME/config/skills`
-2. `<dir>/.gemini/skills` for the cwd and each `additionalDirectories` entry
-3. `$GEMINI_HOME/antigravity-cli/skills`
-4. `<dir>/.agents/skills` for the cwd and each `additionalDirectories` entry
-
-`GEMINI_HOME` defaults to `~/.gemini`. agy also lists built-in harness skills (`run-workflow`).
-It does not read `$HOME/.gemini/...` when `GEMINI_HOME` points elsewhere, `~/.agents/skills`,
-`~/.claude/skills`, `<cwd>/.agent/skills` or `<cwd>/.claude/skills`.
-
-The harness binary names plugin sources (`<cwd>/.agents/plugins/`, `~/.gemini/config/plugins/`,
-`~/.gemini/extensions/`, `~/.claude/plugins/`, with `plugin.json` under `.antigravity-plugin/`,
-`.gemini-plugin/` or `.claude-plugin/`). A test plugin with a guessed manifest and a `skills/`
-folder was not listed, so plugin skills are unconfirmed.
-
-ACP has no call that lists skills: `available_commands_update` holds only `plan`, `logout` and
-`usage`. The skill catalog has to read the folders above itself. A prompt that starts with
-`/<skill name>` makes the model read that skill's `SKILL.md` and follow it (`skill-slash.ndjson`).
-
-## Wire hazards
-
-These are not parity gaps, but the runner must handle them:
-
-1. **The steered prompt's response.** The second `session/prompt` is answered early with
-   `stopReason: "end_turn"`, and agy injects an `agent_message_chunk` "Agent connection was lost
-   and could not be re-established: Concurrent receive_steps() calls are not supported on this
-   connection." into the running turn's text (`midturn-prompt.ndjson`). The SDK sends the
-   steered text to the harness before that error. The runner drops this chunk and must not
-   read the early response as the end of the running turn.
-2. **Errors as text.** Provider and harness errors end the turn normally, with the error as
-   message text (`model-error.ndjson`).
-3. **Background notifications as text.** When a background command or timer reports, the
-   model sometimes repeats the harness's `<SYSTEM_MESSAGE>` notice verbatim in its answer
-   (`midturn-prompt.ndjson`, `cancel.ndjson`).
-4. **Commands that go to the background.** A command still running after `WaitMsBeforeAsync`
-   moves to the background; its `tool_call` stays `in_progress` and closes when it ends, still
-   inside the held turn (`background-command.ndjson`).
-
-## Runner integration choices verified live
-
-A follow-up on the same 1.5.0 build verified the runner fixes for
-hearsay-tools/squawk#4004 with isolated `HOME`, `GEMINI_HOME` and `TMPDIR` on the host:
-
-- `agy --version` prints a multi-line banner. `Build label:` supplies the version.
-- Model ids are opaque. A bare `gemini-3-flash` id passed unchanged through the runner and
-  completed a turn through CLI Proxy. Slashes inside an id also belong to the native id.
-- The harness sorts active workspaces and chooses the first as its default command cwd.
-  Squawk omits `additionalDirectories` so the task checkout remains that directory. A live
-  command without `Cwd` returned the task worktree. The same turn appended to the absolute
-  handoff path under `.ai/squawk/runs` and wrote to `.ai/squawk/t/<task>` and `$TMPDIR` through
-  shell tools. Native `view_file` outside-workspace restrictions still apply.
-- `_meta.antigravity.eagerMcpServers` takes exact MCP server names (`mcp_servers.py`). Squawk
-  sends its bridge name on new and resume so lifecycle tools are available without first
-  reading the lazy tool files. The live model called `cezar_done` through that bridge.
-- The harness writes `skills/system/run-workflow/SKILL.md` in the ACP workspace when native
-  `run_workflow` is enabled. Moving the outer process cwd does not prevent this. A three-way
-  session-opening probe found the file with defaults and no file with either
-  `disabledTools: ["run_workflow"]` or `disabledTools: ["run_workflow", "start_subagent"]`.
-  Squawk deliberately sends only `disabledTools: ["run_workflow"]` on new and resume:
-  Squawk owns workflows, while native `start_subagent` remains available. This prevents the
-  generated skill from entering autosave without deleting or ignoring user files.
-- `available_commands_update` is a benign command catalog update. The mapper ignores it.
-  MCP tool display names come from `_meta.mcp.tool`, while permission matching retains the
-  native server-qualified name too.
-- Cancellation must keep ACP open for failed tool updates and the cancelled prompt response.
-  Native command processes can use detached sessions and survive harness exit. The runner
-  captures descendant process identities before shutdown and reaps observed descendants
-  even after reparenting. This is bounded cleanup, not containment of processes that escape
-  before the snapshot. Open tool items also close as failed at a terminal turn boundary.
-- Native `interaction_` answers accept only an offered `optionId`. Squawk hides free-text
-  answers for these questions. Unsupported option counts cancel visibly; an invalid answer
-  cancels the native request with a notice so the question cannot hang.
-
-## Gaps that need a parity exemption
-
-Wire gaps, each a `mock.parityExemptions` entry or a named exemption in `ui-parity.test.ts`:
-
-| Criterion | Kind | Wire reason |
-| --- | --- | --- |
-| `plan.updated with entries` (UI parity matrix) | capability-absent | agy 1.5.0 sends no ACP `plan` update; `/plan` writes a plan artifact instead. |
-| D1 (governed cross-session controls) and D3 (native cross-session messaging) | capability-absent | agy 1.5.0's built-in tools (`types.BuiltinTools`) include no cross-session tool. The harness carries a `swarm` plugin and an in-session message bus for background-task notices; neither showed as a tool in these sessions. Confirm when the runner exists. |
-| I2 (accepted input left unread) | capability-absent | A steer is read in the running turn or runs as its own prompt, as for Pi; no observed case leaves it unread. Confirm when the runner exists. |
-
-Gaps the declared facts already cover, with no entry: hook items (`hookEvents: 'none'`),
-background subagent items (`nativeSubagents: 'turn-held'`), nested child work
-(`childWork: 'none'`) and late permission requests (`nativePermission: 'in-turn'`).
-
-Limits that are not parity cells, but that the runner must state:
-
-- No cost on the wire. Token counts exist per turn.
-- `usage_update` is absent for a model outside agy's table, which includes every route through
-  CLI Proxy without a renaming shim. The runner can still report per-turn usage from the
-  `session/prompt` result.
-- Squawk's tools must reach agy over HTTP or SSE MCP; stdio MCP is not offered.
-- No skill list call (see [Skills](#skills)).
-
-## Frames not produced
-
-Every frame the issue asks for was recorded. Completed real personal/business OAuth consent,
-Agent Platform sign-in, and a plugin skill with a correct manifest were not run. The accounts
-follow-up verified personal consent capture/cancellation, two isolated API-key sessions, native
-model/thinking discovery, and both linked user and project skill triggers on the real build.
+- **Late steer.** A second prompt sent while the final text of a tool-free turn streamed ended
+  the first prompt with `end_turn` (no `usage`) 5 ms later. The agent then ran one more model
+  step and its answer obeyed the steer; the second prompt's response ended the turn. The steer
+  is read in the running turn: `humanInputAtTurnEnd` is `never-held`.
+- **Prompt during work after the turn.** A prompt sent while the agent wrote text after a
+  background command ended joined that work: the answer obeyed it, and its response ended it.
+- **Google sign-in status.** With `SSH_CONNECTION` set and no stored sign-in, `authenticate
+  oauth-personal` answered -32603 "No browser is available here (this is a remote (SSH)
+  session, …)" at once and ran no `BROWSER` command, even with `DISPLAY` set. Without
+  `SSH_CONNECTION` it waited and did not answer within 20 s.
+- **Where a Google sign-in is stored.** No Google account was used. A local TLS interceptor with
+  a test CA (`SSL_CERT_FILE`, `HTTPS_PROXY`) answered the CLI's token exchange
+  (`POST oauth2.googleapis.com/token`) and user info call with fake values, so `antigravity acp
+  --login` completed with a pasted bare code. With `SSH_CONNECTION` set, each account's sign-in
+  went to one file, `<gemini-dir>/<app-data-dir>/antigravity-oauth-token` (mode 0600, JSON keys
+  `auth_method` and `token`), and `cache/acp-auth-state.json` became
+  `{"methodId":"oauth-personal"}`. Two accounts got two different files; nothing was written under
+  `HOME` or `XDG_CONFIG_HOME`. A session process with `SSH_CONNECTION` then answered `authenticate
+  oauth-personal` with `{}` for each signed-in account and refused the account with no file. The
+  binary has an SSH keyring detector (`code_assist_client/keyring_detector_ssh.go`) beside D-Bus,
+  container, WSL and Termux detectors, and a composite keyring-and-file token storage. This host
+  has no D-Bus session bus, so a run without `SSH_CONNECTION` also wrote the file here. Where a
+  host with an OS keyring (macOS, a Linux desktop) puts the token without `SSH_CONNECTION` was not
+  measured; t3code reports one keyring entry for every account. Squawk always sets
+  `SSH_CONNECTION`, in the sign-in process and in every session and probe process.
 
 ## Fixtures
 
 Each line of a fixture is `{"t": <seconds since the agent started>, "from": "client" | "agent",
 "frame": <JSON-RPC frame>}`. Host paths are replaced with `/work/...`. No key, token or email is
-in them. Frame order and timing are as recorded.
-
-| File | What it shows |
-| --- | --- |
-| `handshake.ndjson` | `initialize`, `authenticate`, `session/new` with a system prompt |
-| `prompt-text-usage.ndjson` | Two turns: thought chunks, text, `usage_update` per model call, per-turn `usage` |
-| `prompt-command.ndjson` | A command with its permission request |
-| `prompt-edit.ndjson` | `fs/read_text_file`, then an edit with a diff and its permission request |
-| `permission-reject.ndjson` | A denied command |
-| `interaction-question.ndjson` | A native question and its answer |
-| `midturn-prompt.ndjson` | A second prompt while a command runs |
-| `midturn-prompt-late.ndjson` | A second prompt after the last tool result |
-| `cancel.ndjson` | `session/cancel` during a command, then a working turn |
-| `resume-without-system-prompt.ndjson` | `session/resume` without `_meta`; the system prompt is gone |
-| `resume-with-system-prompt.ndjson` | `session/resume` with `_meta` resent |
-| `load-replay.ndjson` | `session/load` history replay |
-| `background-command.ndjson` | A background command that holds the turn; no frame in the 30 s before the next prompt |
-| `subagent.ndjson` | `invoke_subagent` and the child's command |
-| `schedule-timer.ndjson` | A `schedule` timer that holds the turn; no frame in the 45 s before the next prompt |
-| `mode-yolo.ndjson` | `session/set_mode yolo`, then a command with no permission request |
-| `config-options.ndjson` | `session/set_config_option` for effort, model and an unknown model |
-| `skills-live.ndjson` | The turn after a skill folder was added on disk mid-session: the listing names it (the addition itself sends no frame) |
-| `skill-slash.ndjson` | `/probe-alpha` and `/no-such-skill` |
-| `skill-midturn.ndjson` | `/probe-alpha` steered into a running turn |
-| `skill-folders.ndjson` | The skill folders agy reads |
-| `session-list.ndjson` | `session/list` |
-| `model-error.ndjson` | A provider 400 as message text and `end_turn` |
-| `harness-missing.ndjson` | `session/new` through a bare `agy` symlink |
-| `permission-handshake-mcp.ndjson` | `initialize` with `fs.readTextFile: false` and `session/new` with one HTTP MCP server |
-| `permission-view-list-search.ndjson` | `view_file` with no request; no list or search tool |
-| `permission-create-file.ndjson` | `create_file` with its request |
-| `permission-search-web.ndjson` | `search_web` and the `read_url_content` it calls, both with requests |
-| `permission-read-url.ndjson` | `read_url_content` with its request |
-| `permission-mcp-echo.ndjson` | An MCP tool call with its request |
-| `permission-generate-image.ndjson` | `generate_image` with its requests |
-| `view-file-outside-workspace.ndjson` | A denied outside read, then `cat` through `run_command` |
-
-The CLI 1.5.14 fixtures follow the same format. The live turns ran through the model-renaming
+in them. Frame order and timing are as recorded. The live turns ran through the model-renaming
 shim (see [CLI models and the API host](#cli-models-and-the-api-host)). Each `cli-*.expected.json` is
-what today's mapper makes of the frames (see
-[What today's mapper does with CLI frames](#what-todays-mapper-does-with-cli-frames)).
+what the mapper makes of the frames.
 
 | File | What it shows |
 | --- | --- |

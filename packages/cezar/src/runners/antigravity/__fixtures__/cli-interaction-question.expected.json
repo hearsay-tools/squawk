@@ -160,29 +160,6 @@
     }
   },
   {
-    "type": "item.completed",
-    "item": {
-      "kind": "tool",
-      "id": "call_9690246566483500780",
-      "name": "ask_question",
-      "title": "Run ask_question",
-      "toolKind": "other",
-      "status": "failed",
-      "input": {
-        "questions": [
-          {
-            "options": [
-              "(Recommended) Red",
-              "Blue"
-            ],
-            "question": "Which color do you prefer?"
-          }
-        ]
-      },
-      "output": "Turn ended before the tool completed"
-    }
-  },
-  {
     "type": "turn.completed",
     "turnId": "acp-turn-1",
     "stopReason": "end_turn",
@@ -218,8 +195,7 @@
             "question": "Which color do you prefer?"
           }
         ]
-      },
-      "output": "Turn ended before the tool completed"
+      }
     }
   },
   {
@@ -241,14 +217,8 @@
             "question": "Which color do you prefer?"
           }
         ]
-      },
-      "output": "Turn ended before the tool completed"
+      }
     }
-  },
-  {
-    "type": "session.error",
-    "message": "ACP ignored unsupported session/update",
-    "fatal": false
   },
   {
     "type": "item.started",

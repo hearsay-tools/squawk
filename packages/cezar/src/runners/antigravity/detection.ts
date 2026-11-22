@@ -1,9 +1,12 @@
 import { productEnv } from '../../core/product-env.ts';
 import type { RunnerDetection } from '../../core/runner-definition.ts';
+import { cachedAntigravityOnPath, checkAntigravityCli, managedAntigravity } from './executable.ts';
 export const ANTIGRAVITY_DETECTION = {
-  binary: 'agy', binOverride: () => productEnv('ANTIGRAVITY_BIN'), dryRun: 'unless-bin-override',
-  banner: { pattern: /antigravity_extensions\/acp_server/, label: 'Google Antigravity ACP server' },
-  versionPattern: /^Build label:\s*(\S+)/m,
-  availableHint: 'Uses GEMINI_API_KEY, GOOGLE_API_KEY, or your Antigravity sign-in in GEMINI_HOME (default ~/.gemini).',
-  missingHint: 'Install the Antigravity ACP registry archive and link agy to agy_acp_server.par. Keep localharness_external beside the .par.',
+  binary: 'agy', binOverride: () => productEnv('ANTIGRAVITY_BIN') || undefined, dryRun: 'unless-bin-override',
+  locate: () => managedAntigravity() ?? cachedAntigravityOnPath(),
+  // The CLI prints a bare version; its --help names the CLI and the acp command.
+  identify: checkAntigravityCli,
+  banner: { pattern: /^\d+\.\d+\.\d+$/, label: 'the Google Antigravity CLI' },
+  availableHint: 'Uses GEMINI_API_KEY, GOOGLE_API_KEY, or the Google sign-in of the selected account.',
+  missingHint: 'Install the Antigravity CLI from Settings > Accounts > Install CLI, or put agy on PATH.',
 } as const satisfies RunnerDetection;
