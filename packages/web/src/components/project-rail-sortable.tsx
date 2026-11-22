@@ -22,6 +22,7 @@ import type { RailSort } from './project-rail'
 
 type RailProjectsProps = {
   projects: readonly ProjectListEntry[]
+  onReady: () => void
   onReorder: (ids: readonly string[]) => void
   renderProject: (project: ProjectListEntry, sort: RailSort) => React.ReactNode
 }
@@ -170,8 +171,9 @@ function useRailSorting(given: readonly ProjectListEntry[], onReorder: ((ids: re
 }
 
 /** Loaded only when the rail can persist a reorder of multiple projects. */
-export default function SortableRailProjects({ projects, onReorder, renderProject }: RailProjectsProps) {
+export default function SortableRailProjects({ projects, onReorder, renderProject, onReady }: RailProjectsProps) {
   const sorting = useRailSorting(projects, onReorder)
+  React.useLayoutEffect(onReady, [onReady])
   return (
     <DndContext
       sensors={sorting.sensors}

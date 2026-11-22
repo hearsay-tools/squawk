@@ -449,6 +449,12 @@ function RailBottom({ roomToExpand, expanded, toggle, railId, allProjectsActive,
   )
 }
 
+/** Capture focus before React removes the static rows during the sortable handover. */
+function StaticRailProjects({ children, rememberFocus }: { children: React.ReactNode; rememberFocus: () => void }) {
+  React.useLayoutEffect(() => rememberFocus, [rememberFocus])
+  return <>{children}</>
+}
+
 export function ProjectRail({ projects, signals, version, projectTarget = homeOf, onSwitchProject, onSelectProject, canReorder = false, onReorder }: ProjectRailProps) {
   const { pathname } = useLocation()
   const { resolvedTheme } = useTheme()
@@ -468,6 +474,26 @@ export function ProjectRail({ projects, signals, version, projectTarget = homeOf
   const allProjectsActive = pathname === '/tasks'
   const settingsActive = pathname === '/settings/global' || pathname.startsWith('/settings/global/')
   const railId = React.useId()
+  const projectsRef = React.useRef<HTMLDivElement>(null)
+  const pendingFocus = React.useRef<{ link: HTMLAnchorElement; projectId: string } | null>(null)
+  const rememberFocus = React.useCallback(() => {
+    const link = document.activeElement
+    if (!(link instanceof HTMLAnchorElement) || !projectsRef.current?.contains(link)) return
+    const projectId = link.closest<HTMLElement>('[data-project-id]')?.dataset.projectId
+    if (projectId) pendingFocus.current = { link, projectId }
+  }, [])
+  const restoreFocus = React.useCallback(() => {
+    const previous = pendingFocus.current
+    pendingFocus.current = null
+    if (!previous || previous.link.isConnected || document.activeElement !== document.body) return
+    const rows = projectsRef.current?.querySelectorAll<HTMLElement>('[data-project-id]') ?? []
+    for (const row of rows) {
+      if (row.dataset.projectId === previous.projectId) {
+        row.querySelector<HTMLAnchorElement>('a')?.focus({ preventScroll: true })
+        break
+      }
+    }
+  }, [])
   const sortable = canReorder && onReorder !== undefined && projects.length > 1
   const renderProject = (project: ProjectListEntry, sort?: RailSort) => {
     const Row = expanded ? ExpandedProjectRow : ProjectMark
@@ -475,7 +501,11 @@ export function ProjectRail({ projects, signals, version, projectTarget = homeOf
       current={project.id === currentProjectId} target={projectTarget(project.id)}
       onSwitchProject={onSwitchProject} onSelectProject={onSelectProject} sort={sort} />
   }
-  const staticProjects = projects.map((project) => renderProject(project))
+  const staticProjects = (
+    <StaticRailProjects rememberFocus={rememberFocus}>
+      {projects.map((project) => renderProject(project))}
+    </StaticRailProjects>
+  )
 
   return (
     <nav
@@ -495,6 +525,7 @@ export function ProjectRail({ projects, signals, version, projectTarget = homeOf
 
       {/* The only part that scrolls, so the app mark and the bottom group stay pinned. */}
       <div
+        ref={projectsRef}
         data-slot="rail-projects"
         className={cn(
           'flex min-h-0 w-full flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain [scrollbar-width:none]',
@@ -503,7 +534,7 @@ export function ProjectRail({ projects, signals, version, projectTarget = homeOf
       >
         {sortable ? (
           <React.Suspense fallback={staticProjects}>
-            <SortableRailProjects projects={projects} onReorder={onReorder} renderProject={renderProject} />
+            <SortableRailProjects projects={projects} onReorder={onReorder} renderProject={renderProject} onReady={restoreFocus} />
           </React.Suspense>
         ) : staticProjects}
         <RailAddProject expanded={expanded} />

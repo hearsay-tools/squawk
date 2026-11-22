@@ -420,8 +420,27 @@ describe('ProjectRail reorder', () => {
     expect(order()).toEqual(['gamma', 'alpha', 'beta'])
     expect(link('gamma').getAttribute('href')).toBe('/p/gamma/')
     expect(link('gamma').getAttribute('aria-describedby')).toBeNull()
+    link('gamma').focus()
     await waitFor(() => expect(link('gamma').getAttribute('aria-describedby')).toBeTruthy())
+    expect(document.activeElement).toBe(link('gamma'))
     expect(order()).toEqual(['gamma', 'alpha', 'beta'])
+  })
+
+  it.each([false, true])('keeps project-link focus when ui-state enables sorting (expanded=%s)', async (expanded) => {
+    setViewport(1600)
+    if (expanded) localStorage.setItem(PROJECT_RAIL_EXPANDED_STORAGE_KEY, '1')
+    const onReorder = vi.fn()
+    const { rerender } = renderRail({ projects: three, canReorder: false, onReorder })
+    link('beta').focus()
+    rerender(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/p/toolkit-dev/']}>
+          <ProjectRail projects={three} signals={new Map()} version="0.15.0" canReorder onReorder={onReorder} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
+    expect(document.activeElement).toBe(link('beta'))
   })
 
   it('offers no reorder until the ui-state has loaded, without a writer, or with one project', () => {
