@@ -5,10 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { removeWorktreesRepo, seedWorktreeRun, worktreesRepo } from '../server/worktrees-api.testkit.ts';
-import { releaseEndedWorkerBranches } from '../delegation/family-end.ts';
-import { createOwnedWorkspace } from '../delegation/workspace.ts';
-import { fixture as workspaceRepo, git } from '../delegation/workspace-fixture.testkit.ts';
-import { projectPaths } from '../project-paths.ts';
 import { provisionArtifactDirectory } from '../artifacts/lifecycle.ts';
 import { reclaimWorktree } from './retention.ts';
 import { runSlotsSealed } from './removal-slots.ts';
@@ -17,7 +13,7 @@ import { RunStore } from './store.ts';
 
 // This file seals no removal slot, as a process entry that forgot registerBuiltInRunSlots() would
 // not: each removal throws before its first side effect (spec 2026-11-21-run-lifecycle-and-store-ports,
-// "Removal cases", last row).
+// "Removal cases", last row). The worker family end case is in `delegation/family-end-unsealed.test.ts`.
 const UNSEALED = /No removal slot is registered: call registerBuiltInRunSlots\(\)/;
 const cleanups: Array<() => void> = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });
@@ -82,15 +78,4 @@ it('a family archive throws and keeps the family unarchived with its tmp directo
   expect(store.getRun(old.id)?.archived).toBe(false);
   expect(existsSync(tmp)).toBe(true);
   store.close();
-});
-
-it('a worker family end throws and keeps an orphan receipt\'s clean worktree and its branch', async () => {
-  const { root, first } = await workspaceRepo();
-  const orphan = await createOwnedWorkspace(root, randomUUID(), first);
-  const store = RunStore.open(projectPaths(root).write);
-  cleanups.unshift(() => store.close());
-
-  await expect(releaseEndedWorkerBranches(root, store, () => () => undefined)).rejects.toThrow(UNSEALED);
-  expect(existsSync(orphan.path)).toBe(true);
-  expect(git(root, 'branch', '--list', orphan.branch)).not.toBe('');
 });
