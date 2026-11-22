@@ -8,8 +8,9 @@
  * `.ai/specs/2026-11-21-run-lifecycle-and-store-ports.md`), and the port then points at the module
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
-import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
+import type { ArchiveFinishedScope, ArchivePullRequestIdentity, MergedPullRequest, WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunEvent, RunRecord, RunStore } from './store.ts';
+import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 import type { WorkerProcessRecord } from '../core/process-stat.ts';
@@ -163,17 +164,35 @@ export interface RunRetention {
   fallbackDeleteError(id: string, kind?: 'record' | 'worktree'): string | undefined;
 }
 
-/** The archive methods. */
+/** The archive flag, archive on merge and the compression of archived history (`runs/run-archive.ts`, `store.archive`). */
 export interface RunArchive {
-  setArchived: RunStore['setArchived'];
-  archiveFinished: RunStore['archiveFinished'];
-  archiveOnMergeSnapshot: RunStore['archiveOnMergeSnapshot'];
-  archiveAfterMerge: RunStore['archiveAfterMerge'];
-  archiveMergeBlocker: RunStore['archiveMergeBlocker'];
-  setArchiveBlocker: RunStore['setArchiveBlocker'];
-  hasArchiveOnMergeAssociations: RunStore['hasArchiveOnMergeAssociations'];
-  prepareArchiveOnMerge: RunStore['prepareArchiveOnMerge'];
-  listArchiveOnMergeCandidates: RunStore['listArchiveOnMergeCandidates'];
+  setArchived(id: string, archived: boolean): RunRecord | undefined;
+  archiveFinished(scope?: ArchiveFinishedScope, automation?: boolean): { archived: number; ids: string[]; pinnedIds: string[] };
+  archiveOnMergeSnapshot(id: string, repoBase?: string, isActive?: (id: string) => boolean): ArchiveOnMergeSnapshot | undefined;
+  archiveAfterMerge(snapshot: ArchiveOnMergeSnapshot, observations: readonly MergedPullRequest[], repoBase?: string, isActive?: (id: string) => boolean): boolean;
+  archiveMergeBlocker(snapshot: ArchiveOnMergeSnapshot, missing: ArchivePullRequestIdentity, repoBase?: string): void;
+  setArchiveBlocker(id: string, blocker: RunRecord['archiveBlocker']): void;
+  hasArchiveOnMergeAssociations(id: string): boolean;
+  prepareArchiveOnMerge(id: string): Promise<void>;
+  listArchiveOnMergeCandidates(afterSeq?: number, limit?: number): Array<{ id: string; seq: number }>;
+  compressArchivedHistory(): void;
+  historyIdle(): Promise<void>;
+}
+
+/** The completion action a finished task waits on (`runs/run-archive.ts`, `store.archive`). */
+export interface RunCompletionActions {
+  listCompletionCandidates(afterSeq?: number, limit?: number): Array<{ id: string; seq: number }>;
+  canCompleteAction(id: string, token: string): boolean;
+  claimCompletionAction(id: string, token: string): boolean;
+  completeAction(id: string, token: string, phase: 'blocked' | 'complete', message?: string): boolean;
+}
+
+/** The user's pin and the read receipt (`runs/run-read-flags.ts`, `store.readFlags`). */
+export interface RunReadFlags {
+  setPinned(id: string, pinned: boolean): RunRecord | undefined;
+  setRead(id: string): RunRecord | undefined;
+  setUnread(id: string): RunRecord | undefined;
+  markAllRead(automation?: boolean): number;
 }
 
 /** Whether this process may write a run, where its files are, and the redaction of its text. */

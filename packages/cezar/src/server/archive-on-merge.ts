@@ -1,5 +1,6 @@
 import type { ArchivePullRequestIdentity, MergedPullRequest } from '@open-mercato/cezar-contract';
-import type { ArchiveOnMergeSnapshot, RunStore } from '../runs/store.ts';
+import type { RunStore } from '../runs/store.ts';
+import type { ArchiveOnMergeSnapshot } from '../runs/run-archive.ts';
 import { pullRequestKey } from '../runs/pull-requests.ts';
 import { projectPaths } from '../project-paths.ts';
 import { withProjectAdmission } from './cockpit-ownership.ts';
