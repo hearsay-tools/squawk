@@ -1,9 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query'
+import * as React from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
-import { RELOADED_FOR_KEY } from '@/lib/version-reload'
+import { RELOADED_FOR_KEY, useUnsentDraft } from '@/lib/version-reload'
 import { VersionReloadNotice } from './version-reload-notice'
 
 beforeEach(() => {
@@ -71,9 +72,28 @@ describe('VersionReloadNotice', () => {
     fireEvent.input(screen.getByLabelText('Reply'), { target: { value: 'half a reply' } })
     await upgrade('1.1.0')
     expect(reload).not.toHaveBeenCalled()
-    expect(screen.getByRole('status').textContent).toContain('reloads once your unsent text is sent or cleared')
+    expect(screen.getByRole('status').textContent).toContain('reloads once your unsent message is sent or cleared')
 
     fireEvent.input(screen.getByLabelText('Reply'), { target: { value: '' } })
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits while a composer reports an unsent draft, then reloads once it reports none', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let release = () => {}
+    function Draft() {
+      const [unsent, setUnsent] = React.useState(true)
+      release = () => setUnsent(false)
+      useUnsentDraft(unsent)
+      return null
+    }
+    const { reload, upgrade } = setup(<Draft />)
+    await upgrade('1.1.0')
+    expect(reload).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-slot="version-reload"]')?.getAttribute('data-phase')).toBe('waiting-for-input')
+
+    act(() => release())
     act(() => { vi.advanceTimersByTime(2000) })
     expect(reload).toHaveBeenCalledTimes(1)
   })

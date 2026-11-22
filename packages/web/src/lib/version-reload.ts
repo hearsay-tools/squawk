@@ -12,11 +12,19 @@
  * - **No loop.** Before it reloads, the page records the target version in `sessionStorage`. A
  *   page that sees a change to a version it already reloaded for does not reload again; it shows
  *   the notice with a manual Reload button instead.
- * - **No lost text.** While a field the user typed into still holds text that no draft store
- *   keeps, the reload waits and the notice says why. A field that only shows a saved value was
- *   never typed into, so it does not block. A field inside `[data-persisted-draft]` is kept by its
- *   draft store (the new-task composer writes localStorage on every change), so it does not block.
+ * - **No lost input.** While unsent input exists that no draft store keeps, the reload waits and
+ *   the notice says why. Two sources answer:
+ *   - A message composer reports its own state through `useUnsentDraft`: text, attachments and a
+ *     dictation in progress. Dictation and attachments change React state with no input event,
+ *     so the composer is the only place that knows. Text a host stores (the new-task draft writes
+ *     localStorage on every change) does not count; attachments always do, no store keeps them.
+ *   - Any other field counts when the user typed into it and it still holds text. A field that
+ *     only shows a saved value was never typed into, so it does not block. Fields inside a
+ *     composer answer through the composer, and fields inside `[data-persisted-draft]` are kept
+ *     by their draft store, so neither counts here.
  */
+
+import { useEffect } from 'react'
 
 export const RELOADED_FOR_KEY = 'hsq:reloaded-for-version'
 
@@ -66,6 +74,21 @@ const EDITABLE = [
 
 const typedInto = new WeakSet<EventTarget>()
 
+/** One token per mounted composer that holds unsent input. */
+const unsentDrafts = new Set<symbol>()
+
+/** Report that this component holds input a reload would lose, for as long as `unsent` is true. */
+export function useUnsentDraft(unsent: boolean): void {
+  useEffect(() => {
+    if (!unsent) return
+    const token = Symbol('unsent-draft')
+    unsentDrafts.add(token)
+    return () => {
+      unsentDrafts.delete(token)
+    }
+  }, [unsent])
+}
+
 /** Remember every field the user types into. Returns the cleanup. */
 export function trackTyping(target: Document = document): () => void {
   const onInput = (event: Event) => {
@@ -75,10 +98,11 @@ export function trackTyping(target: Document = document): () => void {
   return () => target.removeEventListener('input', onInput, true)
 }
 
-/** True when a field the user typed into holds text that a reload would lose. */
-export function hasUnsavedText(root: ParentNode = document): boolean {
+/** True when a reload would lose input: a composer's unsent draft, or a typed field's text. */
+export function hasUnsentInput(root: ParentNode = document): boolean {
+  if (unsentDrafts.size > 0) return true
   for (const element of root.querySelectorAll<HTMLElement>(EDITABLE)) {
-    if (!typedInto.has(element) || element.closest('[data-persisted-draft]')) continue
+    if (!typedInto.has(element) || element.closest('[data-persisted-draft], [data-slot="composer"]')) continue
     if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
       if (element.disabled || element.readOnly) continue
       if (element.value.trim() !== '') return true

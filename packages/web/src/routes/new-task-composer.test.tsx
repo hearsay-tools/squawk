@@ -196,6 +196,20 @@ describe('picker data flows', () => {
     expect(document.querySelector('[data-slot="effort-pill"]')).not.toBeNull()
   })
 
+  it('opens the runner pill for its install links when no provider is connected', async () => {
+    serve({ providerStatus: PROVIDERS_NONE })
+    renderNewTask()
+    const pill = await waitFor(() => {
+      const element = document.querySelector<HTMLButtonElement>('[data-slot="runner-pill"]')
+      expect(element?.disabled).toBe(false)
+      return element!
+    })
+    fireEvent.pointerDown(pill)
+    const link = await screen.findByRole('menuitem', { name: /codex/ })
+    expect(link.getAttribute('href')).toBe('/settings/global/agents#agent-codex')
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0)
+  })
+
   it('shows the runner pill on a single-backend host when a CLI is missing, linking to its Settings card', async () => {
     serve()
     renderNewTask()

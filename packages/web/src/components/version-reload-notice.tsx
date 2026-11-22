@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useHealth } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { alreadyReloadedFor, hasUnsavedText, observeServerVersion, reloadForVersion, trackTyping } from '@/lib/version-reload'
+import { alreadyReloadedFor, hasUnsentInput, observeServerVersion, reloadForVersion, trackTyping } from '@/lib/version-reload'
 
-/** How often a waiting reload checks again whether the unsaved text is gone. */
+/** How often a waiting reload checks again whether the unsent input is gone. */
 const RETRY_MS = 2000
 
-type Phase = 'reloading' | 'waiting-for-text' | 'manual'
+type Phase = 'reloading' | 'waiting-for-input' | 'manual'
 
 /**
  * Reloads the cockpit when the server version changes (rules in `lib/version-reload.ts`), and
@@ -19,7 +19,7 @@ export function VersionReloadNotice({ reload }: { reload?: () => void }) {
   const [target, setTarget] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('reloading')
 
-  // From the first render on, so text typed before an upgrade counts.
+  // From the first render on, so a field typed into before an upgrade counts.
   useEffect(() => trackTyping(), [])
 
   useEffect(() => {
@@ -34,8 +34,8 @@ export function VersionReloadNotice({ reload }: { reload?: () => void }) {
       return
     }
     const attempt = (): boolean => {
-      if (hasUnsavedText()) {
-        setPhase('waiting-for-text')
+      if (hasUnsentInput()) {
+        setPhase('waiting-for-input')
         return false
       }
       setPhase('reloading')
@@ -60,8 +60,8 @@ export function VersionReloadNotice({ reload }: { reload?: () => void }) {
       <span>
         {phase === 'reloading'
           ? `Squawk was updated to ${target}. Reloading…`
-          : phase === 'waiting-for-text'
-            ? `Squawk was updated to ${target}. It reloads once your unsent text is sent or cleared.`
+          : phase === 'waiting-for-input'
+            ? `Squawk was updated to ${target}. It reloads once your unsent message is sent or cleared.`
             : `Squawk was updated to ${target}. Reload to use the new version.`}
       </span>
       {phase === 'reloading' ? null : (

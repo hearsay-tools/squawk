@@ -182,6 +182,7 @@ export function NewTaskRoute() {
           onPendingChange={(pending) => { submissionPending.current = pending }}
           value={draft.text}
           onValueChange={(text) => update({ text })}
+          draftPersisted
           autoFocus
           placeholder="Describe a task for the agent — / for skills…"
           ariaLabel="Describe a task for the agent"

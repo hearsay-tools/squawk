@@ -1,11 +1,13 @@
+import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RELOADED_FOR_KEY,
   alreadyReloadedFor,
-  hasUnsavedText,
+  hasUnsentInput,
   observeServerVersion,
   reloadForVersion,
   trackTyping,
+  useUnsentDraft,
 } from './version-reload'
 
 afterEach(() => {
@@ -38,7 +40,7 @@ describe('the reload loop guard', () => {
   })
 })
 
-describe('hasUnsavedText', () => {
+describe('hasUnsentInput', () => {
   let stop: () => void
   beforeEach(() => { stop = trackTyping() })
   afterEach(() => stop())
@@ -52,7 +54,7 @@ describe('hasUnsavedText', () => {
 
   it('is false for a field that only shows a saved value', () => {
     document.body.innerHTML = '<input value="~/projects"><textarea>saved prompt</textarea>'
-    expect(hasUnsavedText()).toBe(false)
+    expect(hasUnsentInput()).toBe(false)
   })
 
   it('is false for typed fields that are empty, disabled or read-only', () => {
@@ -62,24 +64,41 @@ describe('hasUnsavedText', () => {
     type(text, 'x')
     text.disabled = true
     type(search, 'filter')
-    expect(hasUnsavedText()).toBe(false)
+    expect(hasUnsentInput()).toBe(false)
   })
 
   it('is true for a typed reply, an input or a content-editable field', () => {
     document.body.innerHTML = '<textarea></textarea>'
     type(document.querySelector('textarea')!, 'half a reply')
-    expect(hasUnsavedText()).toBe(true)
+    expect(hasUnsentInput()).toBe(true)
     document.body.innerHTML = '<input>'
     type(document.querySelector('input')!, 'name')
-    expect(hasUnsavedText()).toBe(true)
+    expect(hasUnsentInput()).toBe(true)
     document.body.innerHTML = '<div contenteditable="true"></div>'
     type(document.querySelector<HTMLElement>('[contenteditable]')!, 'note')
-    expect(hasUnsavedText()).toBe(true)
+    expect(hasUnsentInput()).toBe(true)
+  })
+
+  it('leaves a composer\'s field to the composer\'s own report', () => {
+    document.body.innerHTML = '<div data-slot="composer"><textarea></textarea></div>'
+    type(document.querySelector('textarea')!, 'reported through useUnsentDraft')
+    expect(hasUnsentInput()).toBe(false)
+  })
+
+  it('is true while any component reports an unsent draft', () => {
+    const first = renderHook(({ unsent }) => useUnsentDraft(unsent), { initialProps: { unsent: true } })
+    const second = renderHook(() => useUnsentDraft(true))
+    expect(hasUnsentInput()).toBe(true)
+    first.rerender({ unsent: false })
+    expect(hasUnsentInput()).toBe(true)
+    second.unmount()
+    expect(hasUnsentInput()).toBe(false)
+    first.unmount()
   })
 
   it('ignores text a draft store keeps', () => {
     document.body.innerHTML = '<div data-persisted-draft><textarea></textarea></div>'
     type(document.querySelector('textarea')!, 'kept in localStorage')
-    expect(hasUnsavedText()).toBe(false)
+    expect(hasUnsentInput()).toBe(false)
   })
 })

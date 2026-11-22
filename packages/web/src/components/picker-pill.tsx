@@ -222,6 +222,7 @@ export function PickerPill({
   options,
   onPick,
   disabled = false,
+  choicesDisabled = false,
   readOnly = false,
   hint,
   disabledHint,
@@ -241,6 +242,8 @@ export function PickerPill({
   options: ReadonlyArray<{ value: string; label: string; desc?: string }>
   onPick: (value: string) => void
   disabled?: boolean
+  /** The menu opens, but its choices cannot be picked; only the footer's links work. */
+  choicesDisabled?: boolean
   /** Display the resolved value without presenting a selector. */
   readOnly?: boolean
   /** Hover explanation for the enabled pill — what the setting does (e.g. the model pill). */
@@ -356,6 +359,7 @@ export function PickerPill({
             <DropdownMenuRadioItem
               key={option.value}
               value={option.value}
+              disabled={choicesDisabled}
               className={cn('gap-2.5', searchPlaceholder && 'min-h-11')}
               onPointerMove={retainSearchFocus}
               onPointerLeave={retainSearchFocus}
@@ -479,6 +483,9 @@ export function RunnerPill({
   // to, else the discovered account. Falls back to the plain runner row for an agent with one login
   // — and for an override naming an account that has since been deleted, which must not leave the
   // pill pointing at nothing.
+  // A disabled pill still opens when it lists a missing CLI: the install links are the way out of
+  // "no runner is ready", so they stay reachable while the choices stay locked.
+  const linksOnly = disabled && uninstalled.length > 0
   const selected = account ?? repoAccount?.[value] ?? DEFAULT_AGENT_ACCOUNT_ID
   const value_ = options.some((option) => option.value === choiceValue(value, selected))
     ? choiceValue(value, selected)
@@ -492,7 +499,8 @@ export function RunnerPill({
       ariaLabel="Runner"
       label={options.find((option) => option.value === value_)?.label ?? value}
       value={value_}
-      disabled={disabled}
+      disabled={disabled && !linksOnly}
+      choicesDisabled={linksOnly}
       onPick={(next) => {
         const [runner, picked] = next.split(':')
         onPick(runner as Runner, picked ?? null)
