@@ -1,0 +1,332 @@
+{
+  "ids": {
+    "plain": "d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+    "archived": "07866967-e4ed-4f96-a7bf-e673a569ffaf",
+    "root": "17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+    "extras": "7075f90a-22a6-4148-9cf2-d832312211c1"
+  },
+  "before": {
+    "userVersion": 14,
+    "schema": [
+      "CREATE TABLE runs (\n    -- Insertion order, the rowid itself: given by a row's first insert (runs.json order on import,\n    -- then the order runs are first written) and kept by every upsert. Runs created in the same\n    -- millisecond list in this order, as they did when every list was a stable sort of the\n    -- in-memory map: recovery and the queue start tied runs in it.\n    seq INTEGER PRIMARY KEY,\n    id TEXT NOT NULL UNIQUE,\n    -- Newest-first order: GET /run-summaries, /workspace/runs-index, the cold newest-200 read,\n    -- and count-based history retention (the runs past the newest N).\n    created_at TEXT NOT NULL,\n    -- Worktree retention: most recently finished first (falls back to created_at).\n    finished_at TEXT,\n    -- The mark-all-read and archive-finished sweeps select finished statuses.\n    status TEXT NOT NULL,\n    -- History retention, mark-all-read and archive-finished skip or select archived runs (0/1).\n    archived INTEGER NOT NULL,\n    -- isLiveRecord() (run-row.ts): the rows RunStore.open loads into memory and recovers. Every\n    -- other row stays here until something reads it. Written with the row, never recomputed\n    -- (see the note above MIGRATIONS).\n    live INTEGER NOT NULL,\n    -- The workers of a parent (delegation.parentRunId): delegation families, archive cascades and\n    -- the \"every worker\" recovery passes, replacing whole-map scans.\n    parent_run_id TEXT,\n    -- The run an idempotent start already created (#504).\n    client_request_id TEXT,\n    -- The members of a parallel-variant group (spec 010).\n    group_id TEXT,\n    -- A materialized worktree directory (the path, unless retention reclaimed it): worktree\n    -- retention, the worktrees panel and the owned-worker resource collision check.\n    worktree_path TEXT,\n    -- The branch the run owns: branch cleanup, git-log attribution and the collision check.\n    branch TEXT,\n    -- Where that branch forked, which branch cleanup reads with it.\n    base_branch TEXT,\n    -- The commit that last wrote the row: one database-wide sequence (meta 'commit-seq'), so a\n    -- revision is never reused, not even by a row deleted and created again under the same id.\n    -- A writer compares it with the revision it last read to tell whether the row changed under it.\n    revision INTEGER NOT NULL,\n    -- The complete record JSON, opaque here.\n    data TEXT NOT NULL,\n    -- The record's toRunSummary() JSON, so list routes never decode data.\n    summary TEXT NOT NULL\n  ) STRICT",
+      "CREATE INDEX runs_created_at ON runs (created_at DESC, seq)",
+      "CREATE INDEX runs_status ON runs (status)",
+      "CREATE INDEX runs_live ON runs (live) WHERE live = 1",
+      "CREATE INDEX runs_parent_run_id ON runs (parent_run_id) WHERE parent_run_id IS NOT NULL",
+      "CREATE INDEX runs_client_request_id ON runs (client_request_id) WHERE client_request_id IS NOT NULL",
+      "CREATE INDEX runs_group_id ON runs (group_id) WHERE group_id IS NOT NULL",
+      "CREATE INDEX runs_worktree_path ON runs (worktree_path) WHERE worktree_path IS NOT NULL",
+      "CREATE INDEX runs_branch ON runs (branch) WHERE branch IS NOT NULL",
+      "CREATE TABLE meta (\n    key TEXT PRIMARY KEY,\n    value TEXT NOT NULL\n  ) STRICT",
+      "CREATE TABLE run_claims (\n    -- The family's root id: parent_run_id for a worker, the run's own id otherwise.\n    family TEXT PRIMARY KEY,\n    -- The RunStore holding it: a random id per open, so two stores in one process differ.\n    session TEXT NOT NULL,\n    -- That store's process and the process's start identity, so a reused pid is never taken for\n    -- the owner. start_token is NULL only where the platform cannot read one.\n    pid INTEGER NOT NULL,\n    start_token TEXT,\n    -- From meta 'claim-generation', bumped by every acquisition. Every write checks that its\n    -- family still carries this store's session and generation.\n    generation INTEGER NOT NULL\n  ) STRICT",
+      "CREATE INDEX run_claims_session ON run_claims (session)",
+      "CREATE TABLE run_conflicts (\n    seq INTEGER PRIMARY KEY,\n    run_id TEXT NOT NULL,\n    detected_at TEXT NOT NULL,\n    session TEXT NOT NULL,\n    -- changed | created | deleted | claim-lost\n    reason TEXT NOT NULL,\n    -- The row as the writer last read or wrote it (the original); NULL for a row it created.\n    base_revision INTEGER,\n    base_data TEXT,\n    -- What the writer meant to store; NULL with local_deleted = 1 when it meant to delete it.\n    local_data TEXT,\n    local_deleted INTEGER NOT NULL,\n    -- The row as it stands; NULL when another writer deleted it.\n    current_revision INTEGER,\n    current_data TEXT\n  ) STRICT",
+      "CREATE INDEX runs_unarchived ON runs (created_at DESC, seq) WHERE archived = 0",
+      "CREATE INDEX runs_archived_roots ON runs (archived, created_at DESC, seq) WHERE parent_run_id IS NULL",
+      "CREATE INDEX runs_archive_on_merge ON runs (seq)\n    WHERE archived = 0 AND live = 0 AND parent_run_id IS NULL\n      AND status IN ('review', 'done', 'failed', 'cancelled')",
+      "CREATE TABLE artifacts (\n    id TEXT PRIMARY KEY, run_id TEXT NOT NULL, name TEXT NOT NULL,\n    title TEXT, created_at TEXT NOT NULL, size INTEGER NOT NULL\n  ) STRICT",
+      "CREATE INDEX artifacts_created_at ON artifacts (created_at DESC, id)",
+      "CREATE INDEX artifacts_run_id ON artifacts (run_id)",
+      "CREATE TABLE conversation_members (\n    root_id TEXT NOT NULL,\n    member_id TEXT NOT NULL,\n    PRIMARY KEY (member_id, root_id)\n  ) STRICT, WITHOUT ROWID",
+      "CREATE INDEX conversation_members_root ON conversation_members (root_id)",
+      "CREATE TABLE automation_runs (\n    run_id TEXT NOT NULL,\n    automation_id TEXT NOT NULL,\n    receipt_id TEXT\n  ) STRICT",
+      "CREATE INDEX automation_runs_automation ON automation_runs (automation_id, run_id)",
+      "CREATE INDEX automation_runs_receipt ON automation_runs (receipt_id) WHERE receipt_id IS NOT NULL",
+      "CREATE INDEX automation_runs_run ON automation_runs (run_id)"
+    ],
+    "tables": {
+      "runs": [
+        {
+          "seq": 1,
+          "id": "d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+          "created_at": "2026-11-22T14:21:42.016Z",
+          "finished_at": "2026-11-22T12:00:00.000Z",
+          "status": "done",
+          "archived": 0,
+          "live": 0,
+          "parent_run_id": null,
+          "client_request_id": null,
+          "group_id": null,
+          "worktree_path": null,
+          "branch": null,
+          "base_branch": null,
+          "revision": 2,
+          "data": "{\"id\":\"d1d9a675-cfa8-41d4-88f8-118d60742c6f\",\"title\":\"plain\",\"workflow\":\"quick-task\",\"task\":\"a plain run\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.016Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"running\",\"iterations\":1,\"tokensUsed\":0}],\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}",
+          "summary": "{\"id\":\"d1d9a675-cfa8-41d4-88f8-118d60742c6f\",\"title\":\"plain\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.016Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+        },
+        {
+          "seq": 2,
+          "id": "07866967-e4ed-4f96-a7bf-e673a569ffaf",
+          "created_at": "2026-11-22T14:21:42.019Z",
+          "finished_at": "2026-11-22T12:00:00.000Z",
+          "status": "done",
+          "archived": 1,
+          "live": 0,
+          "parent_run_id": null,
+          "client_request_id": null,
+          "group_id": null,
+          "worktree_path": null,
+          "branch": null,
+          "base_branch": null,
+          "revision": 2,
+          "data": "{\"id\":\"07866967-e4ed-4f96-a7bf-e673a569ffaf\",\"title\":\"archived\",\"workflow\":\"quick-task\",\"task\":\"an archived run\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"tokensUsed\":0,\"archived\":true,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"archivedAt\":\"2026-11-22T14:21:42.019Z\",\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}",
+          "summary": "{\"id\":\"07866967-e4ed-4f96-a7bf-e673a569ffaf\",\"title\":\"archived\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"archived\":true,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+        },
+        {
+          "seq": 3,
+          "id": "17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+          "created_at": "2026-11-22T14:21:42.019Z",
+          "finished_at": "2026-11-22T12:00:00.000Z",
+          "status": "done",
+          "archived": 0,
+          "live": 0,
+          "parent_run_id": null,
+          "client_request_id": null,
+          "group_id": null,
+          "worktree_path": null,
+          "branch": null,
+          "base_branch": null,
+          "revision": 2,
+          "data": "{\"id\":\"17bbe112-e07e-4b5f-995a-8a1af5b0def3\",\"title\":\"root\",\"workflow\":\"quick-task\",\"task\":\"a delegation root\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"delegation\":{\"role\":\"root\",\"permissions\":[\"spawn\"],\"receipts\":[]},\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}",
+          "summary": "{\"id\":\"17bbe112-e07e-4b5f-995a-8a1af5b0def3\",\"title\":\"root\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"delegation\":{\"role\":\"root\"}}"
+        },
+        {
+          "seq": 4,
+          "id": "7075f90a-22a6-4148-9cf2-d832312211c1",
+          "created_at": "2026-11-22T14:21:42.025Z",
+          "finished_at": "2026-11-22T12:00:00.000Z",
+          "status": "done",
+          "archived": 0,
+          "live": 0,
+          "parent_run_id": null,
+          "client_request_id": null,
+          "group_id": null,
+          "worktree_path": null,
+          "branch": null,
+          "base_branch": null,
+          "revision": 2,
+          "data": "{\"id\":\"7075f90a-22a6-4148-9cf2-d832312211c1\",\"title\":\"extras\",\"workflow\":\"quick-task\",\"task\":\"a row a newer Squawk wrote\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.025Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"futureField\":{\"kept\":true}}",
+          "summary": "{\"id\":\"7075f90a-22a6-4148-9cf2-d832312211c1\",\"title\":\"extras\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.025Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+        }
+      ],
+      "meta": [
+        {
+          "key": "claim-generation",
+          "value": "4"
+        },
+        {
+          "key": "commit-seq",
+          "value": "2"
+        },
+        {
+          "key": "import-complete",
+          "value": "{\"at\":\"2026-11-22T14:21:42.013Z\",\"source\":\"none\",\"records\":0}"
+        },
+        {
+          "key": "issue-attribution:07866967-e4ed-4f96-a7bf-e673a569ffaf",
+          "value": "2"
+        },
+        {
+          "key": "issue-attribution:17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+          "value": "2"
+        },
+        {
+          "key": "issue-attribution:7075f90a-22a6-4148-9cf2-d832312211c1",
+          "value": "2"
+        },
+        {
+          "key": "issue-attribution:d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+          "value": "2"
+        },
+        {
+          "key": "reports-dirty:07866967-e4ed-4f96-a7bf-e673a569ffaf",
+          "value": "2"
+        },
+        {
+          "key": "reports-dirty:17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+          "value": "2"
+        },
+        {
+          "key": "reports-dirty:d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+          "value": "2"
+        }
+      ],
+      "run_claims": [],
+      "run_conflicts": [],
+      "artifacts": [],
+      "conversation_members": [],
+      "automation_runs": []
+    }
+  },
+  "events": "{\"type\":\"note\",\"message\":\"saved before the move\",\"seq\":1,\"ts\":\"2026-11-22T14:21:42.018Z\"}\n",
+  "decoded": {
+    "plain": {
+      "id": "d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+      "title": "plain",
+      "workflow": "quick-task",
+      "task": "a plain run",
+      "status": "done",
+      "createdAt": "2026-11-22T14:21:42.016Z",
+      "finishedAt": "2026-11-22T12:00:00.000Z",
+      "tokensUsed": 0,
+      "archived": false,
+      "steps": [
+        {
+          "id": "task",
+          "name": "Task",
+          "kind": "agent",
+          "status": "running",
+          "iterations": 1,
+          "tokensUsed": 0
+        }
+      ]
+    },
+    "archived": {
+      "id": "07866967-e4ed-4f96-a7bf-e673a569ffaf",
+      "title": "archived",
+      "workflow": "quick-task",
+      "task": "an archived run",
+      "status": "done",
+      "createdAt": "2026-11-22T14:21:42.019Z",
+      "finishedAt": "2026-11-22T12:00:00.000Z",
+      "tokensUsed": 0,
+      "archived": true,
+      "archivedAt": "2026-11-22T14:21:42.019Z",
+      "steps": [
+        {
+          "id": "task",
+          "name": "Task",
+          "kind": "agent",
+          "status": "pending",
+          "iterations": 0,
+          "tokensUsed": 0
+        }
+      ]
+    },
+    "root": {
+      "id": "17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+      "title": "root",
+      "workflow": "quick-task",
+      "task": "a delegation root",
+      "delegation": {
+        "role": "root",
+        "permissions": [
+          "spawn"
+        ],
+        "receipts": []
+      },
+      "status": "done",
+      "createdAt": "2026-11-22T14:21:42.019Z",
+      "finishedAt": "2026-11-22T12:00:00.000Z",
+      "tokensUsed": 0,
+      "archived": false,
+      "steps": [
+        {
+          "id": "task",
+          "name": "Task",
+          "kind": "agent",
+          "status": "pending",
+          "iterations": 0,
+          "tokensUsed": 0
+        }
+      ]
+    },
+    "extras": {
+      "id": "7075f90a-22a6-4148-9cf2-d832312211c1",
+      "title": "extras",
+      "workflow": "quick-task",
+      "task": "a row a newer Squawk wrote",
+      "status": "done",
+      "createdAt": "2026-11-22T14:21:42.025Z",
+      "finishedAt": "2026-11-22T12:00:00.000Z",
+      "tokensUsed": 0,
+      "archived": false,
+      "steps": [
+        {
+          "id": "task",
+          "name": "Task",
+          "kind": "agent",
+          "status": "pending",
+          "iterations": 0,
+          "tokensUsed": 0
+        }
+      ]
+    }
+  },
+  "after": {
+    "runs": [
+      {
+        "seq": 1,
+        "id": "d1d9a675-cfa8-41d4-88f8-118d60742c6f",
+        "created_at": "2026-11-22T14:21:42.016Z",
+        "finished_at": "2026-11-22T12:00:00.000Z",
+        "status": "done",
+        "archived": 0,
+        "live": 0,
+        "parent_run_id": null,
+        "client_request_id": null,
+        "group_id": null,
+        "worktree_path": null,
+        "branch": null,
+        "base_branch": null,
+        "revision": 3,
+        "data": "{\"id\":\"d1d9a675-cfa8-41d4-88f8-118d60742c6f\",\"title\":\"plain, renamed\",\"workflow\":\"quick-task\",\"task\":\"a plain run\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.016Z\",\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"running\",\"iterations\":1,\"tokensUsed\":0}]}",
+        "summary": "{\"id\":\"d1d9a675-cfa8-41d4-88f8-118d60742c6f\",\"title\":\"plain, renamed\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.016Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+      },
+      {
+        "seq": 2,
+        "id": "07866967-e4ed-4f96-a7bf-e673a569ffaf",
+        "created_at": "2026-11-22T14:21:42.019Z",
+        "finished_at": "2026-11-22T12:00:00.000Z",
+        "status": "done",
+        "archived": 1,
+        "live": 0,
+        "parent_run_id": null,
+        "client_request_id": null,
+        "group_id": null,
+        "worktree_path": null,
+        "branch": null,
+        "base_branch": null,
+        "revision": 2,
+        "data": "{\"id\":\"07866967-e4ed-4f96-a7bf-e673a569ffaf\",\"title\":\"archived\",\"workflow\":\"quick-task\",\"task\":\"an archived run\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"tokensUsed\":0,\"archived\":true,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"archivedAt\":\"2026-11-22T14:21:42.019Z\",\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}",
+        "summary": "{\"id\":\"07866967-e4ed-4f96-a7bf-e673a569ffaf\",\"title\":\"archived\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"archived\":true,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+      },
+      {
+        "seq": 3,
+        "id": "17bbe112-e07e-4b5f-995a-8a1af5b0def3",
+        "created_at": "2026-11-22T14:21:42.019Z",
+        "finished_at": "2026-11-22T12:00:00.000Z",
+        "status": "done",
+        "archived": 0,
+        "live": 0,
+        "parent_run_id": null,
+        "client_request_id": null,
+        "group_id": null,
+        "worktree_path": null,
+        "branch": null,
+        "base_branch": null,
+        "revision": 4,
+        "data": "{\"id\":\"17bbe112-e07e-4b5f-995a-8a1af5b0def3\",\"title\":\"root\",\"workflow\":\"quick-task\",\"task\":\"a delegation root\",\"delegation\":{\"role\":\"root\",\"permissions\":[\"spawn\"],\"receipts\":[]},\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"allowWorkers\":true}",
+        "summary": "{\"id\":\"17bbe112-e07e-4b5f-995a-8a1af5b0def3\",\"title\":\"root\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.019Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"delegation\":{\"role\":\"root\"}}"
+      },
+      {
+        "seq": 4,
+        "id": "7075f90a-22a6-4148-9cf2-d832312211c1",
+        "created_at": "2026-11-22T14:21:42.025Z",
+        "finished_at": "2026-11-22T12:00:00.000Z",
+        "status": "done",
+        "archived": 0,
+        "live": 0,
+        "parent_run_id": null,
+        "client_request_id": null,
+        "group_id": null,
+        "worktree_path": null,
+        "branch": null,
+        "base_branch": null,
+        "revision": 3,
+        "data": "{\"id\":\"7075f90a-22a6-4148-9cf2-d832312211c1\",\"title\":\"extras, renamed\",\"workflow\":\"quick-task\",\"task\":\"a row a newer Squawk wrote\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.025Z\",\"finishedAt\":\"2026-11-22T12:00:00.000Z\",\"tokensUsed\":0,\"archived\":false,\"steps\":[{\"id\":\"task\",\"name\":\"Task\",\"kind\":\"agent\",\"status\":\"pending\",\"iterations\":0,\"tokensUsed\":0}],\"futureField\":{\"kept\":true}}",
+        "summary": "{\"id\":\"7075f90a-22a6-4148-9cf2-d832312211c1\",\"title\":\"extras, renamed\",\"status\":\"done\",\"createdAt\":\"2026-11-22T14:21:42.025Z\",\"archived\":false,\"workflow\":\"quick-task\",\"workflowLabel\":\"quick-task\",\"tokensUsed\":0,\"finishedAt\":\"2026-11-22T12:00:00.000Z\"}"
+      }
+    ]
+  }
+}

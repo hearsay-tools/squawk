@@ -317,6 +317,15 @@ describe('RunStore save lifecycle (#124)', () => {
     ]);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('close writes what is pending and evicts nothing: the closed store still answers a settled run it held', () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    setRunStatus(store, run.id, RUN_STATUS.done);
+    store.close();
+    expect(readPersistedRuns(dataDir)).toMatchObject([{ id: run.id, status: RUN_STATUS.done }]);
+    expect(store.getRun(run.id)).toMatchObject({ id: run.id, status: RUN_STATUS.done });
+  });
 });
 
 describe('RunStore — directional usage persistence', () => {
