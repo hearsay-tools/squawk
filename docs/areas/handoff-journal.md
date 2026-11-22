@@ -11,7 +11,7 @@
 A handoff read follows its run record's winning directory, legacy first by run ID.
 Do not fall back to a different handoff merely because the winning run has no file.
 `handoffPath` remains an explicit-directory helper: read callers supply
-`store.sourceDataDir(runId)`; writers supply the legacy root. A family's first
+`store.claims.sourceDataDir(runId)`; writers supply the legacy root. A family's first
 explicit legacy write preserves its fallback handoff with its other evidence.
 Fallback handoff bytes stay unchanged. Logical deletion refuses if the run also
 exists in fallback; no tombstone is written.

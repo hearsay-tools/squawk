@@ -90,7 +90,7 @@ export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions 
   return {
     lifecycle: new CountedLifecycle(),
     listRuns: () => runs.filter((run) => (options.held ? options.held.includes(run.id) : isLiveStatus(run.status))),
-    listForeignClaimedRunIds: () => [...(options.foreign ?? [])],
+    claims: { listForeignClaimedRunIds: () => [...(options.foreign ?? [])] },
     getRun,
     withReadCache: <T>(fn: () => T): T => fn(),
     isUnreadable: (id: string) => unreadable.has(id),

@@ -2,11 +2,11 @@ import type { ActivityClosedRequest, ActivityRequest, ConversationMessage } from
 import { ACTIVITY_CLOSED_WINDOW_MS, ACTIVITY_TEXT_MAX } from '@open-mercato/cezar-contract/activity';
 import { reconcileConversationState } from '../delegation/conversations.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunQueries, RunReads, WorkerExecutions } from '../runs/ports.ts';
+import type { RunClaims, RunQueries, RunReads, WorkerExecutions } from '../runs/ports.ts';
 import { clampText } from './text.ts';
 
 /** What the request read needs from a project's run store. */
-export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns' | 'listForeignClaimedRunIds'> & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
+export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns'> & { readonly claims: Pick<RunClaims, 'listForeignClaimedRunIds'> } & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
 
 export interface ActivityRequestOptions {
   now: number;
@@ -37,7 +37,7 @@ const displayTitle = (run: RunRecord | undefined): string | undefined => run && 
  * ledger (`ledgerFor` in the delegation service), so one read per root finds every request once.
  */
 export function readActivityRequests(store: ActivityRequestStore, options: ActivityRequestOptions): ActivityRequestRead {
-  const foreign = new Set(store.listForeignClaimedRunIds());
+  const foreign = new Set(store.claims.listForeignClaimedRunIds());
   const roots = new Set<string>(store.listRuns().map(familyRoot));
   for (const id of foreign) {
     const run = store.getRun(id);

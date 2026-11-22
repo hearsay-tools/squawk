@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { RUN_IN_USE_ELSEWHERE, type RunRecord } from '../runs/store.ts';
+import { type RunRecord } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
@@ -80,8 +81,8 @@ function fakeHost({ run, claimHeld, foreignOwner }: State): RunCheckoutHost {
   return {
     root,
     store: {
-      getRun: vi.fn(() => run), sourceDataDir: vi.fn(() => join(root, 'source')),
-      updateRun: forbidden, writeRefusal: vi.fn(() => foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined),
+      getRun: vi.fn(() => run), claims: { sourceDataDir: vi.fn(() => join(root, 'source')), writeRefusal: vi.fn(() => foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined) },
+      updateRun: forbidden,
       retention: { fallbackDeleteError: forbidden, canDeleteRun: forbidden }, listWorkersOf: forbidden,
     },
     manager: { isActive: forbidden, claimForPublish: vi.fn(claimHeld ? () => null : forbidden), claimWorktreeReclaim: vi.fn(claimHeld ? () => null : forbidden) },
@@ -108,12 +109,12 @@ describe.each(policies)('$intent $column policy', (route) => {
         directory: expected,
         ...(route.intent === 'read' ? { beforeLiveIndex: expect.any(Function) } : {}),
       });
-    expect(host.store.writeRefusal).not.toHaveBeenCalled();
+    expect(host.store.claims.writeRefusal).not.toHaveBeenCalled();
     expect(host.manager.claimForPublish).not.toHaveBeenCalled();
     expect(host.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
     expect(host.store.getRun).toHaveBeenCalledExactlyOnceWith(baseRun.id);
     expect(autosaveCleanupBlocker).toHaveBeenCalledTimes(Number(checksMutationAutosave));
-    expect(host.store.sourceDataDir).toHaveBeenCalledTimes(Number(checksMutationAutosave));
+    expect(host.store.claims.sourceDataDir).toHaveBeenCalledTimes(Number(checksMutationAutosave));
     if (checksMutationAutosave) {
       expect(autosaveCleanupBlocker).toHaveBeenCalledWith(join(root, 'source'), baseRun.id);
     }
@@ -170,12 +171,12 @@ function claimedHost(state: State) {
     root,
     store: {
       getRun: vi.fn(() => { calls.push('lookup'); return state.run; }),
-      updateRun: vi.fn(), sourceDataDir: vi.fn(), listWorkersOf: vi.fn(() => []),
+      updateRun: vi.fn(), listWorkersOf: vi.fn(() => []),
       retention: {
         canDeleteRun: vi.fn(() => { calls.push('can-delete'); return state.run?.delegation?.role !== 'worker'; }),
         fallbackDeleteError: vi.fn(() => { calls.push('fallback'); return state.run?.worktreePath ? fallbackProjectWriteError(state.run.worktreePath) : undefined; }),
       },
-      writeRefusal: vi.fn(() => { calls.push('owner'); return state.foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined; }),
+      claims: { sourceDataDir: vi.fn(), writeRefusal: vi.fn(() => { calls.push('owner'); return state.foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined; }) },
     },
     manager: {
       isActive: vi.fn(() => { calls.push('active'); return state.run?.status === RUN_STATUS.running; }),
@@ -195,7 +196,7 @@ describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819
     workspace: { ownerRunId: id, resourceId: '0d0e7a51-7a35-4c53-8a5c-0c7f5f9d2b11', kind: 'shared', path: live, hostRunId: baseRun.id, baselineSha: 'a'.repeat(40) } } });
   const refusal = (action: string) => ({ status: 409, body: { error: `this worker runs in its parent's worktree — ${action}` } });
   function sharedHost(run: RunRecord = shared, workers: RunRecord[] = []): RunCheckoutHost {
-    return { root, store: { getRun: vi.fn(() => run), updateRun: vi.fn(), sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined),
+    return { root, store: { getRun: vi.fn(() => run), updateRun: vi.fn(), claims: { sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined) },
       retention: { fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true) }, listWorkersOf: vi.fn(() => workers) },
       manager: { isActive: vi.fn(() => false), claimForPublish: vi.fn(() => () => undefined), claimWorktreeReclaim: vi.fn(() => () => undefined) } };
   }
@@ -385,8 +386,8 @@ describe('open checkout', () => {
     expect(result.defaultWorktree()).toEqual(state.run.worktree === false ? root : worktree ?? noWorktree);
     expect(result.resumeAllowed).toBe((state.name === 'usage hold' || !['running', 'queued', 'waiting'].includes(state.run.status)));
     expect(host.store.getRun).toHaveBeenCalledExactlyOnceWith(baseRun.id);
-    expect(host.store.writeRefusal).not.toHaveBeenCalled();
-    expect(host.store.sourceDataDir).not.toHaveBeenCalled();
+    expect(host.store.claims.writeRefusal).not.toHaveBeenCalled();
+    expect(host.store.claims.sourceDataDir).not.toHaveBeenCalled();
     expect(host.manager.claimForPublish).not.toHaveBeenCalled();
     expect(host.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
   });

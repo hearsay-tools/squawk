@@ -16,7 +16,8 @@ import { encodeRunRow } from './run-row.ts';
 import { setRunStatus, blockRunWrites, crashStore, readPersistedRuns, seedRuns } from './run-store.testkit.ts';
 import { agentTmpDir } from './agent-tmpdir.ts';
 import { WorkerScratchCleanup } from '../delegation/scratch-cleanup.ts';
-import { RUN_IN_USE_ELSEWHERE, RunStore, RunWriteRefusedError, type RunRecord } from './store.ts';
+import { RunStore, type RunRecord } from './store.ts';
+import { RUN_IN_USE_ELSEWHERE, RunWriteRefusedError } from './run-claims-topic.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 import { sealTestRunSlots } from './removal-slots.testkit.ts';
 

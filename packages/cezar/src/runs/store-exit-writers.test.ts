@@ -8,7 +8,8 @@ import type { RunStatus } from '@open-mercato/cezar-contract';
 import { makeRunRecord, makeStepState, RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
 import { applyExit, takeRunExitViolations } from './run-exits.ts';
-import { reconcileLoadedRun, RunStore, settleOrphanedRun, upgradeLegacyWaits } from './store.ts';
+import { RunStore, upgradeLegacyWaits } from './store.ts';
+import { reconcileLoadedRun, settleOrphanedRun } from './loaded-run-exits.ts';
 
 /**
  * The store's own status writers apply a run exit to the record in hand (slice S4a of

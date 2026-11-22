@@ -118,7 +118,7 @@ export interface RunDatabaseChanges {
    *  back. The last moment a caller can still refuse what it wrote. What it returns is more
    *  private metadata, written in the same commit. */
   beforeCommit?: () => Readonly<Record<string, string>> | void;
-  /** Explicit adoption only (`RunStore.adoptFallbackFamily`): fallback families to copy in first. */
+  /** Explicit adoption only (`store.claims.adoptFallbackFamily`): fallback families to copy in first. */
   adoptFallback?: readonly string[];
 }
 

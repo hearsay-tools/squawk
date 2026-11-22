@@ -42,7 +42,7 @@ export function claimOwnerLive(claim: ClaimOwner): boolean {
 
 /** Every run whose family a store other than `owner` claims — alive, or dead with a live run left
  *  to recover (cleanup keeps their scratch: it is theirs, or recovery's once someone adopts them).
- *  A dead owner's claim on a family with nothing live is no claim (see `RunStore.runOwnership`). */
+ *  A dead owner's claim on a family with nothing live is no claim (see `RunClaimsTopic.runOwnership`). */
 export function foreignClaimedRunIds(db: RunDatabase | null, owner: ClaimOwner | undefined): string[] {
   if (!db || !owner) return [];
   // Both physical claim tables: a stale legacy claim must not hide a live fallback owner.

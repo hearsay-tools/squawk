@@ -11,7 +11,7 @@ import { isLoopbackHostHeader } from '../server/capabilities.ts';
 import { CredentialRegistry, type Caller } from './credentials.ts';
 import type { DelegationService } from './service.ts';
 import { DelegationPolicyError } from './policy.ts';
-import { RunWriteRefusedError } from '../runs/store.ts';
+import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import { withProjectAdmission } from '../server/cockpit-ownership.ts';
 
 type Env = { Variables: { caller: Caller } };

@@ -45,7 +45,7 @@ function sharedWorkspaceRefusal(run: RunRecord, intent: keyof typeof SHARED_REFU
 export type CheckoutIntent = 'read' | 'mutate' | 'publish' | 'remove' | 'open';
 export interface RunCheckoutHost {
   root: string;
-  store: RunLookup & Pick<RunWrites, 'updateRun'> & Pick<RunAccess, 'sourceDataDir' | 'writeRefusal'> &
+  store: RunLookup & Pick<RunWrites, 'updateRun'> & { readonly claims: Pick<RunAccess, 'sourceDataDir' | 'writeRefusal'> } &
     { readonly retention: Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> } & Pick<RunFamilyReads, 'listWorkersOf'>;
   manager: Pick<RunManager, 'isActive' | 'claimForPublish' | 'claimWorktreeReclaim'>;
 }
@@ -124,12 +124,12 @@ function mutateRefusal(store: RunCheckoutHost['store'], run: RunRecord): Checkou
   const shared = sharedWorkspaceRefusal(run, 'mutate');
   if (shared) return shared;
   const error = (run.worktreePath && fallbackProjectWriteError(run.worktreePath)) ||
-    (run.status === 'running' ? 'the agent is still working in this worktree' : autosaveCleanupBlocker(store.sourceDataDir(run.id), run.id));
+    (run.status === 'running' ? 'the agent is still working in this worktree' : autosaveCleanupBlocker(store.claims.sourceDataDir(run.id), run.id));
   return error ? { status: 409, body: { error } } : undefined;
 }
 
 function readCheckoutHandle(host: RunCheckoutHost, run: RunRecord, directory: string | null): ReadHandle<ReadDirectoryRule> & ReadActions {
-  const beforeLiveIndex = () => autosaveCleanupBlocker(host.store.sourceDataDir(run.id), run.id);
+  const beforeLiveIndex = () => autosaveCleanupBlocker(host.store.claims.sourceDataDir(run.id), run.id);
   return {
     run,
     directory,
@@ -168,7 +168,7 @@ export async function preparePublishCheckout({ root, store }: RunCheckoutHost, i
 }
 
 function removalRefusal(store: RunCheckoutHost['store'], run: RunRecord, id: string, deletion: RemoveOptions['deletion']): string | undefined {
-  if (deletion === 'inline') return store.retention.fallbackDeleteError(run.id, 'worktree') ?? store.writeRefusal(run.id);
+  if (deletion === 'inline') return store.retention.fallbackDeleteError(run.id, 'worktree') ?? store.claims.writeRefusal(run.id);
   if (deletion === 'worktree') {
     if (!store.retention.canDeleteRun(id, 'worktree') || run.delegation?.role === 'worker') return 'owned resources require verified worker cleanup';
   } else {

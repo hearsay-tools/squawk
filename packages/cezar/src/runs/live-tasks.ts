@@ -21,7 +21,7 @@ function liveState(run: RunRecord): string {
 export function projectLiveTasks(store: LiveRunReads): LiveProjectTask[] {
   const tasks = new Map(store.listRuns().filter(isLiveRecord).map((run) => [run.id, run]));
   // Rows another process left live, whose owner may since have gone, are in the database only.
-  const { live, foreign } = store.persistedLiveRunIds();
+  const { live, foreign } = store.claims.persistedLiveRunIds();
   for (const id of live) {
     const run = tasks.has(id) ? undefined : store.getRun(id);
     if (run && isLiveRecord(run)) tasks.set(id, run);

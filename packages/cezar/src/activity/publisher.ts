@@ -102,7 +102,7 @@ export function createActivityPublisher(scope: ActivityScope, deps: ActivityPubl
       if (run.stores.has(store)) continue;
       // The claims as this build reads them: a foreign owner that settles and exits before the
       // first check empties the list, and that change must count.
-      run.foreignSeen.set(projectId, claimsKey(store.listForeignClaimedRunIds()));
+      run.foreignSeen.set(projectId, claimsKey(store.claims.listForeignClaimedRunIds()));
       const onChange = () => schedule(run);
       const unsubscribe = store.lifecycle.subscribe({ 'run.created': onChange, 'run.updated': onChange, 'run.deleted': onChange });
       run.stores.set(store, { projectId, dataDir, unsubscribe });
@@ -164,7 +164,7 @@ export function createActivityPublisher(scope: ActivityScope, deps: ActivityPubl
     for (const [store, { projectId, dataDir }] of run.stores) {
       // A project under a migration fence is not read; its next snapshot answers it as unavailable.
       if (dataDir && projectAdmissionRefusal(dataDir)) continue;
-      const ids = store.listForeignClaimedRunIds();
+      const ids = store.claims.listForeignClaimedRunIds();
       const seen = claimsKey(ids);
       if (ids.length > 0 || seen !== (run.foreignSeen.get(projectId) ?? '')) changed = true;
       run.foreignSeen.set(projectId, seen);

@@ -22,7 +22,7 @@ state. Continue and restart recovery keep the missing-checkout fallback to the c
 repository. A missing checkout under an existing project root still obeys the fallback
 write guard, including after migration.
 `RunStore` and cold indexes merge the read roots internally. History, artifacts, handoffs,
-attachments and cleanup checks use `store.sourceDataDir(runId)`. Inspect fallback
+attachments and cleanup checks use `store.claims.sourceDataDir(runId)`. Inspect fallback
 cockpit ownership before claiming legacy state; never reclaim a fallback claim.
 Maintenance can read fallback history without recovery or a shadow legacy database.
 
@@ -256,7 +256,7 @@ P4b3 (hearsay-tools/cezarion#3089) connects the fence and the engine, offline.
   nothing is left in it. `runDataDir(dataDir, id)` resolves a listed task's data directory to
   `.ai/cezar/`; every path helper of a run's own items (handoff, history, artifacts,
   attachments, worker results, scratch and control directories, preview profile, autosave
-  cleanup, history removal, `RunStore.sourceDataDir`, the reports index and the agent's granted
+  cleanup, history removal, `store.claims.sourceDataDir`, the reports index and the agent's granted
   `runs/` directory) calls it, the boot preview sweep also scans the listed tasks' real
   `preview/<id>` (never through a link), and `fallbackProjectWriteError` and
   `isFallbackProjectPath` exempt such items, so the task and its cleanup (a worker's destroy

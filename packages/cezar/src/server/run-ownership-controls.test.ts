@@ -12,7 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import { setRunStatus, crashStore, readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
+import { RunStore } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import '../core/created-runners.testkit.ts';
 import { createFixtureManager, fixtureWork, fixtureWorkSettled, drainFixtureManagers } from '../workflows/fixture-manager.testkit.ts';
 import { RunManager } from '../workflows/run.ts';

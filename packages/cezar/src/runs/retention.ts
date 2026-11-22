@@ -96,7 +96,7 @@ export function selectReclaimableWorktrees(
 }
 
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
-type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & { readonly workerExecutions: Partial<WorkerExecutions> }>;
+type RealStoreMembers = Partial<RunFamilyReads & { readonly claims: Partial<RunAccess>; readonly runPins: Partial<RunPins>; readonly workerExecutions: Partial<WorkerExecutions> }>;
 
 /** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
  *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
@@ -184,7 +184,7 @@ export interface ReclaimOptions {
 export function cleanupSafety(repoRoot: string, store: RealStoreMembers, run: RunRecord): () => void {
   const execution = store.workerExecutions?.readWorkerExecution?.(run.id);
   return () => {
-    const refusal = deletionRefusal(run.id, 'worktree', store.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write);
+    const refusal = deletionRefusal(run.id, 'worktree', store.claims?.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write);
     if (refusal) throw Error(refusal);
     if (run.delegation?.role !== 'worker') return;
     if (typeof store.workerExecutions?.workerResourcesSafe === 'function' && (!execution ||
@@ -193,7 +193,7 @@ export function cleanupSafety(repoRoot: string, store: RealStoreMembers, run: Ru
 }
 
 function readOnlyWorktree(repoRoot: string, store: RetentionStore, run: RunRecord): boolean {
-  return (store as RealStoreMembers).isFallbackRun?.(run.id) === true ||
+  return (store as RealStoreMembers).claims?.isFallbackRun?.(run.id) === true ||
     Boolean(run.worktreePath && isFallbackProjectPath(repoRoot, run.worktreePath));
 }
 
@@ -251,8 +251,8 @@ export async function reclaimWorktree(
   // Claimed in the run database too, for the whole reclaim (#779, plan step 3): no other Squawk
   // process writes this run or reclaims it meanwhile, and another process's run is left alone.
   // Structural test stores have no claims.
-  let pinned = typeof real.pin !== 'function';
-  try { pinned ||= real.pin!.call(store, run.id, 'cleanup') !== undefined; } catch { /* busy: not claimed */ }
+  let pinned = typeof real.runPins?.pin !== 'function';
+  try { pinned ||= real.runPins!.pin!(run.id, 'cleanup') !== undefined; } catch { /* busy: not claimed */ }
   if (!pinned) { release(); return null; }
   try {
     assertSafe();
@@ -267,7 +267,7 @@ export async function reclaimWorktree(
     // best-effort: never let retention crash a terminal transition or startup.
     return null;
   } finally {
-    real.unpin?.call(store, run.id, 'cleanup');
+    real.runPins?.unpin?.(run.id, 'cleanup');
     release();
   }
 }

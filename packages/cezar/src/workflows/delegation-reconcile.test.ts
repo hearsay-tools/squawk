@@ -251,8 +251,8 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     expect(store.workerExecutions.readWorkerExecution(a.workerId)).toMatchObject({ phase: 'starting', generation });
     if (outcome === 'dispose') manager.dispose();
     if (outcome === 'foreign') {
-      const refusal = store.claims.writeRefusal.bind(store);
-      vi.spyOn(store, 'writeRefusal').mockImplementation(id => id === a.workerId ? 'RUN_IN_USE_ELSEWHERE' : refusal(id));
+      const refusal = store.claims.writeRefusal.bind(store.claims);
+      vi.spyOn(store.claims, 'writeRefusal').mockImplementation(id => id === a.workerId ? 'RUN_IN_USE_ELSEWHERE' : refusal(id));
     }
     if (outcome === 'completed') expect(store.workerExecutions.commitWorkerExecutionComplete(a.workerId, generation)).toBe(true);
     release(); if (rejection) await rejection; else await recovery;

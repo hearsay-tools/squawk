@@ -49,7 +49,7 @@ describe('verified destruction retains results through explicit history deletion
     const bytes = readFileSync(join(directory, 'runs.db'));
     // The source was added after this fixture's store opened. Report its duplicate
     // presence through the ordinary query while keeping the live manager attached.
-    vi.spyOn(f.store, 'hasFallbackRun').mockImplementation(id => id === workerId);
+    vi.spyOn(f.store.claims, 'hasFallbackRun').mockImplementation(id => id === workerId);
     expect(f.store.retention.fallbackDeleteError(workerId)).toContain('.ai/squawk');
     expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(existsSync(workspace.path)).toBe(false);

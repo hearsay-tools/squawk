@@ -163,7 +163,7 @@ describe('the activity publisher', () => {
     const migrator = new CockpitOwnership();
     try {
       const { store } = liveStore([makeRoot({ title: 'task' })], { held: [] });
-      const reads = vi.spyOn(store, 'listForeignClaimedRunIds');
+      const reads = vi.spyOn(store.claims, 'listForeignClaimedRunIds');
       const publisher = createActivityPublisher({
         sources: async () => [{ projectId: 'shop', name: 'Shop', loaded: { store, isActive: () => false, dataDir } }],
         watch: () => new ActivityDemand().watch('shop'),

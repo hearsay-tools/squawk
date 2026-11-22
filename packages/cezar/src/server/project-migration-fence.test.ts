@@ -628,7 +628,7 @@ describe('the live-task check under the fence', () => {
     const fence = await cockpit.fenceProject(dataDir, none);
     try {
       expect(ctx.manager.continueRun(finished).error).toContain('project migration');
-      const pin = vi.spyOn(ctx.store, 'pin').mockReturnValue(undefined);
+      const pin = vi.spyOn(ctx.store.runPins, 'pin').mockReturnValue(undefined);
       expect(ctx.manager.continueRun(held, { text: 'resume' }, true).error ?? '').not.toContain('project migration');
       pin.mockRestore();
       expect(ctx.store.getRun(held)?.autoResumeAt).toBe('2026-11-10T00:00:00.000Z');

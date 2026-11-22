@@ -3,7 +3,8 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { ConversationMessage } from '@open-mercato/cezar-contract';
-import { RunWriteRefusedError, type RunRecord } from '../runs/store.ts';
+import { type RunRecord } from '../runs/store.ts';
+import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import { reconcileConversationState } from './conversations.ts';
 const now = '2026-09-08T20:00:00.000Z';
 /** The store's `getRun` over a fixed set of runs. */

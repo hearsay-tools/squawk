@@ -48,6 +48,6 @@ export const adoptFallbackControl: MiddlewareHandler<ProjectApiEnv> = async (con
 };
 
 /** All artifact routes bind their reads to the directory that owns the selected run. */
-export function runArtifactDirectory(store: RunAccess, runId: string): string {
-  return artifactDirectory(store.sourceDataDir(runId), runId);
+export function runArtifactDirectory(store: { readonly claims: Pick<RunAccess, 'sourceDataDir'> }, runId: string): string {
+  return artifactDirectory(store.claims.sourceDataDir(runId), runId);
 }

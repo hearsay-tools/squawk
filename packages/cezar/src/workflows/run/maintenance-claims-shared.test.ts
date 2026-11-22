@@ -16,7 +16,7 @@ const runs = new Map<string, RunRecord>([
 ]);
 
 function claims(autosaveBlocked?: string): MaintenanceClaims {
-  const store = { getRun: (id: string) => runs.get(id), pin: () => true, unpin: () => undefined, writeRefusal: () => undefined, listWorkersOf: () => [] };
+  const store = { getRun: (id: string) => runs.get(id), runPins: { pin: () => true, unpin: () => undefined }, claims: { writeRefusal: () => undefined }, listWorkersOf: () => [] };
   const instance: MaintenanceClaims = new MaintenanceClaims({ store, disposed: () => false } as unknown as RunModuleContext, {
     isActive: () => false, autosaveCleanupBlocker: id => id === autosaveBlocked ? 'autosave cleanup pending' : undefined, hasExecution: () => false, scheduleScratchCleanup: () => undefined,
     holdForMaintenance: ids => instance.holdForMaintenance(ids),

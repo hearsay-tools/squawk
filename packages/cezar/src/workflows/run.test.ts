@@ -744,8 +744,8 @@ describe('RunManager workflow remainder opening', () => {
     fixture.store.updateRun(record.id, { startedAt });
     fixture.store.updateStep(record.id, 'task', { status: STEP_STATUS.done });
     fixture.store.updateRun(record.id, { workflowDef: workflow, worktree: false, runner: 'claude' });
-    const pin = fixture.store.runPins.pin.bind(fixture.store);
-    vi.spyOn(fixture.store, 'pin').mockImplementation((id, reason) => {
+    const pin = fixture.store.runPins.pin.bind(fixture.store.runPins);
+    vi.spyOn(fixture.store.runPins, 'pin').mockImplementation((id, reason) => {
       pin(id, reason);
       if (id !== record.id || reason !== 'active') return;
       const hold = fixture.store.createRun({ title: 'account hold', task: 'hold', workflow: 'quick-task', runner: 'claude', steps: [] });
@@ -999,8 +999,8 @@ describe('RunManager queued-stack mutators (#472)', () => {
     const msg = manager.enqueueMessage(r.id, text('while queued'))!;
     await waitForProduct(manager, store, () => ![...fixtureWork(manager).pending.values()].includes('pump'));
     let observed: { status: RunRecord['status']; results: unknown[]; messages: string[] } | undefined;
-    const pin = store.runPins.pin.bind(store);
-    vi.spyOn(store, 'pin').mockImplementation((id, reason) => {
+    const pin = store.runPins.pin.bind(store.runPins);
+    vi.spyOn(store.runPins, 'pin').mockImplementation((id, reason) => {
       const result = pin(id, reason);
       if (id !== r.id || reason !== 'active') return result;
       // Admission removed the job, but execution has not changed the queued row yet.
@@ -1137,8 +1137,8 @@ describe('RunManager queued-stack mutators (#472)', () => {
   it('defers a message only while the run is starting up', async () => {
     const r = seedQueued();
     expect(manager.deferMessage(r.id, text('nope'))).toBe(false);
-    const pin = store.runPins.pin.bind(store);
-    vi.spyOn(store, 'pin').mockImplementation((id, reason) => {
+    const pin = store.runPins.pin.bind(store.runPins);
+    vi.spyOn(store.runPins, 'pin').mockImplementation((id, reason) => {
       pin(id, reason);
       if (id === r.id && reason === 'active') expect(manager.deferMessage(id, text('buffer me'))).toBe(true);
     });

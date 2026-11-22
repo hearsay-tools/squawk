@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
+import { RunStore } from '../runs/store.ts';
+import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import { MaintenanceClaims } from './run/maintenance-claims.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { unused } from './unused.testkit.ts';
@@ -89,7 +90,7 @@ describe('claims that admit work on a finished run', () => {
     try {
       const claimer = claimsFor(ours);
       // The other process takes the claim after our ownership check would have passed.
-      vi.spyOn(ours, 'writeRefusal').mockReturnValue(undefined);
+      vi.spyOn(ours.claims, 'writeRefusal').mockReturnValue(undefined);
       expect(theirs.runPins.pin(id, 'cleanup')).toBeDefined();
       expect(claim(claimer, id)).toBeNull();
     } finally {
