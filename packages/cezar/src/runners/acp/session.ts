@@ -109,8 +109,9 @@ export class AcpSession {
 
   /** ACP sends no turn-start frame, and a prompt's response ends its turn. The agent's first work
    * update in the turn this prompt opened is the agent taking it: `onAcknowledged` runs then, or at
-   * the response when no work came first. A prompt that joins an agent-started turn, or a turn whose
-   * text already reported a provider failure, is acknowledged only by its response. */
+   * the response when no work came first. Work that reports a provider failure acknowledges nothing;
+   * later work in the turn clears that failure and acknowledges it. A prompt that joins an
+   * agent-started turn is acknowledged only by its response. */
   async prompt(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<z.infer<typeof promptResultSchema>> {
     if (this.promptActive) throw new Error('ACP prompt already active');
     return this.requestPrompt(content, onAcknowledged);
@@ -148,11 +149,13 @@ export class AcpSession {
       throw error;
     }
     // A turn opener no work acknowledged is acknowledged after its turn ends, as its response ends it.
+    // Clear it before the turn end: a turn-end listener may open the next turn at once.
     const unacknowledgedOpener = this.turnOpener === token;
-    if (!unacknowledgedOpener) this.acknowledge(token);
+    if (unacknowledgedOpener) this.turnOpener = undefined;
+    else this.acknowledge(token);
     const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
     this.finishPrompt(token, reason, this.hooks.normalizeUsage?.(result.usage));
-    if (unacknowledgedOpener) { this.turnOpener = undefined; this.acknowledge(token); }
+    if (unacknowledgedOpener) this.acknowledge(token);
     return result;
   }
 

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { expect, it } from 'vitest';
 import { runnersWhere } from './runner-facts.ts';
-import { withHeldAck } from './owned-input-delivery.testkit.ts';
+import { inFlightWithHeldAck, withDelayedAck } from './owned-input-delivery.testkit.ts';
 
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
@@ -15,14 +15,14 @@ const delivered = (input: object, stored: { consumedAt?: string | undefined; awa
     ...(stored?.awaitingRead ? { awaitingRead: true } : {}) });
 for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it(`${backend} delayed ACK keeps the in-flight input in the 32 cap and merges concurrent queue writes exactly once`, async () => {
-    await withHeldAck(backend, async release => {
+    await withDelayedAck(backend, async (release, held) => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
         const makeInput = (text: string) => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId, text, createdAt: new Date().toISOString() });
         const first = makeInput('mock:agent-echo delay-owned-ack first');
         expect(manager.steerWorker(runId, first)).toBe('queued');
-        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('delay-owned-ack first')));
+        await waitFor(() => inFlightWithHeldAck(backend, held, store.eventLog.readEvents(runId).flatMap(e => e.type === 'text' ? [String(e.text)] : []), 'delay-owned-ack first'));
         const rest = Array.from({ length: 31 }, (_, i) => makeInput(`mock:agent-echo next ${i}`));
         for (const input of rest) expect(manager.steerWorker(runId, input)).toBe('queued');
         expect(() => manager.steerWorker(runId, makeInput('over cap'))).toThrow(/capacity/i);
@@ -39,7 +39,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
   }, 60_000);
 
   it(`${backend} automatic steerWorker DONE before ACK closes only after acceptance without needing a phantom turn`, async () => {
-    await withHeldAck(backend, async release => {
+    await withDelayedAck(backend, async (release, held) => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
@@ -51,7 +51,8 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         expect(manager.steerWorker(runId, input)).toBe('queued');
         // bound: the held-ACK turn must end before checking that DONE still waits for acceptance.
         if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
-          await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack finished')));
+          // The turn's first agent work acknowledges the input, so its held turn has not run yet.
+          await waitFor(held);
           expect(store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end')).toHaveLength(turns);
         } else {
           await waitFor(() => store.eventLog.readEvents(runId).filter(event => event.type === 'turn-end').length > turns);

@@ -5,16 +5,10 @@ import { runnersWhere } from './runner-facts.ts';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
-import { withDelayedAck } from './owned-input-delivery.testkit.ts';
-import { runnerDefinition } from './runner-registry.ts';
+import { inFlightWithHeldAck, withDelayedAck } from './owned-input-delivery.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 
 const texts = (store: RunStore, runId: string) => store.eventLog.readEvents(runId).flatMap(event => event.type === 'text' ? [String(event.text)] : []);
-
-/** The input is in flight with its acknowledgement held: its turn's text has arrived, except on a
- * wire whose first agent work acknowledges it, where the held turn has no text yet. */
-const inFlight = (backend: string, held: () => boolean, seen: () => string[], text: string) =>
-  held() && (runnerDefinition(backend).mock.promptResponseEndsTurn === true || seen().some(line => line.includes(text)));
 
 for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it.each(['acknowledged', 'cancelled'] as const)(`${backend}: %s batch keeps independent receipts and concurrent arrivals`, async mode => {
@@ -33,7 +27,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         const first = enqueue('mock:agent-echo delay-owned-ack first');
         const second = enqueue('mock:agent-echo second in same batch');
         manager.deliverConversationInput(runId);
-        await waitFor(() => inFlight(backend, held, () => texts(store, runId), second.text));
+        await waitFor(() => inFlightWithHeldAck(backend, held, texts(store, runId), second.text));
         const third = enqueue('mock:agent-echo arrived during acknowledgement');
         manager.deliverConversationInput(runId);
         expect(store.getRun(runId)?.agentInputs).toEqual([first, second, third]);
@@ -76,7 +70,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
         };
         const first = enqueue('mock:agent-echo delay-owned-ack provider owns this');
         manager.deliverConversationInput(runId);
-        await waitFor(() => inFlight(backend, held, () => texts(store, runId), first.text));
+        await waitFor(() => inFlightWithHeldAck(backend, held, texts(store, runId), first.text));
         const second = enqueue('mock:agent-echo inbox owns this'); const generation = randomUUID();
         expect(manager.canClaimInboxInput(runId, first.id)).toBe(false);
         expect(manager.reserveInboxInputs(runId, generation, [first.id])).toBeUndefined();

@@ -9,6 +9,12 @@ import type { AgentEvent } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import { AcpSession, type AcpSessionOptions } from './session.ts';
 import { createDeliveryControl } from '../../../scripts/mock-delivery-control.mjs';
+import { createFailureControl } from '../../../scripts/mock-failure-control.mjs';
+
+const providerFailure = (update: Record<string, unknown>) => {
+  const text = (update.content as { text?: unknown } | undefined)?.text;
+  return update.sessionUpdate === 'agent_message_chunk' && typeof text === 'string' && text.trimStart().startsWith('⚠ agent executor error:') ? text : undefined;
+};
 
 const children: ChildProcessWithoutNullStreams[] = [];
 const dirs: string[] = [];
@@ -222,12 +228,38 @@ describe('acknowledging a prompt that opens a turn', () => {
     expect(completedAtAcknowledgement).toBe(1);
   });
 
-  it('never acknowledges a prompt whose turn reported a provider failure first', async () => {
-    const { session } = start({ hooks: { updateError: update => update.sessionUpdate === 'agent_message_chunk' ? 'provider failed' : undefined } });
+  it('acknowledges at its first agent work a prompt that the turn end of a work-free turn opens', async () => {
+    const { control, env } = await heldResponse('next-turn');
+    const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-quiet-')); dirs.push(dir);
+    let acknowledged = false;
+    let next: Promise<unknown> | undefined;
+    const { session } = start({ uiEvent: event => {
+      if (event.type === 'turn.completed' && !next) next = session.prompt([{ type: 'text', text: 'Inspect next-turn' }], () => { acknowledged = true; });
+    } }, env);
+    await session.initialize(); await session.open({ cwd: dir });
+    await session.prompt([{ type: 'text', text: 'mock:acp-runtime-workspace' }], () => {});
+    await waitFor(() => control.held());
+    expect(acknowledged).toBe(true);
+    control.release();
+    await next;
+  });
+
+  it('never acknowledges a prompt whose only work is a provider failure', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-fail-')); dirs.push(dir);
+    const control = createFailureControl(dir, { mode: 'persistent', opening: 'fail-this-turn', failure: 'provider' });
+    const { session } = start({ hooks: { updateError: providerFailure } }, { CEZ_MOCK_FAILURE_CONTROL: control.path });
     await session.initialize(); await session.open({ cwd: tmpdir() });
     let acknowledged = false;
-    await expect(session.prompt([{ type: 'text', text: 'Inspect the repo' }], () => { acknowledged = true; })).rejects.toThrow('provider failed');
+    await expect(session.prompt([{ type: 'text', text: 'fail-this-turn' }], () => { acknowledged = true; })).rejects.toThrow(/agent executor error/);
     expect(acknowledged).toBe(false);
+  });
+
+  it('acknowledges at the work after failure-shaped text, which stays plain text', async () => {
+    const { session } = start({ hooks: { updateError: update => update.sessionUpdate === 'agent_message_chunk' ? 'looks like a failure' : undefined } });
+    await session.initialize(); await session.open({ cwd: tmpdir() });
+    let acknowledged = false;
+    await expect(session.prompt([{ type: 'text', text: 'Inspect the repo' }], () => { acknowledged = true; })).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(acknowledged).toBe(true);
   });
 
   it('acknowledges a prompt that joins an agent-started turn only at its response', async () => {
@@ -235,7 +267,8 @@ describe('acknowledging a prompt that opens a turn', () => {
     const { session, events } = start({ hooks: { agentWorkEnds: () => false, permissionPolicy: () => ({ outcome: 'selected', optionId: 'allow-once' }) } }, env);
     await session.initialize(); await session.open({ cwd: tmpdir() });
     await session.prompt([{ type: 'text', text: 'mock:permission-late' }]);
-    await waitFor(() => session.agentWorking);
+    await waitFor(() => events.some(event => event.type === 'text' && event.text.startsWith('Approval response: {"reply":"once"}')));
+    expect(session.agentWorking).toBe(true);
     let acknowledged = false;
     const response = session.prompt([{ type: 'text', text: 'mock:agent-echo joined' }], () => { acknowledged = true; });
     await waitFor(() => control.held());

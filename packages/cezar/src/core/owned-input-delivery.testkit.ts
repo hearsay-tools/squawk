@@ -62,6 +62,13 @@ export function withDelayedAck(runner: string, body: (release: () => void, held:
   return runnerDefinition(runner).mock.promptResponseEndsTurn ? withHeldResponse(runner, body, match) : withHeldAck(runner, body, match);
 }
 
+/** Under `withDelayedAck`, the input is in flight with its acknowledgement held: its turn's text
+ * has arrived, except on a wire whose first agent work acknowledges it, where the held turn has
+ * no text yet. */
+export function inFlightWithHeldAck(runner: string, held: () => boolean, texts: readonly string[], text: string): boolean {
+  return held() && (runnerDefinition(runner).mock.promptResponseEndsTurn === true || texts.some(seen => seen.includes(text)));
+}
+
 /** Acknowledge a matching input, then keep its turn open until release. A wire whose turn's
  * first agent work acknowledges a prompt holds the prompt response that ends the turn; every
  * other wire holds the turn's content after its acknowledgement. */
