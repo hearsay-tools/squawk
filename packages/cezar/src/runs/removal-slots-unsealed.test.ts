@@ -10,6 +10,9 @@ import { reclaimWorktree } from './retention.ts';
 import { runSlotsSealed } from './removal-slots.ts';
 import { setRunStatus, seedRuns } from './run-store.testkit.ts';
 import { RunStore } from './store.ts';
+import { sweepAgentTmpDirs } from './agent-tmpdir.ts';
+import { RunSettlement } from '../workflows/run/run-settlement.ts';
+import { unused } from '../workflows/unused.testkit.ts';
 
 // This file seals no removal slot, as a process entry that forgot registerBuiltInRunSlots() would
 // not: each removal throws before its first side effect (spec 2026-11-21-run-lifecycle-and-store-ports,
@@ -78,4 +81,27 @@ it('a family archive throws and keeps the family unarchived with its tmp directo
   expect(store.getRun(old.id)?.archived).toBe(false);
   expect(existsSync(tmp)).toBe(true);
   store.close();
+});
+
+it('a terminal scratch reap throws before it reads anything and keeps the tmp directory', () => {
+  const dataDir = join(scratch('cez-unsealed-reap-'), '.ai/cezar');
+  const tmp = join(dataDir, 'tmp', 'ended-run');
+  mkdirSync(tmp, { recursive: true });
+  type Args = ConstructorParameters<typeof RunSettlement>;
+  // Every collaborator throws on its first use, so only the seal check can name the registration.
+  const settlement = new RunSettlement(unused<Args[0]>('context'), unused<Args[1]>('humanWaits'), unused<Args[2]>('workerQuestions'),
+    unused<Args[3]>('autosave'), unused<Args[4]>('line'), unused<Args[5]>('resume'), unused<Args[6]>('workers'),
+    unused<Args[7]>('completionGate'), unused<Args[8]>('host'), '', '');
+
+  expect(() => settlement.reapTerminalScratch('ended-run')).toThrow(UNSEALED);
+  expect(existsSync(tmp)).toBe(true);
+});
+
+it('the startup orphan sweep throws and keeps the orphan tmp directory', () => {
+  const dataDir = join(scratch('cez-unsealed-sweep-'), '.ai/cezar');
+  const orphan = join(dataDir, 'tmp', randomUUID());
+  mkdirSync(orphan, { recursive: true });
+
+  expect(() => sweepAgentTmpDirs(dataDir, [])).toThrow(UNSEALED);
+  expect(existsSync(orphan)).toBe(true);
 });

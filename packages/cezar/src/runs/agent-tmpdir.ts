@@ -1,3 +1,4 @@
+import { assertRunSlotsSealed, deletionRefusal } from './removal-slots.ts';
 import { runDataDir } from '../legacy-runs.ts';
 import { productEnv } from '../core/product-env.ts';
 /**
@@ -711,12 +712,21 @@ function reapAgentTmpDir(dataDir: string, runId: string, spareUnclaimedShort: bo
   }
 }
 
+/** Whether the sweep keeps an orphan run's directories: one of them holds what `spare` names, or a
+ *  deletion gate refuses the run's scratch. */
+function sweepKeeps(dataDir: string, runId: string, spare: (dir: string) => boolean): boolean {
+  return agentTmpDirLocations(dataDir, runId).some(spare) || deletionRefusal(runId, 'scratch', dataDir) !== undefined;
+}
+
 /**
  * Startup sweep of confined repo-local and digest directories not claimed by keepRunIds. Respect
  * full-run and dataDir ownership markers; retain unreadable or uncertain ownership. A directory
  * `spare` names stays too: the caller keeps one that holds a running job (hearsay-tools/squawk#3138).
+ * A run's directories also stay when a deletion gate refuses its `scratch` (`runs/removal-slots.ts`);
+ * the sweep throws before it removes anything while the removal slots are not sealed.
  */
 export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spare: (dir: string) => boolean = () => false): string[] {
+  assertRunSlotsSealed();
   // Private worker evidence outlives corrupt/missing/quarantined index rows. Both local
   // and digest-named fallback scratch belong to deferred cleanup, not this orphan sweep.
   const workers = workerEvidenceRunIds(dataDir);
@@ -739,7 +749,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>,
     for (const name of entries) {
       if (keep.has(name) || !safeRunId(name)) continue;
       try {
-        if (agentTmpDirLocations(dataDir, name).some(spare)) continue;
+        if (sweepKeeps(dataDir, name, spare)) continue;
         const locations = agentTmpDirLocations(dataDir, name).filter(dir => existsSync(dir));
         reapAgentTmpDir(dataDir, name, claimedShort.has(basename(agentShortTmpDir(dataDir, name))));
         reaped.push(...locations.filter(dir => !existsSync(dir)).map(dir => basename(dir)));

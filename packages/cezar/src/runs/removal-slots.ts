@@ -12,9 +12,10 @@ import type { RunRecord } from './store.ts';
  * registration, and each removal path reads it before its first side effect.
  */
 
-/** What a deletion removes: a run's history, its worktree or worker resources, or the agent tmp
- *  directory of an archived family member. */
-export type DeletionKind = 'history' | 'worktree' | 'archive-tmp';
+/** What a deletion removes: a run's history, its worktree or worker resources, the agent tmp
+ *  directory of an archived family member, or the agent tmp directory (scratch) of a run that ended
+ *  or of an orphan the startup sweep found. */
+export type DeletionKind = 'history' | 'worktree' | 'archive-tmp' | 'scratch';
 
 /** Refuses a deletion while the feature still needs what it removes. */
 export interface DeletionGate {
