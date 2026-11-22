@@ -18,8 +18,9 @@
  *     dictation in progress. Dictation and attachments change React state with no input event,
  *     so the composer is the only place that knows. Text a host stores (the new-task draft writes
  *     localStorage on every change) does not count; attachments always do, no store keeps them.
- *   - Any other field counts when the user typed into it and it still holds text. A field that
- *     only shows a saved value was never typed into, so it does not block. Fields inside a
+ *   - Any other field counts when the user typed into it and its text differs from what it
+ *     showed at first focus, so clearing a saved value counts too. A field that only shows a
+ *     saved value was never typed into, so it does not block. Fields inside a
  *     composer answer through the composer, and fields inside `[data-persisted-draft]` are kept
  *     by their draft store, so neither counts here.
  */
@@ -90,28 +91,46 @@ export function useUnsentDraft(unsent: boolean): void {
   }, [unsent])
 }
 
-/** Remember every field the user types into. Returns the cleanup. */
+/** What each field showed when the user first focused it: the saved value an edit departs from. */
+const shownValues = new WeakMap<EventTarget, string>()
+
+function fieldText(element: Element): string {
+  return element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement
+    ? element.value
+    : element.textContent ?? ''
+}
+
+/** Remember every field the user types into, and what it showed before. Returns the cleanup. */
 export function trackTyping(target: Document = document): () => void {
+  const onFocus = (event: Event) => {
+    const field = event.target
+    if (field instanceof Element && field.matches(EDITABLE) && !shownValues.has(field)) shownValues.set(field, fieldText(field))
+  }
   const onInput = (event: Event) => {
     if (event.target) typedInto.add(event.target)
   }
+  target.addEventListener('focusin', onFocus, true)
   target.addEventListener('input', onInput, true)
-  return () => target.removeEventListener('input', onInput, true)
+  return () => {
+    target.removeEventListener('focusin', onFocus, true)
+    target.removeEventListener('input', onInput, true)
+  }
 }
 
-/** True when a reload would lose input: a composer's unsent draft, or a typed field's text. */
+/** A typed field that differs from what it showed at first focus, a cleared saved value too.
+ *  Without a recorded first value, any text counts. */
+function holdsEdit(element: HTMLElement): boolean {
+  if (!typedInto.has(element) || element.closest('[data-persisted-draft], [data-slot="composer"]')) return false
+  if ((element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) && (element.disabled || element.readOnly)) return false
+  const text = fieldText(element).trim()
+  const shown = shownValues.get(element)
+  return shown === undefined ? text !== '' : text !== shown.trim()
+}
+
+/** True when a reload would lose input: a composer's unsent draft, or a typed field's edit. */
 export function hasUnsentInput(root: ParentNode = document): boolean {
   if (unsentDrafts.size > 0) return true
-  for (const element of root.querySelectorAll<HTMLElement>(EDITABLE)) {
-    if (!typedInto.has(element) || element.closest('[data-persisted-draft], [data-slot="composer"]')) continue
-    if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
-      if (element.disabled || element.readOnly) continue
-      if (element.value.trim() !== '') return true
-    } else if ((element.textContent ?? '').trim() !== '') {
-      return true
-    }
-  }
-  return false
+  return Array.from(root.querySelectorAll<HTMLElement>(EDITABLE)).some(holdsEdit)
 }
 
 function safeSessionStorage(): Storage | undefined {

@@ -62,9 +62,10 @@ code and the runners list (`staleTime: Infinity`) belong to the old server. It r
 in `sessionStorage` and never reloads twice for one version. It waits while unsent input exists,
 and says so in the notice (`packages/web/src/lib/version-reload.ts`). A message composer reports
 its own state through `useUnsentDraft`: text, attachments and a dictation in progress, which change
-React state with no input event. Text the host stores (`draftPersisted`, the /new draft) does not
-count; attachments always do. Any other field counts when the user typed into it and it still holds
-text, except inside `[data-persisted-draft]` (a draft store that writes on every change).
+React state with no input event. Text the host stores (`draftPersisted`, true on /new only while the
+last draft write reached localStorage) does not count; attachments always do. Any other field counts
+when the user typed into it and its text differs from what it showed at first focus (clearing a saved
+value counts), except inside `[data-persisted-draft]` (a draft store that writes on every change).
 
 ## Activity view
 

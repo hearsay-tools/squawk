@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { workspaceQueryKeys } from '@/api/queries'
 import type { HealthResponse, ProviderStatusResponse } from '@open-mercato/cezar-api-client'
 import { resetToasts } from '@/components/ui/toaster'
+import { hasUnsentInput } from '@/lib/version-reload'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
@@ -182,6 +183,28 @@ describe('the hero surface', () => {
     } finally {
       view.unmount()
       anchor.remove()
+    }
+  })
+})
+
+describe('the reload-on-upgrade guard on /new (hearsay-tools/squawk#4094)', () => {
+  it('trusts the draft text only while its localStorage write succeeds', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    fireEvent.change(textarea(), { target: { value: 'Kept in localStorage' } })
+    expect(hasUnsentInput()).toBe(false)
+
+    const realSetItem = Storage.prototype.setItem
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key.startsWith('cez-new-task-draft')) throw new DOMException('Quota exceeded', 'QuotaExceededError')
+      realSetItem.call(this, key, value)
+    })
+    try {
+      fireEvent.change(textarea(), { target: { value: 'Storage is full now' } })
+      expect(hasUnsentInput()).toBe(true)
+    } finally {
+      setItem.mockRestore()
     }
   })
 })

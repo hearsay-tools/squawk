@@ -103,6 +103,19 @@ describe('hasUnsentInput', () => {
     first.unmount()
   })
 
+  it('counts a cleared saved value, and not a field typed back to what it showed', () => {
+    document.body.innerHTML = '<textarea>saved prompt</textarea><input value="14">'
+    const [prompt, days] = document.body.children as unknown as [HTMLTextAreaElement, HTMLInputElement]
+    prompt.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    type(prompt, '')
+    expect(hasUnsentInput()).toBe(true)
+    type(prompt, 'saved prompt')
+    expect(hasUnsentInput()).toBe(false)
+    days.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    type(days, '30')
+    expect(hasUnsentInput()).toBe(true)
+  })
+
   it('ignores text a draft store keeps', () => {
     document.body.innerHTML = '<div data-persisted-draft><textarea></textarea></div>'
     type(document.querySelector('textarea')!, 'kept in localStorage')

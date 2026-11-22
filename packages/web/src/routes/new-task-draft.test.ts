@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   clearStartedDraft,
   composerRunModeNote,
+  draftStored,
   readDraft,
   resetDraft,
   resolveComposerRunMode,
@@ -47,6 +48,22 @@ describe('resolveComposerRunMode', () => {
 })
 
 describe('the new-task draft store', () => {
+  it('reports whether the last write reached localStorage', () => {
+    expect(draftStored()).toBe(false)
+    writeDraft({ ...readDraft(), text: 'stored' })
+    expect(draftStored()).toBe(true)
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError')
+    })
+    try {
+      writeDraft({ ...readDraft(), text: 'only in memory' })
+      expect(draftStored()).toBe(false)
+      expect(readDraft().text).toBe('only in memory')
+    } finally {
+      setItem.mockRestore()
+    }
+  })
+
   it('retains completion choices across navigation, reload and successful starts', () => {
     writeDraft({ ...readDraft('other'), text: 'Ship it', archiveWhenDone: true, autoMergePr: true }, 'other')
     expect(readDraft()).toMatchObject({ archiveWhenDone: false, autoMergePr: false })
