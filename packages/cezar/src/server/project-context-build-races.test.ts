@@ -66,7 +66,7 @@ describe('a project build that removal or a failure overtakes', () => {
     const counts = { opened: 0, closed: 0 };
     contexts.onStoreCreated((store) => {
       counts.opened += 1;
-      store.once('closed', () => { counts.closed += 1; });
+      const stop = store.lifecycle.subscribe({ 'store.closed': () => { stop(); counts.closed += 1; } });
     });
     return counts;
   }

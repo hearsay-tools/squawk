@@ -17,6 +17,7 @@ import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { factRows } from '../core/runner-fact-rows.testkit.ts';
 import { MESSAGE_WAKE_OPENING, toolCall, thenSay } from './waits-parity.testkit.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // The closed part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -67,8 +68,8 @@ function closeAtOpeningPark(release: () => void): () => string {
     parked = run.id;
     queueMicrotask(() => { sessionOf(run.id).end(); release(); });
   };
-  store.on('run', park);
-  onTestFinished(() => { store.off('run', park); });
+  const stopPark = onRunWrite(store.lifecycle, park);
+  onTestFinished(() => { stopPark(); });
   return () => parked!;
 }
 
@@ -113,7 +114,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
             sessionOf(p.id).end();
           }
         };
-        store.on('event', closeAtTurnEnd);
+        const stopCloseAtTurnEnd = store.lifecycle.subscribe({ 'run.event': closeAtTurnEnd });
         try {
           sessionOf(p.id).end();
           await refusalDeliveryBound(runner, p.id, 'U22c', () => closed);
@@ -136,7 +137,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           expect(refusals()).toHaveLength(1);
           await refusalStep(runner, p.id, 'U22c: Continue final park', () => store.getRun(p.id)?.status === 'waiting');
         } finally {
-          store.off('event', closeAtTurnEnd);
+          stopCloseAtTurnEnd();
         }
       });
     }
@@ -157,8 +158,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       // store's own writes record that it was counted.
       let counted = false;
       const countOnce = (run: RunRecord) => { if (run.id === p.id && run.waitDeliveryFailures === 1) counted = true; };
-      store.on('event', closeOnce);
-      store.on('run', countOnce);
+      const stopCloseOnce = store.lifecycle.subscribe({ 'run.event': closeOnce });
+      const stopCountOnce = onRunWrite(store.lifecycle, countOnce);
       try {
         sessionOf(p.id).end();
         await until(() => counted);
@@ -167,8 +168,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
         expect(prompted(runner, MESSAGE_WAKE_OPENING)).toHaveLength(2);
         expect(store.getRun(p.id)?.waitDeliveryFailures).toBeUndefined();
       } finally {
-        store.off('event', closeOnce);
-        store.off('run', countOnce);
+        stopCloseOnce();
+        stopCountOnce();
       }
     });
 
@@ -207,8 +208,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           closes--;
           sessionOf(p.id).end();
         };
-        store.on('event', closeAtTurnEnd);
-        onTestFinished(() => { store.off('event', closeAtTurnEnd); });
+        const stopCloseAtTurnEnd = store.lifecycle.subscribe({ 'run.event': closeAtTurnEnd });
+        onTestFinished(() => { stopCloseAtTurnEnd(); });
         sessionOf(p.id).end();
         await refusalDeliveryBound(runner, p.id, 'U22k', () => MAX_WAKE_DELIVERY_ATTEMPTS - closes);
         expect(prompted(runner, MESSAGE_WAKE_OPENING)).toHaveLength(MAX_WAKE_DELIVERY_ATTEMPTS);
@@ -263,10 +264,10 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
             events = eventCheckpoint();
             disk = readPersistedRuns(join(root, '.ai/cezar'));
           };
-          store.on('event', capture);
+          const stopCapture = store.lifecycle.subscribe({ 'run.event': capture });
           sessionOf(p.id).end();
           await until(() => disk !== undefined);
-          store.off('event', capture);
+          stopCapture();
           let closes = variant === 'closing' ? 1 : 0;
           const closeOnce = ({ runId, event }: { runId: string; event: { type: string } }) => {
             if (runId !== p.id || event.type !== 'turn-end' || !closes || !refusals().some(input => !input.deliveredAt)) return;
@@ -277,8 +278,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           // The old manager may have reached a mock before it stopped: count from here.
           const before = prompted(runner, refusal).length;
           // Recovery reopens the run through the scheduler; its first turn end is a mock round trip away.
-          store.on('event', closeOnce);
-          onTestFinished(() => { store.off('event', closeOnce); });
+          const stopCloseOnce = store.lifecycle.subscribe({ 'run.event': closeOnce });
+          onTestFinished(() => { stopCloseOnce(); });
           if (variant === 'silent') silence = silenceRefusals();
           else retryAtOnce();
           expect(refusals()).toEqual([expect.objectContaining({ source: 'lifecycle' })]);
@@ -327,8 +328,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
         closes--;
         sessionOf(p.id).end();
       };
-      store.on('event', closeAtTurnEnd);
-      onTestFinished(() => { store.off('event', closeAtTurnEnd); });
+      const stopCloseAtTurnEnd = store.lifecycle.subscribe({ 'run.event': closeAtTurnEnd });
+      onTestFinished(() => { stopCloseAtTurnEnd(); });
       sessionOf(p.id).end();
       await refusalDeliveryBound(runner, p.id, 'U22x', () => MAX_WAKE_DELIVERY_ATTEMPTS - closes);
       expect(refusals()).toEqual([expect.objectContaining({ purpose: 'completion-refusal' })]);

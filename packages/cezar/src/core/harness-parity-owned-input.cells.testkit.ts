@@ -229,7 +229,7 @@ export const OWNED_INPUT_GROUPS = {
             const failAfterEnqueue = ({ event }: { event: { type: string; reason?: unknown } }) => {
               if (event.type === 'human-ask-closed' && event.reason === 'superseded') unblock ??= blockRunWrites(join(repoRoot, '.ai/cezar'));
             };
-            store.on('event', failAfterEnqueue);
+            const stopFailAfterEnqueue = store.lifecycle.subscribe({ 'run.event': failAfterEnqueue });
             const input = agentInput(parentRunId, 'mock:hold');
             const unmute = muteLockedDatabaseLogs();
             try {
@@ -237,7 +237,7 @@ export const OWNED_INPUT_GROUPS = {
               await waitFor(() => store.readEvents(runId).some(event => event.type === 'error' && String(event.message).includes('agent input delivery checkpoint failed')));
               expect(store.getRun(runId)?.agentInputs).toEqual([input]);
             } finally {
-              store.off('event', failAfterEnqueue);
+              stopFailAfterEnqueue();
               unblock?.();
               unmute();
             }

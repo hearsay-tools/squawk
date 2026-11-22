@@ -13,7 +13,7 @@ import { RunStore, type RunRecord } from './store.ts';
 import type { CreateRunInput } from './ports.ts';
 
 /**
- * The lifecycle a `RunStore` publishes beside its emitter (.ai/specs/2026-11-21-run-lifecycle-and-
+ * The lifecycle a `RunStore` publishes (.ai/specs/2026-11-21-run-lifecycle-and-
  * store-ports.md § Lifecycle delivery cases): one test per row of the table, and the `before` of
  * each write path.
  */
@@ -60,15 +60,12 @@ function only<K extends RunLifecycleEventType>(deliveries: readonly Delivery[], 
 const ROOT = { role: 'root' as const, permissions: [], receipts: [] };
 
 describe('lifecycle delivery cases', () => {
-  it('createRun publishes run.created when touch runs, beside the emitter', () => {
+  it('createRun publishes run.created when touch runs', () => {
     const { store } = setup();
-    const order: string[] = [];
-    store.on('run', () => order.push('emitter:run'));
-    const deliveries = record(store, (delivery) => order.push(delivery.type));
+    const deliveries = record(store);
     const id = store.createRun({ title: 'new', task: 'new', workflow: 'quick-task', steps: [] }).id;
     expect(types(deliveries)).toEqual(['run.created']);
     expect(only(deliveries, 'run.created').run).toBe(store.getRun(id));
-    expect(order).toEqual(['run.created', 'emitter:run']);
   });
 
   it('a committed move that changes status: run.updated, run.status-changed, then run.event for the lifecycle event, after the commit', () => {

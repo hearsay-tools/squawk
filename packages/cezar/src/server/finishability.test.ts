@@ -10,6 +10,7 @@ import { apiRequest } from './loopback-request.testkit.js';
 import '../core/created-runners.testkit.ts';
 import { collect, manager, parent, root, store, until, useWorkerWaitFixture, worker } from '../workflows/worker-wait-core.testkit.ts';
 import { setRunStatus, hasPendingAsk } from '../runs/run-store.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 
 describe('authoritative finishability (#449)', () => {
@@ -56,7 +57,7 @@ describe('authoritative finishability (#449)', () => {
     process.env.CEZ_REVIEW_GATE = '1';
     let id = '';
     const verdicts: string[] = [];
-    store.on('run', run => { if (run.id === id && run.status === 'review') verdicts.push(manager.finishBlockedReason(id) ?? 'none'); });
+    onRunWrite(store.lifecycle, run => { if (run.id === id && run.status === 'review') verdicts.push(manager.finishBlockedReason(id) ?? 'none'); });
     id = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'Improve the project notes.', runner: 'claude' }).id;
     for (const sendBack of [false, true]) {
       if (sendBack) expect(manager.continueRun(id, { text: 'Review feedback: mention the port.' }).ok).toBe(true);

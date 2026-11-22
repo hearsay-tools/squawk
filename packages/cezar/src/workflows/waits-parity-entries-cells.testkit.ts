@@ -12,6 +12,7 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // The entries part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -31,10 +32,10 @@ function observeWaitPublication(id: string, via: Wait['via'], assertNudge: () =>
       try { assertNudge(); } catch (error) { failures.push(error); }
     }
   };
-  store.on('run', onRun);
-  onTestFinished(() => { store.off('run', onRun); });
+  const stopOnRun = onRunWrite(store.lifecycle, onRun);
+  onTestFinished(() => { stopOnRun(); });
   return () => {
-    store.off('run', onRun);
+    stopOnRun();
     expect(publications).toBe(1);
     expect(failures).toEqual([]);
   };

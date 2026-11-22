@@ -69,7 +69,7 @@ it.each(['fresh', 'continuation'] as const)('%s acknowledged input checkpoint re
         if (event.type === 'human-ask-closed' && event.reason === 'superseded') unblock ??= blockRunWrites(join(repoRoot, '.ai/cezar'));
       };
       const input = { id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId, text: 'mock:hold', createdAt: new Date().toISOString() };
-      store.on('event', observe);
+      const stopObserve = store.lifecycle.subscribe({ 'run.event': observe });
       const unmute = muteLockedDatabaseLogs();
       try {
         expect(manager.steerWorker(runId, input)).toBe('queued');
@@ -85,7 +85,7 @@ it.each(['fresh', 'continuation'] as const)('%s acknowledged input checkpoint re
         expect(store.getRun(runId)?.agentInputs).toEqual([input]);
         expect(store.getRun(runId)?.error).toContain('agent input delivery checkpoint failed');
       } finally {
-        store.off('event', observe);
+        stopObserve();
         unblock?.();
         unmute();
       }

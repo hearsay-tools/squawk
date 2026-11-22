@@ -19,6 +19,7 @@ import { readRunIndexFromDisk } from './run-index.ts';
 import { encodeRunRow } from './run-row.ts';
 import { blockRunWrites, readPersistedRuns, runIds, seedRuns } from './run-store.testkit.ts';
 import { LEGACY_INDEX_BACKUP_FILE, RunStore, type RunRecord } from './store.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 /** RunStore on `runs.db` (#779): import, failure ordering, dirty-only saves, disposal. */
 
@@ -195,8 +196,8 @@ describe('durable commits', () => {
     const persisted = readPersistedRuns(dataDir);
     const before = structuredClone(store.getRun(y.id));
     const events: unknown[] = [];
-    store.on('run', (run) => events.push(run));
-    store.on('deleted', (id) => events.push(id));
+    onRunWrite(store.lifecycle, (run) => events.push(run));
+    store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { events.push(runId); } });
 
     const release = blockRunWrites(dataDir);
     try {

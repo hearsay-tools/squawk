@@ -15,6 +15,7 @@ import { hasPendingAsk, muteLockedDatabaseLogs, blockRunWrites } from '../runs/r
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { withHeldAck, withHeldResponse, withRejectedInput } from '../core/owned-input-delivery.testkit.ts';
 import { persistentWakeFailure, TIMER_WAKE_OPENING, toolCall, gatedProviderFailure } from './waits-parity.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // The delivery part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -63,8 +64,8 @@ async function answerQuestion(id: string, askSeq: number) {
 function publishedStatuses(id: string): RunRecord['status'][] {
   const statuses: RunRecord['status'][] = [];
   const onRun = (run: RunRecord) => { if (run.id === id) statuses.push(run.status); };
-  store.on('run', onRun);
-  onTestFinished(() => { store.off('run', onRun); });
+  const stopOnRun = onRunWrite(store.lifecycle, onRun);
+  onTestFinished(() => { stopOnRun(); });
   return statuses;
 }
 
@@ -306,7 +307,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         if (resolving) { resolving = false; fireTimer(timer.id); }
         if (store.getRun(run.id)?.waits?.find(wait => wait.id === timer.id)?.phase === 'resolved') sessionOf(run.id).end();
       };
-      store.on('event', closeAtTurnEnd);
+      const stopCloseAtTurnEnd = store.lifecycle.subscribe({ 'run.event': closeAtTurnEnd });
       try {
         expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Check the deploy.' }])).toBe(true);
         await until(() => store.getRun(run.id)?.status === 'failed' && !manager.isActive(run.id));
@@ -321,7 +322,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         closing = false;
         await continueDelivers(runner, run.id, timer, later);
       } finally {
-        store.off('event', closeAtTurnEnd);
+        stopCloseAtTurnEnd();
       }
     });
 

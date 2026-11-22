@@ -21,6 +21,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { WorkspaceEventBus, createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(opencodeRunner);
@@ -427,10 +428,10 @@ describe('GET /api/v1/workspace/events', () => {
     const expected: string[] = [];
     const record = (project: string) => (run: unknown) => expected.push(`event: run\ndata: ${JSON.stringify({ ...(run as object), project })}\n\n`);
     const deleted = (project: string) => (id: string) => expected.push(`event: run-deleted\ndata: ${JSON.stringify({ id, project })}\n\n`);
-    store.on('run', record(bootId));
-    store.on('deleted', deleted(bootId));
-    other.store.on('run', record(other.id));
-    other.store.on('deleted', deleted(other.id));
+    onRunWrite(store.lifecycle, record(bootId));
+    store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { deleted(bootId)(runId); } });
+    onRunWrite(other.store.lifecycle, record(other.id));
+    other.store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { deleted(other.id)(runId); } });
 
     const ws = await openStream('/api/v1/workspace/events');
     const head = await ws.readUntil('event: ping');

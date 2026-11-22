@@ -16,6 +16,7 @@ import type { WorkflowDef } from './types.ts';
 import type { TimerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 export { runnerHook };
 
@@ -45,8 +46,8 @@ export function waitForProduct(manager: RunManager, store: RunStore, predicate: 
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      store.off('run', schedule);
-      store.off('event', schedule);
+      stopRun();
+      stopEvent();
       offWork();
       if (error) reject(error); else resolve();
     };
@@ -63,8 +64,8 @@ export function waitForProduct(manager: RunManager, store: RunStore, predicate: 
     const offWork = fixtureWork(manager).onSettle(schedule);
     // bound: preserve the caller's original per-transition hang guard without polling.
     const timer = setTimeout(() => finish(new Error('condition not met in time')), ms);
-    store.on('run', schedule);
-    store.on('event', schedule);
+    const stopRun = onRunWrite(store.lifecycle, schedule);
+    const stopEvent = store.lifecycle.subscribe({ 'run.event': schedule });
     check();
   });
 }
@@ -132,10 +133,10 @@ export function setupMonitoringFixture() {
       const onRun = (record: RunRecord) => {
         const current = record.steps.find((step) => step.id === record.currentStepId);
         if (!ready() || record.id !== id || record.status !== 'waiting' || current?.status !== 'waiting') return;
-        store.off('run', onRun);
+        stopOnRun();
         resolve(structuredClone(record));
       };
-      store.on('run', onRun);
+      const stopOnRun = onRunWrite(store.lifecycle, onRun);
     });
 
   /** The run's open timer: a `cezar_wait` timer or a monitoring one. */

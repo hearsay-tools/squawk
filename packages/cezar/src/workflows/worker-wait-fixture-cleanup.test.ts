@@ -2,6 +2,7 @@ import { expect, it, onTestFinished, vi } from 'vitest';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import '../core/no-runner.testkit.ts';
 import { manager, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 useWorkerWaitFixture();
 
@@ -9,7 +10,7 @@ it('cancels an unstarted queued run before onTestFinished checks its durable out
   const capacity = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
   const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'must stay queued', runner: 'claude', worktree: false });
   let status = store.getRun(run.id)?.status;
-  store.on('run', () => { status = store.getRun(run.id)?.status; });
+  onRunWrite(store.lifecycle, () => { status = store.getRun(run.id)?.status; });
   onTestFinished(() => {
     expect(status).toBe('cancelled');
     expect(manager.isActive(run.id)).toBe(false);

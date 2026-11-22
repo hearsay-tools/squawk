@@ -11,9 +11,12 @@ import { ProjectContexts, type ProjectContextSource } from './project-context.ts
 import { createRunManager } from './engine-run-manager.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
+import type { RunLifecycleEventType } from '../runs/lifecycle.ts';
 registerRunner(claudeRunner);
 
 
+const LIFECYCLE_TYPES: RunLifecycleEventType[] = ['run.created', 'run.updated', 'run.status-changed', 'run.deleted', 'run.event', 'store.closed'];
 const observed = vi.hoisted(() => ({
   subscriptions: [] as Array<{ listener: ReturnType<typeof vi.fn>; unsubscribe: ReturnType<typeof vi.fn> }>,
 }));
@@ -46,13 +49,20 @@ describe('ProjectContexts (run engine)', () => {
     rmSync(rootB, { recursive: true, force: true });
   });
 
-  function makeContexts(projects: ProjectContextSource[]): ProjectContexts {
-    return new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: async () => projects });
+  function makeContexts(projects: ProjectContextSource[], createManager: typeof createRunManager = createRunManager): ProjectContexts {
+    return new ProjectContexts({ createRunner, createManager, home: testHome(), listProjects: async () => projects });
   }
 
   it('dispose(): the manager receives no further usage ticks and the store is flushed and closed', async () => {
-    const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
+    // Count the lifecycle subscriptions from the first one the context's manager makes.
+    let listeners: ((type: RunLifecycleEventType) => number) | undefined;
+    const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }], (store, ...rest) => {
+      listeners = lifecycleListeners(store.lifecycle);
+      return createRunManager(store, ...rest);
+    });
+    const subscribed = () => LIFECYCLE_TYPES.reduce((sum, type) => sum + listeners!(type), 0);
     const ctx = await contexts.context('a');
+    expect(subscribed()).toBeGreaterThan(0);
     const run = ctx.store.createRun({ title: 'pending', workflow: 'w', task: 't', steps: [] });
     const { listener: spy, unsubscribe } = observed.subscriptions.at(-1)!;
 
@@ -69,7 +79,7 @@ describe('ProjectContexts (run engine)', () => {
     ctx.store.updateRun(run.id, { title: 'after dispose' });
     ctx.store.flush();
     expect(readPersistedRuns(projectPaths(rootA).write)[0]?.title).toBe('pending');
-    expect(ctx.store.eventNames()).toEqual([]);
+    expect(subscribed()).toBe(0);
 
     // Disposed id is gone from the map; the next access builds a fresh context.
     expect(contexts.peek('a')).toBeUndefined();

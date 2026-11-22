@@ -30,6 +30,7 @@ import { ensureOwnedWorkspace } from "./workspace.ts";
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(opencodeRunner);
@@ -290,7 +291,7 @@ describe('delegation service durable authority', () => {
   });
   it('publishes concrete private identity before worker events/enqueue and never rewrites it on replay', async () => {
     const request = input(); let publishedIdentity: unknown;
-    f.store.on('run', run => { if (run.delegation?.role === 'worker') publishedIdentity = f.store.readWorkerIdentity(run.id); });
+    onRunWrite(f.store.lifecycle, run => { if (run.delegation?.role === 'worker') publishedIdentity = f.store.readWorkerIdentity(run.id); });
     const worker = await f.service.spawn(f.caller, request);
     const account = { provider: 'claude', profileId: 'default', homePath: f.root, claudeLayout: { kind: 'relocated' } };
     expect(publishedIdentity).toEqual({ kind: 'accepted', grants: {}, account, model: 'opus', effort: 'high',

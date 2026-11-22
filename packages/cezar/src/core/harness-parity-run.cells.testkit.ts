@@ -17,6 +17,7 @@ import { observationClock } from './observation-clock.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // #723: use the real RunManager on both event-handler construction paths.
 async function continueDiagnosticRun(backend: string, prompt: string): Promise<RunObservation> {
@@ -115,7 +116,7 @@ export const RUN_GROUPS = {
                 const recordChange = (record: NonNullable<RunObservation['record']>) => {
                   if (record.id === runId) changes.push({ status: record.status, monitoringWakeAt: timerWakeOf(record) });
                 };
-                store.on('run', recordChange);
+                const stopRecordChange = onRunWrite(store.lifecycle, recordChange);
                 try {
                   writeFileSync(release, 'go');
                   const discarded = runnerGolden(backend, 'postParkChildFrames') === 'discarded';
@@ -131,7 +132,7 @@ export const RUN_GROUPS = {
                     .filter(event => event.type.startsWith('item.') && event.item && (event.item as { parentItemId?: string }).parentItemId);
                   expect(childItems.length).toBeGreaterThan(0);
                   if (discarded) expect(after.some(event => event.type.startsWith('item.'))).toBe(false);
-                } finally { store.off('run', recordChange); }
+                } finally { stopRecordChange(); }
               });
           } finally { rmSync(dir, { recursive: true, force: true }); }
         }, 60_000);
@@ -169,7 +170,7 @@ export const RUN_GROUPS = {
                 const recordChange = (record: NonNullable<RunObservation['record']>) => {
                   if (record.id === runId) changes.push({ status: record.status, monitoringWakeAt: timerWakeOf(record) });
                 };
-                store.on('run', recordChange);
+                const stopRecordChange = onRunWrite(store.lifecycle, recordChange);
                 try {
                   writeFileSync(release, 'go');
                   await waitFor(() => store.readEvents(runId).slice(before).some(event => JSON.stringify(event).includes('Late hook processed.')));
@@ -181,7 +182,7 @@ export const RUN_GROUPS = {
                     .map(event => (event.item as { id: string }).id);
                   expect(hooks).toHaveLength(2);
                   expect(new Set(hooks).size).toBe(2);
-                } finally { store.off('run', recordChange); }
+                } finally { stopRecordChange(); }
               });
           } finally { rmSync(dir, { recursive: true, force: true }); }
         }, 60_000);
@@ -220,7 +221,7 @@ export const RUN_GROUPS = {
               const recordStatus = (run: { id: string; status: string }) => {
                 if (run.id === runId) statuses.push(run.status);
               };
-              store.on('run', recordStatus);
+              const stopRecordStatus = onRunWrite(store.lifecycle, recordStatus);
               try {
                 // The parent answers (hearsay-tools/cezarion#2410): the parked worker takes it as a wake.
                 await answer(ask.answer);
@@ -232,7 +233,7 @@ export const RUN_GROUPS = {
                 expect(store.getRun(runId)?.steps[0]?.status).toBe('done');
                 expect(hasPendingAsk(store, runId)).toBe(false);
               } finally {
-                store.off('run', recordStatus);
+                stopRecordStatus();
               }
               const events = store.readEvents(runId);
               expect(events.filter(event => event.type === 'ask.requested')).toHaveLength(1);

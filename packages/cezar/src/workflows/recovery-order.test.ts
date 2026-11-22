@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 /**
  * Which of two tied runs a restart picks back up first (#779, T7): the shape of the
@@ -58,7 +59,7 @@ describe('recover() with tied runs in a one-slot project', () => {
     // The order the two leave the queue: recovery requeues both, then the pump starts them.
     const queued = new Set<string>();
     const started: string[] = [];
-    store.on('run', (run: { id: string; status: string }) => {
+    onRunWrite(store.lifecycle, (run: { id: string; status: string }) => {
       if (run.id !== first && run.id !== second) return;
       if (run.status === 'queued') queued.add(run.id);
       else if (queued.has(run.id) && run.status === 'running' && !started.includes(run.id)) started.push(run.id);

@@ -13,6 +13,7 @@ import { bookkeeping, collect, manager, parent, restart, root, store, until, wor
 import { blockRunWrites, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { monitoringWakeOf } from './waits.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
@@ -49,12 +50,12 @@ for (const failure of ['diff', 'checkpoint'] as const) {
           durableStatus = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === p.id)?.status;
         }
       };
-      store.on('run', observe);
+      const stopObserve = onRunWrite(store.lifecycle, observe);
       expect(manager.finish(p.id)).toBe(true);
       await until(() => store.getRun(p.id)?.status === 'done');
       expect(durableStatus).toBe('done');
       expect(store.getRun(p.id)?.delegation).not.toHaveProperty('finishRequestedAt');
-      store.off('run', observe); warn.mockRestore();
+      stopObserve(); warn.mockRestore();
     });
   }
 

@@ -263,7 +263,7 @@ describe('golden-fixture replay through a real RunStore', () => {
         steps: [{ id: 's1', name: 'S', kind: STEP_KIND.agent }],
       });
       const busTypes: string[] = [];
-      store.on('event', ({ event }) => busTypes.push(event.type));
+      store.lifecycle.subscribe({ 'run.event': ({ event }) => { busTypes.push(event.type); } });
       const sink = new UiEventSink({
         persist: (e) => store.appendEvent(run.id, { ...e, stepId: 's1' }),
         emitLive: (e) => store.emitEphemeral(run.id, { ...e, stepId: 's1' }),

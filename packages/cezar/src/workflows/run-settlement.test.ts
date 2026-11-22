@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type StepState } from '../runs/store.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 
 vi.mock('../git-worktree.ts', async importOriginal => ({
@@ -54,7 +55,7 @@ describe('successful run settlement (#473)', () => {
         const id = seed(durable);
         const untouched = structuredClone(store.getRun(id)!.steps.filter(step => preservedStatuses.includes(step.status as typeof preservedStatuses[number])));
         const terminalSnapshots: StepState[][] = [];
-        store.on('run', record => {
+        onRunWrite(store.lifecycle, record => {
           if (record.id === id && record.status === status) terminalSnapshots.push(structuredClone(record.steps));
         });
         await settle(id, durable);

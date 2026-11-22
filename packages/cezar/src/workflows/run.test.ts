@@ -158,14 +158,14 @@ describe('RunManager directional usage accounting', () => {
     manager.dispose();
     manager = createFixtureManager(store, repoRoot);
     const persistedAtSink: StepState[] = [];
-    store.on('event', ({ runId, event }) => {
+    store.lifecycle.subscribe({ 'run.event': ({ runId, event }) => {
       if (event.type !== 'turn.started' && event.type !== 'turn.completed') return;
       const persisted = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true }).getRun(runId)?.steps[0];
       expect(persisted).toMatchObject(event.type === 'turn.started'
         ? { usageInvocationsObserved: 1, usageTurnsStarted: 1 }
         : { usageTurnsRecorded: 1, inputTokens: 8, outputTokens: 2 });
       persistedAtSink.push(persisted!);
-    });
+    } });
     runnerHook.runner = {
       backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => undefined,
