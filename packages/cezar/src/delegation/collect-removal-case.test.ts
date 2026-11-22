@@ -27,7 +27,7 @@ describe('worker collect during a pending history deletion', { timeout: 15_000 }
       if (changes.deletes.includes(workerId)) throw Error('final deletion checkpoint failed');
       return original(changes, transaction);
     });
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     fault.mockRestore();
     const dataDir = join(f.root, '.ai/cezar');
     retainAutosaveCleanup(dataDir, workerId, f.root, 'autosave cleanup pending', { processes: [], groups: [], uncertain: false });

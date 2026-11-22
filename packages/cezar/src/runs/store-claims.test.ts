@@ -135,7 +135,7 @@ describe('another store\'s runs are readable and refuse writes', () => {
     expect(other.pin(run.id, 'continue')).toBeUndefined();
     expect(() => other.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
     expect(() => other.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow(RunWriteRefusedError);
-    expect(other.deleteRun(run.id)).toBe(false);
+    expect(other.retention.deleteRun(run.id)).toBe(false);
     other.flush();
 
     expect(other.heldIds()).toEqual([]);
@@ -215,7 +215,7 @@ describe('deleting a run', () => {
     seedRuns(dataDir, [record('old')]);
     const files = historyFiles('old');
     const store = open();
-    expect(store.deleteRun('old')).toBe(true);
+    expect(store.retention.deleteRun('old')).toBe(true);
     for (const file of files) expect(existsSync(file), file).toBe(true);
     store.flush();
     expect(persisted('old')).toBeUndefined();
@@ -317,7 +317,7 @@ describe('a run changed under this store', () => {
     writeBehindItsBack({ ...persisted('old'), title: 'touched elsewhere' });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.unpin('old', 'cleanup');
-    expect(store.deleteRun('old')).toBe(true);
+    expect(store.retention.deleteRun('old')).toBe(true);
     store.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: 'old', reason: 'changed', localDeleted: true, localData: null })]);
     expect(persisted('old')).toMatchObject({ title: 'touched elsewhere' });

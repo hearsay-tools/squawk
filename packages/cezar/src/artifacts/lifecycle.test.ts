@@ -25,7 +25,7 @@ it('removes published bytes when ordinary task history is deleted', () => {
   const { root, store, run, directory } = fixture();
   writeFileSync(join(directory, 'snapshot'), 'saved');
   setRunStatus(store, run.id, RUN_STATUS.done);
-  expect(store.deleteRun(run.id)).toBe(true);
+  expect(store.retention.deleteRun(run.id)).toBe(true);
   store.flush();
   expect(existsSync(directory)).toBe(false);
   expect(existsSync(root)).toBe(true);

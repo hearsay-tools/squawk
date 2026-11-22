@@ -756,9 +756,9 @@ export class DelegationService {
     project.manager.settleOrphanedWorkerExecution(workerId); // #469: before `settled` is computed
     if (receiptsOf(family).some(receipt => receipt.workerId === workerId && receipt.deletion?.phase === 'pending')) {
       const retained = project.store.readWorkerResult(family.id, workerId);
-      if (!retained || !project.store.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history deletion evidence is unavailable');
+      if (!retained || !project.store.retention.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history deletion evidence is unavailable');
       const evidence = await revalidateRetainedWorkerResult(project.root, retained, project.store.sourceDataDir(family.id));
-      if (!project.store.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history changed during collection');
+      if (!project.store.retention.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history changed during collection');
       return project.store.commitWorkerResult(family.id, evidence, project.store.readWorkerResultDiff(family.id, workerId));
     }
     // Store records preserve object references. Copy before yielding to Continue or cleanup.

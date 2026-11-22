@@ -13,6 +13,8 @@ import { createRunner } from '../core/runner-registry.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
+// A settled run reaps its scratch, which asks the removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 registerRunner(claudeRunner);
 registerRunner(piRunner);

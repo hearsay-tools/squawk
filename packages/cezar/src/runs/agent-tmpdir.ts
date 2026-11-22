@@ -1,4 +1,5 @@
-import { runDataDir } from '../legacy-runs.ts';
+import { assertRunSlotsSealed, deletionRefusal } from './removal-slots.ts';
+import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { productEnv } from '../core/product-env.ts';
 /**
  * Task-owned temp directories with real-byte write probes and a Unix socket path budget. Prefer
@@ -711,17 +712,50 @@ function reapAgentTmpDir(dataDir: string, runId: string, spareUnclaimedShort: bo
   }
 }
 
+/** The directory names under `dir`; none when it is absent or cannot be read. */
+function directoryNames(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/** Ask the deletion gates (`runs/removal-slots.ts`) for the scratch of every run the sweep may find,
+ *  before anything goes: by control directory, by short-directory marker, and each task a project
+ *  move left in `.ai/cezar/`, whose fallback directory the last loop can reach. A refused run joins
+ *  `keep`, so every loop keeps all its directories. A gate that throws keeps the run too. */
+function keepRefusedScratch(dataDir: string, keep: Set<string>): void {
+  const shortRoot = join(dataDir, SHORT_TMP_ROOT);
+  const markers = directoryNames(shortRoot).filter(safeRunId).map((name) => readRunMarker(join(shortRoot, name)));
+  let legacy: string[] = [];
+  try { legacy = legacyRunsBeside(dataDir); } catch { /* an unreadable list names no run to ask about */ }
+  for (const id of new Set([...directoryNames(agentTmpRoot(dataDir)), ...markers, ...legacy])) {
+    if (typeof id !== 'string' || keep.has(id) || !safeRunId(id)) continue;
+    try {
+      if (deletionRefusal(id, 'scratch', dataDir) === undefined) continue;
+    } catch {
+      // A gate that cannot answer keeps the scratch for the next boot.
+    }
+    keep.add(id);
+  }
+}
+
 /**
  * Startup sweep of confined repo-local and digest directories not claimed by keepRunIds. Respect
  * full-run and dataDir ownership markers; retain unreadable or uncertain ownership. A directory
  * `spare` names stays too: the caller keeps one that holds a running job (hearsay-tools/squawk#3138).
+ * A run whose scratch a deletion gate refuses (`runs/removal-slots.ts`) is kept like one in
+ * keepRunIds; the sweep throws before it removes anything while the removal slots are not sealed.
  */
 export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spare: (dir: string) => boolean = () => false): string[] {
+  assertRunSlotsSealed();
   // Private worker evidence outlives corrupt/missing/quarantined index rows. Both local
   // and digest-named fallback scratch belong to deferred cleanup, not this orphan sweep.
   const workers = workerEvidenceRunIds(dataDir);
   if (!workers) return []; // unreadable evidence directory is not proof of absence
   const keep = new Set([...keepRunIds, ...workers]);
+  keepRefusedScratch(dataDir, keep);
   const reaped: string[] = [];
   let entries: string[];
   // Short names a kept run resolves to. Computed before the legacy loop, which

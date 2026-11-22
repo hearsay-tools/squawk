@@ -33,6 +33,10 @@ import {
   sweepAgentTmpDirs,
 } from './agent-tmpdir.ts';
 import { seedRuns } from './run-store.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// The startup sweep asks the removal slots; this file needs none of them.
+sealTestRunSlots();
 
 /** Lets a test make `renameSync` of one path fail as a cross-filesystem move
  *  would (`EXDEV`); every other call passes through untouched. */

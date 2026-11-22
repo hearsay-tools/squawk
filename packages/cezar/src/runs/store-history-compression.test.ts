@@ -100,7 +100,7 @@ describe('RunStore history compression', () => {
     await store.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
-    expect(store.deleteRun(run.id)).toBe(true);
+    expect(store.retention.deleteRun(run.id)).toBe(true);
     store.flush();
     expect(existsSync(compressed)).toBe(false);
     expect(existsSync(plain)).toBe(false);

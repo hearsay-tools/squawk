@@ -167,7 +167,7 @@ describe('lifecycle delivery cases', () => {
     store.flush();
     const rowAtDelivery: boolean[] = [];
     const deliveries = record(store, () => rowAtDelivery.push(persisted(id) !== undefined));
-    expect(store.deleteRun(id)).toBe(true);
+    expect(store.retention.deleteRun(id)).toBe(true);
     expect(deliveries).toEqual([{ type: 'run.deleted', payload: { runId: id } }]);
     expect(rowAtDelivery).toEqual([true]);
   });
@@ -179,7 +179,7 @@ describe('lifecycle delivery cases', () => {
     store.flush();
     const rowAtDeletion: boolean[] = [];
     const deliveries = record(store, (delivery) => { if (delivery.type === 'run.deleted') rowAtDeletion.push(persisted(id) !== undefined); });
-    expect(store.deleteRun(id)).toBe(true);
+    expect(store.retention.deleteRun(id)).toBe(true);
     expect(types(deliveries)).toEqual(['run.updated', 'run.deleted']);
     expect(rowAtDeletion).toEqual([false]);
   });
@@ -302,7 +302,7 @@ describe('before holds the record as it was at the entry of each write path', ()
     const { dir, store, created, persisted } = setup();
     const id = created();
     store.flush();
-    expect(store.deleteRun(id)).toBe(true);
+    expect(store.retention.deleteRun(id)).toBe(true);
     const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
     try { raw.transaction({ upserts: [encodeRunRow({ ...persisted(id)!, title: 'elsewhere' })], deletes: [] }); } finally { raw.close(); }
     vi.spyOn(console, 'error').mockImplementation(() => undefined);

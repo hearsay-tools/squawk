@@ -1,3 +1,4 @@
+import { assertRunSlotsSealed, deletionRefusal } from '../../runs/removal-slots.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { workerEvidenceRunIds } from '../../runs/worker-execution.ts';
 import { agentTmpDirLocations, removeAgentTmpDir } from '../../runs/agent-tmpdir.ts';
@@ -72,6 +73,7 @@ export class RunSettlement {
    * Terminal status alone is not process-exit proof: an active session or an
    * unfinished private worker generation must retain its files until exit. */
   reapTerminalScratch(runId: string): void {
+    assertRunSlotsSealed();
     const run = this.context.store.getRun(runId);
     const disposition = terminalScratchDisposition(runId, run, {
       active: () => this.host.active.has(runId), starting: () => this.line.hasStarting(runId), queued: () => this.line.hasQueued(runId),
@@ -81,6 +83,8 @@ export class RunSettlement {
     });
     if (disposition === 'keep') return;
     if (disposition === 'schedule') { this.host.workerScratchCleanup.schedule(runId); return; }
+    // The removal slots get the last word (`runs/removal-slots.ts`): a refusal keeps the scratch.
+    if (deletionRefusal(runId, 'scratch', this.context.dataDir)) return;
     removeAgentTmpDir(this.context.dataDir, runId);
   }
 
@@ -581,8 +585,12 @@ export class RunSettlement {
     // terminal path. Fire-and-forget: retention must never delay or throw into
     // the lifecycle.
     void this.enforceRetention();
-    this.reapTerminalScratch(runId);
-    this.host.releaseRunMemory(runId);
+    // The reap throws on an unsealed process or a failing removal gate; the memory slot goes anyway.
+    try {
+      this.reapTerminalScratch(runId);
+    } finally {
+      this.host.releaseRunMemory(runId);
+    }
   }
 }
 

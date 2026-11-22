@@ -227,7 +227,7 @@ describe('durable commits', () => {
     store.flush();
     const seen = writes(store);
     store.updateRun(x.id, { title: 'x pending' });
-    expect(store.deleteRun(gone.id)).toBe(true);
+    expect(store.retention.deleteRun(gone.id)).toBe(true);
 
     store.commitDelegation([{ id: y.id, delegation: { role: 'invalid' } }]);
     expect(seen).toEqual([{ upserts: [y.id, x.id], deletes: [gone.id] }]);
@@ -243,7 +243,7 @@ describe('durable commits', () => {
     const run = store.createRun({ title: 'x', workflow: 'w', task: 't', steps: [] });
     const other = store.createRun({ title: 'y', workflow: 'w', task: 't', steps: [] });
     store.flush();
-    store.deleteRun(run.id);
+    store.retention.deleteRun(run.id);
     const target = runPersistence(store);
     vi.spyOn(target, 'persist').mockImplementationOnce(() => { throw new Error('disk unavailable'); });
     expect(() => store.commitDelegation([{ id: other.id, delegation: { role: 'invalid' } }])).toThrow('disk unavailable');
@@ -309,7 +309,7 @@ describe('debounced saves write only what changed', () => {
 
     store.updateRun('run-03', { title: 'changed' });
     store.updateRun('run-03', { tokensUsed: 5 });
-    store.deleteRun('run-07');
+    store.retention.deleteRun('run-07');
     vi.advanceTimersByTime(300);
     expect(seen).toEqual([{ upserts: ['run-03'], deletes: ['run-07'] }]);
     expect(row('run-03')?.revision).toBe(2);

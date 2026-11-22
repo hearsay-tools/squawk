@@ -82,7 +82,7 @@ function fakeHost({ run, claimHeld, foreignOwner }: State): RunCheckoutHost {
     store: {
       getRun: vi.fn(() => run), sourceDataDir: vi.fn(() => join(root, 'source')),
       updateRun: forbidden, writeRefusal: vi.fn(() => foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined),
-      fallbackDeleteError: forbidden, canDeleteRun: forbidden, listWorkersOf: forbidden,
+      retention: { fallbackDeleteError: forbidden, canDeleteRun: forbidden }, listWorkersOf: forbidden,
     },
     manager: { isActive: forbidden, claimForPublish: vi.fn(claimHeld ? () => null : forbidden), claimWorktreeReclaim: vi.fn(claimHeld ? () => null : forbidden) },
   };
@@ -171,8 +171,10 @@ function claimedHost(state: State) {
     store: {
       getRun: vi.fn(() => { calls.push('lookup'); return state.run; }),
       updateRun: vi.fn(), sourceDataDir: vi.fn(), listWorkersOf: vi.fn(() => []),
-      canDeleteRun: vi.fn(() => { calls.push('can-delete'); return state.run?.delegation?.role !== 'worker'; }),
-      fallbackDeleteError: vi.fn(() => { calls.push('fallback'); return state.run?.worktreePath ? fallbackProjectWriteError(state.run.worktreePath) : undefined; }),
+      retention: {
+        canDeleteRun: vi.fn(() => { calls.push('can-delete'); return state.run?.delegation?.role !== 'worker'; }),
+        fallbackDeleteError: vi.fn(() => { calls.push('fallback'); return state.run?.worktreePath ? fallbackProjectWriteError(state.run.worktreePath) : undefined; }),
+      },
       writeRefusal: vi.fn(() => { calls.push('owner'); return state.foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined; }),
     },
     manager: {
@@ -194,7 +196,7 @@ describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819
   const refusal = (action: string) => ({ status: 409, body: { error: `this worker runs in its parent's worktree — ${action}` } });
   function sharedHost(run: RunRecord = shared, workers: RunRecord[] = []): RunCheckoutHost {
     return { root, store: { getRun: vi.fn(() => run), updateRun: vi.fn(), sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined),
-      fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true), listWorkersOf: vi.fn(() => workers) },
+      retention: { fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true) }, listWorkersOf: vi.fn(() => workers) },
       manager: { isActive: vi.fn(() => false), claimForPublish: vi.fn(() => () => undefined), claimWorktreeReclaim: vi.fn(() => () => undefined) } };
   }
 

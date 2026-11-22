@@ -46,6 +46,6 @@ export function interruptParentDeletion(f: Fixture): void {
   f.store.updateStep(f.parent.id, 'task', { status: STEP_STATUS.done, sessionId: 'mock-prior', backend: 'claude' });
   setRunStatus(f.store, f.parent.id, RUN_STATUS.done, { workflowDef: QUICK_TASK_WORKFLOW, task: 'mock:cezar-done', worktreePath: undefined });
   vi.mocked(rmSync).mockImplementationOnce(() => { throw Error('history temporarily busy'); });
-  expect(f.store.deleteRun(f.parent.id)).toBe(false);
+  expect(f.store.retention.deleteRun(f.parent.id)).toBe(false);
   expect(f.store.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
 }

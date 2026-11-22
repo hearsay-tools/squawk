@@ -3576,7 +3576,7 @@ export function createApp(deps: ServerDeps) {
       const { run, release } = checkout;
       try {
         if (run.delegation?.role !== 'worker' && run.worktreePath) await releaseThenRemoveWorktree({ previewHost: deps.previewHost }, id, repoRoot, run.worktreePath, run.branch);
-        return store.deleteRun(id) ? c.json({ deleted: true }) : c.json({ error: 'history cleanup incomplete — retry deletion' }, 409);
+        return store.retention.deleteRun(id) ? c.json({ deleted: true }) : c.json({ error: 'history cleanup incomplete — retry deletion' }, 409);
       } finally { release(); }
     });
 

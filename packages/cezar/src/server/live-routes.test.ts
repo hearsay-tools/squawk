@@ -140,7 +140,7 @@ describe('finite multi-run catch-up', () => {
     store.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'temporary' });
     setRunStatus(store, runId, RUN_STATUS.done);
     expect(store.liveReadSnapshot(runId).events).toHaveLength(1);
-    expect(store.deleteRun(runId)).toBe(true);
+    expect(store.retention.deleteRun(runId)).toBe(true);
     expect(store.liveReadSnapshot(runId).events).toEqual([]);
   });
   it('bounds replay at an accepted prefix and continues without loss or duplicates', async () => {
@@ -248,7 +248,7 @@ describe('multiplexed live task feed', () => {
       const created = JSON.stringify(other);
       store.updateRun(other.id, { title: 'Renamed' });
       const renamed = JSON.stringify(store.getRun(other.id));
-      expect(store.deleteRun(other.id)).toBe(true);
+      expect(store.retention.deleteRun(other.id)).toBe(true);
       await stream.until('event: run-deleted');
       expect(stream.frames('run')).toEqual([created, renamed]);
       expect(stream.frames('run-deleted')).toEqual([JSON.stringify({ id: other.id })]);

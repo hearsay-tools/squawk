@@ -285,7 +285,7 @@ describe('RunStore.listArchivedRuns', () => {
     // Held and unarchived in memory, while its row is still archived: the record wins.
     store.setArchived('a3', false);
     // Last: a write commits the deletes pending before it, and this row must still be stored.
-    expect(store.deleteRun('a2')).toBe(true);
+    expect(store.retention.deleteRun('a2')).toBe(true);
 
     for (const q of [undefined, 'needle']) {
       const found = list(store, { limit: 10, ...(q === undefined ? {} : { q }) });

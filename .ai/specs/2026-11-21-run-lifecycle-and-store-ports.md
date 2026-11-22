@@ -191,12 +191,12 @@ goes. A restart publishes nothing for the runs it loads, so the webhooks send no
 
 | Slot | Signature | Called by | On failure |
 | --- | --- | --- | --- |
-| Deletion gate | `refuse(runId, kind, dataDir): string \| undefined`, with `kind` one of `history`, `worktree`, `archive-tmp`, and `dataDir` the run's data dir | `canDeleteRun`, the worker resource safety check, `cleanupSafety` in retention, the archive of a settled family | A reason refuses the deletion. The caller keeps today's message and status code |
+| Deletion gate | `refuse(runId, kind, dataDir): string \| undefined`, with `kind` one of `history`, `worktree`, `archive-tmp`, `scratch`, and `dataDir` the run's data dir | `canDeleteRun`, the worker resource safety check, `cleanupSafety` in retention, the archive of a settled family, the terminal scratch reap (`reapTerminalScratch`), the startup orphan sweep (`sweepAgentTmpDirs`) | A reason refuses the deletion. The caller keeps today's message and status code |
 | Reclaim preparation | `prepare(run, { repoRoot, store }): Promise<void>`, with `store` typed by a port from `runs/ports.ts` | `reclaimWorktree`, before the worktree goes | The reclaim stops and returns `null`; the next pass retries, as today |
 | Removal cleanup | `removed(runId, dataDir): void` | `removeRunHistoryBytes`, `removeOwedHistory` | Delegated runs: `deleteRun` returns `false` and the checkpoint stays for a retry. Plain runs: logged, as the best-effort path does today |
 
 - Built-in slots: autosave (gate and cleanup), workers (preparation: worker evidence), artifacts
-  (cleanup) and jobs (gate for `archive-tmp`). The worker checks of `canDeleteRun` and
+  (cleanup) and jobs (gate for `archive-tmp` and `scratch`). The worker checks of `canDeleteRun` and
   `cleanupSafety` read the store's private records, so they stay in the store in today's order.
   Preview has no slot: its host belongs to one `serve` process, and its release runs only once a
   removal goes ahead, after the clean and HEAD-reachable checks, and never blocks it. So
@@ -275,6 +275,8 @@ The slots keep each path's behavior; this table is the reviewed list for C1.
 | Worker family end (`delegation/family-end.ts`, `cleanupSafety`) | gate `worktree` | As today | As today |
 | Archive of a settled family (`pruneOldRuns`) | gate `archive-tmp` | As today | The tmp directory stays while a job runs in it |
 | Plain run history delete | gate `history`, then cleanup after the commit | As today | A cleanup failure is logged; the row is gone |
+| Terminal scratch reap (`reapTerminalScratch`, D3) | gate `scratch`, after today's checks | The scratch stays | The scratch stays while autosave cleanup is unconfirmed or a job runs in it, as today |
+| Startup orphan sweep (`sweepAgentTmpDirs`, D3) | gate `scratch` for each orphan run id | — | An orphan's directories stay while a gate refuses its scratch |
 | Any path, registry not sealed | none | — | Throws; nothing is removed |
 
 ### Lifecycle delivery cases

@@ -150,7 +150,7 @@ describe('cez task watching', () => {
 
     it('reports a run that disappears as missing, exit 1, without waiting for the timeout', async () => {
       const id = create();
-      later(40, () => { harness.store.deleteRun(id); });
+      later(40, () => { harness.store.retention.deleteRun(id); });
       const started = Date.now();
       expect(await run(['wait', id, '--timeout-seconds', '30'])).toBe(1);
       expect(Date.now() - started).toBeLessThan(10_000);
@@ -303,7 +303,7 @@ describe('cez task watching', () => {
         await vi.waitFor(() => {
           expect(lines().filter((line) => line.type === 'text').map((line) => line.text)).toContain('before');
         }, { timeout: HANG_GUARD_MS });
-        harness.store.deleteRun(id);
+        harness.store.retention.deleteRun(id);
         expect(await following).toBe(1);
         expect(lines().filter((line) => line.type === 'text').map((line) => line.text)).toEqual(['before']);
         expect(last()).toEqual({ id, status: 'missing', until, timedOut: false });

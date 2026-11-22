@@ -11,7 +11,7 @@ import type { ProjectApiEnv } from './server.ts';
 export function protectFallbackRun(kind: 'record' | 'worktree'): MiddlewareHandler<ProjectApiEnv> {
   return async (context, next) => {
     const id = context.req.param('id');
-    const error = id && context.get('project').store.fallbackDeleteError(id, kind);
+    const error = id && context.get('project').store.retention.fallbackDeleteError(id, kind);
     if (error) return context.json({ error }, 409);
     return next();
   };

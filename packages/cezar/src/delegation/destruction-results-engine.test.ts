@@ -55,7 +55,7 @@ describe('verified destruction retains results through explicit history deletion
     // Parked on the wait with no session, as the product holds it: a running run always has one.
     setRunStatus(f.store, parent.id, RUN_STATUS.waiting);
     const entry = () => f.store.getRun(parent.id)?.waits?.find(wait => wait.id === waitId);
-    await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
+    await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.retention.deleteRun(workerId)).toBe(true);
     f.manager.reconcileWorkerWaits();
     expect(entry()).toMatchObject({ phase: WAIT_PHASE.open, outcomes: [{ workerId, revision: 1, status: WORKER_OUTCOME_STATUS.review }] });
     const retained = f.store.readWorkerResult(f.parent.id, workerId)!;
@@ -73,13 +73,13 @@ describe('verified destruction retains results through explicit history deletion
   });
 
   it('denies replacement evidence whose retained workspace names a different owner', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
+    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.retention.deleteRun(workerId)).toBe(true);
     const result = f.store.readWorkerResult(f.parent.id, workerId)!;
     if (result.diff.state !== 'available') throw Error('fixture diff');
     const file = JSON.parse(readFileSync(result.diff.path, 'utf8'));
     file.result.workspace.ownerRunId = randomUUID();
     writeFileSync(result.diff.path, JSON.stringify(file));
-    expect(f.store.canDeleteRun(f.parent.id)).toBe(false);
+    expect(f.store.retention.canDeleteRun(f.parent.id)).toBe(false);
     expect(f.manager.finishBlockedReason(f.parent.id)).toContain(workerId);
     await expect(f.service.collect(f.caller, { workerId })).rejects.toMatchObject({ code: 'denied_scope' });
   });
@@ -88,7 +88,7 @@ describe('verified destruction retains results through explicit history deletion
     interruptedParentDeletion();
     expect(f.manager.continueRun(f.parent.id, { text: 'mock:cezar-done' }, true)).toMatchObject({ ok: false, error: expect.stringContaining('deletion') });
     expect(f.manager.isActive(f.parent.id)).toBe(false);
-    expect(f.store.deleteRun(f.parent.id)).toBe(true);
+    expect(f.store.retention.deleteRun(f.parent.id)).toBe(true);
   });
   it.each(['queued', 'running'] as const)('does not revive a %s parent with interrupted deletion on restart', async status => {
     interruptedParentDeletion(); setRunStatus(f.store, f.parent.id, status); f.store.close();
@@ -102,7 +102,7 @@ describe('verified destruction retains results through explicit history deletion
       await semaphore.release();
       expect(manager.isActive(f.parent.id)).toBe(false);
       expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
-      expect(reopened.deleteRun(f.parent.id)).toBe(true);
+      expect(reopened.retention.deleteRun(f.parent.id)).toBe(true);
     } finally { manager.dispose(); reopened.flush(); }
   });
 });

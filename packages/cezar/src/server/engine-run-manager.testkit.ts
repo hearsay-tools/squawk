@@ -1,6 +1,9 @@
 import { RunManager } from '../workflows/run.ts';
 import type { RunManagerFactory } from './project-context.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
+// A real manager reaps scratch and sweeps orphans, which ask the removal slots: seal the shipped ones,
+// as `serve` does at its entry.
+import '../built-in-run-slots.testkit.ts';
 
 /** The manager factory `serve` passes, for tests that need the real run engine in a non-boot project context:
  *  `fake-run-manager.testkit.ts` serves every other test. Its managers get the inert CI supervisor; a test that

@@ -49,7 +49,7 @@ describe('human owned-worker cleanup', () => {
     execFileSync('git', ['worktree', 'add', '-qb', branch, path, 'HEAD'], { cwd: f.root });
     writeFileSync(join(path, 'unrelated.txt'), 'keep me');
     f.store.updateRun(workerId, { worktreePath: path, branch });
-    expect(f.store.canDeleteRun(workerId)).toBe(true);
+    expect(f.store.retention.canDeleteRun(workerId)).toBe(true);
     const app = createApp({ home: testHome(), repoRoot: f.root, store: f.store, manager: f.manager, version: 'test', bootProjectId: 'project' });
     let url = `/runs/${workerId}`;
     if (operation === 'remove-worktree') url += '/remove-worktree';

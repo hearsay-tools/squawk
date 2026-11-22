@@ -164,8 +164,8 @@ describe('project run sources', () => {
     const run = record('fallback');
     seed('squawk', [run]);
     const store = open();
-    expect(store.canDeleteRun(run.id)).toBe(false);
-    expect(() => store.deleteRun(run.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
+    expect(store.retention.canDeleteRun(run.id)).toBe(false);
+    expect(() => store.retention.deleteRun(run.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
     expect(readdirSync(root('cezar'))).toEqual([]);
     expect(store.getRun(run.id)?.title).toBe('fallback');
   });
@@ -185,10 +185,10 @@ describe('project run sources', () => {
     seed('squawk', [{ ...duplicate, title: 'fallback copy' }]);
     const store = open();
     expect(store.isFallbackRun(duplicate.id)).toBe(false);
-    expect(store.canDeleteRun(duplicate.id, 'worktree')).toBe(true);
-    expect(store.canDeleteRun(duplicate.id)).toBe(false);
-    expect(() => store.deleteRun(duplicate.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
-    expect(store.deleteRun(old.id)).toBe(true);
+    expect(store.retention.canDeleteRun(duplicate.id, 'worktree')).toBe(true);
+    expect(store.retention.canDeleteRun(duplicate.id)).toBe(false);
+    expect(() => store.retention.deleteRun(duplicate.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
+    expect(store.retention.deleteRun(old.id)).toBe(true);
     store.flush();
     expect(store.getRun(old.id)).toBeUndefined();
     expect(store.getRun(duplicate.id)?.title).toBe('duplicate');

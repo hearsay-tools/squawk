@@ -307,12 +307,12 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(manager.continueRun(w.id, { text: 'resume' }).ok).toBe(false);
     expect(isReclaimable({ ...store.getRun(w.id)!, worktreeReclaimedAt: undefined })).toBe(false);
     expect(await rematerializeReclaimedWorktree(root, store, w.id)).toBe(false);
-    expect(store.deleteRun(w.id)).toBe(false); expect(store.deleteRun(parent.id)).toBe(false);
+    expect(store.retention.deleteRun(w.id)).toBe(false); expect(store.retention.deleteRun(parent.id)).toBe(false);
     store.updateRun(w.id, { delegation: { role: 'invalid' } });
     expect(isReclaimable({ ...store.getRun(w.id)!, worktreeReclaimedAt: undefined })).toBe(false);
     expect(await rematerializeReclaimedWorktree(root, store, w.id)).toBe(false);
     expect(manager.continueRun(w.id, { text: 'resume' }).ok).toBe(false);
-    expect(store.deleteRun(w.id)).toBe(false);
+    expect(store.retention.deleteRun(w.id)).toBe(false);
   });
 
   it('private checkpoint failure or symlink substitution fails closed without publishing proof', async () => {
@@ -384,7 +384,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it('a parent with missing relationship receipts cannot erase a live child', async () => {
     await worker(); store.updateRun(parent.id, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
-    expect(store.deleteRun(parent.id)).toBe(false);
+    expect(store.retention.deleteRun(parent.id)).toBe(false);
   });
 
   it('cancellation during initial config lookup cannot be overwritten by late startup status', async () => {

@@ -155,7 +155,7 @@ describe('ProjectContexts', () => {
       // cockpit's own port registers.
       expect((await registerPreviewServer(ctx.store, ctx.manager.previewHost, observed.options.get(ctx.manager)?.squawkPort, () => false, run.id, { command: 'npm run dev', port: 4321 })).code).toBe('cezar_port');
       expect((await registerPreviewServer(ctx.store, ctx.manager.previewHost, observed.options.get(ctx.manager)?.squawkPort, () => false, run.id, { command: 'npm run dev', port: 5173 })).code).toBe('registered');
-      ctx.store.deleteRun(run.id);
+      ctx.store.retention.deleteRun(run.id);
       expect(release).toHaveBeenCalledWith(run.id, { deleteProfile: true, dataDir: ctx.dataDir });
 
       // Shutdown leaves running previews to the host's own close.

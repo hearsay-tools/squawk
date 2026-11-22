@@ -36,7 +36,7 @@ describe('peer conversations', () => {
     const progress = await f.service.send(f.caller, message(b.id, 'progress'));
     const open = await f.service.send(f.caller, message(b.id));
     // Deleted while it runs: a peer that settled first would settle the request first (R17).
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     // The deletion itself reconciles the live ledgers: no read is needed to settle it.
     expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: 'deleted' })]);
     const history = await f.service.conversation(f.caller, { recipientRunId: b.id });
@@ -96,7 +96,7 @@ describe('peer conversations', () => {
     setRunStatus(f.store, f.parent.id, RUN_STATUS.review);
     // The requester has left the live set the run manager's global pass reads.
     vi.spyOn(f.store, 'listRuns').mockReturnValue([]);
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: 'deleted' })]);
     expect(projections(f.parent.id)).toContain(`request-outcome:${open.message.id}`);
   });
@@ -112,7 +112,7 @@ describe('peer conversations', () => {
     expect(f.store.heldIds()).not.toContain(c.id);
     expect(f.store.listConversationRootIds(b.id)).toEqual([f.parent.id]);
     const read = vi.spyOn(f.store, 'getRun');
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     expect(read.mock.calls.map(([id]) => id)).not.toContain(c.id);
     expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: 'deleted' })]);
     expect(f.store.listConversationRootIds()).toEqual(expect.arrayContaining([f.parent.id, c.id, d.id]));

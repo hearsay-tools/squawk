@@ -120,11 +120,15 @@ export interface WorkerExecutions {
   commitWorkerExecutionComplete: RunStore['commitWorkerExecutionComplete'];
 }
 
-/** Deleting a run, and the archive methods. */
+/** Whether a run may go, and its deletion (`runs/run-retention.ts`, `store.retention`). */
 export interface RunRetention {
-  canDeleteRun: RunStore['canDeleteRun'];
-  deleteRun: RunStore['deleteRun'];
-  fallbackDeleteError: RunStore['fallbackDeleteError'];
+  canDeleteRun(id: string, kind?: 'record' | 'worktree'): boolean;
+  deleteRun(id: string): boolean;
+  fallbackDeleteError(id: string, kind?: 'record' | 'worktree'): string | undefined;
+}
+
+/** The archive methods. */
+export interface RunArchive {
   setArchived: RunStore['setArchived'];
   archiveFinished: RunStore['archiveFinished'];
   archiveOnMergeSnapshot: RunStore['archiveOnMergeSnapshot'];

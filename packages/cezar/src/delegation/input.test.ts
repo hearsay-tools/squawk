@@ -27,6 +27,8 @@ import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+// A settled run reaps its scratch, which asks the removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 registerRunner(claudeRunner);
 

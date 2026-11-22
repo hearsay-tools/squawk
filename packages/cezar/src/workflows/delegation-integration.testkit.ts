@@ -226,7 +226,7 @@ if (group === 'reviewed-integration') {
     expect(await destroy(p.id, a, 1, '--discard-work')).toMatchObject({ state: 'incomplete', remaining: ['branch'], deleted: [{ kind: 'worktree', path: firstA.cwd }] });
     expect(existsSync(firstA.cwd)).toBe(false);
     expect(git(repo, 'rev-parse', `refs/heads/${ownedWorkspace(resultA.workspace).branch}`)).toBe(resultA.head.sha);
-    expect(store.canDeleteRun(a)).toBe(false);
+    expect(store.retention.canDeleteRun(a)).toBe(false);
     expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
     expect(await destroy(p.id, b, 0, '--discard-work')).toMatchObject({ state: 'complete', remaining: [] });
     expect(manager.finish(p.id)).toBe(true);

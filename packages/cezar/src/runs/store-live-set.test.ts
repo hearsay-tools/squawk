@@ -292,7 +292,7 @@ describe('list rows', () => {
     const store = open({ keepLive: true });
     store.updateRun(kept.id, { title: 'unsaved title' });
     const created = store.createRun({ title: 'new', workflow: 'w', task: 't', steps: [] });
-    expect(store.deleteRun(gone.id)).toBe(true);
+    expect(store.retention.deleteRun(gone.id)).toBe(true);
 
     const rows = store.listRunSummaries().runs;
     expect(rows.map((row) => row.id)).not.toContain(gone.id);

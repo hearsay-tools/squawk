@@ -117,11 +117,11 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       expect(execFileSync('git', ['branch', '--list', workspace.branch], { cwd: root, encoding: 'utf8' }).trim()).toBe('');
       expect(store.readWorkerResult(p.id, orphan.id)).toMatchObject({ settled: true, cleanup: 'complete' });
       expect(store.getRun(p.id)?.status).toBe('done');
-      expect(store.canDeleteRun(orphan.id)).toBe(true);
+      expect(store.retention.canDeleteRun(orphan.id)).toBe(true);
       await holder.close(); holderClosed = true;
       // With every resource physically absent, an ambient denial cannot strand history.
       const ambient = await nonDumpableHolder(root);
-      try { expect(store.canDeleteRun(orphan.id)).toBe(true); } finally { await ambient.close(); }
+      try { expect(store.retention.canDeleteRun(orphan.id)).toBe(true); } finally { await ambient.close(); }
       // A completed cleanup/checkpoint cannot authorize later history removal over a live recorded
       // process of the generation.
       mkdirSync(scratch, { recursive: true });
@@ -130,14 +130,14 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
         controller: { pid: ABSENT_PROCESS_PID, startToken: '11111111-1111-4111-8111-111111111111:100' },
         processes: [...processes.processes, { pid: survivor.pid, startToken: processStartToken(survivor.pid) }] }));
       try {
-        expect(store.deleteRun(orphan.id)).toBe(false);
+        expect(store.retention.deleteRun(orphan.id)).toBe(false);
         expect(existsSync(join(files, `${orphan.id}.processes.json`))).toBe(true);
         expect(existsSync(join(files, `${orphan.id}.execution.json`))).toBe(true);
       } finally { await survivor.close(); }
       // Outside processes in its scratch, readable or not, do not stop it and are never signalled.
       const readable = await readableHolder(scratch); const unreadable = await nonDumpableHolder(scratch);
       try {
-        expect(store.deleteRun(orphan.id)).toBe(true);
+        expect(store.retention.deleteRun(orphan.id)).toBe(true);
         expect(readable.running).toBe(true); expect(unreadable.running).toBe(true);
       } finally { await readable.close(); await unreadable.close(); }
       expect(existsSync(scratch)).toBe(false);

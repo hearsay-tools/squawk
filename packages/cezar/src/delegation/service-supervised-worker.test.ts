@@ -266,8 +266,8 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
     expect(await f.service.destroy(f.caller, { workerId: W.id })).toMatchObject({ state: 'complete', remaining: [] });
     expect(order).toEqual([C.id, W.id]);
     expect([C.id, W.id].map(id => { const record = run(id).delegation; return record?.role === 'worker' && record.destroy?.phase; })).toEqual(['complete', 'complete']);
-    expect(f.store.canDeleteRun(W.id)).toBe(false);
-    expect(f.store.deleteRun(C.id)).toBe(true);
-    expect(f.store.canDeleteRun(W.id)).toBe(true);
+    expect(f.store.retention.canDeleteRun(W.id)).toBe(false);
+    expect(f.store.retention.deleteRun(C.id)).toBe(true);
+    expect(f.store.retention.canDeleteRun(W.id)).toBe(true);
   });
 });

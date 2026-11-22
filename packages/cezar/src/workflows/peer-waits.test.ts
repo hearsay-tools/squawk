@@ -166,7 +166,7 @@ describe('peer waits (R9)', { timeout: 45_000 }, () => {
     const entry = await waitOnPeers(run.id, [b]);
     release();
     await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
-    expect(store.deleteRun(b)).toBe(true);
+    expect(store.retention.deleteRun(b)).toBe(true);
     await until(() => anyOf(run.id, entry.id)?.phase !== WAIT_PHASE.open);
     expect(anyOf(run.id, entry.id)).toMatchObject({ result: { reason: 'settled', peerRunId: b } });
   });
