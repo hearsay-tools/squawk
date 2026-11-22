@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActivitySnapshot } from '@open-mercato/cezar-contract';
 import { ACTIVITY_RATE_SECONDS } from '@open-mercato/cezar-contract/activity';
@@ -8,7 +7,7 @@ import { addOutcome, addRequest, fakeStore, makeRoot, NOW } from './activity.tes
 import { ActivityDemand } from './demand.ts';
 import {
   ACTIVITY_COALESCE_MS, ACTIVITY_DRAIN_TICK_MS, ACTIVITY_FOREIGN_CHECK_MS, createActivityPublisher,
-  type ActivityChangeSource, type ActivityPublisherDeps, type LiveActivityStore,
+  type ActivityChangeSource, type ActivityPublisherDeps, type LiveActivitySource,
 } from './publisher.ts';
 import type { ToolActivitySource } from './read-model.ts';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -25,8 +24,8 @@ afterEach(() => vi.useRealTimers());
 /** A project store over mutable records: `held` and `foreign` change between reads. */
 function liveStore(runs: RunRecord[], options: { held?: string[]; foreign?: string[] } = {}) {
   const foreign = options.foreign ?? [];
-  const store = Object.assign(new EventEmitter(), fakeStore(runs, { ...options, foreign })) as unknown as LiveActivityStore & EventEmitter;
-  return { store, foreign, changed: (run: RunRecord) => store.emit('run', run) };
+  const store = fakeStore(runs, { ...options, foreign });
+  return { store, foreign, changed: (run: RunRecord) => store.lifecycle.changed(run) };
 }
 
 /** One tool call per run at a fixed second: its bucket ages out 30 s later, as the tracker's ring does. */
@@ -45,7 +44,7 @@ function toolCalls() {
   return { tools, call: (runId: string) => calls.set(runId, Date.now()) };
 }
 
-function publisherFor(store: LiveActivityStore, deps: ActivityPublisherDeps = {}, demand = new ActivityDemand()) {
+function publisherFor(store: NonNullable<LiveActivitySource['loaded']>['store'], deps: ActivityPublisherDeps = {}, demand = new ActivityDemand()) {
   const publisher = createActivityPublisher({
     sources: async () => [{ projectId: 'shop', name: 'Shop', loaded: { store, isActive: () => false } }],
     watch: () => demand.watch('shop'),
@@ -292,10 +291,10 @@ describe('the activity publisher', () => {
 
     const { stop } = await subscribe(publisher);
     expect(demand.has('shop')).toBe(true);
-    expect(store.listenerCount('run')).toBe(1);
+    expect(store.lifecycle.subscriptions).toBe(1);
     stop();
     expect(vi.getTimerCount()).toBe(0);
-    expect(store.listenerCount('run') + store.listenerCount('deleted')).toBe(0);
+    expect(store.lifecycle.subscriptions).toBe(0);
     expect(demand.has('shop')).toBe(false);
     await vi.advanceTimersByTimeAsync(3 * ACTIVITY_FOREIGN_CHECK_MS);
     expect(vi.getTimerCount()).toBe(0);

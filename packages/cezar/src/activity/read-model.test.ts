@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type { AttentionRung } from '@open-mercato/cezar-contract';
 import { activitySnapshotSchema, activityToolSchema } from '@open-mercato/cezar-contract/activity';
@@ -11,7 +10,7 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
 import type { RunRecord } from '../runs/store.ts';
-import { addRequest, fakeStore, iso, makeRoot, makeWorker, NOW, rootOf, type FakeStoreOptions } from './activity.testkit.ts';
+import { addRequest, CountedLifecycle, fakeStore, iso, makeRoot, makeWorker, NOW, rootOf, type FakeStoreOptions } from './activity.testkit.ts';
 import { buildActivityProject, buildActivitySnapshot, unreadableLogger, type ActivityDeps } from './read-model.ts';
 import { ToolActivityTracker } from './tool-activity.ts';
 
@@ -192,10 +191,10 @@ describe('tool activity and check progress providers', () => {
     const root = makeRoot();
     const worker = makeWorker(root, { status: RUN_STATUS.cancelled });
     const tracker = new ToolActivityTracker({ now: () => NOW });
-    const store = Object.assign(new EventEmitter(), { redactText: (text: string) => text, getRun: (id: string) => [root, worker].find((run) => run.id === id) });
+    const store = { lifecycle: new CountedLifecycle(), redactText: (text: string) => text, getRun: (id: string) => [root, worker].find((run) => run.id === id) };
     const feed = tracker.attach(store);
     // Cancelled before its first tool; the session's late tool start still reaches the tracker.
-    store.emit('run', worker);
+    store.lifecycle.changed(worker);
     const late = { kind: 'tool' as const, id: 'late', name: 'Bash', toolKind: 'execute' as const, title: 'Ran npm test', status: activityToolSchema.shape.status.enum.running };
     feed.observe(worker.id, { type: 'item.started', item: late });
     feed.observe(root.id, { type: 'item.started', item: { ...late, id: 'root-tool', title: 'Ran ls' } });

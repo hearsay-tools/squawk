@@ -3,7 +3,7 @@ import { ACTIVITY_RATE_SECONDS, ACTIVITY_TOOL_TITLE_MAX } from '@open-mercato/ce
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import type { ToolStatus, UiEvent, UiToolItem } from '../core/ui-events.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunAccess, RunLookup } from '../runs/ports.ts';
+import type { RunAccess, RunLifecycleSource, RunLookup } from '../runs/ports.ts';
 import type { ToolActivitySource } from './read-model.ts';
 import { clampText } from './text.ts';
 
@@ -14,14 +14,11 @@ export const TOOL_ACTIVITY_COMPLETED_IDS = 64;
 export const TOOL_ACTIVITY_IDLE_MS = 60_000;
 
 /**
- * What a feed needs from a run store: the run changes it drops runs on, the store's redactor, and
- * a run's current record, read once when an event would create the run's entry.
+ * What a feed needs from a run store: the lifecycle whose run changes it drops runs on, the store's
+ * redactor, and a run's current record, read once when an event would create the run's entry.
  */
 export interface ToolActivityStore extends RunLookup, Pick<RunAccess, 'redactText'> {
-  on(event: 'run', listener: (run: RunRecord) => void): unknown;
-  on(event: 'deleted', listener: (runId: string) => void): unknown;
-  off(event: 'run', listener: (run: RunRecord) => void): unknown;
-  off(event: 'deleted', listener: (runId: string) => void): unknown;
+  readonly lifecycle: RunLifecycleSource;
 }
 
 /** One run manager's way into the tracker: the UI event sinks of its runs feed it. */
@@ -186,9 +183,11 @@ export class ToolActivityTracker implements ToolActivitySource {
         this.stop(run.id, owner);
       }
     };
-    const onDeleted = (runId: string) => this.drop(runId);
-    store.on('run', onRun);
-    store.on('deleted', onDeleted);
+    const unsubscribe = store.lifecycle.subscribe({
+      'run.created': ({ run }) => onRun(run),
+      'run.updated': ({ run }) => onRun(run),
+      'run.deleted': ({ runId }) => this.drop(runId),
+    });
     const redact = (text: string) => store.redactText(text);
     return {
       observe: (runId, event) => {
@@ -197,8 +196,7 @@ export class ToolActivityTracker implements ToolActivitySource {
       detach: () => {
         if (!attached) return;
         attached = false;
-        store.off('run', onRun);
-        store.off('deleted', onDeleted);
+        unsubscribe();
         for (const [runId, run] of this.runs) if (run.owner === owner) this.runs.delete(runId);
       },
     };

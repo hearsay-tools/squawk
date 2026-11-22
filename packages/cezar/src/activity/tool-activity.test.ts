@@ -1,9 +1,10 @@
-import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { UiEvent, UiToolItem } from '../core/ui-events.ts';
+import { publishRunWrite, snapshotRun } from '../runs/lifecycle.ts';
 import type { RunRecord } from '../runs/store.ts';
+import { CountedLifecycle } from './activity.testkit.ts';
 import { ToolActivityTracker } from './tool-activity.ts';
 
 const T0 = Date.parse('2026-11-05T12:00:00.000Z');
@@ -202,24 +203,27 @@ describe('ToolActivityTracker', () => {
     expect(tracked.read('other', T0)?.tool?.title).toBe('Ran elsewhere');
   });
 
-  /** A run store as a feed sees it: run changes and a redactor that hides `secret`. */
   /**
-   * A run store as a feed sees it: run changes, a redactor that hides `hunter2-secret`, and each
-   * run's current record (running until a run change says otherwise).
+   * A run store as a feed sees it: run changes published to its lifecycle, a redactor that hides
+   * `hunter2-secret`, and each run's current record (running until a run change says otherwise).
    */
   function fakeStore() {
     const statuses = new Map<string, RunRecord['status']>();
-    class FakeRunStore extends EventEmitter {
-      redactText = (text: string) => text.split('hunter2-secret').join('[REDACTED]');
-      getRun = (id: string) => makeRunRecord({ id, status: statuses.get(id) ?? RUN_STATUS.running });
-      override emit(event: string | symbol, ...args: unknown[]): boolean {
-        if (event === 'run') statuses.set((args[0] as RunRecord).id, (args[0] as RunRecord).status);
-        return super.emit(event, ...args);
-      }
-    }
-    return new FakeRunStore();
+    const lifecycle = new CountedLifecycle();
+    const record = (id: string) => makeRunRecord({ id, status: statuses.get(id) ?? RUN_STATUS.running });
+    return {
+      lifecycle,
+      redactText: (text: string) => text.split('hunter2-secret').join('[REDACTED]'),
+      getRun: record,
+      /** One write of the run that sets `status`, as the store publishes it. */
+      change(id: string, status: RunRecord['status']) {
+        const before = snapshotRun(record(id));
+        statuses.set(id, status);
+        publishRunWrite(lifecycle, record(id), before);
+      },
+      delete: (runId: string) => lifecycle.publish('run.deleted', { runId }),
+    };
   }
-  const runChange = (id: string, status: RunRecord['status']) => makeRunRecord({ id, status });
 
   it('drops a run when it settles or is deleted, on the run change itself; a live change keeps it', () => {
     const { tracked } = tracker();
@@ -227,9 +231,9 @@ describe('ToolActivityTracker', () => {
     const feed = tracked.attach(store);
     for (const id of ['settles', 'waits', 'deleted']) feed.observe(id, started(tool('a')));
 
-    store.emit('run', runChange('waits', RUN_STATUS.waiting));
-    store.emit('run', runChange('settles', RUN_STATUS.review));
-    store.emit('deleted', 'deleted');
+    store.change('waits', RUN_STATUS.waiting);
+    store.change('settles', RUN_STATUS.review);
+    store.delete('deleted');
     expect(['settles', 'waits', 'deleted'].map((id) => tracked.read(id, T0) !== undefined)).toEqual([false, true, false]);
   });
 
@@ -274,8 +278,8 @@ describe('ToolActivityTracker', () => {
     const store = fakeStore();
     const feed = tracked.attach(store);
     feed.observe(RUN, started(tool('a')));
-    store.emit('run', runChange(RUN, RUN_STATUS.review));
-    store.emit('run', runChange(RUN, RUN_STATUS.running));
+    store.change(RUN, RUN_STATUS.review);
+    store.change(RUN, RUN_STATUS.running);
     clock.now += 2_000;
     feed.observe(RUN, started(tool('b', { title: 'Ran b after resume' })));
     expect(read()).toEqual({ tool: { title: 'Ran b after resume', toolKind: 'execute', status: TOOL_STATUS.running, startedAt: iso(T0 + 2_000) }, rate: rateWith({ 29: 1 }) });
@@ -286,14 +290,14 @@ describe('ToolActivityTracker', () => {
     const store = fakeStore();
     const feed = tracked.attach(store);
     // Stopped before its first tool; its session still reports a tool that never completes.
-    store.emit('run', runChange(RUN, RUN_STATUS.cancelled));
+    store.change(RUN, RUN_STATUS.cancelled);
     feed.observe(RUN, started(tool('late', { title: 'Ran late' })));
     expect(read()).toBeUndefined();
     // A running tool is never pruned: the marked entry outlives 60 s and another run's sweep.
     clock.now += 120_000;
     feed.observe('other', started(tool('a')));
 
-    store.emit('run', runChange(RUN, RUN_STATUS.running));
+    store.change(RUN, RUN_STATUS.running);
     expect(read()).toBeUndefined();
     feed.observe(RUN, started(tool('new', { title: 'Ran after resume' })));
     expect(read()).toEqual({ tool: { title: 'Ran after resume', toolKind: 'execute', status: TOOL_STATUS.running, startedAt: iso(T0 + 120_000) }, rate: rateWith({ 29: 1 }) });
@@ -305,14 +309,14 @@ describe('ToolActivityTracker', () => {
     const feed = tracked.attach(store);
     feed.observe(RUN, started(tool('a')));
     feed.observe(RUN, completed(tool('a', { status: TOOL_STATUS.completed })));
-    store.emit('run', runChange(RUN, RUN_STATUS.cancelled));
+    store.change(RUN, RUN_STATUS.cancelled);
     // 61 s later the stop marker has idled out; another run's event sweeps it away.
     clock.now += 61_000;
     feed.observe('other', started(tool('x')));
     feed.observe(RUN, started(tool('late', { title: 'Ran late' })));
     expect(read()).toBeUndefined();
 
-    store.emit('run', runChange(RUN, RUN_STATUS.running));
+    store.change(RUN, RUN_STATUS.running);
     expect(read()).toBeUndefined();
     clock.now += 1_000;
     feed.observe(RUN, started(tool('new', { title: 'Ran after resume' })));
@@ -324,10 +328,10 @@ describe('ToolActivityTracker', () => {
     const store = fakeStore();
     const feed = tracked.attach(store);
     feed.observe(RUN, started(tool('a')));
-    store.emit('run', runChange(RUN, RUN_STATUS.waiting));
+    store.change(RUN, RUN_STATUS.waiting);
     expect(read()?.tool?.title).toBe('Ran a');
 
-    store.emit('run', runChange('stopped', RUN_STATUS.done));
+    store.change('stopped', RUN_STATUS.done);
     clock.now += 60_000;
     feed.observe(RUN, completed(tool('a', { status: TOOL_STATUS.completed })));
     // The sweep pruned the idle marker; the run is still stopped, so a much later event creates an
@@ -346,9 +350,9 @@ describe('ToolActivityTracker', () => {
 
     feed.detach();
     feed.observe('mine', started(tool('b')));
-    store.emit('run', runChange('theirs', RUN_STATUS.done));
+    store.change('theirs', RUN_STATUS.done);
     expect(tracked.read('mine', T0)).toBeUndefined();
     expect(tracked.read('theirs', T0)).toBeDefined();
-    expect(store.listenerCount('run') + store.listenerCount('deleted')).toBe(0);
+    expect(store.lifecycle.subscriptions).toBe(0);
   });
 });

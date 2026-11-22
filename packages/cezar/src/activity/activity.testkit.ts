@@ -3,6 +3,7 @@ import type { ConversationMessage, DelegationState, RequestOutcome } from '@open
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RunLifecycle, snapshotRun, type RunLifecycleHandlers } from '../runs/lifecycle.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { ActivityStore } from './read-model.ts';
 
@@ -49,6 +50,27 @@ export function addOutcome(ledger: RunRecord, outcome: Pick<RequestOutcome, 'req
   rootOf(ledger).conversation!.outcomes.push({ observedAt: iso(-1_000), ...outcome });
 }
 
+/** A lifecycle that counts its live subscriptions, so a test checks that each one is removed. */
+export class CountedLifecycle extends RunLifecycle {
+  subscriptions = 0;
+
+  override subscribe(handlers: RunLifecycleHandlers): () => void {
+    const off = super.subscribe(handlers);
+    this.subscriptions++;
+    let live = true;
+    return () => {
+      if (live) this.subscriptions--;
+      live = false;
+      off();
+    };
+  }
+
+  /** Publish one write of `run` that changed nothing the test reads: `before` holds `run` itself. */
+  changed(run: RunRecord): void {
+    this.publish('run.updated', { run, before: snapshotRun(run) });
+  }
+}
+
 export interface FakeStoreOptions {
   /** The runs `listRuns()` holds; by default every run with a live status. */
   held?: readonly string[];
@@ -60,11 +82,13 @@ export interface FakeStoreOptions {
   complete?: readonly string[];
 }
 
-/** A run store over fixed records, with the reads the activity model makes. */
-export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions = {}): ActivityStore {
+/** A run store over fixed records, with the reads the activity model makes and a lifecycle a test
+ *  publishes run changes to. */
+export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions = {}): ActivityStore & { lifecycle: CountedLifecycle } {
   const unreadable = new Set(options.unreadable);
   const getRun = (id: string) => (unreadable.has(id) ? undefined : runs.find((run) => run.id === id));
   return {
+    lifecycle: new CountedLifecycle(),
     listRuns: () => runs.filter((run) => (options.held ? options.held.includes(run.id) : isLiveStatus(run.status))),
     listForeignClaimedRunIds: () => [...(options.foreign ?? [])],
     getRun,
@@ -77,5 +101,5 @@ export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions 
       if (parent?.delegation?.role !== 'root') return [];
       return parent.delegation.receipts.flatMap((receipt) => getRun(receipt.workerId) ?? []);
     },
-  } as unknown as ActivityStore;
+  } as unknown as ActivityStore & { lifecycle: CountedLifecycle };
 }

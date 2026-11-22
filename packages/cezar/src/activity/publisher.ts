@@ -1,6 +1,6 @@
 import type { ActivityRun, ActivitySnapshot, ActivityWorker } from '@open-mercato/cezar-contract';
 
-import type { RunStoreEvents } from '../runs/ports.ts';
+import type { RunLifecycleSource } from '../runs/ports.ts';
 import type { TopicPublisher } from '../server/ws.ts';
 import { buildActivityProject, type ActivityDeps, type ActivityProjectSource, type ActivityStore, type CiProgressSource } from './read-model.ts';
 import { projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
@@ -12,12 +12,13 @@ export const ACTIVITY_DRAIN_TICK_MS = 1_000;
 /** No cross-process change signal exists: a subscribed publisher reads the foreign claims this often. */
 export const ACTIVITY_FOREIGN_CHECK_MS = 5_000;
 
-/** A loaded project's store as the publisher needs it: the read model's reads plus its change events. */
-export type LiveActivityStore = ActivityStore & RunStoreEvents;
-
 export interface LiveActivitySource extends ActivityProjectSource {
-  loaded?: { store: LiveActivityStore; isActive: (runId: string) => boolean; ci?: CiProgressSource | undefined; dataDir?: string | undefined } | undefined;
+  /** A loaded project's store as the publisher needs it: the read model's reads plus the lifecycle
+   *  whose run changes schedule a rebuild. */
+  loaded?: { store: ActivityStore & { readonly lifecycle: RunLifecycleSource }; isActive: (runId: string) => boolean; ci?: CiProgressSource | undefined; dataDir?: string | undefined } | undefined;
 }
+
+type LoadedStore = NonNullable<LiveActivitySource['loaded']>['store'];
 
 /** What one topic watches: a project, or every project of the workspace. */
 export interface ActivityScope {
@@ -53,7 +54,7 @@ interface Running {
   drain: ReturnType<typeof setInterval> | undefined;
   foreign: ReturnType<typeof setInterval>;
   foreignSeen: Map<string, string>;
-  stores: Map<LiveActivityStore, { projectId: string; dataDir: string | undefined; off: () => void }>;
+  stores: Map<LoadedStore, { projectId: string; dataDir: string | undefined; unsubscribe: () => void }>;
   release: Array<() => void>;
 }
 
@@ -94,18 +95,17 @@ export function createActivityPublisher(scope: ActivityScope, deps: ActivityPubl
 
   /** Follow the run changes of exactly the stores in scope. */
   const listen = (run: Running, sources: readonly LiveActivitySource[]): void => {
-    const wanted = new Map<LiveActivityStore, { projectId: string; dataDir: string | undefined }>();
+    const wanted = new Map<LoadedStore, { projectId: string; dataDir: string | undefined }>();
     for (const source of sources) if (source.loaded) wanted.set(source.loaded.store, { projectId: source.projectId, dataDir: source.loaded.dataDir });
-    for (const [store, entry] of run.stores) if (!wanted.has(store)) { entry.off(); run.stores.delete(store); }
+    for (const [store, entry] of run.stores) if (!wanted.has(store)) { entry.unsubscribe(); run.stores.delete(store); }
     for (const [store, { projectId, dataDir }] of wanted) {
       if (run.stores.has(store)) continue;
       // The claims as this build reads them: a foreign owner that settles and exits before the
       // first check empties the list, and that change must count.
       run.foreignSeen.set(projectId, claimsKey(store.listForeignClaimedRunIds()));
       const onChange = () => schedule(run);
-      store.on('run', onChange);
-      store.on('deleted', onChange);
-      run.stores.set(store, { projectId, dataDir, off: () => { store.off('run', onChange); store.off('deleted', onChange); } });
+      const unsubscribe = store.lifecycle.subscribe({ 'run.created': onChange, 'run.updated': onChange, 'run.deleted': onChange });
+      run.stores.set(store, { projectId, dataDir, unsubscribe });
     }
   };
 
@@ -194,7 +194,7 @@ export function createActivityPublisher(scope: ActivityScope, deps: ActivityPubl
         clearTimeout(run.timer);
         clearInterval(run.drain);
         clearInterval(run.foreign);
-        for (const { off } of run.stores.values()) off();
+        for (const { unsubscribe } of run.stores.values()) unsubscribe();
         run.stores.clear();
         for (const release of run.release) release();
         carryOver = new Map();
