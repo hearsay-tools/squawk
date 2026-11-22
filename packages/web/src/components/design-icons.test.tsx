@@ -26,3 +26,21 @@ describe('approved design icons', () => {
     expect(container.querySelector('svg')?.getAttribute('data-design-icon')).toBe('list-todo')
   })
 })
+
+describe('named icon exports', () => {
+  it('render the geometry.json glyph for their name', async () => {
+    const mod = (await import('./design-icons')) as unknown as Record<string, unknown>
+    const named = Object.entries(mod).filter(([key]) => key.endsWith('Icon') && key !== 'DesignIcon')
+    expect(named).toHaveLength(75)
+    for (const [key, value] of named) {
+      const Icon = value as React.ComponentType & { displayName?: string }
+      const { container, unmount } = render(<Icon />)
+      const svg = container.querySelector('svg')!
+      const name = svg.getAttribute('data-design-icon') as keyof typeof geometry
+      expect(Icon.displayName, key).toBe(`DesignIcon(${name})`)
+      expect(svg.getAttribute('viewBox'), key).toBe(geometry[name].viewBox)
+      expect([...svg.querySelectorAll('path')].map(p => p.getAttribute('d')), key).toEqual(geometry[name].paths.map(p => p.d))
+      unmount()
+    }
+  })
+})
