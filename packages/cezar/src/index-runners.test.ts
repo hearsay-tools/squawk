@@ -53,6 +53,7 @@ it('migrates legacy accounts before remote-settings status in a cold process', (
   const root = mkdtempSync(join(tmpdir(), 'hsq-cli-migration-'));
   const script = `
     import { strict as assert } from 'node:assert';
+    import { join } from 'node:path';
     import { mkdirSync, readFileSync } from 'node:fs';
     import { Home } from './packages/cezar/src/home/home.ts';
     import { prepareOperatorHome } from './packages/cezar/src/home/entry.ts';
@@ -67,7 +68,7 @@ it('migrates legacy accounts before remote-settings status in a cold process', (
     assert.equal(await runSubcommand(['remote-settings', 'status'], env,
       () => prepareOperatorHome(target, 'remote-settings', env, { legacy })), 0);
     const saved = JSON.parse(readFileSync(target.agentAccounts, 'utf8'));
-    assert.deepEqual(saved.accounts, [{ ...account, configDir: target.data + '/accounts/work' }]);
+    assert.deepEqual(saved.accounts, [{ ...account, configDir: join(target.data, 'accounts', 'work') }]);
     assert.deepEqual(saved.selections, { '/project': { claude: 'work' } });
   `;
   try {
