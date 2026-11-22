@@ -70,6 +70,13 @@ describe('redactSecrets', () => {
     expect(out.match(new RegExp(REDACTED.replace(/[[\]]/g, '\\$&'), 'g'))?.length).toBe(4);
   });
 
+  /** The passes run one pattern at a time, in list order; one alternation would choose other spans. */
+  it('applies the token patterns one after another, not as one alternation', () => {
+    const gh = `ghp_${'a'.repeat(40)}`;
+    expect(redactSecrets(`AIzaab${gh}`, [])).toBe(`AIzaab${REDACTED}`);
+    expect(redactSecrets(`sk-xxxx${gh}`, [])).toBe(`sk-xxxx${REDACTED}`);
+  });
+
   it('leaves non-secret text untouched', () => {
     expect(redactSecrets('the quick brown fox', [])).toBe('the quick brown fox');
   });

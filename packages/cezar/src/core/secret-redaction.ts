@@ -51,6 +51,9 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /glpat-[0-9A-Za-z_-]{20,}/g, // GitLab PAT
 ];
 
+/** Matches where any TOKEN_PATTERNS entry matches. With no match, the passes change nothing. */
+const ANY_TOKEN_PATTERN = new RegExp(TOKEN_PATTERNS.map((re) => `(?:${re.source})`).join('|'));
+
 /** Collect the concrete secret values present in `env` (deduped, longest
  *  first so a value that contains another is replaced whole). */
 export function collectSecretValues(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -70,6 +73,7 @@ export function redactSecrets(text: string, secretValues: readonly string[]): st
     if (!out.includes(value)) continue;
     out = out.split(value).join(REDACTED);
   }
+  if (!ANY_TOKEN_PATTERN.test(out)) return out;
   for (const re of TOKEN_PATTERNS) {
     out = out.replace(re, REDACTED);
   }
@@ -82,16 +86,21 @@ export function redactSecrets(text: string, secretValues: readonly string[]): st
  * event field names, never secrets) are scrubbed.
  */
 export function redactDeep<T>(value: T, secretValues: readonly string[]): T {
+  return redactDeepWith(value, (text) => redactSecrets(text, secretValues));
+}
+
+/** `redactDeep` with the string-leaf scrub given by the caller, so several scrubs share one copy. */
+export function redactDeepWith<T>(value: T, redactString: (text: string) => string): T {
   if (typeof value === 'string') {
-    return redactSecrets(value, secretValues) as unknown as T;
+    return redactString(value) as unknown as T;
   }
   if (Array.isArray(value)) {
-    return value.map((v) => redactDeep(v, secretValues)) as unknown as T;
+    return value.map((v) => redactDeepWith(v, redactString)) as unknown as T;
   }
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = redactDeep(v, secretValues);
+      out[k] = redactDeepWith(v, redactString);
     }
     return out as T;
   }
