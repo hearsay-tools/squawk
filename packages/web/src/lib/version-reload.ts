@@ -62,12 +62,13 @@ export function reloadForVersion(version: string, reload: () => void = () => win
   reload()
 }
 
+/** Inputs whose value is not something the user writes: toggles, buttons, files, pickers, and
+ *  search boxes (a filter, never a draft). Every other input counts, password and number too. */
+const NOT_WRITTEN = ['search', 'checkbox', 'radio', 'hidden', 'button', 'submit', 'reset', 'image', 'file', 'range', 'color']
+
 const EDITABLE = [
   'textarea',
-  'input:not([type])',
-  'input[type="text"]',
-  'input[type="url"]',
-  'input[type="email"]',
+  `input${NOT_WRITTEN.map((type) => `:not([type="${type}"])`).join('')}`,
   '[contenteditable=""]',
   '[contenteditable="true"]',
 ].join(', ')

@@ -58,21 +58,28 @@ describe('hasUnsentInput', () => {
   })
 
   it('is false for typed fields that are empty, disabled or read-only', () => {
-    document.body.innerHTML = '<textarea></textarea><input type="text"><input type="search">'
-    const [textarea, text, search] = document.body.children as unknown as [HTMLTextAreaElement, HTMLInputElement, HTMLInputElement]
+    document.body.innerHTML = '<textarea></textarea><input type="text"><input type="search"><input type="checkbox">'
+    const [textarea, text, search, checkbox] = document.body.children as unknown as [HTMLTextAreaElement, HTMLInputElement, HTMLInputElement, HTMLInputElement]
     type(textarea, '   ')
     type(text, 'x')
     text.disabled = true
     type(search, 'filter')
+    type(checkbox, 'on')
     expect(hasUnsentInput()).toBe(false)
   })
 
-  it('is true for a typed reply, an input or a content-editable field', () => {
+  it('is true for a typed reply, an input (text, password, number) or a content-editable field', () => {
     document.body.innerHTML = '<textarea></textarea>'
     type(document.querySelector('textarea')!, 'half a reply')
     expect(hasUnsentInput()).toBe(true)
     document.body.innerHTML = '<input>'
     type(document.querySelector('input')!, 'name')
+    expect(hasUnsentInput()).toBe(true)
+    document.body.innerHTML = '<input type="password">'
+    type(document.querySelector('input')!, 'webhook token')
+    expect(hasUnsentInput()).toBe(true)
+    document.body.innerHTML = '<input type="number">'
+    type(document.querySelector('input')!, '14')
     expect(hasUnsentInput()).toBe(true)
     document.body.innerHTML = '<div contenteditable="true"></div>'
     type(document.querySelector<HTMLElement>('[contenteditable]')!, 'note')
