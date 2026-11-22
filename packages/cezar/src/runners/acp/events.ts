@@ -157,15 +157,18 @@ export class AcpEvents {
    *  wire closes: an agent-started turn has no prompt response to finish it. */
   flush(): void {
     if (this.block?.kind === 'message') this.release(this.block.text.length);
-    if (this.block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...this.block } });
+    const block = this.block;
+    // State settles before the sinks run: a listener may close the session, which flushes again.
     this.block = undefined; this.released = 0;
+    if (block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...block } });
   }
 
   /** v1 `text` follows the stream chunk by chunk: each event is a progress signal. */
   private release(end: number): void {
     if (this.block?.kind !== 'message' || end <= this.released) return;
-    this.sink.event?.({ type: 'text', text: this.block.text.slice(this.released, end) });
+    const text = this.block.text.slice(this.released, end);
     this.released = end;
+    this.sink.event?.({ type: 'text', text });
   }
 
   private finishTools(reason: StopReason): void {

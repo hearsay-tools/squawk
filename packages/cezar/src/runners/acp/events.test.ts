@@ -102,3 +102,17 @@ it('releases a held prefix once the line grows past it', () => {
   texts(events, ['See C', 'I logs']);
   expect(v1).toEqual(['See ', 'CI logs']);
 });
+
+it('emits held text once when a text listener flushes again', () => {
+  const v1: string[] = [];
+  const completed: UiEvent[] = [];
+  const events: AcpEvents = new AcpEvents({
+    event: event => { if (event.type === 'text') { v1.push(event.text); events.flush(); } },
+    uiEvent: event => { if (event.type === 'item.completed') completed.push(event); },
+  }, hooks);
+  events.begin();
+  texts(events, ['Done. CEZ:D']);
+  events.flush();
+  expect(v1).toEqual(['Done. ', 'CEZ:D']);
+  expect(completed).toHaveLength(1);
+});
