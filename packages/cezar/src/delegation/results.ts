@@ -34,7 +34,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const destroyed = delegation.destroy?.phase === 'complete';
   const workspaceRemoved = !!delegation.destroy && workspaceDirectoryRemoved(delegation.workspace, delegation.destroy.remaining);
   const { lastExecutionOutcome } = executionOutcome(run);
-  const observation = workerObservation(run, store.readWorkerExecution(run.id));
+  const observation = workerObservation(run, store.workerExecutions.readWorkerExecution(run.id));
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
   const changes = await readWorkspaceChanges(store, run);
@@ -55,7 +55,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
  *  other way, with or without a complete execution record, is never compared with the directory as it is. */
 async function readWorkspaceChanges(store: RunStore, run: RunRecord): Promise<Pick<WorkerCollectedResult, 'changes'>> {
   const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run,
-    { generation: store.readWorkerExecution(run.id)?.generation, settled: !isLiveStatus(run.status) });
+    { generation: store.workerExecutions.readWorkerExecution(run.id)?.generation, settled: !isLiveStatus(run.status) });
   return changes ? { changes } : {};
 }
 

@@ -26,6 +26,7 @@ import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
+import { readWorkerIdentity } from './execution-identity.ts';
 
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
@@ -128,7 +129,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
   it('supports only deliberately marked internal primitive workers, never missing identity evidence', async () => {
     const workspace = await planOwnedWorkspace(f.root, randomUUID(), f.sha);
     const worker = f.store.createOwnedRun({ title: 'internal', task: 'internal', runner: 'claude', workflow: 'quick-task', steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] }, f.parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: f.parent.id, workspace }, '0'.repeat(64), spawnCapacityRefusal);
-    expect(f.store.readWorkerIdentity(worker.id)).toEqual({ kind: 'internal' });
+    expect(readWorkerIdentity(f.store.workerExecutions, worker.id)).toEqual({ kind: 'internal' });
     f.manager.enqueueOwnedRun(worker.id); await until(() => sessions.length === 1);
     expect(sessions[0]!.spec.env?.CLAUDE_CONFIG_DIR).toBeUndefined();
     sessions[0]!.finish(); expect(await f.manager.awaitRunTermination(worker.id, 15000)).toBe(true);

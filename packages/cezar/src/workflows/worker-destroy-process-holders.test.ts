@@ -31,6 +31,7 @@ import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
+import { workerExecutionsOf } from '../delegation/worker-executions.ts';
 
 registerRunner(claudeRunner);
 
@@ -45,9 +46,9 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     async function settled() {
       const w = await worker();
       // Admission runs before the worktree exists, so it never scans an ambient holder.
-      const generation = store.commitWorkerExecutionStart(w.id);
+      const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
       await ensureOwnedWorkspace(root, w);
-      setRunStatus(store, w.id, RUN_STATUS.done); store.commitWorkerExecutionComplete(w.id, generation); store.flush();
+      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.flush();
       const service = new DelegationService(workerCleanups()); const detach = service.registerProject({ home: testHome(), id: 'p', root, store, manager });
       return { w, service, detach };
     }
@@ -81,22 +82,22 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
     it('win32 admission is judged by recorded processes: a live one refuses reuse, and Continue works once it exits', async () => {
       const w = await worker();
-      const generation = store.commitWorkerExecutionStart(w.id);
+      const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
       await ensureOwnedWorkspace(root, w);
       const recorded = spawn(process.execPath, ['-e', "console.log('ready'); setInterval(()=>{},1000)"], { cwd: tmpdir(), stdio: ['ignore', 'pipe', 'ignore'] });
       const exited = new Promise(resolve => recorded.once('exit', resolve));
       releases.push(() => recorded.kill('SIGKILL'));
       await new Promise(resolve => recorded.stdout!.once('data', resolve));
-      expect(store.appendWorkerProcess(w.id, generation, recorded.pid!)).toBe(true);
-      setRunStatus(store, w.id, RUN_STATUS.done); store.commitWorkerExecutionComplete(w.id, generation); store.flush();
+      expect(store.workerExecutions.appendWorkerProcess(w.id, generation, recorded.pid!)).toBe(true);
+      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.flush();
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
       // No cwd scan exists on win32 (hearsay-tools/cezarion#889). Before, an `unknown` scan refused
       // every materialized worker's next generation, so Continue never worked there.
       Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
       try {
-        expect(() => store.commitWorkerExecutionStart(w.id)).toThrow(`live processes of the previous session ${recorded.pid} prevent a new execution`);
+        expect(() => store.workerExecutions.commitWorkerExecutionStart(w.id)).toThrow(`live processes of the previous session ${recorded.pid} prevent a new execution`);
         recorded.kill('SIGKILL'); await exited;
-        expect(store.commitWorkerExecutionStart(w.id)).not.toBe(generation);
+        expect(store.workerExecutions.commitWorkerExecutionStart(w.id)).not.toBe(generation);
       } finally { Object.defineProperty(process, 'platform', platform); }
     });
 
@@ -165,7 +166,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
     it("the ledger records the session leader's process group", async () => {
       const { w, leader } = await groupedWorker({ member: 'group', leader: 'stay' });
       await until(() => existsSync(recordPath(w.id)) && readRecord(w.id).processes.length === 1);
-      expect(readRecord(w.id)).toMatchObject({ generation: store.readWorkerExecution(w.id)!.generation,
+      expect(readRecord(w.id)).toMatchObject({ generation: store.workerExecutions.readWorkerExecution(w.id)!.generation,
         processes: [{ pid: leader.pid, pgid: leader.pid, ...(process.platform === 'linux' ? { startToken: expect.any(String) } : {}) }] });
     });
 
@@ -179,9 +180,10 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
       expect(manager.isActive(w.id)).toBe(true);
       const stop = vi.spyOn(manager, 'requestWorkerStop');
       const termination = vi.spyOn(manager, 'awaitRunTermination');
-      const stopScope = store.scopes.stop.bind(store.scopes);
-      const scope = vi.spyOn(store.scopes, 'stop').mockImplementation(async (...args) => {
-        expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+      const scopes = workerExecutionsOf(store).scopes;
+      const stopScope = scopes.stop.bind(scopes);
+      const scope = vi.spyOn(scopes, 'stop').mockImplementation(async (...args) => {
+        expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(existsSync(workspace(w).path)).toBe(true);
         return stopScope(...args);
       });
@@ -198,7 +200,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
 
     it.skipIf(process.platform === 'win32')("destroy ends a finished worker's leftover in its process group", async () => {
       const { w, member } = await groupedWorker({ member: 'group', leader: 'exit' });
-      await until(() => !manager.isActive(w.id) && store.readWorkerExecution(w.id)?.phase === 'complete');
+      await until(() => !manager.isActive(w.id) && store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete');
       expect(alive(member)).toBe(true);
       expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
       expect(alive(member)).toBe(false);
@@ -208,7 +210,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
     // A settled generation whose controller is another live Squawk is not this controller's to stop.
     it.skipIf(process.platform === 'win32')('destroy leaves a settled worker alone while another live controller owns it', async () => {
       const { w, member } = await groupedWorker({ member: 'group', leader: 'exit' });
-      await until(() => !manager.isActive(w.id) && store.readWorkerExecution(w.id)?.phase === 'complete');
+      await until(() => !manager.isActive(w.id) && store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete');
       const other = spawn('sleep', ['30'], { stdio: 'ignore' });
       releases.push(() => { try { other.kill('SIGKILL'); } catch { /* gone */ } });
       writeFileSync(recordPath(w.id), JSON.stringify({ ...readRecord(w.id), controller: { pid: other.pid!, startToken: processStartToken(other.pid!) } }));
@@ -239,7 +241,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
     // not the worker's, so it outlives destroy and keeps nothing from completing.
     it.skipIf(process.platform === 'win32')('on the groups backend a setsid child outlives destroy, which still completes', async () => {
       const { w, member } = await groupedWorker({ member: 'setsid', leader: 'exit' });
-      await until(() => !manager.isActive(w.id) && store.readWorkerExecution(w.id)?.phase === 'complete');
+      await until(() => !manager.isActive(w.id) && store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete');
       const kills = vi.spyOn(process, 'kill');
       expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
       expect(alive(member)).toBe(true);

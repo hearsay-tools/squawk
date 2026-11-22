@@ -87,7 +87,7 @@ describe('stopped composer engine', { timeout: 15_000 }, () => {
         kind: 'owned-isolated', path: join(root, 'worker'), branch: 'worker', baselineSha: 'a'.repeat(40) },
     }, 'a'.repeat(64), spawnCapacityRefusal);
     manager.cancel(run.id);
-    vi.spyOn(store, 'commitWorkerExecutionStart').mockImplementationOnce(() => { throw new Error('checkpoint failed'); });
+    vi.spyOn(store.workerExecutions, 'commitWorkerExecutionStart').mockImplementationOnce(() => { throw new Error('checkpoint failed'); });
     expect(manager.continueRun(run.id, { text: 'must remain draft' })).toEqual({
       ok: false, error: 'checkpoint failed',
     });

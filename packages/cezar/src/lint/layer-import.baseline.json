@@ -104,30 +104,6 @@
       "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
-      "file": "packages/cezar/src/runs/owned-run-create.ts",
-      "target": "packages/cezar/src/delegation/execution-identity.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/delegation/execution-identity.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/worker-scope/scope.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/runs/store.ts",
-      "target": "packages/cezar/src/worker-scope/worker-scopes.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
       "file": "packages/cezar/src/workflows/completion-policy.ts",
       "target": "packages/cezar/src/delegation/conversations.ts",
       "count": 1,

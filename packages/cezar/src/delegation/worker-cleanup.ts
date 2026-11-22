@@ -13,6 +13,7 @@ import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
 import { describeWork } from './workspace-work.ts';
+import { workerExecutionsOf } from './worker-executions.ts';
 
 /** How long an explicit destroy waits in the worktree mutation lock queue: long enough for a
  * settling worker's own Git work to finish (hearsay-tools/squawk#3817). */
@@ -25,8 +26,8 @@ import type { DelegationProject, DestroyOptions, WorkerCleanupFactory } from './
 /** Why the worker's scope is not this controller's to stop: its current generation's record names
  * another live Squawk, or cannot be read. Undefined when it is ours. */
 function foreignControl(store: DelegationProject['store'], workerId: string): string | undefined {
-  const generation = store.readWorkerExecution(workerId)?.generation;
-  const record = generation ? store.readWorkerProcesses(workerId, generation) : 'absent';
+  const generation = store.workerExecutions.readWorkerExecution(workerId)?.generation;
+  const record = generation ? store.workerExecutions.readWorkerProcesses(workerId, generation) : 'absent';
   if (record === 'unknown') return 'worker process record is unreadable';
   if (record === 'absent' || isCurrentProcess(record.controller) || !recordedProcessLive(record.controller)) return undefined;
   return controllerRefusal(record.controller.pid).message;
@@ -36,7 +37,7 @@ function foreignControl(store: DelegationProject['store'], workerId: string): st
  * resources and cap slot are released without the parent asking (hearsay-tools/squawk#3817). */
 export function failedBeforeFirstStep(store: DelegationProject['store'], run: RunRecord): boolean {
   return run.delegation?.role === 'worker' && run.status === 'failed' && !run.delegation.destroy &&
-    !run.steps.some(step => step.startedAt) && store.readWorkerExecution(run.id)?.phase === 'complete';
+    !run.steps.some(step => step.startedAt) && store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete';
 }
 
 /** Whether a destroy attempt may delete work: an explicit attempt of it allowed that now or
@@ -353,12 +354,12 @@ export class WorkerCleanup {
       persist('cleaning', resources);
       let result: WorkerDestroyResult;
       const snapshot = structuredClone(check());
-      const proof = project.store.readWorkerExecution(workerId);
+      const proof = project.store.workerExecutions.readWorkerExecution(workerId);
       const evidence = await collectWorkerEvidence(project.root, project.store, snapshot);
       assertAttached();
       const current = check();
-      if (proof?.phase !== 'complete' || project.store.readWorkerExecution(workerId)?.generation !== proof.generation ||
-        project.store.readWorkerExecution(workerId)?.phase !== 'complete' || current.status !== snapshot.status ||
+      if (proof?.phase !== 'complete' || project.store.workerExecutions.readWorkerExecution(workerId)?.generation !== proof.generation ||
+        project.store.workerExecutions.readWorkerExecution(workerId)?.phase !== 'complete' || current.status !== snapshot.status ||
         JSON.stringify(current.delegation) !== JSON.stringify(snapshot.delegation)) throw new Error('Worker changed before cleanup checkpoint');
       // This immutable parent payload must be durable before the first destructive operation. A
       // payload already on disk is durable, whatever cleanup phase it names (hearsay-tools/cezarion#879).
@@ -371,15 +372,15 @@ export class WorkerCleanup {
         const current = check();
         if (!release || current.delegation?.role !== 'worker' ||
           JSON.stringify(current.delegation.workspace) !== JSON.stringify(workspace) ||
-          project.store.readWorkerExecution(workerId)?.generation !== proof.generation ||
-          project.store.readWorkerExecution(workerId)?.phase !== 'complete') {
+          project.store.workerExecutions.readWorkerExecution(workerId)?.generation !== proof.generation ||
+          project.store.workerExecutions.readWorkerExecution(workerId)?.phase !== 'complete') {
           throw new Error('Worker resource ownership changed');
         }
       };
       // The worker's recorded processes ended with its scope; one still live is a new execution.
       const assertSafe = () => {
         assertCurrent();
-        if (project.store.workerResourceHolders(workerId, proof.generation, workspace.resourceId) !== 'safe') throw new Error('Worker processes still run; cleanup will retry');
+        if (project.store.workerExecutions.workerResourceHolders(workerId, proof.generation, workspace.resourceId) !== 'safe') throw new Error('Worker processes still run; cleanup will retry');
       };
       try {
         assertCurrent();
@@ -443,7 +444,7 @@ export class WorkerCleanup {
       if (foreign) return scopeFailure(foreign);
       // Everything else the worker started, detached descendants included where the host contains
       // them, ends with its scope (ADR 0032).
-      const stopped = await project.store.scopes.stop(workerId, this.terminationTimeoutMs);
+      const stopped = await workerExecutionsOf(project.store).scopes.stop(workerId, this.terminationTimeoutMs);
       assertAttached();
       if (!stopped.stopped) return scopeFailure(stopped.error);
       return await cleanWorkspace();

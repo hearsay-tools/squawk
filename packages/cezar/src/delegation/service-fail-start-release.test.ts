@@ -27,9 +27,9 @@ async function failStart(options: { reservedDirectory?: boolean } = {}) {
   if (run.delegation?.role !== 'worker') throw new Error('worker');
   // What a `git worktree add` that failed before its rollback existed left behind.
   if (options.reservedDirectory) mkdirSync(run.delegation.workspace.path, { recursive: true });
-  const generation = f.store.commitWorkerExecutionStart(workerId);
+  const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
   setRunStatus(f.store, workerId, RUN_STATUS.failed, { error: 'worktree creation failed: git worktree add failed: fatal: example' });
-  expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+  expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
   return { workerId, workspace: run.delegation.workspace };
 }
 
@@ -77,12 +77,12 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
   it.runIf(linux)('leaves a failed worker whose step started for the parent to destroy', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
     const { workerId } = await f.service.spawn(f.caller, input());
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const run = f.store.getRun(workerId)!;
     f.store.updateStep(workerId, run.steps[0]!.id, { startedAt: new Date().toISOString() });
     setRunStatus(f.store, workerId, RUN_STATUS.failed, { error: 'agent failed' });
     expect(run.steps.length).toBeGreaterThan(0);
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
     // Releases run one at a time, in the order they began: once a later fail-start's release has
     // completed, a release of this worker would have run before it.
     const later = await failStart();

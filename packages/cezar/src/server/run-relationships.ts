@@ -5,7 +5,7 @@ import type { RunRecord } from '../runs/store.ts';
 import type { RunFamilyReads, RunLookup, WorkerExecutions } from '../runs/ports.ts';
 import { familyRecordOf, isFamilyRecord, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
 
-type Reads = RunLookup & Pick<RunFamilyReads, 'listOwnedWorkers'> & Pick<WorkerExecutions, 'readWorkerExecution'>;
+type Reads = RunLookup & Pick<RunFamilyReads, 'listOwnedWorkers'> & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
 
 /**
  * What the cockpit shows around one run: a root's whole family, each worker naming the worker that
@@ -31,7 +31,7 @@ export function runRelationships(store: Reads, run: RunRecord): RunRelationships
     return [{ workerId: worker.id, parentRunId: owned.parentRunId,
       ...(owned.supervisorRunId === undefined ? {} : { supervisorRunId: owned.supervisorRunId }),
       status: worker.status, workspace: owned.workspace,
-      settled: workerObservation(worker, store.readWorkerExecution(worker.id)).settled,
+      settled: workerObservation(worker, store.workerExecutions.readWorkerExecution(worker.id)).settled,
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
       ...(owned.destroy ? { destroy: workerDestroyView(worker) } : {}),
     }];

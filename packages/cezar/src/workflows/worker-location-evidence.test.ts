@@ -47,9 +47,9 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
     const run = await worker(parent.id, adapter.scenarios.baseline!);
     store.updateRun(run.id, { runner }); manager.enqueueOwnedRun(run.id);
     await until(() => store.getRun(run.id)?.status === 'waiting');
-    const proof = store.readWorkerExecution(run.id)!;
+    const proof = store.workerExecutions.readWorkerExecution(run.id)!;
     const { generation } = proof;
-    const processes = store.readWorkerProcesses(run.id, generation);
+    const processes = store.workerExecutions.readWorkerProcesses(run.id, generation);
     if (typeof processes === 'string') throw Error('missing native process record');
     expect(processes.processes.length).toBeGreaterThan(0);
     manager.requestWorkerStop(run.id);
@@ -85,7 +85,7 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
       // ADR 0032: the generation's recorded processes are gone, so it settles; a process outside the
       // worker's scope that works in its scratch neither keeps it alive nor is signalled.
       expect(manager.settleOrphanedWorkerExecution(run.id, { fresh: true })).toBe(true);
-      expect(store.readWorkerExecution(run.id)).toMatchObject({ generation, phase: 'complete' });
+      expect(store.workerExecutions.readWorkerExecution(run.id)).toMatchObject({ generation, phase: 'complete' });
       if (damage.endsWith('receipt')) expect(agentTmpDirLocations(dataDir, run.id)).toContain(scratch);
       expect(await service.collect(caller, { workerId: run.id })).toMatchObject({ settled: true });
       const written = once(holder.stdout, 'data'); holder.stdin.write('still writable\n'); await written;

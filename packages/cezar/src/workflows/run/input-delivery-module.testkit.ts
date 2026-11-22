@@ -18,6 +18,8 @@ import type { RunLine } from './run-line.ts';
 import { markTurnBoundary, type SessionHelperHost } from './session-events.ts';
 import type { RunModuleContext, SessionTurn } from './types.ts';
 import { pendingConversationWakes } from './wake-ledger.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../../delegation/worker-executions.testkit.ts';
 
 type DeliveryHost = ConstructorParameters<typeof InputDelivery>[1];
 

@@ -12,6 +12,7 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import '../core/created-runners.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
+import { readWorkerIdentity } from './execution-identity.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(opencodeRunner);
@@ -57,13 +58,13 @@ describe('parent discovery and model admission', () => {
     if (kind === 'inherited') {
       vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'codex', agentProfile: 'work', accountBinding: { provider: 'codex', profileId: 'work', homePath: home } });
       const accepted = await spawn();
-      expect(f.store.readWorkerIdentity(accepted.workerId)).toMatchObject({ model: 'gpt-retired', account: { profileId: 'work' } });
+      expect(readWorkerIdentity(f.store.workerExecutions, accepted.workerId)).toMatchObject({ model: 'gpt-retired', account: { profileId: 'work' } });
     } else {
       await mergeWriteAgentAccounts(store => { store.accounts = [{ id: 'work', provider: 'codex', configDir: home, label: 'Work', addedAt: '' }]; }, testHome());
       const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'profiled.yaml'), 'name: profiled\nsteps:\n  - id: task\n    prompt: "{{task}}"\n    runner: codex\n    agentProfile: work\n');
       const accepted = await spawn({ workflow: 'profiled' });
-      expect(f.store.readWorkerIdentity(accepted.workerId)).toMatchObject({ model: 'gpt-retired', account: { profileId: 'work' } });
+      expect(readWorkerIdentity(f.store.workerExecutions, accepted.workerId)).toMatchObject({ model: 'gpt-retired', account: { profileId: 'work' } });
     }
   });
   it('lists alternate catalog IDs matching the resolved native and canonical model', async () => {

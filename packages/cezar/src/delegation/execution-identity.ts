@@ -2,7 +2,7 @@ import type { Home } from '../home/home.ts';
 import { createHash } from 'node:crypto';
 import { workerInputRecipeSchema, type WorkerInputRecipe } from '@open-mercato/cezar-contract/delegation';
 import { isAbsolute } from 'node:path';
-import { realpathSync, statSync } from 'node:fs';
+import { closeSync, constants, fstatSync, fsyncSync, openSync, readSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
 import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
 import { accountLayout, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
@@ -10,7 +10,7 @@ import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { agentHomeDir, claudeStateFilePath } from '../paths.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
-import type { RunLookup, WorkerExecutions } from '../runs/ports.ts';
+import type { RunLookup, WorkerExecutionRecords } from '../runs/ports.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
@@ -85,6 +85,25 @@ export const workerExecutionIdentitySchema = z.union([
 export type WorkerExecutionIdentity = z.infer<typeof workerExecutionIdentitySchema>;
 export class WorkerIdentityError extends Error {}
 
+/** Private process-generation evidence; never part of run JSON or SSE. */
+export function readWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'identityPath'>, id: string): WorkerExecutionIdentity | undefined {
+  try {
+    const fd = openSync(executions.identityPath(id), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const info = fstatSync(fd);
+      if (!info.isFile() || info.size > 16384 || (info.mode & 0o077)) return undefined;
+      const buffer = Buffer.alloc(16385); const count = readSync(fd, buffer, 0, buffer.length, 0);
+      return workerExecutionIdentitySchema.parse(JSON.parse(buffer.subarray(0, count).toString('utf8')));
+    } finally { closeSync(fd); }
+  } catch { return undefined; }
+}
+
+export function writeWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'identityPath'>, id: string, identity: WorkerExecutionIdentity): void {
+  // Immutable acceptance evidence. An orphan from failed index publication cannot be adopted.
+  const fd = openSync(executions.identityPath(id, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { writeFileSync(fd, JSON.stringify(identity)); fsyncSync(fd); } finally { closeSync(fd); }
+}
+
 export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.ProcessEnv = process.env): WorkerAccountBinding | undefined {
   const layout = accountLayout(profile.provider);
   if (!supportsProfiles(profile.provider) || (profile.isDefault && !layout.defaultBindsHome)) {
@@ -141,10 +160,10 @@ export function workerWorkflowHash(workflow: WorkflowDef): string {
  * `stepId`, the step's own pinned entry is checked too (#452): its account must still be
  * available and its model/effort must clear the lock, exactly as the run-level fields must.
  */
-export function workerIdentity(store: RunLookup & Pick<WorkerExecutions, 'readWorkerIdentity'>, repoRoot: string, runId: string, stepId: string | undefined, home: Home) {
+export function workerIdentity(store: RunLookup & { readonly workerExecutions: Pick<WorkerExecutionRecords, 'identityPath'> }, repoRoot: string, runId: string, stepId: string | undefined, home: Home) {
   const run = store.getRun(runId);
   if (run?.delegation?.role !== 'worker') return undefined;
-  const identity = store.readWorkerIdentity(runId);
+  const identity = readWorkerIdentity(store.workerExecutions, runId);
   if (!identity) throw new WorkerIdentityError('Worker execution identity evidence is unavailable');
   if (identity.kind === 'internal') return undefined;
   validateWorkerIdentity(repoRoot, run, identity, run.delegation.context, home);
@@ -185,7 +204,7 @@ function validateWorkerIdentity(repoRoot: string, run: RunRecord, identity: Acce
  */
 export function continuationDefSteps(store: RunStore, record: RunRecord | undefined): WorkflowStepDef[] | undefined {
   if (record?.delegation?.role === 'worker') {
-    const identity = store.readWorkerIdentity(record.id);
+    const identity = readWorkerIdentity(store.workerExecutions, record.id);
     if (identity?.kind === 'accepted') return (ownedWorkflow(record, identity) ?? QUICK_TASK_WORKFLOW).steps;
   }
   return record?.workflowDef?.steps;

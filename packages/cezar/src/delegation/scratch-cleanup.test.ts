@@ -15,6 +15,7 @@ import { processStartToken } from '../detached-process.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
+import { workerExecutionsOf } from './worker-executions.ts';
 
 // os.tmpdir reads Node's original environment even after the workflow fixture replaces process.env.
 const nativeEnvironment = process.env;
@@ -26,7 +27,7 @@ function setTmpRoot(value: string | undefined) {
 
 /** Records `pid`'s group in the worker's scope, as a spawn site does. The host backend is pinned to
  * process groups, so the same test holds on every host. */
-const own = (runId: string, pid: number) => store.scopes.spawnScope(runId).started(pid);
+const own = (runId: string, pid: number) => workerExecutionsOf(store).scopes.spawnScope(runId).started(pid);
 
 describe('durable scratch cleanup evidence', () => {
   useScratchCleanupFixture();
@@ -37,8 +38,8 @@ describe('durable scratch cleanup evidence', () => {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, parent.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
     const run = await worker(parent.id);
-    const generation = store.commitWorkerExecutionStart(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(run.id);
+    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     const dataDir = join(root, '.ai/cezar'), scratch = location === 'local' ? agentTmpDir(dataDir, run.id) : agentTmpEnv(dataDir, run.id, {}).TMPDIR!;
     if (location === 'fallback') {
       expect(scratch).not.toBe(agentTmpDir(dataDir, run.id));
@@ -86,10 +87,10 @@ describe('durable scratch cleanup evidence', () => {
       expect(readlinkSync(`/proc/${child.pid}/cwd`)).toBe(scratch);
       setTmpRoot('/tmp');
       if (run.delegation?.role !== 'worker') throw Error('missing worker');
-      expect(store.workerScratchResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
+      expect(store.workerExecutions.workerScratchResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
       chmodSync(owner, 0);
       expect(() => readFileSync(owner)).toThrow(/EACCES/);
-      expect(store.workerScratchResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
+      expect(store.workerExecutions.workerScratchResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       cleanup.recover(); await vi.advanceTimersByTimeAsync(120_000);
       expect(readFileSync(pointer, 'utf8')).toBe(scratch);
@@ -249,12 +250,12 @@ describe('durable scratch cleanup evidence', () => {
     const run = await worker(parent.id);
     if (run.delegation?.role !== 'worker') throw Error('missing worker');
     const scratch = agentTmpDir(join(root, '.ai/cezar'), run.id);
-    const generation = store.commitWorkerExecutionStart(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(run.id);
+    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'task files');
     const outsider = await readableHolder(scratch);
     try {
-      expect(store.commitWorkerExecutionStart(run.id)).not.toBe(generation);
+      expect(store.workerExecutions.commitWorkerExecutionStart(run.id)).not.toBe(generation);
       expect(readFileSync(join(scratch, 'retained'), 'utf8')).toBe('task files');
       await outsider.write();
     } finally { await outsider.close(); }
@@ -266,10 +267,10 @@ describe('durable scratch cleanup evidence', () => {
     const service = await groupHolder(scratch);
     own(run.id, service.pid);
     try {
-      expect(store.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
-      expect(store.workerResourceHolders(run.id, generation, run.delegation.workspace.resourceId)).toBe('safe');
+      expect(store.workerExecutions.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
+      expect(store.workerExecutions.workerResourceHolders(run.id, generation, run.delegation.workspace.resourceId)).toBe('safe');
     } finally { await service.close(); }
-    expect(store.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(true);
+    expect(store.workerExecutions.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(true);
   });
 
   it.each(['execution', 'processes'])('reconstructs and keeps retrying while the private %s evidence is unreadable', async sidecar => {
@@ -314,14 +315,14 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, parent.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
     const run = await worker(parent.id);
-    const generation = store.commitWorkerExecutionStart(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(run.id);
+    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     const dataDir = join(root, '.ai/cezar'), scratch = agentTmpDir(dataDir, run.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'keep'), 'durable');
     return { run, dataDir, scratch };
   }
   /** One probe is one ownership check of one id. */
-  const probes = () => vi.mocked(store.workerScratchResourcesSafe).mock.calls.length;
+  const probes = () => vi.mocked(store.workerExecutions.workerScratchResourcesSafe).mock.calls.length;
   type Due = Map<string, { at: number; attempts: number; generation?: string }>;
   const dueOf = (cleanup: WorkerScratchCleanup) => (cleanup as unknown as { due: Due }).due;
 
@@ -329,7 +330,7 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
     const { run, dataDir, scratch } = await completed();
     const holder = await groupHolder(scratch);
     own(run.id, holder.pid);
-    vi.spyOn(store, 'workerScratchResourcesSafe');
+    vi.spyOn(store.workerExecutions, 'workerScratchResourcesSafe');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {
@@ -368,8 +369,8 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
       cleanup.schedule(run.id);
       expect(dueOf(cleanup).get(run.id)).toEqual(backedOff);
       await holder.close();
-      const next = store.commitWorkerExecutionStart(run.id);
-      expect(store.commitWorkerExecutionComplete(run.id, next)).toBe(true);
+      const next = store.workerExecutions.commitWorkerExecutionStart(run.id);
+      expect(store.workerExecutions.commitWorkerExecutionComplete(run.id, next)).toBe(true);
       cleanup.schedule(run.id);
       expect(dueOf(cleanup).get(run.id)).toMatchObject({ attempts: 0, generation: next });
       await vi.advanceTimersByTimeAsync(0);

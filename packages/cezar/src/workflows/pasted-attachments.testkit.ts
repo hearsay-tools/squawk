@@ -9,6 +9,8 @@ import { shellQuote } from '../core/shell-env.ts';
 import { RunStore } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import type { RunManager, PastedContent } from './run.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 // Shared setup for pasted-attachments.test.ts and pasted-attachments-continue.test.ts (open-mercato/cezar#357, open-mercato/cezar#950).
 

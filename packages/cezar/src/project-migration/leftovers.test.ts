@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { parentFileSnapshotPath, verifyWorkerContext } from '../delegation/context.ts';
-import { ownedWorkflow, workerContextHash, workerWorkflowHash } from '../delegation/execution-identity.ts';
+import { ownedWorkflow, workerContextHash, workerWorkflowHash, readWorkerIdentity } from '../delegation/execution-identity.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { processStartToken } from '../core/process-stat.ts';
 import { handoffPath } from '../handoff.ts';
@@ -181,7 +181,7 @@ describe('a project move with tasks that can still resume', { timeout: TIMEOUT }
     try {
       const run = moved.getRun(WORKER)!;
       expect(run.workflowDef?.path).toBe(workflowDef.path);
-      expect(ownedWorkflow(run, moved.readWorkerIdentity(WORKER))).toEqual(workflowDef);
+      expect(ownedWorkflow(run, readWorkerIdentity(moved.workerExecutions, WORKER))).toEqual(workflowDef);
       const recipe = run.delegation?.role === 'worker' ? run.delegation.context : undefined;
       expect(recipe && workerContextHash(recipe)).toBe(contextHash);
       await expect(verifyWorkerContext({ dataDir: project.newDir, parentId: PARENT, workspace: project.worker, context: recipe,

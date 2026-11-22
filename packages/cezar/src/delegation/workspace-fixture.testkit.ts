@@ -13,6 +13,8 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import './worker-executions.testkit.ts';
 
 beforeEach(() => scopeFixtureProcesses());
 afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); });

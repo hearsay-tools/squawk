@@ -21,7 +21,7 @@ describe('a held worker\'s human Continue', () => {
 
     expect(manager.continueRun(child.id, { text: 'mock:cezar-done carry on' })).toEqual({ ok: true });
     expect(store.getRun(child.id)?.status).toBe('queued');
-    expect(store.readWorkerExecution(child.id)?.phase).toBe('starting');
+    expect(store.workerExecutions.readWorkerExecution(child.id)?.phase).toBe('starting');
 
     // The hold lifts: the pump admits the continuation and it runs.
     manager.cancelAutoResume(holder.id);

@@ -108,7 +108,7 @@ export async function replyAfterRestart(holdResources = false) {
     };
     await parentIdle();
     // The restart keeps the worker's `starting` execution record with a dead controller, as a crash leaves it.
-    expect(store.readWorkerExecution(f.w.id)?.phase).toBe('starting');
+    expect(store.workerExecutions.readWorkerExecution(f.w.id)?.phase).toBe('starting');
     await restart(false, undefined, eventCheckpoint());
     const credentials = new CredentialRegistry();
     let releaseHolder: (() => Promise<void>) | undefined;
@@ -121,7 +121,7 @@ export async function replyAfterRestart(holdResources = false) {
       await parentIdle();
       expect(manager.isActive(f.w.id)).toBe(false);
       if (holdResources) {
-        await until(() => store.readWorkerExecution(f.w.id)?.phase === 'complete');
+        await until(() => store.workerExecutions.readWorkerExecution(f.w.id)?.phase === 'complete');
         const delegation = store.getRun(f.w.id)!.delegation!;
         if (delegation.role !== 'worker') throw Error('missing worker');
         const holder = spawn(process.execPath, ['-e', "console.log('ready'); process.stdin.resume()"], {
@@ -130,11 +130,11 @@ export async function replyAfterRestart(holdResources = false) {
         const exited = once(holder, 'exit');
         releaseHolder = async () => { holder.stdin.end(); await exited; };
         await once(holder.stdout, 'data');
-        const resourcesSafe = store.workerResourcesSafe.bind(store);
+        const resourcesSafe = store.workerExecutions.workerResourcesSafe.bind(store.workerExecutions);
         // Release a real holder only after the first resource check sees it.
         // Without the pre-reply wait, admission refuses the one-shot answer;
         // closing the holder afterward cannot turn that refusal into success.
-        vi.spyOn(store, 'workerResourcesSafe').mockImplementation((...args) => {
+        vi.spyOn(store.workerExecutions, 'workerResourcesSafe').mockImplementation((...args) => {
           const safe = resourcesSafe(...args);
           if (args[0] === f.w.id && !safe) holder.stdin.end();
           return safe;
@@ -148,10 +148,10 @@ export async function replyAfterRestart(holdResources = false) {
       // Wait for that physical precondition without finalizing the proof,
       // suppressing any PIDs, or retrying the answer under test.
       await until(() => {
-        const proof = store.readWorkerExecution(f.w.id);
+        const proof = store.workerExecutions.readWorkerExecution(f.w.id);
         const delegation = store.getRun(f.w.id)?.delegation;
         return !!proof && delegation?.role === 'worker' &&
-          store.workerResourcesSafe(f.w.id, proof.generation, delegation.workspace.resourceId);
+          store.workerExecutions.workerResourcesSafe(f.w.id, proof.generation, delegation.workspace.resourceId);
       });
       await service.send(parentCaller, { id: randomUUID(), recipientRunId: f.w.id, kind: 'reply', requestId: f.questionId, text: 'mock:agent-echo Use the parser', timeoutSeconds: 600 });
       await until(() => answered(f.w.id).length === 1);

@@ -94,7 +94,7 @@ export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions 
     getRun,
     withReadCache: <T>(fn: () => T): T => fn(),
     isUnreadable: (id: string) => unreadable.has(id),
-    readWorkerExecution: (id: string) => (options.complete?.includes(id) ? { phase: 'complete' } : undefined),
+    workerExecutions: { readWorkerExecution: (id: string) => (options.complete?.includes(id) ? { phase: 'complete' } : undefined) },
     listRunSummaries: () => ({ runs: runs.filter((run) => !run.archived).map((run) => toRunSummary(run)), truncated: false }),
     listOwnedWorkers: (parentId: string) => {
       const parent = getRun(parentId);

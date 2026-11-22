@@ -67,8 +67,8 @@ describe('project run sources', () => {
     expect(store.readEvents(run.id)[0]?.text).toBe('source history');
     expect((await store.readEventsAsync(run.id))[0]?.text).toBe('source history');
     expect(readHandoff(store.sourceDataDir(run.id), run.id)).toBe('# fallback handoff');
-    expect(store.readWorkerExecution(run.id)).toBeUndefined();
-    expect(store.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
+    expect(store.workerExecutions.readWorkerExecution(run.id)).toBeUndefined();
+    expect(store.workerExecutions.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
     expect(readRunIndexFromDisk(root('cezar')).runs.map(item => item.id)).toEqual([run.id]);
     expect(searchRunIndexFromDisk(root('cezar'), 'fallback', { limit: 10 }).runs.map(item => item.id)).toEqual([run.id]);
     expect(readdirSync(root('cezar'))).toEqual([]);

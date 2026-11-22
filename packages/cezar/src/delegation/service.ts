@@ -11,6 +11,7 @@ import { assertConversationCapacity, byCreatedAtAndId, commitAccepted, inboxEntr
 export { rootDelegation } from './conversations.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
 import { workerContextTask } from './context.ts';
+import { workerExecutionsOf } from './worker-executions.ts';
 import { acceptedWorkerIdentitySchema, workerContextHash, workerWorkflowHash } from './execution-identity.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -370,7 +371,7 @@ export class DelegationService {
     // A ledger whose history is being deleted is read as it stands: reconciliation would write to it.
     if (historyDeleting(root)) return conversationOf(root) ?? { messages: [], outcomes: [] };
     const state = reconcileConversationState(root, (id) => project.store.getRun(id), new Date().toISOString(), run => run.delegation?.role === 'worker'
-      ? project.store.readWorkerExecution(run.id)?.phase === 'complete' : !project.manager.isActive(run.id), id => project.store.isUnreadable(id));
+      ? project.store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete' : !project.manager.isActive(run.id), id => project.store.isUnreadable(id));
     if (state && state !== conversationOf(root)) project.store.commitConversation(root.id, state);
     return state ?? { messages: [], outcomes: [] };
   }
@@ -720,12 +721,12 @@ export class DelegationService {
     return { workerId: worker.id, parentRunId: worker.delegation.parentRunId,
       ...(worker.delegation.supervisorRunId === undefined ? {} : { supervisorRunId: worker.delegation.supervisorRunId }),
       status: worker.status, workspace: worker.delegation.workspace,
-      settled: workerObservation(worker, project.store.readWorkerExecution(worker.id)).settled,
+      settled: workerObservation(worker, project.store.workerExecutions.readWorkerExecution(worker.id)).settled,
       ...(worker.runner === undefined ? {} : { backend: worker.runner }), ...(worker.model === undefined ? {} : { model: worker.model }),
       ...(worker.delegation.context === undefined ? {} : { inputs: worker.delegation.context.inputs }),
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
       ...(wait ? { wait } : {}), ...(completionWait ? { completionWait } : {}), ...(worker.delegation.destroy ? { destroy: workerDestroyView(worker) } : {}), ...(outcome ? { outcome } : {}),
-      scope: project.store.scopes.describe() };
+      scope: workerExecutionsOf(project.store).scopes.describe() };
   }
   /** The wait an inspection shows: the newest open or owed list wait naming the worker, in the
    *  legacy `WorkerWait` shape (hearsay-tools/cezarion#1235). Squawk's completion wait carries no
@@ -770,7 +771,7 @@ export class DelegationService {
       throw new DelegationPolicyError('incompatible_state', 'Worker changed during collection; collect the current execution again');
     }
     // Private completion can arrive during evidence I/O without changing the public revision.
-    const observation = workerObservation(current.worker, project.store.readWorkerExecution(workerId));
+    const observation = workerObservation(current.worker, project.store.workerExecutions.readWorkerExecution(workerId));
     return project.store.workerResults.commitWorkerResult(family.id, { ...evidence.result, ...observation }, evidence.diffSnapshot);
   }
   async steer(caller: Caller, params: WorkerParams, value: WorkerSteerRequest) {

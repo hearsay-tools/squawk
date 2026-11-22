@@ -45,7 +45,7 @@ describe('parent-owned collected worker results', () => {
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path, encoding: 'utf8' }).trim();
     const event = f.store.appendEvent(run.id, { type: 'text', text: 'Implemented. ' + 'x'.repeat(4100) });
     setRunStatus(f.store, run.id, RUN_STATUS.review);
-    const generation = f.store.commitWorkerExecutionStart(run.id); f.store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id); f.store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result).toMatchObject({ workerId: run.id, revision: 0, baselineSha: f.sha, outcome: 'review-ready', partial: false,
       summary: { state: 'available', source: 'assistant', seq: event.seq, truncated: true }, head: { state: 'available', sha: head }, diff: { state: 'available', path: expect.any(String) } });
@@ -64,7 +64,7 @@ describe('parent-owned collected worker results', () => {
     execFileSync('git', ['add', '.'], { cwd: path });
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '-qm', 'older'], { cwd: path });
     f.store.appendEvent(run.id, { type: 'text', text: 'Older worker done' });
-    const generation = f.store.commitWorkerExecutionStart(run.id); f.store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id); f.store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     setRunStatus(f.store, run.id, RUN_STATUS.done, { worktreePath: path });
     expect((await f.service.collect(f.caller, { workerId: run.id })).diff.state).toBe('available');
 
@@ -206,10 +206,10 @@ describe('parent-owned collected worker results', () => {
     reopened.flush();
   });
   it('a stopped public status is partial and unsettled until private termination is proven', async () => {
-    const run = await worker(); const generation = f.store.commitWorkerExecutionStart(run.id);
+    const run = await worker(); const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id);
     setRunStatus(f.store, run.id, RUN_STATUS.cancelled, { error: 'interrupted' });
     expect(await f.service.collect(f.caller, { workerId: run.id })).toMatchObject({ settled: false, partial: true, summary: { state: 'unavailable' } });
-    f.store.commitWorkerExecutionComplete(run.id, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     expect(await f.service.collect(f.caller, { workerId: run.id })).toMatchObject({ settled: true, partial: true });
   });
   it('does not reuse a snapshot ID to overwrite durable evidence before an index checkpoint', async () => {
@@ -233,7 +233,7 @@ describe('unchanged worker results (hearsay-tools/cezarion#879)', () => {
     await ensureOwnedWorkspace(f.root, f.store.getRun(workerId)!);
     f.store.appendEvent(workerId, { type: 'text', text: 'Done.' });
     setRunStatus(f.store, workerId, RUN_STATUS.review);
-    const generation = f.store.commitWorkerExecutionStart(workerId); f.store.commitWorkerExecutionComplete(workerId, generation);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId); f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
     const result = await f.service.collect(f.caller, { workerId });
     const dir = dirname(f.store.workerResults.workerResultSnapshotPath(f.parent.id, workerId, randomUUID()));
     return { workerId, result, diff: f.store.workerResults.readWorkerResultDiff(f.parent.id, workerId), files: () => readdirSync(dir).sort() };

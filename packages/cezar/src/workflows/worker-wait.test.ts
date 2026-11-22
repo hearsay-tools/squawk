@@ -30,7 +30,7 @@ it('a worker of a failed parent continues', async () => {
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.waiting);
     setRunStatus(store, w.id, RUN_STATUS.done);
     store.updateStep(w.id, 'task', { status: STEP_STATUS.done, sessionId: randomUUID(), backend: 'claude' });
-    const generation = store.commitWorkerExecutionStart(w.id); store.commitWorkerExecutionComplete(w.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation);
     setRunStatus(store, p.id, RUN_STATUS.failed);
     expect(manager.continueRun(w.id, { text: 'mock:agent-echo more' }, true)).toEqual({ ok: true });
     expect(store.getRun(w.id)?.status).toBe(RUN_STATUS.queued);
@@ -42,7 +42,7 @@ it.each(['review', 'done'] as const)('readiness worker Continue requires continu
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.waiting);
     setRunStatus(store, w.id, RUN_STATUS.done);
     store.updateStep(w.id, 'task', { status: STEP_STATUS.done, sessionId: randomUUID(), backend: 'claude' });
-    const generation = store.commitWorkerExecutionStart(w.id); store.commitWorkerExecutionComplete(w.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation);
     setRunStatus(store, p.id, RUN_STATUS[status]);
     const before = JSON.stringify(store.getRun(w.id));
     expect(manager.continueRun(w.id, { text: 'more' })).toEqual({ ok: false, error: `Parent task ${p.id} is ${status}; continue the parent before its worker.` });
@@ -55,11 +55,11 @@ it.each(['review', 'failed', 'cancelled'] as const)('readiness requires settled 
     const p = await parent();
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id);
-    const generation = store.commitWorkerExecutionStart(w.id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
     setRunStatus(store, w.id, status);
     await collect(w.id); // Same status/revision, but the process is still unproven.
     expect(manager.finish(p.id)).toBe(false);
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
     expect(manager.finish(p.id)).toBe(false); // A formerly partial observation is not fresh evidence.
     const result = await collect(w.id);
     expect(result.settled).toBe(true);

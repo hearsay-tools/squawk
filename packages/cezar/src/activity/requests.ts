@@ -6,7 +6,7 @@ import type { RunQueries, RunReads, WorkerExecutions } from '../runs/ports.ts';
 import { clampText } from './text.ts';
 
 /** What the request read needs from a project's run store. */
-export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns' | 'listForeignClaimedRunIds'> & Pick<WorkerExecutions, 'readWorkerExecution'>;
+export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns' | 'listForeignClaimedRunIds'> & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
 
 export interface ActivityRequestOptions {
   now: number;
@@ -48,7 +48,7 @@ export function readActivityRequests(store: ActivityRequestStore, options: Activ
   // The delegation service's own test, except that a root another process runs is never settled
   // here because this process's run manager does not hold it.
   const isSettled = (run: RunRecord) => run.delegation?.role === 'worker'
-    ? store.readWorkerExecution(run.id)?.phase === 'complete'
+    ? store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete'
     : !foreign.has(run.id) && !options.isActive(run.id);
   const nowIso = new Date(options.now).toISOString();
   const read: ActivityRequestRead = { requests: [], closed: [], openLedgers: new Set() };

@@ -32,7 +32,7 @@ export type RunContext = {
   title: string;
   worktreePath: string;
   dataDir: string;
-  store: RunLookup & Pick<RunEventLog, 'appendEvent'> & Partial<Pick<RunAccess, 'writeRefusal'> & Pick<WorkerExecutions, 'spawnScope'>>;
+  store: RunLookup & Pick<RunEventLog, 'appendEvent'> & Partial<Pick<RunAccess, 'writeRefusal'> & { readonly workerExecutions: Pick<WorkerExecutions, 'spawnScope'> }>;
 };
 
 export type PreviewTarget = { port: number } | { url: string } | { agent: true };
@@ -224,7 +224,7 @@ export class PreviewHost implements PreviewHostLike {
     if (owned(previous) && this.stopping.has(previous)) return;
     if (this.heldByOther(entry, server)) return;
     // A worker's preview server is the worker's: it starts in its scope, so destroy ends it (ADR 0032).
-    const dev = this.deps.createServer({ server, worktreePath: entry.ctx.worktreePath, dir: this.runDir(entry.ctx), scope: entry.ctx.store.spawnScope?.(entry.ctx.runId) });
+    const dev = this.deps.createServer({ server, worktreePath: entry.ctx.worktreePath, dir: this.runDir(entry.ctx), scope: entry.ctx.store.workerExecutions?.spawnScope(entry.ctx.runId) });
     // A DevServer is born `starting` without emitting it, so the host records that transition, before
     // it reserves the port: a refused record write leaves no live entry and no held port behind.
     try { this.recordState(entry, port, 'starting', dev); }

@@ -42,9 +42,9 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     f.manager.cancel(workerId);
     await f.manager.awaitRunTermination(workerId, 10_000);
     f.store.updateStep(workerId, 'task', { status: STEP_STATUS.done, sessionId: 'previous-session', backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.done);
-    f.store.commitWorkerExecutionComplete(workerId, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
     expect(await runWorkerCommand(['resume', ...args.slice(1)], env)).toBe(0);
     const sent = json();
     expect(Date.parse(sent.message.deadline) - Date.parse(sent.message.createdAt)).toBe(7_201_000);

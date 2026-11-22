@@ -134,8 +134,8 @@ describe('guarded automatic archive', () => {
     store.move(worker.id, 'stop-worker');
     expect(store.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     expect(store.getRun(id)?.archiveBlocker?.runId).toBe(worker.id);
-    const proof = store.readWorkerExecution(worker.id)!;
-    expect(store.commitWorkerExecutionComplete(worker.id, proof.generation)).toBe(true);
+    const proof = store.workerExecutions.readWorkerExecution(worker.id)!;
+    expect(store.workerExecutions.commitWorkerExecutionComplete(worker.id, proof.generation)).toBe(true);
     store.flush();
     mkdirSync(join(dir, 'absent-worktree'));
     mkdirSync(join(dir, 'root-worktree'));

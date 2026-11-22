@@ -147,7 +147,7 @@ it('queued wake after worker completion waits for capacity, not Needs you (#971)
       // commitWorkerExecutionComplete emits the run that reconcileWorkerWaits reads.
       // Hold the durable proof at its store boundary (hearsay-tools/cezarion#1113: the
       // gate read `parked` right after the worker reached `done`).
-      const complete = vi.spyOn(store, 'commitWorkerExecutionComplete').mockReturnValue(false);
+      const complete = vi.spyOn(store.workerExecutions, 'commitWorkerExecutionComplete').mockReturnValue(false);
       manager.finish(w.id);
       try {
         await until(() => terminal.includes(store.getRun(w.id)?.status ?? ''));

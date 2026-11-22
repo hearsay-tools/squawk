@@ -18,8 +18,8 @@ describe('durable scratch cleanup evidence', () => {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, parent.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
     const run = await worker(parent.id);
-    const generation = store.commitWorkerExecutionStart(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(run.id);
+    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.workerExecutions.commitWorkerExecutionComplete(run.id, generation);
     manager.pauseWorkerCleanup();
     const dataDir = join(root, '.ai/cezar'), scratch = location === 'local' ? agentTmpDir(dataDir, run.id) : agentTmpEnv(dataDir, run.id, {}).TMPDIR!;
     if (location === 'fallback') {

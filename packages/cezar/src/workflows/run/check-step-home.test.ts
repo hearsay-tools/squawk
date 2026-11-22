@@ -16,7 +16,7 @@ it.each(['0', '1'])('check steps remove only cockpit home locators with full-env
   vi.stubEnv('CHECK_SECRET', 'preserved');
   const before = { ...process.env };
   const state = { liveSession: { cwd: '/worktree', installInterrupt: vi.fn() } };
-  const context = { store: { spawnScope: () => undefined } };
+  const context = { store: { workerExecutions: { spawnScope: () => undefined } } };
   const result = await StepLoop.prototype.runCheckStep.call({ context } as unknown as StepLoop, 'run-1',
     state as unknown as Parameters<StepLoop['runCheckStep']>[1],
     { id: 'check', command: 'check' } as Parameters<StepLoop['runCheckStep']>[2], vi.fn());

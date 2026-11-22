@@ -261,7 +261,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(await runWorkerCommand(['destroy', workerId], env)).toBe(0); expect(json().state).toBe('complete');
     expect(await runWorkerCommand(['spawn', '--baseline', 'HEAD', '--request-id', randomUUID(), 'retry cleanup'], env)).toBe(0);
     const incompleteId = json().workerId;
-    f.store.commitWorkerExecutionStart(incompleteId);
+    f.store.workerExecutions.commitWorkerExecutionStart(incompleteId);
     vi.spyOn(f.manager, 'awaitRunTermination').mockResolvedValue(false);
     expect(await runWorkerCommand(['destroy', incompleteId], env)).toBe(1);
     expect(json()).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });

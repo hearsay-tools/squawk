@@ -305,7 +305,7 @@ if (group === 'parent-cancellation') {
     expect(store.getRun(completed)?.status).toBe(RUN_STATUS.review);
     expect(readFileSync(join(result.workspace.path, 'shared.txt'), 'utf8')).toBe('retained\n');
     expect(store.workerResults.readWorkerResultDiff(p.id, completed)).toContain('+retained');
-    expect(store.readWorkerExecution(live)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(live)?.phase).toBe('complete');
     expect(store.getRun(live)?.worktreePath && existsSync(store.getRun(live)!.worktreePath!)).toBe(true);
   }, 90_000);
 }

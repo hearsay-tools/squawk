@@ -123,8 +123,8 @@ export class FakeRunManager implements ProjectRunManager {
       if (queued || !['review', 'done', 'failed', 'cancelled'].includes(run.status)) {
         this.#store.move(runId, 'stop-worker', {}, queued ? { event: CANCELLED_WHILE_QUEUED } : {});
       }
-      const proof = this.#store.readWorkerExecution(runId);
-      if (proof?.phase === 'queued') this.#store.commitWorkerExecutionComplete(runId, proof.generation);
+      const proof = this.#store.workerExecutions.readWorkerExecution(runId);
+      if (proof?.phase === 'queued') this.#store.workerExecutions.commitWorkerExecutionComplete(runId, proof.generation);
     }
     if (queued) {
       this.#queued.delete(runId);
@@ -142,7 +142,7 @@ export class FakeRunManager implements ProjectRunManager {
 
   requestWorkerStop(runId: string): ReturnType<RunManager['requestWorkerStop']> {
     if (this.#store.getRun(runId)?.delegation?.role !== 'worker') throw new Error('Worker not found');
-    const complete = () => this.#store.readWorkerExecution(runId)?.phase === 'complete';
+    const complete = () => this.#store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete';
     if (!this.isActive(runId) && ['done', 'failed', 'cancelled', 'review'].includes(this.#store.getRun(runId)!.status) && complete()) {
       return { workerId: runId, state: 'terminated' };
     }
@@ -152,7 +152,7 @@ export class FakeRunManager implements ProjectRunManager {
 
   /** No execution runs here, so termination is proven once the worker's proof is complete or absent. */
   async awaitRunTermination(...[runId]: Method<'awaitRunTermination'>): Promise<boolean> {
-    const proof = this.#store.readWorkerExecution(runId);
+    const proof = this.#store.workerExecutions.readWorkerExecution(runId);
     return !proof || proof.phase === 'complete';
   }
 

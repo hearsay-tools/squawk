@@ -478,7 +478,7 @@ export class ContinuationSession {
       session = startManagedSession(runner,
         {
           timings: this.context.timings,
-          scope: this.context.store.spawnScope(runId),
+          scope: this.context.store.workerExecutions.spawnScope(runId),
           // The system prompt holds the shared tail. Skill text stays with the runner.
           systemPrompt: composeSystemPrompt(undefined, continuationTail),
           ...(resumeFallbackSkill ? { resumeFallbackSkill } : {}),

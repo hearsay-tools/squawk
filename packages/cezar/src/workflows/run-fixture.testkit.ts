@@ -17,6 +17,8 @@ import type { TimerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 export { runnerHook };
 

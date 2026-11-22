@@ -13,6 +13,8 @@ import type { ProjectRunManager, RunManagerFactory } from '../server/project-con
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { Cockpit } from './http.ts';
 import { createRunner } from '../core/runner-registry.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 
 /**

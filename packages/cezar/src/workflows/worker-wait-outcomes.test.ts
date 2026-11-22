@@ -20,7 +20,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const release = join(root, 'release-live-wake-blocker');
     process.env.CEZ_MOCK_RELEASE_FILE = release;
     const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold-gated', runner: 'claude' });
-    const explain = () => `worker execution: ${JSON.stringify(store.readWorkerExecution(w.id))}\n${timeline(w.id)}\n${timeline(p.id)}\n${timeline(blocker.id)}`;
+    const explain = () => `worker execution: ${JSON.stringify(store.workerExecutions.readWorkerExecution(w.id))}\n${timeline(w.id)}\n${timeline(p.id)}\n${timeline(blocker.id)}`;
     try {
       await until(() => store.getRun(w.id)?.status === 'waiting', explain);
       await until(() => store.getRun(blocker.id)?.status === 'running' &&

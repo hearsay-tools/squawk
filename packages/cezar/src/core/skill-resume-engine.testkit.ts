@@ -31,6 +31,8 @@ import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../work
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 
 const execFileAsync = promisify(execFile);

@@ -25,10 +25,10 @@ describe('worker waits: readiness', { timeout: 30_000 }, () => {
   it('fixture status seeding commits worker execution completion before publication is consumed', async () => {
     const p = await parent();
     const w = await worker(p.id);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('queued');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('queued');
     fixtureUpdateRun(w.id, { status: RUN_STATUS.done });
     expect(store.getRun(w.id)?.status).toBe(RUN_STATUS.done);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
   });
 
 it('readiness closed session reopens to refuse a successful done with outstanding workers', async () => {
@@ -53,7 +53,7 @@ it('readiness collects a markerless worker after its idle timer closes the sessi
 
     await until(() => store.getRun(w.id)?.status === 'done');
     await until(() => store.getRun(p.id)?.agentInputs?.some(input => input.id === wait.id && !!input.deliveredAt) === true);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
   });
 it('readiness fails rather than collects success for a worker with a rejected ASK marker', async () => {
@@ -72,13 +72,13 @@ it('readiness fails rather than collects success for a worker with a rejected AS
   });
 it('readiness public cancellation does not wake until private completion is durable', async () => {
     const p = await parent(); const w = await worker(p.id);
-    const generation = store.commitWorkerExecutionStart(w.id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
     const wait = register(p.id, [w.id]);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
     setRunStatus(store, w.id, RUN_STATUS.cancelled); manager.reconcileWorkerWaits();
     expect(waitOf(store.getRun(p.id))?.phase).toBe('parked');
     expect(store.getRun(p.id)?.agentInputs).toBeUndefined();
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
     await until(() => !waitOf(store.getRun(p.id)));
     expect(store.getRun(p.id)?.agentInputs?.filter(input => input.id === wait.id && input.deliveredAt)).toHaveLength(1);
   });
@@ -103,7 +103,7 @@ it('readiness real stopped process wakes its parent only after actual exit and f
       expect(manager.finish(p.id)).toBe(false);
       child!.kill('SIGKILL');
       await until(() => store.getRun(p.id)?.agentInputs?.some(input => input.id === wait.id && !!input.deliveredAt) === true);
-      expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+      expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
       expect(waitOf(store.getRun(p.id))).toBeUndefined();
     } finally { child?.kill('SIGKILL'); runner.mockRestore(); }
   });

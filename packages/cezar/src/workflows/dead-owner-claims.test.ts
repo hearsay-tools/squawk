@@ -59,7 +59,7 @@ describe('a crashed owner\'s claim on a settled family', () => {
     const workspace = await planOwnedWorkspace(root, workerId, sha);
     const worker = owner.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
       { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal);
-    owner.commitWorkerExecutionStart(worker.id);
+    owner.workerExecutions.commitWorkerExecutionStart(worker.id);
     const finishedAt = new Date().toISOString();
     setRunStatus(owner, worker.id, RUN_STATUS.done, { finishedAt });
     setRunStatus(owner, parent.id, RUN_STATUS.done, { finishedAt });

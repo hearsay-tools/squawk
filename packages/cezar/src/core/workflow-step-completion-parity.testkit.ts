@@ -14,6 +14,8 @@ import { workflowDefSchema } from '../workflows/types.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { execFileSync } from 'node:child_process';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 export const describeWorkflowStepCompletionParity = workflowStepCompletionParity((backend, row) => async () => {
   const workflowDef = workflowDefSchema.parse({ name: 'completion-chain', source: 'file', steps: [

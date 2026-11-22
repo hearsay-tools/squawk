@@ -51,12 +51,12 @@ export const SETTLEMENT_GROUPS = {
             manager.enqueueOwnedRun(runId);
             await waitFor(() => store.getRun(runId)?.status === 'waiting');
             expect(manager.finish(runId)).toBe(true);
-            await waitFor(() => !manager.isActive(runId) && store.readWorkerExecution(runId)?.phase === 'complete');
+            await waitFor(() => !manager.isActive(runId) && store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete');
             const unrelated = seedSettledFamily(store, repoRoot);
             const reads = vi.spyOn(store, 'readEvents');
             try {
               cleanupCheckpoint(store, runId);
-              expect(store.readWorkerExecution(runId)?.phase).toBe('complete');
+              expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
               expect(reads.mock.calls.map(([id]) => id)).not.toContain(unrelated.parentId);
               expect(reads.mock.calls.map(([id]) => id)).not.toContain(unrelated.workerId);
             } finally { reads.mockRestore(); }
@@ -294,7 +294,7 @@ export const SETTLEMENT_GROUPS = {
               // bound: idle expiry closes the owned process and releases its active run.
               await waitFor(() => !manager.isActive(runId));
               observation = { active: manager.isActive(runId), status: store.getRun(runId)?.status,
-                phase: store.readWorkerExecution(runId)?.phase, scratch: readFileSync(join(scratch, 'notes'), 'utf8') };
+                phase: store.workerExecutions.readWorkerExecution(runId)?.phase, scratch: readFileSync(join(scratch, 'notes'), 'utf8') };
             });
             return observation;
           } finally { idle.restore(); }

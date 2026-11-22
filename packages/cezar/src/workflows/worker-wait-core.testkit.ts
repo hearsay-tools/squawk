@@ -77,7 +77,7 @@ export function captureState() { return { root, phase, checkpoints: checkpoints.
     active: manager.isActive(run.id), toolGenerationPresent: toolGenerations.has(run.id),
     hasSessionId: run.steps.some(step => !!step.sessionId),
     steps: run.steps.map(step => ({ id: step.id, sessionId: step.sessionId ?? null })),
-    stopping: run.stopping, execution: store.readWorkerExecution(run.id),
+    stopping: run.stopping, execution: store.workerExecutions.readWorkerExecution(run.id),
     inputs: run.agentInputs?.map(input => ({ id: input.id, deliveredAt: input.deliveredAt })),
     events: formatTimeline(run.id, store.readEvents(run.id).slice(-6)), })),
 }; }
@@ -353,11 +353,11 @@ export async function restart(fakeClock = false, diskCheckpoint?: readonly unkno
 export function fixtureUpdateRun(id: string, patch: NonNullable<Parameters<typeof setRunStatus>[3]> & { status?: Parameters<typeof setRunStatus>[2] }) {
   const run = store.getRun(id);
   const generation = run?.delegation?.role === 'worker' && patch.status && terminal.includes(patch.status)
-    ? store.commitWorkerExecutionStart(id) : undefined;
+    ? store.workerExecutions.commitWorkerExecutionStart(id) : undefined;
   const { status, ...extras } = patch;
   if (status === undefined) store.updateRun(id, extras);
   else setRunStatus(store, id, status, extras);
-  if (generation) expect(store.commitWorkerExecutionComplete(id, generation)).toBe(true);
+  if (generation) expect(store.workerExecutions.commitWorkerExecutionComplete(id, generation)).toBe(true);
 }
 export async function collect(id: string) {
   const run = store.getRun(id)!;

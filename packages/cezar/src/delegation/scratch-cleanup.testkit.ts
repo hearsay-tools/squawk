@@ -10,6 +10,8 @@ import { RunStore } from '../runs/store.ts';
 import { RunStoreOpenError } from '../runs/store-open-error.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { planOwnedWorkspace } from './workspace.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import './worker-executions.testkit.ts';
 
 /** The project root of the current test: a Git repository with one empty commit. */
 export let root: string;

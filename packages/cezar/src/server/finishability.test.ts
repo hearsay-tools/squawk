@@ -39,9 +39,9 @@ describe('authoritative finishability (#449)', () => {
     expect(store.getRun(p.id)).not.toHaveProperty('finishBlocked');
     const list = apiRunSchema.array().parse(await (await apiRequest(app(), '/api/v1/runs')).json());
     expect(list.every((run: object) => !('finishBlocked' in run))).toBe(true);
-    const generation = store.commitWorkerExecutionStart(w.id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
     setRunStatus(store, w.id, RUN_STATUS.done);
-    store.commitWorkerExecutionComplete(w.id, generation);
+    store.workerExecutions.commitWorkerExecutionComplete(w.id, generation);
     expect((await detail(p.id)).finishBlocked).toContain(w.id);
     await collect(w.id);
     expect((await detail(p.id)).finishBlocked).toBeNull();

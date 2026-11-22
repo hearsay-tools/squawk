@@ -5,7 +5,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
 import { delegationStateSchema, ownsDirectory, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
-import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { receiptSupervisorId, supervisedReceipts, supervisorIdOf, type Lookup } from './task-rights.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 
@@ -29,7 +28,8 @@ export interface OwnedRunCreateLookup {
 /** The store methods owned-run creation needs, including the typed `buildRun` input. */
 export interface OwnedRunCreateState<TInput extends { worktree?: false | undefined }> extends OwnedRunCreateLookup {
   buildRun(input: TInput, id: string): RunRecord;
-  writeWorkerIdentity(id: string, identity: WorkerExecutionIdentity): void;
+  /** Checks `identity` against the worker identity schema before it writes it. */
+  writeWorkerIdentity(id: string, identity: unknown): void;
   writeWorkerExecution(id: string, proof: WorkerExecution, fresh?: boolean): void;
   commitIndex(input: ReadonlyMap<string, RunRecord | null>): void;
 }
@@ -47,7 +47,7 @@ export function createStoreOwnedRun<TInput extends { worktree?: false | undefine
   worker: DelegationState,
   requestHash: string,
   spawnCapacityRefusal: SpawnCapacityRefusal,
-  executionIdentity: WorkerExecutionIdentity,
+  executionIdentity: unknown,
 ): RunRecord {
   const { parent, authority } = resolveOwnedRunParent(state, parentId);
   // Validate retry identity independently of the newly proposed resource.
@@ -171,7 +171,7 @@ function publishOwnedRun<TInput extends { worktree?: false | undefined }>(
   identity: CreationIdentity,
   metadata: WorkerDelegation,
   input: TInput,
-  executionIdentity: WorkerExecutionIdentity,
+  executionIdentity: unknown,
 ): RunRecord {
   const workspace = metadata.workspace;
   const delegation = delegationStateSchema.parse({
@@ -182,7 +182,7 @@ function publishOwnedRun<TInput extends { worktree?: false | undefined }>(
   const run = { ...state.buildRun(input, workspace.ownerRunId), delegation: metadata };
   // This transaction precedes materialization. Every launch must rotate this
   // generation to starting before touching the workspace or a session.
-  state.writeWorkerIdentity(run.id, workerExecutionIdentitySchema.parse(executionIdentity));
+  state.writeWorkerIdentity(run.id, executionIdentity);
   state.writeWorkerExecution(run.id, { generation: randomUUID(), phase: 'queued' }, true);
   // No pruning here: deleting run history cannot be part of a proposed index transaction.
   state.commitIndex(new Map([[parentId, { ...parent, delegation }], [run.id, run]]));

@@ -6,6 +6,9 @@ import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { RunStore } from '../runs/store.ts';
+import { readWorkerIdentity } from './execution-identity.ts';
+import { workerExecutionsOf } from './worker-executions.ts';
+import './worker-executions.testkit.ts';
 
 // The accepted identity binds a codex and a claude account; its schema reads each one's account layout from the registry.
 registerRunner(claudeRunner);
@@ -45,32 +48,32 @@ describe('saved worker sidecar files', () => {
   });
 
   it('reads the identity, execution, process and scope records an earlier Squawk wrote', () => {
-    expect(store.readWorkerIdentity(ID)).toEqual({ kind: 'accepted', account: codex, grants: {}, model: 'gpt-5.1-codex', effort: 'high',
+    expect(readWorkerIdentity(store.workerExecutions, ID)).toEqual({ kind: 'accepted', account: codex, grants: {}, model: 'gpt-5.1-codex', effort: 'high',
       contextHash: 'a'.repeat(64), workflowHash: 'b'.repeat(64), steps: [
         { stepId: 'implement', account: codex, grants: {}, model: 'gpt-5.1-codex', effort: 'high' },
         { stepId: 'review', account: claude, grants: { allowedTools: ['Read'], bashAllowlist: ['git diff'] }, model: 'opus' },
       ] });
-    expect(store.readWorkerExecution(ID)).toEqual({ generation: GENERATION, phase: 'complete', interrupted: true,
+    expect(store.workerExecutions.readWorkerExecution(ID)).toEqual({ generation: GENERATION, phase: 'complete', interrupted: true,
       scratchCleanup: { resourceId: '9a4f2e6c-1b73-4d58-a0e9-5c3d8b7f1e26', path: `/home/worker/project/.ai/squawk/worktrees/${ID}` } });
-    expect(store.readWorkerProcesses(ID, GENERATION)).toEqual({ generation: GENERATION, controller: { pid: 4242, startToken: 'linux:123456' },
+    expect(store.workerExecutions.readWorkerProcesses(ID, GENERATION)).toEqual({ generation: GENERATION, controller: { pid: 4242, startToken: 'linux:123456' },
       processes: [{ pid: 4243, startToken: 'linux:123460', pgid: 4243 }, { pid: 4250, startToken: 'linux:123470' }] });
-    expect(store.readWorkerScope(ID)).toEqual(scope);
+    expect(workerExecutionsOf(store).readWorkerScope(ID)).toEqual(scope);
   });
 
   it('reads a process record of another generation as unknown, and a missing one as absent', () => {
-    expect(store.readWorkerProcesses(ID, '00000000-0000-4000-8000-000000000000')).toBe('unknown');
+    expect(store.workerExecutions.readWorkerProcesses(ID, '00000000-0000-4000-8000-000000000000')).toBe('unknown');
     rmSync(sidecar('processes'));
     rmSync(sidecar('scope'));
-    expect(store.readWorkerProcesses(ID, GENERATION)).toBe('absent');
-    expect(store.readWorkerScope(ID)).toBe('absent');
+    expect(store.workerExecutions.readWorkerProcesses(ID, GENERATION)).toBe('absent');
+    expect(workerExecutionsOf(store).readWorkerScope(ID)).toBe('absent');
   });
 
   it('refuses a record that others may read', () => {
     for (const kind of ['identity', 'execution', 'processes', 'scope']) chmodSync(sidecar(kind), 0o644);
-    expect(store.readWorkerIdentity(ID)).toBeUndefined();
-    expect(store.readWorkerExecution(ID)).toBeUndefined();
-    expect(store.readWorkerProcesses(ID, GENERATION)).toBe('unknown');
-    expect(store.readWorkerScope(ID)).toBe('unknown');
+    expect(readWorkerIdentity(store.workerExecutions, ID)).toBeUndefined();
+    expect(store.workerExecutions.readWorkerExecution(ID)).toBeUndefined();
+    expect(store.workerExecutions.readWorkerProcesses(ID, GENERATION)).toBe('unknown');
+    expect(workerExecutionsOf(store).readWorkerScope(ID)).toBe('unknown');
   });
 
   it('refuses a record that is a symbolic link', () => {
@@ -83,16 +86,16 @@ describe('saved worker sidecar files', () => {
         rmSync(sidecar(kind));
         symlinkSync(target, sidecar(kind));
       }
-      expect(store.readWorkerIdentity(ID)).toBeUndefined();
-      expect(store.readWorkerExecution(ID)).toBeUndefined();
-      expect(store.readWorkerProcesses(ID, GENERATION)).toBe('unknown');
-      expect(store.readWorkerScope(ID)).toBe('unknown');
+      expect(readWorkerIdentity(store.workerExecutions, ID)).toBeUndefined();
+      expect(store.workerExecutions.readWorkerExecution(ID)).toBeUndefined();
+      expect(store.workerExecutions.readWorkerProcesses(ID, GENERATION)).toBe('unknown');
+      expect(workerExecutionsOf(store).readWorkerScope(ID)).toBe('unknown');
     } finally { rmSync(elsewhere, { recursive: true, force: true }); }
   });
 
   it('writes a scope record with the same bytes', () => {
     rmSync(sidecar('scope'));
-    store.writeWorkerScope(ID, scope);
+    workerExecutionsOf(store).writeWorkerScope(ID, scope);
     expect(readFileSync(sidecar('scope'), 'utf8')).toBe(readFileSync(join(FIXTURES, `${ID}.scope.json`), 'utf8'));
   });
 });

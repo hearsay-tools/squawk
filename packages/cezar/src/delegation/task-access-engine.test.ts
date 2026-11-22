@@ -28,9 +28,9 @@ describe('task access', () => {
     f.manager.cancel(workerId);
     await f.manager.awaitRunTermination(workerId, 5_000);
     f.store.updateStep(workerId, 'task', { status: STEP_STATUS.done, sessionId: 'previous-session', backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.done);
-    f.store.commitWorkerExecutionComplete(workerId, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
     return workerId;
   }
 

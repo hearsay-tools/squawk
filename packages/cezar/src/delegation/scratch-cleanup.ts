@@ -55,7 +55,7 @@ export class WorkerScratchCleanup {
    * in the backoff, so a repeated terminal `run` event cannot reset it; a new generation starts over. */
   schedule(id: string): void {
     const pending = this.due.get(id);
-    if (pending && this.store.readWorkerExecution(id)?.generation === pending.generation) return;
+    if (pending && this.store.workerExecutions.readWorkerExecution(id)?.generation === pending.generation) return;
     this.arm(id, 0, 0);
   }
 
@@ -74,8 +74,8 @@ export class WorkerScratchCleanup {
     if (run && (['queued', 'running', 'waiting'].includes(run.status) ||
       (run.delegation?.role !== 'worker' && run.delegation?.role !== 'invalid'))) return false;
     // Reconstruct older complete checkpoints while the valid terminal index still exists.
-    try { this.store.retainWorkerScratchCleanup(id); } catch { /* retry unreadable evidence */ }
-    const proof = this.store.readWorkerExecution(id);
+    try { this.store.workerExecutions.retainWorkerScratchCleanup(id); } catch { /* retry unreadable evidence */ }
+    const proof = this.store.workerExecutions.readWorkerExecution(id);
     if (run?.delegation?.role === 'worker' && proof && proof.phase !== 'complete') return false;
     return { generation: proof?.generation, resourceId: proof?.scratchCleanup?.resourceId };
   }
@@ -114,12 +114,12 @@ export class WorkerScratchCleanup {
 
   private probe(id: string, { attempts, generation, resourceId }: Pending, now: number): void {
     this.due.delete(id);
-    const execution = this.store.readWorkerExecution(id);
+    const execution = this.store.workerExecutions.readWorkerExecution(id);
     // No await between ownership/generation + holder proof and rm. Admission is synchronous
     // too, so a queued stale callback can never touch the next generation's scratch.
     try {
       if (generation && resourceId && execution?.generation === generation && !this.busy(id) &&
-        this.store.workerScratchResourcesSafe(id, generation, resourceId) &&
+        this.store.workerExecutions.workerScratchResourcesSafe(id, generation, resourceId) &&
         // A job started in the scratch keeps it until the job ends (hearsay-tools/squawk#3138).
         !jobRunsIn(agentTmpDirLocations(this.dataDir, id))) removeAgentTmpDir(this.dataDir, id);
     } catch { /* Transient evidence/read failures retain the durable intent for another wake. */ }

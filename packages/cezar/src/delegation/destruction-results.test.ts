@@ -93,7 +93,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete', deleted: [
       { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` },
     ] });
-    expect(f.store.readWorkerExecution(workerId)).toMatchObject({ phase: 'complete', generation });
+    expect(f.store.workerExecutions.readWorkerExecution(workerId)).toMatchObject({ phase: 'complete', generation });
     expect(f.store.workerResults.readWorkerResult(f.parent.id, workerId)).toMatchObject({ status: workerCollectedResultSchema.shape.status.enum.review, settled: true, partial: false,
       outcome: 'destroyed', lastExecutionOutcome: 'review-ready', cleanup: 'complete', workspace: { state: 'deleted' },
       summary: { state: 'available', text: 'Completed implementation' }, diff: { state: 'available' }, head: { state: 'deleted', sha: f.sha } });

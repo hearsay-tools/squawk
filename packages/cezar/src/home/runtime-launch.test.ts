@@ -2,6 +2,7 @@ import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from './test-home.testkit.ts';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { runtimeHomes } from './runtime-isolation.testkit.ts';
@@ -80,8 +81,10 @@ it.each(['run', 'step'] as const)('validates accepted worker %s pins against the
   const pin = scope === 'run' ? { model: 'sonnet' } : {};
   const identity = { kind: 'accepted', account, grants: {}, ...pin,
     ...(scope === 'step' ? { steps: [{ stepId: 'first', account, grants: {}, model: 'sonnet' }] } : {}) };
+  const identityPath = join(root, 'worker.identity.json');
+  writeFileSync(identityPath, JSON.stringify(identity), { mode: 0o600 });
   const store = { getRun: () => ({ delegation: { role: 'worker' }, runner: 'claude', agentProfile: 'work', ...pin }),
-    readWorkerIdentity: () => identity } as unknown as Parameters<typeof workerIdentity>[0];
+    workerExecutions: { identityPath: () => identityPath } } as unknown as Parameters<typeof workerIdentity>[0];
   expect(() => workerIdentity(store, root, 'worker', 'first', selected)).toThrow(AGENT_MODELS_LOCKED_ERROR);
-  expect(workerIdentity(store, root, 'worker', 'first', testHome())).toBe(identity);
+  expect(workerIdentity(store, root, 'worker', 'first', testHome())).toEqual(identity);
 });

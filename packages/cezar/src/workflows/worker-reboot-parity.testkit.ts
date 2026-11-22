@@ -20,6 +20,7 @@ import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+import { workerExecutionsOf } from '../delegation/worker-executions.ts';
 
 export function registerGroup(settleVia: keyof typeof GROUPS) {
 describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hearsay-tools/cezarion#738)', { timeout: 30_000 }, () => {
@@ -39,9 +40,9 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     store.updateRun(orphan.id, { runner }); manager.enqueueOwnedRun(orphan.id);
     await until(() => store.getRun(orphan.id)?.status === 'waiting');
     const files = join(root, '.ai/cezar/runs');
-    const proof = store.readWorkerExecution(orphan.id)!;
+    const proof = store.workerExecutions.readWorkerExecution(orphan.id)!;
     expect(proof.phase).toBe('starting');
-    const processes = store.readWorkerProcesses(orphan.id, proof.generation);
+    const processes = store.workerExecutions.readWorkerProcesses(orphan.id, proof.generation);
     if (typeof processes === 'string') throw Error('missing native process record');
     expect(processes.processes.length).toBeGreaterThan(0);
     manager.requestWorkerStop(orphan.id);
@@ -49,7 +50,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
 
     const twin = await worker(p.id, adapter.scenarios['cezar-done']!);
     store.updateRun(twin.id, { runner }); manager.enqueueOwnedRun(twin.id);
-    await until(() => store.readWorkerExecution(twin.id)?.phase === 'complete');
+    await until(() => store.workerExecutions.readWorkerExecution(twin.id)?.phase === 'complete');
     expect(store.getRun(twin.id)?.status).toBe('done');
     await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0));
     manager.dispose();
@@ -88,7 +89,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       expect(await service.collect(caller, { workerId: orphan.id })).toMatchObject({ settled: true, status: workerCollectedResultSchema.shape.status.enum.cancelled });
       expect(existsSync(scratch)).toBe(true);
       expect(resourceProbe.mock.calls.filter(([path]) => String(path).startsWith('/proc/'))).toHaveLength(0);
-      expect(store.readWorkerExecution(orphan.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
+      expect(store.workerExecutions.readWorkerExecution(orphan.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
       expect(manager.finishBlockedReason(p.id)).toBeUndefined();
       expect(manager.finish(p.id)).toBe(true);
       expect(existsSync(scratch)).toBe(true);
@@ -153,13 +154,13 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     await until(() => store.getRun(w.id)?.status === 'waiting');
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0));
-    const generation = store.readWorkerExecution(w.id)!.generation;
+    const generation = store.workerExecutions.readWorkerExecution(w.id)!.generation;
     // Nothing holds the old scratch yet: keep the cleanup the stop scheduled from racing the fixture.
     manager.pauseWorkerCleanup();
     const scratch = agentTmpDir(join(root, '.ai/cezar'), w.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'old task scratch');
     // A process in the worker's scope holds its scratch; one outside it holds nothing (ADR 0032).
-    const scoped = await groupHolder(scratch); store.scopes.spawnScope(w.id).started(scoped.pid);
+    const scoped = await groupHolder(scratch); workerExecutionsOf(store).scopes.spawnScope(w.id).started(scoped.pid);
     const holder = await readableHolder(scratch);
     try {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -169,13 +170,13 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       // A cleanup retry is captured against generation one. Admit generation two using the real
       // native continuation and give it task scratch before that old timer fires.
       expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
-      const next = store.readWorkerExecution(w.id)!; expect(next.generation).not.toBe(generation);
+      const next = store.workerExecutions.readWorkerExecution(w.id)!; expect(next.generation).not.toBe(generation);
       writeFileSync(join(scratch, 'new-generation'), next.generation);
       await vi.advanceTimersByTimeAsync(60_000);
       expect(readFileSync(join(scratch, 'new-generation'), 'utf8')).toBe(next.generation);
       vi.useRealTimers();
       await until(() => store.getRun(w.id)?.status === 'waiting');
-      expect(typeof store.readWorkerProcesses(w.id, next.generation)).toBe('object');
+      expect(typeof store.workerExecutions.readWorkerProcesses(w.id, next.generation)).toBe('object');
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       await until(() => !existsSync(scratch));
       expect(holder.running).toBe(true);

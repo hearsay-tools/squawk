@@ -164,7 +164,7 @@ export class RunRecovery {
     const orphanWorkerIds: string[] = [];
     const orphanFactIds = new Set<string>();
     for (const id of workerIds) {
-      if (this.context.store.readWorkerExecution(id)?.phase !== 'starting' || this.context.store.writeRefusal(id)) continue;
+      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase !== 'starting' || this.context.store.writeRefusal(id)) continue;
       const run = this.context.store.getRun(id);
       if (run?.delegation?.role !== 'worker' || !inScope(run)) continue;
       orphanWorkerIds.push(id);
@@ -199,7 +199,7 @@ export class RunRecovery {
     for (const id of orphanWorkerIds) {
       const run = this.context.store.getRun(id);
       if (!run || !inScope(run)) continue;
-      if (this.context.store.readWorkerExecution(id)?.phase === 'starting' && !this.context.store.writeRefusal(id) &&
+      if (this.context.store.workerExecutions.readWorkerExecution(id)?.phase === 'starting' && !this.context.store.writeRefusal(id) &&
         !this.host.settleOrphanedWorkerExecution(id)) this.host.orphans.armOrphanReprobe(id);
     }
   }

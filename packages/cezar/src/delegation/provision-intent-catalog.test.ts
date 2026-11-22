@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
+import { readWorkerIdentity } from './execution-identity.ts';
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels
@@ -113,7 +114,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'review.yaml'), 'name: review\nsteps:\n  - id: inspect\n    prompt: "Review: {{task}}"\n  - id: verify\n    command: "true"\n');
     const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'review' });
-    expect(f.store.readWorkerIdentity(a.child.workerId)).toMatchObject({ workflowHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({ workflowHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     if (mode === 'continue') {
       await launchAccepted(a, mode); await until(() => sessions.length === 2);
       sessions[1]!.finish(); expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);

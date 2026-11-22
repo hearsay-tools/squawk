@@ -52,7 +52,7 @@ export interface RetentionState {
   commitIndex(input: ReadonlyMap<string, RunRecord | null>): void;
   commitDelegation(patches: ReadonlyArray<{ id: string; delegation: DelegationState }>): void;
   applyArchived(run: RunRecord, archived: boolean): boolean;
-  /** The worker deletion checks stay in the store, in today's order, until D5 (C1 decision). */
+  /** The worker deletion checks, in today's order (`store.workerExecutions`, hearsay-tools/squawk#4039). */
   workerDeletionEvidence(id: string): boolean;
   readonly workerResults: WorkerResults;
   readWorkerExecution(id: string): WorkerExecution | undefined;

@@ -45,13 +45,13 @@ export class WorkerExecutions {
     if (refusal) throw refusal;
     const existing = this.executions.get(runId);
     if (existing) {
-      const proof = this.context.store.readWorkerExecution(runId);
+      const proof = this.context.store.workerExecutions.readWorkerExecution(runId);
       if (!existing.admitted && admitted && proof?.generation === existing.generation && proof.phase === 'starting') {
         existing.admitted = true; return;
       }
       throw new WorkerAdmissionRefusal("the worker's previous execution is still finishing", 'retry the same command in a few seconds');
     }
-    const generation = this.context.store.commitWorkerExecutionStart(runId);
+    const generation = this.context.store.workerExecutions.commitWorkerExecutionStart(runId);
     let resolve!: () => void;
     const promise = new Promise<void>(done => { resolve = done; });
     this.executions.set(runId, { generation, admitted, promise, resolve, sessions: new Set(), turns: new Set(), deliveries: new Set() });
@@ -109,7 +109,7 @@ export class WorkerExecutions {
   private persistWorkerCompletion(runId: string, generation: string): void {
     try {
       if (this.isStopped(runId)) this.context.store.move(runId, 'stop-worker');
-      if (this.context.store.commitWorkerExecutionComplete(runId, generation)) {
+      if (this.context.store.workerExecutions.commitWorkerExecutionComplete(runId, generation)) {
         this.finalizedWorkers.delete(runId);
         this.host.reapTerminalScratch(runId);
       }
@@ -121,7 +121,7 @@ export class WorkerExecutions {
   recordWorkerProcess(runId: string, pid: number): void {
     const generation = this.executions.get(runId)?.generation;
     if (!generation) return;
-    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`[hsq] worker ${runId} process record unavailable; its scope still holds the process`); }
+    try { if (!this.context.store.workerExecutions.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`[hsq] worker ${runId} process record unavailable; its scope still holds the process`); }
     catch { console.warn(`[hsq] worker ${runId} process record write failed; its scope still holds the process`); }
   }
 
@@ -132,7 +132,7 @@ export class WorkerExecutions {
       if (!this.context.disposed() && generation) this.persistWorkerCompletion(runId, generation);
       else if (!generation && opts.reapOrphans) await this.orphans.reapOrphanedWorker(runId, timeoutMs);
       else if (!generation) this.host.settleOrphanedWorkerExecution(runId);
-      return this.context.store.readWorkerExecution(runId)?.phase === 'complete';
+      return this.context.store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete';
     }
     if (this.context.disposed()) return false;
     await new Promise<void>(resolve => {
@@ -143,7 +143,7 @@ export class WorkerExecutions {
       this.terminationWaiters.add(settle);
       void execution.promise.then(settle);
     });
-    return !this.executions.has(runId) && this.context.store.readWorkerExecution(runId)?.phase === 'complete';
+    return !this.executions.has(runId) && this.context.store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete';
   }
 
   has(id: string) { return this.executions.has(id); }

@@ -182,7 +182,7 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
     const blockers = () => {
       const ids = supervisedReceipts(run(f.parent.id), W.id).map(receipt => receipt.workerId);
       return parentReadiness(run(W.id), f.parent.id, ids.map(workerId => ({ workerId, run: f.store.getRun(workerId),
-        terminated: f.store.readWorkerExecution(workerId)?.phase === 'complete', result: f.store.workerResults.readWorkerResult(f.parent.id, workerId) })));
+        terminated: f.store.workerExecutions.readWorkerExecution(workerId)?.phase === 'complete', result: f.store.workerResults.readWorkerResult(f.parent.id, workerId) })));
     };
     expect(blockers()).toEqual([{ workerId: C.id, reason: 'outstanding' }]);
     await C.finish();

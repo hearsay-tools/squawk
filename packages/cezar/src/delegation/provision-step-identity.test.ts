@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { provisionWorkflowFixture, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
+import { readWorkerIdentity } from './execution-identity.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 
@@ -26,7 +27,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     const home = join(f.root, 'codex-account'); mkdirSync(home); vi.stubEnv('CODEX_HOME', home);
     writeFileSync(join(home, 'config.toml'), 'model = "gpt-5.1-codex"');
     const a = await acceptIdentityWorker(undefined, { allowedTools: [], bashAllowlist: [] }, { backend: 'codex', context: { text: 'selected context only' } });
-    expect(f.store.readWorkerIdentity(a.child.workerId)).toMatchObject({ account: { provider: 'codex', homePath: home }, model: 'gpt-5.1-codex', grants: { allowedTools: [], bashAllowlist: [] } });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({ account: { provider: 'codex', homePath: home }, model: 'gpt-5.1-codex', grants: { allowedTools: [], bashAllowlist: [] } });
     writeFileSync(join(home, 'config.toml'), 'model = "gpt-5.1-codex-mini"');
     await launchAccepted(a, mode); await until(() => sessions.length === 2);
     expect(sessions[1]!.spec.userPrompt).toContain('selected context only');
@@ -51,7 +52,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     // Run-level columns follow the first agent step; the identity pins both.
     expect(worker).toMatchObject({ runner: 'codex', model: 'gpt-5.1-codex', agentProfile: 'default' });
     expect(worker.effort).toBeUndefined();
-    expect(f.store.readWorkerIdentity(worker.id)).toMatchObject({ account: { provider: 'codex', homePath: codexHome }, steps: [
+    expect(readWorkerIdentity(f.store.workerExecutions, worker.id)).toMatchObject({ account: { provider: 'codex', homePath: codexHome }, steps: [
       { stepId: 'implement', account: { provider: 'codex', profileId: 'default', homePath: codexHome }, model: 'gpt-5.1-codex', grants: { allowedTools: ['Read'] } },
       { stepId: 'review', account: { provider: 'claude', profileId: 'account-a', homePath: a.home }, model: 'haiku', effort: 'high' },
     ] });
@@ -309,7 +310,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     const path = join(f.root, '.ai/cezar/runs', `${a.child.workerId}.identity.json`);
     const { steps: _steps, ...legacy } = JSON.parse(readFileSync(path, 'utf8'));
     expect(_steps).toHaveLength(1); writeFileSync(path, JSON.stringify(legacy));
-    expect(f.store.readWorkerIdentity(a.child.workerId)).not.toHaveProperty('steps');
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).not.toHaveProperty('steps');
     await launchAccepted(a, mode); await until(() => sessions.length === 2);
     if (mode === 'continue') {
       sessions[1]!.finish(); expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
