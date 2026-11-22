@@ -28,7 +28,7 @@ export class AcpEvents {
   private agentStarted = false;
   /** The kind of the open turn's latest work update. */
   private lastWork: string | undefined;
-  /** A provider failure reported as text in the open turn. */
+  /** A provider failure the open turn's last work reported as text. */
   private failure: string | undefined;
   private block: UiMessageItem | UiReasoningItem | undefined;
   /** How much of the open message block v1 `text` has carried. */
@@ -61,6 +61,7 @@ export class AcpEvents {
     this.flush();
     if (!this.turnId) return;
     const reason = this.failure ? 'error' : stopReason;
+    if (this.failure) this.sink.event?.({ type: 'error', message: this.failure });
     this.finishTools(reason);
     // A turn-end listener sees the turn closed: it may start the next one or close the session.
     const turnId = this.turnId;
@@ -74,8 +75,8 @@ export class AcpEvents {
       if (this.closedTool(update)) return;
       const work = WORK_UPDATES.has(update.sessionUpdate as string);
       if (work && !this.turnId && this.hooks.agentWorkEnds) { this.begin(); this.agentStarted = true; }
-      const failure = this.turnId ? this.hooks.updateError?.(update) : undefined;
-      if (failure) this.failure ??= failure;
+      // A failure counts only as the whole message and the turn's last work: later work clears it.
+      if (work) this.failure = this.turnId && this.block?.kind !== 'message' ? this.hooks.updateError?.(update) : undefined;
       this.mapUpdate(update);
       const previous = this.lastWork;
       if (work) this.lastWork = update.sessionUpdate as string;

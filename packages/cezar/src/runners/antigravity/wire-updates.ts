@@ -3,14 +3,17 @@ import type { AcpHooks } from '../acp/protocol.ts';
 import { antigravityTool } from './tool-normalization.ts';
 
 const textSchema = z.object({ text: z.string() });
-const ERROR_PREFIX = '⚠ agent executor error:';
+/** The CLI writes an agent failure as one message chunk, "\n⚠ <error>\n" (CLI 1.5.14 format string
+ *  `\n⚠ %s\n`). The error may or may not start "agent executor error:" (cli-config-options.ndjson,
+ *  cli-tool-output.ndjson, the 404 of hearsay-tools/squawk#4098). */
+const ERROR_SHAPE = /^\n⚠ \S[^]*\n$/u;
 
-/** The CLI reports a provider failure as message text, then end_turn (cli-config-options.ndjson). */
+/** A chunk in the CLI's provider-failure shape. The turn fails only when this chunk is the whole
+ *  agent message and no other agent work follows it before the turn ends (AcpEvents). */
 export function antigravityUpdateError(update: Record<string, unknown>): string | undefined {
   const content = textSchema.safeParse(update.content);
   if (update.sessionUpdate !== 'agent_message_chunk' || !content.success) return undefined;
-  const text = content.data.text.trimStart();
-  return text.startsWith(ERROR_PREFIX) ? text : undefined;
+  return ERROR_SHAPE.test(content.data.text) ? content.data.text.trim() : undefined;
 }
 
 /**

@@ -59,6 +59,33 @@ describe('Antigravity CLI recorded ACP wire', () => {
     ]);
   });
 
+  /** One prompt turn of synthetic frames: the prompt, the agent's updates, then its end_turn response. */
+  function turn(...updates: Array<Record<string, unknown>>): UiEvent[] {
+    let state = createAntigravityUiState();
+    const events: UiEvent[] = [];
+    const frames = [{ from: 'client', frame: { jsonrpc: '2.0', id: 1, method: 'session/prompt', params: { sessionId: 's', prompt: [] } } },
+      ...updates.map(update => ({ from: 'agent', frame: { jsonrpc: '2.0', method: 'session/update', params: { sessionId: 's', update } } })),
+      { from: 'agent', frame: { jsonrpc: '2.0', id: 1, result: { stopReason: 'end_turn' } } }];
+    for (const frame of frames) { const mapped = mapAntigravityFrame(frame, state); state = mapped.state; events.push(...mapped.events); }
+    return events;
+  }
+  const chunk = (text: string) => ({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
+  const stopReason = (events: UiEvent[]) => events.flatMap(event => event.type === 'turn.completed' ? [event.stopReason] : [])[0];
+
+  it('fails the turn on the CLI failure shape with no executor prefix, as the 404 of hearsay-tools/squawk#4098', () => {
+    expect(stopReason(turn(chunk('\n⚠ NOT_FOUND (code 404): Requested entity was not found.\n'), { sessionUpdate: 'usage_update', used: 1, size: 2 }))).toBe('error');
+  });
+
+  it.each([
+    ['a warning inside the reply', [chunk('Checked the logs.\n'), chunk('\n⚠ The 404 above came from Google.\n')]],
+    ['a reply that starts with the sign', [chunk('⚠ Careful: this deletes files.')]],
+    ['a failure-shaped message the agent keeps working after', [chunk('\n⚠ retrying\n'), { sessionUpdate: 'tool_call', toolCallId: 'c', name: 'read_file', title: 'File a', kind: 'read', status: 'in_progress' }]],
+  ])('keeps assistant text with a warning sign as text: %s', (_case, updates) => {
+    const events = turn(...updates);
+    expect(stopReason(events)).toBe('end_turn');
+    expect(events.filter(event => event.type === 'item.delta').map(event => event.type === 'item.delta' ? event.delta : '').join('')).toContain('⚠');
+  });
+
   it('closes a cancelled command once, before its late failed update', () => {
     const events = replay('cli-cancel');
     expect(events.find(event => event.type === 'turn.completed')).toMatchObject({ stopReason: 'cancelled' });

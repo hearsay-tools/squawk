@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ACP v1 encoder. Shared scenarios own content; this module owns native framing and timing.
 import readline from 'node:readline';
-import { appendFileSync, closeSync, existsSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -33,7 +33,9 @@ let sessionParams = {};
 const steers = [];
 let mcpTurns = 0;
 let pendingAsk;
-if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(process.argv.slice(2))}\n`);
+// The subagent guard folder sits in each launch's own temp folder: record it by name, so launches compare.
+const recordedArgs = process.argv.slice(2).map(arg => /[\\/]squawk-antigravity-guard$/.test(arg) ? '<session temp>/squawk-antigravity-guard' : arg);
+if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(recordedArgs)}\n`);
 let serverId = 0;
 const pending = new Map();
 const update = value => write({ method: 'session/update', params: { sessionId, update: value } });
@@ -59,7 +61,7 @@ function encoder(turn) {
     toolStart: ({ call }) => send({ sessionUpdate: 'tool_call', toolCallId: call.id, title: call.name, kind: 'other', status: 'in_progress', rawInput: call.input }),
     toolEnd: ({ call }) => send({ sessionUpdate: 'tool_call_update', toolCallId: call.id, status: call.isError ? 'failed' : 'completed', rawOutput: call.output }),
     progress: () => send({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }),
-    end: ({ error } = {}) => { if (error) text('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[error] ?? error}`); },
+    end: ({ error } = {}) => { if (error) text('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[error] ?? error}\n`); },
     // The CLI reads a steer in the running turn, early or late.
     readSteers: () => { echoSteers(turn); return []; },
     closeInput: () => closeSync(0),
@@ -75,6 +77,7 @@ function acknowledge(frame, result, text) {
 async function prompt(frame) {
   const text = promptText(frame);
   if (text === 'mock:account-homes') { accountHomes(frame); return; }
+  if (text === 'mock:transcript-read') { transcriptRead(frame); return; }
   if (delivery?.rejects(text)) { write({ id: frame.id, error: { code: -32000, message: 'owned turn rejected' } }); return; }
   if (active) { steer(frame, text); return; }
   let cancel;
@@ -96,7 +99,7 @@ async function playTurn(frame, text, turn) {
   if (failureControl?.failure === 'unread' && failureControl.failureFor(text) === 'unread') process.exit(1);
   await delivery?.holdResponse(text);
   const failure = await failureControl?.failureFor(text);
-  if (failure) { content('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[failure]}`); steers.length = 0; }
+  if (failure) { content('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[failure]}\n`); steers.length = 0; }
   else { await runPrompt(answerNudge(text), turn); echoSteers(turn); }
   if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   acknowledge(turn.carrier ?? frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
@@ -109,7 +112,25 @@ function steer(frame, text) {
   active.carrier = frame; active.carrierText = text;
 }
 function accountHomes(frame) {
-  content('agent_message_chunk', JSON.stringify({ gemini: flag('--gemini-dir'), appData: flag('--app-data-dir'), geminiHome: process.env.GEMINI_HOME, home: process.env.HOME, config: process.env.XDG_CONFIG_HOME, ssh: process.env.SSH_CONNECTION }));
+  content('agent_message_chunk', JSON.stringify({ gemini: flag('--gemini-dir'), appData: flag('--app-data-dir'), geminiHome: process.env.GEMINI_HOME, home: process.env.HOME, config: process.env.XDG_CONFIG_HOME, ssh: process.env.SSH_CONNECTION,
+    guard: flag('--add-dir'), guardHooks: existsSync(join(flag('--add-dir') ?? '', '.agents', 'hooks.json')) }));
+  update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+  reply(frame.id, { stopReason: 'end_turn' });
+}
+/** A read whose completed update carries no result, as on the CLI 1.5.14 wire; its transcript row
+ *  lands after that update (cli-tool-output fixture). */
+function transcriptRead(frame) {
+  const logs = join(flag('--gemini-dir') ?? '.', 'antigravity-cli', 'brain', frame.params.sessionId, '.system_generated', 'logs');
+  const args = { Path: 'notes.txt' };
+  const call = { toolCallId: 'call_transcript', name: 'read_file', args, kind: 'read', title: 'File notes.txt', rawInput: args };
+  update({ sessionUpdate: 'tool_call', ...call, status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', ...call, status: 'completed' });
+  mkdirSync(logs, { recursive: true });
+  appendFileSync(join(logs, 'transcript_full.jsonl'), `${[
+    { step_index: 0, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: 'read_file', args }] },
+    { step_index: 1, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-22T21:27:12+01:00\nCompleted At: 2026-11-22T21:27:12+01:00\n1: mock transcript line' },
+  ].map(row => JSON.stringify(row)).join('\n')}\n`);
+  content('agent_message_chunk', 'Read notes.txt.');
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   reply(frame.id, { stopReason: 'end_turn' });
 }
@@ -158,11 +179,13 @@ async function runtimeProbe(text, turn) {
 }
 async function runPrompt(text, turn) {
   if (await runtimeProbe(text, turn)) return;
-  if (text.includes('mock:permission-late')) return latePermission(turn);
+  if (text.includes('mock:permission-late')) return latePermission(turn, text.includes('mock:permission-late-error'));
+  // The CLI's quota refusal, verbatim from a live CLI 1.5.14 turn (hearsay-tools/squawk#4098).
+  if (text.includes('mock:quota')) { content('agent_message_chunk', '\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 3h54m9s.\n'); return; }
   if (text.includes('mock:late-error')) {
     // A background command wakes the idle session, and that model step fails.
     content('agent_message_chunk', 'Started in the background.');
-    turn.afterTurn = async () => { content('agent_message_chunk', '\n⚠ agent executor error: 503 Service Unavailable'); update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }); };
+    turn.afterTurn = async () => { content('agent_message_chunk', '\n⚠ agent executor error: 503 Service Unavailable\n'); update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }); };
     return;
   }
   if (scheduleWakeup(text)) return;
@@ -237,7 +260,7 @@ async function answerAsk(text) {
   content('agent_message_chunk', `Answer received: ${text}${ask.done || context.session.resumeAfterAsk ? await context.lifecycle(['cezar_done', {}]) : ''}`);
 }
 /** P8: the turn ends after cezar_done; a background command then wakes the idle session, which asks. */
-async function latePermission(turn) {
+async function latePermission(turn, fail) {
   content('agent_message_chunk', `The turn finished before the late request.${await context.lifecycle(['cezar_done', {}])}`);
   turn.afterTurn = async () => {
     const toolCall = { toolCallId: 'call_late', name: 'generate_image', title: 'Run generate_image', kind: 'other', rawInput: {} };
@@ -245,6 +268,8 @@ async function latePermission(turn) {
     const response = await request('session/request_permission', { sessionId, toolCall,
       options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }, { optionId: 'reject-once', name: 'Deny', kind: 'reject_once' }] });
     const allowed = response?.outcome?.optionId === 'allow-once';
+    // The model step after the answer fails: the CLI's failure text, then the step's usage update.
+    if (fail) { content('agent_message_chunk', '\n⚠ agent executor error: 503 Service Unavailable\n'); update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }); return; }
     update({ sessionUpdate: 'tool_call_update', toolCallId: toolCall.toolCallId, status: allowed ? 'completed' : 'failed', rawOutput: { output: '' } });
     content('agent_message_chunk', `Approval response: ${allowed ? '{"reply":"once"}' : '{"reply":"reject"}'}${await context.lifecycle(['cezar_done', {}])}`);
     update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });

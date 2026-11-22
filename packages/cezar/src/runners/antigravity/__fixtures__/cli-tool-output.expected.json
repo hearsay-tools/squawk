@@ -1,0 +1,416 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Initial hypothesis: User wants to execute a series of actions in a specific order, involving file reads and tool invocations. The order and structure of the requested steps are crucial. Each step must be completed successfully before proceeding to the next.\n\n\n"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9533,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "Initial hypothesis: User wants to execute a series of actions in a specific order, involving file reads and tool invocations. The order and structure of the requested steps are crucial. Each step must be completed successfully before proceeding to the next.\n\n\n"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_3483797392669486337",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "Path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_3483797392669486337",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "Path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 9735,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_6890206374657537504",
+      "name": "echo",
+      "title": "echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "text": "golden-1",
+        "toolSummary": "Probe MCP echo golden-1"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_6890206374657537504",
+      "name": "echo",
+      "title": "echo",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "text": "golden-1",
+        "toolSummary": "Probe MCP echo golden-1"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_6890206374657537504",
+      "name": "echo",
+      "title": "echo",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "text": "golden-1",
+        "toolSummary": "Probe MCP echo golden-1"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_6890206374657537504",
+      "name": "echo",
+      "title": "echo",
+      "toolKind": "other",
+      "status": "completed",
+      "input": {
+        "text": "golden-1",
+        "toolSummary": "Probe MCP echo golden-1"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "reasoning",
+    "delta": "Reading the notes reveals an interesting pattern that might be relevant. Next, echoing \"golden-1\" through the probe is a good starting point to confirm the tool is working as expected.\n\n\n"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10149,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-3",
+      "text": "Reading the notes reveals an interesting pattern that might be relevant. Next, echoing \"golden-1\" through the probe is a good starting point to confirm the tool is working as expected.\n\n\n"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_5817001205062449895",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "running",
+      "input": {
+        "Path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_5817001205062449895",
+      "name": "Read",
+      "title": "File notes.txt",
+      "toolKind": "read",
+      "status": "completed",
+      "input": {
+        "Path": "/work/project/notes.txt"
+      },
+      "locations": [
+        {
+          "path": "/work/project/notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10315,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_8598173120530576272",
+      "name": "fail",
+      "title": "fail",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "toolSummary": "Probe MCP fail call"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8598173120530576272",
+      "name": "fail",
+      "title": "fail",
+      "toolKind": "other",
+      "status": "pending",
+      "input": {
+        "toolSummary": "Probe MCP fail call"
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_8598173120530576272",
+      "name": "fail",
+      "title": "fail",
+      "toolKind": "other",
+      "status": "running",
+      "input": {
+        "toolSummary": "Probe MCP fail call"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_8598173120530576272",
+      "name": "fail",
+      "title": "fail",
+      "toolKind": "other",
+      "status": "failed",
+      "input": {
+        "toolSummary": "Probe MCP fail call"
+      }
+    }
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10579,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_5704470663332638531",
+      "name": "Task",
+      "title": "Run invoke_subagent",
+      "toolKind": "task",
+      "status": "running",
+      "input": {
+        "Prompt": "say hi",
+        "Role": "Greeting Helper",
+        "TypeName": "self",
+        "Workspace": "inherit"
+      }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_5704470663332638531",
+      "name": "Task",
+      "title": "Run invoke_subagent",
+      "toolKind": "task",
+      "status": "failed",
+      "input": {
+        "Prompt": "say hi",
+        "Role": "Greeting Helper",
+        "TypeName": "self",
+        "Workspace": "inherit"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "reasoning",
+    "delta": "The secret word retrieved is `KINGFISHER-7`. The `mcp_probe_echo` successfully echoed back the input, confirming basic functionality. Now proceeding to analyze the next file as per the instructions.\n\n\n"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-4",
+      "text": "The secret word retrieved is `KINGFISHER-7`. The `mcp_probe_echo` successfully echoed back the input, confirming basic functionality. Now proceeding to analyze the next file as per the instructions.\n\n\n"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "Secret word: `KINGFISHER-7` | Echo result: `ECHO:golden-1` | `invoke_"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": "subagent` returned: `Encountered error in tool execution: tool call denied by pre-tool hook: Squawk"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": " turned off native subagents for Antigravity: their permission requests never reach Squawk. Do the work in this session"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-5",
+    "field": "text",
+    "delta": ", or start a Squawk worker if your instructions offer one.`"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 10996,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-5",
+      "role": "assistant",
+      "text": "Secret word: `KINGFISHER-7` | Echo result: `ECHO:golden-1` | `invoke_subagent` returned: `Encountered error in tool execution: tool call denied by pre-tool hook: Squawk turned off native subagents for Antigravity: their permission requests never reach Squawk. Do the work in this session, or start a Squawk worker if your instructions offer one.`"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 13767,
+      "output": 1057,
+      "total": 61307,
+      "reasoning": 797,
+      "cacheRead": 46483,
+      "cacheWrite": 0
+    }
+  }
+]

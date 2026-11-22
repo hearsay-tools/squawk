@@ -61,11 +61,12 @@ export function nudgeHeldRunning(state: ActiveRun): boolean {
 
 /** The work the no-progress guard counts as the model working (`MODEL_PROGRESS` in
  *  `core/managed-session.ts`), with the UI frames that carry it: a turn start and a top-level item.
- *  Heartbeats, usage and a nested subagent's items are not. */
-function isModelActivity(event: { type: string; item?: { parentItemId?: string } }): boolean {
+ *  Heartbeats, usage, a nested subagent's items and a late display update are not. */
+function isModelActivity(event: NudgeEvent): boolean {
   if (['turn.started', 'text', 'tool-call', 'tool-result', 'image'].includes(event.type)) return true;
-  return event.type.startsWith('item.') && event.item?.parentItemId === undefined;
+  return event.type.startsWith('item.') && event.item?.parentItemId === undefined && event.late !== true;
 }
+type NudgeEvent = { type: string; item?: { parentItemId?: string }; late?: true };
 
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
@@ -284,7 +285,7 @@ export class TurnNudges {
   /** Model work in the nudge's own session is its reply: its bounds stop while the turn runs. A turn
    *  end that still finds the acknowledgement missing arms it again. Both event paths name the session
    *  that emitted the event, so a retired session's late events stop nothing (hearsay-tools/squawk#2443). */
-  noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
+  noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: NudgeEvent): void {
     if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
       state.boundary.nudge?.session !== emitting || !isModelActivity(event)) return;
     const nudge = state.boundary.nudge;
@@ -310,14 +311,14 @@ export class TurnNudges {
     return true;
   }
 
-  /** Heartbeats and nested subagent items are not a reply. A `turn.started` counts only while the
+  /** Heartbeats, nested subagent items and late display updates are not a reply. A `turn.started` counts only while the
    *  reply timer runs or after it expired on this session: OpenCode emits a synthetic one
    *  inside `sendAgentMessage`, and a later send goes through `submitAgentInput`, which resumes. */
-  isNoWaitNudgeReply(state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): boolean {
+  isNoWaitNudgeReply(state: ActiveRun, event: NudgeEvent): boolean {
     if (event.type === 'turn.started') return state.boundary.noWaitNudgeReplyTimer !== undefined || state.boundary.noWaitNudgeParked === state.liveSession.session;
     if (event.type === 'text' || event.type === 'tool-call' || event.type === 'tool-result') return true;
     if (event.type === 'item.delta' || !event.type.startsWith('item.')) return false;
-    return event.item?.parentItemId === undefined;
+    return event.item?.parentItemId === undefined && event.late !== true;
   }
 
   /** A reply to the nudge clears its bound. One that arrives after the bound parked the run resumes
@@ -325,7 +326,7 @@ export class TurnNudges {
    *  Squawk's no-wait wait parks on it again. Only the live session's own events count: one `ActiveRun`
    *  spans workflow steps, so a retired step's late reply must not clear the current bound
    *  (hearsay-tools/squawk#3740). */
-  noteNoWaitNudgeContent(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
+  noteNoWaitNudgeContent(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: NudgeEvent): void {
     if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
       !this.isNoWaitNudgeReply(state, event)) return;
     transitionTurnBoundary(state, { kind: 'reply-content', phase: 'received', session: state.liveSession.session });

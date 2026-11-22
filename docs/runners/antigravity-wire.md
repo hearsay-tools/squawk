@@ -125,8 +125,11 @@ the table cannot be set, so CLI Proxy refuses every turn with 400 `model_not_fou
 named `gemini-3.1-pro-preview`; titles use `gemini-3.1-flash-lite-preview`). All CLI live turns
 went through a local shim that renamed the model in the request path to `gemini-3-flash`. The
 binary also names `AGY_LLM_GATEWAY_URL`, `AGY_LLM_GATEWAY_MODELS` and `AGY_LLM_GATEWAY_API_KEY`;
-they were not probed. A provider error is still message text plus `end_turn`, but the text now
-starts "⚠ agent executor error:" (1.5.0: "Agent execution error:") (`cli-config-options.ndjson`).
+they were not probed. A provider error is still message text plus `end_turn`. The CLI writes every agent failure as
+one message chunk, `"\n⚠ <error>\n"` (the binary's format string is `\n⚠ %s\n`). The error often
+starts "agent executor error:" (1.5.0: "Agent execution error:") (`cli-config-options.ndjson`), but
+not always: the 404 of hearsay-tools/squawk#4098 came as `"\n⚠ NOT_FOUND (code 404): Requested
+entity was not found.\n"`, and a broken custom agent as `"\n⚠ failed to construct executor: …\n"`.
 
 ### RunnerFacts on the CLI
 
@@ -141,7 +144,7 @@ starts "⚠ agent executor error:" (1.5.0: "Agent execution error:") (`cli-confi
 | `inputDelivery.humanInputAtTurnEnd` | `held-when-late` | not probed on the CLI | — |
 | `nativePermission` | `in-turn` | **changes to `after-turn`** | A background command finished 10 s after `end_turn`; the agent then ran `echo after-bg` and sent `session/request_permission` with no prompt open (`cli-permission-after-turn.ndjson`). |
 | `nativeAsk` | `answerable` | answerable, by another route | `ask_question` is a `tool_call` (title `Run ask_question`, `rawInput.questions[{question, options, is_multi_select}]`). The question comes as `agent_message_chunk` text ("- [1] (Recommended) Red"), and the prompt ends with `end_turn` while the call is `pending`. The next `session/prompt` is the answer: the call completes in that prompt (`cli-interaction-question.ndjson`). No `session/request_permission`, no `interaction_` id. |
-| `nativeSubagents` | `turn-held` | observed held; not settled | `invoke_subagent` completed at once and the parent polled with `manage_subagents`, `send_message` and reads of the child's transcript until it ended its turn (`cli-subagent.ndjson`). Children are separate conversations (`brain/<child id>/`). Since commands and timers no longer hold the turn, a parent that ends its turn while a child runs is likely; not observed. |
+| `nativeSubagents` | `turn-held` | **`none`** since hearsay-tools/squawk#4098: Squawk denies the subagent tools | `invoke_subagent` completes at once and the child runs as a separate conversation (`brain/<child id>/`, `cli-subagent.ndjson`). A child's permission requests never reach the ACP client, so each command it needs approved times out after 60 s (see [Native subagents and tool results](#native-subagents-and-tool-results-hearsay-toolssquawk4098-hearsay-toolssquawk4099)). |
 | `childWork` | `none` | same | child calls carry no link to `invoke_subagent` (`cli-subagent.ndjson`) |
 | `hookEvents` | `none` | same | no hook frame in any CLI fixture; hooks not probed |
 | `humanPromptHold` | `acknowledgement` | same | no consumption signal |
@@ -238,8 +241,8 @@ and `swarm_pane`.
 ### Parity exemptions to revisit
 
 - D3 (native cross-session messaging): the CLI has `send_message` and `manage_subagents`,
-  between a parent and its subagents. The 1.5.0 reason ("no cross-session tool") no longer
-  holds as written.
+  between a parent and its subagents. Squawk denies both with the other subagent tools
+  (hearsay-tools/squawk#4098), so the session still has no cross-session tool.
 - `plan.updated with entries`: `plan` is now a mode and a command; no ACP `plan` frame was
   seen, but it was not probed.
 
@@ -257,7 +260,11 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
    message text ends it: every recorded agent step that makes no further tool call ends so, and
    after thoughts or a tool the same update starts the next step. A prompt sent while it runs
    joins it.
-4. Message text starting "⚠ agent executor error:" makes the turn end as `error`.
+4. A message chunk in the failure shape `"\n⚠ <error>\n"` makes the turn end as `error` when it
+   opens a message of its own and no other agent work follows it before the turn ends. Assistant
+   text with a warning sign inside a reply, or followed by more work, stays text. After an
+   accepted `cezar_done` the error is a diagnostic (a note and a non-fatal `session.error`), and
+   the run keeps its result (hearsay-tools/squawk#4016).
 5. MCP items take their server and tool from `mcp_<server>_<tool>`; Squawk's `squawk` server is
    matched by name, so its tools stay trusted.
 6. An `ask_question` call becomes a question card. The answer goes as the next prompt.
@@ -266,6 +273,63 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
    (`systemPromptOnResume: 'in-thread'`).
 8. `_meta.antigravity.disabledTools` and `eagerMcpServers` are no longer sent: the CLI ignores
    the first, does not know the second, and `run_workflow` writes no skill into the workspace.
+9. Every session gets `--add-dir <session temp>/squawk-antigravity-guard`. Its `.agents/hooks.json`
+   holds a `PreToolUse` hook that denies `invoke_subagent`, `define_subagent`, `manage_subagents`,
+   `send_message`, `run_workflow` and `swarm` by whole name. The folder is outside the checkout
+   and goes with the session's temp folder.
+10. A read, MCP or subagent tool whose completed update carries no result gets its output from
+    the session's transcript row, as an `item.updated` of the completed card marked `late: true`.
+    Nudge accounting ignores it: it is a display update, not the agent's reply.
+
+### Native subagents and tool results (hearsay-tools/squawk#4098, hearsay-tools/squawk#4099)
+
+Measured live on Linux x86-64 on 2026-11-22 with CLI 1.5.14 and a personal Google sign-in, no
+shim, through a JSON-RPC driver with a local HTTP MCP server.
+
+**Native subagents.** A subagent's permission requests never reach the ACP client: no
+`session/request_permission` arrives, for the parent's session id or another. Each command the
+child needs approved fails after 60 s ("permission check timed out waiting for a user response
+after 60s"; the CLI log says `context deadline exceeded`). In the failed run of
+hearsay-tools/squawk#4098 five such children ran, and the parent's next model call failed with
+Google's `NOT_FOUND (code 404)`; one child did not reproduce the 404. The log line
+`agy_tool_safety triggered=true reason="unsupported_tool: invoke_subagent"` is not the cause: the
+same line appears for `write_file`, `edit_file` and MCP tools, and only hands the call to the
+model-based monitor.
+
+Routes to turn the tools off:
+
+| Route | Result |
+| --- | --- |
+| `_meta.antigravity.disabledTools` on `session/new` | ignored (see [`_meta.antigravity`](#_metaantigravity)) |
+| A hidden main agent (`agents/<name>.md` with `mainAgent: true` and a `tools` list) chosen with `--agent` | The listed tools hold, but the agent's body replaces the CLI's identity prompt ("You are Antigravity, …"), and every MCP server passed on `session/new` is gone: `inheritMcp`, a `mcpServers` list of names, of objects or a map bring none back, and an MCP name in `tools` fails with "unknown component". An agent the CLI cannot resolve falls back to the default agent with only a log line (`Agent "<name>" not found, falling back to default`). Not used. |
+| A `PreToolUse` hook (`.agents/hooks.json`) returning `{"decision":"deny","reason":…}` | The call closes `failed` with no permission request; the agent reads "tool call denied by pre-tool hook: <reason>" and goes on with its turn (`cli-tool-output.ndjson`). The system prompt and MCP tools stay. Used. |
+
+`--add-dir` makes the CLI read `.agents/` from the added folder, as from the workspace. With a
+folder that sorts before the workspace (`/tmp/…/extraH` before `/tmp/…/ws1`), `pwd` in a command
+still printed the workspace, and `write_file` with a relative name wrote into the workspace. The
+model sees the added folder as a workspace root.
+
+**Tool results.** Completed `tool_call_update`s for `read_file`, an MCP call (success and
+`isError`), and a denied `invoke_subagent` carry no `content`, no `rawOutput` and no `_meta`
+(`cli-tool-output.ndjson`). Only `run_command` (`rawOutput`) and `edit_file` (`content` diff)
+carry results. The CLI keeps what the agent received in
+`<gemini-dir>/<app-data-dir>/brain/<sessionId>/.system_generated/logs/transcript_full.jsonl`, one
+JSON row per step (`cli-tool-output.transcript.jsonl`):
+
+- A `PLANNER_RESPONSE` row lists the step's `tool_calls` as `{name, args}`; `args` equal the
+  wire's `args`, `toolSummary` included. The k-th call's result is the row with
+  `step_index` = planner `step_index` + 1 + k. `SYSTEM_MESSAGE`, `USER_INPUT` and `CHECKPOINT`
+  rows hold no result.
+- A result row has `status` `DONE` or `ERROR` (with `error`), and `content` that starts with
+  `Created At:`/`Completed At:` lines.
+- The row is sometimes written after the wire's completed update: for one of four calls it was
+  missing when the update arrived.
+
+This is the CLI's private format. Squawk reads only the run's own account folder and session,
+from the file's size when the session opened, at most 4 MiB a read, a row up to 8 MiB and an
+output up to 64 Ki characters, and it waits at most 10 s after a tool completes. A missing file
+or rows in another shape leave the card with no output. The golden
+`cli-tool-output.outputs.json` pins the mapping for CLI 1.5.14.
 
 ### Runner integration probes (hearsay-tools/squawk#4060)
 
@@ -321,6 +385,7 @@ what the mapper makes of the frames.
 | `cli-cancel.ndjson` | `session/cancel` during a command, then a working turn |
 | `cli-interaction-question.ndjson` | `ask_question` as text with `end_turn`, then the next prompt as the answer |
 | `cli-subagent.ndjson` | `invoke_subagent`, `manage_subagents`, `send_message` and the child's command |
+| `cli-tool-output.ndjson` | A read, an MCP result, the same read again, an MCP `isError` result and an `invoke_subagent` denied by Squawk's hook; no completed update carries a result. Recorded with a Google sign-in, no shim. `cli-tool-output.transcript.jsonl` is the session's transcript; `cli-tool-output.outputs.json` the output Squawk reads from it for each call |
 | `cli-background-command.ndjson` | A background command; its completion and the agent's text arrive after the turn |
 | `cli-permission-after-turn.ndjson` | A permission request after the turn ended |
 | `cli-schedule-timer.ndjson` | A `schedule` timer that fires after the turn and wakes the session |

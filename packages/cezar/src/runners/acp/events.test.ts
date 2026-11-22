@@ -65,18 +65,34 @@ it('ignores a late update for a call the cancelled turn already closed', () => {
   expect(ui.filter(event => event.type === 'item.completed')).toHaveLength(1);
 });
 
-it('ends the turn that carried an executor error as failed, and lets a prompt adopt an agent-started turn', () => {
+it('ends the turn as failed when the executor error is its whole last message, and lets a prompt adopt an agent-started turn', () => {
   const ui: UiEvent[] = [];
-  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, { ...hooks,
+  const errors: string[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event), event: event => { if (event.type === 'error') errors.push(event.message); } }, { ...hooks,
     updateError: update => update.sessionUpdate === 'agent_message_chunk' && JSON.stringify(update).includes('⚠') ? 'failed' : undefined });
   events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'working' } });
   events.adopt();
   expect(events.agentTurn).toBe(false);
+  events.update({ sessionUpdate: 'tool_call', toolCallId: 'read', title: 'File a.txt', kind: 'read', status: 'completed' });
   events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '⚠ agent executor error: 400' } });
   events.update({ sessionUpdate: 'usage_update', used: 3, size: 10 });
   expect(events.turnOpen).toBe(true);
   events.finish('end_turn');
   expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'error' });
+  expect(errors).toEqual(['failed']);
+});
+
+it.each([
+  ['inside a longer message', [{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Result: ' } }, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '⚠ careful' } }]],
+  ['followed by more work', [{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '⚠ careful' } }, { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'next' } }]],
+])('keeps error-shaped text %s as text', (_case, updates) => {
+  const ui: UiEvent[] = [];
+  const events = new AcpEvents({ uiEvent: event => ui.push(event) }, { ...hooks,
+    updateError: update => update.sessionUpdate === 'agent_message_chunk' && JSON.stringify(update).includes('⚠') ? 'failed' : undefined });
+  events.begin();
+  for (const update of updates) events.update(update);
+  events.finish('end_turn');
+  expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'end_turn' });
 });
 
 const texts = (events: AcpEvents, chunks: string[]): void => {
