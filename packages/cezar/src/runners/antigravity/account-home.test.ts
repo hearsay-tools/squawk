@@ -20,9 +20,9 @@ it.each(['absolute', 'relative'])('shares native files from an %s source home an
   for (const name of ['AGENTS.md', 'GEMINI.md', 'config/skills', 'antigravity-cli/skills', 'skills']) {
     expect(await readlink(join(account, name))).toBe(join(source, name));
   }
-  await writeFile(join(account, 'antigravity-acp-settings'), 'account-owned');
+  await writeFile(join(account, 'account-settings.json'), 'account-owned');
   prepareAntigravityAccount(account, sourceHome);
-  expect(await readFile(join(account, 'antigravity-acp-settings'), 'utf8')).toBe('account-owned');
+  expect(await readFile(join(account, 'account-settings.json'), 'utf8')).toBe('account-owned');
   expect(await readFile(join(account, 'AGENTS.md'), 'utf8')).toBe('User instructions');
 });
 

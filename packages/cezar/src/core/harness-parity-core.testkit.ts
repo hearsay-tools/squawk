@@ -520,9 +520,9 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   ...exemptWhere('R4', 'scenario-unconstructible', facts => facts.nativeAsk === 'none', () =>
     'this wire has no native ask; a malformed cezar_ask is refused to the agent as invalid_request before any card exists'),
   // hearsay-tools/cezarion#1233 U7: cezar_wait stays live on every wire; only a declared native
-  // timer tool (Claude's ScheduleWakeup) is an alias.
+  // timer tool (Claude's ScheduleWakeup, the Antigravity CLI's schedule) is an alias.
   ...exemptWhere('U7', 'capability-absent', facts => facts.nativeTimerTool === null, () =>
-    'native scheduler tool exists only on the Claude wire'),
+    'this wire has no native timer tool'),
   // U7h (hearsay-tools/cezarion#1234): the ask scenario on these wires calls cezar_ask, so its
   // human wait opens through cezar_ask rather than a native ask; the cell asserts that instead.
   ...exemptWhere('U7h', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>

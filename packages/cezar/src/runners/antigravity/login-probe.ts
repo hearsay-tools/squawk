@@ -4,7 +4,6 @@ import { AcpRpcError } from '../acp/transport.ts';
 import { AntigravityProbe } from './probe-process.ts';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
-const ACCOUNT_KEYS = ['GEMINI_HOME', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME'] as const;
 
 /**
  * Whether the account holds a Google sign-in. Where the CLI stores it is not recorded, so the CLI
@@ -12,7 +11,8 @@ const ACCOUNT_KEYS = ['GEMINI_HOME', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME'] a
  * and opens no browser (antigravity-wire.md, CLI sign-in). Credential contents stay unread.
  */
 export async function antigravityPersonalSignIn(env: NodeJS.ProcessEnv): Promise<boolean> {
-  const account = Object.fromEntries(ACCOUNT_KEYS.flatMap(key => env[key] ? [[key, env[key]!]] : []));
+  const { GEMINI_HOME, HOME, USERPROFILE, XDG_CONFIG_HOME } = env;
+  const account = Object.fromEntries(Object.entries({ GEMINI_HOME, HOME, USERPROFILE, XDG_CONFIG_HOME }).flatMap(([key, value]) => value ? [[key, value]] : []));
   const probe = new AntigravityProbe(productEnv('ANTIGRAVITY_BIN', env), { ...account, BROWSER: '/bin/false' }, 15_000);
   try {
     await probe.acp.initialize();

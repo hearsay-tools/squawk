@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { waitFor } from '../../core/harness-parity-core.testkit.ts';
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import { AcpSession, type AcpSessionOptions } from './session.ts';
@@ -49,7 +50,7 @@ describe('shared ACP session over the native mock wire', () => {
     await expect(session.prompt([{ type: 'text', text: 'mock:agent-echo follow-up' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
   });
 
-  it('initializes, authenticates and maps a full turn, including early usage, tools and follow-ups', async () => {
+  it('initializes, authenticates and maps a full turn, including tools and follow-ups', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-')); dirs.push(dir);
     const wire = join(dir, 'wire.ndjson');
     const options: unknown[] = [];
@@ -61,7 +62,7 @@ describe('shared ACP session over the native mock wire', () => {
     } }, { CEZ_MOCK_STDIN_FILE: wire });
     await session.initialize();
     await session.open({ cwd: dir });
-    expect(events.slice(0, 2)).toEqual([{ type: 'session', sessionId: 'mock-acp-session', resumed: false }, { type: 'token-usage', tokensUsed: 0 }]);
+    expect(events[0]).toEqual({ type: 'session', sessionId: expect.stringMatching(/^mock-acp-/), resumed: false });
     expect(await session.prompt([{ type: 'text', text: 'Inspect the repo' }])).toMatchObject({ stopReason: 'end_turn' });
     expect(events).toContainEqual({ type: 'tool-call', id: 'read-1', tool: 'Read', input: { path: 'README.md' } });
     expect(events).toContainEqual({ type: 'tool-result', toolCallId: 'read-1', result: 'mock file', isError: false });
@@ -73,7 +74,7 @@ describe('shared ACP session over the native mock wire', () => {
     expect(options.at(-1)).toEqual([{ id: 'model', currentValue: 'fixture-model' }]);
     const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
     expect(frames.find(frame => frame.method === 'initialize').params).toMatchObject({ protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } } });
-    expect(frames.find(frame => frame.method === 'authenticate').params).toEqual({ methodId: 'mock-key' });
+    expect(frames.find(frame => frame.method === 'authenticate').params).toEqual({ methodId: 'gemini-api-key' });
     expect(frames.find(frame => frame.method === 'session/new').params._meta).toEqual({ fixture: { systemPrompt: { append: 'Test instruction' } } });
   });
 
@@ -139,19 +140,44 @@ describe('shared ACP session over the native mock wire', () => {
 });
 
 
-it('starts a successor turn for a late steer and keeps its native permission live', async () => {
+it('keeps one logical turn when a steer ends the running prompt first, and sums the usage', async () => {
   let steer: Promise<void> | undefined;
-  const { session, ui } = start({ event: event => {
-    if (event.type === 'tool-call' && event.id === 'steer-now') steer = session.steer([{ type: 'text', text: 'late input' }]);
+  const { session, ui } = start({ hooks: { normalizeUsage: () => ({ input: 3, output: 4, total: 7 }) }, event: event => {
+    if (event.type === 'tool-call' && !steer) steer = session.steer([{ type: 'text', text: 'steered input' }]);
+  } });
+  await session.initialize(); await session.open({ cwd: tmpdir() });
+  await session.prompt([{ type: 'text', text: 'mock:steer-tool' }]);
+  expect(steer).toBeDefined(); await steer;
+  expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(1);
+  // The early-ended prompt reports no usage on the CLI; the mock's reports both, summed into one turn.
+  expect(ui.filter(event => event.type === 'turn.completed')).toEqual([expect.objectContaining({ stopReason: 'end_turn' })]);
+});
+
+it('maps work after the turn to an agent-started turn that asks and ends on its own', async () => {
+  const { session, ui, events } = start({ hooks: {
+    agentWorkEnds: (update, previous) => update.sessionUpdate === 'usage_update' && previous === 'agent_message_chunk',
   }, uiEvent: event => {
     if (event.type === 'permission.requested') expect(session.respondPermission(event.requestId, 'allow-once')).toBe(true);
   } });
   await session.initialize(); await session.open({ cwd: tmpdir() });
-  await session.prompt([{ type: 'text', text: 'mock:acp-late-steer' }]);
-  expect(steer).toBeDefined(); await steer;
+  await session.prompt([{ type: 'text', text: 'mock:permission-late' }]);
+  await waitFor(() => ui.filter(event => event.type === 'turn.completed').length === 2);
+  expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(2);
+  expect(session.agentWorking).toBe(false);
+  expect(ui).toContainEqual(expect.objectContaining({ type: 'permission.resolved', optionId: 'allow-once' }));
+  expect(events).toContainEqual({ type: 'text', text: expect.stringMatching(/^Approval response: \{"reply":"once"\}/) });
+});
+
+it('lets a prompt carry an open agent-started turn instead of starting a second one', async () => {
+  const { session, ui, events } = start({ hooks: { agentWorkEnds: () => false, permissionPolicy: () => ({ outcome: 'selected', optionId: 'allow-once' }) } });
+  await session.initialize(); await session.open({ cwd: tmpdir() });
+  await session.prompt([{ type: 'text', text: 'mock:permission-late' }]);
+  await waitFor(() => events.some(event => event.type === 'text' && event.text.startsWith('Approval response: {"reply":"once"}')));
+  expect(session.agentWorking).toBe(true);
+  await session.prompt([{ type: 'text', text: 'mock:agent-echo joined' }]);
   expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(2);
   expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
-  expect(ui).toContainEqual(expect.objectContaining({ type: 'permission.resolved', optionId: 'allow-once' }));
+  expect(session.agentWorking).toBe(false);
 });
 
 it('applies update filtering and provider usage to a prompt without mutating mapper state', async () => {

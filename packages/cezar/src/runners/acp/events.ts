@@ -60,8 +60,10 @@ export class AcpEvents {
     if (!this.turnId) return;
     const reason = this.failure ? 'error' : stopReason;
     this.finishTools(reason);
-    this.sink.uiEvent?.({ type: 'turn.completed', turnId: this.turnId, stopReason: reason, ...(usage ? { usage } : {}) });
+    // A turn-end listener sees the turn closed: it may start the next one or close the session.
+    const turnId = this.turnId;
     this.turnId = undefined; this.agentStarted = false; this.failure = undefined;
+    this.sink.uiEvent?.({ type: 'turn.completed', turnId, stopReason: reason, ...(usage ? { usage } : {}) });
     this.sink.event?.({ type: 'turn-end' });
   }
 

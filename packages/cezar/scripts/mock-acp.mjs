@@ -2,6 +2,7 @@
 // ACP v1 encoder. Shared scenarios own content; this module owns native framing and timing.
 import readline from 'node:readline';
 import { appendFileSync, closeSync, existsSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { join } from 'node:path';
@@ -79,25 +80,25 @@ async function prompt(frame) {
   const turn = { cancelled: false, cancelledPromise: new Promise(resolve => { cancel = resolve; }), cancel: () => { turn.cancelled = true; cancel(); } };
   turn.frameId = frame.id;
   active = turn;
-  if (pendingAsk && await answerAsk(text)) {
-    update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
-    active = undefined;
-    acknowledge(frame, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text); return;
-  }
-  try {
-    // An unread crash stops before the first yield can accept a concurrent steer.
-    if (failureControl?.failure === 'unread' && failureControl.failureFor(text) === 'unread') process.exit(1);
-    await delivery?.holdResponse(text);
-    const failure = await failureControl?.failureFor(text);
-    if (failure) content('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[failure]}`);
-    else await runPrompt(answerNudge(text), turn);
-    if (failure) steers.length = 0;
-    else echoSteers(turn);
-    if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
-    const carrier = turn.carrier ?? frame;
-    if (!turn.replied) acknowledge(carrier, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
-  } catch (error) { write({ id: (turn.carrier ?? frame).id, error: { code: -32603, message: error.message } }); }
+  if (pendingAsk) { await answerAsk(text); finishAnswer(frame, text); return; }
+  try { await playTurn(frame, text, turn); }
+  catch (error) { write({ id: (turn.carrier ?? frame).id, error: { code: -32603, message: error.message } }); }
   finally { active = undefined; await turn.afterTurn?.(); }
+}
+function finishAnswer(frame, text) {
+  update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+  active = undefined;
+  acknowledge(frame, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text);
+}
+async function playTurn(frame, text, turn) {
+  // An unread crash stops before the first yield can accept a concurrent steer.
+  if (failureControl?.failure === 'unread' && failureControl.failureFor(text) === 'unread') process.exit(1);
+  await delivery?.holdResponse(text);
+  const failure = await failureControl?.failureFor(text);
+  if (failure) { content('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[failure]}`); steers.length = 0; }
+  else { await runPrompt(answerNudge(text), turn); echoSteers(turn); }
+  if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+  acknowledge(turn.carrier ?? frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
 }
 /** A steer ends the running prompt at once; the steer's own response ends the turn. */
 function steer(frame, text) {
@@ -156,19 +157,16 @@ async function runtimeProbe(text, turn) {
 }
 async function runPrompt(text, turn) {
   if (await runtimeProbe(text, turn)) return;
-  // The managed recovery prompt is supplied as the resumed system prompt.
-  if (sessionParams._meta?.antigravity?.systemPrompt?.append?.includes('mock:approval')) return permissionPrompt('mock:approval', turn);
   if (text.includes('mock:permission-late')) return latePermission(turn);
-  const wakeup = /mock:schedule-wakeup:(\d+)/.exec(text);
-  if (wakeup) {
-    // The native timer stays open until it fires; this turn ends at once.
-    update({ sessionUpdate: 'tool_call', toolCallId: 'call_schedule', name: 'schedule', title: 'Run schedule', kind: 'other', status: 'in_progress', rawInput: { DurationSeconds: Number(wakeup[1]), Prompt: 'wake up' } });
-    content('agent_message_chunk', 'Scheduled.'); return;
-  }
+  if (scheduleWakeup(text)) return;
   if (process.env.CEZ_MOCK_PERMISSION_PROBE === '1') await policyProbe();
   if (text.includes('mock:acp-extended-updates')) extendedUpdates();
   if (/mock:(?:ask-native|ask-bad)/.test(text)) return askQuestion(text);
-  if (/mock:(?:acp-permission|approval|permission-default)/.test(text)) return permissionPrompt(text, turn);
+  // A resumed process holds no open question: the answer arrives as the opening prompt.
+  if (context.session.resumeAfterAsk && /^Question:\s*(?:Vitest|Node test)\s*$/m.test(text)) {
+    content('agent_message_chunk', `Answer received: ${text.trim()}${await context.lifecycle(['cezar_done', {}])}`); return;
+  }
+  if (/mock:(?:acp-permission|acp-ask|approval|permission-default)/.test(text)) return permissionPrompt(text, turn);
   if (text.startsWith('/probe-')) { content('agent_message_chunk', `TRIGGER-FIXTURE ${text}`); return; }
   if (process.env.CEZ_MOCK_CI_PR) await probeCiTool('acp', sessionParams);
   const scenario = scenarioFor(text, context);
@@ -205,6 +203,14 @@ async function permissionPrompt(text, turn) {
   else content('agent_message_chunk', `Approval response: ${response.outcome.optionId === 'allow-once' ? 'allow' : 'deny'}${await context.lifecycle(['cezar_done', {}])}`);
 }
 
+/** The native timer stays open until it fires; this turn ends at once. */
+function scheduleWakeup(text) {
+  const wakeup = /mock:schedule-wakeup:(\d+)/.exec(text);
+  if (!wakeup) return false;
+  update({ sessionUpdate: 'tool_call', toolCallId: 'call_schedule', name: 'schedule', title: 'Run schedule', kind: 'other', status: 'in_progress', rawInput: { DurationSeconds: Number(wakeup[1]), Prompt: 'wake up' } });
+  content('agent_message_chunk', 'Scheduled.');
+  return true;
+}
 /** ask_question ends the prompt with the question as text; the next prompt is the answer. */
 async function askQuestion(text) {
   const questions = text.includes('mock:ask-bad') ? [] : [{ question: 'Which test library?', options: ['(Recommended) Vitest', 'Node test'] }];
@@ -222,13 +228,12 @@ async function answerAsk(text) {
   const ask = pendingAsk; pendingAsk = undefined;
   update({ sessionUpdate: 'tool_call_update', toolCallId: ask.id, status: 'completed', rawOutput: { output: text } });
   content('agent_message_chunk', `Answer received: ${text}${ask.done || context.session.resumeAfterAsk ? await context.lifecycle(['cezar_done', {}]) : ''}`);
-  return true;
 }
 /** P8: the turn ends after cezar_done; a background command then wakes the idle session, which asks. */
 async function latePermission(turn) {
   content('agent_message_chunk', `The turn finished before the late request.${await context.lifecycle(['cezar_done', {}])}`);
   turn.afterTurn = async () => {
-    const toolCall = { toolCallId: 'call_late', name: 'run_command', title: 'git push', kind: 'execute', rawInput: { CommandLine: 'git push' } };
+    const toolCall = { toolCallId: 'call_late', name: 'generate_image', title: 'Run generate_image', kind: 'other', rawInput: {} };
     update({ sessionUpdate: 'tool_call', ...toolCall, status: 'in_progress' });
     const response = await request('session/request_permission', { sessionId, toolCall,
       options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }, { optionId: 'reject-once', name: 'Deny', kind: 'reject_once' }] });
@@ -265,6 +270,7 @@ async function policyProbe() {
     }, `policy-${index}`);
   }
 }
+let mintedId;
 function recorded(frame) {
   // Connection credentials stay in memory; recordings retain only their structure.
   const copy = structuredClone(frame);
@@ -272,6 +278,9 @@ function recorded(frame) {
     if (server.type !== 'http') continue;
     server.url = 'http://127.0.0.1:0/mcp'; server.headers = [{ name: 'Authorization', value: '<session-token>' }];
   }
+  // This process's session/new id differs per process; two recordings of the same requests compare
+  // equal. A resumed id is the caller's and stays as it is.
+  if (mintedId && copy.params?.sessionId === mintedId) copy.params.sessionId = 'mock-acp-session';
   return JSON.stringify(copy);
 }
 
@@ -300,7 +309,8 @@ async function handle(frame) {
     case 'initialize': reply(frame.id, { protocolVersion: 1, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, mcpCapabilities: { http: true, sse: true } }, authMethods: [{ id: 'gemini-api-key', name: 'Gemini API key' }, { id: 'oauth-personal', name: 'Google' }], agentInfo: { name: 'Antigravity ACP Server', version: '1.5.14' } }); break;
     case 'authenticate': authenticate(frame); break;
     case 'session/new':
-      sessionParams = frame.params; sessionId = 'mock-acp-session';
+      // Like the CLI, each session gets its own id; recordings show it as mock-acp-session.
+      sessionParams = frame.params; sessionId = mintedId = `mock-acp-${randomUUID()}`;
       reply(frame.id, { sessionId, configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/resume': case 'session/load': context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/set_config_option': setConfig(frame); break;

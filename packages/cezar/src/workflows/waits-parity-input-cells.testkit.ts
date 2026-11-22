@@ -1,3 +1,4 @@
+import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { waitPartDescribers, github, nativeWire, pr, parkedOn, waitOfKind, turnEnds, fireTimer, settled, prompted, timerText, agentWaits, inputsFor, viaOf, sessionOf, runnerBoundary, expectPoolCapacity, sessionStoreEnv, useSessionStore } from './waits-parity-fixture.testkit.ts';
 import { nativeTimerDelay } from './run.ts';
 import { randomUUID } from 'node:crypto';
@@ -67,10 +68,11 @@ export function inputCells(runners: string[], it: typeof registerTest = register
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), runner });
       await until(() => parkedOn(run.id, viaOf(run.id, 'cezar_wait')));
       expect(viaOf(run.id, 'cezar_wait')).toMatchObject({ kind: WAIT_KIND.pr, prUrl: pr });
-      const scheduler = { type: 'tool-call', id: 'toolu_1', tool: 'ScheduleWakeup', input: { delaySeconds: 120 } } as const;
+      // The runner's declared timer tool, its input normalized to the delay Squawk reads.
+      const scheduler = { type: 'tool-call', id: 'toolu_1', tool: RUNNER_FACTS[runner]!.nativeTimerTool ?? 'ScheduleWakeup', input: { delaySeconds: 120 } } as const;
       if (exemptionFor('U7', runner)) {
         // capability-absent: the same tool name on this wire is not a scheduler.
-        expect(exemptionFor('U7', runner)?.reason).toBe('native scheduler tool exists only on the Claude wire');
+        expect(exemptionFor('U7', runner)?.reason).toBe('this wire has no native timer tool');
         expect(nativeTimerDelay(scheduler, runner)).toBeUndefined();
         expect(store.getRun(run.id)?.waits?.map(wait => wait.via).sort()).toEqual(['cezar_wait']);
         return;

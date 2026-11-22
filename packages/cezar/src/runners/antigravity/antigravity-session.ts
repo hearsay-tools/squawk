@@ -2,7 +2,7 @@ import { askPayloadOf } from '@open-mercato/cezar-contract/pending-ask';
 import { rm } from 'node:fs/promises';
 import { z } from 'zod';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlock, SessionOptions } from '../../core/agent-runner.ts';
-import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
+import { prependSystemPrompt, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
 import { openingContent, validSkillMessage } from '../../core/skill-trigger.ts';
 import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
 import { SessionDescendants } from '../../core/session-descendants.ts';
@@ -115,7 +115,7 @@ export class AntigravitySession implements AgentSession {
         permissionPolicy: request => permissionPolicy(spec.toolGrant, request, productEnv('APPROVAL_GATE', this.runtime.env) === '1', spec.squawkTools ? squawkToolNames(spec.env ?? {}).map(name => `${ANTIGRAVITY_MCP_NAME}_${name}`) : []),
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
         // The CLI saves the session/new system prompt with the session and appends a resent one,
-        // so a resume sends none (systemPromptOnResume 'in-thread').
+        // so a resume prepends it to the opening turn instead (systemPromptOnResume 'in-thread').
         sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } } } : {},
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
@@ -127,11 +127,9 @@ export class AntigravitySession implements AgentSession {
     });
   }
   private uiEvent(event: UiEvent): void {
-    if (event.type === 'turn.started') {
-      clearTimeout(this.quietTimer); this.clearAutoEnd();
-      // The prompt that opened this turn is read; an agent-started turn holds nothing.
-      if (this.busy) this.humanHolds.clear();
-    }
+    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); }
+    // The response that ends a turn carries every prompt sent into it: none is held after it.
+    if (event.type === 'turn.completed') this.humanHolds.clear();
     if (event.type === 'turn.completed' && event.stopReason === 'error' && !this.reportedFailure) {
       this.failedTurn = event; return;
     }
@@ -173,15 +171,28 @@ export class AntigravitySession implements AgentSession {
     }
     if (!this.open) return;
     this.ready = true;
-    void this.submit(openingContent(this.spec, !!this.spec.resume)).catch(error => this.fail(error));
+    void this.submit(this.opening()).catch(error => this.fail(error));
     this.options.onAgentInputReady?.();
   }
-  private submit(content: ContentBlock[]): Promise<void> {
+  /** `onAcknowledged` runs when the CLI takes the input: a steer when the running prompt answers
+   *  for it, any prompt at its own response. */
+  /** A resumed session carries spec.systemPrompt in its opening turn, as the other in-thread
+   *  runners do: the CLI keeps the session/new prompt, and a resent _meta prompt would be appended. */
+  private opening(): ContentBlock[] {
+    const content = openingContent(this.spec, !!this.spec.resume);
+    if (!(this.spec.resume && this.spec.sessionId && this.spec.systemPrompt)) return content;
+    const last = content.at(-1);
+    if (last?.type !== 'text') return content;
+    return [...content.slice(0, -1), { ...last, text: prependSystemPrompt(this.spec.systemPrompt, last.text) }];
+  }
+  private submit(content: ContentBlock[], onAcknowledged?: () => void): Promise<void> {
     this.clearAutoEnd();
-    const steered = this.busy;
+    // The ACP prompt state decides, not `busy`: a turn's response closes the prompt before the
+    // submission that carried it settles here, and input sent at that turn end opens a new one.
+    const steered = this.acp.promptOpen;
     this.inflight++;
-    const operation = steered ? this.acp.steer(contentBlocks(content)) : this.acp.prompt(contentBlocks(content));
-    return operation.then(() => {}).finally(() => {
+    const operation = steered ? this.acp.steer(contentBlocks(content), onAcknowledged) : this.acp.prompt(contentBlocks(content));
+    return operation.then(() => { onAcknowledged?.(); }).finally(() => {
       this.inflight--;
       if (this.busy) return;
       if (this.interrupted) this.closeInput();
@@ -196,7 +207,9 @@ export class AntigravitySession implements AgentSession {
     if (!this.ready) { this.queue.push(content); return true; }
     const hold = Symbol('human input');
     this.humanHolds.add(hold); this.humanAcks++;
-    void this.submit(content).then(() => this.releaseHuman(hold), error => { this.releaseHuman(hold); this.fail(error); });
+    let released = false;
+    const release = () => { if (!released) { released = true; this.releaseHuman(hold); } };
+    void this.submit(content, release).then(release, error => { release(); this.fail(error); });
     return true;
   }
   /** The card's answer becomes the next prompt, in the words the CLI's own question offered. */
@@ -215,8 +228,16 @@ export class AntigravitySession implements AgentSession {
   sendAgentMessage(content: ContentBlock[]): false | Promise<void> {
     if (!this.open || !this.ready || this.humanAcks || this.agentAcks || this.pendingAsk || !validSkillMessage(content)) return false;
     this.agentAcks++;
-    return this.submit(content).catch(error => { if (!this.open && this.requestedClose) throw new SessionEndedBeforeAcknowledgement(); throw error; }).finally(() => {
-      this.agentAcks--; this.options.onAgentInputReady?.(); if (!this.busy) this.scheduleAutoEnd();
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const settle = (error?: unknown) => {
+        if (settled) { if (error !== undefined) this.fail(error); return; }
+        settled = true;
+        this.agentAcks--; this.options.onAgentInputReady?.(); if (!this.busy) this.scheduleAutoEnd();
+        if (error === undefined) resolve();
+        else reject(!this.open && this.requestedClose ? new SessionEndedBeforeAcknowledgement() : error);
+      };
+      this.submit(content, () => settle()).then(() => settle(), error => settle(error ?? new Error('Antigravity input failed')));
     });
   }
   respondPermission(id: string, option: string): boolean { return this.acp.respondPermission(id, option); }

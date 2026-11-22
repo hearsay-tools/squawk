@@ -43,6 +43,7 @@ export class AcpSession {
   private get promptActive(): boolean { return this.promptOwner !== undefined; }
   private turnCancelled = false;
   private turnUsage: TokenUsage | undefined;
+  private readonly acknowledgements = new Map<symbol, () => void>();
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
     this.hooks = options.hooks ?? {};
@@ -110,19 +111,24 @@ export class AcpSession {
   }
 
   /** Steering adds input to the running turn. The turn is one logical turn: if the running prompt
-   * answers first, the steered prompt carries the turn and its response ends it. */
-  async steer(content: readonly Record<string, unknown>[]): Promise<void> {
+   * answers first, the steered prompt carries the turn and its response ends it. That early answer
+   * is the agent taking the steer: `onAcknowledged` runs then, or at the steer's own response. */
+  async steer(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<void> {
     if (!this.promptActive) throw new Error('ACP steering requires an active prompt');
-    await this.requestPrompt(content);
+    await this.requestPrompt(content, onAcknowledged);
   }
+
+  /** A prompt is open: new input steers into it. */
+  get promptOpen(): boolean { return this.promptActive; }
 
   /** An agent-started turn is open: the agent works on its own, with no prompt carrying it. */
   get agentWorking(): boolean { return this.events.agentTurn; }
 
-  private async requestPrompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
+  private async requestPrompt(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<z.infer<typeof promptResultSchema>> {
     const sessionId = this.requireSession();
     const token = Symbol('prompt');
     this.prompts.add(token);
+    if (onAcknowledged) this.acknowledgements.set(token, onAcknowledged);
     if (!this.promptOwner) this.beginPrompt(token);
     let result: z.infer<typeof promptResultSchema>;
     try {
@@ -130,12 +136,20 @@ export class AcpSession {
       const failure = this.promptOwner === token ? this.events.turnFailure : undefined;
       if (failure) throw new Error(failure);
     } catch (error) {
+      this.acknowledgements.delete(token);
       this.finishPrompt(token, this.turnCancelled ? 'cancelled' : 'error');
       throw error;
     }
+    this.acknowledge(token);
     const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
     this.finishPrompt(token, reason, this.hooks.normalizeUsage?.(result.usage));
     return result;
+  }
+
+  private acknowledge(token: symbol): void {
+    const acknowledged = this.acknowledgements.get(token);
+    this.acknowledgements.delete(token);
+    acknowledged?.();
   }
 
   private beginPrompt(token: symbol): void {
@@ -152,12 +166,15 @@ export class AcpSession {
     if (this.promptOwner !== token) return;
     const next = this.prompts.values().next().value;
     // A steer still pending carries the running turn: the agent ended this prompt to read it.
-    if (next && reason === 'end_turn' && !this.closed) { this.promptOwner = next; return; }
+    if (next && reason === 'end_turn' && !this.closed) { this.promptOwner = next; this.acknowledge(next); return; }
     this.cancelPermissions();
-    this.events.finish(reason, this.turnUsage);
+    // A turn-end listener may send input at once: it must find no prompt open, and open its own turn.
+    const carried = this.turnUsage;
     this.promptOwner = undefined;
     this.turnUsage = undefined;
-    if (next && !this.closed) this.beginPrompt(next);
+    this.events.finish(reason, carried);
+    const waiting = this.prompts.values().next().value;
+    if (waiting && !this.promptOwner && !this.closed) this.beginPrompt(waiting);
   }
 
   cancel(): void {
