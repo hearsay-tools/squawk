@@ -113,7 +113,7 @@ describe('a resumed session keeps its workflow step tools', () => {
     await drainFixtureManagers(repoRoot);
     manager?.dispose();
     manager = undefined;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

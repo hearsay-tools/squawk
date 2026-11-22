@@ -72,7 +72,7 @@ describe('account holds read the execution account', () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     runnerHook.runner = undefined; vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
@@ -142,7 +142,7 @@ describe('a held wake does not advertise itself to the workspace line', () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     runnerHook.runner = undefined; vi.restoreAllMocks(); vi.unstubAllEnvs();
   });

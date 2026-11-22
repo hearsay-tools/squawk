@@ -39,7 +39,7 @@ function setup() {
       const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.waiting, autoResumeAt: AT, autoResumeAttempts: 2, ...extra };
       setRunStatus(store, id, fixtureStatus, fixtureExtras);
     }
-    store.flush();
+    store.persistence.flush();
     expect(committed(id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: AT });
   };
   const committed = (id: string) => readPersistedRuns(dir).find((row) => row.id === id);

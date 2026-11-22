@@ -64,7 +64,7 @@ describe('runs with the same createdAt', () => {
     // A write keeps a row where it was inserted.
     store.updateRun('run-c', { title: 'renamed' });
     store.updateRun('run-b', { title: 'renamed' });
-    store.flush();
+    store.persistence.flush();
     expect(orders(store)).toEqual({ live: expected, summaries: expected, all: expected });
 
     store.close();
@@ -87,7 +87,7 @@ describe('runs with the same createdAt', () => {
     expect(store.listRuns().map((run) => run.id)).toEqual(created);
     expect(store.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
 
-    store.flush();
+    store.persistence.flush();
     expect(store.listRuns().map((run) => run.id)).toEqual(created);
     expect(store.listRunSummaries().runs.map((run) => run.id)).toEqual(created);
 

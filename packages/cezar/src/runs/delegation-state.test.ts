@@ -242,7 +242,7 @@ describe('RunStore durable delegation', () => {
     store = openTestRunStore(dataDir, { keepLive: true });
   });
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(dataDir, { recursive: true, force: true });
   });
   function parent() {
@@ -473,7 +473,7 @@ describe('RunStore durable delegation', () => {
     const agentInput = (text: string) => ({ id: randomUUID(), source: WAIT_SOURCE.agent, parentRunId: run.id, text, createdAt: now });
     store.commitWorkerContinuation(id, 'continue-line', { agentInputs: [agentInput(`patched ${secret}`)] }, undefined,
       withDelivery ? { rootId: run.id, state: { messages: [], outcomes: [] }, input: agentInput(`delivered ${secret}`) } : undefined);
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedText(dataDir)).not.toContain(secret);
     const texts = RunStore.open(dataDir, { keepLive: true }).getRun(id)?.agentInputs?.map(entry => entry.text);
     expect(texts).toEqual(withDelivery ? ['patched [REDACTED]', 'delivered [REDACTED]'] : ['patched [REDACTED]']);
@@ -499,7 +499,7 @@ describe('RunStore durable delegation', () => {
 
   it('a write that fails after its first row publishes nothing and keeps nothing', () => {
     const run = parent();
-    store.flush();
+    store.persistence.flush();
     const before = store.getRun(run.id)?.delegation;
     const persisted = readPersistedText(dataDir);
     // The parent's receipt row is written first; the worker's insert then aborts the transaction.
@@ -676,7 +676,7 @@ describe('RunStore durable delegation', () => {
     expect(store.getRun(broken.id)?.delegation).toEqual({ role: 'invalid' });
     expect(store.getRun(valid.id)?.delegation).toEqual(root);
     expect(() => store.createOwnedRun(input, broken.id, requestId, worker(broken.id), requestHash, spawnCapacityRefusal)).toThrow();
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun(broken.id)?.delegation).toEqual({ role: 'invalid' });
   });
 });

@@ -68,7 +68,7 @@ describe('POST /api/v1/runs/:id/continue override', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [repoRoot, home]) rmSync(dir, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;

@@ -26,7 +26,7 @@ it('removes published bytes when ordinary task history is deleted', () => {
   writeFileSync(join(directory, 'snapshot'), 'saved');
   setRunStatus(store, run.id, RUN_STATUS.done);
   expect(store.retention.deleteRun(run.id)).toBe(true);
-  store.flush();
+  store.persistence.flush();
   expect(existsSync(directory)).toBe(false);
   expect(existsSync(root)).toBe(true);
 });
@@ -35,7 +35,7 @@ it('provisions distinct task stores and keeps an existing store on Continue', ()
   writeFileSync(join(directory, 'snapshot'), 'saved');
   expect(provisionArtifactDirectory(join(root, '.ai/cezar'), run.id)).toBe(directory);
   expect(existsSync(join(directory, 'snapshot'))).toBe(true);
-  store.flush();
+  store.persistence.flush();
 });
 it('anchors storage to the canonical data directory when its ancestor is an OS alias', () => {
   const { root, store, run, directory } = fixture();
@@ -43,7 +43,7 @@ it('anchors storage to the canonical data directory when its ancestor is an OS a
   const dataDir = join(alias, '.ai/cezar');
   expect(provisionArtifactDirectory(dataDir, run.id)).toBe(directory);
   expect(artifactDirectory(dataDir, run.id)).toBe(directory);
-  store.flush();
+  store.persistence.flush();
 });
 it('degrades without following a redirected artifact store', () => {
   const { root, store, run, directory } = fixture();
@@ -52,7 +52,7 @@ it('degrades without following a redirected artifact store', () => {
   symlinkSync(outside, directory);
   expect(provisionArtifactDirectory(join(root, '.ai/cezar'), run.id)).toBe('');
   expect(artifactInstructions('')).toContain('unavailable');
-  store.flush();
+  store.persistence.flush();
 });
 it('teaches an explicit bundled publication command without requiring delegation', () => {
   expect(artifactInstructions('/owned/store')).toContain('artifact publish');

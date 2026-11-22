@@ -51,7 +51,7 @@ describe('per-task auto-resume cancellation', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

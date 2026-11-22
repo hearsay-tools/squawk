@@ -104,7 +104,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [repoRoot, home]) rmSync(dir, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;

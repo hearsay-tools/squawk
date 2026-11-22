@@ -60,7 +60,7 @@ export class ContinuationAcceptance {
   private commitContinuation(runId: string, human: boolean): void {
     const outcomes: RunOutcome[] = [{ kind: 'answered' }, { kind: 'counted', waitDeliveryFailures: undefined },
       ...(this.context.store.getRun(runId)?.automaticWakes ? [{ kind: 'charged' as const, automaticWakes: 0 }] : [])];
-    if (!human || !this.context.store.commitOutcome(runId, outcomes, {}, { bestEffort: true }).committed) this.context.store.flush();
+    if (!human || !this.context.store.commitOutcome(runId, outcomes, {}, { bestEffort: true }).committed) this.context.store.persistence.flush();
   }
 
   admitContinuation(
@@ -121,7 +121,7 @@ export class ContinuationAcceptance {
     this.context.store.archive.setArchived(runId, false);
     this.host.move(runId, 'continue-line', { stopping: undefined,
       ...(message ? { queuedMessages: [...(current.queuedMessages ?? []), message] } : {}) });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     this.line.enqueueJob(runId, job);
     void this.host.pump();
     return { ok: true };

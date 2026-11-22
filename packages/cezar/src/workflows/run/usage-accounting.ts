@@ -234,7 +234,7 @@ export function persistUsageCheckpoint(
   patch: Partial<Omit<StepState, 'id'>>,
 ): void {
   store.updateStep(runId, stepId, patch);
-  store.flush();
+  store.persistence.flush();
 }
 
 /**

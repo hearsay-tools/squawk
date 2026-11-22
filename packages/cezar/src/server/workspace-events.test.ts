@@ -85,7 +85,7 @@ describe('GET /api/v1/workspace/events', () => {
   afterEach(async () => {
     for (const close of closers.splice(0)) await close().catch(() => undefined);
     contexts.disposeAll();
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot, otherRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);

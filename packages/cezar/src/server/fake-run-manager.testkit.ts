@@ -129,7 +129,7 @@ export class FakeRunManager implements ProjectRunManager {
     if (queued) {
       this.#queued.delete(runId);
       this.#store.move(runId, 'cancel', {}, { event: CANCELLED_WHILE_QUEUED });
-      this.#store.flush();
+      this.#store.persistence.flush();
       return true;
     }
     const current = this.#store.getRun(runId);

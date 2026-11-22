@@ -76,7 +76,7 @@ describe('health topic + cache (live-server path)', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;

@@ -89,7 +89,7 @@ beforeEach(() => {
 afterEach(async () => {
   await drainFixtureManagers(root);
   runnerHook.runner = undefined;
-  store.flush();
+  store.persistence.flush();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });

@@ -112,7 +112,7 @@ describe('open', () => {
     seedRuns(dataDir, [legacy, record({ markerRefs: { pr: 9 } })]);
     const store = open();
     expect(held(store)).toEqual([legacy.id]);
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([]);
     const db = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE))!;
     try {
@@ -162,7 +162,7 @@ describe('writing a finished run', () => {
     expect(read.seenAt).toBeDefined();
     // Until its write settles it is held, and reads see the write.
     expect(store.getRun(done.id)).toBe(read);
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([]);
     expect(readPersistedRuns(dataDir)[0].seenAt).toBe(read.seenAt);
     expect(store.getRun(done.id)?.seenAt).toBe(read.seenAt);
@@ -175,11 +175,11 @@ describe('writing a finished run', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const release = blockRunWrites(dataDir);
     store.updateRun(done.id, { title: 'pending' });
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([done.id]);
     expect(store.getRun(done.id)?.title).toBe('pending');
     release();
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([]);
     expect(store.getRun(done.id)?.title).toBe('pending');
   });
@@ -190,11 +190,11 @@ describe('writing a finished run', () => {
     seedRuns(dataDir, [first, second]);
     const store = open({ keepLive: true });
     const events: string[] = [];
-    onRunWrite(store.lifecycle, (run: RunRecord) => { events.push(`run ${run.id}`); store.flush(); });
+    onRunWrite(store.lifecycle, (run: RunRecord) => { events.push(`run ${run.id}`); store.persistence.flush(); });
     store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { events.push(`deleted ${runId}`); } });
     commitStagedRuns(store, new Map([[first.id, { ...store.getRun(first.id)!, title: 'one' }], [second.id, { ...store.getRun(second.id)!, title: 'two' }]]));
     expect(events).toEqual([`run ${first.id}`, `run ${second.id}`]);
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([first.id]);
     expect(store.getRun(second.id)?.title).toBe('two');
   });
@@ -210,10 +210,10 @@ describe('pins', () => {
     expect(store.getRun(done.id)).toBe(pinned);
     expect(store.listRuns()).toEqual([pinned]);
     store.runPins.unpin(done.id, 'continue');
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(done.id)).toBe(pinned);
     store.runPins.unpin(done.id, 'active');
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([]);
     expect(store.listRuns()).toEqual([]);
   });
@@ -240,7 +240,7 @@ describe('the live set stays in memory', () => {
     seedRuns(dataDir, [run]);
     const store = open({ keepLive: true });
     store.updateRun(run.id, { title: 'touched' });
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([run.id]);
     expect(store.listRuns().map((r) => r.id)).toEqual([run.id]);
   });
@@ -251,7 +251,7 @@ describe('the live set stays in memory', () => {
     const store = open({ keepLive: true });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
     expect(held(store)).toEqual([run.id]);
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual([]);
     expect(store.getRun(run.id)?.status).toBe('done');
   });
@@ -264,7 +264,7 @@ describe('the live set stays in memory', () => {
     expect(held(store)).toEqual(ids([root!, ...workers, ...others]));
     const live = workers[1]!;
     setRunStatus(store, live.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual(ids(others));
   });
 
@@ -278,7 +278,7 @@ describe('the live set stays in memory', () => {
     const read = store.getRun(done!.id)!;
     expect(store.getRun(done!.id)).toBe(read);
     expect(store.listWorkersOf(done!.id)).toHaveLength(1);
-    store.flush();
+    store.persistence.flush();
     expect(held(store)).toEqual(ids([root!, done!]));
   });
 });
@@ -389,7 +389,7 @@ describe('indexed queries reach runs not in memory', () => {
     const store = open({ keepLive: true });
     expect(store.readFlags.markAllRead()).toBe(1);
     expect(store.archive.archiveFinished()).toMatchObject({ archived: 2, ids: [read.id, unread.id] });
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).filter((run) => run.archived).map((run) => run.id).sort()).toEqual(ids([unread, read]));
     expect(held(store)).toEqual([scheduled.id]);
   });

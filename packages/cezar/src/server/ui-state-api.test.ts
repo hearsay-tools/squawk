@@ -47,7 +47,7 @@ describe('the ui-state API — skillUsage (#408)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });

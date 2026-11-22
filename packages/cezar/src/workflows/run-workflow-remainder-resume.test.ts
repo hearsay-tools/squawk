@@ -93,8 +93,8 @@ describe('RunManager workflow remainder resume', () => {
     const originalBaseBranch = 'original-diff-baseline';
     fixture.store.updateRun(record.id, { startedAt: originalStartedAt, baseBranch: originalBaseBranch });
     const flushed: RunRecord[] = [];
-    const originalFlush = fixture.store.flush.bind(fixture.store);
-    vi.spyOn(fixture.store, 'flush').mockImplementation(() => {
+    const originalFlush = fixture.store.persistence.flush.bind(fixture.store.persistence);
+    vi.spyOn(fixture.store.persistence, 'flush').mockImplementation(() => {
       flushed.push(structuredClone(fixture.store.getRun(record.id)!));
       originalFlush();
     });

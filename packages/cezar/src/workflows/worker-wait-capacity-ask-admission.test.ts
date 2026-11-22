@@ -75,7 +75,7 @@ for (const role of ['root', 'worker'] as const) {
       if (role === 'root') setRunStatus(store, w.id, RUN_STATUS.queued, { finishedAt: undefined });
       // The transcripts belong to the crash checkpoint too: the cancel below closes a worker's
       // question as it stops (hearsay-tools/cezarion#2410), which a crash never writes.
-      store.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar')); const events = eventCheckpoint();
+      store.persistence.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar')); const events = eventCheckpoint();
       expect(store.getRun(target.id)?.continuationMessage?.origin).toBe('human');
       await until(() => manager.isActive(target.id) && store.getRun(target.id)?.steps.some(step => !!step.sessionId) === true);
       // The real wire received the accepted input but cannot reply until released.

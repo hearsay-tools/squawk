@@ -90,7 +90,7 @@ describe('lifecycle delivery cases', () => {
   it('a debounced move publishes run.updated and run.status-changed when touch runs, before the SQLite write', () => {
     const { store, created, persisted } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     const statusAtDelivery: Array<string | undefined> = [];
     const deliveries = record(store, () => statusAtDelivery.push(persisted(id)?.status));
     store.move(id, 'start');
@@ -134,13 +134,13 @@ describe('lifecycle delivery cases', () => {
   it('a conflict publishes run.updated with source conflict, and run.status-changed with exit conflict', () => {
     const { dir, store, created, persisted } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
     try { raw.transaction({ upserts: [encodeRunRow({ ...persisted(id)!, title: 'elsewhere', status: RUN_STATUS.failed })], deletes: [] }); } finally { raw.close(); }
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.updateRun(id, { title: 'local' });
     const deliveries = record(store);
-    store.flush();
+    store.persistence.flush();
     expect(types(deliveries)).toEqual(['run.updated', 'run.status-changed']);
     const updated = only(deliveries, 'run.updated');
     expect(updated).toMatchObject({ source: 'conflict', run: { title: 'elsewhere', status: RUN_STATUS.failed } });
@@ -151,20 +151,20 @@ describe('lifecycle delivery cases', () => {
   it('a conflict on a deleted row publishes run.deleted', () => {
     const { dir, store, created } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
     try { raw.transaction({ upserts: [], deletes: [id] }); } finally { raw.close(); }
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.updateRun(id, { title: 'local' });
     const deliveries = record(store);
-    store.flush();
+    store.persistence.flush();
     expect(deliveries).toEqual([{ type: 'run.deleted', payload: { runId: id } }]);
   });
 
   it('the delete of a plain run publishes run.deleted before the debounced write', () => {
     const { store, created, persisted } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     const rowAtDelivery: boolean[] = [];
     const deliveries = record(store, () => rowAtDelivery.push(persisted(id) !== undefined));
     expect(store.retention.deleteRun(id)).toBe(true);
@@ -176,7 +176,7 @@ describe('lifecycle delivery cases', () => {
     const { store, created, persisted } = setup();
     const id = created();
     setRunStatus(store, id, RUN_STATUS.done, { delegation: ROOT });
-    store.flush();
+    store.persistence.flush();
     const rowAtDeletion: boolean[] = [];
     const deliveries = record(store, (delivery) => { if (delivery.type === 'run.deleted') rowAtDeletion.push(persisted(id) !== undefined); });
     expect(store.retention.deleteRun(id)).toBe(true);
@@ -195,7 +195,7 @@ describe('lifecycle delivery cases', () => {
     const gone = open();
     const orphan = gone.createRun({ title: 'left running', workflow: 'w', task: 't', steps: [] });
     setRunStatus(gone, orphan.id, RUN_STATUS.running);
-    gone.flush();
+    gone.persistence.flush();
     crashStore(gone);
     expect(store.claims.adoptFamily(orphan.id)).toBe(orphan.id);
     expect(store.getRun(orphan.id)?.status).toBe(RUN_STATUS.failed);
@@ -216,7 +216,7 @@ describe('lifecycle delivery cases', () => {
   it('close() publishes store.closed before the database closes', () => {
     const { store } = setup();
     const openAtDelivery: boolean[] = [];
-    const deliveries = record(store, () => openAtDelivery.push(store.reportSource().db !== null));
+    const deliveries = record(store, () => openAtDelivery.push(store.persistence.reportSource().db !== null));
     store.close();
     expect(deliveries).toEqual([{ type: 'store.closed', payload: {} }]);
     expect(openAtDelivery).toEqual([true]);
@@ -301,13 +301,13 @@ describe('before holds the record as it was at the entry of each write path', ()
   it('a conflict on a row the store neither holds nor stages: a frozen before, source conflict', () => {
     const { dir, store, created, persisted } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     expect(store.retention.deleteRun(id)).toBe(true);
     const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
     try { raw.transaction({ upserts: [encodeRunRow({ ...persisted(id)!, title: 'elsewhere' })], deletes: [] }); } finally { raw.close(); }
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const deliveries = record(store);
-    store.flush();
+    store.persistence.flush();
     expect(types(deliveries)).toEqual(['run.updated']);
     const { run, before, source } = only(deliveries, 'run.updated');
     expect(source).toBe('conflict');

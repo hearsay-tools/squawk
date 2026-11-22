@@ -42,7 +42,7 @@ async function startOwner(): Promise<{ runId: string; pid: number }> {
     const store = RunStore.open(process.argv[2], { keepLive: true });
     const run = store.createRun({ title: 'theirs', workflow: 'w', task: 't', steps: [] });
     store.updateRun(run.id, { status: 'running' });
-    store.flush();
+    store.persistence.flush();
     process.stdout.write(JSON.stringify({ runId: run.id, pid: process.pid }) + '\\n');
     setInterval(() => {}, 1000);
   `);

@@ -189,7 +189,7 @@ describe('removal cases in a run store', () => {
     const store = open(dataDir);
     const run = store.createRun({ title: 'plain', task: 'plain', workflow: 'quick-task', steps: [] });
     setRunStatus(store, run.id, RUN_STATUS.done);
-    store.flush();
+    store.persistence.flush();
     // Autosave evidence is cleared with the other cleanups, after the commit (a changed moment:
     // before C1 the delete cleared it before the commit).
     const evidence = join(dataDir, 'runs', `${run.id}.autosave-cleanup.json`);
@@ -200,7 +200,7 @@ describe('removal cases in a run store', () => {
     expect(store.retention.deleteRun(run.id)).toBe(true);
     expect(calls).toEqual(['gate history']);
     expect(existsSync(evidence)).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(calls).toEqual(['gate history', 'cleanup']);
     expect(existsSync(evidence)).toBe(false);
     expect(warn).toHaveBeenCalledWith(`[hsq] History cleanup of run ${run.id} is incomplete: cleanup failed`);

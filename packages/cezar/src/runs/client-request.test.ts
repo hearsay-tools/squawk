@@ -49,7 +49,7 @@ describe('RunStore client request id', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'x', steps: [], clientRequestId: id, clientRequestHash: 'h' });
     store.archive.setArchived(run.id, true);
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(dataDir);
     const found = reopened.findRunByClientRequestId(id);
     expect(found?.id).toBe(run.id);

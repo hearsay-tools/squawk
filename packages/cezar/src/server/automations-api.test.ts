@@ -75,7 +75,7 @@ describe('GitHub automation API', () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
     useTestHome(undefined);
@@ -154,7 +154,7 @@ describe('GitHub automation API', () => {
       JSON.stringify({ ...latest, seq: latest.seq + i + 1 }))).join('\n') + '\n');
     await automationStore.compact();
     expect(readFileSync(logPath, 'utf8')).not.toContain('"result":"launched"');
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(dataDir);
     try {
       const server = app({ store: reopened, automationStore: AutomationStore.open(dataDir) });
@@ -167,7 +167,7 @@ describe('GitHub automation API', () => {
       expect(reopened.countAutomationRuns(definition.id)).toBe(2);
       reopened.retention.deleteRun(second.id);
       expect(reopened.countAutomationRuns(definition.id)).toBe(1);
-      reopened.flush();
+      reopened.persistence.flush();
       expect(reopened.countAutomationRuns(definition.id)).toBe(1);
     } finally {
       reopened.close();

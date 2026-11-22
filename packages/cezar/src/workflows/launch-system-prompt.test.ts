@@ -106,7 +106,7 @@ describe('launch system prompt at both sites (#1632)', () => {
     await drainFixtureManagers(repoRoot);
     manager?.dispose();
     manager = undefined;
-    store.flush();
+    store.persistence.flush();
     await mergeWriteWorkspaceConfig((config) => {
       config.projects = config.projects.filter((project) => project.id !== projectId);
     }, testHome());

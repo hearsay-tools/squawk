@@ -325,7 +325,7 @@ async function runChild(options: ChildOptions, resultPath: string): Promise<void
       const s = store;
       sync['save (flush)'] = await sampleSync(options, (iteration) => {
         s.updateRun(saveTarget, { seenAt: isoAt(iteration) });
-        s.flush();
+        s.persistence.flush();
       });
       gc();
       const flushMedian = quantile(sync['save (flush)'], 0.5);
@@ -356,7 +356,7 @@ async function runChild(options: ChildOptions, resultPath: string): Promise<void
       s.runPins.unpin(singleTarget, 'cleanup');
       gc();
       sync['commit (cold run)'] = await sampleSync(options, () => {
-        s.flush();
+        s.persistence.flush();
         const t0 = performance.now();
         commit([singleTarget]);
         return performance.now() - t0;
@@ -401,7 +401,7 @@ async function runChild(options: ChildOptions, resultPath: string): Promise<void
       await sleep(options.duration * 1000);
       clearInterval(timer);
       histogram.disable();
-      s.flush();
+      s.persistence.flush();
       const ms = (ns: number) => ns / 1e6;
       result.loop = {
         p50: ms(histogram.percentile(50)), p99: ms(histogram.percentile(99)), max: ms(histogram.max), mean: ms(histogram.mean),

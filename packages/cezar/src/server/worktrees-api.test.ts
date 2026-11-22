@@ -53,7 +53,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     removeWorktreesRepo({ repoRoot, cezHome }, savedHome);
   });
 
@@ -369,7 +369,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       expect(existsSync(join(worktreePath!, 'work.txt'))).toBe(true);
       // Cleared, whether the run is still held (the key set to undefined) or already read back
       // from runs.db once its write settled (the key absent) — #779.
-      store.flush();
+      store.persistence.flush();
       expect(store.getRun(id)).toMatchObject({ branch, pullRequestUrl: expect.any(String) });
       expect(store.getRun(id)?.worktreeReclaimedAt).toBeUndefined();
     });

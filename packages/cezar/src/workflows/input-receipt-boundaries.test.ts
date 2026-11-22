@@ -77,7 +77,7 @@ function launch(mode: 'fresh' | 'continuation') {
   return record.id;
 }
 
-const saved = (id: string) => { store.flush(); return readPersistedRuns(join(root, '.ai/cezar')).find(run => run.id === id)!; };
+const saved = (id: string) => { store.persistence.flush(); return readPersistedRuns(join(root, '.ai/cezar')).find(run => run.id === id)!; };
 
 it.each(['fresh', 'continuation'] as const)('%s reads the session at callback time before and after startSession returns', async mode => {
   let id = '';

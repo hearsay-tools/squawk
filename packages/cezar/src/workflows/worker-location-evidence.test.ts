@@ -55,7 +55,7 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
     manager.requestWorkerStop(run.id);
     expect(await manager.awaitRunTermination(run.id, 15_000)).toBe(true);
     await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0));
-    manager.dispose(); store.flush(); reopenRuntime();
+    manager.dispose(); store.persistence.flush(); reopenRuntime();
     const dataDir = join(root, '.ai/cezar');
     writeFileSync(join(dataDir, 'runs', `${run.id}.execution.json`), JSON.stringify(proof));
     writeFileSync(join(dataDir, 'runs', `${run.id}.processes.json`), JSON.stringify({

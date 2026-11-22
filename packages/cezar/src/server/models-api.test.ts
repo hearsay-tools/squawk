@@ -27,7 +27,7 @@ describe('workspace model catalog API', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
   });
 

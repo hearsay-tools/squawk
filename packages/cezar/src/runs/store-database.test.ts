@@ -83,7 +83,7 @@ describe('importing runs.json', () => {
     expect(readPersistedRuns(dataDir).map((run) => run.id)).toEqual(['bb', 'a']);
 
     store.updateRun('a', { title: 'renamed' });
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun('a')?.title).toBe('renamed');
   });
 
@@ -105,7 +105,7 @@ describe('importing runs.json', () => {
     expect(importMeta()).toMatchObject({ source: 'runs.json (unparseable)', records: 0 });
 
     const run = store.createRun({ title: 'new', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     // Before #779 the next save overwrote the unreadable file; now nothing writes it.
     expect(readFileSync(join(dataDir, 'runs.json'), 'utf8')).toBe(bytes);
     expect(runIds(open())).toEqual([run.id]);
@@ -143,7 +143,7 @@ describe('importing runs.json', () => {
     expect(runIds(store)).toEqual([]);
     expect(existsSync(join(dataDir, LEGACY_INDEX_BACKUP_FILE))).toBe(false);
     const run = store.createRun({ title: 'new', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).map((saved) => saved.id)).toEqual([run.id]);
     // The marker is set: a runs.json that shows up later is somebody else's history.
     writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('late')]));
@@ -167,7 +167,7 @@ describe('a database with an unreadable row', () => {
     expect(store.getRun('broken-done')).toBeUndefined();
     expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('1 run(s) in runs.db could not be read'));
     store.updateRun('a', { title: 'touched' });
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).map((run) => run.id)).toEqual(['broken', 'broken-done', 'bb', 'a']);
   });
 
@@ -195,7 +195,7 @@ describe('durable commits', () => {
     const store = open();
     const x = store.createRun({ title: 'x', workflow: 'w', task: 't', steps: [] });
     const y = store.createRun({ title: 'y', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     store.updateRun(x.id, { title: 'x pending' });
     const persisted = readPersistedRuns(dataDir);
     const before = structuredClone(store.getRun(y.id));
@@ -224,7 +224,7 @@ describe('durable commits', () => {
     const x = store.createRun({ title: 'x', workflow: 'w', task: 't', steps: [] });
     const y = store.createRun({ title: 'y', workflow: 'w', task: 't', steps: [] });
     const gone = store.createRun({ title: 'gone', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     const seen = writes(store);
     store.updateRun(x.id, { title: 'x pending' });
     expect(store.retention.deleteRun(gone.id)).toBe(true);
@@ -242,12 +242,12 @@ describe('durable commits', () => {
     const store = open();
     const run = store.createRun({ title: 'x', workflow: 'w', task: 't', steps: [] });
     const other = store.createRun({ title: 'y', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     store.retention.deleteRun(run.id);
     const target = runPersistence(store);
     vi.spyOn(target, 'persist').mockImplementationOnce(() => { throw new Error('disk unavailable'); });
     expect(() => store.commitDelegation([{ id: other.id, delegation: { role: 'invalid' } }])).toThrow('disk unavailable');
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).map((saved) => saved.id)).toEqual([other.id]);
   });
 
@@ -259,16 +259,16 @@ describe('durable commits', () => {
     const first = open({ keepLive: true });
     const a = first.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
     const b = first.createRun({ title: 'b', workflow: 'w', task: 't', steps: [] });
-    first.flush();
+    first.persistence.flush();
     const second = open({ keepLive: true });
     const c = second.createRun({ title: 'c', workflow: 'w', task: 't', steps: [] });
-    second.flush();
+    second.persistence.flush();
 
     first.updateRun(a.id, { title: 'a from first' });
-    first.flush();
+    first.persistence.flush();
     second.updateRun(c.id, { title: 'c from second' });
     expect(second.updateRun(b.id, { title: 'b from second' })).toBeUndefined();
-    second.flush();
+    second.persistence.flush();
 
     const reopened = RunStore.open(dataDir, { keepLive: true });
     expect(reopened.getRun(a.id)?.title).toBe('a from first');
@@ -280,16 +280,16 @@ describe('durable commits', () => {
     const first = open({ keepLive: true });
     const x = first.createRun({ title: 'x', workflow: 'w', task: 't', steps: [] });
     const y = first.createRun({ title: 'y', workflow: 'w', task: 't', steps: [] });
-    first.flush();
+    first.persistence.flush();
     const second = open({ keepLive: true });
     const z = second.createRun({ title: 'z from second', workflow: 'w', task: 't', steps: [] });
-    second.flush();
+    second.persistence.flush();
 
     first.updateRun(x.id, { title: 'x pending' });
     const target = runPersistence(first);
     vi.spyOn(target, 'persist').mockImplementationOnce(() => { throw new Error('disk unavailable'); });
     expect(() => first.commitDelegation([{ id: y.id, delegation: { role: 'invalid' } }])).toThrow('disk unavailable');
-    first.flush();
+    first.persistence.flush();
 
     const reopened = RunStore.open(dataDir, { keepLive: true });
     expect(reopened.getRun(x.id)?.title).toBe('x pending');
@@ -304,7 +304,7 @@ describe('debounced saves write only what changed', () => {
     seedRuns(dataDir, Array.from({ length: 20 }, (_, i) => record(`run-${String(i).padStart(2, '0')}`)));
     const store = open();
     const seen = writes(store);
-    store.flush();
+    store.persistence.flush();
     expect(seen).toEqual([]);
 
     store.updateRun('run-03', { title: 'changed' });
@@ -326,7 +326,7 @@ describe('debounced saves write only what changed', () => {
     const store = open();
     const seen = writes(store);
     const run = store.createRun({ title: 'trigger retention', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     expect(seen).toHaveLength(1);
     expect(seen[0]?.deletes).toEqual([]);
     expect([...seen[0]!.upserts].sort()).toEqual([run.id, 'old-1'].sort());
@@ -338,7 +338,7 @@ describe('debounced saves write only what changed', () => {
     const run = store.createRun({ title: 'summary', workflow: '(planned)', task: 't', steps: [{ id: 's', name: 'Planner', kind: STEP_KIND.agent }] });
     setRunStatus(store, run.id, RUN_STATUS.waiting, { autoResumeAt: '2026-10-06T00:00:00.000Z', error: 'usage limit' });
     store.archive.setArchived(run.id, false);
-    store.flush();
+    store.persistence.flush();
     const saved = row(run.id)!;
     expect(JSON.parse(saved.data)).toEqual(JSON.parse(JSON.stringify(store.getRun(run.id))));
     expect(JSON.parse(saved.summary)).toEqual(JSON.parse(JSON.stringify(toRunSummary(store.getRun(run.id)!))));
@@ -386,7 +386,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
     seedRuns(dataDir, [seeded, record('control')]);
     const store = open({ keepLive });
     const seen = writes(store);
-    store.flush();
+    store.persistence.flush();
     expect(seen).toEqual([{ upserts: [seeded.id], deletes: [] }]);
     expectSaved(readPersistedRuns(dataDir).find((run) => run.id === seeded.id)!);
     expect(row('control')?.revision).toBe(1);
@@ -396,7 +396,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
     seedRuns(dataDir, [record('root', { status: RUN_STATUS.waiting, hasPendingHumanAsk: true } as Partial<RunRecord>), record('control')]);
     const store = open({ keepLive: true });
     const seen = writes(store);
-    store.flush();
+    store.persistence.flush();
     expect(seen).toEqual([{ upserts: ['root'], deletes: [] }]);
     const row = readPersistedRuns(dataDir).find((run) => run.id === 'root');
     expect(row).not.toHaveProperty('hasPendingHumanAsk');
@@ -424,7 +424,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
 
     const store = open();
     const seen = writes(store);
-    store.flush();
+    store.persistence.flush();
     expect(seen.flatMap((change) => change.upserts).sort()).toEqual(['gh', 'sched']);
     // The committed rows, which every cold list read serves.
     expect(JSON.parse(row('gh')!.summary)).toHaveProperty('automationId', 'auto-gh');
@@ -437,7 +437,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
     expect(healed.gh).toBeGreaterThan(revisions.gh);
     const again = open();
     const later = writes(again);
-    again.flush();
+    again.persistence.flush();
     expect(later).toEqual([]);
     expect(again.listRunSummaries().runs.find((run) => run.id === 'sched')).toHaveProperty('automationId', 'auto-s');
   });
@@ -446,7 +446,7 @@ describe('loading normalizes and saves exactly the rows it changed', () => {
     seedRuns(dataDir, [record('a'), record('bb', { status: RUN_STATUS.review })]);
     const store = open();
     const seen = writes(store);
-    store.flush();
+    store.persistence.flush();
     expect(seen).toEqual([]);
   });
 });
@@ -463,7 +463,7 @@ describe('close', () => {
     store.updateRun(run.id, { title: 'after close' });
     expect(store.getRun(run.id)?.title).toBe('after close');
     expect(vi.getTimerCount()).toBe(0);
-    store.flush();
+    store.persistence.flush();
     expect(() => store.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow('runs database unavailable');
     expect(() => store.close()).not.toThrow();
     expect(readPersistedRuns(dataDir)[0]?.title).toBe('x');

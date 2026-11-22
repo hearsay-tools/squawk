@@ -35,7 +35,7 @@ describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {
   it('restart: an overdue timer resolves at once and is delivered exactly once', async () => {
     const run = await waitingParent();
     const wait = await registerTimer(run.id, 600);
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedRuns(join(root, '.ai/cezar')) as Array<{ id: string; waits?: Wait[] }>;
     const row = disk.find(entry => entry.id === run.id)!;
     row.waits = row.waits!.map(entry => ({ ...entry, deadline: new Date(Date.now() - 1_000).toISOString() }));
@@ -50,7 +50,7 @@ describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {
     const run = await waitingParent();
     const wait = await registerPr(run.id, 12);
     if (wait.kind !== 'pr') throw Error('expected a CI wait');
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedRuns(join(root, '.ai/cezar')) as Array<Record<string, unknown> & { id: string }>;
     const row = disk.find(entry => entry.id === run.id)!;
     const result = success();
@@ -71,7 +71,7 @@ describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {
     const run = await waitingParent();
     const ci = await registerPr(run.id, 12);
     const timer = await registerTimer(run.id, 600);
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedRuns(join(root, '.ai/cezar')) as Array<Record<string, unknown> & { id: string }>;
     Object.assign(disk.find(entry => entry.id === run.id)!, { status: RUN_STATUS.review });
     await restart(false, disk);

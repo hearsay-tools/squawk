@@ -154,7 +154,7 @@ describe('project run sources', () => {
     expect(store.claims.adoptFallbackFamily(run.id)).toBe(true);
     store.eventLog.appendEvent(run.id, { type: 'text', text: 'new' });
     store.updateRun(run.id, { title: 'changed' });
-    store.flush();
+    store.persistence.flush();
     expect(store.claims.sourceDataDir(run.id)).toBe(root('cezar'));
     expect(store.eventLog.readEvents(run.id).map(event => event.text)).toEqual(['original', 'new']);
     expect(readFileSync(history, 'utf8')).toBe(bytes);
@@ -191,7 +191,7 @@ describe('project run sources', () => {
     expect(store.retention.canDeleteRun(duplicate.id)).toBe(false);
     expect(() => store.retention.deleteRun(duplicate.id)).toThrow(/\.ai\/squawk.*binary that migrated/);
     expect(store.retention.deleteRun(old.id)).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(old.id)).toBeUndefined();
     expect(store.getRun(duplicate.id)?.title).toBe('duplicate');
   });
@@ -301,7 +301,7 @@ describe('project run sources', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const store = open();
     store.createRun({ title: 'new', task: 'new', workflow: 'quick-task', steps: [] });
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(protectedRun.id)?.archived).toBe(false);
     expect(info.mock.calls.filter(([line]) => String(line).includes('read-only fallback run'))).toHaveLength(1);
   });
@@ -329,7 +329,7 @@ describe('project run sources', () => {
     expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
     expect(store.claims.adoptFallbackFamily(workerId)).toBe(true);
     store.updateRun(workerId, { title: 'explicit write' });
-    store.flush();
+    store.persistence.flush();
     expect(store.claims.sourceDataDir(parentId)).toBe(root('cezar'));
     expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
     expect(store.workerResults.readWorkerResult(parentId, workerId)?.diff).toMatchObject({ path: join(root('cezar'), 'runs', `${parentId}-worker-results`, `${workerId}.${snapshotId}.json`) });
@@ -352,7 +352,7 @@ describe('project run sources', () => {
     } else {
       store.claims.adoptFallbackFamily(run.id);
       store.updateRun(run.id, { title: 'changed' });
-      store.flush();
+      store.persistence.flush();
       expect(store.claims.isFallbackRun(run.id)).toBe(false);
       expect(store.getRun(run.id)?.title).toBe('changed');
       expect(readFileSync(join(root('cezar'), 'runs', name, 'result.json'), 'utf8')).toBe('source evidence');
@@ -371,7 +371,7 @@ describe('project run sources', () => {
     expect(store.listWorkersOf(parent.id).map(run => run.id)).toContain(worker.id);
     expect(store.listRuns().map(run => run.id)).not.toContain(worker.id);
     expect(store.getRun(worker.id)?.status).toBe(RUN_STATUS.running);
-    store.flush();
+    store.persistence.flush();
     const db = RunDatabase.open(join(root('cezar'), 'runs.db'));
     try { expect(db.has(worker.id)).toBe(false); } finally { db.close(); }
   });
@@ -384,7 +384,7 @@ describe('project run sources', () => {
     expect(store.claims.adoptFamily(parent.id, { stop: true })).toBeUndefined();
     expect(store.claims.adoptFallbackFamily(parent.id)).toBe(true);
     expect(store.claims.adoptFamily(parent.id, { stop: true })).toBe(parent.id);
-    store.flush();
+    store.persistence.flush();
     expect(store.claims.isFallbackRun(parent.id)).toBe(false);
     expect(store.getRun(parent.id)?.status).toBe(RUN_STATUS.cancelled);
     const source = RunDatabase.openReadOnly(join(root('squawk'), 'runs.db'))!;
@@ -397,7 +397,7 @@ describe('project run sources', () => {
     const store = open();
     expect(store.listRunIds()).toEqual([]);
     store.createRun({ title: 'new', task: 'new', workflow: 'quick-task', steps: [] });
-    store.flush();
+    store.persistence.flush();
     expect(existsSync(join(paths.write, 'runs.db'))).toBe(true);
     expect(existsSync(paths.reads[1]!)).toBe(false);
   });
@@ -419,7 +419,7 @@ describe('project run sources', () => {
     vi.restoreAllMocks();
     store.claims.adoptFallbackFamily(run.id);
     store.updateRun(run.id, { title: 'retry' });
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(run.id)?.title).toBe('retry');
     expect(store.eventLog.readEvents(run.id)[0]?.text).toBe('original');
   });

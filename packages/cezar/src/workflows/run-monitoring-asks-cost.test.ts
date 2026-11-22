@@ -46,7 +46,7 @@ describe('RunManager reported cost accounting', () => {
     await drainFixtureManagers(repoRoot);
     runnerHook.runner = undefined;
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -264,7 +264,7 @@ describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

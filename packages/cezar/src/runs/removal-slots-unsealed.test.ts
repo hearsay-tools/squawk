@@ -41,10 +41,10 @@ it('a deletion throws and removes no row, history, artifact or tmp directory', (
   writeFileSync(join(artifacts, 'snapshot'), 'kept');
   const tmp = join(dataDir, 'tmp', run.id);
   mkdirSync(tmp, { recursive: true });
-  store.flush();
+  store.persistence.flush();
 
   expect(() => store.retention.deleteRun(run.id)).toThrow(UNSEALED);
-  store.flush();
+  store.persistence.flush();
   store.close();
 
   const reopened = RunStore.open(dataDir);

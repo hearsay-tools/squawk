@@ -68,7 +68,7 @@ describe('family reconcile decodes each cold run once per pass', () => {
 
   it('a pass with nothing to repair decodes each member once', () => {
     manager.reconcileWorkerWaits(family.parentId);
-    store.flush(); // the written members leave memory: the next pass reads cold rows again
+    store.persistence.flush(); // the written members leave memory: the next pass reads cold rows again
     decodes.clear();
     manager.reconcileWorkerWaits(family.parentId);
     expect(memberDecodes()).toEqual([1, 1]);

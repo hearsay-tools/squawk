@@ -91,7 +91,7 @@ describe('open leaves another live store\'s runs alone', () => {
     setRunStatus(serve, monitoring.id, RUN_STATUS.waiting);
     serve.commitWait(monitoring.id, { id: '33333333-3333-4333-8333-333333333333', kind: WAIT_KIND.timer, source: WAIT_SOURCE.agent, via: WAIT_VIA['monitoring-line'],
       registeredAt: '2026-10-05T11:55:00.000Z', deadline: '2026-10-05T12:00:00.000Z', phase: WAIT_PHASE.open, turnId: 'turn', seconds: 300 });
-    serve.flush();
+    serve.persistence.flush();
 
     const headless = open();
     const heldThere = headless.heldIds();
@@ -122,7 +122,7 @@ describe('another store\'s runs are readable and refuse writes', () => {
     const owner = open({ keepLive: true });
     const run = owner.createRun({ title: 'theirs', workflow: 'w', task: 't', steps: [] });
     owner.eventLog.appendEvent(run.id, { type: 'note', message: 'from the owner' });
-    owner.flush();
+    owner.persistence.flush();
     const other = open({ keepLive: true });
 
     expect(other.claims.runOwnership(run.id)).toBe('foreign');
@@ -137,7 +137,7 @@ describe('another store\'s runs are readable and refuse writes', () => {
     expect(() => other.eventLog.appendEvent(run.id, { type: 'note', message: 'not mine' })).toThrow(RunWriteRefusedError);
     expect(() => other.commitDelegation([{ id: run.id, delegation: { role: 'invalid' } }])).toThrow(RunWriteRefusedError);
     expect(other.retention.deleteRun(run.id)).toBe(false);
-    other.flush();
+    other.persistence.flush();
 
     expect(other.heldIds()).toEqual([]);
     expect(persisted(run.id)).toMatchObject({ title: 'theirs', archived: false });
@@ -149,19 +149,19 @@ describe('another store\'s runs are readable and refuse writes', () => {
     const run = owner.createRun({ title: 'done there', workflow: 'w', task: 't', steps: [] });
     setRunStatus(owner, run.id, RUN_STATUS.done, { finishedAt: '2026-10-05T10:00:00.000Z' });
     owner.runPins.pin(run.id, 'active'); // still settling there
-    owner.flush();
+    owner.persistence.flush();
     const other = open({ keepLive: true });
     expect(other.readFlags.markAllRead()).toBe(0);
     expect(other.archive.archiveFinished()).toEqual({ archived: 0, ids: [], pinnedIds: [] });
 
     owner.runPins.unpin(run.id, 'active');
-    owner.flush();
+    owner.persistence.flush();
     expect(owner.heldIds()).toEqual([]);
     expect(claims()).toEqual([]);
     expect(other.claims.runOwnership(run.id)).toBe('free');
     expect(other.readFlags.markAllRead()).toBe(1);
     expect(other.archive.archiveFinished().ids).toEqual([run.id]);
-    other.flush();
+    other.persistence.flush();
     expect(persisted(run.id)).toMatchObject({ archived: true });
   });
 });
@@ -176,7 +176,7 @@ describe('claims follow memory', () => {
 
     store.readFlags.setRead('finished');
     expect(claims().map((claim) => claim.family).sort()).toEqual(['finished', live.id].sort());
-    store.flush();
+    store.persistence.flush();
     expect(claims().map((claim) => claim.family)).toEqual([live.id]);
 
     store.close();
@@ -187,7 +187,7 @@ describe('claims follow memory', () => {
     const store = open({ keepLive: true });
     const root = store.createRun({ title: 'root', workflow: 'w', task: 't', steps: [] });
     store.commitDelegation([{ id: root.id, delegation: { role: 'root', permissions: [], receipts: [] } }]);
-    store.flush();
+    store.persistence.flush();
     const other = open({ keepLive: true });
     // Only the row's columns matter here: `parent_run_id` files it under the root.
     const raw = db();
@@ -199,7 +199,7 @@ describe('claims follow memory', () => {
   it('takes over the claims of a store in this process that is gone without releasing them', () => {
     const gone = open({ keepLive: true });
     const run = gone.createRun({ title: 'left', workflow: 'w', task: 't', steps: [] });
-    gone.flush();
+    gone.persistence.flush();
     // A store that vanished without close(): its session is no longer open in this process.
     const raw = new DatabaseSync(join(dataDir, RUNS_DB_FILE));
     raw.prepare("UPDATE run_claims SET session = 'a-session-nobody-opened'").run();
@@ -218,7 +218,7 @@ describe('deleting a run', () => {
     const store = open();
     expect(store.retention.deleteRun('old')).toBe(true);
     for (const file of files) expect(existsSync(file), file).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(persisted('old')).toBeUndefined();
     for (const file of files) expect(existsSync(file), file).toBe(false);
   });
@@ -229,7 +229,7 @@ describe('a run changed under this store', () => {
     const store = open({ keepLive: true });
     const a = store.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
     const b = store.createRun({ title: 'b', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     const original = persisted(a.id);
     writeBehindItsBack({ ...original, title: 'a from elsewhere' });
     const events: string[] = [];
@@ -261,7 +261,7 @@ describe('a run changed under this store', () => {
 
     // Unrelated durable work proceeds.
     store.commitDelegation([{ id: b.id, delegation: { role: 'invalid' } }]);
-    store.flush();
+    store.persistence.flush();
     expect(persisted(b.id)).toMatchObject({ title: 'b local', delegation: { role: 'invalid' } });
     expect(persisted(a.id)).toMatchObject({ title: 'a from elsewhere' });
   });
@@ -269,14 +269,14 @@ describe('a run changed under this store', () => {
   it('keeps the changes pending when the evidence cannot be stored', () => {
     const store = open({ keepLive: true });
     const a = store.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     writeBehindItsBack({ ...persisted(a.id), title: 'elsewhere' });
     const raw = new DatabaseSync(join(dataDir, RUNS_DB_FILE));
     raw.exec("CREATE TRIGGER no_evidence BEFORE INSERT ON run_conflicts BEGIN SELECT RAISE(ABORT, 'evidence disk full'); END");
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     store.updateRun(a.id, { title: 'local' });
-    store.flush();
+    store.persistence.flush();
     expect(errors.mock.calls.flat().join('\n')).toContain('could not record the conflicting write');
     expect(store.claims.runOwnership(a.id)).toBe('held');
     expect(store.getRun(a.id)?.title).toBe('local');
@@ -285,7 +285,7 @@ describe('a run changed under this store', () => {
     // Once evidence can be written, the next save meets the same conflict and settles it.
     raw.exec('DROP TRIGGER no_evidence');
     raw.close();
-    store.flush();
+    store.persistence.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, localData: expect.stringContaining('"title":"local"') })]);
     expect(store.claims.runOwnership(a.id)).toBe('quarantined');
     expect(store.getRun(a.id)?.title).toBe('elsewhere');
@@ -294,14 +294,14 @@ describe('a run changed under this store', () => {
   it('detects a row deleted under it and drops it, with its intent recorded', () => {
     const store = open({ keepLive: true });
     const a = store.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     writeBehindItsBack(null, a.id);
     const deleted: string[] = [];
     store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { deleted.push(runId); } });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     store.updateRun(a.id, { title: 'local' });
-    store.flush();
+    store.persistence.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, reason: 'deleted', currentData: null, localDeleted: false })]);
     expect(store.getRun(a.id)).toBeUndefined();
     expect(deleted).toEqual([a.id]);
@@ -313,13 +313,13 @@ describe('a run changed under this store', () => {
     const files = historyFiles('old');
     const store = open({ keepLive: true });
     store.readFlags.setRead('old');
-    store.flush();
+    store.persistence.flush();
     store.runPins.pin('old', 'cleanup');
     writeBehindItsBack({ ...persisted('old'), title: 'touched elsewhere' });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.runPins.unpin('old', 'cleanup');
     expect(store.retention.deleteRun('old')).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: 'old', reason: 'changed', localDeleted: true, localData: null })]);
     expect(persisted('old')).toMatchObject({ title: 'touched elsewhere' });
     for (const file of files) expect(existsSync(file), file).toBe(true);
@@ -328,7 +328,7 @@ describe('a run changed under this store', () => {
   it('never takes a row deleted and created again for the one it read, though its id is the same', () => {
     const store = open({ keepLive: true });
     const a = store.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     const seen = persisted(a.id);
     // Deleted and written again under the same id, as many times as it takes per-row counters to
     // come back round to the revision this store holds.
@@ -338,7 +338,7 @@ describe('a run changed under this store', () => {
     }
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.updateRun(a.id, { title: 'local' });
-    store.flush();
+    store.persistence.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, reason: 'changed' })]);
     expect(persisted(a.id)).toMatchObject({ title: 'again 2' });
   });
@@ -346,13 +346,13 @@ describe('a run changed under this store', () => {
   it('stops writing a family whose claim another writer took', () => {
     const store = open({ keepLive: true });
     const a = store.createRun({ title: 'a', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     const raw = new DatabaseSync(join(dataDir, RUNS_DB_FILE));
     raw.prepare("UPDATE run_claims SET session = 'someone-else', generation = generation + 100").run();
     raw.close();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     store.updateRun(a.id, { title: 'local' });
-    store.flush();
+    store.persistence.flush();
     expect(conflicts()).toEqual([expect.objectContaining({ runId: a.id, reason: 'claim-lost' })]);
     expect(store.claims.runOwnership(a.id)).toBe('quarantined');
     expect(persisted(a.id)).toMatchObject({ title: 'a' });
@@ -364,7 +364,7 @@ describe('a run nobody alive owns', () => {
     const gone = open({ keepLive: true });
     const run = gone.createRun({ title: 'left running', workflow: 'w', task: 't', steps: [] });
     setRunStatus(gone, run.id, RUN_STATUS.running);
-    gone.flush();
+    gone.persistence.flush();
     const store = open({ keepLive: true });
     expect(store.claims.runOwnership(run.id)).toBe('foreign');
     crashStore(gone);
@@ -388,12 +388,12 @@ describe('a run nobody alive owns', () => {
       // Before #779 an optimistic write never touched the database; it still does not fail.
       expect(store.readFlags.setRead('finished')?.seenAt).toBeDefined();
       expect(claims()).toEqual([]);
-      store.flush();
+      store.persistence.flush();
       expect(errors.mock.calls.flat().join('\n')).toContain('database is locked');
     } finally {
       release();
     }
-    store.flush();
+    store.persistence.flush();
     expect(persisted('finished')?.seenAt).toBeDefined();
     // Taken with the write, then released once the run left memory.
     expect(claims()).toEqual([]);
@@ -403,7 +403,7 @@ describe('a run nobody alive owns', () => {
     const owner = open({ keepLive: true });
     const run = owner.createRun({ title: 'theirs', workflow: 'w', task: 't', steps: [] });
     setRunStatus(owner, run.id, RUN_STATUS.running);
-    owner.flush();
+    owner.persistence.flush();
     const scratch = agentTmpDir(dataDir, run.id);
     mkdirSync(scratch, { recursive: true });
     const store = open({ keepLive: true });

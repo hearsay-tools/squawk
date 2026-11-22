@@ -65,7 +65,7 @@ describe('preview registration (open-mercato/cezar#781)', { timeout: 30_000 }, (
     for (const release of sessions.release) release();
     manager?.dispose();
     manager = undefined;
-    store.flush();
+    store.persistence.flush();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     rmSync(repoRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

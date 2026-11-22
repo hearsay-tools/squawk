@@ -78,7 +78,7 @@ export function provisionWorkflowFixture() {
       manager.dispose();
     }
     recoveredManagers.length = 0;
-    for (const store of recoveredStores) store.flush(); recoveredStores.length = 0;
+    for (const store of recoveredStores) store.persistence.flush(); recoveredStores.length = 0;
     await controller.close(); sessions.length = 0; await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs();
   });
   // Real acceptance/store/manager and account registry; only the external agent wire is fake.

@@ -256,7 +256,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios.baseline! });
       await until(() => store.getRun(run.id)?.status === 'waiting');
       store.updateRun(run.id, { waitDeliveryFailures: 2 });
-      store.flush();
+      store.persistence.flush();
       const unmute = muteLockedDatabaseLogs();
       const unblock = blockRunWrites(join(root, '.ai/cezar'));
       try {

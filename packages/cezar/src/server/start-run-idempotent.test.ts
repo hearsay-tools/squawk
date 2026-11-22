@@ -40,7 +40,7 @@ describe('POST /api/v1/runs clientRequestId', () => {
 
   afterEach(() => {
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;

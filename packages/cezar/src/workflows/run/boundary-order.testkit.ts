@@ -63,8 +63,8 @@ export function boundaryOrderFixture(autonomous = false): BoundaryOrderFixture {
   state.liveSession.attachSession(wire); state.liveSession.selectStep('step');
   const append = store.eventLog.appendEvent.bind(store.eventLog);
   vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => { log.push(`event:${event.type}`); return append(id, event); });
-  const flush = store.flush.bind(store);
-  vi.spyOn(store, 'flush').mockImplementation(() => { log.push('flush'); flush(); });
+  const flush = store.persistence.flush.bind(store.persistence);
+  vi.spyOn(store.persistence, 'flush').mockImplementation(() => { log.push('flush'); flush(); });
   const context = unused<RunModuleContext>('context', { store, repoRoot: root, dataDir: join(root, '.ai/cezar'), disposed: () => false,
     semaphore: unused<WorkspaceSemaphore>('semaphore', { monitoringWakeIntervalMinutes: () => 1, memoryLimitMb: () => 1 }) });
   const waitEngine = new WaitEngine(context, unused<ConstructorParameters<typeof WaitEngine>[1]>('engine', {
@@ -95,7 +95,7 @@ export function boundaryOrderFixture(autonomous = false): BoundaryOrderFixture {
   const settler = new TurnSettler(context, host, 60_000, 40, 'wait for workers', 3600);
   traceBoundary(log);
   onTestFinished(async () => {
-    clearIdleTimer(state); store.flush(); await store.transcriptFacts.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
+    clearIdleTimer(state); store.persistence.flush(); await store.transcriptFacts.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
   });
   log.length = 0;
   return { root, run, store, log, state, wire, active, context, waitEngine, humanWaits, questions, questionHost, host, line, settler };

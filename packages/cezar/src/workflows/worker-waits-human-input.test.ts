@@ -50,10 +50,10 @@ describe('human messages beside an owed timer wait', { timeout: 45_000 }, () => 
     expect(manager.enqueueMessage(p.id, [{ type: 'text', text: 'human update beside the timer' }])).toBeTruthy();
     expect(store.getRun(p.id)?.continuationMessage).toMatchObject({ origin: 'human', text: opening!.text });
     expect(entryOf(p.id, timer.id)?.phase).toBe('resolved');
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('human update beside the timer');
-    expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.flush();
+    expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.persistence.flush();
     manager.cancel(blocker.id);
     await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('human update beside the timer')));
     await until(() => settledOf(p.id, timer.id)?.phase === 'delivered');
@@ -74,7 +74,7 @@ describe('human messages beside an owed timer wait', { timeout: 45_000 }, () => 
       expect(manager.deferMessage(p.id, [{ type: 'text', text: 'startup update beside the timer' }])).toBe(true);
       expect(entryOf(p.id, timer.id)?.phase).toBe('resolved');
       expect(store.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('startup update beside the timer');
-      store.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
+      store.persistence.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
     } finally { release(); }
     await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'user-message' && String(event.text).includes('startup update beside the timer')));
     const eventStart = store.eventLog.readEvents(p.id).length;

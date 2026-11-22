@@ -121,7 +121,7 @@ describe('the store-backed autosave records', () => {
     store = RunStore.open(dataDir);
     runId = store.createRun({ title: 't', workflow: 'quick-task', task: 'do it', steps: [] }).id;
     store.updateRun(runId, { branch: BRANCH });
-    store.flush();
+    store.persistence.flush();
     seedHandoffFile(dataDir, store.getRun(runId)!);
     vi.useFakeTimers({ toFake: ['Date'] });
     at('2026-10-16T10:00:00.000Z');

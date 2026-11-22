@@ -57,7 +57,7 @@ describe('the config API', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     rmSync(homeRoot, { recursive: true, force: true });
     if (savedHome === undefined) delete process.env.HOME;
@@ -401,7 +401,7 @@ describe('liveTitleUpdates round-trip (task auto-naming spec)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -438,7 +438,7 @@ describe('reviewGate round-trip (optional review gate, #489)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

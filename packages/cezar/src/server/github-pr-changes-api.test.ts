@@ -26,7 +26,7 @@ describe('the GitHub PR changes API', () => {
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
   });
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

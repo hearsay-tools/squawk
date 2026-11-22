@@ -50,7 +50,7 @@ describe('POST /api/v1/runs systemPrompt', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

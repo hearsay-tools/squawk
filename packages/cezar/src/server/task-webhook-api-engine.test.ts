@@ -51,7 +51,7 @@ describe('task webhook API (run engine)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     for (const [key, env] of [['home', 'CEZ_HOME'], ['dryRun', 'CEZ_DRY_RUN']] as const) {
       if (saved[key] === undefined) delete process.env[env];

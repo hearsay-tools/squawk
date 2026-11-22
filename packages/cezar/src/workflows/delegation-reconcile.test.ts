@@ -48,7 +48,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     manager = new RunManager(store, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
   });
   afterEach(() => {
-    manager.dispose(); store.flush(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers();
+    manager.dispose(); store.persistence.flush(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -80,7 +80,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     const prepare = vi.spyOn(store.transcriptFacts, 'prepareRecoveryFacts');
     const before = store.eventLog.readEvents(a.parentId);
     await manager.recover();
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(a.parentId)).toBeDefined();
     expect(store.eventLog.readEvents(a.parentId)).toEqual(before);
     expect(writes).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     vi.spyOn(manager, 'continueRun').mockReturnValue({ ok: false, error: 'fixture stops agent launch' });
     expect(store.listWorkersOf(a.parentId).map(run => run.id)).toContain(a.workerId);
     await manager.recover();
-    store.flush();
+    store.persistence.flush();
     // Automatic recovery treats the whole family as read only: both runs keep their stored status.
     expect(store.claims.runOwnership(a.parentId)).toBe('fallback');
     expect(store.getRun(a.parentId)?.status).toBe(RUN_STATUS.running);
@@ -132,7 +132,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     // An explicit control adopts the family, then the existing orphan adoption recovers it.
     expect(store.claims.adoptFallbackFamily(a.parentId)).toBe(true);
     expect(await manager.adoptOrphanedRun(a.parentId, { stop: true })).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(store.claims.isFallbackRun(a.workerId)).toBe(false);
     expect(store.getRun(a.parentId)?.status).not.toBe(RUN_STATUS.running);
     expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(databaseBytes);
@@ -216,7 +216,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
   it.each(['dispose', 'failure', 'foreign', 'completed'] as const)('selected starting-proof readiness retains guard and rechecks %s', async outcome => {
     manager.dispose();
     const generation = store.workerExecutions.commitWorkerExecutionStart(a.workerId);
-    store.flush(); store.close();
+    store.persistence.flush(); store.close();
     const dataDir = join(root, '.ai/cezar');
     // Prior-boot proof makes exit conclusive, independent of ambient process enumeration.
     writeFileSync(join(dataDir, 'runs', `${a.workerId}.processes.json`), JSON.stringify({
@@ -337,7 +337,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
     await reboot((store, manager) => {
       expect(store.getRun(parentId)?.status).toBe('cancelled');
       expect(store.getRun(parentId)?.delegation).not.toHaveProperty('finishRequestedAt');
-      store.flush();
+      store.persistence.flush();
       expect(readPersistedRuns(dataDir).find(run => run.id === parentId)?.delegation).not.toHaveProperty('finishRequestedAt');
       // Repaired, the root is finished like any other and leaves memory with its family.
       expect(store.heldIds()).not.toContain(parentId);
@@ -395,7 +395,7 @@ describe('restart repairs on a settled family without a conversation (#779)', ()
       expect(root?.delegation).not.toHaveProperty('wait');
       expect(root?.waits ?? []).toEqual([]);
       expect(root?.lastWaits).toEqual([expect.objectContaining({ id: waitId, kind: WAIT_KIND.worker, phase: WAIT_PHASE.cancelled })]);
-      store.flush();
+      store.persistence.flush();
       expect(store.heldIds()).not.toContain(parentId);
     });
   });

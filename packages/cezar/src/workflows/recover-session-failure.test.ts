@@ -51,7 +51,7 @@ describe('recover() contains backend session failures (#562)', () => {
     else process.env.CEZ_ENV_PASSTHROUGH = savedPassthrough;
     if (savedReject === undefined) delete process.env.MOCK_CODEX_REJECT_RESUME;
     else process.env.MOCK_CODEX_REJECT_RESUME = savedReject;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

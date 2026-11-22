@@ -624,7 +624,7 @@ describe('session git API routes', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -1006,7 +1006,7 @@ describe('repo git API routes (R5 Step 1.3 — main working tree)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

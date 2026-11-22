@@ -161,7 +161,7 @@ describe('wakes beside questions, footers and slots (hearsay-tools/cezarion#1233
     fireTimer(second.id);
     await until(() => prompted('claude', `Timer ${second.id} fired`).length === 1);
     expect(store.getRun(run.id)?.agentInputs?.find(input => input.id === second.id)?.deliveredAt).toBeUndefined();
-    store.flush();
+    store.persistence.flush();
     const beforeAck = readPersistedRuns(join(root, '.ai/cezar'));
     expect(beforeAck.find(row => row.id === run.id)?.automaticWakes).toBe(1);
     release();

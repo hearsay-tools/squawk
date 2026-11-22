@@ -36,7 +36,7 @@ function fixture() {
       appendEvent: vi.fn((_id: string, event: { type: string; message?: string }) => { log.push(`event:${event.type}`); }),
     },
     updateRun: vi.fn((_id: string, patch: object) => { log.push(`update:${Object.keys(patch).join(',')}`); }),
-    updateStep: call('step', undefined), flush: call('flush', undefined), commitWait: call('commitWait', undefined),
+    updateStep: call('step', undefined), persistence: { flush: call('flush', undefined) }, commitWait: call('commitWait', undefined),
   };
   const humanWaits = {
     turnEndHumanWait: call<object | undefined>('humanWait', undefined),

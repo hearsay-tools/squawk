@@ -84,7 +84,7 @@ function buildFixture() {
   const worktreeRun = store.createRun({ title: 'fallback worktree', task: 'w', workflow: 'quick-task', steps: [] });
   const worktreePath = join(fallback, 'worktrees', worktreeRun.id);
   setRunStatus(store, worktreeRun.id, RUN_STATUS.done, { worktreePath, branch: `cez/${worktreeRun.id.slice(0, 8)}` });
-  store.flush(); store.close();
+  store.persistence.flush(); store.close();
   const fallbackIds = new Set([mixed.workerId, mixedLive.workerId, fallbackSettled.parentId, fallbackSettled.workerId,
     fallbackLive.parentId, fallbackLive.workerId, archived.id, worktreeRun.id]);
   return { legacy, mixed, mixedLive, fallbackSettled, fallbackLive, fallbackIds, worktreePath };
@@ -159,7 +159,7 @@ it('boot, recovery, reconcilers and background sweeps never copy or change a fal
     await pruneOrphans(root, new Set(store.listRunIds()));
     store.archive.archiveFinished(undefined, true);
     store.createRun({ title: 'triggers count retention', task: 'r', workflow: 'quick-task', steps: [] });
-    store.flush();
+    store.persistence.flush();
 
     // Positive control: the same sweeps did act on the legacy-only family.
     expect(store.eventLog.readEvents(fixture.legacy.workerId).some(event => event.type === 'human-ask-closed')).toBe(true);
@@ -223,7 +223,7 @@ it('keeps saving a held legacy family when another process adds a fallback membe
     finally { source.close(); }
     const before = fallbackBytes();
     store.updateRun(fixture.legacy.parentId, { title: 'still saved' });
-    store.flush();
+    store.persistence.flush();
     expect(error.mock.calls.flat().join('\n')).not.toMatch(/failed to save/);
     expect(readPersistedRuns(primary).find(run => run.id === fixture.legacy.parentId)?.title).toBe('still saved');
     expect(primaryIds()).not.toContain(late.id);
@@ -245,7 +245,7 @@ it('maps a busy legacy database to RunDatabaseBusyError for projected claims and
     // The store's existing contract: a busy claim is deferred to the write, which retries on the next save.
     expect(store.updateRun(fixture.legacy.parentId, { title: 'deferred' })?.title).toBe('deferred');
     lock.exec('ROLLBACK');
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(primary).find(run => run.id === fixture.legacy.parentId)?.title).toBe('deferred');
   } finally { if (lock.isTransaction) lock.exec('ROLLBACK'); lock.close(); store.close(); }
 });
@@ -258,7 +258,7 @@ it('settles a queued change refused by a new fallback copy per row, and the rest
   try {
     const doomed = store.createRun({ title: 'legacy only', task: 'd', workflow: 'quick-task', steps: [] });
     setRunStatus(store, doomed.id, RUN_STATUS.done);
-    store.flush();
+    store.persistence.flush();
     const row = (store as unknown as { db: RunDatabase }).db.get(doomed.id)!;
     expect(store.retention.deleteRun(doomed.id)).toBe(true);
     store.updateRun(fixture.legacy.parentId, { title: 'unrelated' });
@@ -266,7 +266,7 @@ it('settles a queued change refused by a new fallback copy per row, and the rest
     const source = RunDatabase.open(join(fallback, RUNS_DB_FILE));
     try { source.transaction({ upserts: [{ ...row, conversationMembers: null, automationRuns: null }], deletes: [] }); } finally { source.close(); }
     const before = fallbackBytes();
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(primary).find(run => run.id === fixture.legacy.parentId)?.title).toBe('unrelated');
     expect(primaryIds()).toContain(doomed.id);
     expect(store.getRun(doomed.id)?.title).toBe('legacy only');

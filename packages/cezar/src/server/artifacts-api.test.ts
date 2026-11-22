@@ -33,7 +33,7 @@ describe('task file links', () => {
     writeFileSync(join(working, 'ADR space.md'), '# working copy');
     writeFileSync(join(root, 'ADR space.md'), '# project copy');
   });
-  afterEach(() => { vi.restoreAllMocks(); store.flush(); rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => { vi.restoreAllMocks(); store.persistence.flush(); rmSync(root, { recursive: true, force: true }); });
   const get = (suffix: string, alias = '') => apiRequest(createApp({ home: testHome(), repoRoot: root, store, manager: {} as RunManager, version: 'test' }), `/api/v1${alias}/runs/${runId}${suffix}`);
   const link = (path: string, alias = '') => get(`/file-link?path=${encodeURIComponent(path)}`, alias);
 

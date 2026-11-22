@@ -42,7 +42,7 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
         // Squawk's text, so the mock answers it with its ordinary turn rather than an echo.
         await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
         await Promise.all(bookkeeping);
-        store.flush(); // Earlier turn bookkeeping/debounce cannot satisfy the measured ACK checkpoint.
+        store.persistence.flush(); // Earlier turn bookkeeping/debounce cannot satisfy the measured ACK checkpoint.
         const wake = structuredClone(store.getRun(p.id)?.agentInputs?.find(input => input.source === 'lifecycle'));
         expect(wake?.deliveredAt).toBeUndefined();
         const charged = store.getRun(p.id)?.automaticWakes ?? 0; // the first turn's nudge

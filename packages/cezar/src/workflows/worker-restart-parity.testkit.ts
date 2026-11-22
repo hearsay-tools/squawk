@@ -63,7 +63,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     const dataDir = join(root, '.ai/cezar'); const files = join(dataDir, 'runs');
     const before = store.eventLog.readEvents(w.id);
     expect(before.length).toBeGreaterThan(0);
-    store.flush(); store.close();
+    store.persistence.flush(); store.close();
     writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
     const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
     writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
@@ -114,7 +114,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
         controller: { pid: ABSENT_PROCESS_PID, startToken: `${boot}:100` },
         processes: [...recorded.processes, { pid: survivor.pid, pgid: survivor.pid, startToken: processStartToken(survivor.pid) }] }));
-      store.flush(); reopenRuntime();
+      store.persistence.flush(); reopenRuntime();
       try {
         expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
         expect(survivor.running).toBe(true);
@@ -154,7 +154,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
         controller: { pid: ABSENT_PROCESS_PID, startToken: `${boot}:100` } }));
-      store.flush(); reopenRuntime();
+      store.persistence.flush(); reopenRuntime();
       try {
         // Recovery settles the generation first, and marks it interrupted.
         await manager.recover();
@@ -204,7 +204,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const owned = await groupHolder(root);
       const readable = await readableHolder(workspace.path);
       const unreadable = await nonDumpableHolder(scratch);
-      setRunStatus(store, w.id, RUN_STATUS.waiting); store.flush(); reopenRuntime();
+      setRunStatus(store, w.id, RUN_STATUS.waiting); store.persistence.flush(); reopenRuntime();
       workerExecutionsOf(store).scopes.spawnScope(w.id).started(owned.pid);
       const service = new DelegationService(workerCleanups({ terminationTimeoutMs: 4_000 })); const detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       try {
@@ -253,7 +253,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
     const ambient = await readableHolder(workspace.path); let ambientClosed = false;
     writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...ledger,
       processes: [...ledger.processes, { pid: descendant.pid, startToken: processStartToken(descendant.pid) }] }));
-    setRunStatus(store, w.id, RUN_STATUS.waiting); store.flush(); reopenRuntime();
+    setRunStatus(store, w.id, RUN_STATUS.waiting); store.persistence.flush(); reopenRuntime();
     const credentials = new CredentialRegistry();
     const caller = credentials.authenticate(credentials.issue('project', p.id, 'test'))!;
     let service = new DelegationService(workerCleanups()); let detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
@@ -266,7 +266,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       // Include PID reuse: ambient PID cannot attest the exited old incarnation.
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...ledger,
         processes: [...ledger.processes, { pid: ambient.pid, startToken: `${boot}:1` }] }));
-      detach(); manager.dispose(); store.flush(); reopenRuntime(); await manager.recover();
+      detach(); manager.dispose(); store.persistence.flush(); reopenRuntime(); await manager.recover();
       // An explicit destroy waits its own bounded time for the lock; 1 s here, so the hang guard below stays far off.
       service = new DelegationService(workerCleanups({ manualLockWaitMs: 1_000 })); detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       // Exit proof, not abandonment: the generation completes and nothing cancels the task.

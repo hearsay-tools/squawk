@@ -17,7 +17,7 @@ const unused = (): never => { throw new Error('unused child wait collaborator');
 let root: string;
 let store: RunStore;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'cez-child-owner-')); store = RunStore.open(root); });
-afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { store.persistence.flush(); rmSync(root, { recursive: true, force: true }); });
 const event = (status: ToolStatus): UiEvent => ({ type: 'item.updated', item: {
   kind: 'tool', id: 'child', name: 'Agent', toolKind: 'task', title: 'research', status, background: true,
 } });

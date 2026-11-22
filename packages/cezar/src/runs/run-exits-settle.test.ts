@@ -66,7 +66,7 @@ function setup() {
   /** Move `id` by `exit`, then read the record the save wrote. */
   const settle = (id: string, exit: RunExitId) => {
     store.move(id, exit);
-    store.flush();
+    store.persistence.flush();
     return committed(id);
   };
   return { dir, store, committed, root, worker, settle };
@@ -98,7 +98,7 @@ describe('B1-B3: every settling exit clears currentStepId and retires the root\'
     const { store, root, committed } = setup();
     const id = root('cancel');
     store.move(id, 'cancel', { currentStepId: 'b' });
-    store.flush();
+    store.persistence.flush();
     expect(committed(id)).not.toHaveProperty('currentStepId');
   });
 
@@ -132,7 +132,7 @@ describe('B4: a settling exit keeps an existing finishedAt; continue-* and hold 
     const { store, root, worker, committed } = setup();
     const id = exit === 'stop-worker' ? worker(exit, { finishedAt: EARLIER }) : root(exit, { finishedAt: EARLIER });
     store.move(id, exit, RUN_EXITS[exit].durability === 'committed' ? {} : { finishedAt: new Date().toISOString() });
-    store.flush();
+    store.persistence.flush();
     expect(committed(id)).toMatchObject({ status: RUN_EXITS[exit].to, finishedAt: EARLIER });
   });
 
@@ -147,7 +147,7 @@ describe('B4: a settling exit keeps an existing finishedAt; continue-* and hold 
     const { id } = store.createRun({ title: 'settle', task: 'settle', workflow: 'quick-task', steps: [] });
     setRunStatus(store, id, RUN_STATUS.failed, { finishedAt: EARLIER });
     store.move(id, exit);
-    store.flush();
+    store.persistence.flush();
     expect(committed(id)).not.toHaveProperty('finishedAt');
   });
 });
@@ -225,7 +225,7 @@ describe('B10: every exit to cancelled settles running and waiting steps to canc
     const { dir, store, root } = setup();
     const stopped = root('cancel', { status: RUN_STATUS.running, stopping: true, finishedAt: EARLIER });
     store.updateStep(stopped, 'b', { status: STEP_STATUS.running });
-    store.flush();
+    store.persistence.flush();
     store.close();
     const reopened = RunStore.open(dir, { keepLive: true });
     try {
@@ -268,7 +268,7 @@ describe('B11: every exit to failed settles running steps to failed and keeps a 
     const id = root('fail-interrupted', { status: RUN_STATUS.running });
     store.updateStep(id, 'a', { status: STEP_STATUS.waiting });
     store.updateStep(id, 'b', { status: STEP_STATUS.running });
-    store.flush();
+    store.persistence.flush();
     store.close();
     const reopened = RunStore.open(dir);
     try {
@@ -305,7 +305,7 @@ describe('B12: the cancel exits write the run cancelled event once, at every sit
   it('the store\'s load-time Stop writes it once', () => {
     const { dir, store, root } = setup();
     const id = root('cancel', { status: RUN_STATUS.running, stopping: true });
-    store.flush();
+    store.persistence.flush();
     store.close();
     const reopened = RunStore.open(dir, { keepLive: true });
     try {

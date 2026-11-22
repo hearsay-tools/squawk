@@ -65,7 +65,7 @@ describe('GET /api/v1/fs/browse (step 4.1)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const [key, value] of [
       ['HOME', savedHome],
       ['CEZ_HOME', savedCezHome],

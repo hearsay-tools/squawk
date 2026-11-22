@@ -40,7 +40,7 @@ describe('RunManager continuation membership', () => {
     await idleClose(clock, record.id, fixture.manager, fixture.store, predicate => waitFor(record.id, predicate));
     fixture.store.updateStep(record.id, 'continue-1', { synthetic: undefined });
     fixture.store.updateRun(record.id, { continuationMessage: undefined, workflowDef: SINGLE_STEP });
-    fixture.store.flush();
+    fixture.store.persistence.flush();
     fixture.manager.dispose();
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();

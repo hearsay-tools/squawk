@@ -13,6 +13,8 @@ import type { RunEvent, RunRecord, RunStore } from './store.ts';
 import type { ArchiveOnMergeSnapshot } from './run-archive.ts';
 import type { RunOwnership } from './run-claims-topic.ts';
 import type { RunPinHolder } from './run-pins.ts';
+import type { RunDatabase } from './run-database.ts';
+import type { RunStoreOpenError } from './store-open-error.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 import type { WorkerProcessRecord } from '../core/process-stat.ts';
@@ -224,11 +226,16 @@ export interface RunRepoHandle {
   setRepoHandle: RunStore['setRepoHandle'];
 }
 
-/** Whether the store opened, closing it and writing it out. */
+/** Whether the store opened, and closing it. */
 export interface StoreHandle {
   readonly unavailable: RunStore['unavailable'];
   close: RunStore['close'];
-  flush: RunStore['flush'];
+}
+
+/** Writing the pending rows out now, and what the reports index reads the rows from (`runs/run-persistence.ts`, `store.persistence`). */
+export interface RunPersistence {
+  flush(): void;
+  reportSource(): { db: RunDatabase | null; dataDir: string; openFailure: RunStoreOpenError | undefined };
 }
 
 /** A run's record patch, as `updateRun` takes it. */

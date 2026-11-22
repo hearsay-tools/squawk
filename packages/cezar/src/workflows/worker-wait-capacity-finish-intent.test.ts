@@ -31,7 +31,7 @@ for (const review of [false, true]) {
         completion = Promise.all([...work.pending.keys()]);
         expect(store.getRun(p.id)?.delegation).toHaveProperty('finishRequestedAt');
         expect(manager.continueRun(p.id, { text: 'too late' }).ok).toBe(false);
-        store.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
+        store.persistence.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
         manager.dispose(); release(); await completion; delayedDiff.mockRestore();
         expect(store.getRun(p.id)?.status).toBe(review ? 'review' : 'done');
         await restart(false, checkpoint);
@@ -47,7 +47,7 @@ it('inactive Finish write failure leaves the root recoverable and children untou
     const w = await worker(p.id); await restart();
     await until(() => store.getRun(w.id)?.status === 'waiting');
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15000)).toBe(true); await collect(w.id);
-    await Promise.all(bookkeeping.splice(0)); store.flush();
+    await Promise.all(bookkeeping.splice(0)); store.persistence.flush();
     const snapshot = JSON.stringify(store.getRun(p.id));
     const release = blockRunWrites(join(root, '.ai/cezar'));
     try { expect(manager.finish(p.id)).toBe(false); }

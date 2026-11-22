@@ -75,7 +75,7 @@ describe('project reports', () => {
     expect((await page()).reports.map(a => a.id)).toContain(first.id);
     const second = await publish(run.id, 'second.htm');
     setRunStatus(store, run.id, RUN_STATUS.done);
-    store.flush();
+    store.persistence.flush();
     // Wait for the settlement listener's serialized work, without invoking list/reconcile.
     await vi.waitFor(() => {
       const db = new DatabaseSync(join(dataDir, 'runs.db'), { readOnly: true });
@@ -90,10 +90,10 @@ describe('project reports', () => {
     let artifactId: string;
     try {
       const run = writer.createRun({ title: 'Between queries', task: 'Publish', workflow: 'quick-task', steps: [] });
-      writer.flush();
+      writer.persistence.flush();
       artifactId = (await publish(run.id)).id;
       setRunStatus(writer, run.id, RUN_STATUS.done);
-      writer.flush();
+      writer.persistence.flush();
     } finally { writer.close(); }
     expect((await page()).reports.map(a => a.id)).toContain(artifactId);
   });
@@ -102,13 +102,13 @@ describe('project reports', () => {
     const settled = task('Settling'), active = task('Still running');
     reportsIndex(store).start(); await page();
     const a = await publish(settled.id), b = await publish(active.id);
-    setRunStatus(store, settled.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, settled.id, RUN_STATUS.done); store.persistence.flush();
     // The public serialized barrier completes the settlement work without including live tasks.
     await reportsIndex(store).reconcile(false);
     const raw = new DatabaseSync(join(dataDir, 'runs.db'), { readOnly: true });
     try {
       expect(raw.prepare('SELECT id FROM artifacts').all().map(row => row.id)).toEqual([a.id]);
-      store.updateRun(settled.id, { archived: true }); store.flush();
+      store.updateRun(settled.id, { archived: true }); store.persistence.flush();
       await reportsIndex(store).reconcile(false);
       expect(raw.prepare('SELECT id FROM artifacts WHERE id = ?').get(b.id)).toBeUndefined();
     } finally { raw.close(); }
@@ -134,7 +134,7 @@ describe('project reports', () => {
     const run = task();
     await publish(run.id, 'first.html'); await publish(run.id, 'second.html');
     await publish(run.id, 'third.html');
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     await page();
     const initial = await page('?limit=1');
     const missing = initial.reports[0]!;
@@ -156,7 +156,7 @@ describe('project reports', () => {
     const cached = await publish(broken.id, 'broken.html');
     const artifact = await publish(good.id, 'good.html');
     for (const run of [broken, good]) setRunStatus(store, run.id, RUN_STATUS.done);
-    store.flush(); await page();
+    store.persistence.flush(); await page();
     const raw = new DatabaseSync(join(dataDir, 'runs.db'));
     const summary = raw.prepare('SELECT summary FROM runs WHERE id = ?').get(broken.id)!.summary;
     raw.prepare('UPDATE runs SET summary = ? WHERE id = ?').run('{broken', broken.id);
@@ -180,7 +180,7 @@ describe('project reports', () => {
     const first = await publish(good.id, 'first.html', 'Matching report');
     const second = await publish(good.id, 'second.html', 'Matching report');
     for (const run of [broken, good]) setRunStatus(store, run.id, RUN_STATUS.done);
-    store.flush(); await page();
+    store.persistence.flush(); await page();
     const raw = new DatabaseSync(join(dataDir, 'runs.db'));
     try {
       // Put the unreadable summary strictly beyond the first page's lookahead.
@@ -209,7 +209,7 @@ describe('project reports', () => {
     const empty = join(root, 'empty'); mkdirSync(empty);
     renameSync(directory, saved); symlinkSync(empty, directory, 'dir');
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     await reportsIndex(store).reconcile(false, run.id);
     const raw = new DatabaseSync(join(dataDir, 'runs.db'));
     try {
@@ -231,7 +231,7 @@ describe('project reports', () => {
 
   it('keeps redirected cached metadata reachable while refusing same-sized outside content', async () => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); await page();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); await page();
     const directory = join(dataDir, 'runs'), saved = directory + '-saved', outside = join(root, 'outside');
     cpSync(directory, outside, { recursive: true });
     renameSync(directory, saved); symlinkSync(outside, directory, 'dir');
@@ -249,7 +249,7 @@ describe('project reports', () => {
 
   it('keeps cached reports and a durable retry marker after metadata I/O failure, then indexes a recovered publication', async () => {
     const run = task(); const cached = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); await page();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); await page();
     const recovered = await publish(run.id, 'recovered.html');
     const actualOpen = fs.open;
     const fault = vi.spyOn(fs, 'open').mockImplementation((...args) => {
@@ -271,7 +271,7 @@ describe('project reports', () => {
 
   it('leaves backfill incomplete after an indeterminate scan and retries after restart', async () => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     const actualOpen = fs.open;
     const fault = vi.spyOn(fs, 'open').mockImplementation((...args) => {
       if (String(args[0]).endsWith('/metadata.json')) return Promise.reject(Object.assign(new Error('temporarily unreadable'), { code: 'EACCES' }));
@@ -291,7 +291,7 @@ describe('project reports', () => {
 
   it('keeps a report when its directory or content check is indeterminate and retries later', async () => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); await page();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); await page();
     const directoryFault = vi.spyOn(fs, 'opendir').mockRejectedValue(Object.assign(new Error('busy directory'), { code: 'EACCES' }));
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await reportsIndex(store).reconcile(false, run.id);
@@ -333,7 +333,7 @@ describe('project reports', () => {
 
   it('reports missing content and drops its cache row instead of serving it', async () => {
     const run = task(); const artifact = await publish(run.id);
-    await page(); setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    await page(); setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     await reportsIndex(store).reconcile();
     rmSync(join(artifactDirectory(dataDir, run.id), artifact.id, 'content'));
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -345,9 +345,9 @@ describe('project reports', () => {
 
   it('removes cache rows atomically with history deletion and cannot restore them during reconciliation', async () => {
     const run = task(); await publish(run.id); await page();
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     await reportsIndex(store).reconcile();
-    expect(store.retention.deleteRun(run.id)).toBe(true); store.flush();
+    expect(store.retention.deleteRun(run.id)).toBe(true); store.persistence.flush();
     const db = new DatabaseSync(join(dataDir, 'runs.db'), { readOnly: true });
     try {
       expect(db.prepare('SELECT id FROM runs WHERE id = ?').get(run.id)).toBeUndefined();
@@ -385,7 +385,7 @@ describe('project reports', () => {
 
   it('backfills through a trusted data-root ancestor alias while preserving below-root redirect checks', async () => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); store.close();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); store.close();
     const alias = root + '-alias'; symlinkSync(root, alias, 'dir');
     try {
       dataDir = join(alias, '.ai/cezar'); store = RunStore.open(dataDir);
@@ -407,7 +407,7 @@ describe('project reports', () => {
   it('keeps an indeterminate row reachable and all cursor pages complete before and after recovery', async () => {
     const run = task();
     for (const name of ['first.html', 'second.html', 'third.html']) await publish(run.id, name);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush();
     const baseline = await page();
     const target = baseline.reports[0]!;
     const actual = fs.lstat;
@@ -436,7 +436,7 @@ describe('project reports', () => {
 
   it.each(['directory entries', 'artifact count', 'metadata bytes', 'file bytes', 'task bytes'])('retains the full cache and retry state after exceeding the store cap: %s', async cap => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); await page();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); await page();
     const directory = artifactDirectory(dataDir, run.id), entry = join(directory, artifact.id);
     const metadata = JSON.parse(readFileSync(join(entry, 'metadata.json'), 'utf8'));
     const added: string[] = [];
@@ -472,7 +472,7 @@ describe('project reports', () => {
 
   it('retains a cached row and retries when its content becomes a symlink', async () => {
     const run = task(); const artifact = await publish(run.id);
-    setRunStatus(store, run.id, RUN_STATUS.done); store.flush(); await page();
+    setRunStatus(store, run.id, RUN_STATUS.done); store.persistence.flush(); await page();
     const content = join(artifactDirectory(dataDir, run.id), artifact.id, 'content'), saved = content + '-saved';
     renameSync(content, saved); symlinkSync(saved, content);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -488,7 +488,7 @@ describe('project reports', () => {
   it('ignores live legacy task IDs and clears their impossible artifact retry markers', async () => {
     const good = task(), legacy = task('Legacy');
     const report = await publish(good.id);
-    setRunStatus(store, legacy.id, RUN_STATUS.running); store.flush(); store.close();
+    setRunStatus(store, legacy.id, RUN_STATUS.running); store.persistence.flush(); store.close();
     const raw = new DatabaseSync(join(dataDir, 'runs.db'));
     try {
       raw.prepare("UPDATE runs SET id = ?, data = json_set(data, '$.id', ?), summary = json_set(summary, '$.id', ?) WHERE id = ?").run('run-1', 'run-1', 'run-1', legacy.id);

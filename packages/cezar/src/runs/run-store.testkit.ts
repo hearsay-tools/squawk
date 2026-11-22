@@ -164,11 +164,10 @@ export function muteLockedDatabaseLogs(): () => void {
  * Like a closed store, a crashed one still answers reads for what it held and saves nothing.
  */
 export function crashStore(store: RunStore): void {
-  const internals = store as unknown as {
-    saveTimer: NodeJS.Timeout | null; db: { close(): void } | null; owner: { session: string } | undefined;
-  };
-  if (internals.saveTimer) clearTimeout(internals.saveTimer);
-  internals.saveTimer = null;
+  const internals = store as unknown as { db: { close(): void } | null; owner: { session: string } | undefined };
+  const persistence = store.persistence as unknown as { saveTimer: NodeJS.Timeout | null };
+  if (persistence.saveTimer) clearTimeout(persistence.saveTimer);
+  persistence.saveTimer = null;
   internals.db?.close();
   internals.db = null;
   if (internals.owner) closeClaimSession(internals.owner.session);
@@ -186,8 +185,7 @@ export function hasPendingAsk(store: { readonly transcriptFacts: TranscriptFacts
 
 /** The one test-only staging reach: pins publication of every row before its first event. */
 export function commitStagedRuns(store: RunStore, staged: Map<string, RunRecord>): void {
-  const commit = Reflect.get(store, 'commitIndex') as (staged: Map<string, RunRecord>) => void;
-  commit.call(store, staged);
+  store.persistence.commitIndex(staged);
 }
 
 /** Seed a fixture status through the ordinary update path, including its persistence rules.

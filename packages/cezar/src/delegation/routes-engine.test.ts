@@ -56,6 +56,6 @@ describe('authenticated delegation HTTP family', () => {
       }
       expect(reopened.getRun(workerId)?.status).toBe('queued');
       expect(reopened.getRun(f.parent.id)?.status).toBe(status);
-    } finally { manager.dispose(); reopened.flush(); }
+    } finally { manager.dispose(); reopened.persistence.flush(); }
   });
 });

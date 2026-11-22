@@ -74,7 +74,7 @@ describe('task access', () => {
       access(f.parent.id, { allowWorkers: false, allowMessaging: false });
       const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
       expect(reopened.getRun(f.parent.id)).toMatchObject({ allowWorkers: false, allowMessaging: false });
-      reopened.flush();
+      reopened.persistence.flush();
     });
   });
 

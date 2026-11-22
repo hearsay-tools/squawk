@@ -29,7 +29,7 @@ describe('scheduler repository probe budget (#364)', () => {
   afterEach(() => {
     for (const { root, store, manager } of fixtures.splice(0)) {
       manager.dispose();
-      store.flush();
+      store.persistence.flush();
       rmSync(root, { recursive: true, force: true });
     }
     vi.restoreAllMocks();

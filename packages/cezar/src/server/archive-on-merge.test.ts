@@ -67,7 +67,7 @@ it('treats a GitHub rate limit as a pause: no blocker and no failure backoff', a
 
 it('archives a merged family when a different family declares a nonexistent PR', async () => {
   const f = fixture(2);
-  f.store.updateRun(f.ids[1]!, { pullRequests: [{ number: 43, source: 'declared' }] }); f.store.flush();
+  f.store.updateRun(f.ids[1]!, { pullRequests: [{ number: 43, source: 'declared' }] }); f.store.persistence.flush();
   f.lookup.mockImplementation(async (_root, identities) => fetchMergedPullRequests(async query => {
     const repository = { nameWithOwner: 'o/r', pr42: { number: 42, url: 'https://github.com/o/r/pull/42', state: 'MERGED', mergedAt: '2026-01-02T00:00:00Z' }, pr43: null };
     if (query.includes('pr43:')) throw Object.assign(new Error('gh: Could not resolve PR 43'), {
@@ -85,7 +85,7 @@ it.each([0, 32])('eventually checks complete large PR sets across more than 32 f
   for (const id of f.ids.slice(0, openSets)) {
     f.store.updateRun(id, { pullRequests: Array.from({ length: 65 }, (_, i) => ({ number: 1000 + i, source: 'declared' })) });
   }
-  f.store.flush();
+  f.store.persistence.flush();
   f.lookup.mockImplementation(async (_root, identities) => identities.filter(pr => pr.number < 1000).map(pr => ({ ...pr, mergedAt: '2026-01-02T00:00:00.000Z' })));
   for (let i = 0; i < 100; i++) await f.coordinator.tick();
   expect(f.ids.slice(openSets).every(id => f.store.getRun(id)?.archived)).toBe(true);

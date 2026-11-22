@@ -138,14 +138,14 @@ describe('stopped composer engine', { timeout: 15_000 }, () => {
   });
   it('persists a queued Stop before acknowledging it', () => {
     const { manager, store, data } = fixture();
-    const run = manager.startRun(workflow, { task: 'original' }); store.flush();
+    const run = manager.startRun(workflow, { task: 'original' }); store.persistence.flush();
     expect(manager.cancel(run.id)).toBe(true);
     expect(RunStore.open(data, { keepLive: true }).getRun(run.id)?.status).toBe('cancelled');
   });
   it('does not resume an accepted stop after a restart', () => {
     const { store, data } = fixture();
     const run = store.createRun({ title: 'task', task: 'task', workflow: 'original', steps: [] });
-    setRunStatus(store, run.id, RUN_STATUS.running, { stopping: true }); store.flush();
+    setRunStatus(store, run.id, RUN_STATUS.running, { stopping: true }); store.persistence.flush();
     expect(RunStore.open(data, { keepLive: true }).getRun(run.id)).toMatchObject({ status: RUN_STATUS.cancelled });
   });
 });

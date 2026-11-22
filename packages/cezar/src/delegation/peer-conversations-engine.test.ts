@@ -108,7 +108,7 @@ describe('peer conversations', () => {
     await f.service.send(c.caller, message(d.id, 'progress'));
     await f.service.send(d.caller, message(c.id, 'progress'));
     setRunStatus(f.store, c.id, RUN_STATUS.done);
-    f.store.flush();
+    f.store.persistence.flush();
     expect(f.store.heldIds()).not.toContain(c.id);
     expect(f.store.listConversationRootIds(b.id)).toEqual([f.parent.id]);
     const read = vi.spyOn(f.store, 'getRun');

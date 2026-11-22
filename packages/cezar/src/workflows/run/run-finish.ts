@@ -121,7 +121,7 @@ export class RunFinish {
     // Every blocker but the pending human question is a refusal: the question parks for the user.
     this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: 'Completion blocked: answer the pending human question.' });
     this.host.move(runId, 'park', { finishedAt: undefined }, { stepId: state?.liveSession.currentStepId });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     if (state) {
       clearIdleTimer(state);
       this.line.leavePool(runId); this.line.park(runId);

@@ -131,7 +131,7 @@ export class TurnNudges {
     const state = this.host.active.get(runId);
     this.context.store.eventLog.appendEvent(runId, { type: 'note', tone: 'warning', message: `Completion blocked: ${refusal.message}` });
     this.host.move(runId, 'park', { finishedAt: undefined });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     const decision = completionRefusalQueueDecision(runId, {
       holdsAgentWaits: id => this.humanWaits.holdsAgentWaits(id),
       owesCompletionRefusal: id => completionGateReads.owesCompletionRefusal(this.context, this.completionGateHost, id),

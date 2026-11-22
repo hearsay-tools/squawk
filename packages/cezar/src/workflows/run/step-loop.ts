@@ -222,7 +222,7 @@ export class StepLoop {
       // Durable before the first command: recovery reads `running` to requeue a run a restart
       // interrupted here, instead of failing it with no agent session to resume.
       this.context.store.updateRun(runId, { worktreeSetup: { status: 'running', startedAt } });
-      this.context.store.flush();
+      this.context.store.persistence.flush();
       emit({ type: 'note', message: worktreeSetupStartNote(plan.commands.length) });
       let tmpEnv: Record<string, string> = {};
       try {
@@ -446,7 +446,7 @@ export class StepLoop {
         // run the step's turn already parked stays waiting, for the reason it parked.
         const parked = this.context.store.getRun(runId)?.status === 'waiting';
         this.host.move(runId, parked ? 'fail-attempt-parked' : 'fail-attempt', {}, { stepId, cursor: 'resume' });
-        this.context.store.flush();
+        this.context.store.persistence.flush();
       }
       this.finishStep(runId, stepId, 'failed', failure, emit);
       loop.runError = `step "${stepId}" failed: ${failure}`;
@@ -465,7 +465,7 @@ export class StepLoop {
     this.humanWaits.surfaceHumanWait(runId, state);
     this.host.move(runId, 'park-closing-wakes', {
       ...(failure ? { error: loop.runError! } : {}) });
-    this.context.store.flush(); // checkpoint the failed attempt and its recoverable workflow cursor before parking
+    this.context.store.persistence.flush(); // checkpoint the failed attempt and its recoverable workflow cursor before parking
     this.host.dropActive(runId);
     return true;
   }
@@ -508,7 +508,7 @@ export class StepLoop {
       this.host.move(runId, 'requeue');
       // The retry target and its consumed budget form one crash boundary: a
       // restart must observe the queued target, budget, and cursor together.
-      this.context.store.flush();
+      this.context.store.persistence.flush();
       return outcome.retryIndex;
     }
 

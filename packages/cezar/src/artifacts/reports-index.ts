@@ -9,7 +9,7 @@ import type { RunDatabase } from '../runs/run-database.ts';
 import { REPORTS_BACKFILL_KEY, type IndexedArtifact, type ReportRow, type ReportCursor } from '../runs/report-rows.ts';
 import { parseStoredSummary } from '../runs/run-summary-page.ts';
 import type { RunLifecycleEvents, RunLifecycleSource } from '../runs/lifecycle.ts';
-import type { RunAccess, RunLookup, StoreHandle } from '../runs/ports.ts';
+import type { RunAccess, RunLookup, RunPersistence } from '../runs/ports.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { artifactRunsRoot, scanArtifactsForIndex, checkArtifactContentForIndex } from './store.ts';
 
@@ -17,14 +17,14 @@ export { REPORTS_BACKFILL_KEY } from '../runs/report-rows.ts';
 const cursorSchema = z.tuple([z.iso.datetime(), z.uuid()]);
 /** What the index reads from a run store: its database, a run's record and files, the write-out
  *  before a read, and the lifecycle whose run changes drive the report watch. */
-export interface ReportsStore extends RunLookup, Pick<StoreHandle, 'flush'> {
+export interface ReportsStore extends RunLookup {
   readonly claims: Pick<RunAccess, 'sourceDataDir'>;
-  reportSource(): { db: RunDatabase | null; dataDir: string; openFailure: Error | undefined };
+  readonly persistence: Pick<RunPersistence, 'flush' | 'reportSource'>;
   readonly lifecycle: RunLifecycleSource;
 }
 const instances = new WeakMap<ReportsStore, ReportsIndex>();
 export function reportsIndex(store: ReportsStore): ReportsIndex {
-  const { db, dataDir, openFailure } = store.reportSource();
+  const { db, dataDir, openFailure } = store.persistence.reportSource();
   if (!db) throw openFailure ?? new Error('runs database unavailable');
   let index = instances.get(store);
   if (!index) { index = new ReportsIndex(db, store, dataDir); instances.set(store, index); }
@@ -68,11 +68,11 @@ export class ReportsIndex {
       id => this.serial(async () => {
         if (!this.changes.watching()) return;
         if (!this.changes.due(id)) { this.changes.schedule(id); return; }
-        this.store.flush(); await this.indexRun(id); this.settlements.delete(id);
+        this.store.persistence.flush(); await this.indexRun(id); this.settlements.delete(id);
       }),
       before => this.serial(async () => {
         if (!this.changes.watching()) return;
-        this.store.flush();
+        this.store.persistence.flush();
         const ids = new Set(this.db.reports.dirty());
         for (const row of this.db.listLive()) if (this.changes.quiet(row.id, before)) ids.add(row.id);
         for (const id of ids) if (this.changes.due(id) && this.supportedRun(id)) await this.indexRun(id);
@@ -85,7 +85,7 @@ export class ReportsIndex {
         }
       },
     );
-    store.flush();
+    store.persistence.flush();
     for (const row of db.reports.summaries()) {
       const summary = parseStoredSummary(row.summary);
       this.changes.seed(row.runId, summary ? reportMetadataKey(summary) : undefined);
@@ -126,7 +126,7 @@ export class ReportsIndex {
   }
   backfill(): Promise<void> {
     return this.serial(async () => {
-      this.store.flush();
+      this.store.persistence.flush();
       if (this.db.getMeta(REPORTS_BACKFILL_KEY) && (!this.db.hasProjectSource || this.projectBackfilled)) return;
       let complete = true;
       for (const id of this.db.listIds()) {
@@ -145,7 +145,7 @@ export class ReportsIndex {
   }
   reconcile(includeLive = true, settledId?: string): Promise<void> {
     return this.serial(async () => {
-      this.store.flush();
+      this.store.persistence.flush();
       const ids = new Set(this.db.reports.dirty());
       if (includeLive) for (const row of this.db.listLive()) ids.add(row.id);
       if (settledId) ids.add(settledId);

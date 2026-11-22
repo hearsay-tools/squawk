@@ -464,7 +464,7 @@ export class TurnSettler {
    *  already in (a pending question beside a resolved wait) still queues its wake. */
   parkForUser(runId: string, state: ActiveRun, stepId: string | undefined): void {
     this.host.move(runId, 'park', {}, { stepId });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     this.host.line.park(runId);
     this.holdChildrenOrArmIdle(runId, state);
     this.host.releaseSlot();

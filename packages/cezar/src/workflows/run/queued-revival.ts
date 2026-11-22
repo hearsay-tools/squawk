@@ -42,7 +42,7 @@ export function checkpointRestartContext(context: RunModuleContext, host: Queued
     ...(message.origin === 'lifecycle' && message.text === host.restartContinuationPrompt ? { text: 'Continue.' } : {}),
     resumeContext: withCutOff(context.store, run.id, { ...message.resumeContext, restarted: true }),
   } }) ?? run;
-  context.store.flush();
+  context.store.persistence.flush();
   return updated;
 }
 
@@ -142,14 +142,14 @@ export function requeueInterruptedRun(context: RunModuleContext, host: QueuedRev
   // continue, so start the workflow over. `execute` sees setup still `running` and reruns it.
   if (atTaskHead.storedWorkflow(run) && run.worktreeSetup?.status === 'running' && !run.steps.some(step => step.sessionId)) {
     host.move(run.id, 'requeue', { error: undefined, finishedAt: undefined });
-    context.store.flush();
+    context.store.persistence.flush();
     host.enqueueJob(run.id, { workflow: atTaskHead.storedWorkflow(run)!, startAt: 0, input: atTaskHead.recoveryInput(run) });
     return true;
   }
   if (atTaskHead.storedWorkflow(run) && interruptedDef && stepKind(interruptedDef) === 'check') {
     context.store.updateStep(run.id, interruptedDef.id, { status: 'pending', error: undefined, finishedAt: undefined });
     host.move(run.id, 'requeue', { error: undefined, finishedAt: undefined });
-    context.store.flush();
+    context.store.persistence.flush();
     host.enqueueJob(run.id, {
       workflow: atTaskHead.storedWorkflow(run)!,
       startAt: interruptedIndex,

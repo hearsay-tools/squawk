@@ -48,7 +48,7 @@ describe('RunManager agent-profile resolution', () => {
   });
 
   afterEach(async () => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);

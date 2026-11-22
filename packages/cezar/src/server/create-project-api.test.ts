@@ -57,7 +57,7 @@ describe('new-project routes', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     const restore = (key: string, value: string | undefined) => {
       if (value === undefined) delete process.env[key];

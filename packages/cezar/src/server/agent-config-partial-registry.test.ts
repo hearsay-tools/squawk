@@ -25,7 +25,7 @@ describe('the agent-config API without a registered Claude runner', () => {
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
   });
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (prevRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = prevRemote;

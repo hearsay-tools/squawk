@@ -36,7 +36,7 @@ describe('usage owner encapsulation', () => {
     root = mkdtempSync(join(tmpdir(), 'cez-usage-owner-'));
     store = RunStore.open(join(root, '.ai/cezar'));
   });
-  afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => { store.persistence.flush(); rmSync(root, { recursive: true, force: true }); });
 
   function fixture() {
     const run = store.createRun({ title: 'usage', task: 'usage', workflow: 'quick-task',

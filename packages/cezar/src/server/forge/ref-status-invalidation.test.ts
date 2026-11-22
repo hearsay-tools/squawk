@@ -96,7 +96,7 @@ describe('a reference Squawk changes itself is forgotten, not waited out', () =>
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

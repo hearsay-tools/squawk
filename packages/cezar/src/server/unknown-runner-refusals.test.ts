@@ -40,7 +40,7 @@ describe('an unknown runner id on each request route', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

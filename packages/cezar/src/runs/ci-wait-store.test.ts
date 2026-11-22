@@ -31,7 +31,7 @@ describe('atomic CI wait checkpoints', () => {
   afterEach(() => { vi.restoreAllMocks(); store.close(); rmSync(directory, { recursive: true, force: true }); });
 
   it('publishes neither registration nor event if the durable replacement fails', () => {
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedText(directory);
     const events = vi.fn(); onRunWrite(store.lifecycle, events);
     vi.spyOn(runPersistence(store), 'persist').mockImplementation(() => { throw new Error('read only'); });
@@ -74,7 +74,7 @@ describe('atomic CI wait checkpoints', () => {
     expect(readRunIndexFromDisk(directory).runs[0]?.status).toBe(status);
     expect(reopened.getRun(id)).toMatchObject({ lastWaitsError: expect.stringContaining('saved wait is unreadable') });
     expect(reopened.getRun(id)?.lastWaits).toBeUndefined();
-    reopened.flush();
+    reopened.persistence.flush();
     expect(RunStore.open(directory, { keepLive: true }).getRun(id)?.lastWaitsError).toContain('unreadable');
     reopened.commitWait(id, ciWaitEntry(wait));
     expect(reopened.getRun(id)?.lastWaitsError).toBeUndefined();

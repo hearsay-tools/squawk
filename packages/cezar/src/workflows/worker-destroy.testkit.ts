@@ -53,7 +53,7 @@ export function useWorkerDestroyFixture(): void {
     await fixtureWorkSettled(root);
     await until(() => store.listRuns().every(run => !manager.isActive(run.id)));
     await drainFixtureManagers(root);
-    manager.dispose(); store.flush(); vi.restoreAllMocks(); vi.unstubAllEnvs();
+    manager.dispose(); store.persistence.flush(); vi.restoreAllMocks(); vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   }, 30_000);
 }

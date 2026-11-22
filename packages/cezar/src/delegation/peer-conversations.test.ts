@@ -61,7 +61,7 @@ describe('peer conversations', () => {
     // Restart: the ledger reloads, and replaying projections adds no input and no event.
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { messages: [request.message, reply.message], outcomes: [reply.outcome] } });
-    reopened.flush();
+    reopened.persistence.flush();
     const before = { a: projections(f.parent.id), b: projections(b.id) };
     projectConversationEvents(f.store, f.store.getRun(f.parent.id)!);
     expect({ a: projections(f.parent.id), b: projections(b.id) }).toEqual(before);

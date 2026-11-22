@@ -78,7 +78,7 @@ describe('RunStore.withReadCache', () => {
     store.withReadCache(() => {
       const before = store.getRun(run.id);
       store.updateRun(run.id, { title: 'renamed' });
-      store.flush(); // the settled write lets the run leave memory
+      store.persistence.flush(); // the settled write lets the run leave memory
       expect(store.heldIds()).toEqual([]);
       const after = store.getRun(run.id);
       expect(after).not.toBe(before);
@@ -106,10 +106,10 @@ describe('RunStore.withReadCache', () => {
     store.withReadCache(() => {
       expect(store.getRun(run.id)?.title).toBe('settled');
       other.updateRun(run.id, { title: 'changed elsewhere' });
-      other.flush();
+      other.persistence.flush();
       expect(store.getRun(run.id)?.title).toBe('changed elsewhere');
       expect(other.retention.deleteRun(run.id)).toBe(true);
-      other.flush();
+      other.persistence.flush();
       expect(store.getRun(run.id)).toBeUndefined();
     });
   });
@@ -124,7 +124,7 @@ describe('RunStore.withReadCache', () => {
     store.withReadCache(() => {
       expect(store.getRun(workerId)?.title).toBe('settled');
       other.updateRun(workerId, { title: 'changed elsewhere' });
-      other.flush(); // released: this store may claim the family again
+      other.persistence.flush(); // released: this store may claim the family again
       // A query reads the row again and sees its new revision.
       expect(store.listWorkersOf(root.id).map((entry) => entry.title)).toEqual(['changed elsewhere']);
       expect(store.getRun(workerId)?.title).toBe('changed elsewhere');
@@ -132,7 +132,7 @@ describe('RunStore.withReadCache', () => {
     store.withReadCache(() => {
       expect(store.getRun(workerId)?.title).toBe('changed elsewhere');
       other.updateRun(workerId, { title: 'changed again' });
-      other.flush();
+      other.persistence.flush();
       // The write claims the family, then holds the row at its claimed revision, not the cached one.
       store.updateRun(workerId, { task: 'mine' });
       expect(store.getRun(workerId)).toMatchObject({ title: 'changed again', task: 'mine' });

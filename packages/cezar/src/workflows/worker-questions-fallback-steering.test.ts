@@ -55,7 +55,7 @@ describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { 
     await service.send(callerFor(p.id), { id: replyId, recipientRunId: w.id, kind: 'reply', requestId, text: `${WORKER_FALLBACK_HEADER}: cez-dev`, timeoutSeconds: 600 });
     await until(() => answered(w.id).length === 1);
     expect(refusals).toBeGreaterThan(0);
-    store.flush();
+    store.persistence.flush();
     const delivered = (row: RunRecord) => !!row.agentInputs?.find(input => input.id === replyId)?.deliveredAt;
     commits.expectEveryCommit(w.id, row => { return (row.automaticWakes ?? 0) === wakes || delivered(row); }, 'the reply\'s charge and its delivery');
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === w.id)!;

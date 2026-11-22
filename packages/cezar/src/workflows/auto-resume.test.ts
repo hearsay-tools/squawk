@@ -119,7 +119,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -725,7 +725,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     manager = createFixtureManager(store, repoRoot);
     const record = manager.startRun(workflow, { task: 'mock:limit ship it', worktree: false });
     await settle(record.id);
-    store.flush();
+    store.persistence.flush();
     const committed = () => readPersistedRuns(join(repoRoot, '.ai/cezar')).find((row) => row.id === record.id);
     expect(committed()).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
 

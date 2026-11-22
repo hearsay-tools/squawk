@@ -40,7 +40,7 @@ describe('provider action gating', () => {
 
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedModelsLocked === undefined) delete process.env.CEZ_AGENT_MODELS_LOCKED;
     else process.env.CEZ_AGENT_MODELS_LOCKED = savedModelsLocked;
@@ -96,7 +96,7 @@ describe('provider availability preserves existing execution', () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     if (runId) manager.cancel(runId);
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;

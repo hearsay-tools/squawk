@@ -58,7 +58,7 @@ describe('guarded automatic archive', () => {
     const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
     expect(store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
     expect(readPersistedRuns(dir)[0]).toMatchObject({ archived: true, autoArchive: { reason: 'pull-requests-merged', fingerprint: snapshot.fingerprint } });
-    store.archive.setArchived(id, false); store.flush();
+    store.archive.setArchived(id, false); store.persistence.flush();
     expect(store.getRun(id)).toMatchObject({ archived: false, manualUnarchivedAt: expect.any(String), autoArchive: { fingerprint: snapshot.fingerprint } });
     expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     store.close(); stores.splice(stores.indexOf(store), 1);
@@ -100,8 +100,8 @@ describe('guarded automatic archive', () => {
     try {
       vi.setSystemTime(new Date('2026-01-03T00:00:00Z'));
       const { store, id } = setup();
-      store.archive.setArchived(id, true); store.archive.setArchived(id, false); store.flush();
-      store.updateRun(id, { pullRequests: [pr, { number: 43, source: 'declared' }] }); store.flush();
+      store.archive.setArchived(id, true); store.archive.setArchived(id, false); store.persistence.flush();
+      store.updateRun(id, { pullRequests: [pr, { number: 43, source: 'declared' }] }); store.persistence.flush();
       vi.setSystemTime(new Date('2026-01-05T00:00:00Z'));
       const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
       expect(store.archive.archiveAfterMerge(snapshot, snapshot.pullRequests.map(identity => ({ ...identity, mergedAt: identity.number === 43 ? '2026-01-04T00:00:00Z' : mergedAt })), repo)).toBe(true);
@@ -130,17 +130,17 @@ describe('guarded automatic archive', () => {
     const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: id, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated', path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
     }, 'a'.repeat(64), spawnCapacityRefusal);
-    store.updateRun(worker.id, { pullRequests: [pr] }); store.flush();
+    store.updateRun(worker.id, { pullRequests: [pr] }); store.persistence.flush();
     expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     store.move(worker.id, 'stop-worker');
     expect(store.archive.archiveOnMergeSnapshot(id, repo)).toBeUndefined();
     expect(store.getRun(id)?.archiveBlocker?.runId).toBe(worker.id);
     const proof = store.workerExecutions.readWorkerExecution(worker.id)!;
     expect(store.workerExecutions.commitWorkerExecutionComplete(worker.id, proof.generation)).toBe(true);
-    store.flush();
+    store.persistence.flush();
     mkdirSync(join(dir, 'absent-worktree'));
     mkdirSync(join(dir, 'root-worktree'));
-    store.updateRun(id, { worktreePath: join(dir, 'root-worktree') }); store.flush();
+    store.updateRun(id, { worktreePath: join(dir, 'root-worktree') }); store.persistence.flush();
     const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
     expect(snapshot?.pullRequests).toEqual([{ owner: 'o', repo: 'r', number: 42 }]);
     store.archive.archiveMergeBlocker(snapshot, snapshot.pullRequests[0]!, repo);

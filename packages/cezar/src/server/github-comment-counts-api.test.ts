@@ -39,7 +39,7 @@ describe('the paged github list and comment counts API', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

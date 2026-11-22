@@ -46,7 +46,7 @@ it('installs the waiter interrupt before park/release and restores it before unp
     waiter.liveSession.releaseRepoRoot?.();
     owner.liveSession.releaseRepoRoot?.();
   } finally {
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
   }
 });

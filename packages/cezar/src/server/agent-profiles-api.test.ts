@@ -53,7 +53,7 @@ describe('agent profiles API', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     for (const [key, value] of [
       ['CEZ_HOME', saved.home],

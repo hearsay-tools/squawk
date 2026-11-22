@@ -217,7 +217,7 @@ describe('the write backstop', () => {
     const store = RunStore.open(dataDir, { retryBusy: true });
     disposers.push(() => store.close());
     const early = store.createRun({ title: 'before', workflow: 'w', task: 't', steps: [] });
-    store.flush();
+    store.persistence.flush();
     const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
@@ -232,7 +232,7 @@ describe('the write backstop', () => {
       store.setRepoHandle({ owner: 'acme', name: 'demo' });
       // A family claimed before the fence: its debounced save is skipped and kept.
       store.updateRun(early.id, { title: 'during' });
-      store.flush();
+      store.persistence.flush();
       // A new family cannot be claimed: the start is refused and writes nothing.
       expect(() => store.createRun({ title: 'late', workflow: 'w', task: 't', steps: [] })).toThrow();
       expect(stored()).toEqual({ referenced: true, claims: 1, title: 'before' });
@@ -240,7 +240,7 @@ describe('the write backstop', () => {
       const exited = once(other, 'exit');
       other.kill('SIGKILL');
       await exited;
-      store.flush();
+      store.persistence.flush();
       expect(stored().title).toBe('during');
     } finally {
       warn.mockRestore();
@@ -489,7 +489,7 @@ describe('the live-task check under the fence', () => {
     const other = RunStore.open(dataDir, { keepLive: true });
     const headless = other.createRun({ title: 'headless', workflow: 'w', task: 't', steps: [] }).id;
     setRunStatus(other, headless, RUN_STATUS.running);
-    other.flush();
+    other.persistence.flush();
     const refusal = await cockpit.fenceProject(dataDir, { liveTasks: () => projectLiveTasks(store) }).catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(ProjectMigrationBusyError);
     const busy = refusal as ProjectMigrationBusyError;
@@ -508,7 +508,7 @@ describe('the live-task check under the fence', () => {
     // Another process (a headless `cez run`) owns a queued task while the cockpit opens.
     const other = RunStore.open(dataDir, { keepLive: true });
     const theirs = other.createRun({ title: 'left queued', workflow: 'w', task: 't', steps: [] }).id;
-    other.flush();
+    other.persistence.flush();
     const cockpit = owner();
     const ctx = await contextsFor(cockpit, { id: 'p', root }).context('p');
     // That owner ends: its row is no longer claimed by a live process and this store never held it.

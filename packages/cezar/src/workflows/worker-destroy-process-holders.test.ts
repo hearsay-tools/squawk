@@ -48,7 +48,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       // Admission runs before the worktree exists, so it never scans an ambient holder.
       const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
       await ensureOwnedWorkspace(root, w);
-      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.flush();
+      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.persistence.flush();
       const service = new DelegationService(workerCleanups()); const detach = service.registerProject({ home: testHome(), id: 'p', root, store, manager });
       return { w, service, detach };
     }
@@ -89,7 +89,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       releases.push(() => recorded.kill('SIGKILL'));
       await new Promise(resolve => recorded.stdout!.once('data', resolve));
       expect(store.workerExecutions.appendWorkerProcess(w.id, generation, recorded.pid!)).toBe(true);
-      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.flush();
+      setRunStatus(store, w.id, RUN_STATUS.done); store.workerExecutions.commitWorkerExecutionComplete(w.id, generation); store.persistence.flush();
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
       // No cwd scan exists on win32 (hearsay-tools/cezarion#889). Before, an `unknown` scan refused
       // every materialized worker's next generation, so Continue never worked there.
@@ -223,7 +223,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
     it.skipIf(process.platform === 'win32')("destroy reaps a crashed generation's recorded group after its leader died", async () => {
       const { w, leader, member } = await groupedWorker({ member: 'group', leader: 'stay' });
       await until(() => existsSync(recordPath(w.id)) && readRecord(w.id).processes.length === 1);
-      manager.dispose(); setRunStatus(store, w.id, RUN_STATUS.failed); store.flush();
+      manager.dispose(); setRunStatus(store, w.id, RUN_STATUS.failed); store.persistence.flush();
       const corpse = spawn(process.execPath, ['-e', '']); await new Promise(resolve => corpse.once('exit', resolve));
       writeFileSync(recordPath(w.id), JSON.stringify({ ...readRecord(w.id), controller: { pid: corpse.pid!, startToken: '1' } }));
       // Only the leader dies: its member keeps the group, and the worktree, alive.
@@ -234,7 +234,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
         expect(await service(reopened, other).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         expect(alive(member)).toBe(false);
         expect(existsSync(workspace(w).path)).toBe(false);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     // The `groups` backend's documented limit (ADR 0032): a child that left the worker's group is

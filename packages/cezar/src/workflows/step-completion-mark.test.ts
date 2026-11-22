@@ -72,7 +72,7 @@ describe('step completion mark at settlement callers', () => {
 
   afterEach(() => {
     active.clear();
-    store.flush();
+    store.persistence.flush();
     vi.restoreAllMocks();
     rmSync(root, { recursive: true, force: true });
   });

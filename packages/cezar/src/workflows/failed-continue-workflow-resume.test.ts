@@ -52,7 +52,7 @@ describe('a failed Continue on a root parked at an earlier workflow step', () =>
     manager = undefined;
     if (dryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = dryRun;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -61,7 +61,7 @@ describe('a failed Continue on a root parked at an earlier workflow step', () =>
       steps: workflow.steps.map(step => ({ id: step.id, name: step.name!, kind: STEP_KIND.agent })) });
     setRunStatus(store, id, RUN_STATUS.waiting, { currentStepId: 'a', runner: 'claude', startedAt: new Date().toISOString() });
     store.updateStep(id, 'a', { status: STEP_STATUS.waiting, iterations: 1, sessionId: '11111111-1111-4111-8111-111111111111', backend: 'claude' });
-    store.flush();
+    store.persistence.flush();
     manager = createFixtureManager(store, repoRoot);
 
     expect(manager.continueRun(id, { text: 'mock:request-error resume' })).toEqual({ ok: true });

@@ -58,7 +58,7 @@ describe('periodic autosave gate (#471)', () => {
   afterAll(async () => {
     await Promise.all(saves);
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

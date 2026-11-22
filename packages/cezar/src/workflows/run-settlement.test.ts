@@ -59,7 +59,7 @@ describe('successful run settlement (#473)', () => {
           if (record.id === id && record.status === status) terminalSnapshots.push(structuredClone(record.steps));
         });
         await settle(id, durable);
-        store.flush();
+        store.persistence.flush();
         const completed = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }).getRun(id)!;
         expect(completed.status).toBe(status);
         expect(completed.currentStepId).toBeUndefined();

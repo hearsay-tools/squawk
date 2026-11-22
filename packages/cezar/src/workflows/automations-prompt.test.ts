@@ -74,7 +74,7 @@ describe('automations prompt part and cockpit address (#774)', () => {
     await drainFixtureManagers(repoRoot);
     manager?.dispose();
     manager = undefined;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

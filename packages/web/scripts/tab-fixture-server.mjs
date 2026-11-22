@@ -68,7 +68,7 @@ const indexRoots = {}
 const seed = (dir, projectId) => {
   // The project's write root: .ai/squawk/ for a fresh project with the release switch on.
   const store = RunStore.open(projectPaths(dir).write)
-  if (indexSeed) { seedIndex(store, projectId); store.flush(); return store }
+  if (indexSeed) { seedIndex(store, projectId); store.persistence.flush(); return store }
   const active = sizes?.active ?? (taskList === 'project' ? 300 : taskList === 'global' ? 30 : 10)
   const archived = sizes?.archived ?? (taskList === 'project' ? 1000 : taskList === 'global' ? 200 : 0)
   for (let i = 0; i < active + archived; i++) {

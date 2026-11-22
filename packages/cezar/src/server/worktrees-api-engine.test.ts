@@ -44,7 +44,7 @@ describe('the worktrees API on the real engine', { timeout: 30_000 }, () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     removeWorktreesRepo({ repoRoot, cezHome }, savedHome);
   });
 

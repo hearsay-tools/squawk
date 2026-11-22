@@ -45,7 +45,7 @@ it('reads a waiting run\'s stored pending question into one open human wait and 
   expect(human(run)[0]).not.toHaveProperty('askSeq');
   expect(run).not.toHaveProperty('hasPendingHumanAsk');
   expect(toRunSummary(run!).waitingOn).toEqual({ kind: WAIT_KIND.human });
-  store.flush();
+  store.persistence.flush();
   // The committed row holds the wait and no summary, so a later read does not upgrade again.
   expect(readPersistedRuns(dir)[0]).not.toHaveProperty('hasPendingHumanAsk');
   expect(human(readPersistedRuns(dir)[0])).toHaveLength(1);
