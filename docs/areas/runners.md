@@ -481,6 +481,22 @@ note that says so. A native
 `ask_question` call ends the prompt with the question as text; Squawk shows it as a question
 card that keeps the free-text answer, and sends the chosen answer as the next prompt.
 
+Native subagents are off (`nativeSubagents: 'none'`). On CLI 1.5.14 a subagent's permission
+requests never reach the ACP client, so its commands time out. Each session gets `--add-dir` for a
+folder in its own temp folder, outside the checkout, whose `.agents/hooks.json` denies
+`invoke_subagent`, `define_subagent`, `manage_subagents`, `send_message`, `run_workflow` and
+`swarm`. The agent reads the denial and goes on; Squawk workers replace subagents. An added
+folder leaves the command cwd on the checkout (docs/runners/antigravity-wire.md).
+
+The CLI sends no result for a read, an MCP call or a subagent tool. Squawk reads it from the
+session's transcript in the account folder
+(`antigravity-cli/brain/<session>/.system_generated/logs/transcript_full.jsonl`) and adds it to
+the completed tool card, bounded to 64 Ki characters. That file is the CLI's private format,
+pinned for CLI 1.5.14 by a golden; when it is missing or changes shape, the card has no output and
+the run goes on. The CLI writes a provider failure as the message `"\n⚠ <error>\n"`; when that
+message is the turn's last work, the turn and the session fail. After an accepted `cezar_done` the
+same error is a diagnostic and the run keeps its result.
+
 The CLI keeps working after a turn ends: a background command or a `schedule` timer wakes the
 idle session, which then streams, runs tools and can ask for permission with no prompt open.
 Squawk maps that work to a new turn that the agent started (`nativePermission: 'after-turn'`).

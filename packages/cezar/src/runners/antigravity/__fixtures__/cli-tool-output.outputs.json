@@ -1,0 +1,22 @@
+{
+  "call_3483797392669486337": {
+    "name": "read_file",
+    "output": "Showing lines 1-3 of 3\n1: alpha line one\n2: beta line two\n3: PROBE-SECRET-WORD: KINGFISHER-7"
+  },
+  "call_6890206374657537504": {
+    "name": "mcp_probe_echo",
+    "output": "ECHO:golden-1"
+  },
+  "call_5817001205062449895": {
+    "name": "read_file",
+    "output": "Showing lines 1-3 of 3\n1: alpha line one\n2: beta line two\n3: PROBE-SECRET-WORD: KINGFISHER-7"
+  },
+  "call_8598173120530576272": {
+    "name": "mcp_probe_fail",
+    "output": "Encountered error in step execution: PROBE-FAILURE-TEXT"
+  },
+  "call_5704470663332638531": {
+    "name": "invoke_subagent",
+    "output": "Encountered error in step execution: tool call denied by pre-tool hook: Squawk turned off native subagents for Antigravity: their permission requests never reach Squawk. Do the work in this session, or start a Squawk worker if your instructions offer one."
+  }
+}

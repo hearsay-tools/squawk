@@ -19,12 +19,14 @@ export const SUBAGENT_CRITERIA = [
 export type SubagentCriterion = (typeof SUBAGENT_CRITERIA)[number]['id'];
 
 const NO_SIGNAL = (runner: string) => `${runner}'s native wire reports no start or end of a background child to Squawk, so its sessions keep the monitoring timer (owner decision 3 of hearsay-tools/cezarion#2431).`;
+const TURNED_OFF = (runner: string) => `Squawk turns ${runner}'s native subagent tools off (a hook denies each call), so no child runs and no row applies.`;
 const NEVER_SETTLES = (runner: string) => `${runner}'s parent turn never ends while its subagents run: the wire holds the turn open until every child returns, so no turn end parks on running children.`;
 
 /** Rows a runner's wire cannot carry. A runner with no scenario is exempt from every row; which
  *  runners those are comes from their declared `nativeSubagents` (hearsay-tools/cezarion#2991). */
 export const SUBAGENT_EXEMPTIONS: ReadonlyArray<{ criterion: SubagentCriterion; runner: string; reason: string }> = [
   ...factsWhere(facts => facts.nativeSubagents === 'unreported').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NO_SIGNAL(runner) }))),
+  ...factsWhere(facts => facts.nativeSubagents === 'none').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: TURNED_OFF(runner) }))),
   ...factsWhere(facts => facts.nativeSubagents === 'turn-held').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NEVER_SETTLES(runner) }))),
   { criterion: 'U31', runner: 'codex', reason: 'Codex app-server never starts a parent turn by itself when a spawned child ends (live codex-cli 0.164.0 wire, watched for 2.5 minutes): the child\'s end reaches the parent only as a subAgentActivity item on the already-completed turn, so Squawk\'s grace wake is the only resume.' },
   ...(['U33', 'U34'] as const).map(criterion => ({ criterion, runner: 'codex' as const,

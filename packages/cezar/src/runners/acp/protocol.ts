@@ -24,7 +24,8 @@ export interface AcpAsk {
 export interface AcpAskRefusal { refused: string }
 export interface AcpHooks {
   /** Some ACP agents report execution failures as text followed by end_turn. A matching update
-   *  makes the turn that carries it end as `error`. */
+   *  makes the turn that carries it end as `error` when it opens a message of its own and no other
+   *  agent work follows it before the turn ends; otherwise it stays plain text. */
   updateError?(update: Record<string, unknown>): string | undefined;
   /**
    * Agents whose idle session can wake on its own (a background command or timer ends) send work

@@ -29,9 +29,10 @@ export interface RunnerFacts {
   /**
    * Backgrounded native subagents. `reported`: the wire reports a child's start and end, so Squawk
    * waits on the child. `unreported`: the wire sends no child signal. `turn-held`: the parent turn
-   * stays open until every child returns, so no turn end parks on running children.
+   * stays open until every child returns, so no turn end parks on running children. `none`: Squawk
+   * turns the native subagent tools off, so no child runs.
    */
-  readonly nativeSubagents: 'reported' | 'unreported' | 'turn-held';
+  readonly nativeSubagents: 'reported' | 'unreported' | 'turn-held' | 'none';
   /**
    * A native subagent's own work. `nested`: the wire reports a child's items together with the
    * parent tool call that started the child, so the child's work nests under that call. `none`:

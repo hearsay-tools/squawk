@@ -13,6 +13,7 @@ import { pidExists } from '../../core/process-stat.ts';
 import { permissionPolicy } from './permissions.ts';
 import { antigravityTool } from './tool-normalization.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
+import { parseUsageLimit } from '../../core/usage-limit.ts';
 registerRunner(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
@@ -61,6 +62,19 @@ it('fails the session result when a turn the agent started on its own fails', as
   expect(events.filter(event => event.type === 'done')).toEqual([]);
 });
 
+it('fails on the CLI quota text with an error the usage-limit resume reads', async () => {
+  const cwd = await workspace(); const before = Date.now();
+  const failure = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:quota' }).then(() => undefined, (error: unknown) => error);
+  expect(failure).toBeInstanceOf(Error);
+  const message = (failure as Error).message;
+  expect(message).toContain('⚠ Individual quota reached.');
+  const hit = parseUsageLimit(message);
+  const wait = (3 * 3600 + 54 * 60 + 9) * 1000;
+  expect(hit?.evidence).toBe('delay');
+  expect(hit!.resetAt.getTime()).toBeGreaterThanOrEqual(before + wait);
+  expect(hit!.resetAt.getTime()).toBeLessThanOrEqual(Date.now() + wait);
+});
+
 it('says when a grant without Read cannot stop native file reads', async () => {
   const cwd = await workspace(); const events: AgentEvent[] = [];
   await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'explicit', tools: ['Bash'] }, userPrompt: 'inspect' }, event => events.push(event));
@@ -73,8 +87,40 @@ it('says when a grant without Read cannot stop native file reads', async () => {
 it('launches the CLI ACP server on the account folder with per-account file token storage', async () => {
   const cwd = await workspace(); const account = join(cwd, 'account');
   const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:account-homes', env: { GEMINI_HOME: account } });
-  expect(JSON.parse(result.text)).toMatchObject({ gemini: account, appData: 'antigravity-cli', ssh: '127.0.0.1 0 127.0.0.1 0' });
-  expect(JSON.parse(result.text)).not.toHaveProperty('geminiHome');
+  const launched = JSON.parse(result.text);
+  expect(launched).toMatchObject({ gemini: account, appData: 'antigravity-cli', ssh: '127.0.0.1 0 127.0.0.1 0', guardHooks: true });
+  expect(launched).not.toHaveProperty('geminiHome');
+  // The native subagent guard is a session temp folder outside the checkout, removed at exit.
+  expect(launched.guard.startsWith(cwd)).toBe(false);
+  await expect(access(launched.guard)).rejects.toThrow();
+});
+
+it('fills a read card from the CLI transcript row written after the wire completed the call', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = [];
+  let resolveAmended!: (item: UiEvent) => void;
+  const amended = new Promise<UiEvent>(resolve => { resolveAmended = resolve; });
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:transcript-read', env: { GEMINI_HOME: join(cwd, 'account') } }, undefined, {
+    onUiEvent: event => { ui.push(event); if (event.type === 'item.updated' && event.item.kind === 'tool' && event.item.output) resolveAmended(event); },
+  });
+  expect(await amended).toMatchObject({ type: 'item.updated', item: { id: 'call_transcript', name: 'Read', status: 'completed', output: '1: mock transcript line' } });
+  expect(ui.find(event => event.type === 'item.completed' && event.item.kind === 'tool')).toMatchObject({ item: { id: 'call_transcript' } });
+  session.end();
+  await session.result;
+});
+
+it('keeps an accepted done when the CLI reports a provider error afterwards, and shows the error as a diagnostic', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:permission-late-error' }, event => {
+    events.push(event);
+    if (event.type === 'turn-end' && events.filter(item => item.type === 'turn-end').length === 1) session.endWhenQuiet!();
+  }, { onUiEvent: event => {
+    ui.push(event);
+    if (event.type === 'permission.requested') expect(session.respondPermission?.(event.requestId, 'allow-once')).toBe(true);
+  } });
+  await expect(session.result).resolves.toMatchObject({ toolCalls: expect.any(Array) });
+  expect(events.filter(event => event.type === 'error')).toEqual([]);
+  expect(events).toContainEqual({ type: 'note', message: 'Antigravity reported an error after the task was done: ⚠ agent executor error: 503 Service Unavailable' });
+  expect(ui).toContainEqual({ type: 'session.error', message: '⚠ agent executor error: 503 Service Unavailable', fatal: false });
 });
 
 it('shows ask_question as a card and sends the chosen answer as the next prompt', async () => {

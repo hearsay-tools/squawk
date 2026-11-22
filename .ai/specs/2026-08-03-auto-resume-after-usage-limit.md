@@ -35,6 +35,7 @@ The reset instant is the whole feature, and the shapes it arrives in differ by b
 
 - **Claude Code** — `Claude AI usage limit reached|<epoch seconds>` in the result frame. Exact, locale-free, no prose parsing. This is the case that matters in practice.
 - **Codex / OpenCode** — prose, when they carry an instant at all (`try again at <ISO>`), or a relative delay (`retry after 3600`).
+- **Antigravity CLI** — its quota refusal as message text with a compact delay: `Individual quota reached. … Resets in 3h54m9s.` (hearsay-tools/squawk#4098).
 - **Raw API 429s** — frequently no instant at all, which Q2 answers.
 
 Two adjacent mechanisms already exist in the engine and were deliberately NOT reused:
@@ -57,7 +58,7 @@ The run stays `failed` while it waits, deliberately: it IS failed, the Continue 
 
 ### Detection — `src/core/usage-limit.ts`
 
-`parseUsageLimit(message, now)` → `{ resetAt, evidence } | null`, recognized in order of exactness: the Claude marker (epoch seconds, milliseconds tolerated), an explicit ISO instant in prose, a relative delay / `retry-after`. Gated on a narrow limit-phrase test so a timestamp that happens to sit in an unrelated error can never schedule anything. A reset already in the past clamps to now (the window is open); one further out than **seven days** is refused rather than believed — a corrupt number must not swallow a task. Never throws: this runs on the failure path of every run.
+`parseUsageLimit(message, now)` → `{ resetAt, evidence } | null`, recognized in order of exactness: the Claude marker (epoch seconds, milliseconds tolerated), an explicit ISO instant in prose, a relative delay / `retry-after`, or a compact delay (`Resets in 3h54m9s`). Gated on a narrow limit-phrase test so a timestamp that happens to sit in an unrelated error can never schedule anything. A reset already in the past clamps to now (the window is open); one further out than **seven days** is refused rather than believed — a corrupt number must not swallow a task. Never throws: this runs on the failure path of every run.
 
 ### Scheduling — `RunManager`
 

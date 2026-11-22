@@ -67,6 +67,18 @@ describe('parseUsageLimit', () => {
     expect(parseUsageLimit('usage limit reached, retry after 90 s', NOW)?.evidence).toBe('delay');
   });
 
+  it('reads a compact delay, as the Antigravity CLI writes its quota', () => {
+    const hit = parseUsageLimit('⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 3h54m9s.', NOW);
+    expect(hit).toEqual({ resetAt: new Date('2026-08-03T15:54:09.000Z'), evidence: 'delay' });
+    // The run error the runner raises carries the same text with its exit suffix.
+    expect(parseUsageLimit('step "task" failed: ⚠ Individual quota reached. Resets in 54m9s.: Antigravity exited code 0', NOW)?.resetAt.toISOString())
+      .toBe('2026-08-03T12:54:09.000Z');
+    expect(parseUsageLimit('quota reached, resets in 2h', NOW)?.resetAt.toISOString()).toBe('2026-08-03T14:00:00.000Z');
+    expect(parseUsageLimit('quota reached, try again in 45s', NOW)?.resetAt.toISOString()).toBe('2026-08-03T12:00:45.000Z');
+    // Words keep their meaning: a delay with a unit word is not a compact one.
+    expect(parseUsageLimit('rate limit exceeded — try again in 42 minutes', NOW)?.resetAt.toISOString()).toBe('2026-08-03T12:42:00.000Z');
+  });
+
   it('reads the two-word "rate limited" phrasing with a reset instant', () => {
     // #443: a mid-work provider throttle says "429 rate limited, try again at T" — the
     // spaced two-word form must count as a limit phrase or the instant is lost and the

@@ -15,7 +15,8 @@
  *     OpenCode phrase the same thing when they carry a timestamp at all.
  *  3. A clock-only reset in prose (`resets 8:10pm (Europe/Warsaw)`) — how Claude Code phrases
  *     session windows in some interactive output.
- *  4. A relative delay (`try again in 42 minutes`, `retry-after: 3600`).
+ *  4. A relative delay (`try again in 42 minutes`, `retry-after: 3600`), or a compact one
+ *     (`Resets in 3h54m9s`) — how the Antigravity CLI phrases its quota (hearsay-tools/squawk#4098).
  *
  * Nothing else counts. A limit message with no recoverable reset instant returns `null` on
  * purpose: guessing a window would turn one interruption into a retry loop against a provider
@@ -59,6 +60,9 @@ const RESET_CLOCK_RE =
 /** `…try again in 42 minutes`, `…retry after 3600 seconds`, `retry-after: 3600`. */
 const RESET_IN_RE =
   /(?:try\s+again|retry|resets?|available\s+again)\b[^\n]{0,16}?\b(?:in|after)\s+(\d{1,7})\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)\b/i;
+/** `…Resets in 3h54m9s`, `…try again in 54m9s`: one to three `<n><h|m|s>` parts, largest first. */
+const RESET_IN_COMPACT_RE =
+  /(?:try\s+again|retry|resets?|available\s+again)\b[^\n]{0,16}?\b(?:in|after)\s+((?:\d{1,7}h)?(?:\d{1,7}m)?(?:\d{1,7}s)?)(?![\w])/i;
 const RETRY_AFTER_HEADER_RE = /\bretry[-_\s]?after\b\s*[:=]?\s*(\d{1,7})\b/i;
 
 const UNIT_MS: Record<string, number> = {
@@ -103,6 +107,8 @@ export function parseUsageLimit(message: string | undefined, now = Date.now()): 
     if (parsed !== null) return settle(parsed, now, 'clock');
   }
 
+  const compact = compactDelayMs(RESET_IN_COMPACT_RE.exec(message)?.[1]);
+  if (compact !== undefined) return settle(now + compact, now, 'delay');
   const relative = RESET_IN_RE.exec(message);
   if (relative) {
     const unit = UNIT_MS[relative[2]!.toLowerCase()];
@@ -112,6 +118,13 @@ export function parseUsageLimit(message: string | undefined, now = Date.now()): 
   if (header) return settle(now + Number(header[1]) * 1_000, now, 'delay');
 
   return null;
+}
+
+function compactDelayMs(delay: string | undefined): number | undefined {
+  if (!delay) return undefined;
+  let total = 0;
+  for (const [, count, unit] of delay.matchAll(/(\d+)([hms])/gi)) total += Number(count) * UNIT_MS[unit!.toLowerCase()]!;
+  return total;
 }
 
 function parseClockReset(match: RegExpExecArray, now: number): number | null {

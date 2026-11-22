@@ -19,7 +19,9 @@ import { antigravityUsage } from './usage.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
-import { ANTIGRAVITY_WIRE_HOOKS, antigravityUpdateError } from './wire-updates.ts';
+import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
+import { writeAntigravitySubagentGuard } from './subagent-guard.ts';
+import { AntigravityToolOutputs, antigravityTranscriptPath } from './tool-transcript.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
 import type { UiAskQuestion, UiEvent } from '../../core/ui-events.ts';
@@ -71,11 +73,15 @@ export class AntigravitySession implements AgentSession {
   private kill: NodeJS.Timeout | undefined;
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
+  /** Reads read, MCP and subagent results from the CLI transcript; the wire carries none. */
+  private readonly toolOutputs = new AntigravityToolOutputs(item => this.options.onUiEvent?.({ type: 'item.updated', item }));
+  /** The native subagent guard could not be written; boot says so. */
+  private guardMissing = false;
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(spec);
     this.launch = launchAntigravity(bin) ?? missingAntigravity(this.runtime.temp);
-    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir, this.guardArgs()), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     try { if (this.child.pid) this.launch.bindProcess(this.child.pid); }
     catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)); }
     this.descendants = new SessionDescendants(this.child);
@@ -95,6 +101,11 @@ export class AntigravitySession implements AgentSession {
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
   get closingQuietly(): boolean { return this.quiet && !this.requestedClose; }
+  /** `--add-dir` for the hook folder that denies native subagent tools (hearsay-tools/squawk#4098). */
+  private guardArgs(): string[] {
+    try { return ['--add-dir', writeAntigravitySubagentGuard(this.runtime.temp)]; }
+    catch { this.guardMissing = true; return []; }
+  }
   private emit(event: AgentEvent): void {
     if (event.type === 'turn-end' && this.failedTurn) return;
     if (event.type === 'text') this.output.text += event.text;
@@ -106,7 +117,7 @@ export class AntigravitySession implements AgentSession {
     const spec = this.spec;
     return new AcpSession({ input: this.child.stdin, output: this.child.stdout }, {
       backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, // ACP usage_update reports context occupancy, not spent tokens.
-      event: event => { if (event.type !== 'token-usage') this.emit(event); },
+      event: event => this.acpEvent(event),
       onActivity: () => this.options.onActivity?.(),
       uiEvent: event => this.uiEvent(event),
       hooks: {
@@ -119,32 +130,48 @@ export class AntigravitySession implements AgentSession {
         // The CLI saves the session/new system prompt with the session and appends a resent one,
         // so a resume prepends it to the opening turn instead (systemPromptOnResume 'in-thread').
         sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: (this.lostSession ? spec.resumeFallbackSystemPrompt : undefined) ?? spec.systemPrompt ?? '' } } } } : {},
-        filterUpdate: update => {
-          const failure = antigravityUpdateError(update);
-          this.providerError = failure ?? this.providerError;
-          if (failure) this.reportFailure(failure);
-          return true;
-        },
+        filterUpdate: update => { this.toolOutputs.observe(update); return true; },
       },
     });
   }
+  private acpEvent(event: AgentEvent): void {
+    if (event.type === 'token-usage') return;
+    if (event.type === 'error') { this.providerFailure(event.message); return; }
+    if (event.type === 'session') this.toolOutputs.open(antigravityTranscriptPath(this.runtime.geminiDir, event.sessionId));
+    this.emit(event);
+  }
+  /** A turn ended on the CLI's failure text. After an accepted done the run keeps its result and the
+   *  error stays visible as a diagnostic (hearsay-tools/squawk#4016). */
+  private providerFailure(message: string): void {
+    if (!this.quiet) { this.providerError = message; this.reportFailure(message); return; }
+    this.emit({ type: 'note', message: `Antigravity reported an error after the task was done: ${message}` });
+    this.options.onUiEvent?.({ type: 'session.error', message, fatal: false });
+  }
   private uiEvent(event: UiEvent): void {
     if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); }
-    // The response that ends a turn carries every prompt sent into it: none is held after it.
-    if (event.type === 'turn.completed') this.humanHolds.clear();
-    if (event.type === 'turn.completed' && event.stopReason === 'error' && this.failedTurnEnded(event)) return;
-    if (event.type === 'turn.completed' && event.usage) {
-      this.output.tokensUsed += event.usage.total;
-      this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
+    if (event.type === 'turn.completed') {
+      // The response that ends a turn carries every prompt sent into it: none is held after it.
+      this.humanHolds.clear();
+      if (event.stopReason === 'error' && !this.quiet && this.failedTurnEnded(event)) return;
+      if (event.usage) {
+        this.output.tokensUsed += event.usage.total;
+        this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
+      }
     }
     this.options.onUiEvent?.(event);
-    if (event.type === 'item.started' && event.item.kind === 'tool' && event.item.name === 'ask_question') this.openAsk(event.item.id, event.item.input);
-    if (event.type === 'item.completed' && event.item.id === this.pendingAsk?.toolCallId) this.pendingAsk = undefined;
+    this.trackItem(event);
     // Work the agent started on its own ended: input and auto-end resume as after a prompt.
     if (event.type === 'turn.completed' && !this.busy) {
       this.armQuietEnd();
       if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
     }
+  }
+  /** The open native question, and a tool that closed with no output (its transcript row may hold it). */
+  private trackItem(event: UiEvent): void {
+    if (event.type === 'item.started' && event.item.kind === 'tool' && event.item.name === 'ask_question') this.openAsk(event.item.id, event.item.input);
+    if (event.type !== 'item.completed') return;
+    if (event.item.kind === 'tool') this.toolOutputs.completed(event.item);
+    if (event.item.id === this.pendingAsk?.toolCallId) this.pendingAsk = undefined;
   }
   /** A failed turn is held until the session reports the failure. One the agent started on its
    *  own has no prompt that rejects, so it fails the session here, as a failed prompt does. */
@@ -176,6 +203,7 @@ export class AntigravitySession implements AgentSession {
       else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} ${option ? `does not offer effort ${this.spec.effort}` : 'has no effort setting'}; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
+    if (this.guardMissing) this.emit({ type: 'note', message: 'Squawk could not write its Antigravity hook folder; native subagent tools stay on for this session.' });
     // The CLI runs read_file with no permission request, so the policy cannot withhold reads.
     const grant = this.spec.toolGrant;
     if (grant.kind !== 'unset' && !grant.tools.includes('Read')) this.emit({ type: 'note', message: 'Antigravity reads files without asking for permission; this step\'s tool grant does not include Read, but it cannot stop native file reads.' });
@@ -329,7 +357,7 @@ export class AntigravitySession implements AgentSession {
   }
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
-    this.accepting = false; this.acp.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
+    this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
     await boot;
