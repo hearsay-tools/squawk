@@ -420,7 +420,6 @@ describe('workspace provider API', () => {
     });
     // The lazily built context is the next process on this project: this store goes first.
     lazyStore.close();
-    lazyStore.removeAllListeners();
 
     const contexts = new ProjectContexts({ createRunner, createManager: createFakeRunManager, home: testHome(),
       listProjects: async () => [{ id: 'lazy', root: lazyRoot, status: 'not-git' }],

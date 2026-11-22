@@ -588,11 +588,11 @@ export class ProjectContexts {
 }
 
 /** Shared teardown for built and half-built contexts. Closing the store writes what is pending
- *  and releases its database connection; a late write to it afterwards saves nothing. The store's
- *  listeners go after the close, so what the close publishes still reaches them. */
+ *  and releases its database connection; a late write to it afterwards saves nothing. The
+ *  lifecycle subscribers unsubscribe in `cleanups`, after the close, so what the close publishes still
+ *  reaches them. */
 function teardown(ctx: { store: RunStore; manager: ProjectRunManager }, cleanups: ReadonlyArray<() => void> = []): void {
   ctx.manager.dispose();
   ctx.store.close();
-  ctx.store.removeAllListeners();
   for (const cleanup of cleanups) cleanup();
 }
