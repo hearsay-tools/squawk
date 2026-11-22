@@ -78,3 +78,16 @@ it('ends the turn that carried an executor error as failed, and lets a prompt ad
   events.finish('end_turn');
   expect(ui.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'error' });
 });
+
+it('emits one v1 text per message block, so a marker split across chunks stays whole', () => {
+  const texts: string[] = [];
+  const events = new AcpEvents({ event: event => { if (event.type === 'text') texts.push(event.text); } }, hooks);
+  events.begin();
+  for (const text of ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.'])
+    events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
+  expect(texts).toEqual([]);
+  events.update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'next' } });
+  events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Waiting.' } });
+  events.finish('end_turn');
+  expect(texts).toEqual(['Opened the PR.\n\nCEZ:PR=4104\n\n- done.', 'Waiting.']);
+});

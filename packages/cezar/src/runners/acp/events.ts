@@ -140,7 +140,6 @@ export class AcpEvents {
     }
     this.block!.text += content.text;
     this.sink.uiEvent?.({ type: 'item.delta', itemId: this.block!.id, field: kind === 'message' ? 'text' : 'reasoning', delta: content.text });
-    if (kind === 'message') this.sink.event?.({ type: 'text', text: content.text });
   }
 
   private plan(value: unknown): void {
@@ -151,7 +150,10 @@ export class AcpEvents {
     this.sink.uiEvent?.({ type: 'plan.updated', entries });
   }
 
+  /** v1 `text` is one whole assistant block, as `V1TextCoalescer` documents: a marker split
+   *  across chunks must reach the server's per-event marker strip in one piece. */
   private flush(): void {
+    if (this.block?.kind === 'message' && this.block.text) this.sink.event?.({ type: 'text', text: this.block.text });
     if (this.block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...this.block } });
     this.block = undefined;
   }
