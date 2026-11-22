@@ -125,7 +125,7 @@ and an orchestrator keeps a whole queue of them moving.
   its own branch: inspect it, send notes back into the same session, or push a
   **draft PR**. Auto merge is off by default; each task can opt in to merge after Done.
   Turn on the optional **review gate**
-  (`HSQ_REVIEW_GATE=1` (`CEZ_REVIEW_GATE` fallback) or Settings → Agents) and a finished run with changes
+  (`HSQ_REVIEW_GATE=1` (`CEZ_REVIEW_GATE` fallback) or Settings → Agent defaults) and a finished run with changes
   waits in `review` for you.
 - ♻️ **Losing a session when it fails.** Every run records its `claude` session id.
   Take it over interactively in one click (`claude --resume <id>`), or continue it
@@ -352,7 +352,7 @@ The moves that make the cockpit worth the browser tab:
 - 🛡️ **You control merging.** Read a finished run's diff, type notes that go
   straight back into the agent's session, or push a `gh pr create --draft`.
   Auto merge is off by default and requires a task to opt in. The **review gate** is optional (`HSQ_REVIEW_GATE=1` (`CEZ_REVIEW_GATE` fallback), or
-  Settings → Agents): with it on, a successful run with changes parks in `review`
+  Settings → Agent defaults): with it on, a successful run with changes parks in `review`
   until you accept it. Autonomous runs always skip it.
 - 🗂️ **Every project in one cockpit.** One `hsq serve` hosts every repo you
   register; the desktop rail switches between them, and **All tasks** shows every

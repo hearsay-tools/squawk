@@ -84,8 +84,8 @@
 .settings-panel .settings-disclosure { border-block-start: 1px solid var(--border); padding-block-start: 16px; font-size: 12px; color: var(--muted-foreground); }
 .settings-panel .settings-disclosure summary { cursor: pointer; padding-block: 4px; padding-inline: 0; }
 .settings-panel .settings-disclosure > :not(summary) { margin-block-start: 12px; }
-.settings-panel [data-slot=agents-section] { gap: 20px; }
-.settings-panel [data-slot=agents-section] .settings-field + .settings-field { padding-block-start: 20px; }
+.settings-panel [data-slot=agent-defaults-section] { gap: 20px; }
+.settings-panel [data-slot=agent-defaults-section] .settings-field + .settings-field { padding-block-start: 20px; }
 .settings-panel [data-slot=agents-system-prompt] { min-height: 192px; }
 .settings-panel [data-slot=agents-task-runs] { gap: 20px; }
 .settings-panel [data-slot=agents-task-runs] > h2 { font-size: 14px; font-weight: 400; }

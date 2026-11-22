@@ -705,7 +705,7 @@ export async function pullRepo(
   return result.data
 }
 
-/** The Settings → Agents knobs in one read (`GET /api/config`, additive R6 route). */
+/** The Settings → Agent defaults knobs in one read (`GET /api/config`, additive R6 route). */
 export async function getConfig(opts?: ReadOptions): Promise<ConfigResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].config.$get({ param: { projectId: queryScope() } }, init(opts)),
@@ -2005,7 +2005,7 @@ export async function putWorkspaceConfig(
 }
 
 /** Set/clear the agents' config knobs — base branch, default runner, system prompt, per-runner
- *  model presets (Settings → Agents, R6 1.5). Merged into the raw config.json server-side so
+ *  model presets (Settings → Agent defaults, R6 1.5). Merged into the raw config.json server-side so
  *  unrelated user keys survive; `null` clears a knob back to its default. */
 export async function putConfig(
   patch: SetConfigInput,

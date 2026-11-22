@@ -2,7 +2,7 @@ import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
 
 /** Engine-free helpers shared by the provider gate's module and engine tests. */
-export const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agents → Providers.';
+export const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agent defaults → Providers.';
 
 export const memoryWorkspaceConfig = (disabledProviders: ProviderId[] = ['codex']) => {
   let config: WorkspaceConfig = { ...defaultWorkspaceConfig(), disabledProviders };

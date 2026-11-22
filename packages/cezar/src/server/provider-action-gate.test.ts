@@ -48,7 +48,7 @@ describe('provider action gate', () => {
         { provider: 'codex', status: 'connected', enabled: false },
         { provider: 'opencode', status: 'not-installed', enabled: true },
       ],
-    })).toBe('Codex is disabled. Enable it in Settings → Agents → Providers.');
+    })).toBe('Codex is disabled. Enable it in Settings → Agent defaults → Providers.');
   });
 
   it.each(['disconnected', 'unknown'] as const)(
@@ -56,19 +56,19 @@ describe('provider action gate', () => {
     (status) => {
       expect(unavailableProviderMessage(['codex'], {
         providers: [{ provider: 'codex', status, enabled: true }],
-      })).toBe('Codex credentials are unavailable. Authorize it in Settings → Agents → Providers.');
+      })).toBe('Codex credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.');
     },
   );
 
   it('names OMP the way every other surface does', () => {
     expect(unavailableProviderMessage(['omp'], {
       providers: [{ provider: 'omp', status: 'connected', enabled: false }],
-    })).toBe('OMP is disabled. Enable it in Settings → Agents → Providers.');
+    })).toBe('OMP is disabled. Enable it in Settings → Agent defaults → Providers.');
   });
 
   it('reports unavailable credentials when the provider status row is missing', () => {
     expect(unavailableProviderMessage(['opencode'], { providers: [] }))
-      .toBe('OpenCode credentials are unavailable. Authorize it in Settings → Agents → Providers.');
+      .toBe('OpenCode credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.');
   });
 
   it('uses an explicit override before the latest step backend', () => {

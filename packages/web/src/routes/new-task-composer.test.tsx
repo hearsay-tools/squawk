@@ -2,7 +2,7 @@ import { HEALTH, HEALTH_MULTI, HEALTH_ALL, HEALTH_NO_GIT, PROVIDERS_CONNECTED, P
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { workspaceQueryKeys } from '@/api/queries'
-import type { HealthResponse } from '@open-mercato/cezar-api-client'
+import type { HealthResponse, ProviderStatusResponse } from '@open-mercato/cezar-api-client'
 import { resetToasts } from '@/components/ui/toaster'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
@@ -29,6 +29,14 @@ afterEach(() => {
   resetToasts()
   vi.unstubAllGlobals()
 })
+
+
+/** One connected runner and no missing CLI: nothing to choose and nothing to install. */
+const PROVIDERS_NONE_MISSING: ProviderStatusResponse = { providers: [
+  { provider: 'claude', status: 'connected', enabled: true },
+  { provider: 'codex', status: 'disconnected', enabled: true },
+  { provider: 'opencode', status: 'disconnected', enabled: true },
+] }
 
 describe('the hero surface', () => {
   it('keeps default-off completion switches in the draft and sends them on create', async () => {
@@ -179,13 +187,28 @@ describe('the hero surface', () => {
 })
 
 describe('picker data flows', () => {
-  it('hides the runner pill on a single-backend host (legacy rule)', async () => {
-    serve()
+  it('hides the runner pill on a single-backend host with no missing CLI', async () => {
+    serve({ providerStatus: PROVIDERS_NONE_MISSING })
     renderNewTask()
     await pillReady()
     expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
     expect(document.querySelector('[data-slot="model-pill"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="effort-pill"]')).not.toBeNull()
+  })
+
+  it('shows the runner pill on a single-backend host when a CLI is missing, linking to its Settings card', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    const pill = await waitFor(() => {
+      const element = document.querySelector<HTMLButtonElement>('[data-slot="runner-pill"]')
+      expect(element).not.toBeNull()
+      return element!
+    })
+    fireEvent.pointerDown(pill)
+    const link = await screen.findByRole('menuitem', { name: /opencode/ })
+    expect(link.getAttribute('href')).toBe('/settings/global/agents#agent-opencode')
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(1)
   })
 
   it.each([{ levels: ['low'] }, { levels: [] }])('resets unsupported effort for discovered levels $levels before submission', async ({ levels }) => {
@@ -799,7 +822,7 @@ describe('provider authentication gate', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Plan first' }))
     expect((screen.getByRole('button', { name: 'Plan task' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/p/acme/settings/agents#providers',
+      '/p/acme/settings/agent-defaults#providers',
     )
   })
 
@@ -812,7 +835,7 @@ describe('provider authentication gate', () => {
     )
     expect((screen.getByRole('button', { name: 'Start task' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/settings/agents#providers',
+      '/settings/agent-defaults#providers',
     )
   })
 
@@ -823,7 +846,7 @@ describe('provider authentication gate', () => {
         providers: [
           { provider: 'claude', status: 'disconnected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
-          { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'opencode', status: 'disconnected', enabled: true },
         ],
       },
     })
@@ -991,6 +1014,7 @@ describe('prompt templates on the new-task composer', () => {
 describe('the composer runner pill carries the account', () => {
   it('adds nothing when no second login exists — the zero-config composer is unchanged', async () => {
     serve({
+      providerStatus: PROVIDERS_NONE_MISSING,
       agentProfiles: { ...ACCOUNTS, profiles: ACCOUNTS.profiles.filter((p: (typeof ACCOUNTS)['profiles'][number]) => p.isDefault) },
     })
     renderNewTask()

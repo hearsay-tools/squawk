@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -122,7 +122,7 @@ function serve(
   )
 }
 
-function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localHandoff = true) {
+function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localHandoff = true, entry = '/settings/global/agents') {
   const client = createQueryClient()
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
   seedRunners(client, runners)
@@ -144,7 +144,7 @@ function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localH
   })
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/settings/global/accounts']}>
+      <MemoryRouter initialEntries={[entry]}>
         <AppRoutes />
         <Toaster />
       </MemoryRouter>
@@ -153,17 +153,13 @@ function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localH
 }
 
 const rows = () => [...document.querySelectorAll('[data-slot="account-row"]')]
-/** Switch to an agent's tab and wait for its panel to mount. */
-const openTab = async (provider: string) => {
-  await waitFor(() =>
-    expect(document.querySelector(`[data-slot="accounts-tabs"] [data-provider="${provider}"]`)).not.toBeNull(),
-  )
-  // Radix activates a tab on mousedown, not click — a `click` alone leaves the panel unmounted.
-  fireEvent.mouseDown(document.querySelector(`[data-slot="accounts-tabs"] [data-provider="${provider}"]`)!)
-  await waitFor(() =>
-    expect(document.querySelector(`[data-slot="accounts-provider"][data-provider="${provider}"]`)).not.toBeNull(),
-  )
-}
+/** Wait for an agent's card to mount; every card renders at once. */
+const cardFor = async (provider: string) =>
+  waitFor(() => {
+    const card = document.querySelector<HTMLElement>(`[data-slot="accounts-provider"][data-provider="${provider}"]`)
+    expect(card).not.toBeNull()
+    return card!
+  })
 const rowFor = (id: string) => document.querySelector(`[data-slot="account-row"][data-account="${id}"]`)
 
 afterEach(() => {
@@ -178,13 +174,13 @@ const waitForRow = (id: string) =>
     return rowFor(id)!
   })
 
-describe('the agent accounts section', () => {
+describe('the global Agents section', () => {
   it('shows a connected API-key account without a folder or Connect hint', async () => {
     serve({ editable: true, profiles: [profile({ id: 'default', provider: 'antigravity', isDefault: true,
       exists: false, looksValid: false, status: { provider: 'antigravity', status: 'connected', requiresAccountHome: false,
         hint: 'Uses GEMINI_API_KEY from the Squawk host environment; no account folder is required.' } })], profileCapableProviders: ['antigravity'], selections: {} });
     renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', terminalLogin: false, browserLogin: true }] });
-    await openTab('antigravity');
+    await cardFor('antigravity');
     expect(await screen.findByText(/Uses GEMINI_API_KEY/)).toBeTruthy();
     expect(document.querySelector('[data-slot="account-missing"]')).toBeNull();
     expect(document.querySelector('[data-action="account-connect"]')).toBeNull();
@@ -201,8 +197,8 @@ describe('the agent accounts section', () => {
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
-    // One tab at a time, so only the ACTIVE agent's rows are in the DOM.
-    await waitFor(() => expect(rows()).toHaveLength(1))
+    // Every card renders at once: one discovered account each for claude and codex.
+    await waitFor(() => expect(rows()).toHaveLength(2))
     // The discovered profile is what Squawk found — a Rename or Remove would imply a setting.
     expect(document.querySelector('[data-slot="account-manage"]')).toBeNull()
     expect(document.querySelector('[data-action="account-rename"]')).toBeNull()
@@ -541,26 +537,74 @@ describe('the agent accounts section', () => {
   it('offers hosted browser sign-in with the host grant while withholding account paths', async () => {
     serve({ editable: false, profileCapableProviders: ['claude'], selections: {}, profiles: [] })
     renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', displayName: 'Antigravity', terminalLogin: false, browserLogin: true }] }, true, false)
-    expect(await screen.findByText('Antigravity · discovered account')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy()
+    const card = await cardFor('antigravity')
+    expect(within(card).getByText('Discovered account')).toBeTruthy()
+    expect(within(card).getByRole('heading', { name: 'Antigravity' })).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Connect' })).toBeTruthy()
     expect(rows()).toHaveLength(0)
     expect(document.querySelector('[data-slot="account-path"]')).toBeNull()
     expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
   })
 
-  it('gives every agent a tab, including one that cannot carry a second account', async () => {
+  it('shows each agent install state and version in hosted mode too', async () => {
+    serve({ editable: false, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: [] })
+    renderAccounts(RUNNERS_RESPONSE, false, false)
+
+    const claude = await cardFor('claude')
+    await waitFor(() => expect(claude.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'))
+    expect((await cardFor('codex')).querySelector('[data-slot="agent-installed"]')?.textContent).toContain('Not installed')
+    // Account counts are part of the account listing, which hosted mode withholds.
+    expect(document.querySelector('.settings-account-count')).toBeNull()
+  })
+
+  it('shows the host check, not installer controls, for a managed runner without the host grant', async () => {
+    serve({ editable: false, profileCapableProviders: [], selections: {}, profiles: [] })
+    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'codex', managedInstall: true }] }, false, false)
+
+    const card = await cardFor('codex')
+    await waitFor(() => expect(card.querySelector('[data-slot="agent-installed"]')?.textContent).toContain('Not installed'))
+    expect(within(card).queryByRole('region', { name: 'CLI installation' })).toBeNull()
+    expect(within(card).queryByRole('button', { name: /Install CLI/ })).toBeNull()
+  })
+
+  it('offers the managed installer on the runner card with the host grant', async () => {
+    serve({ editable: true, profileCapableProviders: [], selections: {}, profiles: [] })
+    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'codex', managedInstall: true }] }, true, true)
+
+    const card = await cardFor('codex')
+    expect(await within(card).findByRole('region', { name: 'CLI installation' })).toBeTruthy()
+    // The installer reports its own versions, so the host-check readout is not repeated.
+    expect(card.querySelector('[data-slot="agent-installed"]')).toBeNull()
+  })
+
+  it('scrolls to and focuses the card a link named', async () => {
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this) }
+    try {
+      serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: DEFAULTS })
+      renderAccounts(RUNNERS_RESPONSE, true, true, '/settings/global/agents#agent-codex')
+
+      const card = await cardFor('codex')
+      await waitFor(() => expect(document.activeElement).toBe(card))
+      expect(scrolled).toContain(card)
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
+
+  it('gives every agent a card, including one that cannot carry a second account', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(1))
-    // OpenCode and pi get a tab too: it is where "is this agent installed?" is answered, and
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    // OpenCode and pi get a card too: it is where "is this agent installed?" is answered, and
     // hiding the ones that cannot carry a second login would only move that question elsewhere.
-    expect(
-      [...document.querySelectorAll('[data-slot="accounts-tabs"] [data-provider]')].map((el) =>
-        el.getAttribute('data-provider'),
-      ),
-    ).toEqual(RUNNER_IDS)
+    const cards = [...document.querySelectorAll('[data-slot="accounts-provider"]')]
+    expect(cards.map((el) => el.getAttribute('data-provider'))).toEqual(RUNNER_IDS)
+    // Each card is a link target: `#agent-<id>` from the runner picker and the Tools menu.
+    expect(cards.map((el) => el.id)).toEqual(RUNNER_IDS.map((id) => `agent-${id}`))
   })
 
   it('offers no Add on an agent that cannot carry a second account, and says why', async () => {
@@ -568,9 +612,9 @@ describe('the agent accounts section', () => {
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
-    await openTab('opencode')
-    expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
-    expect(document.querySelector('[data-slot="accounts-single-only"]')).not.toBeNull()
+    const card = await cardFor('opencode')
+    expect(card.querySelector('[data-action="accounts-add"]')).toBeNull()
+    expect(card.querySelector('[data-slot="accounts-single-only"]')).not.toBeNull()
   })
 
   it('reports what the MACHINE has for the active agent, not per account', async () => {
@@ -590,12 +634,12 @@ describe('the agent accounts section', () => {
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
-    await openTab('codex')
-    expect(document.querySelector('[data-slot="agent-installed"]')?.textContent).toContain(
+    const card = await cardFor('codex')
+    await waitFor(() => expect(card.querySelector('[data-slot="agent-installed"]')?.textContent).toContain(
       '@openai/codex',
-    )
+    ))
     // No version row at all when there is nothing installed to have one.
-    expect(document.querySelector('[data-slot="agent-version"]')).toBeNull()
+    expect(card.querySelector('[data-slot="agent-version"]')).toBeNull()
   })
 })
 
@@ -606,7 +650,7 @@ describe('the agent accounts section', () => {
  */
 describe('the add-account dialog', () => {
   const openDialog = async (provider = 'claude') => {
-    if (provider !== 'claude') await openTab(provider);
+    if (provider !== 'claude') await cardFor(provider);
     await waitFor(() => expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull())
     fireEvent.click(document.querySelector(`[data-action="accounts-add"][data-provider="${provider}"]`)!)
     await waitFor(() => expect(document.querySelector('[data-slot="add-account-dialog"]')).not.toBeNull())

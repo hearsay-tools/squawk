@@ -146,7 +146,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
           <span>{continuation.reason}</span>
           {!continuation.providerPending ? (
             <Link
-              to="/settings/agents#providers"
+              to="/settings/agent-defaults#providers"
               className="font-medium text-foreground underline underline-offset-4"
             >
               Configure providers

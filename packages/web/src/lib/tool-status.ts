@@ -14,8 +14,8 @@ export const toolStateLabel = (check: BackendCheck): string => (check.available 
 /** The server's hint for a missing tool, verbatim; null while the tool works or has none to give. */
 export const toolHint = (check: BackendCheck): string | null => (check.available ? null : (check.hint ?? null))
 
-/** Where a missing tool is set up: Settings → Agents, resolved by the project-router `Link`. */
-export const TOOL_SETTINGS_PATH = '/settings/agents'
+/** Where tools are set up: global Settings → Agents. Link with the plain react-router `Link`. */
+export { GLOBAL_AGENTS_PATH as TOOL_SETTINGS_PATH, agentCardPath as toolSetupPath } from './agents-settings-path'
 
 /** Neutral link style for the touch-first surfaces: `--foreground`, underline on hover and
  *  keyboard focus, the app's focus ring, and a 44px target wherever there is no hover. */

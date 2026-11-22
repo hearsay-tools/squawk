@@ -16,9 +16,9 @@ describe('control direction message bytes', () => {
   it('preserves both provider refusals', () => {
     expect(unavailableProviderMessage(['codex'], {
       providers: [{ provider: 'codex', status: 'connected', enabled: false }],
-    })).toBe('Codex is disabled. Enable it in Settings → Agents → Providers.');
+    })).toBe('Codex is disabled. Enable it in Settings → Agent defaults → Providers.');
     expect(unavailableProviderMessage(['codex'], {
       providers: [{ provider: 'codex', status: 'disconnected', enabled: true }],
-    })).toBe('Codex credentials are unavailable. Authorize it in Settings → Agents → Providers.');
+    })).toBe('Codex credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.');
   });
 });

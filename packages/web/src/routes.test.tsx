@@ -176,7 +176,7 @@ describe('pageTitleContext', () => {
     ['/p/cezar/github/issues/543', 'GitHub'],
     ['/p/cezar/skills', 'Skills'],
     ['/p/cezar/workflows/quick-task', 'Workflows'],
-    ['/p/cezar/settings/agents', 'Settings'],
+    ['/p/cezar/settings/agent-defaults', 'Settings'],
     ['/settings/global/projects', 'Settings'],
   ])('labels %s as %s', (pathname, pageLabel) => {
     expect(pageTitleContext(pathname)).toEqual({ pageLabel, taskId: null })
@@ -236,7 +236,7 @@ const ROUTE_CASES: Array<[url: string, route: string]> = [
   // Project settings only (step 3.5) — appearance/notifications/resources/projects moved to
   // the unscoped `/settings/global/*` area, covered in its own describe below.
   ['/settings', 'settings'],
-  ['/settings/agents', 'settings-agents'],
+  ['/settings/agent-defaults', 'settings-agent-defaults'],
   ['/settings/agent-config', 'settings-agent-config'],
   ['/settings/worktrees', 'settings-worktrees'],
   ['/settings/prompt-templates', 'settings-prompt-templates'],
@@ -313,8 +313,8 @@ describe('scoped route map (/p/:projectId)', () => {
   // section links are plain flat `to`s routed through the scope-aware Link.
   it('navigation links generated inside a project carry its prefix', () => {
     renderAt(`/p/${BOOT}/settings`)
-    const link = document.querySelector('[data-slot="settings-index"] a[data-section="agents"]')
-    expect(link?.getAttribute('href')).toBe(`/p/${BOOT}/settings/agents`)
+    const link = document.querySelector('[data-slot="settings-index"] a[data-section="agent-defaults"]')
+    expect(link?.getAttribute('href')).toBe(`/p/${BOOT}/settings/agent-defaults`)
   })
 
   it('remounts the same page and loads its new scope when the project param changes', async () => {
@@ -369,6 +369,7 @@ describe('the global settings area (/settings/global)', () => {
     ['/settings/global/notifications', 'settings-global-notifications'],
     ['/settings/global/resources', 'settings-global-resources'],
     ['/settings/global/projects', 'settings-global-projects'],
+    ['/settings/global/agents', 'settings-global-agents'],
   ]
   for (const [url, route] of GLOBAL_CASES) {
     it(`${url} → ${route}, unscoped`, () => {

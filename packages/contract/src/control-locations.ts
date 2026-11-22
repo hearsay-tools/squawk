@@ -2,7 +2,7 @@
 export const CONTROL_LOCATIONS = {
   general: ['Settings', 'General'],
   webhooks: ['Settings', 'General', 'Webhooks'],
-  providers: ['Settings', 'Agents', 'Providers'],
+  providers: ['Settings', 'Agent defaults', 'Providers'],
   projects: ['Settings', 'Projects'],
   worktrees: ['Settings', 'Worktrees'],
   sidebar: ['Settings', 'Sidebar'],

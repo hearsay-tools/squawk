@@ -244,8 +244,8 @@ describe('AskCard', () => {
   })
 
   it.each([
-    ['disabled', { provider: 'claude', status: 'connected', enabled: false }, 'Claude Code is disabled. Enable it in Settings → Agents → Providers.'],
-    ['disconnected', { provider: 'claude', status: 'disconnected', enabled: true }, 'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.'],
+    ['disabled', { provider: 'claude', status: 'connected', enabled: false }, 'Claude Code is disabled. Enable it in Settings → Agent defaults → Providers.'],
+    ['disconnected', { provider: 'claude', status: 'disconnected', enabled: true }, 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.'],
   ] as const)('disables Ask submissions when its active provider is %s', (_case, claude, reason) => {
     providerStatus = {
       providers: [
@@ -260,7 +260,7 @@ describe('AskCard', () => {
     expect((screen.getByRole('button', { name: /date-fns/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText(reason)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/settings/agents#providers',
+      '/settings/agent-defaults#providers',
     )
     expect(mutateAsync).not.toHaveBeenCalled()
   })
@@ -353,7 +353,7 @@ describe('AskCard — answering after the session has ended', () => {
     expect((screen.getByRole('button', { name: /date-fns/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(
       screen.getByText(
-        'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.',
+        'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
       ),
     ).toBeTruthy()
     expect(continueAsync).not.toHaveBeenCalled()

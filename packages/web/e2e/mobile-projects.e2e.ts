@@ -228,7 +228,7 @@ describe('phone Tools page (#621 follow-up)', () => {
 
         browser.click('[data-slot="tools-settings"]')
         // The unscoped link only becomes the project's page once LegacyPathRedirect has run and the section rendered.
-        browser.waitForFunction(`location.pathname === ${JSON.stringify(`/p/${projectId}/settings/agents`)} && document.querySelector('[data-route="settings-agents"]') !== null`)
+        browser.waitForFunction(`location.pathname === ${JSON.stringify(`/p/${projectId}/settings/agent-defaults`)} && document.querySelector('[data-route="settings-agent-defaults"]') !== null`)
       } finally {
         browser.unroute('**/api/v1/health')
       }

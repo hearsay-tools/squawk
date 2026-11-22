@@ -90,7 +90,7 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 ### Managed CLI installation
 
 A `cli.installSource.managed` declares a host-target manifest and an HTTPS download
-prefix. Settings → Agent accounts installs, updates and removes it through
+prefix. Settings → Agents installs, updates and removes it through
 `/api/v1/runner-install/:runner`, gated by `settingsAdmin`. Reads return progress
 without awaiting the network; manifests refresh at most hourly while the pane is
 open, or on demand. Boot and task start never fetch a manifest. The managed CLI
@@ -513,7 +513,7 @@ their own `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`. Only native instruction fi
 `GEMINI.md`) and skill folders (`config/skills`, `antigravity-cli/skills`, `skills`) link back to
 the user's default Gemini home; existing account files are preserved.
 
-Settings → Agent accounts offers personal Google sign-in through `antigravity acp --login`. The
+Settings → Agents offers personal Google sign-in through `antigravity acp --login`. The
 CLI prints a consent link whose redirect is `https://antigravity.google/oauth-callback`; that page
 shows a code. The user pastes the code, or the full address of that page, into the same dialog.
 Squawk accepts a bare code, or an address with this sign-in's single state and a single code, and

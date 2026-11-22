@@ -17,7 +17,7 @@ import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
 /**
- * Settings → Agents (R6 Step 1.5): the form round-trip against a stateful `/api/v1/config` stub
+ * Settings → Agent defaults (R6 Step 1.5): the form round-trip against a stateful `/api/v1/config` stub
  * that mimics the server's merge semantics (null clears, `defaultModels` merges per runner),
  * client-side validation of the system-prompt cap, and error surfacing — a PUT refusal (409)
  * shows the server's own words. The API contract itself is pinned server-side in
@@ -247,7 +247,7 @@ function renderAt(entry: string, withRunners = true) {
 }
 
 const puts = () => requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/config')
-const form = () => document.querySelector('[data-slot="agents-section"]')
+const form = () => document.querySelector('[data-slot="agent-defaults-section"]')
 
 afterEach(() => {
   act(() => resetToasts())
@@ -255,10 +255,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the agents form', () => {
+describe('the agent defaults form', () => {
   it('keeps the anchored Providers section in an explicit disclosure', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     await waitFor(() => expect(form()).not.toBeNull())
     const providers = document.querySelector<HTMLElement>('[data-slot="provider-settings"]')!
@@ -277,7 +277,7 @@ describe('the agents form', () => {
         ],
       },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     const codex = await screen.findByRole('radio', { name: 'codex' })
     expect(codex.getAttribute('aria-checked')).toBe('true')
@@ -301,7 +301,7 @@ describe('the agents form', () => {
         ],
       },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     const codex = await screen.findByRole('radio', { name: 'codex' })
     expect(codex.getAttribute('aria-checked')).toBe('true')
@@ -312,7 +312,7 @@ describe('the agents form', () => {
 
   it('disables only provider-specific controls while provider status is pending', async () => {
     serve({ providerStatusPending: true })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     const claude = await screen.findByRole('radio', { name: 'claude' })
     expect((claude as HTMLButtonElement).disabled).toBe(true)
@@ -324,7 +324,7 @@ describe('the agents form', () => {
   // hearsay-tools/squawk#3897 and hearsay-tools/squawk#3898: the runner rows come from the runners query, so they wait for it.
   it('lists the model selectors only once the runners query answers', async () => {
     serve()
-    const client = renderAt('/settings/agents', false)
+    const client = renderAt('/settings/agent-defaults', false)
     await waitFor(() => expect(client.getQueryState(workspaceQueryKeys.providerStatus)?.status).toBe('success'))
     expect(screen.queryByLabelText('Default model for claude')).toBeNull()
     seedRunners(client)
@@ -334,7 +334,7 @@ describe('the agents form', () => {
 
   it('keeps unrelated settings usable when provider status errors', async () => {
     serve({ providerStatus: { error: 'probe failed' }, providerStatusCode: 500 })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect((screen.getByRole('radio', { name: 'claude' }) as HTMLButtonElement).disabled).toBe(true)
@@ -348,7 +348,7 @@ describe('the agents form', () => {
     serve({
       providerStatus: { providers: [null, { provider: 'future', status: secret }] },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect((screen.getByRole('radio', { name: 'claude' }) as HTMLButtonElement).disabled).toBe(true)
@@ -359,7 +359,7 @@ describe('the agents form', () => {
 
   it('disables provider controls when a failed refresh leaves connected data cached', async () => {
     serve({ providerStatusAfterFirstError: 'refresh probe failed' })
-    const client = renderAt('/settings/agents')
+    const client = renderAt('/settings/agent-defaults')
 
     const claude = await screen.findByRole('radio', { name: 'claude' })
     expect((claude as HTMLButtonElement).disabled).toBe(false)
@@ -379,7 +379,7 @@ describe('the agents form', () => {
         defaultModels: { claude: 'opus' },
       },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
 
     await waitFor(() => expect(form()).not.toBeNull())
     expect(screen.getByRole('radio', { name: 'codex' }).getAttribute('aria-checked')).toBe('true')
@@ -395,7 +395,7 @@ describe('the agents form', () => {
 
   it('live title updates: the switch defaults ON and PUTs the toggle', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const toggle = screen.getByLabelText('Live title updates')
@@ -408,7 +408,7 @@ describe('the agents form', () => {
 
   it('review gate: the switch defaults OFF and PUTs the toggle (#489)', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const toggle = screen.getByLabelText('Review changes before finishing')
@@ -421,7 +421,7 @@ describe('the agents form', () => {
 
   it('default runner round-trips: click PUTs the patch and the control follows the answer', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     fireEvent.click(screen.getByRole('radio', { name: 'codex' }))
@@ -434,7 +434,7 @@ describe('the agents form', () => {
 
   it('model presets round-trip per runner — auto sends null to clear the key', async () => {
     serve({ config: { defaultModels: { codex: 'gpt-5-codex' } } })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const claude = screen.getByLabelText<HTMLSelectElement>('Default model for claude')
@@ -453,7 +453,7 @@ describe('the agents form', () => {
 
   it('lists every runner’s default model in the same place', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
     expect(
       [...document.querySelectorAll('[data-slot="agents-model"]')].map((el) => el.getAttribute('data-runner')),
@@ -470,7 +470,7 @@ describe('the agents form', () => {
         ],
       },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const opencode = screen.getByLabelText<HTMLSelectElement>('Default model for opencode')
@@ -496,7 +496,7 @@ describe('the agents form', () => {
         modelsLocked: true,
       },
     })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const claudeModel = screen.getByLabelText<HTMLOutputElement>('Default model for claude')
@@ -511,7 +511,7 @@ describe('the agents form', () => {
 
   it('system prompt saves trimmed on the explicit button, and an emptied box clears with null', async () => {
     serve({ config: { systemPrompt: 'Be brief.' } })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     const box = screen.getByLabelText<HTMLTextAreaElement>('System prompt')
@@ -535,7 +535,7 @@ describe('the agents form', () => {
 
   it('an over-limit prompt disables Save with the reason — no request leaves', async () => {
     serve()
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'x'.repeat(20_001) } })
@@ -548,7 +548,7 @@ describe('the agents form', () => {
 
   it('base branch round-trips through the same PUT — "" means follow the checked-out branch', async () => {
     serve({ config: { baseBranch: 'develop' } })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
     const picker = await waitFor(() => screen.getByLabelText<HTMLSelectElement>('Base branch'))
     expect(picker.value).toBe('develop')
@@ -560,7 +560,7 @@ describe('the agents form', () => {
 
   it('a PUT refusal surfaces the server\'s own words (409 → danger toast)', async () => {
     serve({ putStatus: 409, putError: 'config.json is locked by another cockpit' })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
 
     fireEvent.click(screen.getByRole('radio', { name: 'opencode' }))
@@ -597,7 +597,7 @@ describe('the agents form', () => {
           profiles: WITH_WORK_ACCOUNT.profiles.filter((profile) => profile.isDefault),
         },
       })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
       await waitFor(() => expect(form()).not.toBeNull())
       // Settled: the default-models field below it has rendered, so the pane is not mid-load.
       await screen.findByLabelText('Default model for claude')
@@ -606,7 +606,7 @@ describe('the agents form', () => {
 
     it('splits ONLY the agent that has a second login, and names each folder', async () => {
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       await waitFor(() => expect(rows()).toHaveLength(6))
       expect(rows().map((r) => `${r.getAttribute('data-value')}:${r.getAttribute('data-account')}`)).toEqual([
@@ -624,7 +624,7 @@ describe('the agents form', () => {
       serve({
         agentProfiles: { ...WITH_WORK_ACCOUNT, selections: { '/repo': { claude: 'klaudiusz' } } },
       })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       await waitFor(() => expect(rowFor('claude', 'klaudiusz')?.getAttribute('aria-checked')).toBe('true'))
       expect(rowFor('claude', '')?.getAttribute('aria-checked')).toBe('false')
@@ -634,7 +634,7 @@ describe('the agents form', () => {
       // One click, two stores, and that split is the point: the runner is a team decision that
       // belongs in the committable repo config, the account is personal and must never reach it.
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       await waitFor(() => expect(rows()).toHaveLength(6))
       fireEvent.click(rowFor('claude', 'klaudiusz')!)
@@ -655,7 +655,7 @@ describe('the agents form', () => {
       serve({
         agentProfiles: { ...WITH_WORK_ACCOUNT, selections: { '/repo': { claude: 'klaudiusz' } } },
       })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       // Wait for the SPLIT state: until the accounts land, claude is one plain row, and clicking
       // that one writes no selection — which is correct, and would make this pass for no reason.
@@ -672,7 +672,7 @@ describe('the agents form', () => {
 
     it('switches agent and account together when the picked row is another agent', async () => {
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       await waitFor(() => expect(rows()).toHaveLength(6))
       fireEvent.click(rowFor('codex')!)
@@ -694,7 +694,7 @@ describe('the agents form', () => {
             profile.id === 'klaudiusz' ? { ...profile, exists: false, looksValid: false } : profile),
         },
       })
-      renderAt('/settings/agents')
+      renderAt('/settings/agent-defaults')
 
       await waitFor(() =>
         expect(document.querySelector('[data-slot="agents-account-missing"][data-runner="claude"]')).not.toBeNull())
@@ -706,14 +706,14 @@ describe('the agents form', () => {
 describe('Agents conditional controls while repo discovery is pending (#795)', () => {
   it('keeps the unavailable state when discovery finishes without a git repository', async () => {
     serve({ repoRead: () => Promise.resolve(new Response(JSON.stringify({ ...REPO, info: null, branches: [] }))) })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     await waitFor(() => expect(document.querySelector('[data-slot="agents-base-branch-unavailable"]')?.textContent).toContain('Not a git repository'))
     expect(document.querySelector('[data-slot="agents-base-branch"]')).toBeNull()
   })
 
   it('leaves an empty branch answer for the original nonempty assertion to reject', async () => {
     serve({ repoRead: () => Promise.resolve(new Response(JSON.stringify({ ...REPO, branches: [] }))) })
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     const selector = '[data-slot="agents-base-branch"]'
     await waitFor(() => expect(document.querySelector<HTMLSelectElement>(selector)?.options.length).toBe(1))
     expect(window.eval(`document.querySelector('[data-slot="agents-base-branch"]').options[1]?.value ?? ''`)).toBe('')
@@ -723,7 +723,7 @@ describe('Agents conditional controls while repo discovery is pending (#795)', (
     let release!: (response: Response) => void
     const held = new Promise<Response>(resolve => { release = resolve })
     serve({ repoRead: () => held })
-    const client = renderAt('/settings/agents')
+    const client = renderAt('/settings/agent-defaults')
     await waitFor(() => expect(form()).not.toBeNull())
     const selector = '[data-slot="agents-base-branch"]'
     expect(document.querySelector(selector)).toBeNull()
@@ -746,7 +746,7 @@ describe('Agents conditional controls while repo discovery is pending (#795)', (
     const held = new Promise<Response>(resolve => { release = resolve })
     let reads = 0
     serve({ repoRead: () => ++reads === 1 ? Promise.resolve(new Response(JSON.stringify(REPO))) : held })
-    const client = renderAt('/settings/agents')
+    const client = renderAt('/settings/agent-defaults')
     const selector = '[data-slot="agents-base-branch"]'
     await waitFor(() => expect(document.querySelector<HTMLSelectElement>(selector)?.options[1]?.value).toBe('main'))
     fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Warm save' } })

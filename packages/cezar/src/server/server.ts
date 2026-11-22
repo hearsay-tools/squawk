@@ -4208,7 +4208,7 @@ export function createApp(deps: ServerDeps) {
   /** #917, hearsay-tools/squawk#914: setup and teardown commands run on the host. */
   const WORKTREE_COMMANDS_HOSTED_ERROR = `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running Squawk.`;
 
-  // The Settings → Agents knobs in one read (R6 Step 1.5) — an ADDITIVE
+  // The Settings → Agent defaults knobs in one read (R6 Step 1.5) — an ADDITIVE
   // sibling of PUT /api/config below; /api/health keeps its protected shape.
   const configAnswer = async (repoRoot: string, config: CezConfig): Promise<ConfigResponse> => {
     const archive = resolveArchiveOnMerge(config, await loadWorkspaceConfig(deps.home.workspaceConfig));

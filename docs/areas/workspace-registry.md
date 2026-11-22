@@ -447,10 +447,10 @@ These read and write `<config>/config.json` directly, so they work with the
 server stopped, and `HSQ_HOME` (`CEZ_HOME` fallback) selects which workspace they operate on.
 
 Settings split along the same line: **General** (the project's folder, its
-registry facts, its parallel-task ceiling, and Remove), **Agents**, **Agent config**,
+registry facts, its parallel-task ceiling, and Remove), **Agent defaults**, **Agent config**,
 **Worktrees**, **Sidebar** and **Prompt templates** describe one
 repo and live under `/p/<projectId>/settings`; **Appearance**,
-**Notifications**, **Resources**, **Skills**, **Agent accounts** and **Projects**
+**Notifications**, **Resources**, **Skills**, **Agents** and **Projects**
 are yours or the machine's and live at `/settings/global`.
 
 **Settings → Sidebar** controls this project's task rows on desktop and mobile.

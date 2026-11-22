@@ -302,7 +302,7 @@ describe('density-independent mobile action targets (#166)', () => {
           browser.evaluate(`document.querySelector('[data-slot="main"]').scrollTop = 0`)
           browser.screenshot(`${artifacts}/${width}-${density}-${theme}-workflow.png`, { viewport: true })
 
-          browser.goto(`${baseUrl}/p/${project}/settings/agents`)
+          browser.goto(`${baseUrl}/p/${project}/settings/agent-defaults`)
           const toggle = '[data-slot="agents-review-gate"]'
           browser.waitForFunction(`document.querySelector('${toggle}') !== null`)
           appearance(density, theme)
@@ -434,7 +434,7 @@ describe('keyboard, draft and choice journeys across appearance changes (hearsay
         (text: string | null) => text?.includes('Copied') === true,
       )).toContain('Copied')
 
-      browser.goto(`${baseUrl}/p/${project}/settings/agents`)
+      browser.goto(`${baseUrl}/p/${project}/settings/agent-defaults`)
       const toggle = '[data-slot="agents-review-gate"]'
       browser.waitForFunction(`document.querySelector('${toggle}') !== null`)
       appearance(density, theme)

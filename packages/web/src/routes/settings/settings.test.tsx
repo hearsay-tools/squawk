@@ -127,26 +127,26 @@ afterEach(() => {
   document.documentElement.classList.remove('light')
 })
 
-const PROJECT_SECTIONS = ['sidebar', 'agents', 'agent-config', 'worktrees', 'prompt-templates']
+const PROJECT_SECTIONS = ['sidebar', 'agent-defaults', 'agent-config', 'worktrees', 'prompt-templates']
 const GLOBAL_SECTIONS = [
   'appearance',
   'notifications',
   'resources',
   'tasks',
-  // Agent accounts (spec 2026-07-29-agent-profiles) sit beside Projects: both describe the
-  // machine and the person at it, not any one repo.
-  'accounts',
+  // Agents (install, version, accounts; hearsay-tools/squawk#4094) sit beside Projects: both
+  // describe the machine and the person at it, not any one repo.
+  'agents',
   'projects',
 ]
 
 describe('the settings shell', () => {
   it('renders the mobile PROJECT nav from the registry — project sections only', () => {
-    renderAt('/settings/agents')
+    renderAt('/settings/agent-defaults')
     const nav = document.querySelector('[data-slot="settings-nav-mobile"]')!
     const ids = [...nav.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
     expect(ids).toEqual(PROJECT_SECTIONS)
     // The active section is marked for assistive tech, not just by color.
-    expect(nav.querySelector('[aria-current="page"]')?.getAttribute('data-section')).toBe('agents')
+    expect(nav.querySelector('[aria-current="page"]')?.getAttribute('data-section')).toBe('agent-defaults')
     expect(document.querySelector('[data-slot="settings-nav"]')).toBeNull()
   })
 
@@ -353,8 +353,8 @@ describe('the settings split writes the right store', () => {
     expect(putsTo('/api/v1/ui-state')).toHaveLength(0)
   })
 
-  it('agents → the project-scoped /api/v1/config, never the workspace routes', async () => {
-    renderAt('/settings/agents')
+  it('agent defaults → the project-scoped /api/v1/config, never the workspace routes', async () => {
+    renderAt('/settings/agent-defaults')
     const runner = await waitFor(() => {
       const el = document.querySelector<HTMLButtonElement>('[data-slot="agents-runner"] [data-value="codex"]')
       expect(el).not.toBeNull()

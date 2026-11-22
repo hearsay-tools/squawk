@@ -310,7 +310,7 @@ export type SetWorkspaceUiStateInput = z.infer<typeof setWorkspaceUiStateInputSc
 
 // ---- per-repo agent knobs (`GET/PUT /api/v1/config`) ----------------------------------------
 
-/** Per-runner default model preset (Settings → Agents): the composer preselects this model id for
+/** Per-runner default model preset (Settings → Agent defaults): the composer preselects this model id for
  *  the runner. Absent = auto (the runner decides). Keyed by runner id, each independently optional. */
 export const runnerModelsSchema = perRunnerOptionalStrings();
 export type RunnerModels = z.infer<typeof runnerModelsSchema>;
@@ -336,7 +336,7 @@ export const worktreeSetupConfigSchema = z
   .strict();
 export type WorktreeSetupConfig = z.infer<typeof worktreeSetupConfigSchema>;
 
-/** `GET /api/v1/config` — every Settings → Agents knob in one read. */
+/** `GET /api/v1/config` — every Settings → Agent defaults knob in one read. */
 export const configResponseSchema = z.object({
   archiveOnMerge: z.boolean().nullable(),
   effectiveArchiveOnMerge: z.boolean(),
@@ -378,7 +378,7 @@ export const setConfigResponseSchema = configResponseSchema;
 export type SetConfigResponse = z.infer<typeof setConfigResponseSchema>;
 
 /**
- * `PUT /api/v1/config` body (Settings → Agents; the Repo tab's base-branch picker).
+ * `PUT /api/v1/config` body (Settings → Agent defaults; the Repo tab's base-branch picker).
  * `baseBranch: null` clears the setting back to "follow checked-out branch"; `systemPrompt` and
  * per-runner `defaultModels` entries clear on `null` (or `''`) too. Merged into the raw
  * config.json server-side — `defaultModels` merges per runner, so one write never clobbers

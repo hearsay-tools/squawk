@@ -50,8 +50,8 @@ describe('Workspace tools', () => {
     const setups = screen.getAllByRole('link', { name: 'Set up ›' })
     expect(setups).toHaveLength(1)
     expect(codex.querySelector('[data-slot="tool-setup"]')).toBe(setups[0])
-    expect(setups[0]!.getAttribute('href')).toBe('/settings/agents')
-    expect(screen.getByRole('link', { name: 'Tool settings ›' }).getAttribute('href')).toBe('/settings/agents')
+    expect(setups[0]!.getAttribute('href')).toBe('/settings/global/agents#agent-codex')
+    expect(screen.getByRole('link', { name: 'Tool settings ›' }).getAttribute('href')).toBe('/settings/global/agents')
   })
 
   it('has no "Set up" link when every tool is available', () => {

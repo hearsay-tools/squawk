@@ -260,7 +260,7 @@ describe('agent CLI installers', () => {
   const EXPECTED = (runner: string): string => {
     const source = runnerDefinition(runner).cli.installSource;
     return source && 'managed' in source
-      ? `note ${runner}: Install ${runner} from Settings → Agent accounts in the cockpit.`
+      ? `note ${runner}: Install ${runner} from Settings → Agents in the cockpit.`
       : runnerGolden(runner, 'installerDryRun');
   };
 

@@ -121,24 +121,24 @@ describe('tools menu', () => {
       } else {
         expect(row?.version).toBe('not found')
         if (check.hint) expect(row?.hint).toBe(check.hint)
-        expect(row?.setupHref).toBe(scoped('/settings/agents'))
+        expect(row?.setupHref).toBe(`/settings/global/agents#agent-${check.name}`)
       }
     }
 
     browser.screenshot(`${artifactsDir}/tools-menu-open.png`)
   })
 
-  it('routes the cog row to Settings → Agents and closes the menu', () => {
+  it('routes the cog row to global Settings → Agents and closes the menu', () => {
     browser.click(TRIGGER)
     browser.waitForFunction(`document.querySelector('${MENU}') !== null`)
     expect(
       browser.evaluate(`document.querySelector('${MENU} [data-slot="tools-settings"]').getAttribute('href')`)
-    ).toBe(scoped('/settings/agents'))
+    ).toBe('/settings/global/agents')
 
     browser.click(`${MENU} [data-slot="tools-settings"]`)
-    browser.waitForFunction(`location.pathname === '${scoped('/settings/agents')}'`)
+    browser.waitForFunction(`location.pathname === '/settings/global/agents'`)
     browser.waitForFunction(`document.querySelector('${MENU}') === null`)
     expect(browser.count(MENU)).toBe(0)
-    expect(browser.url()).toContain('/settings/agents')
+    expect(browser.url()).toContain('/settings/global/agents')
   })
 })

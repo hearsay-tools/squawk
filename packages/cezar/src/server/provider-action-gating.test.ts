@@ -359,7 +359,7 @@ describe('the gate verifies before it refuses', () => {
     const response = await start(app, 'claude');
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: 'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.',
+      error: 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     });
     expect(startRun).not.toHaveBeenCalled();
   });

@@ -25,7 +25,7 @@ registerRunner(opencodeRunner);
 
 
 const LOCKED_MESSAGE = 'agent models are locked — configure the model in the native coding-agent settings';
-const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agents → Providers.';
+const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agent defaults → Providers.';
 const CONFLICT_MESSAGE = 'request id payload conflict';
 const NO_WEBHOOK_MESSAGE =
   'this project has no task webhook — add a webhook with Task notifications on in Settings → General → Webhooks, or start without notify';

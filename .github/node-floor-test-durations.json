@@ -716,7 +716,7 @@
     "packages/web/src/routes/settings/accounts-section.test.tsx": 3288.9842689999996,
     "packages/web/src/routes/settings/agent-config-section.test.tsx": 625.804613,
     "packages/web/src/routes/settings/agent-descriptors.test.ts": 17.172472999999968,
-    "packages/web/src/routes/settings/agents-section.test.tsx": 1265.0106379999997,
+    "packages/web/src/routes/settings/agent-defaults-section.test.tsx": 1265.0106379999997,
     "packages/web/src/routes/settings/appearance.test.tsx": 194.93504400000006,
     "packages/web/src/routes/settings/archive-on-merge-field.test.tsx": 456.59106500000007,
     "packages/web/src/routes/settings/bookmarklets-section.test.tsx": 467.0235730000004,

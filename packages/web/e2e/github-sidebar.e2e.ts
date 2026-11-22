@@ -404,7 +404,7 @@ describe('GitHub desktop sidebar (#622)', () => {
     browser.click('[data-slot="view-tabs"] a[aria-label="Tasks"]')
     browser.waitForFunction(`document.querySelector('[data-slot="task-quick-list"]') !== null && document.querySelector(${JSON.stringify(SIDEBAR)}) === null`)
 
-    browser.goto(`${base}/settings/agents`)
+    browser.goto(`${base}/settings/agent-defaults`)
     browser.waitForFunction(`document.querySelector('[data-slot="settings-sidebar"] [data-section="agents"][aria-current="page"]') !== null`)
     expect(browser.count(SIDEBAR)).toBe(0)
   }, 90_000)

@@ -343,7 +343,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'Codex is disabled. Enable it in Settings → Agents → Providers.',
+      error: 'Codex is disabled. Enable it in Settings → Agent defaults → Providers.',
     });
     expect(mockOpenInTerminal).not.toHaveBeenCalled();
   });
@@ -354,7 +354,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'Codex is disabled. Enable it in Settings → Agents → Providers.',
+      error: 'Codex is disabled. Enable it in Settings → Agent defaults → Providers.',
     });
     expect(mockOpenInTerminal).not.toHaveBeenCalled();
   });
@@ -365,7 +365,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'Codex credentials are unavailable. Authorize it in Settings → Agents → Providers.',
+      error: 'Codex credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     });
     expect(mockOpenInTerminal).not.toHaveBeenCalled();
   });
@@ -376,7 +376,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'Codex credentials are unavailable. Authorize it in Settings → Agents → Providers.',
+      error: 'Codex credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     });
     expect(mockOpenInTerminal).not.toHaveBeenCalled();
   });

@@ -868,7 +868,7 @@
     "packages/web/src/routes/settings/accounts-section.test.tsx": 3167,
     "packages/web/src/routes/settings/agent-config-section.test.tsx": 1028,
     "packages/web/src/routes/settings/agent-descriptors.test.ts": 19,
-    "packages/web/src/routes/settings/agents-section.test.tsx": 3012,
+    "packages/web/src/routes/settings/agent-defaults-section.test.tsx": 3012,
     "packages/web/src/routes/settings/appearance.test.tsx": 421,
     "packages/web/src/routes/settings/archive-on-merge-field.test.tsx": 499,
     "packages/web/src/routes/settings/bookmarklets-section.test.tsx": 529,

@@ -10,8 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Link as RouterLink } from 'react-router'
+import { agentCardPath } from '@/lib/agents-settings-path'
 import { runnerEntries, useRunners } from '@/api/runners'
 
 /**
@@ -226,6 +229,7 @@ export function PickerPill({
   searchPlaceholder,
   icon,
   fieldLabel = false,
+  footer,
 }: {
   slot: string
   ariaLabel: string
@@ -246,6 +250,8 @@ export function PickerPill({
   status?: string | undefined
   /** Add a name filter above longer option catalogs. */
   searchPlaceholder?: string
+  /** Menu items after the choices that are not choices (links out). Never part of the radio group. */
+  footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -379,6 +385,7 @@ export function PickerPill({
             {status}
           </DropdownMenuItem>
         ) : null}
+        {footer}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -435,8 +442,12 @@ export function RunnerPill({
   repoAccount,
   icon,
   fieldLabel,
+  uninstalled = [],
 }: {
   runners: readonly Runner[]
+  /** Registered runners whose CLI is missing: listed after the choices, greyed out, each a link
+   *  to its card on global Settings → Agents. Picking one navigates there and starts nothing. */
+  uninstalled?: readonly Runner[]
   icon?: ReactNode | undefined
   fieldLabel?: boolean | undefined
   value: Runner
@@ -487,6 +498,32 @@ export function RunnerPill({
         onPick(runner as Runner, picked ?? null)
       }}
       options={options}
+      footer={<UninstalledRunnerLinks runners={uninstalled} />}
     />
+  )
+}
+
+/** Not-installed runners as menu links to their Settings card. Greyed by colour, not opacity, so
+ *  the text keeps its contrast. A link, not a radio row: it can never become the task's runner. */
+function UninstalledRunnerLinks({ runners }: { runners: readonly Runner[] }) {
+  const registered = useRunners().data
+  const entries = runnerEntries(registered).filter((entry) => runners.includes(entry.id))
+  if (entries.length === 0) return null
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {entries.map((entry) => (
+        <DropdownMenuItem key={entry.id} asChild className="gap-2.5 ps-8">
+          <RouterLink to={agentCardPath(entry.id)} data-slot="runner-install-link" data-runner={entry.id}>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[13px] font-medium text-muted-foreground">{entry.id}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Not installed · <span className="font-medium text-accent-text">Install in Settings</span>
+              </span>
+            </span>
+          </RouterLink>
+        </DropdownMenuItem>
+      ))}
+    </>
   )
 }

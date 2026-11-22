@@ -20,7 +20,7 @@ describe('Settings view sidebar (#622)', () => {
   for (const theme of ['light', 'dark']) {
     it(`${theme}: navigates between project and global sections without duplicate desktop navigation`, () => {
       browser.setViewport(1440, 900)
-      browser.goto(`${base}/settings/agents`)
+      browser.goto(`${base}/settings/agent-defaults`)
       browser.waitForFunction(`document.querySelector('${sidebar} [data-section="agents"][aria-current="page"]') !== null`)
       browser.evaluate(`document.documentElement.classList.remove('light', 'dark'); document.documentElement.classList.add('${theme}')`)
       const facts = waitForSettledSample(browser, `(() => {
@@ -45,7 +45,7 @@ describe('Settings view sidebar (#622)', () => {
       // In-app, not a goto: right after a cold load the view tabs are still settling, and a
       // click there landed on Workflows.
       browser.click(`${sidebar} [data-section="agents"]`)
-      browser.waitForFunction(`document.querySelector('[data-route="settings-agents"]') !== null`)
+      browser.waitForFunction(`document.querySelector('[data-route="settings-agent-defaults"]') !== null`)
       browser.click('[data-slot="view-tabs"] a[aria-label="Settings"]')
       expect(browser.waitForValue(`document.querySelector('[data-route="settings"]') && document.querySelector('${sidebar} [aria-current="page"]')?.dataset.section`)).toBe('general')
       browser.click('[data-slot="view-tabs"] a[aria-label="Tasks"]')
@@ -69,8 +69,8 @@ describe('Settings view sidebar (#622)', () => {
     expect(facts).toEqual({ open: false, sidebarHidden: true, overflow: false })
     // The global area has no index, so its picker has no General entry; the project one does.
     expect(browser.count('[data-slot="settings-nav-mobile"] [data-slot="settings-nav-index"]')).toBe(0)
-    browser.goto(`${base}/settings/agents`)
-    browser.waitForFunction(`document.querySelector('[data-route="settings-agents"]') !== null`)
+    browser.goto(`${base}/settings/agent-defaults`)
+    browser.waitForFunction(`document.querySelector('[data-route="settings-agent-defaults"]') !== null`)
     browser.click('.settings-section-picker summary')
     browser.click('[data-slot="settings-nav-mobile"] [data-slot="settings-nav-index"]')
     browser.waitForFunction(`document.querySelector('[data-route="settings"]') !== null`)

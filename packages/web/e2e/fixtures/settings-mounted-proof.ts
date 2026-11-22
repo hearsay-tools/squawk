@@ -80,8 +80,8 @@ try {
     };
   })()`)
   browser.setViewport(1440, 900)
-  browser.goto(`${env.baseUrl}/settings/agents`)
-  browser.waitForFunction(`document.querySelector('[data-slot="agents-section"]') !== null && window.__heldRepo === true`)
+  browser.goto(`${env.baseUrl}/settings/agent-defaults`)
+  browser.waitForFunction(`document.querySelector('[data-slot="agent-defaults-section"]') !== null && window.__heldRepo === true`)
   assert.equal(browser.count(selector), 0, 'real form mounted while real repo response is held')
   assert.equal(browser.evaluate('window.__realRepoInfo'), true)
   assert.ok(Number(browser.evaluate('window.__realBranchCount')) > 0, 'actual server supplied real branches')
