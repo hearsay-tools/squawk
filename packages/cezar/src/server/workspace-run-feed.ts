@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { toRunSummary, type ProcessUsage, type RunSummary } from '@open-mercato/cezar-contract/runs';
+import type { RunLifecycleSource } from '../runs/lifecycle.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { ProjectContext } from './project-context.ts';
 
@@ -23,12 +24,9 @@ export type WorkspaceRunFeedMode = 'full' | 'summary';
 /** Writes one SSE frame. The caller owns the stream; the feed never awaits it. */
 export type WorkspaceFrameWriter = (event: string, data: string) => void;
 
-/** What the feed reads off a project store: its `run` and `deleted` events, and run ownership. */
+/** What the feed reads off a project store: its run writes and deletes, and run ownership. */
 export interface FeedStore {
-  on(event: 'run', listener: (run: RunRecord) => void): unknown;
-  on(event: 'deleted', listener: (id: string) => void): unknown;
-  off(event: 'run', listener: (run: RunRecord) => void): unknown;
-  off(event: 'deleted', listener: (id: string) => void): unknown;
+  readonly lifecycle: RunLifecycleSource;
   getRun(id: string): RunRecord | undefined;
 }
 
@@ -121,7 +119,7 @@ export function createWorkspaceRunFeed(deps: WorkspaceRunFeedDeps): WorkspaceRun
 
   const attach = (project: string, store: FeedStore): void => {
     if (attached.has(project)) return;
-    const onRun = (run: RunRecord): void => {
+    const onRun = ({ run }: { run: RunRecord }): void => {
       seq += 1;
       const current = seq;
       broadcast({
@@ -132,7 +130,7 @@ export function createWorkspaceRunFeed(deps: WorkspaceRunFeedDeps): WorkspaceRun
       });
       clearStoppedUsage(project, store);
     };
-    const onDeleted = (id: string): void => {
+    const onDeleted = ({ runId: id }: { runId: string }): void => {
       seq += 1;
       const current = seq;
       broadcast({
@@ -140,15 +138,8 @@ export function createWorkspaceRunFeed(deps: WorkspaceRunFeedDeps): WorkspaceRun
         summary: () => ['run-deleted', JSON.stringify({ project, seq: current, id })],
       });
     };
-    store.on('run', onRun);
-    store.on('deleted', onDeleted);
-    attached.set(project, {
-      store,
-      detach: () => {
-        store.off('run', onRun);
-        store.off('deleted', onDeleted);
-      },
-    });
+    const detach = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun, 'run.deleted': onDeleted });
+    attached.set(project, { store, detach });
   };
 
   const detach = (project: string): void => {

@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +9,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { processStartToken } from '../delegation/process-liveness.ts';
 import type { PreviewHost } from '../preview/host.ts';
+import { RunLifecycle } from '../runs/lifecycle.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import { armPreview, sweepRegisteredPreviewLeftovers } from './project-context.ts';
 
 /**
@@ -106,7 +107,7 @@ describe('sweepRegisteredPreviewLeftovers', () => {
 });
 
 /** The store members `armPreview` uses. A run it is never asked about needs none of them. */
-const armedStore = () => Object.assign(new EventEmitter(), { getRun: () => undefined, appendEvent: (): never => { throw new Error('no run was expected'); } });
+const armedStore = () => ({ lifecycle: new RunLifecycle(), getRun: () => undefined, appendEvent: (): never => { throw new Error('no run was expected'); } });
 
 describe('armPreview', () => {
   it("appends the disconnected a crash left out before anything else runs (hearsay-tools/cezarion#784)", () => {
@@ -114,7 +115,7 @@ describe('armPreview', () => {
     mkdirSync(join(a.dataDir, 'preview', 'run-crashed'), { recursive: true });
     writeFileSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'), '');
     const events: unknown[] = [];
-    const store = Object.assign(new EventEmitter(), { getRun: () => ({ id: 'run-crashed' }), appendEvent: (_runId: string, event: unknown) => events.push(event) });
+    const store = { lifecycle: new RunLifecycle(), getRun: () => ({ id: 'run-crashed' }), appendEvent: (_runId: string, event: unknown) => events.push(event) };
     armPreview(store as unknown as Parameters<typeof armPreview>[0], a.dataDir, noHost);
     expect(events).toEqual([{ type: 'preview.agent-browser', state: 'disconnected' }]);
     expect(existsSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'))).toBe(false);
@@ -129,7 +130,7 @@ describe('armPreview', () => {
       const store = armedStore();
       const host = { release: () => Promise.reject(new Error('boom')), ownsServer: () => false, ownsBrowser: () => false } as unknown as PreviewHost;
       armPreview(store, a.dataDir, host);
-      store.emit('deleted', 'run-x');
+      store.lifecycle.publish('run.deleted', { runId: 'run-x' });
       // Node reports an unhandled rejection once the microtasks after its creation drain, before
       // the next check phase runs.
       await afterRejectionCheck();
@@ -137,5 +138,20 @@ describe('armPreview', () => {
       process.off('unhandledRejection', onUnhandled);
     }
     expect(unhandled).toEqual([]);
+  });
+
+  it("releases a deleted run's preview until its unsubscribe runs", () => {
+    const a = project();
+    const store = armedStore();
+    const listeners = lifecycleListeners(store.lifecycle);
+    const released: string[] = [];
+    const host = { release: async (runId: string) => { released.push(runId); }, ownsServer: () => false, ownsBrowser: () => false } as unknown as PreviewHost;
+    const unsubscribe = armPreview(store, a.dataDir, host);
+    store.lifecycle.publish('run.deleted', { runId: 'run-x' });
+    expect(listeners('run.deleted')).toBe(1);
+    unsubscribe();
+    store.lifecycle.publish('run.deleted', { runId: 'run-y' });
+    expect(released).toEqual(['run-x']);
+    expect(listeners('run.deleted')).toBe(0);
   });
 });

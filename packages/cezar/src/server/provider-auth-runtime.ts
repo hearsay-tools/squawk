@@ -105,8 +105,7 @@ export function watchProviderRuntimeAuthFailures(
     })().catch(() => {});
   };
 
-  store.on('event', onEvent);
-  return () => store.off('event', onEvent);
+  return store.lifecycle.subscribe({ 'run.event': onEvent });
 }
 
 /**

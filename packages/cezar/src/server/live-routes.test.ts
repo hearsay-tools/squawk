@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import { UiEventSink } from '../runs/ui-event-sink.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
@@ -27,6 +28,25 @@ afterEach(() => { store.close(); rmSync(root, { recursive: true, force: true });
 const batch = (runs: unknown[]) => apiRequest(app, '/api/v1/workspace/run-event-batches', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runs }),
 });
+
+/** One SSE stream: read until a marker, list one event's data lines, abort. */
+async function openSse(path: string) {
+  const controller = new AbortController();
+  const reader = (await apiRequest(app, path, { signal: controller.signal })).body!.getReader();
+  const decoder = new TextDecoder();
+  let wire = '';
+  return {
+    async until(marker: string): Promise<void> {
+      while (!wire.includes(marker)) {
+        const next = await reader.read();
+        if (next.done) throw new Error(`stream ended before ${marker}`);
+        wire += decoder.decode(next.value, { stream: true });
+      }
+    },
+    frames: (event: string) => [...wire.matchAll(new RegExp(`event: ${event}\\ndata: (.*)\\n`, 'g'))].map((match) => match[1]),
+    async close(): Promise<void> { controller.abort(); await reader.cancel(); },
+  };
+}
 
 describe('finite multi-run catch-up', () => {
   it('delivers current text before item completion without persisting streaming deltas', async () => {
@@ -63,7 +83,8 @@ describe('finite multi-run catch-up', () => {
       app = createApp({ home: testHome(), repoRoot: root, store, manager: {} as RunManager, version: 'test', bootProjectId: 'boot' });
     }
     const other = store.createRun({ title: 'Other', task: 'Other', workflow: 'quick-task', steps: [] }).id;
-    const before = store.listenerCount('event');
+    const listeners = lifecycleListeners(store.lifecycle);
+    const before = listeners('run.event');
     const capture = store.liveReadSnapshot.bind(store);
     vi.spyOn(store, 'liveReadSnapshot').mockImplementationOnce(id => {
       const snapshot = capture(id);
@@ -86,7 +107,7 @@ describe('finite multi-run catch-up', () => {
       { type: 'note', text: 'persisted during scan' },
     ]);
     expect(next.hasMore).toBe(false);
-    expect(store.listenerCount('event')).toBe(before);
+    expect(listeners('run.event')).toBe(before);
   });
   it('merges active snapshots at an event-limit boundary without skipping persisted records', async () => {
     store.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
@@ -162,7 +183,8 @@ describe('multiplexed live task feed', () => {
   it('isolates project errors, replays healthy demand and releases listeners on cancellation', async () => {
     store.appendEvent(runId, { type: 'note', text: 'healthy transcript' });
     const controller = new AbortController();
-    const before = store.listenerCount('event');
+    const listeners = lifecycleListeners(store.lifecycle);
+    const before = listeners('run.event');
     const response = await apiRequest(app, '/api/v1/workspace/run-events', {
       method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ runs: [{ projectId: 'unknown', runId, afterSeq: 0 }, { projectId: 'boot', runId, afterSeq: 0 }] }),
@@ -178,9 +200,9 @@ describe('multiplexed live task feed', () => {
       }
       expect(wire).toContain('"projectId":"unknown"');
       expect(wire).toContain('"projectId":"boot"');
-      expect(store.listenerCount('event')).toBe(before + 1);
+      expect(listeners('run.event')).toBe(before + 1);
     } finally { controller.abort(); await reader.cancel(); }
-    expect(store.listenerCount('event')).toBe(before);
+    expect(listeners('run.event')).toBe(before);
   });
   it('keeps the old per-run SSE route and large records compatible', async () => {
     const text = 'x'.repeat(1024 * 1024 + 10);
@@ -197,6 +219,39 @@ describe('multiplexed live task feed', () => {
       }
       expect(size).toBeGreaterThan(text.length);
     } finally { controller.abort(); await reader.cancel(); }
+  });
+  it('sends its own run record on every write and releases its subscription on abort', async () => {
+    const listeners = lifecycleListeners(store.lifecycle);
+    const initial = JSON.stringify(store.getRun(runId));
+    const stream = await openSse(`/api/v1/runs/${runId}/events`);
+    try {
+      await stream.until('event: ping');
+      expect([listeners('run.created'), listeners('run.updated')]).toEqual([1, 1]);
+      store.createRun({ title: 'Other', workflow: 'quick-task', task: 'Other', steps: [] });
+      store.updateRun(runId, { title: 'Renamed' });
+      const renamed = JSON.stringify(store.getRun(runId));
+      await stream.until('"title":"Renamed"');
+      expect(stream.frames('run')).toEqual([initial, renamed]);
+    } finally { await stream.close(); }
+    expect([listeners('run.created'), listeners('run.updated')]).toEqual([0, 0]);
+  });
+  it('sends every run write and delete on the project feed and releases its subscription on abort', async () => {
+    const listeners = lifecycleListeners(store.lifecycle);
+    const held = () => [listeners('run.created'), listeners('run.updated'), listeners('run.deleted')];
+    const stream = await openSse('/api/v1/events');
+    try {
+      await stream.until('event: ping');
+      expect(held()).toEqual([1, 1, 1]);
+      const other = store.createRun({ title: 'Other', workflow: 'quick-task', task: 'Other', steps: [] });
+      const created = JSON.stringify(other);
+      store.updateRun(other.id, { title: 'Renamed' });
+      const renamed = JSON.stringify(store.getRun(other.id));
+      expect(store.deleteRun(other.id)).toBe(true);
+      await stream.until('event: run-deleted');
+      expect(stream.frames('run')).toEqual([created, renamed]);
+      expect(stream.frames('run-deleted')).toEqual([JSON.stringify({ id: other.id })]);
+    } finally { await stream.close(); }
+    expect(held()).toEqual([0, 0, 0]);
   });
   it('rejects canonical duplicates on the streaming route too', async () => {
     const response = await apiRequest(app, '/api/v1/workspace/run-events', {

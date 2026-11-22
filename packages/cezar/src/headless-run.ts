@@ -9,7 +9,7 @@ import { applyProviderEnablement } from './core/provider-availability.ts';
 import { forwardToSessionGroups } from './core/session-process.ts';
 import { loadConfig } from './config.ts';
 import { RunStoreOpenError } from './runs/store-open-error.ts';
-import type { RunStore } from './runs/store.ts';
+import type { RunRecord, RunStore } from './runs/store.ts';
 import type { Home } from './home/home.ts';
 import { RunManager } from './workflows/run.ts';
 import { acquireCiResources } from './ci-wait/resources.ts';
@@ -105,6 +105,7 @@ export async function runHeadless(
   const onSighup = deps.onTerminal() ? () => forward('SIGHUP') : () => {};
   deps.process.on('SIGINT', onSigint); deps.process.on('SIGTERM', onSigterm);
   if (deps.process.platform !== 'win32') deps.process.on('SIGHUP', onSighup);
+  const subscriptions: Array<() => void> = [];
   try {
     // Headless tasks still appear in the cockpit later, so persist the same
     // task-local recovery event when a credential expires after the preflight.
@@ -117,15 +118,16 @@ export async function runHeadless(
     const manager = new deps.RunManager(store, repoRoot, { skillCatalog: new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters() }), home, createRunner: deps.createRunner, semaphore, acquireCiResources });
     delegation.attachProject({ id: 'headless', root: repoRoot, store, manager, home });
 
-    store.on('event', ({ event }) => printHeadlessEvent(event, deps.console));
+    subscriptions.push(store.lifecycle.subscribe({ 'run.event': ({ event }) => printHeadlessEvent(event, deps.console) }));
 
     const run = manager.startRun(workflow, { task, model, ...access });
     // `review` is terminal here too (spec 009) — headless runs must not hang on
     // the GUI's review gate; the diff waits on the task branch/cockpit instead.
     const final = await new Promise<string>((resolveStatus) => {
-      store.on('run', (r) => {
+      const settle = ({ run: r }: { run: RunRecord }) => {
         if (r.id === run.id && ['done', 'review', 'failed', 'cancelled'].includes(r.status)) resolveStatus(r.status);
-      });
+      };
+      subscriptions.push(store.lifecycle.subscribe({ 'run.created': settle, 'run.updated': settle }));
     });
     const record = store.getRun(run.id);
     if (final === 'review') {
@@ -142,6 +144,7 @@ export async function runHeadless(
       // already arrived has repaired the store; an unfinished lookup remains unknown.
       repoHandleController.abort();
       store.close();
+      for (const unsubscribe of subscriptions) unsubscribe();
     }
   }
 }

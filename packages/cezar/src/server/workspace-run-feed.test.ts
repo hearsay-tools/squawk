@@ -1,17 +1,25 @@
-import { EventEmitter } from 'node:events';
 import { workspaceReadyEventSchema, workspaceRunDeletedEventSchema, workspaceRunSummaryEventSchema } from '@open-mercato/cezar-contract/workspace-events';
 import { toRunSummary, type ProcessUsage, type RunSummary } from '@open-mercato/cezar-contract/runs';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
+import { publishRunWrite, RunLifecycle, snapshotRun } from '../runs/lifecycle.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { ProjectContext } from './project-context.ts';
 import { createWorkspaceRunFeed, relationshipsDigest, type WorkspaceRunFeedDeps } from './workspace-run-feed.ts';
 
-class FakeStore extends EventEmitter {
+/** A store's run lifecycle: `put` publishes `run.created` for a new id, else `run.updated`. */
+class FakeStore {
   readonly runs = new Map<string, RunRecord>();
+  readonly lifecycle = new RunLifecycle();
+  readonly listeners = lifecycleListeners(this.lifecycle);
   getRun(id: string): RunRecord | undefined { return this.runs.get(id); }
-  put(run: RunRecord): void { this.runs.set(run.id, run); this.emit('run', run); }
-  remove(id: string): void { this.runs.delete(id); this.emit('deleted', id); }
+  put(run: RunRecord): void {
+    const before = snapshotRun(this.runs.get(run.id));
+    this.runs.set(run.id, run);
+    publishRunWrite(this.lifecycle, run, before);
+  }
+  remove(id: string): void { this.runs.delete(id); this.lifecycle.publish('run.deleted', { runId: id }); }
 }
 
 const record = (id: string, over: Partial<RunRecord> = {}): RunRecord => ({
@@ -145,7 +153,7 @@ describe('workspace run feed (hearsay-tools/cezarion#2730)', () => {
   it('holds every subscription only while a connection is open, and keeps numbering after a gap', () => {
     const h = harness();
     const other = h.build('other');
-    const held = () => [h.boot.listenerCount('run'), h.boot.listenerCount('deleted'), other.listenerCount('run'), h.usageListeners.size, h.builtListeners.size, h.busListeners.size];
+    const held = () => [h.boot.listeners('run.updated'), h.boot.listeners('run.deleted'), other.listeners('run.updated'), h.usageListeners.size, h.builtListeners.size, h.busListeners.size];
     expect(held()).toEqual([0, 0, 0, 0, 0, 0]);
     const a = h.open('summary');
     const b = h.open('full');
