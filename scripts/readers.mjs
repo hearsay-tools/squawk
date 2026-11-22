@@ -48,7 +48,8 @@ export const TREES = [
  */
 export const RUNNER_ID_READERS = [
   { reader: 'Read-time fold: REMOVED_RUNNER_IDS and the row, summary and worker-result upgrades', file: 'packages/cezar/src/runs/legacy-run-rows.ts', anchor: 'REMOVED_RUNNER_IDS' },
-  { reader: 'Run row with its steps and workflowDef steps, and the worker-result snapshot, folded on load', file: 'packages/cezar/src/runs/store.ts', anchor: 'upgradeRemovedRunnerResult(' },
+  { reader: 'Run row with its steps and workflowDef steps, folded on load', file: 'packages/cezar/src/runs/store.ts', anchor: 'upgradeLegacyRunRow(' },
+  { reader: 'Worker-result snapshot, folded on load', file: 'packages/cezar/src/runs/worker-results.ts', anchor: 'upgradeRemovedRunnerResult(' },
   { reader: 'Stored list summary of a settled run', file: 'packages/cezar/src/runs/run-summary-page.ts', anchor: 'upgradeRemovedRunnerSummary(' },
   { reader: 'Record schema: runner, removedRunner, step backend and removedBackend', file: 'packages/contract/src/runs.ts', anchor: 'removedBackend' },
   { reader: 'latestSession and removedRunnerStepAfter: the session for terminal hand-off and Continue', file: 'packages/contract/src/run-predicates.ts', anchor: 'export function latestSession' },
