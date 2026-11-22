@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../automations/store.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import type { PreviewHost } from '../preview/host.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
+import type { ProviderAuthService } from '../core/provider-auth.ts';
+import { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContextSource, type RunManagerFactory } from './project-context.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { seedRuns, readPersistedRuns } from '../runs/run-store.testkit.ts';
@@ -140,6 +143,8 @@ describe('ProjectContexts', () => {
     const release = vi.fn(async () => undefined);
     const preview = { portOwner: () => undefined, probe: async () => false, release, ownsServer: () => false } as unknown as PreviewHost;
     const contexts = new ProjectContexts({ createRunner, createManager, home: testHome(), listProjects: async () => [{ id: 'a', root: rootA, status: 'not-git' }], preview, squawkPort: () => 4321 });
+    let listeners!: ReturnType<typeof lifecycleListeners>;
+    contexts.onStoreCreated((store) => { listeners = lifecycleListeners(store.lifecycle); });
     try {
       const ctx = await contexts.context('a');
       const run = ctx.store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [] });
@@ -153,8 +158,11 @@ describe('ProjectContexts', () => {
 
       // Shutdown leaves running previews to the host's own close.
       const running = ctx.store.createRun({ title: 'still previewing', workflow: 'quick-task', task: 't', steps: [] });
+      expect(listeners('run.deleted')).toBeGreaterThan(0);
       await contexts.disposeAll();
       expect(release).not.toHaveBeenCalledWith(running.id);
+      // Teardown removes the release with the store's other listeners.
+      expect(listeners('run.deleted')).toBe(0);
     } finally {
       contexts.disposeAll();
       vi.unstubAllEnvs();
@@ -271,6 +279,26 @@ describe('ProjectContexts', () => {
     expect(b.id).toBe('b'); // built fine with only the throwing listener left
     expect(built).toEqual(['a']); // unsubscribed — not notified for b
     contexts.disposeAll();
+  });
+
+  it("runs a store listener's returned cleanup right after teardown closes the store", async () => {
+    const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
+    const observer = new ProviderRuntimeAuthObserver({} as ProviderAuthService, () => {}, undefined, testHome());
+    let listeners!: ReturnType<typeof lifecycleListeners>;
+    const order: string[] = [];
+    contexts.onStoreCreated((store) => {
+      listeners = lifecycleListeners(store.lifecycle);
+      store.lifecycle.subscribe({ 'store.closed': () => { order.push('closed'); } });
+      const unwatch = observer.watch(store);
+      return () => { order.push('cleanup'); unwatch(); };
+    });
+    const ctx = await contexts.context('a');
+    // A repeat watch, as the context-built hook makes, holds no second subscription.
+    observer.watch(ctx.store)();
+    expect(listeners('run.event')).toBe(1);
+    expect(contexts.dispose('a')).toBe(true);
+    expect(listeners('run.event')).toBe(0);
+    expect(order).toEqual(['closed', 'cleanup']);
   });
 
   it('dispose() of a never-built project is a no-op returning false', () => {

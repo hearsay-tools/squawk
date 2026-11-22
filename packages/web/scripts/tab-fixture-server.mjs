@@ -75,10 +75,25 @@ const seed = (dir, projectId) => {
   }
   return store
 }
+/** Each served store's live run lifecycle subscriptions, counted per event type from the moment
+ *  the store opens, as `listenerCount` counted the store emitter's listeners. */
+const subscriptions = new Map()
+const countSubscriptions = store => {
+  const live = new Set()
+  const subscribe = store.lifecycle.subscribe.bind(store.lifecycle)
+  store.lifecycle.subscribe = handlers => {
+    const unsubscribe = subscribe(handlers)
+    live.add(handlers)
+    return () => { live.delete(handlers); unsubscribe() }
+  }
+  subscriptions.set(store, type => [...live].filter(handlers => handlers[type]).length)
+}
 const store = seed(root, 'boot')
+countSubscriptions(store)
 for (const project of projects.slice(1)) { const extra = seed(project.root, project.id); extra.close() }
 const manager = new RunManager(store, root, { home, acquireCiResources })
 const contexts = new ProjectContexts({ home, createManager: (store, root, options) => new RunManager(store, root, { ...options, acquireCiResources }), listProjects: async () => projects })
+contexts.onStoreCreated(created => { countSubscriptions(created) })
 const stores = new Map([['boot', store]])
 for (const project of projects.slice(1)) stores.set(project.id, (await contexts.context(project.id)).store)
 const runs = [...stores].flatMap(([projectId, value]) => value.listRunIds().map(runId => ({ projectId, runId })))
@@ -145,7 +160,7 @@ const control = createServer(async (req, res) => {
     if (command.publish) for (const run of command.runs ?? runs) stores.get(run.projectId)?.appendEvent(run.runId, { type: 'item.completed', item: { kind: 'message', id: `publish-${++published}`, role: 'assistant', text: command.publish } })
   }
   res.setHeader('content-type', 'application/json')
-  res.end(JSON.stringify({ runs, published, ticks, family, indexRoots, ...reports.state(), reportIo, listeners: [...stores].map(([projectId, value]) => ({ projectId, event: value.listenerCount('event'), run: value.listenerCount('run'), deleted: value.listenerCount('deleted') })) }))
+  res.end(JSON.stringify({ runs, published, ticks, family, indexRoots, ...reports.state(), reportIo, listeners: [...stores].map(([projectId, value]) => { const count = subscriptions.get(value); return { projectId, event: count('run.event'), run: count('run.updated'), deleted: count('run.deleted') } }) }))
 })
 control.listen(0, '127.0.0.1', () => console.log(`control → http://127.0.0.1:${control.address().port}`))
 const server = startServer({ home, repoRoot: root, store, manager, contexts, version: 'tab-fixture', bootProjectId: 'boot' }, 0)

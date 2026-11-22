@@ -247,7 +247,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { createProject, listGithubOwners, type CommandRunner } from './create-project.ts';
-import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
+import { createWorkspaceRunFeed, currentRecord, type RunWrite } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
@@ -3725,11 +3725,11 @@ export function createApp(deps: ServerDeps) {
       return streamSSENoBuffer(c, async (stream) => {
         const controller = new AbortController();
         const stop = () => controller.abort();
-        const onRun = (run: RunRecord) => {
-          if (run.id === id) void stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
+        const onRun = (write: RunWrite) => {
+          if (write.run.id === id) void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
         };
-        store.on('run', onRun);
-        stream.onAbort(() => { stop(); store.off('run', onRun); });
+        const unsubscribe = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun });
+        stream.onAbort(() => { stop(); unsubscribe(); });
         const feed = subscribeRunFeed({ store, dataDir }, {
           projectId: c.get('project').id, runId: id, afterSeq: requestedAfter,
           ...(query.cursor ? { cursor: query.cursor } : {}),
@@ -3749,7 +3749,7 @@ export function createApp(deps: ServerDeps) {
             await stream.sleep(15_000);
           }
         } finally {
-          stop(); store.off('run', onRun);
+          stop(); unsubscribe();
           await feed;
         }
       });
@@ -3764,8 +3764,8 @@ export function createApp(deps: ServerDeps) {
     .get('/events', (c) => {
       const { store } = c.get('project');
       return streamSSENoBuffer(c, async (stream) => {
-        const onRun = (run: RunRecord) => void stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
-        const onDeleted = (id: string) =>
+        const onRun = (write: RunWrite) => void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
+        const onDeleted = ({ runId: id }: { runId: string }) =>
           void stream.writeSSE({
             event: 'run-deleted',
             data: JSON.stringify({ id }),
@@ -3784,11 +3784,9 @@ export function createApp(deps: ServerDeps) {
           }
           void stream.writeSSE({ event: 'usage', data: JSON.stringify(owned) });
         });
-        store.on('run', onRun);
-        store.on('deleted', onDeleted);
+        const unsubscribe = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun, 'run.deleted': onDeleted });
         stream.onAbort(() => {
-          store.off('run', onRun);
-          store.off('deleted', onDeleted);
+          unsubscribe();
           offUsage();
         });
         while (!stream.aborted) {

@@ -18,7 +18,7 @@ import { armRepoHandle } from '../runs/arm-repo-handle.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
 import { reclaimWorktrees } from '../runs/retention.ts';
 import { SWEEP_MIN_INTERVAL_MS, sweepMergedBranches, type SweepOptions, type SweepProject } from './repo-branch-sweep.ts';
-import type { RunEventLog, RunLookup, RunStoreEvents } from '../runs/ports.ts';
+import type { RunEventLog, RunLifecycleSource, RunLookup } from '../runs/ports.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunDatabase, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run-database.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -142,13 +142,14 @@ function sweepPreviewOnce(dataDir: string, host: PreviewHost | undefined): Promi
  * dev servers and browsers a crashed Squawk left behind are swept once per data dir per process
  * (always, so turning the flag off after a crash still cleans up; a project removed and re-added
  * is not swept again, and what the live host runs is spared either way), and a deleted run's
- * preview is released with its profile.
+ * preview is released with its profile. Returns the unsubscribe of that release.
  */
-export function armPreview(store: RunStoreEvents & RunLookup & Pick<RunEventLog, 'appendEvent'>, dataDir: string, host: PreviewHost | undefined): void {
+export function armPreview(store: { readonly lifecycle: RunLifecycleSource } & RunLookup & Pick<RunEventLog, 'appendEvent'>, dataDir: string, host: PreviewHost | undefined): () => void {
   // Before the sweep's first await: a crash's agent state is reconciled before any agent can connect.
   reconcileAgentMarkers(dataDir, store, runId => host?.hasAgents(runId) ?? false);
   void sweepPreviewOnce(dataDir, host);
-  if (host) store.on('deleted', (runId: string) => void host.release(runId, { deleteProfile: true, dataDir }).catch(() => undefined));
+  if (!host) return () => {};
+  return store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => void host.release(runId, { deleteProfile: true, dataDir }).catch(() => undefined) });
 }
 
 /**
@@ -217,7 +218,9 @@ export class ProjectContexts {
   private readonly sweepControllers = new WeakMap<RunStore, AbortController>();
   private readonly sweeps = new Set<Promise<unknown>>();
   /** Live store-created subscribers; invoked before RunManager recovery. */
-  private readonly storeListeners = new Set<(store: RunStore) => void>();
+  private readonly storeListeners = new Set<(store: RunStore) => void | (() => void)>();
+  /** What each built store's `onStoreCreated` listeners returned, run when its context is torn down. */
+  private readonly storeCleanups = new WeakMap<RunStore, Array<() => void>>();
   /** Live `onContextBuilt` subscribers (workspace SSE, step 2.8). */
   private readonly builtListeners = new Set<(ctx: ProjectContext) => void>();
   /** One semaphore for every manager this map builds — injected by boot,
@@ -383,22 +386,28 @@ export class ProjectContexts {
    * Subscribe at the earliest RunStore lifecycle point: immediately after a
    * lazy project's store opens and before its manager can recover runs. This
    * stays generic so backend-specific observers do not leak into the context
-   * map. Returns an unsubscribe.
+   * map. A listener may return a cleanup: the store's teardown runs it right after the store
+   * closes. Returns an unsubscribe.
    */
-  onStoreCreated(listener: (store: RunStore) => void): () => void {
+  onStoreCreated(listener: (store: RunStore) => void | (() => void)): () => void {
     this.storeListeners.add(listener);
     return () => this.storeListeners.delete(listener);
   }
 
-  /** A listener throwing must never fail the build (its store is usable). */
-  private notifyStoreCreated(store: RunStore): void {
+  /** A listener throwing must never fail the build (its store is usable). Returns the cleanups
+   *  the store's teardown runs. */
+  private notifyStoreCreated(store: RunStore): Array<() => void> {
+    const cleanups: Array<() => void> = [];
+    this.storeCleanups.set(store, cleanups);
     for (const listener of [...this.storeListeners]) {
       try {
-        listener(store);
+        const cleanup = listener(store);
+        if (cleanup) cleanups.push(cleanup);
       } catch {
         // subscriber's problem — context construction can continue
       }
     }
+    return cleanups;
   }
 
   /** A listener throwing must never fail the build (its context is fine). */
@@ -462,7 +471,7 @@ export class ProjectContexts {
     this.repoHandleControllers.get(ctx.store)!.abort();
     this.sweepControllers.get(ctx.store)?.abort();
     this.managerCleanups.get(ctx.manager)?.();
-    teardown(ctx);
+    teardown(ctx, this.storeCleanups.get(ctx.store));
   }
 
   /** Tear down every built context (process shutdown), and every build still running. Resolves
@@ -520,8 +529,7 @@ export class ProjectContexts {
     const automationStore = this.deps.automationStore?.(project.id, project.root)
       ?? AutomationStore.open(dataDir);
     reconcileAutomationReceipts(automationStore, store);
-    this.notifyStoreCreated(store);
-    armPreview(store, dataDir, this.deps.preview);
+    this.notifyStoreCreated(store).push(armPreview(store, dataDir, this.deps.preview));
     this.sweepControllers.set(store, new AbortController());
     const manager: ProjectRunManager = createManager(store, project.root, {
       home: this.deps.home,
@@ -571,7 +579,7 @@ export class ProjectContexts {
       // A failed build must not leak the half-built context's subscriptions, nor its sweep.
       this.sweepControllers.get(store)?.abort();
       this.managerCleanups.get(manager)?.();
-      teardown({ store, manager });
+      teardown({ store, manager }, this.storeCleanups.get(store));
       throw err;
     } finally {
       this.buildingManagers.delete(projectId);
@@ -580,9 +588,11 @@ export class ProjectContexts {
 }
 
 /** Shared teardown for built and half-built contexts. Closing the store writes what is pending
- *  and releases its database connection; a late write to it afterwards saves nothing. */
-function teardown(ctx: { store: RunStore; manager: ProjectRunManager }): void {
+ *  and releases its database connection; a late write to it afterwards saves nothing. The store's
+ *  listeners go after the close, so what the close publishes still reaches them. */
+function teardown(ctx: { store: RunStore; manager: ProjectRunManager }, cleanups: ReadonlyArray<() => void> = []): void {
   ctx.manager.dispose();
   ctx.store.close();
   ctx.store.removeAllListeners();
+  for (const cleanup of cleanups) cleanup();
 }

@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { testHome } from './home/test-home.testkit.ts';
 import { defaultHeadlessDeps, printHeadlessEvent, runHeadless, type HeadlessDeps } from './headless-run.ts';
 import { RunStoreOpenError } from './runs/store-open-error.ts';
+import { RunLifecycle } from './runs/lifecycle.ts';
+import { lifecycleListeners } from './runs/lifecycle-listeners.testkit.ts';
+import type { RunRecord } from './runs/store.ts';
 import { QUICK_TASK_WORKFLOW } from './workflows/types.ts';
 import type { WorkerCleanupFactory } from './delegation/service.ts';
 
@@ -14,10 +17,17 @@ function fixture() {
   const trace: string[] = [];
   const home = testHome();
   const state = { final: 'done', duringStart: () => {}, record: { branch: 'cez/task', tokensUsed: 42 } as { branch: string; tokensUsed: number } | undefined };
-  const store = Object.assign(new EventEmitter(), {
+  const store = {
+    lifecycle: new RunLifecycle(),
     getRun: vi.fn(() => state.record),
     close: vi.fn(() => { trace.push('store.close'); }),
-  });
+  };
+  const listeners = lifecycleListeners(store.lifecycle);
+  const write = (type: 'run.created' | 'run.updated', run: { id: string; status: string }) => {
+    const record = run as unknown as RunRecord;
+    if (type === 'run.created') store.lifecycle.publish(type, { run: record });
+    else store.lifecycle.publish(type, { run: record, before: record });
+  };
   const fakeProcess = Object.assign(new EventEmitter(), {
     platform: 'linux', pid: 1234, exitCode: undefined as number | undefined,
     kill: vi.fn((_pid: number, signal: string) => { trace.push(`kill ${signal}`); }),
@@ -32,13 +42,13 @@ function fixture() {
   const watch = vi.fn(() => { trace.push('watch'); });
   const refresh = vi.fn(async () => { trace.push('refresh'); });
   const startRun = vi.fn(() => {
-    trace.push(`startRun listeners=${store.listenerCount('run')}`);
+    trace.push(`startRun listeners=${listeners('run.updated')}`);
     state.duringStart();
     queueMicrotask(() => {
-      store.emit('run', { id: 'other', status: RUN_STATUS.done });
-      store.emit('run', { id: 'task', status: RUN_STATUS.running });
-      store.emit('event', { event: { type: 'text', text: 'task output' } });
-      store.emit('run', { id: 'task', status: state.final });
+      write('run.created', { id: 'other', status: RUN_STATUS.done });
+      write('run.created', { id: 'task', status: RUN_STATUS.running });
+      store.lifecycle.publish('run.event', { runId: 'task', event: { type: 'text', text: 'task output', seq: 1, ts: '' } });
+      write('run.updated', { id: 'task', status: state.final });
     });
     return { id: 'task' };
   });
@@ -74,7 +84,7 @@ function fixture() {
     onTerminal: vi.fn(() => true),
   };
   const run = (workflowName?: string) => runHeadless(home, '/repo', 'the task', workflowName, 'model', access, deps as unknown as HeadlessDeps);
-  return { trace, home, state, store, fakeProcess, output, status, watch, refresh, startRun, delegation, deps, run };
+  return { trace, home, state, store, listeners, fakeProcess, output, status, watch, refresh, startRun, delegation, deps, run };
 }
 
 describe('runHeadless', () => {
@@ -91,6 +101,7 @@ describe('runHeadless', () => {
       'off SIGINT', 'off SIGTERM', 'off SIGHUP', 'delegation.close', 'abort', 'store.close',
     ]);
     expect(f.output.log).toHaveBeenCalledWith('task output');
+    expect([f.listeners('run.created'), f.listeners('run.updated'), f.listeners('run.event')]).toEqual([0, 0, 0]);
     expect(f.startRun).toHaveBeenCalledWith(QUICK_TASK_WORKFLOW, { task: 'the task', model: 'model', ...access });
     expect(f.delegation.attachProject).toHaveBeenCalledWith(expect.objectContaining({ id: 'headless', root: '/repo', home: f.home, store: f.store }));
     expect(f.output.log.mock.calls.some(([line]) => String(line).includes('changes ready for review'))).toBe(final === 'review');

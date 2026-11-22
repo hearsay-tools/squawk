@@ -119,12 +119,13 @@ export async function readFiniteRunFeed(
   context: Pick<ProjectContext, 'store' | 'dataDir'>, demand: LiveRunDemand, signal: AbortSignal,
 ): Promise<LiveRunBatch> {
   const snapshot = context.store.liveReadSnapshot(demand.runId);
-  const bound = ({ runId, event }: { runId: string; event: RunEvent }) => {
-    if (runId === demand.runId) snapshot.throughSeq = Math.min(snapshot.throughSeq, event.seq - 1);
-  };
-  context.store.on('event', bound);
+  const unsubscribe = context.store.lifecycle.subscribe({
+    'run.event': ({ runId, event }) => {
+      if (runId === demand.runId) snapshot.throughSeq = Math.min(snapshot.throughSeq, event.seq - 1);
+    },
+  });
   try { return await readRunEventBatch(context.store.sourceDataDir(demand.runId), demand, signal, LIVE_BYTE_LIMIT, snapshot); }
-  finally { context.store.off('event', bound); }
+  finally { unsubscribe(); }
 }
 
 /** Attach before reading; serialize replay and live writes; bound slow-client memory. */
@@ -156,15 +157,13 @@ export async function subscribeRunFeed(
     pending.push(event);
     wake?.();
   };
-  const onDeleted = (id: string) => { if (id === demand.runId) reset('run removed'); };
-  const onClosed = () => reset('project removed');
-  context.store.on('closed', onClosed);
-  context.store.on('event', onEvent);
-  context.store.on('deleted', onDeleted);
+  const unsubscribe = context.store.lifecycle.subscribe({
+    'store.closed': () => reset('project removed'),
+    'run.event': onEvent,
+    'run.deleted': ({ runId }) => { if (runId === demand.runId) reset('run removed'); },
+  });
   const detached = () => {
-    context.store.off('closed', onClosed);
-    context.store.off('event', onEvent);
-    context.store.off('deleted', onDeleted);
+    unsubscribe();
     pending = [];
     wake?.();
   };

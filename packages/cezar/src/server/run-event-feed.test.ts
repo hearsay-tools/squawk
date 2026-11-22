@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { brotliCompressSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
+import type { RunLifecycle } from '../runs/lifecycle.ts';
+import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import { readFiniteRunFeed, readRunEventBatch, subscribeRunFeed } from './run-event-feed.ts';
 import { LIVE_BYTE_LIMIT } from '@open-mercato/cezar-contract/live-limits';
 import type { RunEvent } from '@open-mercato/cezar-contract';
@@ -11,11 +13,13 @@ import type { RunEvent } from '@open-mercato/cezar-contract';
 let dataDir: string;
 let store: RunStore;
 let runId: string;
+let listeners: ReturnType<typeof lifecycleListeners>;
 const signal = () => new AbortController().signal;
 const demand = () => ({ projectId: 'boot', runId, afterSeq: 0 });
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), 'cez-feed-'));
   store = RunStore.open(dataDir);
+  listeners = lifecycleListeners(store.lifecycle);
   runId = store.createRun({ title: 'Feed', task: 'Feed', workflow: 'quick-task', steps: [] }).id;
 });
 afterEach(() => { store.close(); rmSync(dataDir, { recursive: true, force: true }); });
@@ -71,16 +75,16 @@ describe('bounded persisted feed', () => {
     await expect(reading).rejects.toMatchObject({ name: 'AbortError' });
   });
   it('releases the finite scan write observer on cancellation and a failed read', async () => {
-    const before = store.listenerCount('event');
+    const before = listeners('run.event');
     const controller = new AbortController();
     const reading = readFiniteRunFeed({ store, dataDir }, demand(), controller.signal);
-    expect(store.listenerCount('event')).toBe(before + 1);
+    expect(listeners('run.event')).toBe(before + 1);
     controller.abort();
     await expect(reading).rejects.toMatchObject({ name: 'AbortError' });
-    expect(store.listenerCount('event')).toBe(before);
+    expect(listeners('run.event')).toBe(before);
     store.appendEvent(runId, { type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT + 1) });
     await expect(readFiniteRunFeed({ store, dataDir }, demand(), signal())).rejects.toMatchObject({ status: 413 });
-    expect(store.listenerCount('event')).toBe(before);
+    expect(listeners('run.event')).toBe(before);
   });
   it('rejects expired cursors and pre-aborted requests', async () => {
     store.appendEvent(runId, { type: 'note', text: 'old' });
@@ -99,7 +103,7 @@ describe('ordered replay/live handoff', () => {
     const seen: number[] = [];
     let sawLive!: () => void;
     const received = new Promise<void>(resolve => { sawLive = resolve; });
-    const baseline = store.listenerCount('event');
+    const baseline = listeners('run.event');
     const task = subscribeRunFeed({ store, dataDir }, demand(), {
       async event(event) {
         seen.push(event.seq);
@@ -107,12 +111,13 @@ describe('ordered replay/live handoff', () => {
         if (event.seq === 3) sawLive();
       }, reset: () => { throw new Error('unexpected reset'); },
     }, controller.signal);
-    expect(store.listenerCount('event')).toBe(baseline + 1);
+    expect(listeners('run.event')).toBe(baseline + 1);
     store.appendEvent(runId, { type: 'note', text: 'during read' });
     await received;
     controller.abort(); await task;
     expect(seen).toEqual([1, 2, 3]);
-    expect(store.listenerCount('event')).toBe(baseline);
+    expect(listeners('run.event')).toBe(baseline);
+    expect([listeners('run.deleted'), listeners('store.closed')]).toEqual([0, 0]);
   });
   it('bounds a slow live consumer and stops on overflow', async () => {
     const controller = new AbortController();
@@ -123,10 +128,23 @@ describe('ordered replay/live handoff', () => {
       event: () => blocked, reset: reason => { resets.push(reason); },
     }, controller.signal);
     const event = { seq: 1, ts: '', type: 'note', text: 'x'.repeat(LIVE_BYTE_LIMIT) } satisfies RunEvent;
-    store.emit('event', { runId, event });
+    (store.lifecycle as RunLifecycle).publish('run.event', { runId, event });
     released(); await task;
     expect(resets).toHaveLength(1);
-    expect(store.listenerCount('event')).toBe(0);
+    expect(listeners('run.event')).toBe(0);
+  });
+  it("resets on its own run's delete, not another run's, and releases every listener", async () => {
+    const other = store.createRun({ title: 'Other', task: 'Other', workflow: 'quick-task', steps: [] }).id;
+    const resets: string[] = [];
+    const task = subscribeRunFeed({ store, dataDir }, demand(), {
+      event: async () => {}, reset: reason => { resets.push(reason); },
+    }, signal());
+    expect(store.deleteRun(other)).toBe(true);
+    expect(resets).toEqual([]);
+    expect(store.deleteRun(runId)).toBe(true);
+    expect(resets).toEqual(['run removed']);
+    expect([listeners('run.event'), listeners('run.deleted'), listeners('store.closed')]).toEqual([0, 0, 0]);
+    await task;
   });
   it('detaches replay and live work when the project store closes', async () => {
     const controller = new AbortController();
@@ -137,7 +155,8 @@ describe('ordered replay/live handoff', () => {
     store.close();
     try {
       expect(resets).toEqual(['project removed']);
-      expect(store.listenerCount('event')).toBe(0);
+      expect(listeners('run.event')).toBe(0);
+      expect([listeners('run.deleted'), listeners('store.closed')]).toEqual([0, 0]);
     } finally { controller.abort(); await task; }
   });
 
