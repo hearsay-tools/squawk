@@ -92,7 +92,7 @@ function projectDelivery(store: RunStore, runId: string, message: ConversationMe
 }
 
 /** A request's outcome on one participant's transcript, once; a late reply gets its own projection. */
-function projectOutcome(store: RunEventLog, runId: string, outcome: RequestOutcome | undefined): void {
+function projectOutcome(store: { readonly eventLog: RunEventLog }, runId: string, outcome: RequestOutcome | undefined): void {
   if (!outcome) return;
   const projectionId = `request-outcome:${outcome.requestId}${outcome.status === 'replied-late' ? ':replied-late' : ''}`;
   if (!store.hasProjection(runId, projectionId)) store.appendEvent(runId, { type: 'request-outcome', projectionId, outcome });

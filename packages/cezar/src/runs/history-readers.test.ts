@@ -28,8 +28,8 @@ describe('history readers', () => {
     const violates = (file: string, source: string) => scanHistoryReaders(`packages/cezar/src/${file}`, source).length > 0;
     expect(violates('runs/other.ts', 'createReadStream(this.eventsPath(id))')).toBe(true);
     expect(violates('runs/other.ts', 'statSync(this.eventsPath(id))')).toBe(true);
-    expect(violates('runs/store.ts', 'appendFileSync(this.eventsPath(runId), line)')).toBe(false);
-    expect(violates('runs/store.ts', 'class Store { private eventsPath(runId: string): string { return ""; } }')).toBe(false);
+    expect(violates('runs/event-log.ts', 'appendFileSync(this.eventsPath(runId), line)')).toBe(false);
+    expect(violates('runs/event-log.ts', 'class Store { private eventsPath(runId: string): string { return ""; } }')).toBe(false);
     expect(violates('runs/store.ts', 'id + ".ndjson"')).toBe(true);
     expect(violates('runs/store.ts', '`${id}.ndjson.br`')).toBe(true);
     expect(violates('runs/history-file.ts', '`${id}.ndjson`')).toBe(false);

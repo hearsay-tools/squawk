@@ -55,8 +55,10 @@ export function cutOffWork(events: Iterable<unknown>): CutOffWork | undefined {
 
 /** The event log a restart reads and closes the cut-off items in. */
 export interface CutOffLog {
-  readEvents(runId: string): Iterable<unknown>;
-  appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): unknown;
+  readonly eventLog: {
+    readEvents(runId: string): Iterable<unknown>;
+    appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): unknown;
+  };
 }
 
 /**

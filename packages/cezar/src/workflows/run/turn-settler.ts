@@ -539,7 +539,7 @@ export class TurnSettler {
  *  when the run or its step finishes on the done; `reconsidered` when a human message, a new
  *  instruction, a failed wait result, a wait or question the agent registers, or a completion
  *  refusal withdraws it, and the agent must call `cezar_done` again. False when none was on record. */
-export function retireDoneAccepted(store: RunLookup & RunWrites & RunEventLog, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
+export function retireDoneAccepted(store: RunLookup & RunWrites & { readonly eventLog: RunEventLog }, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
   if (!store.getRun(runId)?.doneAccepted) return false;
   store.commitOutcome(runId, { kind: 'done-retired', as, reason }, {}, { bestEffort: true });
   if (as === 'reconsidered') store.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });

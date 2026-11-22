@@ -61,7 +61,7 @@ export interface DeliveryResult {
 }
 
 /** The run store methods a task webhook and `sendAgentReport` call. */
-export type TaskWebhookStore = RunLookup & Pick<RunAccess, 'sourceDataDir' | 'runOwnership'> & Pick<RunEventLog, 'appendEvent'> & Pick<RunWrites, 'updateRun'>;
+export type TaskWebhookStore = RunLookup & Pick<RunAccess, 'sourceDataDir' | 'runOwnership'> & { readonly eventLog: Pick<RunEventLog, 'appendEvent'> } & Pick<RunWrites, 'updateRun'>;
 
 export const WEBHOOK_TIMEOUT_MS = 10_000;
 export const WEBHOOK_ATTEMPTS = 3;

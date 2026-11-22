@@ -705,7 +705,7 @@ function ciWorkflowResumeStepIndex(run: RunRecord): number {
  * refuses the resume. A shown launch with no matching `session` event ended before the runner
  * reported its id.
  */
-function resumableSessionId(store: RunLookup & RunEventLog, runId: string, sessionStep: StepState | undefined): string | undefined {
+function resumableSessionId(store: RunLookup & { readonly eventLog: RunEventLog }, runId: string, sessionStep: StepState | undefined): string | undefined {
   const sessionId = sessionStep?.sessionId;
   if (!sessionId) return undefined;
   const run = store.getRun(runId);

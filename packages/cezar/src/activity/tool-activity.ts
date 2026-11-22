@@ -3,7 +3,7 @@ import { ACTIVITY_RATE_SECONDS, ACTIVITY_TOOL_TITLE_MAX } from '@open-mercato/ce
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import type { ToolStatus, UiEvent, UiToolItem } from '../core/ui-events.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunAccess, RunLifecycleSource, RunLookup } from '../runs/ports.ts';
+import type { RunLifecycleSource, RunLookup, RunRedaction } from '../runs/ports.ts';
 import type { ToolActivitySource } from './read-model.ts';
 import { clampText } from './text.ts';
 
@@ -17,8 +17,9 @@ export const TOOL_ACTIVITY_IDLE_MS = 60_000;
  * What a feed needs from a run store: the lifecycle whose run changes it drops runs on, the store's
  * redactor, and a run's current record, read once when an event would create the run's entry.
  */
-export interface ToolActivityStore extends RunLookup, Pick<RunAccess, 'redactText'> {
+export interface ToolActivityStore extends RunLookup {
   readonly lifecycle: RunLifecycleSource;
+  readonly redaction: Pick<RunRedaction, 'redactText'>;
 }
 
 /** One run manager's way into the tracker: the UI event sinks of its runs feed it. */

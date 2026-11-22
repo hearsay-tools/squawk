@@ -1,18 +1,16 @@
 import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, withKeptFields } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, fallbackRunDeleteError } from './project-run-sources.ts';
-import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
-import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, stepTotals, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
+import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stageStepUpdate, stepTotals, redactPatch, clearPin, type RecordPatch } from './record-write-rules.ts';
 import { publishRunWrite, RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
-import { defined } from '../core/defined.ts';
 import type { WorkerExecutionRecords, WorkerExecutions } from './ports.ts';
 import { workerExecutionsFactory } from './worker-executions-registry.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
@@ -33,22 +31,20 @@ import { previewServerSchema } from '@open-mercato/cezar-contract/preview';
 import { waitSchema, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { isSweepable, UNREAD_RUN_RULE, SWEEPABLE_RUN_RULE, REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
-import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunPullRequest, RunSummary, Wait, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
+import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunSummary, Wait, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
 import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@open-mercato/cezar-contract/run-search';
 import { storedDelegationStateSchema } from './delegation-state.ts';
 import { HistoryCompressor } from './history-compressor.ts';
 import { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { stampOf } from './transcript-facts.ts';
 import { RunTranscriptFacts } from './transcript-facts-topic.ts';
-import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, restoreHistory } from './history-file.ts';
-import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
+import { hasPlainHistory, historyPaths, restoreHistory } from './history-file.ts';
 // Pure, dependency-free reference helpers — the same sanity bound the marker parser applies.
 import { archivePullRequests, pullRequestKey } from './pull-requests.ts';
-import { isRepoScopedRef, promptNamesRepo } from './task-refs.ts';
 // Type-only module (zod + nothing else), so this cannot cycle back into the store.
 import { workflowDefSchema } from '../workflows/types.ts';
 import { applyOutcomes, type OutcomeDependencies, type OutcomeReceipt, type RunOutcome } from './outcome-commit.ts';
-import { ISSUE_URL_RE, namesForeignReference, originatingIssue, refUrlNumber, referencedPrDeclaration, rescopeRun, resolveIssueReference, resolveReferencedRef, restoreOriginatingIssue, scanEventReferences, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
+import { ISSUE_URL_RE, namesForeignReference, referencedPrDeclaration, rescopeRun, resolveReferencedRef, restoreOriginatingIssue, trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
@@ -75,6 +71,8 @@ import { archiveStoreFamily } from './archive-family.ts';
 import { claimStoreFamilies } from './claim-families.ts';
 import { createStoreOwnedRun, type SpawnCapacityRefusal } from './owned-run-create.ts';
 import { WorkerResultsTopic } from './worker-results.ts';
+import { RunEventLogTopic } from './event-log.ts';
+import { RunRedaction } from './run-redaction.ts';
 import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 
@@ -425,21 +423,6 @@ function isDestroyProgress(before: RunRecord['delegation'], after: DelegationSta
   return isDeepStrictEqual({ ...before, destroy: undefined }, { ...after, destroy: undefined });
 }
 
-/** NDJSON transcript text to events; a damaged line is skipped, never fatal. */
-function parseEvents(raw: string): RunEvent[] {
-  return raw
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as RunEvent;
-      } catch {
-        return null;
-      }
-    })
-    .filter((e): e is RunEvent => e !== null);
-}
-
 /** An archived page's cursor: the last row's order, opaque to clients. A held run with no row yet
  *  lists after every row (`seq` is infinite), which JSON cannot carry, so it travels as null. */
 function encodeArchivedCursor(key: ListOrder): string {
@@ -499,7 +482,7 @@ export class RunStore {
   private readonly published = new RunLifecycle();
   readonly lifecycle: RunLifecycleSource = this.published;
   /** The lifecycle events run exits write (B12). */
-  private readonly exitEvents = new ExitEvents((id, event) => this.appendEvent(id, event));
+  private readonly exitEvents = new ExitEvents((id, event) => this.eventLog.appendEvent(id, event));
   /** Runs gone from memory whose rows the next save or commit deletes. */
   private readonly deleted = new Set<string>();
   /** Deleted runs whose history files (events, handoff, images, artifacts) go once the delete of
@@ -543,6 +526,10 @@ export class RunStore {
   readonly retention: RunRetentionTopic;
   /** The saved snapshot of a worker's collected result (hearsay-tools/squawk#4038). */
   readonly workerResults: WorkerResultsTopic;
+  /** The event log and reference markers (hearsay-tools/squawk#4040). */
+  readonly eventLog: RunEventLogTopic;
+  /** The scrub of events and free text (hearsay-tools/squawk#4040). */
+  readonly redaction: RunRedaction;
   private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
   /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
    *  first use by the factory this process registered; throws when none is registered. */
@@ -561,6 +548,7 @@ export class RunStore {
   }
 
   private constructor(private readonly dataDir: string) {
+    this.redaction = new RunRedaction();
     this.transcriptFacts = new RunTranscriptFacts(dataDir, {
       isFallbackRun: (id) => this.isFallbackRun(id),
       sourceDataDir: (id) => this.sourceDataDir(id),
@@ -573,8 +561,14 @@ export class RunStore {
     this.workerResults = new WorkerResultsTopic(dataDir, {
       peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), hasFallbackRun: (id) => this.hasFallbackRun(id),
       writeDir: (id) => this.writeDir(id), sourceDataDir: (id) => this.sourceDataDir(id),
-      redactResult: (result) => this.redact({ type: 'worker-result', seq: 0, ts: result.observedAt, result }).result,
-      redactText: (text) => this.redactText(text), commitDelegation: (patches) => this.commitDelegation(patches),
+      redactResult: (result) => this.redaction.redact({ type: 'worker-result', seq: 0, ts: result.observedAt, result }).result,
+      redactText: (text) => this.redaction.redactText(text), commitDelegation: (patches) => this.commitDelegation(patches),
+    });
+    this.eventLog = new RunEventLogTopic(dataDir, {
+      seqs: this.seqs, published: this.published, liveItems: this.liveItems, transcriptFacts: this.transcriptFacts, redaction: this.redaction,
+      record: (id) => this.record(id), missingRunError: (runId) => this.missingRunError(runId), sourceDataDir: (id) => this.sourceDataDir(id),
+      touch: (run, before) => this.touch(run, before), change: (id, apply) => this.change(id, apply), repoHandle: () => this.repoHandle,
+      maybeEnqueueHistoryCompress: (run) => this.maybeEnqueueHistoryCompress(run),
     });
     this.retention = new RunRetentionTopic(dataDir, {
       db: () => this.db, held: this.held, deleted: this.deleted, quarantined: this.quarantined,
@@ -854,6 +848,14 @@ export class RunStore {
   }
   private fallbackRefusal(id: string): RunWriteRefusedError { return new RunWriteRefusedError(id, 'fallback', fallbackRunDeleteError(this.dataDir, true)); }
   /** Run files are written only for a family this store may write, never a fallback family. */
+  /** The error `appendEvent` throws for a run this store cannot write or does not know. */
+  private missingRunError(runId: string): Error {
+    const ownership = this.runOwnership(runId);
+    if (ownership === 'fallback') return this.fallbackRefusal(runId);
+    if (ownership === 'foreign' || ownership === 'orphaned' || ownership === 'quarantined') return new RunWriteRefusedError(runId, ownership);
+    return new Error(`unknown run: ${runId}`);
+  }
+
   private writeDir(id: string): string { if (this.runOwnership(id) === 'fallback') throw this.fallbackRefusal(id); return runDataDir(this.dataDir, id); }
 
   /** Every run whose family another process owns (`foreignClaimedRunIds`). */
@@ -1531,7 +1533,7 @@ export class RunStore {
       // scrubbed: it is the user's own prompt and is replayed into `{{task}}`
       // when a queued run is revived after a restart (#367), so redacting it
       // would corrupt the revived run.
-      title: this.redactText(input.title),
+      title: this.redaction.redactText(input.title),
       workflow: input.workflow,
       task: input.task,
       model: input.model,
@@ -1576,9 +1578,9 @@ export class RunStore {
     message?: ConversationIdentity): void {
     const root = this.peek(rootId);
     if (root?.delegation?.role !== 'root') throw new Error('missing conversation root');
-    assertConversationIdFree(root, message ?? delivery?.input, id => this.peek(id), (runId, id) => this.hasProjection(runId, id));
+    assertConversationIdFree(root, message ?? delivery?.input, id => this.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
     const staged = new Map<string, RunRecord>();
-    stageConversation(staged, root, conversation, delivery, id => this.peek(id), text => this.redactText(text));
+    stageConversation(staged, root, conversation, delivery, id => this.peek(id), text => this.redaction.redactText(text));
     this.commitIndex(staged);
   }
 
@@ -1826,7 +1828,7 @@ export class RunStore {
       const root = this.peek(conversation.rootId);
       if (root?.delegation?.role !== 'root' || run.delegation.parentRunId !== root.id) throw new Error('missing conversation ownership');
       stageConversation(staged, root, conversation.state, { recipientRunId: id, input: conversation.input },
-        runId => this.peek(runId), text => this.redactText(text));
+        runId => this.peek(runId), text => this.redaction.redactText(text));
     }
     this.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
   }
@@ -2040,7 +2042,7 @@ export class RunStore {
   private writeRun(id: string, run: RunRecord, patch: RecordPatch, durability: ExitDurability, exit?: RunExitId): RunRecord | undefined {
     const before = snapshotRun(run);
     const hooks = {
-      redact: (text: string) => this.redactText(text),
+      redact: (text: string) => this.redaction.redactText(text),
       repoHandle: this.repoHandle,
       restore: () => restoreHistory(this.dataDir, id),
       archive: (record: RunRecord, archived: boolean) => this.applyArchived(record, archived, before, exit),
@@ -2055,7 +2057,7 @@ export class RunStore {
     return run;
   }
   private redactPatch(patch: Partial<Omit<RunRecord, 'id' | 'steps'>>): Partial<Omit<RunRecord, 'id' | 'steps'>> {
-    return redactPatch(patch, text => this.redactText(text));
+    return redactPatch(patch, text => this.redaction.redactText(text));
   }
 
   /** Append a step to an existing run (used by "Continue" — spec 003). */
@@ -2070,7 +2072,7 @@ export class RunStore {
     const run = this.record(runId);
     const step = run?.steps.find((s) => s.id === stepId);
     if (!run || !step) return;
-    const before = snapshotRun(run), next = { ...step, ...stageStepUpdate(patch, text => this.redactText(text)) };
+    const before = snapshotRun(run), next = { ...step, ...stageStepUpdate(patch, text => this.redaction.redactText(text)) };
     // Replaced, never changed in place, so `before` keeps the steps as they were.
     run.steps = run.steps.map((candidate) => candidate === step ? next : candidate);
     Object.assign(run, stepTotals(run.steps));
@@ -2371,157 +2373,6 @@ export class RunStore {
     return count;
   }
 
-  appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): RunEvent {
-    const run = this.record(runId);
-    if (!run) {
-      const ownership = this.runOwnership(runId);
-      if (ownership === 'fallback') throw this.fallbackRefusal(runId);
-      if (ownership === 'foreign' || ownership === 'orphaned' || ownership === 'quarantined') throw new RunWriteRefusedError(runId, ownership);
-      throw new Error(`unknown run: ${runId}`);
-    }
-    const seq = this.nextSeq(runId);
-    // Scrub credentials before the event touches disk or the live wire (#427):
-    // tool-result output is persisted verbatim and served back over the API, so
-    // a secret in an agent's command output would otherwise land in `.ai/cezar/`.
-    const full: RunEvent & { stepId?: string } = this.redact(defined({ ...event, seq, ts: new Date().toISOString() }));
-    // Sync append keeps event order without a write queue; local NDJSON
-    // appends at agent-event rates are effectively free.
-    if (!hasPlainHistory(this.dataDir, runId)) restoreHistory(this.dataDir, runId);
-    const line = `${JSON.stringify(full)}\n`;
-    appendFileSync(this.eventsPath(runId), line, 'utf8');
-    this.transcriptFacts.index.append(runId, full, Buffer.byteLength(line));
-    this.maybeEnqueueHistoryCompress(run);
-    this.liveItems.observe(runId, full, false);
-    this.published.publish('run.event', { runId, event: full });
-
-    // Reference discovery runs last, after the event is persisted, indexed and
-    // published: the janitor reads the event text and may still update the run.
-    const before = snapshotRun(run);
-    scanEventReferences(
-      run, full, this.repoHandle,
-      (target, entries) => this.accumulatePullRequests(target, entries),
-      (target) => this.touch(target, before),
-    );
-    return full;
-  }
-
-  /**
-   * Apply agent-declared reference markers (spec 2026-07-18-task-ref-markers).
-   * Marker values are authoritative for the display tier: they overwrite the
-   * regex/namer numbers unless the prompt identifies the originating issue, and a declared PR re-resolves the referenced URL
-   * against the candidate working set — including down to `undefined` when no
-   * candidate matches (a wrong chip is worse than no chip). The created tier
-   * (`pullRequestUrl`) is deliberately untouched.
-   *
-   * One declaration is NOT a statement about the referenced tier: the number of the PR this run
-   * itself created. See `referencedPrDeclaration` — the marker contract asks the agent to
-   * re-declare after it opens a PR, and taking that literally cost the task the PR it was about.
-   */
-  applyMarkerRefs(runId: string, refs: { pr?: number | undefined; prs?: readonly number[] | undefined; issue?: number | undefined }): RunRecord | undefined {
-    if (refs.pr === undefined && refs.issue === undefined) return this.record(runId);
-    return this.change(runId, (run) => {
-      const numbers = [...new Set([...(run.markerRefs?.pr === undefined ? [] : [run.markerRefs.pr]),
-        ...(refs.prs ?? (refs.pr === undefined ? [] : [refs.pr]))])];
-      if (numbers.length) this.accumulatePullRequests(run, numbers.flatMap((number) => {
-        const matches = (run.referencedPrCandidates ?? []).filter((url) => refUrlNumber(url) === number &&
-          (this.repoHandle ? isRepoScopedRef(url, run.task, this.repoHandle) : promptNamesRepo(url, run.task)));
-        const url = matches.length === 1 ? matches[0] : matches.length === 0 && this.repoHandle
-          ? `https://github.com/${this.repoHandle.owner}/${this.repoHandle.name}/pull/${number}` : undefined;
-        const parsed = runPullRequestSchema.safeParse({ number, ...(url ? { url } : {}), source: 'declared' });
-        return parsed.success ? [parsed.data] : [];
-      }));
-      run.markerRefs = {
-        ...run.markerRefs,
-        ...(refs.pr !== undefined ? { pr: refs.pr } : {}),
-        ...(refs.issue !== undefined ? { issue: refs.issue } : {}),
-      };
-      // `prNumber` is the about-PR as well (it is what paints a numeric-only chip), so a
-      // re-declaration naming the created PR only FILLS it — it never overwrites the number the
-      // task came in with, which is still the PR this task is about.
-      if (refs.pr !== undefined && (run.prNumber === undefined || refs.pr !== refUrlNumber(run.pullRequestUrl))) {
-        run.prNumber = refs.pr;
-      }
-      if (refs.issue !== undefined) {
-        run.issueNumber = originatingIssue(run) ?? refs.issue;
-        delete run.referencedIssueNumberSeeded;
-      }
-      if (run.markerRefs.pr !== undefined) {
-        run.referencedPullRequestUrl = resolveReferencedRef(
-          run.referencedPrCandidates ?? [],
-          run.task,
-          referencedPrDeclaration(run),
-          this.repoHandle,
-        );
-      }
-      if (run.markerRefs.issue !== undefined) {
-        run.referencedIssueUrl = resolveIssueReference(run, this.repoHandle);
-      }
-    });
-  }
-
-  /** Authoritative creation keeps the first scalar for publishing, plus every created identity. */
-  recordCreatedPr(runId: string, url: string): RunRecord | undefined {
-    const run = this.record(runId);
-    const parsed = runPullRequestSchema.safeParse({ number: refUrlNumber(url), url, source: 'created' });
-    if (!run || !parsed.success) return run;
-    const before = snapshotRun(run);
-    let changed = this.accumulatePullRequests(run, [parsed.data]);
-    if (!run.pullRequestUrl) { run.pullRequestUrl = url; changed = true; }
-    if (changed) this.touch(run, before);
-    return run;
-  }
-  private accumulatePullRequests(run: RunRecord, entries: readonly RunPullRequest[]): boolean {
-    return stagePullRequests(run, entries, this.repoHandle);
-  }
-
-  /**
-   * Fan an event out to live subscribers WITHOUT writing it to the NDJSON
-   * file — the channel for coalesced `item.delta` flushes (protocol-v2
-   * performance guardrail: raw deltas never hit disk; replay = the persisted
-   * snapshots). Stamped with `seq`/`ts` like persisted lines so the live
-   * wire keeps one ordering axis. Finite polling coalesces active item content
-   * into bounded in-memory snapshots on that clock; disk replay still has gaps
-   * (dedup compares with `>`).
-   */
-  emitEphemeral(runId: string, event: { type: string; stepId?: string; [key: string]: unknown }): RunEvent {
-    const full: RunEvent = this.redact({ ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() });
-    this.liveItems.observe(runId, full, true);
-    this.published.publish('run.event', { runId, event: full });
-    return full;
-  }
-
-  /** Lazily-collected concrete secret values from the host env (#427). */
-  private secretValues: readonly string[] | null = null;
-  /** Controller-issued tokens never persist, including when host-secret redaction is disabled. */
-  private readonly sessionSecrets = new Set<string>();
-  registerSessionSecret(value: string): void { this.sessionSecrets.add(value); }
-  containsSessionSecret(value: string): boolean { return [...this.sessionSecrets].some(secret => value.includes(secret)); }
-
-  /**
-   * Scrub known credential values / token shapes from an event before it is
-   * persisted or fanned out. On by default; `CEZ_REDACT_SECRETS=0` opts out.
-   */
-  private redact<T extends RunEvent>(event: T): T {
-    const safe = this.sessionSecrets.size ? redactDeep(event, [...this.sessionSecrets]) : event;
-    if (productEnv('REDACT_SECRETS') === '0') return safe;
-    return redactDeep(safe, this.hostSecrets());
-  }
-
-  /** Best-effort scrub of one free-text string bound for `runs.json`. Honors
-   *  the `CEZ_REDACT_SECRETS=0` opt-out itself so every caller inherits it. */
-  redactText(text: string): string {
-    return redactText(text, [...this.sessionSecrets], () => this.hostSecrets());
-  }
-
-  private hostSecrets(): readonly string[] {
-    if (this.secretValues === null) this.secretValues = collectSecretValues();
-    return this.secretValues;
-  }
-
-  hasProjection(runId: string, projectionId: string): boolean {
-    return this.transcriptFacts.transcriptFacts(runId).projectionIds.includes(projectionId);
-  }
-
   /** Indexed family enumeration, including members not yet flushed to SQLite. */
   listFamilyRunIds(rootId: string): string[] {
     const ids = new Set([rootId, ...(this.db?.listIdsByParent(rootId) ?? [])]);
@@ -2531,26 +2382,6 @@ export class RunStore {
     }
     for (const id of this.deleted) ids.delete(id);
     return [...ids];
-  }
-
-  /** `readEvents` off the event loop (async read and async brotli), for collection paths. */
-  async readEventsAsync(runId: string): Promise<RunEvent[]> {
-    try {
-      const raw = await readHistoryTextAsync(this.sourceDataDir(runId), runId);
-      return raw === undefined ? [] : parseEvents(raw);
-    } catch {
-      return [];
-    }
-  }
-
-  readEvents(runId: string): RunEvent[] {
-    try {
-      const raw = readHistoryText(this.sourceDataDir(runId), runId);
-      if (raw === undefined) return [];
-      return parseEvents(raw);
-    } catch {
-      return [];
-    }
   }
 
   /** Write the pending rows out now (used on shutdown). */
@@ -2565,25 +2396,6 @@ export class RunStore {
   // ---- internals -----------------------------------------------------------
 
   private seqs = new Map<string, number>();
-
-  private nextSeq(runId: string): number {
-    const next = (this.seqs.get(runId) ?? this.rehydrateSeq(runId)) + 1;
-    this.seqs.set(runId, next);
-    return next;
-  }
-
-  /** After a restart the in-memory counter is empty while the run's NDJSON file
-   *  keeps the history. Restarting from 1 would collide with the seqs a client
-   *  already replayed — its `seq > maxSeq` dedup then silently drops every
-   *  resumed event, even across a reload (the frozen-transcript symptom class
-   *  of #424). One file read on the first post-restart append per run. */
-  private rehydrateSeq(runId: string): number {
-    return this.transcriptFacts.transcriptFacts(runId).lastSeq;
-  }
-
-  private eventsPath(runId: string): string {
-    return historyPaths(this.sourceDataDir(runId), runId).plain;
-  }
 
   /** Same location `handoffPath()` in handoff.ts produces — inlined to keep
    *  the store free of upward imports. */

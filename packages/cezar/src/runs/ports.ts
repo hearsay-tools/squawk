@@ -9,7 +9,7 @@
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
-import type { RunStore } from './store.ts';
+import type { RunEvent, RunRecord, RunStore } from './store.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 import type { WorkerProcessRecord } from '../core/process-stat.ts';
@@ -80,13 +80,26 @@ export interface RunWrites {
   commitWorkerContinuation: RunStore['commitWorkerContinuation'];
 }
 
-/** One run's event log. */
+/** One run's event log (`runs/event-log.ts`, `store.eventLog`). */
 export interface RunEventLog {
-  appendEvent: RunStore['appendEvent'];
-  emitEphemeral: RunStore['emitEphemeral'];
-  readEvents: RunStore['readEvents'];
-  readEventsAsync: RunStore['readEventsAsync'];
-  hasProjection: RunStore['hasProjection'];
+  appendEvent(runId: string, event: { type: string; stepId?: string | undefined; [key: string]: unknown }): RunEvent;
+  emitEphemeral(runId: string, event: { type: string; stepId?: string; [key: string]: unknown }): RunEvent;
+  readEvents(runId: string): RunEvent[];
+  readEventsAsync(runId: string): Promise<RunEvent[]>;
+  hasProjection(runId: string, projectionId: string): boolean;
+}
+
+/** The reference markers an agent declares and the PR a run created (`runs/event-log.ts`, `store.eventLog`). */
+export interface RunMarkerRefs {
+  applyMarkerRefs(runId: string, refs: { pr?: number | undefined; prs?: readonly number[] | undefined; issue?: number | undefined }): RunRecord | undefined;
+  recordCreatedPr(runId: string, url: string): RunRecord | undefined;
+}
+
+/** The scrub of events and free text before they are written or sent (`runs/run-redaction.ts`, `store.redaction`). */
+export interface RunRedaction {
+  redactText(text: string): string;
+  registerSessionSecret(value: string): void;
+  containsSessionSecret(value: string): boolean;
 }
 
 /** What the transcript says about a run. The type `TranscriptFacts` is the facts themselves. */
@@ -168,7 +181,6 @@ export interface RunAccess {
   writeRefusal: RunStore['writeRefusal'];
   readonly unavailable: RunStore['unavailable'];
   sourceDataDir: RunStore['sourceDataDir'];
-  redactText: RunStore['redactText'];
   isFallbackRun: RunStore['isFallbackRun'];
   runOwnership: RunStore['runOwnership'];
 }
