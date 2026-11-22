@@ -14,6 +14,7 @@ import type { CiWait, CiWaitResult } from '@open-mercato/cezar-contract';
 import { controlledWire, manager, parent, root, restart, store, until, worker, waitOf, useWorkerWaitFixture, work, toolGenerationOf, reopenRuntime } from './worker-wait-claude.testkit.ts';
 
 import { readPersistedRuns, hasPendingAsk } from '../runs/run-store.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 
 
@@ -49,17 +50,17 @@ describe('CI wait recovery and conversations', { timeout: 30_000 }, () => {
     expect(watched.at(-1)).toMatchObject({ id: receipt.id, until: target, wakeOnConflict: false });
     // The committed row at the wake boundary already holds the result and its input.
     let committed: { waits?: Wait[]; agentInputs?: Array<{ id: string; text: string }> } | undefined;
-    const observe = (row: { id: string; waits?: Wait[] }) => {
+    const observe = (row: { id: string; waits?: Wait[] | undefined }) => {
       if (row.id === run.id && row.waits?.some(wait => wait.id === receipt.id && wait.phase === 'resolved')) {
         committed = readPersistedRuns(join(root, '.ai/cezar')).find(row => row.id === run.id);
       }
     };
-    store.on('run', observe);
+    const stopObserve = onRunWrite(store.lifecycle, observe);
     const outcome = target === 'merge' ? 'merged' : 'blocked';
     settle({ outcome, headSha: identity.headSha, observedAt: new Date().toISOString(), checks: [], totalChecks: 0, truncated: false,
       ...(target === 'merge' ? { mergedAt: '2026-10-23T09:00:00Z' } : { mergeBlock: { reason: 'no_pending_merge' as const, isInMergeQueue: false, autoMergeEnabled: false } }) });
     await until(() => !!lastCiWaitOf(run.id)?.deliveredAt);
-    store.off('run', observe);
+    stopObserve();
     expect(committed).toBeDefined();
     expect(committed?.waits?.find(wait => wait.id === receipt.id)).toMatchObject({ phase: WAIT_PHASE.resolved, until: target, result: { outcome } });
     expect(committed?.agentInputs?.find(input => input.id === receipt.id)?.text).toContain(`(until ${target})`);

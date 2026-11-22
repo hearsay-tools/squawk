@@ -26,6 +26,7 @@ import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 registerRunner(claudeRunner);
 
@@ -80,7 +81,7 @@ describe('attributed input queue', () => {
       store.flush();
       const release = blockRunWrites(dir);
       const events: unknown[] = [];
-      store.on('run', event => events.push(event));
+      onRunWrite(store.lifecycle, event => events.push(event));
       expect(() => store.commitAgentInputs(record.id, [input])).toThrow();
       expect(record.agentInputs).toBeUndefined();
       expect(events).toEqual([]);
@@ -158,9 +159,9 @@ function inputDelivered(store: RunStore, runId: string, id: string): Promise<voi
   return new Promise(resolve => {
     const check = () => {
       if (!store.getRun(runId)?.agentInputs?.find(entry => entry.id === id)?.deliveredAt) return;
-      store.off('run', check); resolve();
+      stopCheck(); resolve();
     };
-    store.on('run', check); check();
+    const stopCheck = onRunWrite(store.lifecycle, check); check();
   });
 }
 

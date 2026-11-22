@@ -16,6 +16,7 @@ import type { DelegationState } from '@open-mercato/cezar-contract';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { blockRunWrites, readPersistedRuns, runIds, seedRuns } from './run-store.testkit.ts';
 import { RunStore, type RunRecord } from './store.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 /**
  * The held set (#779, Amendment 2): `RunStore` keeps only live runs, the runs a RunManager pins,
@@ -150,7 +151,7 @@ describe('writing a finished run', () => {
     seedRuns(dataDir, [done]);
     const store = open();
     const emitted: RunRecord[] = [];
-    store.on('run', (run: RunRecord) => emitted.push(run));
+    onRunWrite(store.lifecycle, (run: RunRecord) => emitted.push(run));
 
     const read = store.setRead(done.id)!;
     expect(emitted).toEqual([read]);
@@ -185,8 +186,8 @@ describe('writing a finished run', () => {
     seedRuns(dataDir, [first, second]);
     const store = open({ keepLive: true });
     const events: string[] = [];
-    store.on('run', (run: RunRecord) => { events.push(`run ${run.id}`); store.flush(); });
-    store.on('deleted', (id: string) => events.push(`deleted ${id}`));
+    onRunWrite(store.lifecycle, (run: RunRecord) => { events.push(`run ${run.id}`); store.flush(); });
+    store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { events.push(`deleted ${runId}`); } });
     commitStagedRuns(store, new Map([[first.id, { ...store.getRun(first.id)!, title: 'one' }], [second.id, { ...store.getRun(second.id)!, title: 'two' }]]));
     expect(events).toEqual([`run ${first.id}`, `run ${second.id}`]);
     store.flush();

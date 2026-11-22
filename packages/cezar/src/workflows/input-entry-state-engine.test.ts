@@ -8,6 +8,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { createActiveRun } from './active-run.ts';
 import type { InputGroup } from './run/input-delivery.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 vi.mock('./active-run.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('./active-run.ts')>();
@@ -190,11 +191,11 @@ it('counts a failed wake delivery when a clean close requeues an earlier acknowl
   // Without a charge the owed batch reopens the run at once, and its delivery clears any count.
   let charged = 0;
   const watch = () => { charged = Math.max(charged, f.store.getRun(record.id)?.waitDeliveryFailures ?? 0); };
-  f.store.on('run', watch);
+  const stopWatch = onRunWrite(f.store.lifecycle, watch);
   try {
     closeWire();
     await waitForProduct(f.manager, f.store, () => charged > 0 || openedGroups.length > 1);
-  } finally { f.store.off('run', watch); }
+  } finally { stopWatch(); }
   expect(charged).toBe(1);
   expect(f.store.getRun(record.id)?.agentInputs?.find(entry => entry.id === first.id)?.deliveredAt).toBeUndefined();
 });

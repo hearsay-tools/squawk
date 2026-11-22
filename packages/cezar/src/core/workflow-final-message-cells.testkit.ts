@@ -15,6 +15,7 @@ import { HARNESS_ADAPTERS, driveSeam, promptFor, waitFor } from './harness-parit
 import { workflowFinalMessage } from './workflow-final-message-rows.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE } from '../workflows/run.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 function replyObservationClock() {
   return observationClock(delay => delay === 300 &&
@@ -145,13 +146,13 @@ const ROW_CELLS: Record<string, (backend: string) => CellBody> = {
         const onRun = (run: { id: string; status: string }) => {
           if (run.id === runId && run.status === 'running') resumedSlots ??= semaphore.busy();
         };
-        store.on('run', onRun);
+        const stopOnRun = onRunWrite(store.lifecycle, onRun);
         try {
           writeFileSync(release, 'go');
           await waitFor(() => resumedSlots !== undefined);
           expect(resumedSlots).toBe(1);
           await waitFor(() => store.getRun(runId)?.status === 'done');
-        } finally { store.off('run', onRun); }
+        } finally { stopOnRun(); }
         expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
         expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
       }, { semaphore, noWaitNudgeReplyMs: 300, env: { CEZ_MOCK_RELEASE_FILE: release } });

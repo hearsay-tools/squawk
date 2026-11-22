@@ -15,6 +15,7 @@ import { RunStore, type RunRecord } from './store.ts';
 import { seedRuns, blockRunWrites, readPersistedRuns } from './run-store.testkit.ts';
 import { archivePullRequests } from './pull-requests.ts';
 import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 const repo = 'https://github.com/o/r';
 const pr = { number: 42, source: 'declared' as const };
@@ -143,7 +144,7 @@ describe('guarded automatic archive', () => {
     store.archiveMergeBlocker(snapshot, snapshot.pullRequests[0]!, repo);
     expect(store.getRun(id)?.archiveBlocker).toMatchObject({ runId: worker.id, pullRequestUrl: `${repo}/pull/42` });
     const seen: boolean[][] = [];
-    store.on('run', () => seen.push([store.getRun(id)!.archived, store.getRun(worker.id)!.archived]));
+    onRunWrite(store.lifecycle, () => seen.push([store.getRun(id)!.archived, store.getRun(worker.id)!.archived]));
     expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
     expect(seen.every(pair => pair.every(Boolean))).toBe(true);
     expect(readPersistedRuns(dir).every(run => run.archived)).toBe(true);

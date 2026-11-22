@@ -16,6 +16,7 @@ import { RunStore } from '../runs/store.ts';
 import { artifactDirectory, publishArtifact } from '../artifacts/store.ts';
 import { readPersistedRuns, readPersistedText, seedRuns } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 vi.mock('node:fs', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs') & { default: typeof import('node:fs') }>();
@@ -162,7 +163,7 @@ describe('parent-owned collected worker results', () => {
     const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'First evidence' });
     const first = await f.service.collect(f.caller, { workerId: run.id });
     f.store.appendEvent(run.id, { type: 'text', text: 'Second evidence' });
-    const published = vi.fn(); f.store.on('run', published);
+    const published = vi.fn(); onRunWrite(f.store.lifecycle, published);
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('disk failure'); });
     await expect(f.service.collect(f.caller, { workerId: run.id })).rejects.toThrow('disk failure');
     expect(published).not.toHaveBeenCalled();

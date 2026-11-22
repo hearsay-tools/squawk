@@ -14,6 +14,7 @@ import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { RUN_EXITS } from '../runs/run-exits.ts';
 import { askErrorMessage } from '../ci-wait/errors.ts';
 import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // The settle budget for the row cells below. OpenCode's A5, A11 and A12 cells run
 // MAX_AUTO_CONTINUES turns and take 4.6-4.8 s alone and 5.4-5.9 s in an idle full
@@ -88,8 +89,8 @@ export const describeWorkflowAutonomousParity = workflowAutonomousParity({
           if (wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open && !priorHumanWaits.has(wait.id)) publishedHumanWaits.add(wait.id);
         }
       };
-      store.on('run', observeHumanWaits);
-      onTestFinished(() => { store.off('run', observeHumanWaits); });
+      const stopObserveHumanWaits = onRunWrite(store.lifecycle, observeHumanWaits);
+      onTestFinished(() => { stopObserveHumanWaits(); });
       // A refused cezar_ask answers the agent and leaves no run event; the registry's warning is its trace.
       const warnings = vi.spyOn(console, 'warn');
       const askRefusals = () => warnings.mock.calls.filter(([message]) => String(message).includes('wait registration refused: autonomous_run')).length;

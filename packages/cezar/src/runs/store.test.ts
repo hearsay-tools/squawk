@@ -35,6 +35,7 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 
 import type { RunRecord } from './store.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 /** A minimal pre-#389 record, exactly as an old runs.json holds it — no
  *  titleSummary, no diffStat. Loading it must keep working (additive proof). */
@@ -596,7 +597,7 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
     const store = RunStore.open(dataDir);
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     const seen: Array<{ titleSummary?: string | undefined }> = [];
-    store.on('run', (r: { titleSummary?: string }) => seen.push({ titleSummary: r.titleSummary }));
+    onRunWrite(store.lifecycle, (r: { titleSummary?: string | undefined }) => seen.push({ titleSummary: r.titleSummary }));
     store.updateRun(run.id, { titleSummary: 'A real summary of the turn' });
     expect(seen.at(-1)?.titleSummary).toBe('A real summary of the turn');
   });
@@ -1788,7 +1789,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       expect(run.issueNumber).toBe(43);
       const seen: Array<string | undefined> = [];
-      store.on('run', (record: RunRecord) => seen.push(record.referencedPullRequestUrl));
+      onRunWrite(store.lifecycle, (record: RunRecord) => seen.push(record.referencedPullRequestUrl));
 
       store.updateRun(run.id, { task }); // the mutation used by queued RunManager.editTask
       store.flush();
@@ -1834,7 +1835,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
     it('collects newly pasted prompt URLs before notifying readers of a queued edit', () => {
       const { store, run } = scopedRun('fix the bug');
       const seen: Array<Array<string | undefined>> = [];
-      store.on('run', (record: RunRecord) => seen.push([record.referencedPullRequestUrl, record.referencedIssueUrl]));
+      onRunWrite(store.lifecycle, (record: RunRecord) => seen.push([record.referencedPullRequestUrl, record.referencedIssueUrl]));
       store.updateRun(run.id, { task: `review ${foreignPr} and ${foreignIssue}` });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       expect(run.referencedIssueUrl).toBe(foreignIssue);
@@ -2010,7 +2011,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         const { store, run } = scopedRun(task);
         if (evidence) store.appendEvent(run.id, { type: 'result', result: evidence });
         const seen: Array<ReturnType<typeof referenceFields>> = [];
-        store.on('run', (record: RunRecord) => seen.push(referenceFields(record)));
+        onRunWrite(store.lifecycle, (record: RunRecord) => seen.push(referenceFields(record)));
 
         store.updateRun(run.id, { task: edit, ...extra });
         store.flush();
@@ -2265,7 +2266,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         referencedPullRequestUrl: 'https://github.com/supabase/cli/pull/6056',
       });
       const seen: string[] = [];
-      seed.on('run', (r: RunRecord) => seen.push(r.id));
+      onRunWrite(seed.lifecycle, (r: RunRecord) => seen.push(r.id));
       seed.setRepoHandle(HANDLE);
       expect(seen).toContain(run.id);
     });
@@ -2941,7 +2942,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     store.setPinned(worker.id, true);
     setRunStatus(store, worker.id, RUN_STATUS.waiting, { autoResumeAt: '2026-08-03T18:41:48.000Z', autoResumeAttempts: 1 });
     const touched: string[] = [];
-    store.on('run', (run) => touched.push(run.id));
+    onRunWrite(store.lifecycle, (run) => touched.push(run.id));
 
     expect(store.setArchived(parent.id, true)?.archived).toBe(true);
 

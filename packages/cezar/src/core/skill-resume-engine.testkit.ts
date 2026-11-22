@@ -30,6 +30,7 @@ import { RunStore } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 
 const execFileAsync = promisify(execFile);
@@ -186,7 +187,7 @@ function observeIdle(manager: RunManager, store: RunStore): () => void {
   let published: string | undefined;
   const timers = new Map<string, number>();
   const onRun = (run: { id: string; status: string }) => { published = run.status === 'waiting' ? run.id : undefined; };
-  store.on('run', onRun);
+  const stopOnRun = onRunWrite(store.lifecycle, onRun);
   const clock = observationClock(delay => {
     if (delay !== IDLE_TIMEOUT_MS || !/\bat (?:[^ (\n]+\.)?armIdleTimer \(/.test(new Error().stack ?? '')) return false;
     if (!published) throw new Error('idle timer armed before publishing a waiting run');
@@ -194,7 +195,7 @@ function observeIdle(manager: RunManager, store: RunStore): () => void {
     return true;
   });
   idleOwners.set(manager, { store, clock, timers });
-  return () => { store.off('run', onRun); clock.restore(); idleOwners.delete(manager); };
+  return () => { stopOnRun(); clock.restore(); idleOwners.delete(manager); };
 }
 
 async function idleClose(manager: RunManager, runId: string): Promise<void> {

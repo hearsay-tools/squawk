@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type RunRecord } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 describe('RunManager workflow remainder resume', () => {
   const fixture = setupMonitoringFixture();
@@ -133,7 +134,7 @@ describe('RunManager workflow remainder resume', () => {
 
     let cancelled = false;
     let cancelAttempted = false;
-    fixture.store.on('run', candidate => {
+    onRunWrite(fixture.store.lifecycle, candidate => {
       if (!cancelAttempted && candidate.id === record.id && candidate.status === 'queued') {
         cancelAttempted = true;
         cancelled = fixture.manager.cancel(record.id);
@@ -155,7 +156,7 @@ describe('RunManager workflow remainder resume', () => {
     await waitFor(record.id, () => !fixture.manager.isActive(record.id));
     let cancelled = false;
     let cancelAttempted = false;
-    fixture.store.on('run', candidate => {
+    onRunWrite(fixture.store.lifecycle, candidate => {
       if (!cancelAttempted && candidate.id === record.id && candidate.status === 'failed') {
         cancelAttempted = true;
         cancelled = fixture.manager.cancel(record.id);

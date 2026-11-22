@@ -10,6 +10,7 @@ import type { CiWait } from '@open-mercato/cezar-contract';
 import { ciWaitEntry, RunStore } from './store.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { readPersistedRuns, readPersistedText, runIds, seedRuns } from './run-store.testkit.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 // The legacy CI checkpoints, now thin wrappers over the wait list (store schema 4, unified waits):
 // a CI wait lives in `waits` and settles into `lastWaits`.
@@ -32,7 +33,7 @@ describe('atomic CI wait checkpoints', () => {
   it('publishes neither registration nor event if the durable replacement fails', () => {
     store.flush();
     const disk = readPersistedText(directory);
-    const events = vi.fn(); store.on('run', events);
+    const events = vi.fn(); onRunWrite(store.lifecycle, events);
     vi.spyOn(runPersistence(store), 'persist').mockImplementation(() => { throw new Error('read only'); });
     expect(() => store.commitWait(id, ciWaitEntry(wait))).toThrow('read only');
     expect(store.getRun(id)?.waits).toBeUndefined();

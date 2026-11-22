@@ -128,7 +128,7 @@ function singleRunnerCells(): void {
     const closeAtTurnEnd = ({ runId, event }: { runId: string; event: { type: string } }) => {
       if (runId === p.id && event.type === 'turn-end' && closing && refusals().some(input => !input.deliveredAt)) sessionOf(p.id).end();
     };
-    store.on('event', closeAtTurnEnd);
+    const stopCloseAtTurnEnd = store.lifecycle.subscribe({ 'run.event': closeAtTurnEnd });
     try {
       const wakes = store.getRun(p.id)?.automaticWakes ?? 0;
       sessionOf(p.id).end();
@@ -139,7 +139,7 @@ function singleRunnerCells(): void {
       expect(nudgeNotes(p.id)).toHaveLength(1);
       expect(store.getRun(p.id)?.automaticWakes).toBe(wakes + 1);
     } finally {
-      store.off('event', closeAtTurnEnd);
+      stopCloseAtTurnEnd();
     }
   });
 

@@ -16,6 +16,7 @@ import type { AgentSession } from '../core/agent-runner.ts';
 import { gate, thenSay, toolCall } from './waits-parity.testkit.ts';
 
 import { manager, root, store, until } from './worker-wait-core.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 let sessions: ReturnType<typeof captureSessions>;
 const answers = new Map<string, string>();
@@ -37,8 +38,8 @@ export function observeIdleClose(ownedStore: RunStore = store) {
   let published: string | undefined;
   const timerOf = new Map<string, number>();
   const onRun = (run: { id: string; status: string }) => { published = run.status === 'waiting' ? run.id : undefined; };
-  ownedStore.on('run', onRun);
-  onTestFinished(() => { ownedStore.off('run', onRun); });
+  const stopOnRun = onRunWrite(ownedStore.lifecycle, onRun);
+  onTestFinished(() => { stopOnRun(); });
   const clock = observationClock(delay => {
     if (delay !== IDLE_TIMEOUT_MS || !/\bat (?:[^ (\n]+\.)?armIdleTimer \(/.test(new Error().stack ?? '')) return false;
     if (!published) throw new Error('idle timer armed without a published waiting run');

@@ -15,6 +15,7 @@ import { wakeRetryClock } from './waits-wake.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(opencodeRunner);
@@ -192,11 +193,11 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     // Without a charge the requeued message reopens the run at once as a continuation.
     let charged = 0;
     const watch = () => { charged = Math.max(charged, store.getRun(p.id)?.waitDeliveryFailures ?? 0); };
-    store.on('run', watch);
+    const stopWatch = onRunWrite(store.lifecycle, watch);
     try {
       sessionOf(p.id).end();
       await until(() => charged > 0 || !!store.getRun(p.id)?.steps.some(step => step.id.startsWith('continue-')), () => timeline(p.id));
-    } finally { store.off('run', watch); }
+    } finally { stopWatch(); }
     expect(charged).toBe(1);
     expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
     expect(retry.delays).toHaveLength(1);
@@ -221,11 +222,11 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
       store.commitWait(p.id, makeTimerWait());
       let charged = 0;
       const watch = () => { charged = Math.max(charged, store.getRun(p.id)?.waitDeliveryFailures ?? 0); };
-      store.on('run', watch);
+      const stopWatch = onRunWrite(store.lifecycle, watch);
       try {
         sessionOf(p.id).end();
         await until(() => charged > 0 || store.getRun(p.id)?.status === 'failed', () => timeline(p.id));
-      } finally { store.off('run', watch); }
+      } finally { stopWatch(); }
       expect(store.readEvents(p.id).filter(event => event.type === 'error').map(event => event.message)).toEqual([]);
       expect(store.getRun(p.id)?.status).not.toBe('failed');
       expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();

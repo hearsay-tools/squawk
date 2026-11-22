@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parse } from '@babel/parser';
 import { describe, expect, it } from 'vitest';
+import { sourceFiles } from './service-sources.testkit.ts';
 
 /**
  * A caller of the run store takes a port from `runs/ports.ts`, never a `Pick<RunStore, …>` or a
@@ -42,15 +43,6 @@ export function portBypasses(source: string, file: string): string[] {
   };
   visit(parse(source, { sourceType: 'module', plugins: ['typescript'] }).program.body);
   return found;
-}
-
-/** Every non-test source file of the service, testkits included. */
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === 'fixtures' ? [] : sourceFiles(path);
-    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [path] : [];
-  });
 }
 
 describe('run store ports', () => {

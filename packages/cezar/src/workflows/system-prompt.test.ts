@@ -27,6 +27,7 @@ import { createRunner } from '../core/runner-registry.ts';
 import { RunMemory } from './run/run-memory.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 registerRunner(claudeRunner);
 
@@ -49,7 +50,7 @@ function runSettled(store: RunStore, id: string): Promise<RunRecord> {
   return new Promise((resolve, reject) => {
     let guard: ReturnType<typeof setTimeout> | undefined;
     const finish = (settle: () => void): void => {
-      store.off('run', check);
+      stopCheck();
       clearTimeout(guard);
       settle();
     };
@@ -61,7 +62,7 @@ function runSettled(store: RunStore, id: string): Promise<RunRecord> {
       // load 11; 20 s covers a host several times busier and stays under the 30 s test timeout.
       guard = setTimeout(() => finish(() => reject(new Error(`run did not finish in time (status ${store.getRun(id)?.status})`))), 20_000);
     }
-    store.on('run', check);
+    const stopCheck = onRunWrite(store.lifecycle, check);
     check();
   });
 }

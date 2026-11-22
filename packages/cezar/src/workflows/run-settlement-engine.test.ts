@@ -104,7 +104,7 @@ describe('successful run settlement on the engine', () => {
       store.commitWait(record.id, lateWait);
       heldSnapshot = structuredClone(store.getRun(record.id));
     };
-    store.on('event', commitLateWait);
+    const stopCommitLateWait = store.lifecycle.subscribe({ 'run.event': commitLateWait });
     const releaseSlot = semaphore.release.bind(semaphore);
     const release = vi.spyOn(semaphore, 'release').mockImplementation(() => {
       expect(store.getRun(record.id)?.autoResumeAt).toEqual(expect.any(String));
@@ -127,7 +127,7 @@ describe('successful run settlement on the engine', () => {
       expect(store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
       expect(store.readEvents(record.id).filter(event => String(event.message).includes('continu'))).toEqual([]);
     } finally {
-      store.off('event', commitLateWait);
+      stopCommitLateWait();
     }
 
   }

@@ -21,6 +21,7 @@ import type { UiEvent } from './ui-events.ts';
 import { driveRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
 import { answerThroughRoute, type StoredEvent } from './harness-parity-permission-route.testkit.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 type PermissionRequestedEvent = Extract<UiEvent, { type: 'permission.requested' }>;
 const joinedText = (events: readonly StoredEvent[]) => events.filter(event => event.type === 'text').map(event => event.text).join('');
@@ -106,14 +107,14 @@ export const PENDING_REQUEST_GROUPS = {
               const recordChange = (record: RunRecord) => {
                 if (record.id === runId) changes.push({ status: record.status, hasPendingPermission: record.hasPendingPermission });
               };
-              store.on('run', recordChange);
+              const stopRecordChange = onRunWrite(store.lifecycle, recordChange);
               try {
                 const response = await answerThroughRoute(repoRoot, store, manager, runId, first, firstChoice.id);
                 expect(response.status).toBe(200);
                 expect(await response.json()).toEqual({ delivered: true });
                 await waitFor(() => requests().length === 2 &&
                   store.readEvents(runId).some(event => event.type === 'permission.resolved' && event.requestId === first.requestId));
-              } finally { store.off('run', recordChange); }
+              } finally { stopRecordChange(); }
               for (const change of changes) expect(change).toEqual({ status: RUN_STATUS.waiting, hasPendingPermission: true });
               const events = store.readEvents(runId);
               const fresh = requests()[1]!;

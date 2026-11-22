@@ -17,6 +17,7 @@ import { setRunStatus, blockRunWrites, crashStore, readPersistedRuns, seedRuns }
 import { agentTmpDir } from './agent-tmpdir.ts';
 import { WorkerScratchCleanup } from '../delegation/scratch-cleanup.ts';
 import { RUN_IN_USE_ELSEWHERE, RunStore, RunWriteRefusedError, type RunRecord } from './store.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 /**
  * Two stores on one project (#779, plan step 3): `serve` and a headless `cez run` open the same
@@ -227,7 +228,7 @@ describe('a run changed under this store', () => {
     const original = persisted(a.id);
     writeBehindItsBack({ ...original, title: 'a from elsewhere' });
     const events: string[] = [];
-    store.on('run', (run: RunRecord) => events.push(`${run.id}:${run.title}`));
+    onRunWrite(store.lifecycle, (run: RunRecord) => events.push(`${run.id}:${run.title}`));
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     store.updateRun(a.id, { title: 'a local' });
@@ -291,7 +292,7 @@ describe('a run changed under this store', () => {
     store.flush();
     writeBehindItsBack(null, a.id);
     const deleted: string[] = [];
-    store.on('deleted', (id: string) => deleted.push(id));
+    store.lifecycle.subscribe({ 'run.deleted': ({ runId }) => { deleted.push(runId); } });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     store.updateRun(a.id, { title: 'local' });

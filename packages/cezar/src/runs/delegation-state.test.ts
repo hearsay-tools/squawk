@@ -37,6 +37,7 @@ import type { RunWrites } from './ports.ts';
 import { ConversationIdInUseError } from './conversation-identity.ts';
 import { parentReadiness } from '../delegation/readiness.ts';
 import { blockRunWrites, readPersistedRuns, readPersistedText, runIds, seedRuns } from './run-store.testkit.ts';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 
 const INVALID_WORKER_OUTCOME_STATUS = 'running';
@@ -385,7 +386,7 @@ describe('RunStore durable delegation', () => {
     store.commitRootFinishIntent(run.id);
     const before = readPersistedText(dataDir);
     const snapshot = structuredClone(store.getRun(run.id));
-    const notifications: unknown[] = []; store.on('run', value => notifications.push(value));
+    const notifications: unknown[] = []; onRunWrite(store.lifecycle, value => notifications.push(value));
     const release = blockRunWrites(dataDir);
     try {
       expect(() => store.move(run.id, 'cancel-root')).toThrow();
@@ -409,7 +410,7 @@ describe('RunStore durable delegation', () => {
     const first = store.createRun(input);
     const second = store.createRun(input);
     const observed: unknown[] = [];
-    store.on('run', () => observed.push({ disk: disk(), memory: store.listRuns().map(r => r.delegation) }));
+    onRunWrite(store.lifecycle, () => observed.push({ disk: disk(), memory: store.listRuns().map(r => r.delegation) }));
     store.commitDelegation([{ id: first.id, delegation: root }, { id: second.id, delegation: { role: 'invalid' } }]);
     expect(observed).toHaveLength(2);
     for (const value of observed) {
@@ -481,8 +482,8 @@ describe('RunStore durable delegation', () => {
     const run = parent();
     const original = readPersistedText(dataDir);
     const emitted: unknown[] = [];
-    store.on('run', r => emitted.push(r));
-    store.on('event', e => emitted.push(e));
+    onRunWrite(store.lifecycle, r => emitted.push(r));
+    store.lifecycle.subscribe({ 'run.event': e => { emitted.push(e); } });
     // A real write failure, even under root: another connection holds the database's write lock.
     const release = blockRunWrites(dataDir);
     try {
@@ -504,7 +505,7 @@ describe('RunStore durable delegation', () => {
     const raw = new DatabaseSync(join(dataDir, 'runs.db'));
     raw.exec(`CREATE TRIGGER fail_worker BEFORE INSERT ON runs WHEN NEW.id = '${workerId}' BEGIN SELECT RAISE(ABORT, 'disk failure'); END`);
     const emitted: unknown[] = [];
-    store.on('run', r => emitted.push(r));
+    onRunWrite(store.lifecycle, r => emitted.push(r));
     try {
       expect(() => store.createOwnedRun(input, run.id, requestId, worker(run.id), requestHash)).toThrow('disk failure');
       expect(store.listRuns()).toHaveLength(1);
@@ -521,16 +522,21 @@ describe('RunStore durable delegation', () => {
     const run = parent();
     const metadata = worker(run.id);
     const emitted: string[] = [];
-    store.on('run', r => {
+    // The lifecycle logs a listener that throws and goes on, so the listener records and the test asserts.
+    const diskAtNotice: Array<ReturnType<typeof disk>> = [];
+    onRunWrite(store.lifecycle, r => {
       emitted.push(r.id);
-      expect(disk()).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: run.id, delegation: expect.objectContaining({ receipts: [{ requestId, workerId, requestHash }] }) }),
-        expect.objectContaining({ id: workerId, delegation: metadata }),
-      ]));
+      diskAtNotice.push(disk());
     });
     const created = store.createOwnedRun({ ...input, runner: 'codex', model: 'model', agentProfile: 'account' }, run.id, requestId, metadata, requestHash);
     expect(created).toMatchObject({ id: workerId, delegation: metadata, status: RUN_STATUS.queued, runner: 'codex', model: 'model', agentProfile: 'account' });
     expect(emitted.sort()).toEqual([run.id, workerId].sort());
+    for (const rows of diskAtNotice) {
+      expect(rows).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: run.id, delegation: expect.objectContaining({ receipts: [{ requestId, workerId, requestHash }] }) }),
+        expect.objectContaining({ id: workerId, delegation: metadata }),
+      ]));
+    }
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
     // The selector hash is unchanged even if parent HEAD and inherited settings have moved.

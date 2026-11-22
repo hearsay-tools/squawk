@@ -11,7 +11,6 @@ import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } f
 export { parseStoredSummary } from './run-summary-page.ts';
 import { defined } from '../core/defined.ts';
 import { autosaveCleanupBlocker, clearAutosaveCleanup } from '../autosave-cleanup.ts';
-import { EventEmitter } from 'node:events';
 import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerEvidenceRunIds, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
 import { agentTmpDirLocations, agentTmpDirMayExist, agentTmpDirOwnershipProven, removeAgentTmpDir } from './agent-tmpdir.ts';
 import { jobRunsIn } from '../jobs/job.ts';
@@ -521,7 +520,7 @@ const startToken = (pid: number) => { const token = processStartToken(pid); retu
  * pinned, related and unsettled records only. Optimistic writes debounce; durable commits
  * publish after persistence. Family claims fence every write.
  */
-export class RunStore extends EventEmitter {
+export class RunStore {
   /** The held set: every record this store keeps in memory, by id. */
   private readonly held = new Map<string, RunRecord>();
   /** Who holds a run beyond its record, by holder, so one holder's unpin never releases another. */
@@ -539,7 +538,7 @@ export class RunStore extends EventEmitter {
   private persistence: RunStorePersistence | undefined;
   /** Runs whose held record is ahead of its row; the next save or commit writes them. */
   private readonly dirty = new Set<string>();
-  /** The typed lifecycle events, published beside each emitter event (lifecycle.ts). */
+  /** The typed lifecycle events the store publishes after each write (lifecycle.ts). */
   private readonly published = new RunLifecycle();
   readonly lifecycle: RunLifecycleSource = this.published;
   /** The lifecycle events run exits write (B12). */
@@ -596,8 +595,6 @@ export class RunStore extends EventEmitter {
   }
 
   private constructor(private readonly dataDir: string) {
-    super();
-    this.setMaxListeners(100);
     this.facts = new TranscriptFactsIndex(dataDir);
     this.compressor = new HistoryCompressor(dataDir, (id) => this.isHistoryCompressEligible(id),
       (id, plain, archive) => this.facts.adoptArchive(id, plain, stampOf(archive)));
@@ -1031,7 +1028,7 @@ export class RunStore extends EventEmitter {
    *  verdict reads (hearsay-tools/cezarion#1301). */
   republish(id: string): void {
     const run = this.peek(id);
-    if (run) { this.published.publish('run.updated', { run, before: snapshotRun(run), source: 'live-release' }); this.emit('run', run, 'live-release'); }
+    if (run) this.published.publish('run.updated', { run, before: snapshotRun(run), source: 'live-release' });
   }
 
   /** Release `holder`'s pin. The run leaves memory at the next sweep once nothing else holds it. */
@@ -1934,8 +1931,8 @@ export class RunStore extends EventEmitter {
     try {
       for (const id of staged.keys()) {
         const run = this.held.get(id);
-        if (run) { publishRunWrite(this.published, committed.get(id) ?? run, before.get(id), source, exits.get(id)); this.emit('run', run, source); }
-        else { this.published.publish('run.deleted', { runId: id }); this.emit('deleted', id); }
+        if (run) publishRunWrite(this.published, committed.get(id) ?? run, before.get(id), source, exits.get(id));
+        else this.published.publish('run.deleted', { runId: id });
       }
     } finally {
       for (const id of staged.keys()) this.committing.delete(id);
@@ -2445,7 +2442,6 @@ export class RunStore extends EventEmitter {
     this.maybeEnqueueHistoryCompress(run);
     this.liveItems.observe(runId, full, false);
     this.published.publish('run.event', { runId, event: full });
-    this.emit('event', { runId, event: full });
 
     // Reference discovery runs last, after the event is persisted, indexed and
     // published: the janitor reads the event text and may still update the run.
@@ -2540,7 +2536,6 @@ export class RunStore extends EventEmitter {
     const full: RunEvent = this.redact({ ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() });
     this.liveItems.observe(runId, full, true);
     this.published.publish('run.event', { runId, event: full });
-    this.emit('event', { runId, event: full });
     return full;
   }
 
@@ -2853,7 +2848,6 @@ export class RunStore extends EventEmitter {
       // durable private proof before a terminal worker can satisfy a lifecycle wait.
       const settled = this.peek(id)!;
       this.published.publish('run.updated', { run: settled, before: snapshotRun(settled) });
-      this.emit('run', settled);
       return true;
     } catch { return false; }
   }
@@ -2999,7 +2993,6 @@ export class RunStore extends EventEmitter {
       this.seqs.delete(id);
       this.scheduleSave();
       this.published.publish('run.deleted', { runId: id });
-      this.emit('deleted', id);
     }
     return existed;
   }
@@ -3052,7 +3045,6 @@ export class RunStore extends EventEmitter {
     this.dirty.add(run.id);
     this.scheduleSave();
     publishRunWrite(this.published, run, before, undefined, exit);
-    this.emit('run', run);
     this.maybeEnqueueHistoryCompress(run);
   }
 
@@ -3300,12 +3292,10 @@ export class RunStore extends EventEmitter {
         if (held) replaceRecord(held, current);
         this.base.set(conflict.id, { revision: conflict.current.revision, seq: conflict.current.seq, data: conflict.current.data, extras: decoded!.extras });
         publishRunWrite(this.published, held ?? current, before ?? snapshotRun(current), 'conflict');
-        this.emit('run', held ?? current);
       } else {
         this.held.delete(conflict.id);
         this.base.delete(conflict.id);
         this.published.publish('run.deleted', { runId: conflict.id });
-        this.emit('deleted', conflict.id);
       }
       console.error(`[hsq] run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until Squawk restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
     });
@@ -3344,7 +3334,6 @@ export class RunStore extends EventEmitter {
     this.liveItems.clear();
     // Demand-bound feeds stop before storage disappears during project removal/shutdown.
     this.published.publish('store.closed', {});
-    this.emit('closed');
     this.compressor.stop();
     this.fallbackFacts?.stop();
     this.facts.stop();

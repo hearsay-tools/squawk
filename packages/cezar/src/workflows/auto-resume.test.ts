@@ -26,6 +26,7 @@ import {
 import type { WorkflowDef } from './types.ts';
 import { AutoResumeScheduler } from './run/auto-resume.ts';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -424,8 +425,8 @@ describe('a run stopped by a usage limit resumes itself', () => {
     const first = createFixtureManager(store, repoRoot, { home: testHome(), semaphore });
     async function checkpoint(runId: string, name: string, reached: (run: RunRecord) => boolean): Promise<void> {
       let timer: ReturnType<typeof setTimeout>;
-      let onRun: (run: RunRecord) => void;
-      let onEvent: (entry: { runId: string }) => void;
+      let stopOnRun: (() => void) | undefined;
+      let stopOnEvent: (() => void) | undefined;
       try {
         await new Promise<void>((resolve, reject) => {
           const inspect = () => {
@@ -438,16 +439,14 @@ describe('a run stopped by a usage limit resumes itself', () => {
               `${name}: ${runId} made no progress; ${JSON.stringify(store.getRun(runId))}`,
             )), 20_000);
           };
-          onRun = (run) => { if (run.id === runId) inspect(); };
-          onEvent = (entry) => { if (entry.runId === runId) inspect(); };
-          store.on('run', onRun);
-          store.on('event', onEvent);
+          stopOnRun = onRunWrite(store.lifecycle, (run) => { if (run.id === runId) inspect(); });
+          stopOnEvent = store.lifecycle.subscribe({ 'run.event': (entry) => { if (entry.runId === runId) inspect(); } });
           inspect();
         });
       } finally {
         clearTimeout(timer!);
-        store.off('run', onRun!);
-        store.off('event', onEvent!);
+        stopOnRun?.();
+        stopOnEvent?.();
       }
     }
     const runs = [1, 2].map((n) => first.startRun(workflow, { task: `mock:limit pair ${n}` }));

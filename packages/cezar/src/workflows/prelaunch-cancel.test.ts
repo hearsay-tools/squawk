@@ -17,6 +17,7 @@ import type { RunManager } from './run.ts';
 import { createFixtureManager, removeFixtureRepo, fixtureWork, fixtureWorkSettled } from './fixture-claude.testkit.ts';
 import { unused } from './unused.testkit.ts';
 import type { WorkflowDef } from './types.ts';
+import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 const workflow: WorkflowDef = {
   name: 'prelaunch-cancel', source: 'built-in',
@@ -29,7 +30,7 @@ function runStatus(store: RunStore, id: string, status: RunStatus): Promise<void
   return new Promise((resolve, reject) => {
     const finish = (error?: Error) => {
       clearTimeout(guard);
-      store.off('run', check);
+      stopCheck();
       if (error) reject(error); else resolve();
     };
     const check = (run: RunRecord | undefined = store.getRun(id)) => {
@@ -42,7 +43,7 @@ function runStatus(store: RunStore, id: string, status: RunStatus): Promise<void
     // bound: fork #1325 measured the real mock park at p95 5.4 s under load. This 20 s
     // hang guard covers that child plus SQLite writes; the run event ends the wait.
     const guard = setTimeout(() => finish(new Error(`Run ${id} did not reach ${status}; status ${store.getRun(id)?.status}`)), 20_000);
-    store.on('run', check);
+    const stopCheck = onRunWrite(store.lifecycle, check);
     check();
   });
 }

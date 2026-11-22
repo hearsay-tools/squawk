@@ -4,7 +4,7 @@
  * the store wrote; it never writes (ADR 0056, ADR 0064). `RunStore.open` builds one and exposes it
  * as `store.lifecycle`, typed by the port `RunLifecycleSource`, so nothing else publishes to it.
  *
- * Delivery is synchronous, in subscription order, at the moment the store's emitter fires today.
+ * Delivery is synchronous, in subscription order, at the moment the store writes.
  * A listener that throws is logged with its event type and run id, and the next listener runs. A
  * listener may return a promise: it is not awaited, and a rejection is logged. A publish from inside
  * a listener is delivered at once, before the outer delivery continues, as `EventEmitter` does.

@@ -6,6 +6,7 @@ import { historyPaths } from './history-file.ts';
 import { RunStore, type RunRecord } from './store.ts';
 import { setRunStatus, blockRunWrites, readPersistedRuns } from './run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });
@@ -74,7 +75,7 @@ it('commits deferred root Finish and its archive before exposing success', () =>
   setRunStatus(store, id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: [], receipts: [] } });
   store.commitRootFinishIntent(id);
   const rows: unknown[] = [];
-  store.on('run', run => { if (run.status === 'done') rows.push(readPersistedRuns(dir)[0]); });
+  onRunWrite(store.lifecycle, run => { if (run.status === 'done') rows.push(readPersistedRuns(dir)[0]); });
   expect(store.move(id, 'succeed-root')).toMatchObject({ status: RUN_STATUS.done });
   expect(rows).toEqual([expect.objectContaining({ status: RUN_STATUS.done, archived: true })]);
 });
