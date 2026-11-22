@@ -1,4 +1,6 @@
 import { RunStore, type RunStorePersistence } from './store.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 /**
  * The test stores whose persistence a test can observe or fail. Kept apart from

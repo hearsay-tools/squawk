@@ -170,7 +170,7 @@ it.each(['fresh', 'continuation'] as const)('%s keeps a worker session live when
       Object.defineProperty(runner.session, 'pid', { value: ABSENT_PROCESS_PID });
     }
     const recorded = signal();
-    const write = vi.spyOn(owned.store, 'appendWorkerProcess').mockImplementation(() => {
+    const write = vi.spyOn(owned.store.workerExecutions, 'appendWorkerProcess').mockImplementation(() => {
       recorded.resolve();
       throw Error('injected process record write failure');
     });
@@ -209,8 +209,8 @@ it.each(['fresh', 'continuation'] as const)('%s replaces a changed PID before re
     const opts = await runner.started.promise;
     const calls: string[] = [];
     vi.spyOn(processes, 'replaceRunProcess').mockImplementation(() => { calls.push('replace'); });
-    const append = owned.store.appendWorkerProcess.bind(owned.store);
-    vi.spyOn(owned.store, 'appendWorkerProcess').mockImplementation((id, generation, pid, pgid) => {
+    const append = owned.store.workerExecutions.appendWorkerProcess.bind(owned.store.workerExecutions);
+    vi.spyOn(owned.store.workerExecutions, 'appendWorkerProcess').mockImplementation((id, generation, pid, pgid) => {
       if (pid === OTHER_ABSENT_PROCESS_PID) {
         expect(calls).toEqual(['replace']);
         calls.push('record');
@@ -220,8 +220,8 @@ it.each(['fresh', 'continuation'] as const)('%s replaces a changed PID before re
     opts.onPidChange?.(OTHER_ABSENT_PROCESS_PID);
     expect(calls).toEqual(['replace', 'record']);
     expect(processes.replaceRunProcess).toHaveBeenCalledWith(workerId, OTHER_ABSENT_PROCESS_PID);
-    const generation = owned.store.readWorkerExecution(workerId)!.generation;
-    const recorded = owned.store.readWorkerProcesses(workerId, generation);
+    const generation = owned.store.workerExecutions.readWorkerExecution(workerId)!.generation;
+    const recorded = owned.store.workerExecutions.readWorkerProcesses(workerId, generation);
     expect(recorded).toMatchObject({ processes: expect.arrayContaining([expect.objectContaining({ pid: OTHER_ABSENT_PROCESS_PID })]) });
   } finally {
     runner.close();

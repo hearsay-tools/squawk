@@ -24,6 +24,7 @@ import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { manager, store, root, worker, until, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { RESTART_GROUPS } from './worker-restart-rows.testkit.ts';
+import { workerExecutionsOf } from '../delegation/worker-executions.ts';
 
 // Native wires, tokens, process groups, cancellation, persistence, Git locking, collection and
 // parent Finish are real. Worker ownership comes from the scope and the process ledger (ADR 0032).
@@ -48,9 +49,9 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     const w = await worker(p.id, adapter.scenarios.baseline!);
     store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
     await until(() => store.getRun(w.id)?.status === 'waiting');
-    const proof = store.readWorkerExecution(w.id)!;
+    const proof = store.workerExecutions.readWorkerExecution(w.id)!;
     expect(proof.phase).toBe('starting');
-    const recorded = store.readWorkerProcesses(w.id, proof.generation);
+    const recorded = store.workerExecutions.readWorkerProcesses(w.id, proof.generation);
     if (typeof recorded === 'string') throw Error('missing native process ledger');
     expect(recorded.processes.length).toBeGreaterThan(0);
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -71,13 +72,13 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     const joins = vi.spyOn(TranscriptFactsQueue.prototype, 'join');
     reopenRuntime();
     expect(store.listRuns()).toEqual([]); // no live, legacy or deferred family anchor
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
     expect(existsSync(historyPaths(dataDir, w.id).facts)).toBe(false);
     // No pre-awaited global warming: boot recovery itself owns readiness.
     await manager.recover();
     expect(joins).not.toHaveBeenCalled();
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
-    expect(store.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
     expect(store.getRun(w.id)?.status).toBe('done'); expect(store.getRun(p.id)?.status).toBe('done');
     const events = store.readEvents(w.id);
     const repaired = events.filter(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)));
@@ -95,8 +96,8 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const w = await worker(p.id, adapter.scenarios.baseline!);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
-      const proof = store.readWorkerExecution(w.id)!;
-      const recorded = store.readWorkerProcesses(w.id, proof.generation);
+      const proof = store.workerExecutions.readWorkerExecution(w.id)!;
+      const recorded = store.workerExecutions.readWorkerProcesses(w.id, proof.generation);
       if (typeof recorded === 'string') throw Error('missing native process ledger');
       expect(recorded.processes.length).toBeGreaterThan(0);
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -115,18 +116,18 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
         processes: [...recorded.processes, { pid: survivor.pid, pgid: survivor.pid, startToken: processStartToken(survivor.pid) }] }));
       store.flush(); reopenRuntime();
       try {
-        expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
+        expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting', generation: proof.generation });
         expect(survivor.running).toBe(true);
         // Decision 6: Continue ends the old generation's processes instead of refusing.
         expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
         await until(() => !survivor.running);
-        const next = store.readWorkerExecution(w.id)!;
+        const next = store.workerExecutions.readWorkerExecution(w.id)!;
         expect(next.generation).not.toBe(proof.generation);
         const lifecycle = store.readEvents(w.id).filter(e => e.type === 'lifecycle').map(e => String(e.message));
         expect(lifecycle.filter(message => /Continue stopped the processes/.test(message))).toHaveLength(1);
         expect(lifecycle.some(message => /execution was finalized/.test(message))).toBe(true);
         await until(() => store.getRun(w.id)?.status === 'waiting');
-        expect(store.readWorkerExecution(w.id)?.generation).toBe(next.generation);
+        expect(store.workerExecutions.readWorkerExecution(w.id)?.generation).toBe(next.generation);
         expect(outside.running).toBe(true); // outside the worker's scope: never signalled
         await outside.write();
         manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -140,8 +141,8 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const w = await worker(p.id, adapter.scenarios.baseline!);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
-      const proof = store.readWorkerExecution(w.id)!;
-      const recorded = store.readWorkerProcesses(w.id, proof.generation);
+      const proof = store.workerExecutions.readWorkerExecution(w.id)!;
+      const recorded = store.workerExecutions.readWorkerProcesses(w.id, proof.generation);
       if (typeof recorded === 'string') throw Error('missing native process ledger');
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0)); manager.dispose();
@@ -149,7 +150,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
       // The crash left a service the worker's setup started, in its scope only; its sessions are gone.
       const service = await orphanedGroupHolder(root);
-      store.scopes.spawnScope(w.id).started(service.pid);
+      workerExecutionsOf(store).scopes.spawnScope(w.id).started(service.pid);
       const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
         controller: { pid: ABSENT_PROCESS_PID, startToken: `${boot}:100` } }));
@@ -157,13 +158,13 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       try {
         // Recovery settles the generation first, and marks it interrupted.
         await manager.recover();
-        expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation, interrupted: true });
+        expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation, interrupted: true });
         expect(service.running).toBe(true);
         expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
         // Admission waited for the scope to empty: nothing old runs beside the new execution.
-        expect(store.scopes.empty(w.id)).toBe(true);
+        expect(store.workerExecutions.scopes.empty(w.id)).toBe(true);
         await until(() => !service.running);
-        expect(store.readWorkerExecution(w.id)?.generation).not.toBe(proof.generation);
+        expect(store.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(proof.generation);
         await until(() => store.getRun(w.id)?.status === 'waiting');
         manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       } finally { await service.close(); }
@@ -179,8 +180,8 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const w = await worker(p.id, adapter.scenarios.baseline!);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
-      const proof = store.readWorkerExecution(w.id)!;
-      const recorded = store.readWorkerProcesses(w.id, proof.generation);
+      const proof = store.workerExecutions.readWorkerExecution(w.id)!;
+      const recorded = store.workerExecutions.readWorkerProcesses(w.id, proof.generation);
       if (typeof recorded === 'string') throw Error('missing native process ledger');
       expect(recorded.processes.length).toBeGreaterThan(0);
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -204,15 +205,15 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const readable = await readableHolder(workspace.path);
       const unreadable = await nonDumpableHolder(scratch);
       setRunStatus(store, w.id, RUN_STATUS.waiting); store.flush(); reopenRuntime();
-      store.scopes.spawnScope(w.id).started(owned.pid);
+      workerExecutionsOf(store).scopes.spawnScope(w.id).started(owned.pid);
       const service = new DelegationService(workerCleanups({ terminationTimeoutMs: 4_000 })); const detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       try {
-        expect(store.scopes.empty(w.id)).toBe(false);
+        expect(store.workerExecutions.scopes.empty(w.id)).toBe(false);
         expect(await service.destroyForHuman('project', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         await until(() => !owned.running);
-        expect(store.scopes.empty(w.id)).toBe(true);
-        expect(store.readWorkerExecution(w.id)).toMatchObject({ generation: proof.generation, phase: 'complete' });
-        expect(store.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
+        expect(store.workerExecutions.scopes.empty(w.id)).toBe(true);
+        expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ generation: proof.generation, phase: 'complete' });
+        expect(store.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
         expect(existsSync(workspace.path)).toBe(false);
         expect(execFileSync('git', ['branch', '--list', '--format=%(refname:short)', workspace.branch], { cwd: root, encoding: 'utf8' }).trim()).toBe('');
         // Outside the worker's scope: never signalled, and never waited for.
@@ -231,8 +232,8 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
     const w = await worker(p.id, adapter.scenarios.baseline!);
     store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
     await until(() => store.getRun(w.id)?.status === 'waiting');
-    const proof = store.readWorkerExecution(w.id)!;
-    const recorded = store.readWorkerProcesses(w.id, proof.generation);
+    const proof = store.workerExecutions.readWorkerExecution(w.id)!;
+    const recorded = store.workerExecutions.readWorkerProcesses(w.id, proof.generation);
     if (typeof recorded === 'string') throw Error('missing native process ledger');
     expect(recorded.processes.length).toBeGreaterThan(0);
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -260,7 +261,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       const partial = await service.collect(caller, { workerId: w.id });
       expect(partial).toMatchObject({ settled: false });
       expect(manager.finish(p.id)).toBe(false);
-      expect(store.readWorkerExecution(w.id)).toMatchObject({ generation: proof.generation, phase: 'starting' });
+      expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ generation: proof.generation, phase: 'starting' });
       await descendant.write(); await descendant.close(); descendantClosed = true;
       // Include PID reuse: ambient PID cannot attest the exited old incarnation.
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...ledger,
@@ -269,8 +270,8 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       // An explicit destroy waits its own bounded time for the lock; 1 s here, so the hang guard below stays far off.
       service = new DelegationService(workerCleanups({ manualLockWaitMs: 1_000 })); detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       // Exit proof, not abandonment: the generation completes and nothing cancels the task.
-      expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
-      expect(store.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
+      expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
+      expect(store.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
       expect(store.readEvents(w.id).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(true);
       expect(store.readEvents(w.id).some(e => e.type === 'lifecycle' && /abandoned/.test(String(e.message)))).toBe(false);
       expect(manager.finish(p.id)).toBe(false); // earlier partial collection cannot authorize Finish

@@ -32,9 +32,9 @@ describe('durable conversations', () => {
     f.manager.cancel(w.id);
     await f.manager.awaitRunTermination(w.id, 5_000);
     f.store.updateStep(w.id, 'task', { status: STEP_STATUS.done, ...(session ? { sessionId: session } : {}), backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(w.id);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(w.id);
     setRunStatus(f.store, w.id, status);
-    f.store.commitWorkerExecutionComplete(w.id, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(w.id, generation);
     return w;
   }
   it.each(['done', 'review'] as const)('parent --resume atomically queues one attributed continuation of a %s worker', async status => {

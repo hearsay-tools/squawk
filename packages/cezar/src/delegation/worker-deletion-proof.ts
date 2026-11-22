@@ -1,5 +1,5 @@
 import type { DelegationState } from '@open-mercato/cezar-contract';
-import type { WorkerExecution } from './worker-execution.ts';
+import type { WorkerExecution } from '../runs/worker-execution.ts';
 
 type Deletion = Extract<DelegationState, { role: 'root' }>['receipts'][number]['deletion'];
 

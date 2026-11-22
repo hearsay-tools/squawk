@@ -42,10 +42,10 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
   it('completion rotates on Continue; stale completion cannot authorize a newer execution', async () => {
     const w = await worker(); manager.enqueueOwnedRun(w.id); await until(() => store.getRun(w.id)?.status === 'waiting');
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
-    const first = store.readWorkerExecution(w.id)!;
+    const first = store.workerExecutions.readWorkerExecution(w.id)!;
     expect(manager.continueRun(w.id, { text: 'mock:hold' }).ok).toBe(true);
-    const next = store.readWorkerExecution(w.id)!; expect(next.generation).not.toBe(first.generation); expect(next.phase).toBe('starting');
-    expect(store.commitWorkerExecutionComplete(w.id, first.generation)).toBe(false);
+    const next = store.workerExecutions.readWorkerExecution(w.id)!; expect(next.generation).not.toBe(first.generation); expect(next.phase).toBe('starting');
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, first.generation)).toBe(false);
     await until(() => store.getRun(w.id)?.status === 'waiting'); manager.requestWorkerStop(w.id);
     expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     store.close(); const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
@@ -65,7 +65,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const wait = manager.awaitRunTermination(live.id, 30_000);
     manager.cancel(live.id); manager.dispose();
     expect(await wait).toBe(false);
-    expect(store.readWorkerExecution(live.id)?.phase).toBe('starting');
+    expect(store.workerExecutions.readWorkerExecution(live.id)?.phase).toBe('starting');
   });
 
   it('waits for an already-running periodic autosave before proving termination', async () => {
@@ -94,33 +94,33 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     // Finish the old release sweep: Continue must schedule its own new queue entry.
     await semaphore.release();
     expect(manager.continueRun(w.id, { text: 'mock:hold' }, true).ok).toBe(true);
-    const deferred = store.readWorkerExecution(w.id)!;
+    const deferred = store.workerExecutions.readWorkerExecution(w.id)!;
     await until(() => store.getRun(w.id)?.status === 'waiting');
-    expect(store.readWorkerExecution(w.id)).toEqual(deferred);
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toEqual(deferred);
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15000)).toBe(true);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ generation: deferred.generation, phase: 'complete' });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ generation: deferred.generation, phase: 'complete' });
   });
 
   it('capacity-deferred Continue invalidates prior completion before queueing and cancels without launching', async () => {
     const w = await worker(); manager.enqueueOwnedRun(w.id); await until(() => store.getRun(w.id)?.status === 'waiting');
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
-    const first = store.readWorkerExecution(w.id)!;
+    const first = store.workerExecutions.readWorkerExecution(w.id)!;
     expect(manager.continueRun(w.id, { text: 'mock:hold' }, true).ok).toBe(true);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting' });
-    expect(store.readWorkerExecution(w.id)?.generation).not.toBe(first.generation);
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting' });
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(first.generation);
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 100)).toBe(true);
     expect(store.getRun(w.id)?.status).toBe('cancelled'); expect(manager.isActive(w.id)).toBe(false);
   });
 
   it('private completion does not publish when final index persistence fails', async () => {
-    const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
+    const w = await worker(); const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
     setRunStatus(store, w.id, RUN_STATUS.done); store.flush();
     const release = blockRunWrites(join(root, '.ai/cezar'));
     releases.push(release);
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(false);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('starting');
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(false);
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('starting');
     release();
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
   });
 
   it('keeps workflow checks inside the termination barrier until the check process closes', async () => {
@@ -148,7 +148,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const read = store.getRun.bind(store); let failedRead = false;
     vi.spyOn(store, 'getRun').mockImplementation(id => {
       const run = read(id);
-      if (id !== w.id || !run || failedRead || store.readWorkerExecution(id)?.phase !== 'starting') return run;
+      if (id !== w.id || !run || failedRead || store.workerExecutions.readWorkerExecution(id)?.phase !== 'starting') return run;
       return new Proxy(run, { get(target, key, receiver) {
         if (key === 'queuedMessages') { failedRead = true; throw Error('fixture hydration failed'); }
         return Reflect.get(target, key, receiver);
@@ -180,11 +180,11 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it('explicit termination retry can persist finalized same-process evidence after a checkpoint write failure', async () => {
     const w = await worker('mock:cezar-done');
-    const complete = vi.spyOn(store, 'commitWorkerExecutionComplete').mockReturnValueOnce(false);
+    const complete = vi.spyOn(store.workerExecutions, 'commitWorkerExecutionComplete').mockReturnValueOnce(false);
     manager.enqueueOwnedRun(w.id); await until(() => !manager.isActive(w.id));
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('starting');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('starting');
     complete.mockRestore();
     expect(await manager.awaitRunTermination(w.id, 100)).toBe(true);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
   });
 });

@@ -5,22 +5,16 @@ import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
 import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, stepTotals, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
 import { publishRunWrite, RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
-import { workerDeletionProof } from './worker-deletion-proof.ts';
-import { recordedHolders, workerResourceAuthorized } from './worker-resource-holders.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
 import { defined } from '../core/defined.ts';
-import { deletionRefusal } from './removal-slots.ts';
-import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
-import { agentTmpDirMayExist, agentTmpDirOwnershipProven } from './agent-tmpdir.ts';
+import type { WorkerExecutionRecords, WorkerExecutions } from './ports.ts';
+import { workerExecutionsFactory } from './worker-executions-registry.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
-import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-scope/scope.ts';
-import { WorkerScopes } from '../worker-scope/worker-scopes.ts';
-import { readPrivateRecord, writePrivateRecord } from './private-record-file.ts';
 import {
   delegationStateSchema,
   workerDestroyRetrySchema,
@@ -47,8 +41,6 @@ import { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { stampOf } from './transcript-facts.ts';
 import { RunTranscriptFacts } from './transcript-facts-topic.ts';
 import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, restoreHistory } from './history-file.ts';
-import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
-import { startToken, type RecordedProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
 import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
 // Pure, dependency-free reference helpers — the same sanity bound the marker parser applies.
 import { archivePullRequests, pullRequestKey } from './pull-requests.ts';
@@ -480,11 +472,6 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-const WORKER_PROCESS_CAP = 32;
-const recordedProcessSchema = z.object({ pid: z.number().int().positive(), startToken: z.string().min(1).max(128).optional(),
-  pgid: z.number().int().positive().optional() }).strict();
-const workerProcessRecordSchema = z.object({ generation: z.string().uuid(), controller: recordedProcessSchema,
-  processes: z.array(recordedProcessSchema).max(WORKER_PROCESS_CAP) }).strict();
 /**
  * Run rows in runs.db plus append-only NDJSON events and an in-process event bus. Hold live,
  * pinned, related and unsettled records only. Optimistic writes debounce; durable commits
@@ -513,8 +500,6 @@ export class RunStore {
   readonly lifecycle: RunLifecycleSource = this.published;
   /** The lifecycle events run exits write (B12). */
   private readonly exitEvents = new ExitEvents((id, event) => this.appendEvent(id, event));
-  /** Every worker's process scope (ADR 0032): spawn sites, Continue and destroy reach it here. */
-  readonly scopes = new WorkerScopes(this);
   /** Runs gone from memory whose rows the next save or commit deletes. */
   private readonly deleted = new Set<string>();
   /** Deleted runs whose history files (events, handoff, images, artifacts) go once the delete of
@@ -558,6 +543,16 @@ export class RunStore {
   readonly retention: RunRetentionTopic;
   /** The saved snapshot of a worker's collected result (hearsay-tools/squawk#4038). */
   readonly workerResults: WorkerResultsTopic;
+  private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
+  /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
+   *  first use by the factory this process registered; throws when none is registered. */
+  get workerExecutions(): WorkerExecutions & WorkerExecutionRecords {
+    return this.executions ??= workerExecutionsFactory()(this.dataDir, {
+      peek: (id) => this.peek(id), getRun: (id) => this.getRun(id), writeDir: (id) => this.writeDir(id),
+      sourceDataDir: (id) => this.sourceDataDir(id), commitIndex: (input) => this.commitIndex(input),
+      published: this.published, workerResults: this.workerResults,
+    });
+  }
   private readonly liveItems = new LiveItemSnapshots();
 
   /** Capture both sources on the same synchronous sequence boundary before history IO. */
@@ -590,11 +585,11 @@ export class RunStore {
       claimFamilies: (families) => this.claimFamilies(families), markDeleted: (id, family) => this.markDeleted(id, family),
       scheduleSave: () => this.scheduleSave(), commitIndex: (input) => this.commitIndex(input),
       commitDelegation: (patches) => this.commitDelegation(patches), applyArchived: (run, archived) => this.applyArchived(run, archived),
-      workerDeletionEvidence: (id) => this.workerDeletionEvidence(id),
+      workerDeletionEvidence: (id) => this.workerExecutions.workerDeletionEvidence(id),
       workerResults: this.workerResults,
-      readWorkerExecution: (id) => this.readWorkerExecution(id), identityPath: (id) => this.identityPath(id),
-      processesPath: (id) => this.processesPath(id), scopePath: (id) => this.scopePath(id),
-      executionPath: (id) => this.executionPath(id), handoffPath: (runId) => this.handoffPath(runId),
+      readWorkerExecution: (id) => this.workerExecutions.readWorkerExecution(id), identityPath: (id) => this.workerExecutions.identityPath(id),
+      processesPath: (id) => this.workerExecutions.processesPath(id), scopePath: (id) => this.workerExecutions.scopePath(id),
+      executionPath: (id) => this.workerExecutions.executionPath(id), handoffPath: (runId) => this.handoffPath(runId),
       imagesDir: (runId) => this.imagesDir(runId),
     });
     this.compressor = new HistoryCompressor(dataDir, (id) => this.isHistoryCompressEligible(id),
@@ -1844,15 +1839,15 @@ export class RunStore {
     worker: DelegationState,
     requestHash: string,
     spawnCapacityRefusal: SpawnCapacityRefusal,
-    executionIdentity: WorkerExecutionIdentity = { kind: 'internal' },
+    executionIdentity: unknown = { kind: 'internal' },
   ): RunRecord {
     return createStoreOwnedRun({
       peek: (id) => this.peek(id),
       hasRun: (id) => this.hasRun(id),
       held: this.held, deleted: this.deleted, db: this.db,
       buildRun: (ownedInput, id) => this.buildRun(ownedInput, id),
-      writeWorkerIdentity: (id, identity) => this.writeWorkerIdentity(id, identity),
-      writeWorkerExecution: (id, proof, fresh) => this.writeWorkerExecution(id, proof, fresh),
+      writeWorkerIdentity: (id, identity) => this.workerExecutions.writeWorkerIdentity(id, identity),
+      writeWorkerExecution: (id, proof, fresh) => this.workerExecutions.writeWorkerExecution(id, proof, fresh),
       commitIndex: (owned) => this.commitIndex(owned),
     }, input, parentId, requestId, worker, requestHash, spawnCapacityRefusal, executionIdentity);
   }
@@ -1904,7 +1899,7 @@ export class RunStore {
       if (!facts || !['done', 'review', 'failed', 'cancelled'].includes(run.status) || run.waits?.some(wait => wait.phase === 'open') ||
         run.hasPendingPermission || facts.pendingAsk !== undefined)
         return 'Task or worker work still needs attention. Open the task or archive manually.';
-      if (run.delegation?.role === 'invalid' || (run.delegation?.role === 'worker' && this.readWorkerExecution(run.id)?.phase !== 'complete'))
+      if (run.delegation?.role === 'invalid' || (run.delegation?.role === 'worker' && this.workerExecutions.readWorkerExecution(run.id)?.phase !== 'complete'))
         return 'Worker execution has not settled. Open the worker or archive manually.';
     }
     return undefined;
@@ -2100,7 +2095,7 @@ export class RunStore {
       decodeCold: (row) => this.decodeCold(row),
       writeRefusal: (memberId) => this.writeRefusal(memberId),
       factsPeek: (memberId) => this.transcriptFacts.factsFor(memberId).peek(memberId),
-      readWorkerExecution: (memberId) => this.readWorkerExecution(memberId),
+      readWorkerExecution: (memberId) => this.workerExecutions.readWorkerExecution(memberId),
     }, id, isActive);
   }
 
@@ -2556,205 +2551,6 @@ export class RunStore {
     } catch {
       return [];
     }
-  }
-
-  /** Private process-generation evidence; never part of run JSON or SSE. */
-  private identityPath(id: string, write = false): string {
-    return this.executionPath(id, write).replace(/\.execution\.json$/, '.identity.json');
-  }
-
-  readWorkerIdentity(id: string): WorkerExecutionIdentity | undefined {
-    try {
-      const fd = openSync(this.identityPath(id), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-      try {
-        const info = fstatSync(fd);
-        if (!info.isFile() || info.size > 16384 || (info.mode & 0o077)) return undefined;
-        const buffer = Buffer.alloc(16385); const count = readSync(fd, buffer, 0, buffer.length, 0);
-        return workerExecutionIdentitySchema.parse(JSON.parse(buffer.subarray(0, count).toString('utf8')));
-      } finally { closeSync(fd); }
-    } catch { return undefined; }
-  }
-
-  private writeWorkerIdentity(id: string, identity: WorkerExecutionIdentity): void {
-    // Immutable acceptance evidence. An orphan from failed index publication cannot be adopted.
-    const fd = openSync(this.identityPath(id, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    try { writeFileSync(fd, JSON.stringify(identity)); fsyncSync(fd); } finally { closeSync(fd); }
-  }
-
-  private executionPath(id: string, write = false): string {
-    z.string().uuid().parse(id);
-    const dir = join(write ? this.writeDir(id) : this.sourceDataDir(id), 'runs');
-    if (write) mkdirSync(dir, { recursive: true });
-    if (lstatSync(dir).isSymbolicLink() || realpathSync(dir) !== resolve(dir)) throw new Error('Unsafe execution directory');
-    return join(dir, `${id}.execution.json`);
-  }
-
-  readWorkerExecution(id: string): WorkerExecution | undefined {
-    try {
-      const proof = readPrivateRecord(this.executionPath(id), 16384, value => workerExecutionSchema.parse(value));
-      return typeof proof === 'string' ? undefined : proof;
-    } catch { return undefined; }
-  }
-
-  private writeWorkerExecution(id: string, proof: WorkerExecution, fresh = false): void {
-    writePrivateRecord(this.executionPath(id, true), proof, { fresh });
-  }
-
-  /** Complete execution is not permission to reuse/delete persistent resources (#738).
-   * Synchronous, fresh and generation/resource fenced; callers hold admission off across awaits. */
-  workerResourcesSafe(id: string, generation: string, resourceId: string): boolean {
-    // Reclaim and history deletion also need an empty scope; admission does not (ADR 0032).
-    return this.workerResourceHolders(id, generation, resourceId) === 'safe' && this.scopes.empty(id);
-  }
-
-  /** `workerResourcesSafe` with the refusal's live PIDs (empty when no PID explains it). */
-  workerResourceHolders(id: string, generation: string, resourceId: string,
-    opts: { admittingQueued?: boolean } = {}): 'safe' | number[] {
-    if (deletionRefusal(id, 'worktree', this.dataDir)) return [];
-    const run = this.peek(id);
-    const proof = this.readWorkerExecution(id);
-    if (!workerResourceAuthorized(run, proof, id, generation, resourceId, opts.admittingQueued)) return [];
-    const record = this.readWorkerProcesses(id, generation);
-    if (record === 'unknown' || !agentTmpDirOwnershipProven(this.dataDir, id)) return [];
-    // Only the generation's recorded processes count; an outside process blocks nothing (ADR 0032).
-    return recordedHolders(record);
-  }
-
-  /** Upgrade a legacy completed checkpoint while terminal task ownership is still known.
-   * No holder scan here: settlement and scheduling must never wait on cleanup proof. */
-  retainWorkerScratchCleanup(id: string): void {
-    const run = this.peek(id), proof = this.readWorkerExecution(id);
-    if (run?.delegation?.role !== 'worker' || ['queued', 'running', 'waiting'].includes(run.status) || proof?.phase !== 'complete') return;
-    const { resourceId, path } = run.delegation.workspace;
-    if (proof.scratchCleanup?.resourceId === resourceId && proof.scratchCleanup.path === path) return;
-    this.writeWorkerExecution(id, { ...proof, scratchCleanup: { resourceId, path } });
-  }
-
-  /** Cleanup can outlive its index row, but never its generation or terminal task intent. */
-  workerScratchResourcesSafe(id: string, generation: string, resourceId: string): boolean {
-    if (deletionRefusal(id, 'worktree', this.dataDir)) return false;
-    const run = this.peek(id), proof = this.readWorkerExecution(id);
-    if (proof?.phase !== 'complete' || proof.generation !== generation || proof.scratchCleanup?.resourceId !== resourceId ||
-      (run && ['queued', 'running', 'waiting'].includes(run.status))) return false;
-    // A process still in the worker's scope may use its scratch; one outside it is not the worker's.
-    if (run?.delegation?.role === 'worker') return run.delegation.workspace.path === proof.scratchCleanup.path &&
-      this.workerResourceHolders(id, generation, resourceId) === 'safe' && this.scopes.empty(id);
-    // A valid different role contradicts the retained intent. Quarantined/missing metadata
-    // supplies no new authority; only the private terminal checkpoint authorizes scratch.
-    if (run && run.delegation?.role !== 'invalid') return false;
-    const record = this.readWorkerProcesses(id, generation);
-    if (record === 'unknown' || !agentTmpDirOwnershipProven(this.dataDir, id)) return false;
-    return recordedHolders(record) === 'safe' && this.scopes.empty(id);
-  }
-
-  commitWorkerExecutionStart(id: string): string {
-    const run = this.peek(id);
-    if (run?.delegation?.role !== 'worker' || run.delegation.destroy) throw new WorkerAdmissionRefusal('the worker is being destroyed', SPAWN_NEXT);
-    const prior = admissibleExecution(this.readWorkerExecution(id));
-    const holders = this.workerResourceHolders(id, prior.generation, run.delegation.workspace.resourceId, { admittingQueued: true });
-    if (holders !== 'safe') throw holderRefusal(holders, this.readWorkerProcesses(id, prior.generation));
-    const generation = randomUUID();
-    // #469: the controller is durable before `starting`, so a crash leaves a provable generation.
-    this.writeWorkerProcesses(id, { generation, controller: { pid: process.pid, ...startToken(process.pid) }, processes: [] });
-    this.writeWorkerExecution(id, { generation, phase: 'starting' });
-    return generation;
-  }
-
-  /** Private process record (#469): which processes a generation spawned, never part of run JSON or SSE. */
-  private processesPath(id: string, write = false): string {
-    return this.executionPath(id, write).replace(/\.execution\.json$/, '.processes.json');
-  }
-
-  /** Tri-state: only ENOENT is `absent` (legacy, scan-only). A present record that is unreadable,
-   * wrongly permissioned, malformed or of another generation is `unknown`: never finalized or reaped. */
-  readWorkerProcesses(id: string, generation: string): WorkerProcessRecord | 'absent' | 'unknown' {
-    const record = readPrivateRecord(() => this.processesPath(id), 8192, value => workerProcessRecordSchema.parse(value));
-    return typeof record === 'string' || record.generation === generation ? record : 'unknown';
-  }
-
-  private writeWorkerProcesses(id: string, record: WorkerProcessRecord): void {
-    writePrivateRecord(this.processesPath(id, true), workerProcessRecordSchema.parse(record));
-  }
-
-  /** Private scope record: the cgroups and process groups the worker owns (ADR 0032). */
-  private scopePath(id: string, write = false): string {
-    return this.executionPath(id, write).replace(/\.execution\.json$/, '.scope.json');
-  }
-
-  /** Tri-state like the process record: only ENOENT is `absent`. */
-  readWorkerScope(id: string): ScopeRecord | 'absent' | 'unknown' {
-    const record = readPrivateRecord(() => this.scopePath(id), 65_536, value => scopeRecordSchema.parse(value));
-    return typeof record === 'string' || record.workerId === id ? record : 'unknown';
-  }
-
-  /** Durable before the caller acts on it. */
-  writeWorkerScope(id: string, record: ScopeRecord): void {
-    writePrivateRecord(this.scopePath(id, true), scopeRecordSchema.parse(record));
-  }
-
-  /** The scope a run's processes start in: a worker's own, none for any other run (ADR 0032). */
-  spawnScope(id: string): SpawnScope | undefined {
-    return this.peek(id)?.delegation?.role === 'worker' ? this.scopes.spawnScope(id) : undefined;
-  }
-
-  /** Bound to the current generation. Past the cap the record never drops an entry: the
-   * working-directory scan is the remaining evidence. */
-  appendWorkerProcess(id: string, generation: string, pid: number, pgid?: number): boolean {
-    const record = this.readWorkerProcesses(id, generation);
-    if (typeof record === 'string' || this.readWorkerExecution(id)?.generation !== generation) return false;
-    const entry: RecordedProcess = { pid, ...startToken(pid), ...(pgid === undefined ? {} : { pgid }) };
-    if (record.processes.some(known => known.pid === entry.pid && known.startToken === entry.startToken)) return true;
-    if (record.processes.length >= WORKER_PROCESS_CAP) return false;
-    this.writeWorkerProcesses(id, { ...record, processes: [...record.processes, entry] });
-    return true;
-  }
-
-  commitWorkerExecutionComplete(id: string, generation: string, opts: { interrupted?: boolean } = {}): boolean {
-    const proof = this.readWorkerExecution(id);
-    if (!proof || proof.generation !== generation) return false;
-    if (proof.phase === 'queued' && this.peek(id)?.status !== 'cancelled') return false;
-    try {
-      const run = this.peek(id);
-      if (run?.delegation?.role !== 'worker') return false;
-      this.commitIndex(new Map([[id, run]]));
-      if (this.readWorkerExecution(id)?.generation !== generation) return false;
-      this.writeWorkerExecution(id, { generation, phase: 'complete',
-        // Nothing abandons an execution any more (hearsay-tools/cezarion#889); keep a checkpoint that already was.
-        ...(proof.abandoned ? { abandoned: true as const } : {}),
-        ...(proof.interrupted || (opts.interrupted && proof.phase === 'starting') ? { interrupted: true as const } : {}),
-        ...(proof.phase === 'queued' || proof.neverMaterialized ? { neverMaterialized: true as const } : {}),
-        ...(!['queued', 'running', 'waiting'].includes(run.status) ? { scratchCleanup: {
-          resourceId: run.delegation.workspace.resourceId, path: run.delegation.workspace.path } } : {}) });
-      // The earlier index event cannot attest exit: subscribers must observe the
-      // durable private proof before a terminal worker can satisfy a lifecycle wait.
-      const settled = this.peek(id)!;
-      this.published.publish('run.updated', { run: settled, before: snapshotRun(settled) });
-      return true;
-    } catch { return false; }
-  }
-
-  /** A deleted child's receipt replaces the private proof only after the deletion checkpoint. */
-  private workerDeletionEvidence(id: string): boolean {
-    const child = this.peek(id);
-    if (child?.delegation?.role !== 'worker' || child.delegation.workspace.ownerRunId !== id ||
-      child.delegation.destroy?.phase !== 'complete' || child.delegation.destroy.remaining.length ||
-      !['review', 'done', 'failed', 'cancelled'].includes(child.status)) return false;
-    return this.workerDeletionResult(id, child as RunRecord & { delegation: Extract<DelegationState, { role: 'worker' }> });
-  }
-
-  private workerDeletionResult(id: string, child: RunRecord & { delegation: Extract<DelegationState, { role: 'worker' }> }): boolean {
-    const parent = this.peek(child.delegation.parentRunId);
-    if (parent?.delegation?.role !== 'root' || parent.delegation.historyDeletion) return false;
-    const receipt = parent.delegation.receipts.find(entry => entry.workerId === id);
-    const result = this.workerResults.readWorkerResult(parent.id, id);
-    if (!receipt || !result?.settled || result.cleanup !== 'complete' || result.status !== child.status ||
-      result.revision !== (child.delegation.executionRevision ?? 0)) return false;
-    const { state: _state, ...workspace } = result.workspace;
-    if (JSON.stringify(workspace) !== JSON.stringify(child.delegation.workspace)) return false;
-    return workerDeletionProof(receipt.deletion, result.revision, workspace.resourceId, {
-      readProof: () => this.readWorkerExecution(id), resourcesSafe: generation => this.workerResourcesSafe(id, generation, workspace.resourceId),
-      scratchMayExist: () => agentTmpDirMayExist(this.dataDir, id), executionExists: () => existsSync(this.executionPath(id)),
-    });
   }
 
   /** Write the pending rows out now (used on shutdown). */

@@ -15,7 +15,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { workerSpawnRequestSchema } from "@open-mercato/cezar-contract/delegation";
 import { agentInputSchema } from "@open-mercato/cezar-contract/agent-input";
 import { DelegationPolicyError } from './policy.ts';
-import { workerWorkflowHash } from './execution-identity.ts';
+import { workerWorkflowHash, readWorkerIdentity } from './execution-identity.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps } from '../workflows/types.ts';
 import { join } from 'node:path';
 
@@ -50,10 +50,10 @@ describe('delegation service durable authority', () => {
     expect(worker).toMatchObject({ status: RUN_STATUS.queued, runner: 'claude', model: 'opus', effort: 'high', delegation: { role: 'worker', permissions: ['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait'], spawnGrant: { kinds: ['shared'], live: 1 }, parentRunId: f.parent.id } });
     if (worker.delegation?.role !== 'worker') throw Error('worker');
     expect(existsSync(worker.delegation.workspace.path)).toBe(false);
-    const proof = f.store.readWorkerExecution(worker.id);
+    const proof = f.store.workerExecutions.readWorkerExecution(worker.id);
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'moved'], { cwd: f.root });
     expect(await f.service.spawn(f.caller, request)).toEqual(a);
-    expect(f.store.readWorkerExecution(worker.id)).toEqual(proof);
+    expect(f.store.workerExecutions.readWorkerExecution(worker.id)).toEqual(proof);
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [{ workerId: a.workerId }] });
     expect(reopened.getRun(a.workerId)?.delegation).toEqual(worker.delegation); reopened.flush();
@@ -80,7 +80,7 @@ describe('delegation service durable authority', () => {
     const { workerId } = await f.service.spawn(f.caller, { ...input(), backend: 'codex' });
     expect(f.store.getRun(workerId)).toMatchObject({ runner: 'codex', agentProfile: 'default' });
     expect(f.store.getRun(workerId)?.model).toBeUndefined(); expect(f.store.getRun(workerId)?.effort).toBeUndefined();
-    expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ account: { provider: 'codex', homePath: f.root }, grants: { allowedTools: [], bashAllowlist: [] } });
+    expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ account: { provider: 'codex', homePath: f.root }, grants: { allowedTools: [], bashAllowlist: [] } });
   });
   it('applies explicit spawn effort, hashes the normalized pin, and refuses unknown or locked values', async () => {
     const same = { ...input(), effort: ' LOW ' };
@@ -119,7 +119,7 @@ describe('delegation service durable authority', () => {
         ...skillTaskSteps('worker-skill')[0], runner: 'claude', agentProfile: 'default', model: 'opus', effort: 'high',
       }] });
       expect(worker.steps.map(step => step.id)).toEqual(['task']);
-      expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ workflowHash: workerWorkflowHash(worker.workflowDef!) });
+      expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ workflowHash: workerWorkflowHash(worker.workflowDef!) });
     });
     it('rejects an unknown skill at spawn before creating a worker', async () => {
       const rejection = f.service.spawn(f.caller, { ...input(), skill: 'missing' });
@@ -139,7 +139,7 @@ describe('delegation service durable authority', () => {
       const { workerId } = await f.service.spawn(f.caller, { ...input(), backend: 'codex', skill: 'worker-skill' });
       expect(query).toHaveBeenCalledOnce();
       expect(f.store.getRun(workerId)).toMatchObject({ runner: 'codex', agentProfile: 'default' });
-      expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ account: { provider: 'codex', homePath: workerHome } });
+      expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ account: { provider: 'codex', homePath: workerHome } });
     });
     it('rejects skill with workflow in the spawn contract', () => {
       const result = workerSpawnRequestSchema.safeParse({ ...input(), skill: 'worker-skill', workflow: 'review' });
@@ -196,7 +196,7 @@ describe('delegation service durable authority', () => {
       catalog('codex-review', ['name: codex-review', 'steps:', '  - id: inspect', '    prompt: "{{task}}"', '    runner: codex'].join('\n'));
       const { workerId } = await f.service.spawn(f.caller, { ...input(), workflow: 'codex-review' });
       expect(f.store.getRun(workerId)).toMatchObject({ runner: 'codex', workflowDef: { steps: [{ runner: 'codex' }] } });
-      expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ account: { provider: 'codex' } });
+      expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ account: { provider: 'codex' } });
     });
     it('rejects an unknown workflow name with invalid_input, creating nothing', async () => {
       await expect(f.service.spawn(f.caller, { ...input(), workflow: 'nope' })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('nope') });
@@ -221,18 +221,18 @@ describe('delegation service durable authority', () => {
         ]);
         expect(worker.workflowDef!.steps[1]).not.toHaveProperty('runner');
         expect(worker.workflowDef!.steps[1]).not.toHaveProperty('agentProfile');
-        expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ kind: 'accepted', account: { provider: 'codex', homePath: f.root }, grants: {}, steps: [
+        expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ kind: 'accepted', account: { provider: 'codex', homePath: f.root }, grants: {}, steps: [
           { stepId: 'implement', account: { provider: 'codex', profileId: 'default', homePath: f.root }, grants: {} },
           { stepId: 'review', account: { provider: 'claude', profileId: 'default', homePath: f.root }, model: 'opus', effort: 'high', grants: {} },
         ] });
-        expect(f.store.readWorkerIdentity(workerId)).not.toHaveProperty('model');
+        expect(readWorkerIdentity(f.store.workerExecutions, workerId)).not.toHaveProperty('model');
       });
       it('lets --backend fill only the steps that leave runner unset', async () => {
         vi.stubEnv('CODEX_HOME', f.root);
         catalog('partly', ['name: partly', 'steps:', '  - id: a', '    prompt: "{{task}}"', '    runner: claude', '  - id: b', '    prompt: "{{task}}"'].join('\n'));
         const { workerId } = await f.service.spawn(f.caller, { ...input(), workflow: 'partly', backend: 'codex' });
         expect(f.store.getRun(workerId)).toMatchObject({ runner: 'claude', model: 'opus', workflowDef: { steps: [{ id: 'a', runner: 'claude' }, { id: 'b', runner: 'codex' }] } });
-        expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ steps: [{ stepId: 'a', account: { provider: 'claude' } }, { stepId: 'b', account: { provider: 'codex' } }] });
+        expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ steps: [{ stepId: 'a', account: { provider: 'claude' } }, { stepId: 'b', account: { provider: 'codex' } }] });
       });
       it('narrows a step\'s authored tools to the parent\'s grants and never widens them', async () => {
         vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', model: 'opus', effort: 'high', agentProfile: 'default',
@@ -243,7 +243,7 @@ describe('delegation service durable authority', () => {
         const { workerId } = await f.service.spawn(f.caller, { ...input(), workflow: 'tools' });
         const narrow = { allowedTools: ['Read', 'Bash'], bashAllowlist: ['git diff'] };
         const inherit = { allowedTools: ['Read', 'Edit', 'Bash'], bashAllowlist: ['git status', 'git diff'] };
-        expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ grants: narrow, steps: [{ stepId: 'narrow', grants: narrow }, { stepId: 'inherit', grants: inherit }] });
+        expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ grants: narrow, steps: [{ stepId: 'narrow', grants: narrow }, { stepId: 'inherit', grants: inherit }] });
         expect(f.store.getRun(workerId)?.workflowDef?.steps).toMatchObject([{ id: 'narrow', ...narrow }, { id: 'inherit', ...inherit }]);
       });
       it('resolves a YAML agentProfile per step and refuses an account the registry does not know', async () => {
@@ -252,7 +252,7 @@ describe('delegation service durable authority', () => {
         catalog('profiled', ['name: profiled', 'steps:', '  - id: a', '    prompt: "{{task}}"', '    runner: codex', '    agentProfile: work'].join('\n'));
         const { workerId } = await f.service.spawn(f.caller, { ...input(), workflow: 'profiled' });
         expect(f.store.getRun(workerId)).toMatchObject({ runner: 'codex', agentProfile: 'work', workflowDef: { steps: [{ id: 'a', runner: 'codex', agentProfile: 'work' }] } });
-        expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ account: { provider: 'codex', profileId: 'work', homePath: work }, steps: [{ stepId: 'a', account: { profileId: 'work', homePath: work } }] });
+        expect(readWorkerIdentity(f.store.workerExecutions, workerId)).toMatchObject({ account: { provider: 'codex', profileId: 'work', homePath: work }, steps: [{ stepId: 'a', account: { profileId: 'work', homePath: work } }] });
         catalog('unknown-account', ['name: unknown-account', 'steps:', '  - id: a', '    prompt: "{{task}}"', '    runner: codex', '    agentProfile: nope'].join('\n'));
         await expect(f.service.spawn(f.caller, { ...input(), workflow: 'unknown-account' })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('nope') });
         expect(f.store.listRuns()).toHaveLength(2);
@@ -291,7 +291,7 @@ describe('delegation service durable authority', () => {
   });
   it('publishes concrete private identity before worker events/enqueue and never rewrites it on replay', async () => {
     const request = input(); let publishedIdentity: unknown;
-    onRunWrite(f.store.lifecycle, run => { if (run.delegation?.role === 'worker') publishedIdentity = f.store.readWorkerIdentity(run.id); });
+    onRunWrite(f.store.lifecycle, run => { if (run.delegation?.role === 'worker') publishedIdentity = readWorkerIdentity(f.store.workerExecutions, run.id); });
     const worker = await f.service.spawn(f.caller, request);
     const account = { provider: 'claude', profileId: 'default', homePath: f.root, claudeLayout: { kind: 'relocated' } };
     expect(publishedIdentity).toEqual({ kind: 'accepted', grants: {}, account, model: 'opus', effort: 'high',
@@ -309,8 +309,8 @@ describe('delegation service durable authority', () => {
   });
   it('publishes neither receipt nor worker when private identity cannot be written', async () => {
     f.store.flush();
-    const writer = f.store as unknown as { writeWorkerIdentity(id: string, identity: unknown): void };
-    const write = writer.writeWorkerIdentity.bind(f.store);
+    const writer = f.store.workerExecutions;
+    const write = writer.writeWorkerIdentity.bind(writer);
     vi.spyOn(writer, 'writeWorkerIdentity').mockImplementation((id, identity) => {
       mkdirSync(join(f.root, '.ai/cezar/runs', `${id}.identity.json`), { recursive: true });
       write(id, identity);
@@ -358,17 +358,17 @@ describe('delegation service durable authority', () => {
   });
   it('does not clean unknown termination; durably records exact remaining resources', async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
-    f.store.commitWorkerExecutionStart(workerId); // restart provenance: process result not known
+    f.store.workerExecutions.commitWorkerExecutionStart(workerId); // restart provenance: process result not known
     vi.spyOn(f.manager, 'awaitRunTermination').mockResolvedValue(false);
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
     expect(f.store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'incomplete', remaining: ['process', 'worktree', 'branch'] } });
   });
   it("releases a destroyed worker's preview before its checkout is removed (#781 final review)", async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
-    f.store.commitWorkerExecutionStart(workerId);
+    f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, f.store.getRun(workerId)!);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, f.store.readWorkerExecution(workerId)!.generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, f.store.workerExecutions.readWorkerExecution(workerId)!.generation)).toBe(true);
     const released: Array<{ runId: string; checkoutExisted: boolean }> = [];
     const host = { stopPreview: async () => ({ ok: false, code: 'unavailable' as const, message: 'Unavailable', hint: 'Retry.' }), portOwner: () => undefined, probe: async () => false, release: async (runId: string) => { released.push({ runId, checkoutExisted: existsSync(workspace.path) }); }, replaced: async () => undefined };
     vi.spyOn(f.manager, 'previewHost', 'get').mockReturnValue(host);
@@ -381,7 +381,7 @@ describe('delegation service durable authority', () => {
     await f.close();
     f = fixture(workerCleanups({ backoff: { fastMs: 50, fastCount: 100, capMs: 50 } }));
     const { workerId } = await f.service.spawn(f.caller, input());
-    f.store.commitWorkerExecutionStart(workerId);
+    f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const worker = f.store.getRun(workerId)!;
     const workspace = await ensureOwnedWorkspace(f.root, worker);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
@@ -390,18 +390,18 @@ describe('delegation service durable authority', () => {
     expect(f.store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'incomplete' } });
     termination.mockRestore();
     // Recovery supplied the real process proof. The accepted destroy intent must finish itself.
-    const generation = f.store.readWorkerExecution(workerId)?.generation;
+    const generation = f.store.workerExecutions.readWorkerExecution(workerId)?.generation;
     expect(generation).toBeDefined();
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation!)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation!)).toBe(true);
     await vi.waitFor(() => expect(f.store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 10_000 });
   });
   it('resumes a persisted destroy after recovery and cancels pending retries on detach', async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
     const worker = f.store.getRun(workerId)!;
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, worker);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
     const current = f.store.getRun(workerId)!;
     if (current.delegation?.role !== 'worker') throw Error('worker');
     f.store.commitDelegation([{ id: workerId, delegation: { ...current.delegation, destroy: {
@@ -448,10 +448,10 @@ describe('delegation service durable authority', () => {
     f = fixture(workerCleanups({ backoff: { fastMs: 50, fastCount: 100, capMs: 50 } }));
     const { workerId } = await f.service.spawn(f.caller, input());
     const worker = f.store.getRun(workerId)!;
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, worker);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
     const current = f.store.getRun(workerId)!;
     if (current.delegation?.role !== 'worker') throw Error('worker');
     f.store.commitDelegation([{ id: workerId, delegation: { ...current.delegation, destroy: {
@@ -483,10 +483,10 @@ describe('delegation service durable authority', () => {
   it('revokes cleanup inside Git preflight before an old project removes owned resources', async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
     const worker = f.store.getRun(workerId)!;
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, worker);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
 
     const bin = join(f.root, 'git-shim');
     const armed = join(bin, 'armed');

@@ -69,7 +69,7 @@ export class RunCancel {
   private cancelWorkerExecution(runId: string): void {
     const run = this.context.store.getRun(runId);
     if (run?.delegation?.role === 'worker') {
-      const proof = this.context.store.readWorkerExecution(runId);
+      const proof = this.context.store.workerExecutions.readWorkerExecution(runId);
       const queued = this.line.indexOf(runId) >= 0;
       // A settled worker keeps its status and the result its parent collects (hearsay-tools/squawk#1907).
       // A session still closing takes the late Stop a root's does.
@@ -79,7 +79,7 @@ export class RunCancel {
         this.workerExecutions.markStopped(runId);
       }
       if (!this.workerExecutions.has(runId) && !this.host.active.has(runId) && !this.line.hasStarting(runId) && proof?.phase === 'queued') {
-        this.context.store.commitWorkerExecutionComplete(runId, proof.generation);
+        this.context.store.workerExecutions.commitWorkerExecutionComplete(runId, proof.generation);
       }
     }
   }
@@ -129,9 +129,9 @@ export class RunCancel {
 
   requestWorkerStop(runId: string): WorkerStopResult {
     if (this.context.store.getRun(runId)?.delegation?.role !== 'worker') throw new Error('Worker not found');
-    if (!this.workerExecutions.has(runId) && !this.host.isActive(runId) && ['done', 'failed', 'cancelled', 'review'].includes(this.context.store.getRun(runId)!.status) && this.context.store.readWorkerExecution(runId)?.phase === 'complete') return { workerId: runId, state: 'terminated' };
+    if (!this.workerExecutions.has(runId) && !this.host.isActive(runId) && ['done', 'failed', 'cancelled', 'review'].includes(this.context.store.getRun(runId)!.status) && this.context.store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete') return { workerId: runId, state: 'terminated' };
     this.host.cancel(runId);
-    return { workerId: runId, state: !this.workerExecutions.has(runId) && this.context.store.readWorkerExecution(runId)?.phase === 'complete' ? 'terminated' : 'stopping' };
+    return { workerId: runId, state: !this.workerExecutions.has(runId) && this.context.store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete' ? 'terminated' : 'stopping' };
   }
 
   cancelWorkerWait(parentId: string, waitId: string): WorkerWait {

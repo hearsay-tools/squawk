@@ -44,7 +44,7 @@ describe('verified destruction retains results through explicit history deletion
   it('keeps an all-wait outcome and its revision after safe child deletion until the other worker settles', async () => {
     const { workerId } = await completed();
     f.store.commitWorkerContinuation(workerId, 'succeed-review');
-    const generation = f.store.commitWorkerExecutionStart(workerId); f.store.commitWorkerExecutionComplete(workerId, generation);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId); f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
     const other = await f.service.spawn(f.caller, { task: 'other', baseline: 'HEAD', requestId: randomUUID() });
     const parent = f.store.getRun(f.parent.id)!;
     // A worker wait in the list (hearsay-tools/cezarion#1235, #1301).

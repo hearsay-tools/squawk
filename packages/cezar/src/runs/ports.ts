@@ -11,6 +11,9 @@
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunStore } from './store.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
+import type { WorkerExecution } from './worker-execution.ts';
+import type { WorkerProcessRecord } from '../core/process-stat.ts';
+import type { AgentRunSpec } from '../core/agent-runner.ts';
 
 export type { RunLifecycleSource } from './lifecycle.ts';
 
@@ -104,21 +107,40 @@ export interface WorkerResults {
   commitWorkerResult(parentId: string, value: WorkerCollectedResult, diffSnapshot?: string, opts?: { ignoreCleanup?: boolean }): WorkerCollectedResult;
 }
 
-/** A worker's execution, scope and processes. */
+/** The processes of a worker's scope that a core caller stops (`workflows/run/worker-orphans.ts`). */
+export interface WorkerScopeControl {
+  empty(workerId: string): boolean;
+  stopped(workerId: string): boolean;
+  kill(workerId: string): void;
+}
+
+/** A worker's execution, scope and processes (`delegation/worker-executions.ts`, `store.workerExecutions`). */
 export interface WorkerExecutions {
-  readWorkerIdentity: RunStore['readWorkerIdentity'];
-  readWorkerExecution: RunStore['readWorkerExecution'];
-  workerResourcesSafe: RunStore['workerResourcesSafe'];
-  workerResourceHolders: RunStore['workerResourceHolders'];
-  retainWorkerScratchCleanup: RunStore['retainWorkerScratchCleanup'];
-  workerScratchResourcesSafe: RunStore['workerScratchResourcesSafe'];
-  commitWorkerExecutionStart: RunStore['commitWorkerExecutionStart'];
-  readWorkerProcesses: RunStore['readWorkerProcesses'];
-  readWorkerScope: RunStore['readWorkerScope'];
-  writeWorkerScope: RunStore['writeWorkerScope'];
-  spawnScope: RunStore['spawnScope'];
-  appendWorkerProcess: RunStore['appendWorkerProcess'];
-  commitWorkerExecutionComplete: RunStore['commitWorkerExecutionComplete'];
+  readWorkerExecution(id: string): WorkerExecution | undefined;
+  workerResourcesSafe(id: string, generation: string, resourceId: string): boolean;
+  workerResourceHolders(id: string, generation: string, resourceId: string, opts?: { admittingQueued?: boolean }): 'safe' | number[];
+  retainWorkerScratchCleanup(id: string): void;
+  workerScratchResourcesSafe(id: string, generation: string, resourceId: string): boolean;
+  commitWorkerExecutionStart(id: string): string;
+  readWorkerProcesses(id: string, generation: string): WorkerProcessRecord | 'absent' | 'unknown';
+  spawnScope(id: string): AgentRunSpec['scope'];
+  appendWorkerProcess(id: string, generation: string, pid: number, pgid?: number): boolean;
+  commitWorkerExecutionComplete(id: string, generation: string, opts?: { interrupted?: boolean }): boolean;
+  readonly scopes: WorkerScopeControl;
+}
+
+/** The worker records the store's own paths write, check and remove: owned-run creation, the
+ *  archive checks and the delegated deletion. */
+export interface WorkerExecutionRecords {
+  /** `identity` is checked against the worker identity schema before it is written. */
+  writeWorkerIdentity(id: string, identity: unknown): void;
+  writeWorkerExecution(id: string, proof: WorkerExecution, fresh?: boolean): void;
+  /** A deleted child's receipt replaces the private proof only after the deletion checkpoint. */
+  workerDeletionEvidence(id: string): boolean;
+  identityPath(id: string, write?: boolean): string;
+  executionPath(id: string, write?: boolean): string;
+  processesPath(id: string, write?: boolean): string;
+  scopePath(id: string, write?: boolean): string;
 }
 
 /** Whether a run may go, and its deletion (`runs/run-retention.ts`, `store.retention`). */

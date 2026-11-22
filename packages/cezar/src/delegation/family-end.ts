@@ -22,7 +22,7 @@ import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 
 export type FamilyEndStore = RunLookup & Pick<RunFamilyReads, 'listWorkersOf'> & Pick<RunWrites, 'commitDelegation'> &
-  Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> & Pick<RunAccess, 'sourceDataDir' | 'unavailable'>;
+  { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> } & Pick<RunAccess, 'sourceDataDir' | 'unavailable'>;
 
 const SETTLED: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled', 'review']);
 

@@ -14,6 +14,8 @@ import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
 import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 // bound: native mock turns and real saves use the same 30 s per-step guard as R24/R25
 // (hearsay-tools/cezarion#1322); their measured pinned-load startup exceeded 10 s.
@@ -179,7 +181,7 @@ async function settleAndAssertRefusal({ store, manager, runId }: SettlementFixtu
   await waitFor(() => !manager.isActive(runId), FIXTURE_STEP_MS);
   expect(outcome === 'success' ? ['done', 'review'] : [outcome]).toContain(store.getRun(runId)?.status);
   expect(store.getRun(runId)?.stopping).toBeUndefined();
-  expect(store.readWorkerExecution(runId)?.phase).toBe('complete');
+  expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
   const refusal = manager.continueRun(runId, { text: 'another writer' });
   expect(refusal.ok).toBe(false);
   expect(refusal.error).toContain(String(holder));

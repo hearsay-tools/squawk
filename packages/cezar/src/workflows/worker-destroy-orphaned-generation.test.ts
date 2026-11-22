@@ -31,6 +31,7 @@ import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
+import { workerExecutionsOf } from '../delegation/worker-executions.ts';
 
 registerRunner(claudeRunner);
 
@@ -72,7 +73,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
             interrupt: () => { proc.kill('SIGTERM'); }, end: () => { proc.kill('SIGTERM'); } };
         } });
       manager.enqueueOwnedRun(w.id); await started;
-      const prior = store.readWorkerExecution(w.id)!;
+      const prior = store.workerExecutions.readWorkerExecution(w.id)!;
       expect(prior.phase).toBe('starting');
       expect(readRecord(w.id)).toMatchObject({ generation: prior.generation, controller: { pid: process.pid }, processes: [{ pid: first!.proc.pid }] });
       manager.dispose(); setRunStatus(store, w.id, status); store.flush();
@@ -83,14 +84,14 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     }
 
     it('the process record is generation-bound and never drops an entry past its cap', async () => {
-      const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
-      expect(store.appendWorkerProcess(w.id, randomUUID(), 100)).toBe(false);
-      for (let pid = 100; pid < 132; pid++) expect(store.appendWorkerProcess(w.id, generation, pid)).toBe(true);
-      expect(store.appendWorkerProcess(w.id, generation, 132)).toBe(false);
-      const record = store.readWorkerProcesses(w.id, generation);
+      const w = await worker(); const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
+      expect(store.workerExecutions.appendWorkerProcess(w.id, randomUUID(), 100)).toBe(false);
+      for (let pid = 100; pid < 132; pid++) expect(store.workerExecutions.appendWorkerProcess(w.id, generation, pid)).toBe(true);
+      expect(store.workerExecutions.appendWorkerProcess(w.id, generation, 132)).toBe(false);
+      const record = store.workerExecutions.readWorkerProcesses(w.id, generation);
       expect(typeof record === 'string' ? record : record.processes.map(entry => entry.pid)).toEqual(Array.from({ length: 32 }, (_, index) => 100 + index));
-      expect(store.readWorkerProcesses(w.id, randomUUID())).toBe('unknown');
-      rmSync(recordPath(w.id)); expect(store.readWorkerProcesses(w.id, generation)).toBe('absent');
+      expect(store.workerExecutions.readWorkerProcesses(w.id, randomUUID())).toBe('unknown');
+      rmSync(recordPath(w.id)); expect(store.workerExecutions.readWorkerProcesses(w.id, generation)).toBe('absent');
     });
 
     it('a dead child is finalized by recovery, re-launches, and destroy completes', async () => {
@@ -101,8 +102,8 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         await until(() => !other.isActive(w.id) && reopened.getRun(w.id)?.status !== 'queued');
         expect(launches()).toBe(2);
         expect(reopened.readEvents(w.id).some(event => event.type === 'lifecycle' && String(event.message).includes('processes are gone'))).toBe(true);
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
-        expect(reopened.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
       } finally { other.dispose(); reopened.flush(); }
@@ -112,12 +113,12 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       const { w, child, prior, reopened, other, service } = await crashed('failed');
       // The mock spawns outside spawnSessionLeader, so the record has no group; the worker's scope owns it.
       expect(readRecord(w.id).processes.map(entry => 'pgid' in entry)).toEqual([false]);
-      reopened.scopes.spawnScope(w.id).started(child.proc.pid!);
+      workerExecutionsOf(reopened).scopes.spawnScope(w.id).started(child.proc.pid!);
       try {
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         await child.exited;
         expect(child.proc.signalCode).toBe('SIGKILL');
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ ...prior, phase: 'complete' });
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ ...prior, phase: 'complete' });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
       } finally { other.dispose(); reopened.flush(); }
     });
@@ -130,7 +131,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         const token = processStartToken(foreign.proc.pid!);
         setController(w.id, { pid: foreign.proc.pid!, ...(token ? { startToken: token } : {}) });
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
         expect(other.continueRun(w.id, { text: 'try again' })).toEqual({ ok: false,
           error: expect.stringContaining(`another live controller ${foreign.proc.pid}`),
           next: 'wait for that controller to end the worker execution, then retry the same command' });
@@ -138,7 +139,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
           error: expect.stringContaining(`Worker termination is not proven: another live controller ${foreign.proc.pid}`) });
         expect(existsSync(workspace(w).path)).toBe(true);
         expect(foreign.proc.exitCode).toBeNull(); expect(foreign.proc.signalCode).toBeNull();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
       } finally { other.dispose(); reopened.flush(); }
     });
 
@@ -148,11 +149,11 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         child.proc.kill('SIGKILL'); await child.exited;
         writeFileSync(recordPath(w.id), shape === 'malformed' ? '{broken' : JSON.stringify({ ...readRecord(w.id), generation: randomUUID() }));
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'incomplete', remaining: expect.arrayContaining(['process']),
           error: 'worker process record is unreadable; termination cannot be proven' });
         expect(existsSync(workspace(w).path)).toBe(true);
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
       } finally { other.dispose(); reopened.flush(); }
     });
 
@@ -160,11 +161,11 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       const { w, child, prior, reopened, other, launches } = await crashed('failed');
       try {
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior); // cached "alive" for 2 s
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior); // cached "alive" for 2 s
         child.proc.kill('SIGKILL'); await child.exited;
         expect(other.continueRun(w.id, { text: 'resume' })).toEqual({ ok: true });
         await until(() => launches() === 2);
-        expect(reopened.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
       } finally { other.dispose(); reopened.flush(); }
     });
 
@@ -182,7 +183,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       try {
         child.proc.kill('SIGKILL'); await child.exited;
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)?.phase).toBe('complete');
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(reopened.getRun(w.id)?.status).toBe('waiting');
         expect(readFileSync(join(scratch, 'notes'), 'utf8')).toBe('answer still needed');
       } finally { other.dispose(); reopened.flush(); }
@@ -196,7 +197,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       try {
         child.proc.kill('SIGKILL'); await child.exited;
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
         expect(holder.proc.exitCode).toBeNull(); expect(holder.proc.signalCode).toBeNull();
         expect(kills.mock.calls.filter(([pid, signal]) => Math.abs(pid) === holder.proc.pid && signal !== 0)).toEqual([]);
         expect(own.mock.calls).toEqual([]);
@@ -216,12 +217,12 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       const wait = () => { const run = reopened.getRun(parent.id); return [...(run?.waits ?? []), ...(run?.lastWaits ?? [])].find((entry): entry is Extract<typeof entry, { kind: 'worker' }> => entry.id === waitId && entry.kind === 'worker'); };
       try {
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)?.phase).toBe('starting');
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('starting');
         expect(wait()?.outcomes).toEqual([]);
         if (window === 'after') await vi.advanceTimersByTimeAsync(15_000 * 60);
         child.proc.kill('SIGKILL'); await child.exited;
         await vi.advanceTimersByTimeAsync(window === 'inside' ? 15_000 : 30_000);
-        expect(reopened.readWorkerExecution(w.id)?.phase).toBe('complete');
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(wait()?.outcomes?.some(outcome => outcome.workerId === w.id)).toBe(true);
         expect(wait()!.outcomes).toEqual([expect.objectContaining({ workerId: w.id, revision: 0, status: WORKER_OUTCOME_STATUS.failed })]);
       } finally { vi.useRealTimers(); other.dispose(); reopened.flush(); }
@@ -230,10 +231,10 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     it('a recorded survivor is re-probed on the backoff cadence until it dies (hearsay-tools/cezarion#879)', async () => {
       const ids: string[] = []; const holders: Awaited<ReturnType<typeof spawnReady>>[] = [];
       for (let i = 0; i < 2; i++) {
-        const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
+        const w = await worker(); const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
         setRunStatus(store, w.id, RUN_STATUS.failed);
         const holder = await spawnReady(tmpdir());
-        expect(store.appendWorkerProcess(w.id, generation, holder.proc.pid!)).toBe(true);
+        expect(store.workerExecutions.appendWorkerProcess(w.id, generation, holder.proc.pid!)).toBe(true);
         setController(w.id, { pid: await deadPid(), startToken: '1' });
         holders.push(holder); ids.push(w.id);
       }
@@ -250,7 +251,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       try {
         for (const id of ids) cadence.armOrphanReprobe(id);
         await vi.advanceTimersByTimeAsync(400);
-        expect(ids.map(id => store.readWorkerExecution(id)?.phase)).toEqual(['starting', 'starting']);
+        expect(ids.map(id => store.workerExecutions.readWorkerExecution(id)?.phase)).toEqual(['starting', 'starting']);
         expect(ids.map(id => cadence.orphanDue.get(id)?.attempts)).toEqual([1, 1]);
         // Then 400, 800 and 1,600 ms: past the fast window it doubles to the cap.
         await vi.advanceTimersByTimeAsync(400 + 800 + 1_600);
@@ -258,22 +259,22 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(cadence.orphanDue.get(ids[0]!)!.at - Date.now()).toBeGreaterThan(1_500);
         for (const holder of holders) { holder.proc.kill('SIGKILL'); await holder.exited; }
         await vi.advanceTimersByTimeAsync(1_700);
-        expect(ids.map(id => store.readWorkerExecution(id)?.phase)).toEqual(['complete', 'complete']);
+        expect(ids.map(id => store.workerExecutions.readWorkerExecution(id)?.phase)).toEqual(['complete', 'complete']);
         expect(cadence.orphanDue.size).toBe(0);
       } finally { cadence.dispose(); vi.useRealTimers(); }
     });
 
     it.runIf(process.platform === 'linux')('an unreadable process in the worktree is no evidence: destroy finalizes a legacy generation without signalling it (hearsay-tools/cezarion#889)', async () => {
       const w = await worker(); await ensureOwnedWorkspace(root, w);
-      store.commitWorkerExecutionStart(w.id); setRunStatus(store, w.id, RUN_STATUS.failed); store.flush();
+      store.workerExecutions.commitWorkerExecutionStart(w.id); setRunStatus(store, w.id, RUN_STATUS.failed); store.flush();
       manager.dispose(); store.close(); rmSync(recordPath(w.id)); // an absent legacy ledger leaves the scan as the only evidence
       const holder = await nonDumpableHolder(workspace(w).path);
       const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
       const service = new DelegationService(workerCleanups({ terminationTimeoutMs: 1_500 })); const detach = service.registerProject({ home: testHome(), id: 'reopened', root, store: reopened, manager: other });
       try {
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
-        expect(reopened.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
         expect(existsSync(workspace(w).path)).toBe(false);
         expect(holder.running).toBe(true); // its cwd is gone, but nothing signalled it
       } finally { detach(); other.dispose(); reopened.flush(); await holder.close(); }
@@ -285,7 +286,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         child.proc.kill('SIGKILL'); await child.exited;
         rmSync(recordPath(w.id));
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+        expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
       } finally { other.dispose(); reopened.flush(); }

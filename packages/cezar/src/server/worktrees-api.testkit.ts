@@ -75,5 +75,5 @@ export function claimsManager(store: RunStore): RunManager {
 
 /** A worker generation that started and completed, as the run line leaves a worker that ran. */
 export function executedWorker(store: RunStore, workerId: string): void {
-  store.commitWorkerExecutionComplete(workerId, store.commitWorkerExecutionStart(workerId));
+  store.workerExecutions.commitWorkerExecutionComplete(workerId, store.workerExecutions.commitWorkerExecutionStart(workerId));
 }

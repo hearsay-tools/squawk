@@ -91,7 +91,7 @@ function loggingUnreadable(store: ActivityStore, log: (runId: string) => void): 
     isUnreadable: (id) => store.isUnreadable(id),
     listRuns: () => store.listRuns(),
     listForeignClaimedRunIds: () => store.listForeignClaimedRunIds(),
-    readWorkerExecution: (id) => store.readWorkerExecution(id),
+    get workerExecutions() { return store.workerExecutions; },
     listRunSummaries: (options) => store.listRunSummaries(options),
     withReadCache: (fn) => store.withReadCache(fn),
     // The store skips a worker it cannot read: the receipts name it.

@@ -236,7 +236,7 @@ export class StepLoop {
         env: worktreeSetupEnv({ projectRoot: this.context.repoRoot, runId, tmpEnv }),
         setInterrupt: (stop) => { state.liveSession.installInterrupt(stop); },
         isCancelled: () => state.liveSession.cancelled,
-        scope: this.context.store.spawnScope(runId),
+        scope: this.context.store.workerExecutions.spawnScope(runId),
         onCommandResult: (result) => emit({
           type: 'check-output',
           command: result.command,
@@ -534,7 +534,7 @@ export class StepLoop {
       setInterrupt: (stop) => { state.liveSession.installInterrupt(stop); },
       keep: 'head',
       cap: CHECK_OUTPUT_CAP,
-      scope: this.context.store.spawnScope(runId),
+      scope: this.context.store.workerExecutions.spawnScope(runId),
     });
     emit({ type: 'check-output', stepId: step.id, command, text: result.output, exitCode: result.exitCode ?? -1 });
     return { ok: result.exitCode === 0, output: result.output };

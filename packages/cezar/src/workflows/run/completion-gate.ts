@@ -37,7 +37,7 @@ export function parentCompletionBlockers(context: RunModuleContext, host: Comple
   const family = familyRecordOf(parent, id => context.store.getRun(id));
   if (!parent || !family) return [];
   const workers = parentReadiness(parent, family.id, completionWorkerIds(context.store, parent, family).map(workerId => ({ workerId, run: context.store.getRun(workerId),
-    terminated: context.store.readWorkerExecution(workerId)?.phase === 'complete', result: context.store.getRun(workerId)
+    terminated: context.store.workerExecutions.readWorkerExecution(workerId)?.phase === 'complete', result: context.store.getRun(workerId)
       ? context.store.workerResults.readWorkerResult(family.id, workerId) : context.store.workerResults.readDeletedWorkerResult(family.id, workerId),
   })));
   return [...workers, ...openCompletionRequests(context.store, runId).sent.map(request => ({ workerId: request.recipientRunId, reason: 'request' as const, request }))];

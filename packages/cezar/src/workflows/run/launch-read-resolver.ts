@@ -12,7 +12,7 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../../core/agent-m
 import { ModelIdentityError, formatModelIdentity, normalizeModelForBackend } from '../../core/model-identity.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { parseDelegationEffort } from '../../delegation/effort.ts';
-import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, removedRunnerStepAfter, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
+import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, readWorkerIdentity, removedRunnerStepAfter, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import type { CreateRunInput, RunEventLog, RunLookup } from '../../runs/ports.ts';
@@ -749,7 +749,7 @@ function ownedJob(context: RunModuleContext, host: { historyDeletionPending(runI
     const grants = workerIdentity(context.store, context.repoRoot, run.id, undefined, context.home)?.grants
       ?? run.workflowDef?.steps.find(step => step.id === QUICK_TASK_WORKFLOW.steps[0]!.id);
     return {
-      workflow: ownedWorkflow(run, context.store.readWorkerIdentity(run.id)) ?? { ...QUICK_TASK_WORKFLOW, steps: [{ ...QUICK_TASK_WORKFLOW.steps[0]!,
+      workflow: ownedWorkflow(run, readWorkerIdentity(context.store.workerExecutions, run.id)) ?? { ...QUICK_TASK_WORKFLOW, steps: [{ ...QUICK_TASK_WORKFLOW.steps[0]!,
         ...(grants?.allowedTools === undefined ? {} : { allowedTools: [...grants.allowedTools] }),
         ...(grants?.bashAllowlist === undefined ? {} : { bashAllowlist: [...grants.bashAllowlist] }),
       }] },

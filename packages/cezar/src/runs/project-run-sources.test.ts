@@ -16,6 +16,8 @@ import { encodeRunRow } from './run-row.ts';
 import { readRunIndexFromDisk, searchRunIndexFromDisk } from './run-index.ts';
 import { RunStore, runRecordSchema, type RunRecord } from './store.ts';
 import { sealTestRunSlots } from './removal-slots.testkit.ts';
+// Its fallback sweeps read worker evidence: the shipped worker executions (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 // Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
 sealTestRunSlots();
@@ -67,8 +69,8 @@ describe('project run sources', () => {
     expect(store.readEvents(run.id)[0]?.text).toBe('source history');
     expect((await store.readEventsAsync(run.id))[0]?.text).toBe('source history');
     expect(readHandoff(store.sourceDataDir(run.id), run.id)).toBe('# fallback handoff');
-    expect(store.readWorkerExecution(run.id)).toBeUndefined();
-    expect(store.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
+    expect(store.workerExecutions.readWorkerExecution(run.id)).toBeUndefined();
+    expect(store.workerExecutions.readWorkerProcesses(run.id, randomUUID())).toBe('absent');
     expect(readRunIndexFromDisk(root('cezar')).runs.map(item => item.id)).toEqual([run.id]);
     expect(searchRunIndexFromDisk(root('cezar'), 'fallback', { limit: 10 }).runs.map(item => item.id)).toEqual([run.id]);
     expect(readdirSync(root('cezar'))).toEqual([]);

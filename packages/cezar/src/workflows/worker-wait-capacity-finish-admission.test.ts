@@ -36,7 +36,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     await until(() => !manager.isActive(blocker.id));
     await semaphore.release(); await pumps();
     expect(store.getRun(queued.id)?.status).toBe('queued');
-    expect(store.readWorkerExecution(queued.id)?.phase).toBe('queued');
+    expect(store.workerExecutions.readWorkerExecution(queued.id)?.phase).toBe('queued');
     expect(store.getRun(queued.id)?.worktreePath).toBeUndefined();
     expect(store.readEvents(queued.id).some(event => event.type === 'session')).toBe(false);
     // bound: the unrelated run's turn end proves it passed the held child in the shared queue.

@@ -20,12 +20,12 @@ describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
 
   it('collect sees termination completed during its evidence read at the same revision as inspect and list', async () => {
     const workerId = await worker();
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     const run = f.store.getRun(workerId)!;
     vi.spyOn(workspaceKindOf(run), 'readHead').mockImplementationOnce(async () => {
-      expect(f.store.readWorkerExecution(workerId)?.phase).toBe('starting');
-      f.store.commitWorkerExecutionComplete(workerId, generation);
+      expect(f.store.workerExecutions.readWorkerExecution(workerId)?.phase).toBe('starting');
+      f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
       return f.sha;
     });
     const collected = await f.service.collect(f.caller, { workerId });
@@ -39,11 +39,11 @@ describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
 
   it('keeps every observation unsettled until private termination is proven', async () => {
     const workerId = await worker();
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.cancelled);
     expect(await f.service.inspect(f.caller, { workerId })).toMatchObject({ settled: false });
     expect((await f.service.list(f.caller, {})).workers[0]).toMatchObject({ settled: false });
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ settled: false, partial: true });
-    f.store.commitWorkerExecutionComplete(workerId, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation);
   });
 });

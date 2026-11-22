@@ -50,7 +50,7 @@ it('readiness ready human Finish retires an accepted wait before closing its ses
   });
 it('readiness discards cached unsettled observations lacking current private proof', async () => {
     const p = await parent(); const first = await worker(p.id); const second = await worker(p.id);
-    const generation = store.commitWorkerExecutionStart(first.id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(first.id);
     setRunStatus(store, first.id, RUN_STATUS.cancelled);
     // An agent's worker wait is a list entry (hearsay-tools/cezarion#1301).
     const now = Date.now();
@@ -60,7 +60,7 @@ it('readiness discards cached unsettled observations lacking current private pro
       outcomes: [{ workerId: first.id, revision: 0, status: RUN_STATUS.cancelled, observedAt: new Date(now).toISOString() }] }));
     manager.reconcileWorkerWaits();
     expect(waitOf(store.getRun(p.id))?.outcomes).toEqual([]);
-    expect(store.commitWorkerExecutionComplete(first.id, generation)).toBe(true);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(first.id, generation)).toBe(true);
     expect(waitOf(store.getRun(p.id))?.outcomes).toHaveLength(1);
   });
 it('readiness Finish preserves pending parent human questions', async () => {

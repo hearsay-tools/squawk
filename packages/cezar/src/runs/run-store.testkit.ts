@@ -7,6 +7,8 @@ import { closeClaimSession } from './run-claims.ts';
 import { encodeRunRow } from './run-row.ts';
 import type { RunRecord, RunStore } from './store.ts';
 import type { RunWrites, TranscriptFactsPort } from './ports.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 /**
  * The one way tests put runs on disk and read them back (#779). Every test that seeded or read

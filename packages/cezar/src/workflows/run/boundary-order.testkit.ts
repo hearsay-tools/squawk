@@ -17,6 +17,8 @@ import type { RunModuleContext } from './types.ts';
 import type { TurnEndOutcome } from '../turn-end.ts';
 import { clearIdleTimer } from './input-timers.ts';
 import * as boundary from './turn-boundary.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../../delegation/worker-executions.testkit.ts';
 
 /** Fact traces mark completed writes. Effect entries are traced before their named collaborators. */
 export function traceBoundary(log: string[], observe?: (state: ActiveRun, event: boundary.TurnBoundaryEvent) => void,

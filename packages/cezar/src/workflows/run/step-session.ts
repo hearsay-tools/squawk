@@ -221,7 +221,7 @@ export class StepSession {
       session = startManagedSession(runner,
         {
           timings: this.context.timings,
-          scope: this.context.store.spawnScope(runId),
+          scope: this.context.store.workerExecutions.spawnScope(runId),
           // Each step receives the extra prompt and handoff contract.
           systemPrompt: composeSystemPrompt(undefined, sessionEvents.launchSystemTail(this.context, this.sharedHost, {
             extraSystemPrompt: launch.extraSystemPrompt, delegation, webhooksPart: launch.webhooksPart,

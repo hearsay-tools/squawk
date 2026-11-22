@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readableHolder } from './non-dumpable.testkit.ts';
 import { processesWithCwdUnder } from './process-liveness.ts';
 import { processStartToken, recordedProcessLive } from '../core/process-stat.ts';
-import { recordedHolders } from '../runs/worker-resource-holders.ts';
+import { recordedHolders } from './worker-resource-holders.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { requirePidText } from '../pid-file.testkit.ts';
 

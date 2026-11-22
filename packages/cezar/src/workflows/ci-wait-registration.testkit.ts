@@ -18,6 +18,8 @@ import { automaticWakes } from './run/wake-ledger.ts';
 import { WaitEngine } from './run/wait-engine.ts';
 import { WaitRegistry } from './run/wait-registry.ts';
 import { unused } from './unused.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 // `WaitRegistry` and `WaitEngine` over a real store, with no run engine: the registration policy,
 // the wait list and its receipts are theirs. The registry host reads the run guards the run

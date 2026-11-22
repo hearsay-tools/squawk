@@ -12,6 +12,8 @@ import { RunStore } from '../runs/store.ts';
 import { workflowDefSchema } from '../workflows/types.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { hasPendingAsk, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 const STEP_TIMEOUT_MS = 2_000;
 

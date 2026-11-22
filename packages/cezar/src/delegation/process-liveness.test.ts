@@ -9,7 +9,7 @@ import { hasLinuxPython, singleThreadZombie, threadHoldingPort } from '../linux-
 import { nonDumpableHolder } from './non-dumpable.testkit.ts';
 import { processesWithCwdUnder } from './process-liveness.ts';
 import { parseProcStat, processStartToken, recordedProcessLive, describeProcesses } from '../core/process-stat.ts';
-import { recordedHolders } from '../runs/worker-resource-holders.ts';
+import { recordedHolders } from './worker-resource-holders.ts';
 
 // Scope only enumeration to the processes this fixture owns, so host processes never enter a scan.
 // Keep cwd/stat/token reads real, including ENOENT after our child has exited;

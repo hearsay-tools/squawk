@@ -8,6 +8,8 @@ import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../work
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { driveObservedRun, TERMINAL } from './harness-parity-run-tier.testkit.ts';
 import { driveRun, type RunObservation } from './workflow-parity-core.testkit.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 /** Flush until `runId` has left the store's memory; false if it never does. */
 async function leavesMemory(store: RunStore, runId: string): Promise<boolean> {

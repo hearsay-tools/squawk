@@ -44,9 +44,9 @@ export class WorkerOrphans {
     const run = this.context.store.getRun(runId);
     if (run?.delegation?.role !== 'worker' || this.context.disposed()) return { state: 'none' };
     if (this.host.holds(runId, admitting)) return { state: 'busy' };
-    const proof = this.context.store.readWorkerExecution(runId);
+    const proof = this.context.store.workerExecutions.readWorkerExecution(runId);
     if (proof?.phase !== 'starting') return { state: 'none' };
-    const record = this.context.store.readWorkerProcesses(runId, proof.generation);
+    const record = this.context.store.workerExecutions.readWorkerProcesses(runId, proof.generation);
     // A present record that proves nothing (unreadable, malformed, another generation) blocks
     // finalization; an absent one is a generation from before process records, with nothing to wait for.
     if (record === 'unknown') return { state: 'unknown' };
@@ -68,7 +68,7 @@ export class WorkerOrphans {
     if (probe.liveness !== 'gone') { this.orphanProbes.set(runId, { generation: orphan.generation, probe }); return false; }
     this.orphanProbes.delete(runId);
     try {
-      if (!this.context.store.commitWorkerExecutionComplete(runId, orphan.generation, { interrupted: true })) return false;
+      if (!this.context.store.workerExecutions.commitWorkerExecutionComplete(runId, orphan.generation, { interrupted: true })) return false;
     } catch { return false; }
     this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.orphanDue.delete(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
@@ -160,15 +160,15 @@ export class WorkerOrphans {
     const orphan = this.orphanedWorkerGeneration(runId, true);
     const probe = orphan ? probeOrphan(orphan.record) : undefined;
     if (probe?.liveness === 'alive' && probe.controller !== undefined) return;
-    const proof = orphan ? undefined : this.context.store.readWorkerExecution(runId);
+    const proof = orphan ? undefined : this.context.store.workerExecutions.readWorkerExecution(runId);
     if (!orphan && !(proof?.phase === 'complete' && proof.interrupted)) return;
-    if (probe?.liveness !== 'alive' && this.context.store.scopes.empty(runId)) return;
-    this.context.store.scopes.kill(runId);
+    if (probe?.liveness !== 'alive' && this.context.store.workerExecutions.scopes.empty(runId)) return;
+    this.context.store.workerExecutions.scopes.kill(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
     // Nothing new starts until the old processes are gone, so none keeps a port or a file.
     const deadline = Date.now() + waitMs;
     const pause = new Int32Array(new SharedArrayBuffer(4));
-    const stopped = () => (!orphan || probeOrphan(orphan.record).liveness === 'gone') && this.context.store.scopes.stopped(runId);
+    const stopped = () => (!orphan || probeOrphan(orphan.record).liveness === 'gone') && this.context.store.workerExecutions.scopes.stopped(runId);
     while (!stopped() && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
     if (!stopped()) throw new WorkerAdmissionRefusal("the processes the interrupted execution left are still stopping", 'retry the same command in a few seconds');
   }
@@ -189,7 +189,7 @@ export class WorkerOrphans {
       this.orphanBlockers.set(runId, { kind: 'controller', pid: probe.controller });
       return;
     }
-    if (probe.liveness === 'alive') this.context.store.scopes.kill(runId);
+    if (probe.liveness === 'alive') this.context.store.workerExecutions.scopes.kill(runId);
     while (!this.host.settleOrphanedWorkerExecution(runId, { fresh: true }) && Date.now() < deadline && same()) {
       await new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(50, deadline - Date.now()))));
     }

@@ -149,9 +149,9 @@ describe('durable conversations', () => {
     f.manager.cancel(w.id);
     await f.manager.awaitRunTermination(w.id, 5_000);
     f.store.updateStep(w.id, 'task', { status: STEP_STATUS.done, ...(session ? { sessionId: session } : {}), backend: 'claude' });
-    const generation = f.store.commitWorkerExecutionStart(w.id);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(w.id);
     setRunStatus(f.store, w.id, status);
-    f.store.commitWorkerExecutionComplete(w.id, generation);
+    f.store.workerExecutions.commitWorkerExecutionComplete(w.id, generation);
     return w;
   }
   it('keeps provider acknowledgement time separate from a later repaired projection', async () => {
@@ -169,7 +169,7 @@ describe('durable conversations', () => {
   // hearsay-tools/squawk#867: each store refusal carries its own cause and next step.
   const spawnNext = 'spawn a new worker with the instruction';
   it.each([
-    ['an unfinished checkpoint', (id: string) => { f.store.commitWorkerExecutionStart(id); },
+    ['an unfinished checkpoint', (id: string) => { f.store.workerExecutions.commitWorkerExecutionStart(id); },
       'the previous execution is not proven finished (checkpoint starting)', `retry the same command after it ends; if this repeats, ${spawnNext}`],
     ['an abandoned execution', (id: string) => {
       const path = join(f.root, '.ai/cezar/runs', `${id}.execution.json`);
@@ -183,7 +183,7 @@ describe('durable conversations', () => {
     const w = await completedWorker();
     arrange(w.id);
     let thrown: unknown;
-    try { f.store.commitWorkerExecutionStart(w.id); } catch (error) { thrown = error; }
+    try { f.store.workerExecutions.commitWorkerExecutionStart(w.id); } catch (error) { thrown = error; }
     expect(admissionRefusal(thrown, 'fallback')).toEqual({ ok: false, error: cause, next });
   });
   it('keeps the fallback text only for an admission error without a message', () => {

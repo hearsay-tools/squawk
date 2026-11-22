@@ -223,7 +223,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
         // durably queues the workflow remainder before any next execute can start.
         const capacity = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
         signalDone(run.id, runner);
-        await until(() => store.getRun(run.id)?.status === 'queued' && ![...work.liveSessions].some(session => session.open) && store.readWorkerExecution(run.id)?.phase === 'complete');
+        await until(() => store.getRun(run.id)?.status === 'queued' && ![...work.liveSessions].some(session => session.open) && store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete');
         expect(store.getRun(run.id)?.steps.find(step => step.id === 'later')?.status).toBe('pending');
         expect(capacity).toHaveBeenCalled(); capacity.mockRestore();
       }

@@ -215,7 +215,7 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
 
   it.each(['dispose', 'failure', 'foreign', 'completed'] as const)('selected starting-proof readiness retains guard and rechecks %s', async outcome => {
     manager.dispose();
-    const generation = store.commitWorkerExecutionStart(a.workerId);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(a.workerId);
     store.flush(); store.close();
     const dataDir = join(root, '.ai/cezar');
     // Prior-boot proof makes exit conclusive, independent of ambient process enumeration.
@@ -248,16 +248,16 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
     expect(rescues).toHaveLength(1);
     await rescues[0]![1];
     expect(settlement).not.toHaveBeenCalled();
-    expect(store.readWorkerExecution(a.workerId)).toMatchObject({ phase: 'starting', generation });
+    expect(store.workerExecutions.readWorkerExecution(a.workerId)).toMatchObject({ phase: 'starting', generation });
     if (outcome === 'dispose') manager.dispose();
     if (outcome === 'foreign') {
       const refusal = store.writeRefusal.bind(store);
       vi.spyOn(store, 'writeRefusal').mockImplementation(id => id === a.workerId ? 'RUN_IN_USE_ELSEWHERE' : refusal(id));
     }
-    if (outcome === 'completed') expect(store.commitWorkerExecutionComplete(a.workerId, generation)).toBe(true);
+    if (outcome === 'completed') expect(store.workerExecutions.commitWorkerExecutionComplete(a.workerId, generation)).toBe(true);
     release(); if (rejection) await rejection; else await recovery;
     expect(settlement).not.toHaveBeenCalled();
-    expect(store.readWorkerExecution(a.workerId)?.phase).toBe(outcome === 'completed' ? 'complete' : 'starting');
+    expect(store.workerExecutions.readWorkerExecution(a.workerId)?.phase).toBe(outcome === 'completed' ? 'complete' : 'starting');
     expect(store.readEvents(a.workerId).some(e => e.type === 'lifecycle' && /execution was finalized/.test(String(e.message)))).toBe(false);
     store.close();
   });

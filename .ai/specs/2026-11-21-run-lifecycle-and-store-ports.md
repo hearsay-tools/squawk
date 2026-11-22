@@ -260,6 +260,16 @@ The measured spans add up to about 2,300 lines and leave about 1,080. Each topic
 move with it, so the class reaches 1,000 lines. Each slice lowers the pin of `runs/store.ts` in
 `file-length.baseline.json` and removes it at or below 1,000.
 
+D5 is the one topic whose module is a feature: the worker sidecar code moves to
+`delegation/worker-executions.ts`, which the core may not import. So the store reaches it through
+a core registry, `runs/worker-executions-registry.ts`: one factory per process, registered inside
+`registerBuiltInRunSlots()`, and built lazily as `store.workerExecutions` on first use. It is not a
+fourth removal slot. A process with no factory fails closed: the first use throws before any side
+effect. Callers take the `WorkerExecutions` port; the members only the store's own paths use
+(owned-run creation, the archive checks and the delegated deletion) form `WorkerExecutionRecords`.
+Tests get the factory through the shared store and RunManager testkits (planner decision,
+2026-11-22).
+
 ## Case tables
 
 ### Removal cases

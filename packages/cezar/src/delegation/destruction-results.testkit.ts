@@ -25,12 +25,12 @@ export async function completedWorker(f: Fixture) {
   const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
   const run = f.store.getRun(workerId)!;
   f.manager.requestWorkerStop(workerId); // remove held scheduler admission before simulating a completed execution
-  const generation = f.store.commitWorkerExecutionStart(workerId);
+  const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
   const workspace = await ensureOwnedWorkspace(f.root, run);
   writeFileSync(join(workspace.path, 'result.txt'), 'retained patch');
   f.store.appendEvent(workerId, { type: 'text', text: 'Completed implementation' });
   setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-  expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+  expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
   const files = join(f.root, '.ai/cezar/runs');
   mkdirSync(join(files, `${workerId}-images`));
   writeFileSync(join(files, `${workerId}-images/worker-context-0.input`), 'copied input');

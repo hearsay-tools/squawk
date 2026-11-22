@@ -32,7 +32,7 @@ const family = (...runs: RunRecord[]) => {
   const all = runs.length ? runs : [root(), isolated(W), isolated(S), child()];
   const getRun = (id: string) => all.find(run => run.id === id);
   const workers = () => all.filter(run => run.delegation?.role === 'worker');
-  return { getRun, listWorkersOf: (id: string) => id === R ? workers() : [], listOwnedWorkers: (id: string) => id === R ? workers() : [], readWorkerExecution: () => undefined };
+  return { getRun, listWorkersOf: (id: string) => id === R ? workers() : [], listOwnedWorkers: (id: string) => id === R ? workers() : [], workerExecutions: { readWorkerExecution: () => undefined } };
 };
 const refusal = (check: () => void) => { try { check(); return undefined; } catch (error) { return (error as { code?: string }).code; } };
 

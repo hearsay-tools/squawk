@@ -84,10 +84,10 @@ describe('authenticated delegation HTTP family', () => {
   it('reports each execution revision and waits for durable settlement', async () => {
     const first = await spawn();
     const second = await spawn();
-    const generation = f.store.commitWorkerExecutionStart(first.workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(first.workerId);
     setRunStatus(f.store, first.workerId, RUN_STATUS.done);
     expect(workerListResultSchema.parse(await (await request('/list')).json()).workers[0]).toMatchObject({ workerId: first.workerId, settled: false });
-    expect(f.store.commitWorkerExecutionComplete(first.workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(first.workerId, generation)).toBe(true);
     const result = workerListResultSchema.parse(await (await request('/list')).json());
     expect(result.workers).toHaveLength(2);
     expect(result.workers[0]).toMatchObject({ workerId: first.workerId, status: workerListEntrySchema.shape.status.enum.done, settled: true, revision: 0 });

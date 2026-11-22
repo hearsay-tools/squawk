@@ -25,9 +25,9 @@ describe('releasing the branches of ended worker families', { timeout: WORKSPACE
       git(workspace.path, 'commit', '-qam', 'worker');
     }
     const { run, store } = durableRun(root, workspace);
-    const generation = store.commitWorkerExecutionStart(run.id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(run.id);
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z' });
-    expect(store.commitWorkerExecutionComplete(run.id, generation)).toBe(true);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(run.id, generation)).toBe(true);
     git(root, 'worktree', 'remove', workspace.path);
     const parentId = run.delegation?.role === 'worker' ? run.delegation.parentRunId : '';
     setRunStatus(store, parentId, RUN_STATUS.failed, { finishedAt: '2026-07-02T00:00:00Z' });

@@ -70,7 +70,7 @@ describe('delegation service durable authority', () => {
   });
   it('collect settles a worker whose crashed generation left no live process (#469)', { timeout: 15_000 }, async () => {
     const { workerId } = await f.service.spawn(f.caller, input());
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.failed, { finishedAt: new Date().toISOString() });
     const record = join(f.root, '.ai/cezar/runs', `${workerId}.processes.json`);
     const dead = spawn(process.execPath, ['-e', '']); await new Promise(resolve => dead.once('exit', resolve));
@@ -85,7 +85,7 @@ describe('delegation service durable authority', () => {
       // collect caches that conservative result for 2 s; poll it (not the finalizer) so the
       // assertion waits for proof of termination and still catches a missing collect hook (#703).
       await expect.poll(() => f.service.collect(f.caller, { workerId }), { timeout: 10_000, interval: 250 }).toMatchObject({ settled: true });
-      expect(reopened.readWorkerExecution(workerId)).toMatchObject({ generation, phase: 'complete' });
+      expect(reopened.workerExecutions.readWorkerExecution(workerId)).toMatchObject({ generation, phase: 'complete' });
     } finally { manager.dispose(); reopened.flush(); }
   });
   it('returns only the retained old cancellation while a queued parent has a newer wait', async () => {

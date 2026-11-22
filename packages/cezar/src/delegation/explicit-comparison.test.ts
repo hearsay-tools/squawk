@@ -20,13 +20,13 @@ it('keeps owned-worker comparison explicit from spawn through collection, integr
   for (const approach of ['minimal', 'structural']) {
     const accepted = await f.service.spawn(f.caller, { task: `Try ${approach}`, baseline: 'parent-head', requestId: randomUUID() });
     const worker = f.store.getRun(accepted.workerId)!;
-    const generation = f.store.commitWorkerExecutionStart(worker.id);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(worker.id);
     const workspace = await ensureOwnedWorkspace(f.root, worker);
     writeFileSync(join(workspace.path, 'approach.txt'), approach);
     git(workspace.path, 'add', 'approach.txt');
     git(workspace.path, 'commit', '-qm', approach);
     setRunStatus(f.store, worker.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    expect(f.store.commitWorkerExecutionComplete(worker.id, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(worker.id, generation)).toBe(true);
     workers.push({ id: worker.id, path: workspace.path, approach });
   }
   expect(workers[0]!.path).not.toBe(workers[1]!.path);

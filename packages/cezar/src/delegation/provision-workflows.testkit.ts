@@ -99,7 +99,7 @@ export function provisionWorkflowFixture() {
   async function acceptedBeforeLaunch(workerId: string) {
     await Promise.all([...fixtureWork(f.manager).pending].filter(([, label]) => label === 'pump').map(([promise]) => promise));
     expect(f.store.getRun(workerId)?.status).toBe('queued');
-    expect(f.store.readWorkerExecution(workerId)?.phase).toBe('queued');
+    expect(f.store.workerExecutions.readWorkerExecution(workerId)?.phase).toBe('queued');
     expect(sessions.some(entry => entry.spec.env?.CEZ_TASK_ID === workerId)).toBe(false);
   }
   async function launchAccepted(accepted: Awaited<ReturnType<typeof acceptIdentityWorker>>, mode: 'queued' | 'restart' | 'continue') {

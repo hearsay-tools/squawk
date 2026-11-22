@@ -6,7 +6,7 @@
  */
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../core/process-stat.ts';
-import type { WorkerExecution } from './worker-execution.ts';
+import type { WorkerExecution } from '../runs/worker-execution.ts';
 
 type WorkerOwnedRun = RunRecord & { delegation: Extract<RunRecord['delegation'], { role: 'worker' }> };
 

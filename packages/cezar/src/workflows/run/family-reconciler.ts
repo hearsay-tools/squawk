@@ -88,7 +88,7 @@ export class FamilyReconciler {
     for (const root of family) {
       if (root.delegation?.role !== 'root' || !root.delegation.conversation) continue;
       const next = reconcileConversationState(root, (id) => this.context.store.getRun(id), now, run =>
-        run.delegation?.role === 'worker' ? this.context.store.readWorkerExecution(run.id)?.phase === 'complete' : !this.host.isActive(run.id), id => this.context.store.isUnreadable(id));
+        run.delegation?.role === 'worker' ? this.context.store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete' : !this.host.isActive(run.id), id => this.context.store.isUnreadable(id));
       if (next && next !== root.delegation.conversation) this.context.store.commitConversation(root.id, next);
       projectConversationEvents(this.context.store, this.context.store.getRun(root.id)!);
       this.host.retireSettledQuestions(root.id);
@@ -239,7 +239,7 @@ export class FamilyReconciler {
     const family = familyRecordOf(parent, id => this.context.store.getRun(id));
     const outcomes = familyWorkers(this.context.store, parent).flatMap(child => {
       const outcome = workerOutcome(child, now);
-      return outcome && this.context.store.readWorkerExecution(child.id)?.phase === 'complete' ? [outcome] : [];
+      return outcome && this.context.store.workerExecutions.readWorkerExecution(child.id)?.phase === 'complete' ? [outcome] : [];
     });
     // Explicit history deletion replaces the live execution proof with a completed
     // parent receipt. Keep its acknowledged outcome while other all-wait workers run.

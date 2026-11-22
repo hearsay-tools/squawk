@@ -97,7 +97,7 @@ describe('harness parity — autosave cleanup (#495)', () => {
               await waitFor(() => store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('termination not confirmed')));
               // bound: hang guard for the run settling while the blocked save keeps its cleanup hold.
               await waitFor(() => !manager.isActive(runId));
-              expect(store.readWorkerExecution(runId)?.phase).toBe('complete');
+              expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
               expect(manager.claimForPublish(runId)).toBeNull();
               expect(manager.claimWorktreeReclaim(runId)).toBeNull();
               expect(manager.continueRun(runId, { text: 'another writer' }).ok).toBe(false);
@@ -114,7 +114,7 @@ describe('harness parity — autosave cleanup (#495)', () => {
               // bound: hang guard; the run already settled above unless an earlier step failed.
               await waitFor(() => !manager.isActive(runId));
             }
-            expect(store.readWorkerExecution(runId)?.phase).toBe('complete');
+            expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');
             expect(store.readEvents(runId).some(event => event.type === 'note' && String(event.message).includes('autosave failed'))).toBe(true);
             expect(readFileSync(join(dir, 'progress.txt'), 'utf8')).toBe('recover me\n');
           });

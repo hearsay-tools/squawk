@@ -88,10 +88,10 @@ try {
     const workspace = await planOwnedWorkspace(root, id, sha);
     store.createOwnedRun({ title: `worker ${i}`, task: 'stuck', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', name: 'Task', kind: 'agent' }] },
       parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal);
-    const generation = store.commitWorkerExecutionStart(id);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(id);
     const created = await ensureOwnedWorkspace(root, store.getRun(id)!);
     setRunStatus(store, id, 'review', { worktreePath: created.path, branch: created.branch });
-    if (!store.commitWorkerExecutionComplete(id, generation)) throw new Error(`worker ${id} did not complete`);
+    if (!store.workerExecutions.commitWorkerExecutionComplete(id, generation)) throw new Error(`worker ${id} did not complete`);
     const scratch = agentTmpDir(dataDir, id);
     mkdirSync(scratch, { recursive: true });
     execFileSync('git', ['worktree', 'lock', '--reason', 'benchmark', created.path], { cwd: root });

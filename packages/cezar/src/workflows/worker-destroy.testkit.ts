@@ -16,6 +16,8 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import { planOwnedWorkspace } from '../delegation/workspace.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RunManager } from './run.ts';
+// Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
+import '../delegation/worker-executions.testkit.ts';
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 export const HANG_GUARD_MS = 15_000;

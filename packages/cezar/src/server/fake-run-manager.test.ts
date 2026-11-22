@@ -79,7 +79,7 @@ describe.each(managers)('$name, before any session starts', ({ build }) => {
     expect(store.getRun(workerId)?.agentInputs?.map(input => input.text)).toEqual(['hello']);
     expect(manager.requestWorkerStop(workerId)).toEqual({ workerId, state: 'terminated' });
     expect(store.getRun(workerId)?.status).toBe(RUN_STATUS.cancelled);
-    expect(store.readWorkerExecution(workerId)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(workerId)?.phase).toBe('complete');
     expect(manager.isActive(workerId)).toBe(false);
     // bound: a queued worker that never launched has nothing left to stop.
     expect(await manager.awaitRunTermination(workerId, 8_000)).toBe(true);

@@ -96,7 +96,7 @@ export function selectReclaimableWorktrees(
 }
 
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
-type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & WorkerExecutions>;
+type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & { readonly workerExecutions: Partial<WorkerExecutions> }>;
 
 /** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
  *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
@@ -182,13 +182,13 @@ export interface ReclaimOptions {
  * evidence or preview work. Structural test stores have no execution machinery and skip that part.
  */
 export function cleanupSafety(repoRoot: string, store: RealStoreMembers, run: RunRecord): () => void {
-  const execution = store.readWorkerExecution?.(run.id);
+  const execution = store.workerExecutions?.readWorkerExecution?.(run.id);
   return () => {
     const refusal = deletionRefusal(run.id, 'worktree', store.sourceDataDir?.(run.id) ?? projectPaths(repoRoot).write);
     if (refusal) throw Error(refusal);
     if (run.delegation?.role !== 'worker') return;
-    if (typeof store.workerResourcesSafe === 'function' && (!execution ||
-      !store.workerResourcesSafe(run.id, execution.generation, run.delegation.workspace.resourceId))) throw Error('Worker resources are not safe to reclaim');
+    if (typeof store.workerExecutions?.workerResourcesSafe === 'function' && (!execution ||
+      !store.workerExecutions.workerResourcesSafe(run.id, execution.generation, run.delegation.workspace.resourceId))) throw Error('Worker resources are not safe to reclaim');
   };
 }
 

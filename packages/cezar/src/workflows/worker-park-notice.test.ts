@@ -58,7 +58,7 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     // Recovery finalizes the parked worker's execution, and the worker still parked by its own turn
     // (hearsay-tools/squawk#3502).
     await restart(false, undefined, eventCheckpoint());
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
     await until(() => notices(p.id, w.id).length > 0, () => timeline(w.id));
     const [notice, ...more] = notices(p.id, w.id);
     expect(more).toEqual([]);
@@ -83,7 +83,7 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     const { p } = await family();
     const w = await worker(p.id, 'mock:limit Waiting on the account.');
     manager.enqueueOwnedRun(w.id);
-    await until(() => parked(w.id) && store.getRun(w.id)?.autoResumeAt !== undefined && store.readWorkerExecution(w.id)?.phase === 'complete', () => timeline(w.id));
+    await until(() => parked(w.id) && store.getRun(w.id)?.autoResumeAt !== undefined && store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete', () => timeline(w.id));
     register(p.id, [w.id]);
     expect(notices(p.id, w.id)).toEqual([]);
     // Recovery's sweep passes over the held worker too.

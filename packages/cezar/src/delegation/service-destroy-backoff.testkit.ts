@@ -40,10 +40,10 @@ export const cadence = async (backoff = { fastMs: 40, fastCount: 3, capMs: 300 }
  * lock: Git refuses the removal, so the destroy stays incomplete and is retried until `release()`. */
 export async function settled(block = true) {
     const { workerId } = await f.service.spawn(f.caller, input());
-    const generation = f.store.commitWorkerExecutionStart(workerId);
+    const generation = f.store.workerExecutions.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, f.store.getRun(workerId)!);
     setRunStatus(f.store, workerId, RUN_STATUS.review, { worktreePath: workspace.path, branch: workspace.branch });
-    expect(f.store.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
+    expect(f.store.workerExecutions.commitWorkerExecutionComplete(workerId, generation)).toBe(true);
     if (block) execFileSync('git', ['worktree', 'lock', workspace.path], { cwd: f.root });
     const blocker = block ? { release: () => execFileSync('git', ['worktree', 'unlock', workspace.path], { cwd: f.root }) } : undefined;
     return { workerId, workspace, blocker };

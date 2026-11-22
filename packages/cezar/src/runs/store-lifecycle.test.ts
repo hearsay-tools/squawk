@@ -381,7 +381,7 @@ describe('each write path publishes its before, source and exit', () => {
     { key: 'commitWorkerContinuation', arrange: (f) => { const { workerId } = f.family(); f.store.move(workerId, 'stop-worker'); return workerId; },
       act: ({ store }, workerId) => store.commitWorkerContinuation(workerId, 'continue-line'), before: { status: RUN_STATUS.cancelled }, after: { status: RUN_STATUS.queued }, exit: 'continue-line' },
     { key: 'commitWorkerExecutionComplete second publish', arrange: (f) => { const { workerId } = f.family(); f.store.move(workerId, 'stop-worker'); return workerId; },
-      act: ({ store }, workerId) => { expect(store.commitWorkerExecutionComplete(workerId, store.readWorkerExecution(workerId)!.generation)).toBe(true); },
+      act: ({ store }, workerId) => { expect(store.workerExecutions.commitWorkerExecutionComplete(workerId, store.workerExecutions.readWorkerExecution(workerId)!.generation)).toBe(true); },
       before: { status: RUN_STATUS.cancelled }, after: { status: RUN_STATUS.cancelled } },
     { key: 'republish', act: ({ store }, id) => store.republish(id), before: { title: 'lifecycle' }, after: { title: 'lifecycle' }, source: 'live-release' },
   ])('$key', ({ arrange, act, before, after, exit, source }) => {

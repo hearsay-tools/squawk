@@ -47,7 +47,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(manager.requestWorkerStop(w.id).state).toBe('terminated');
     store.close(); const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(w.id)?.status).toBe('cancelled');
-    expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+    expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
     expect(JSON.stringify(reopened.getRun(w.id))).not.toMatch(/execution|generation/);
     expect(existsSync(workspace(w).path)).toBe(false);
     const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() }); expect(await other.awaitRunTermination(w.id, 10)).toBe(true); other.dispose(); reopened.flush();
@@ -78,7 +78,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     manager.enqueueOwnedRun(w.id);
     // bound: config lookup is the public preflight boundary before any worktree or session.
     await until(() => entered);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting' });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting' });
     expect(existsSync(workspace(w).path)).toBe(false);
     destroy(w); expect(manager.requestWorkerStop(w.id).state).toBe('stopping');
     expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
@@ -96,7 +96,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const service = new DelegationService(workerCleanups()); const detach = service.registerProject({ home: testHome(), id: 'reopened', root, store: reopened, manager: other });
     try {
       // The flag stays in the checkpoint as a record of the queued completion; destroy no longer reads it.
-      expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
+      expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
       for (let attempt = 0; attempt < 2; attempt++) {
         const result = await service.destroyForHuman('reopened', w.id);
         expect(result).toMatchObject({ state: 'complete', remaining: [] });
@@ -121,43 +121,43 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it('a checkpoint both abandoned and never-materialized does not parse (hearsay-tools/cezarion#839)', async () => {
     const w = await worker(); destroy(w); manager.requestWorkerStop(w.id);
-    const proof = store.readWorkerExecution(w.id)!;
+    const proof = store.workerExecutions.readWorkerExecution(w.id)!;
     expect(proof.neverMaterialized).toBe(true);
     writeFileSync(join(root, '.ai/cezar/runs', `${w.id}.execution.json`), JSON.stringify({ ...proof, abandoned: true }), { mode: 0o600 });
-    expect(store.readWorkerExecution(w.id)).toBeUndefined();
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toBeUndefined();
     // #878: nothing was materialized, so absence alone still completes bookkeeping.
     expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'complete', remaining: [] });
   });
 
   it('a checkpoint an older Squawk abandoned still parses, keeps its flag and refuses resume (hearsay-tools/cezarion#889)', async () => {
     const w = await worker();
-    const generation = store.commitWorkerExecutionStart(w.id);
-    setRunStatus(store, w.id, RUN_STATUS.cancelled); expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
+    const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
+    setRunStatus(store, w.id, RUN_STATUS.cancelled); expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
     const path = join(root, '.ai/cezar/runs', `${w.id}.execution.json`);
     writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), abandoned: true }), { mode: 0o600 });
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ generation, phase: 'complete', abandoned: true });
-    expect(() => store.commitWorkerExecutionStart(w.id)).toThrow(/abandoned/);
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ generation, phase: 'complete', abandoned: true });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ generation, phase: 'complete', abandoned: true });
+    expect(() => store.workerExecutions.commitWorkerExecutionStart(w.id)).toThrow(/abandoned/);
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(true);
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ generation, phase: 'complete', abandoned: true });
   });
 
   it('destroy stays incomplete when a later starting generation carries the never-materialized flag', async () => {
     const w = await worker(); manager.requestWorkerStop(w.id);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
     manager.dispose(); store.close();
     // The schema refuses the flag outside `complete`, so this generation's termination is never proven.
     writeFileSync(join(root, '.ai/cezar/runs', `${w.id}.execution.json`), JSON.stringify({ generation: randomUUID(), phase: 'starting', neverMaterialized: true }), { mode: 0o600 });
     const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     const service = new DelegationService(workerCleanups({ terminationTimeoutMs: 50 })); const detach = service.registerProject({ home: testHome(), id: 'reopened', root, store: reopened, manager: other });
     try {
-      expect(reopened.readWorkerExecution(w.id)).toBeUndefined();
+      expect(reopened.workerExecutions.readWorkerExecution(w.id)).toBeUndefined();
       expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
     } finally { detach(); other.dispose(); reopened.flush(); }
   });
 
   it('an unreadable creation receipt keeps a never-materialized worker\'s destroy incomplete', async () => {
     const w = await worker(); manager.requestWorkerStop(w.id);
-    expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', neverMaterialized: true });
     const dir = join(root, '.git/cezar-owned-workspaces'); mkdirSync(dir, { recursive: true });
     const receipt = join(dir, `${workspace(w).resourceId}.json`); writeFileSync(receipt, '{broken');
     const service = new DelegationService(workerCleanups()); const detach = service.registerProject({ home: testHome(), id: 'p', root, store, manager });
@@ -175,7 +175,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(record).toHaveBeenCalled();
     destroy(w); expect(manager.requestWorkerStop(w.id).state).toBe('stopping');
     await until(() => [...fixtureWork(root).pending.values()].includes('finishWorkerExecution')
-      || store.readWorkerExecution(w.id)?.phase === 'complete');
+      || store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete');
     expect(await manager.awaitRunTermination(w.id, 30)).toBe(false);
     expect(existsSync(workspace(w).path)).toBe(true);
     hold.release(); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -239,7 +239,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(await Promise.all([manager.awaitRunTermination(w.id, 20), manager.awaitRunTermination(w.id, 30)])).toEqual([false, false]);
     expect(child?.killed).toBe(true); expect(existsSync(workspace(w).path)).toBe(true);
     child!.kill('SIGKILL'); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
-    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+    expect(store.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
   });
 
   it('terminal status without a private completion checkpoint never proves termination after restart', async () => {
@@ -265,7 +265,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } });
     releases.push(() => child?.kill('SIGKILL'));
     manager.enqueueOwnedRun(w.id); await until(() => ready);
-    const prior = store.readWorkerExecution(w.id)!;
+    const prior = store.workerExecutions.readWorkerExecution(w.id)!;
     // Resolved, not hand-built: the run's scratch lives wherever the socket-safe
     // resolver (#387) put it, and the recovery barrier must see that location.
     const scratchDir = resolveAgentTmpDir(join(root, '.ai/cezar'), w.id);
@@ -276,7 +276,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     try {
       await other.recover();
       await until(() => !other.isActive(w.id) && reopened.getRun(w.id)?.status !== 'queued');
-      expect.soft(reopened.readWorkerExecution(w.id)).toEqual(prior);
+      expect.soft(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
       expect.soft(existsSync(scratch)).toBe(true);
       expect.soft(other.continueRun(w.id, { text: 'try again' })).toMatchObject({ ok: false, error: expect.stringContaining('checkpoint') });
       await until(() => !other.isActive(w.id));
@@ -285,7 +285,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       expect.soft(launches).toBe(1); expect.soft(existsSync(workspace(w).path)).toBe(true);
       expect.soft(existsSync(scratch)).toBe(true);
       expect.soft(child!.exitCode).toBeNull(); expect.soft(child!.signalCode).toBeNull();
-      expect.soft(reopened.readWorkerExecution(w.id)).toEqual(prior);
+      expect.soft(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
       expect(reopened.getRun(w.id)).toBeDefined(); expect(reopened.readEvents(w.id).length).toBeGreaterThan(0);
     } finally { other.dispose(); reopened.flush(); child?.kill('SIGKILL'); }
   });
@@ -294,9 +294,9 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const w = await worker(); const path = join(root, '.ai/cezar/runs', `${w.id}.execution.json`);
     if (shape === 'missing') rmSync(path);
     else if (shape === 'malformed') writeFileSync(path, '{broken');
-    else store.commitWorkerExecutionStart(w.id);
+    else store.workerExecutions.commitWorkerExecutionStart(w.id);
     const before = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
-    expect(() => store.commitWorkerExecutionStart(w.id)).toThrow(/checkpoint/);
+    expect(() => store.workerExecutions.commitWorkerExecutionStart(w.id)).toThrow(/checkpoint/);
     expect(existsSync(path) ? readFileSync(path, 'utf8') : undefined).toBe(before);
     expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
   });
@@ -316,16 +316,16 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
   });
 
   it('private checkpoint failure or symlink substitution fails closed without publishing proof', async () => {
-    const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
+    const w = await worker(); const generation = store.workerExecutions.commitWorkerExecutionStart(w.id);
     const path = join(root, '.ai/cezar/runs', `${w.id}.execution.json`);
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ generation, phase: 'starting' });
     const original = readFileSync(path, 'utf8'); rmSync(path); symlinkSync(join(root, 'outside'), path);
     writeFileSync(join(root, 'outside'), original);
-    expect(store.readWorkerExecution(w.id)).toBeUndefined();
-    expect(store.commitWorkerExecutionComplete(w.id, generation)).toBe(false);
+    expect(store.workerExecutions.readWorkerExecution(w.id)).toBeUndefined();
+    expect(store.workerExecutions.commitWorkerExecutionComplete(w.id, generation)).toBe(false);
     expect(readFileSync(join(root, 'outside'), 'utf8')).toBe(original);
     rmSync(path); mkdirSync(path);
-    expect(() => store.commitWorkerExecutionStart(w.id)).toThrow();
+    expect(() => store.workerExecutions.commitWorkerExecutionStart(w.id)).toThrow();
     expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
     manager.enqueueOwnedRun(w.id);
     await vi.waitFor(() => expect(store.getRun(w.id)?.status).toBe('failed'), { timeout: HANG_GUARD_MS });

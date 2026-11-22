@@ -31,6 +31,7 @@ import { ClaudeCliRunner } from '../src/runners/claude/claude-cli-runner.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from '../src/runners/built-in.ts';
 import { registerBuiltInRunSlots } from '../src/built-in-run-slots.ts';
+import { workerExecutionsOf } from '../src/delegation/worker-executions.ts';
 
 installWindowsIdentityStore();
 registerBuiltInRunners();
@@ -120,14 +121,14 @@ try {
     let stopFailures = 0;
     for (let i = 0; i < 10; i++) {
       const id = randomUUID();
-      const scope = store.scopes.spawnScope(id);
+      const scope = workerExecutionsOf(store).scopes.spawnScope(id);
       const [file, args] = scope.command('/bin/sh', ['-c', 'setsid sleep 600 & echo $!']);
       const leader = spawn(file, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
       scope.started(leader.pid!);
       const descendant = Number(String(await new Promise(resolve => leader.stdout!.once('data', resolve))).trim());
       const t0 = performance.now();
       try {
-        const stopped = await store.scopes.stop(id, 10_000);
+        const stopped = await workerExecutionsOf(store).scopes.stop(id, 10_000);
         if (stopped.stopped) stops.push(performance.now() - t0); else stopFailures++;
       } catch { stopFailures++; } finally {
         // Ended whatever the stop did: nothing this fixture started outlives it.

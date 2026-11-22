@@ -18,7 +18,7 @@ const failedWorker = (): RunRecord => makeRunRecord({
 /** A project whose store holds `run`, with the worker execution phase `phase`, over a lifecycle. */
 function cleanupOf(run: RunRecord, phase: () => string) {
   const lifecycle = new CountedLifecycle();
-  const store = { lifecycle, getRun: () => run, readWorkerExecution: () => ({ phase: phase() }), listWorkerIds: () => [] };
+  const store = { lifecycle, getRun: () => run, workerExecutions: { readWorkerExecution: () => ({ phase: phase() }) }, listWorkerIds: () => [] };
   const project = { id: 'project', store } as unknown as DelegationProject;
   // The release runs off the publish; its first step is a serialized operation keyed by the worker,
   // which never settles here: the test counts releases, not destroys.
