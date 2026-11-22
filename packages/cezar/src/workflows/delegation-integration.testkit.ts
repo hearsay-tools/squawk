@@ -80,7 +80,7 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
     await until(() => store.listRuns().every(run => !manager.isActive(run.id)), 'all sessions stopped');
     await fixtureWorkSettled(repo);
     await drainFixtureManagers(repo);
-    manager.dispose(); store.flush(); await controller.close();
+    manager.dispose(); store.persistence.flush(); await controller.close();
     environments.clear(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true });
   }, 30_000);
 

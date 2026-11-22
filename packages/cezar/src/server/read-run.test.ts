@@ -32,7 +32,7 @@ describe('read receipts (#unread-done-items)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

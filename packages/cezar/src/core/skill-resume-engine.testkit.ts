@@ -296,7 +296,7 @@ async function withSkillResumeRun(
     const mark = () => markWire(argsFile, stdinFile);
     const since = (marked: { args: number; stdin: number }) => wireSince(argsFile, stdinFile, marked);
     const restart = async () => {
-      store!.flush();
+      store!.persistence.flush();
       const dataDir = join(repoRoot, '.ai/cezar');
       const checkpoint = readPersistedRuns(dataDir);
       await drainFixtureManagers(repoRoot);

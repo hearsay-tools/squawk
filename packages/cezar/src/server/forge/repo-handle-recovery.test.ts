@@ -36,7 +36,7 @@ describe('live repository identity recovery', () => {
   });
   afterEach(() => {
     controller.abort();
-    store.flush();
+    store.persistence.flush();
     vi.useRealTimers();
     rmSync(root, { recursive: true, force: true });
   });
@@ -171,7 +171,7 @@ describe('live repository identity recovery', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(release).toBeTypeOf('function');
     controller.abort();
-    store.flush();
+    store.persistence.flush();
     const before = readPersistedText(root);
     execFileMock.mockImplementation(reply(null, 'replacement/repo'));
     expect(await resolveRepoHandle(root)).toEqual({ owner: 'replacement', name: 'repo' });

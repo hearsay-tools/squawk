@@ -22,7 +22,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'cez-cost-custom-'));
   store = RunStore.open(join(root, '.ai/cezar'));
 });
-afterEach(() => { store.flush(); rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { store.persistence.flush(); rmSync(root, { recursive: true, force: true }); });
 
 function report(runId: string, stepId: string, state: ReturnType<typeof createActiveRun>, backend: string, usd: number) {
   store.eventLog.appendEvent(runId, { type: 'cost', stepId, usd });

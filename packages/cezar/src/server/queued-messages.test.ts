@@ -92,7 +92,7 @@ describe('queued prompt stack routes (#472)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

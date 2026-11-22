@@ -77,7 +77,7 @@ describe('ProjectContexts (run engine)', () => {
     // to the disposed store saves nothing.
     expect(readPersistedRuns(projectPaths(rootA).write).map((saved) => saved.id)).toEqual([run.id]);
     ctx.store.updateRun(run.id, { title: 'after dispose' });
-    ctx.store.flush();
+    ctx.store.persistence.flush();
     expect(readPersistedRuns(projectPaths(rootA).write)[0]?.title).toBe('pending');
     expect(subscribed()).toBe(0);
 

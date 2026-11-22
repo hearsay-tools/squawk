@@ -108,7 +108,7 @@ export const describeWorkflowStepCompletionParity = workflowStepCompletionParity
       return;
     }
     const restart = async () => {
-      store.flush();
+      store.persistence.flush();
       const dataDir = join(repoRoot, '.ai/cezar');
       const checkpoint = readPersistedRuns(dataDir);
       await drainFixtureManagers(repoRoot);

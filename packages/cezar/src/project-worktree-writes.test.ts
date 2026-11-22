@@ -40,7 +40,7 @@ it('refuses Continue before claiming or copying a fallback family; record-only e
     expect(store.updateRun(run.id, { title: 'automatic edit' })).toBeUndefined();
     expect(store.claims.adoptFallbackFamily(run.id)).toBe(true);
     store.updateRun(run.id, { title: 'record-only edit' });
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(run.id)?.title).toBe('record-only edit');
     expect(manager.continueRun(run.id).error).toMatch(refusal);
   } finally { manager.dispose(); store.close(); }

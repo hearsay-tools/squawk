@@ -62,7 +62,7 @@ async function startHeld(): Promise<string> {
 }
 
 async function restart(): Promise<void> {
-  store.flush();
+  store.persistence.flush();
   manager.dispose();
   sessions.at(-1)!.close();
   await fixtureWorkSettled(f.repoRoot);

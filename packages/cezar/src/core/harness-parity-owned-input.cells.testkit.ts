@@ -222,7 +222,7 @@ export const OWNED_INPUT_GROUPS = {
             // The idle worker parks on Squawk's fallback question, routed to its parent
             // (hearsay-tools/cezarion#1301, hearsay-tools/cezarion#2410).
             await waitFor(() => store.getRun(runId)?.status === 'waiting' && store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
-            store.flush();
+            store.persistence.flush();
             let unblock: (() => void) | undefined;
             // The input supersedes that question with a write to the parent's conversation first; the
             // failure this cell injects is the input's own delivery checkpoint, after it.
@@ -273,7 +273,7 @@ export const OWNED_INPUT_GROUPS = {
         it(`${backend} R8 queued restart/starting inputs persist; disk failure emits and delivers nothing`, async () => {
           await withOwnedInputRun(backend, 'hold', async fixture => {
             const { runId, parentRunId, repoRoot } = fixture;
-            fixture.store.flush();
+            fixture.store.persistence.flush();
             const unblock = blockRunWrites(join(repoRoot, '.ai/cezar'));
             try {
               expect(() => fixture.manager.steerWorker(runId, agentInput(parentRunId))).toThrow();

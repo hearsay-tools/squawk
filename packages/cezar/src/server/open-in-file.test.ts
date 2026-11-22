@@ -43,7 +43,7 @@ describe("POST /api/v1/runs/:id/open-in — target 'default' (local-mode file op
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     rmSync(worktree, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;

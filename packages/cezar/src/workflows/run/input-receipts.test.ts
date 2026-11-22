@@ -35,7 +35,7 @@ function opening() {
       conversation: { senderRunId: parent.id, recipientRunId: recipient.id, kind: 'request' } } });
   store.updateRun(recipient.id, { continuationMessage: { id: 'continue-1', agentInputId: message.id,
     text: message.text, createdAt: message.createdAt, origin: 'lifecycle' } });
-  store.flush();
+  store.persistence.flush();
   projectConversationEvents(store, store.getRun(parent.id)!);
   const state = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
   state.inputState.selectOpeningInput(message.id);

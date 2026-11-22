@@ -130,7 +130,7 @@ export function completionCells(runners: string[], it: typeof registerTest = reg
       // done: a store write cannot settle a queued run the scheduler starts (hearsay-tools/cezarion#1804).
       const p = await workerParent(runner);
       const { entry } = await ignoreRefusal(runner, p.id, reply, () => workerWaits(p.id)[0]?.phase === 'open', { task: 'mock:cezar-done' });
-      store.flush();
+      store.persistence.flush();
       await restart(false, readPersistedRuns(join(root, '.ai/cezar')));
       expect(workerWaits(p.id)).toEqual([entry]);
       await until(() => settled(p.id, entry.id)?.phase === 'delivered' && prompted(runner, workerWake(entry)).length > 0);

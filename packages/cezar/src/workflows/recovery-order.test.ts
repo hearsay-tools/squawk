@@ -41,7 +41,7 @@ describe('recover() with tied runs in a one-slot project', () => {
 
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     vi.unstubAllEnvs();
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;

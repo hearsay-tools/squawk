@@ -44,7 +44,7 @@ export function durableRun(root: string, workspace: WorkerWorkspace) {
   stores.push(store);
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
   store.updateRun(parent.id, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
-  store.flush();
+  store.persistence.flush();
   const run = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent }] }, parent.id, randomUUID(), {
     role: 'worker', parentRunId: parent.id, permissions: [], workspace,
   }, 'a'.repeat(64), spawnCapacityRefusal);
@@ -55,7 +55,7 @@ export function receiptPath(root: string, workspace: WorkerWorkspace) {
 }
 afterEach(async () => {
   for (const manager of managers.splice(0)) manager.dispose();
-  for (const store of stores.splice(0)) store.flush();
+  for (const store of stores.splice(0)) store.persistence.flush();
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });

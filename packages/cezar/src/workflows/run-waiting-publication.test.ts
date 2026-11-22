@@ -35,13 +35,13 @@ describe('RunManager waiting publication', () => {
     const record = fixture.manager.startRun(SINGLE_STEP, { task: 'first markerless turn', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, (candidate) => candidate?.status === 'waiting');
-    fixture.store.flush();
+    fixture.store.persistence.flush();
 
     // Delivery publishes turn.started before resumeParkedRun; ignore that prior parked snapshot.
     let resumed = false;
     const published = publishedWaiting(record.id, () => resumed);
     expect(fixture.manager.sendMessage(record.id, [{ type: 'text', text: 'mock:hold second markerless turn' }])).toBe(true);
-    fixture.store.flush();
+    fixture.store.persistence.flush();
     resumed = true;
     await published;
     await new Promise<void>((resolve) => setImmediate(resolve));

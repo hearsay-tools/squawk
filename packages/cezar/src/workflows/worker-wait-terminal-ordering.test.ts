@@ -89,10 +89,10 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const blocker = await parent('mock:slow');
     expect(manager.continueRun(p.id, { text: 'internal restart' }, true).ok).toBe(true);
     expect(store.getRun(p.id)?.continuationMessage).toMatchObject({ origin: 'lifecycle' });
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(p.id)?.continuationMessage).toMatchObject({ origin: 'lifecycle' });
-    reopened.flush();
+    reopened.persistence.flush();
     manager.cancel(blocker.id);
     await until(() => store.getRun(p.id)?.status === 'waiting');
     expect(store.eventLog.readEvents(p.id).filter(e => e.type === 'user-message')).toEqual([]);
@@ -114,7 +114,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const wire = controlledWire({ firstResultGate: gate });
     const p = await parent(); const w = await worker(p.id);
     await until(wire.initialReceived);
-    register(p.id, [w.id]); store.flush();
+    register(p.id, [w.id]); store.persistence.flush();
     const emit = runnerTurnEvents.get(store.getRun(p.id)!.worktreePath!);
     if (!emit) throw Error('parent runner turn channel missing');
     const release = blockRunWrites(join(root, '.ai/cezar'));

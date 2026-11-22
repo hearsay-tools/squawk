@@ -120,7 +120,7 @@ export async function drainFixtureManagers(root: string, timeoutMs = 8_000): Pro
     // fails with the names of the work still owned.
     if (await nextSettlement(work, deadline - Date.now())) deadline = Date.now() + timeoutMs;
   }
-  for (const { manager, store } of group) { manager.dispose(); store.flush(); }
+  for (const { manager, store } of group) { manager.dispose(); store.persistence.flush(); }
   fixtures.delete(root);
 }
 

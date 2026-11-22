@@ -248,7 +248,7 @@ describe('durable conversations', () => {
       expect((await f.service.conversation(f.caller, { recipientRunId: w.id })).outcomes).toEqual([reply.outcome]);
       const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
       expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { outcomes: [reply.outcome] } });
-      reopened.flush();
+      reopened.persistence.flush();
       for (const id of [f.parent.id, w.id]) {
         const events = f.store.eventLog.readEvents(id).filter(event => event.type === 'request-outcome');
         expect(events.at(-1)).toMatchObject({ outcome: { status: 'replied-late', replyId: request.id } });
@@ -263,7 +263,7 @@ describe('durable conversations', () => {
     await expect(f.service.send(f.caller, { ...request, text: 'changed' })).rejects.toMatchObject({ code: 'invalid_input' });
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { messages: [a.message], outcomes: [] } });
-    expect(reopened.getRun(w.id)?.agentInputs?.[0]).toMatchObject({ id: request.id, conversation: { senderRunId: f.parent.id, recipientRunId: w.id, kind: 'request' } }); reopened.flush();
+    expect(reopened.getRun(w.id)?.agentInputs?.[0]).toMatchObject({ id: request.id, conversation: { senderRunId: f.parent.id, recipientRunId: w.id, kind: 'request' } }); reopened.persistence.flush();
   });
   it('allows worker request, parent follow-up and reply, preserving first settlement and late replies', async () => {
     const w = await worker(); const req = await f.service.send(w.caller, { id: randomUUID(), recipientRunId: f.parent.id, kind: 'request', text: 'Approve approach?', timeoutSeconds: 600 });

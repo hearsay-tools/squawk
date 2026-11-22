@@ -65,7 +65,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     manager.dispose();
     vi.unstubAllEnvs();
     for (const run of store.listRuns()) removeAgentTmpDir(dataDir, run.id);
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
@@ -143,7 +143,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
       writeFileSync(join(dir, 'scratch'), 'survive restart');
     }
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     store = RunStore.open(dataDir, { keepLive: true });
     manager = createFixtureManager(store, repoRoot);
     await manager.recover();
@@ -361,7 +361,7 @@ describe('RunManager — deep checkout falls back to a socket-safe TMPDIR (#387)
     manager.dispose();
     vi.unstubAllEnvs();
     for (const run of store.listRuns()) removeAgentTmpDir(dataDir, run.id);
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);

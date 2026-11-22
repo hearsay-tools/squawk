@@ -97,7 +97,7 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
   const movedState = () => existsSync(join(project.newDir, 'runs.db')) && !existsSync(join(project.dataDir, 'runs.db'));
   const setTask = (status: 'waiting' | 'review', archived = true) => {
     const store = RunStore.open(project.dataDir, { keepLive: true });
-    try { setRunStatus(store, TASK, status, { archived }); store.flush(); } finally { store.close(); }
+    try { setRunStatus(store, TASK, status, { archived }); store.persistence.flush(); } finally { store.close(); }
   };
 
   it('moves an idle legacy project at cockpit start, before the listener, and its task data stays readable', async () => {
@@ -173,7 +173,7 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       expect(fallbackProjectWriteError(join(project.dataDir, 'runs.db'))).toMatch(/read-only project data/);
       // The task ends in review; a human can still Continue it, so the next start keeps its files.
       setRunStatus(context.store, TASK, 'review');
-      context.store.flush();
+      context.store.persistence.flush();
       first.stop();
       const second = cockpit();
       const kept = await second.contexts.context('p');
@@ -184,7 +184,7 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       expect(JSON.parse(readFileSync(join(project.newDir, LEGACY_RUNS_FILE), 'utf8'))).toEqual({ version: 1, runs: [TASK] });
       // The task is archived; one attempt per cockpit run, so the same run does not move its files.
       kept.store.archive.setArchived(TASK, true);
-      kept.store.flush();
+      kept.store.persistence.flush();
       second.contexts.dispose('p');
       await second.contexts.context('p');
       expect(existsSync(project.taskPath)).toBe(true);

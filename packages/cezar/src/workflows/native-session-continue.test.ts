@@ -83,7 +83,7 @@ describe('Continue after a crash before the native session event', () => {
     await drainFixtureManagers(repoRoot);
     manager?.dispose();
     manager = undefined;
-    store.flush();
+    store.persistence.flush();
     for (const [name, value] of saved) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;

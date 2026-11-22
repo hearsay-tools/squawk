@@ -63,7 +63,7 @@ describe('runs saved before the persistence move', () => {
     try {
       store.updateRun(fixture.ids.plain, { title: 'plain, renamed' });
       store.updateRun(fixture.ids.extras, { title: 'extras, renamed' });
-      store.flush();
+      store.persistence.flush();
       store.updateRun(fixture.ids.root, { allowWorkers: true });
     } finally {
       store.close();

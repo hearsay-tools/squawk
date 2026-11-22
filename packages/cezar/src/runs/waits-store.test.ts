@@ -219,7 +219,7 @@ describe('wait checkpoints', () => {
     id = store.createRun({ title: 'Waits', workflow: 'quick-task', task: 'wait', steps: [] }).id;
     setRunStatus(store, id, RUN_STATUS.waiting);
   });
-  afterEach(() => { vi.restoreAllMocks(); store.flush(); rmSync(directory, { recursive: true, force: true }); });
+  afterEach(() => { vi.restoreAllMocks(); store.persistence.flush(); rmSync(directory, { recursive: true, force: true }); });
   const input = (waitId: string, text = 'wake'): AgentInput => ({ id: waitId, parentRunId: id, source: 'lifecycle', text, createdAt: new Date().toISOString() });
   const reopen = () => { store.close(); store = openTestRunStore(directory, { keepLive: true }); return store.getRun(id)!; };
   /** What a store reopened after a crash reads: only committed writes survive. */
@@ -423,7 +423,7 @@ describe('opening a v3 store', () => {
       expect(run.status).toBe('waiting');
       expect(run.waits).toEqual([expect.objectContaining({ id: legacyCi.id, kind: WAIT_KIND.pr, phase: WAIT_PHASE.resolved, result })]);
       expect(run.agentInputs).toHaveLength(1);
-      store.flush();
+      store.persistence.flush();
     } finally {
       store.close();
     }
@@ -694,7 +694,7 @@ describe('upgrade-on-read of agent worker waits', () => {
       const store = openTestRunStore(directory, { keepLive: true });
       try {
         expect(store.getRun(RUN_ID)!.waits).toEqual([expect.objectContaining({ id: WAIT_ID, kind: WAIT_KIND.worker, phase: WAIT_PHASE.open })]);
-        store.flush();
+        store.persistence.flush();
       } finally {
         store.close();
       }
@@ -752,7 +752,7 @@ describe('the summary and live column of an upgraded worker wait', () => {
   it('rewrites an agent wait without delegation.wait and keeps the row live', () => {
     seedRuns(directory, [stored(parked)]);
     const store = openTestRunStore(directory, { keepLive: true });
-    try { store.flush(); } finally { store.close(); }
+    try { store.persistence.flush(); } finally { store.close(); }
     const db = RunDatabase.openReadOnly(join(directory, RUNS_DB_FILE))!;
     try {
       expect(db.get(RUN_ID)!.live).toBe(true);
@@ -767,7 +767,7 @@ describe('the summary and live column of an upgraded worker wait', () => {
   it('reads the completion wait into the list, and the summary keeps no delegation.wait', () => {
     seedRuns(directory, [stored(parked, { completion: { phase: 'waiting', waitId: WAIT_ID } })]);
     const store = openTestRunStore(directory, { keepLive: true });
-    try { store.flush(); } finally { store.close(); }
+    try { store.persistence.flush(); } finally { store.close(); }
     const db = RunDatabase.openReadOnly(join(directory, RUNS_DB_FILE))!;
     try {
       expect(db.get(RUN_ID)!.live).toBe(true);

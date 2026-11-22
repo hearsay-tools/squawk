@@ -48,7 +48,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
         expect(JSON.stringify(store.getRun(p.id))).toBe(snapshot);
         expect(store.getRun(w.id)?.status).toBe('queued');
         expect(currentUsage(p.id)).toBeUndefined();
-        store.flush();
+        store.persistence.flush();
         reopenRuntime();
         await manager.recover();
         expect(waitOf(store.getRun(p.id))?.id).toBe(wait.id);
@@ -87,7 +87,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     await Promise.all(executions.splice(0));
     expect(store.getRun(p.id)?.status).toBe('cancelled');
     await Promise.all(bookkeeping.splice(0));
-    store.flush();
+    store.persistence.flush();
     reopenRuntime();
     await manager.recover();
     expect(store.getRun(w.id)?.status).toBe('cancelled');

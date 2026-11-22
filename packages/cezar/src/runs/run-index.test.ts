@@ -398,7 +398,7 @@ describe('cold reads of runs.db', () => {
       const store = RunStore.open(dir);
       const run = store.createRun({ title: 'live writer', workflow: 'w', task: 't', steps: [] });
       setRunStatus(store, run.id, RUN_STATUS.done);
-      store.flush();
+      store.persistence.flush();
       const before = readdirSync(dir).sort();
       chmodSync(dir, 0o555);
       try {
@@ -431,7 +431,7 @@ describe('cold reads of runs.db', () => {
  it('finds every collection-only PR in a cold archived database without writing files', () => {
   const pullRequests = [812, 813, 814, 815, 816].map(number => ({ number, source: 'declared' as const }));
   seedRuns(dir, [record({ id: 'split', archived: true, pullRequests })]);
-  const store = RunStore.open(dir); store.flush();
+  const store = RunStore.open(dir); store.persistence.flush();
   const before = readdirSync(dir).sort();
   const bytes = readFileSync(join(dir, RUNS_DB_FILE));
   for (const number of [812, 813, 814, 815, 816]) {

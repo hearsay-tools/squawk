@@ -103,6 +103,6 @@ describe('verified destruction retains results through explicit history deletion
       expect(manager.isActive(f.parent.id)).toBe(false);
       expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
       expect(reopened.retention.deleteRun(f.parent.id)).toBe(true);
-    } finally { manager.dispose(); reopened.flush(); }
+    } finally { manager.dispose(); reopened.persistence.flush(); }
   });
 });

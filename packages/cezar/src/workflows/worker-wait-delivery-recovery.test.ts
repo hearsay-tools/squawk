@@ -21,7 +21,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     // input receipt committed, but wait retirement and resumeParkedRun's status update had not
     // happened yet. hearsay-tools/cezarion#1235: the wait is `delegation.wait`, not a list entry,
     // and upgrade-on-read reads the run as resumed.
-    store.flush();
+    store.persistence.flush();
     const now = new Date().toISOString();
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).map(run => {
       if (run.id !== p.id || run.delegation?.role !== 'root') return run;
@@ -46,7 +46,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const p = await parent(); const w = await worker(p.id);
     const wait = register(p.id, [w.id]);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
-    store.flush();
+    store.persistence.flush();
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).map(run => {
       if (run.id !== p.id || run.delegation?.role !== 'root') return run;
       const { waits: _waits, ...legacy } = run;

@@ -284,7 +284,7 @@ export function startServer(deps: ServerDeps, port: number, listener?: Server): 
   const shutdownForRestart = async (): Promise<void> => {
     lifecycle.stop(); archiveOnMerge.stop(); completionActions.stop();
     void sharedContexts.disposeAll(); // close every built secondary project before old process exits
-    deps.store.flush();
+    deps.store.persistence.flush();
     socketHub.close();
     // Dev servers run in their own process groups: they outlive Squawk unless stopped here.
     // A failed release must not abort the restart halfway, with the store flushed and the port still bound.

@@ -74,7 +74,7 @@ describe('POST /api/v1/runs refusals', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

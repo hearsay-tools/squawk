@@ -56,7 +56,7 @@ describe('delegation service durable authority', () => {
     expect(f.store.workerExecutions.readWorkerExecution(worker.id)).toEqual(proof);
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [{ workerId: a.workerId }] });
-    expect(reopened.getRun(a.workerId)?.delegation).toEqual(worker.delegation); reopened.flush();
+    expect(reopened.getRun(a.workerId)?.delegation).toEqual(worker.delegation); reopened.persistence.flush();
     await expect(f.service.spawn(f.caller, { ...request, task: 'different' })).rejects.toMatchObject({ code: 'invalid_input' });
   });
   it('accepts explicit same-backend context/model and hashes caller choices while retaining legacy hashes', async () => {
@@ -308,7 +308,7 @@ describe('delegation service durable authority', () => {
     expect(f.store.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
   });
   it('publishes neither receipt nor worker when private identity cannot be written', async () => {
-    f.store.flush();
+    f.store.persistence.flush();
     const writer = f.store.workerExecutions;
     const write = writer.writeWorkerIdentity.bind(writer);
     vi.spyOn(writer, 'writeWorkerIdentity').mockImplementation((id, identity) => {
@@ -319,7 +319,7 @@ describe('delegation service durable authority', () => {
     expect(f.store.listRuns()).toHaveLength(1); expect(f.parent.delegation).toMatchObject({ receipts: [] });
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.listRuns()).toHaveLength(1); expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [] }); reopened.flush();
+    expect(reopened.listRuns()).toHaveLength(1); expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ receipts: [] }); reopened.persistence.flush();
   });
   it('authorizes before replay and rejects copied caller, wrong project, and worker credentials', async () => {
     const request = input(); const worker = await f.service.spawn(f.caller, request);

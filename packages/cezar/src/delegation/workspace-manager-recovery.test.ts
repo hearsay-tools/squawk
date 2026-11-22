@@ -41,7 +41,7 @@ describe('RunManager.enqueueOwnedRun', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, (
       task: 'mock:cezar-done owned task', runner: 'claude', model: 'sonnet', systemPrompt: 'Inherited worker instruction',
       worktree: false, worktreePath: parentPath, baseBranch: first,
       workflowDef: { name: 'injected', source: 'built-in', steps: [{ id: 'task', command: 'exit 99' }] },
-    }); store.flush();
+    }); store.persistence.flush();
     const manager = managerFor(store, root);
     manager.enqueueOwnedRun(run.id);
     manager.enqueueOwnedRun(run.id);

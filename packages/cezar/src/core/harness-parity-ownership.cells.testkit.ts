@@ -14,7 +14,7 @@ import '../delegation/worker-executions.testkit.ts';
 /** Flush until `runId` has left the store's memory; false if it never does. */
 async function leavesMemory(store: RunStore, runId: string): Promise<boolean> {
   try {
-    await waitFor(() => { store.flush(); return !store.heldIds().includes(runId); }, 10_000);
+    await waitFor(() => { store.persistence.flush(); return !store.heldIds().includes(runId); }, 10_000);
     return true;
   } catch {
     return false;
@@ -86,7 +86,7 @@ export const OWNERSHIP_GROUPS = {
             async ({ store, manager, runId, repoRoot }) => {
               await waitFor(() => !manager.isActive(runId));
               const dataDir = join(repoRoot, '.ai/cezar');
-              store.flush();
+              store.persistence.flush();
               const records = readPersistedRuns(dataDir);
               await drainFixtureManagers(repoRoot);
               store.close();
@@ -137,7 +137,7 @@ export const OWNERSHIP_GROUPS = {
           await driveObservedRun(backend, 'ask', record => record?.status === 'waiting', 30_000,
             async ({ store, runId, repoRoot }) => {
               const dataDir = join(repoRoot, '.ai/cezar');
-              store.flush();
+              store.persistence.flush();
               // A headless `cez run` opens the project and exits while the owner still runs.
               RunStore.open(dataDir).close();
               afterHeadless = readPersistedRuns(dataDir).find((record) => record.id === runId)?.status;
@@ -192,7 +192,7 @@ export const OWNERSHIP_GROUPS = {
             async ({ store, manager, runId, repoRoot }) => {
               await waitFor(() => [...fixtureWork(manager).liveSessions].some(session => session.open));
               const dataDir = join(repoRoot, '.ai/cezar');
-              store.flush();
+              store.persistence.flush();
               // This cockpit was already running beside the owner, which then crashed mid-session.
               const cockpit = RunStore.open(dataDir, { keepLive: true });
               try {
@@ -253,7 +253,7 @@ export const OWNERSHIP_GROUPS = {
             async ({ store, manager, runId, repoRoot }) => {
               await waitFor(() => [...fixtureWork(manager).liveSessions].some(session => session.open));
               const dataDir = join(repoRoot, '.ai/cezar');
-              store.flush();
+              store.persistence.flush();
               const cockpit = RunStore.open(dataDir, { keepLive: true });
               try {
                 manager.dispose();

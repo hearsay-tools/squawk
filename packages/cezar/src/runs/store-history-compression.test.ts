@@ -101,7 +101,7 @@ describe('RunStore history compression', () => {
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(store.retention.deleteRun(run.id)).toBe(true);
-    store.flush();
+    store.persistence.flush();
     expect(existsSync(compressed)).toBe(false);
     expect(existsSync(plain)).toBe(false);
   });
@@ -116,7 +116,7 @@ describe('RunStore history compression', () => {
     store.eventLog.appendEvent(both.id, { type: 'note', message: 'A' });
     finish(store, both.id);
     store.archive.setArchived(both.id, true);
-    store.flush();
+    store.persistence.flush();
     await store.archive.historyIdle();
     store.close();
     stores.pop();
@@ -183,7 +183,7 @@ describe('RunStore history compression', () => {
     const historyFile = await import('./history-file.ts');
     const spy = vi.spyOn(historyFile, 'compressHistory').mockResolvedValue('skipped');
     owner.archive.setArchived(run.id, true);
-    owner.flush();
+    owner.persistence.flush();
     await owner.archive.historyIdle();
     spy.mockRestore();
 
@@ -264,7 +264,7 @@ describe('RunStore history compression', () => {
     finish(store, boom.id);
     store.archive.setArchived(ok.id, true);
     store.archive.setArchived(boom.id, true);
-    store.flush();
+    store.persistence.flush();
     await store.archive.historyIdle();
     store.close();
     stores.pop();
@@ -325,7 +325,7 @@ describe('RunStore history compression', () => {
     finish(store, other.id);
     store.archive.setArchived(prefixRun.id, true);
     store.archive.setArchived(other.id, true);
-    store.flush();
+    store.persistence.flush();
     await store.archive.historyIdle();
     store.close();
     stores.pop();
@@ -472,7 +472,7 @@ describe('RunStore history compression', () => {
       store.archive.setArchived(run.id, true);
     }
     await store.archive.historyIdle();
-    store.flush();
+    store.persistence.flush();
     store.close();
     stores.pop();
 
@@ -493,7 +493,7 @@ describe('RunStore history compression', () => {
     const { plain, compressed } = historyPaths(dir, run.id);
     const before = readFileSync(plain);
     store.archive.setArchived(run.id, true);
-    store.flush();
+    store.persistence.flush();
     const other = openStore(dir).store;
     expect(other.runPins.pin(run.id, 'active')).toBeDefined();
     await store.archive.historyIdle();
@@ -522,7 +522,7 @@ describe('RunStore history compression', () => {
     try {
       store.archive.setArchived(run.id, true);
       await vi.waitFor(() => expect(spy).toHaveBeenCalled(), { timeout: HANG_GUARD_MS });
-      store.flush();
+      store.persistence.flush();
       const other = openStore(dir).store;
       expect(other.runPins.pin(run.id, 'active')).toBeDefined();
       release();

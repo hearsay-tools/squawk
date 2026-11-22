@@ -83,7 +83,7 @@ describe('workspace runs index API', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot, otherRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);

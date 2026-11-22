@@ -38,7 +38,7 @@ beforeEach(() => {
   context = { createRunner: noRunners, home: testHome(), store, dataDir: root, repoRoot: root, semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false };
   id = store.createRun({ title: 'Launch', workflow: 'accepted', task: 'original', steps: [{ id: 'first', name: 'First', kind: STEP_KIND.agent }] }).id;
 });
-afterEach(() => { vi.unstubAllEnvs(); store.flush(); rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { vi.unstubAllEnvs(); store.persistence.flush(); rmSync(root, { recursive: true, force: true }); });
 const attachments = (runId: string, urls: string[], kind: 'task' | 'queued' | 'continuation') =>
   atTaskHead.attachments(context, runId, urls, kind);
 const message = (text: string, images: string[] = []) => ({ id: 'queued', text, images, createdAt: '2026-11-05T00:00:00Z' });

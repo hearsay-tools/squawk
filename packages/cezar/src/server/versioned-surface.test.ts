@@ -48,7 +48,7 @@ describe('the versioned API surface', () => {
 
   afterEach(() => {
     contexts.disposeAll();
-    store.flush();
+    store.persistence.flush();
     rmSync(home, { recursive: true, force: true });
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);

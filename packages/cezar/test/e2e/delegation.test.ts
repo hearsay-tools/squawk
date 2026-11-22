@@ -98,7 +98,7 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
       }
       for (const run of store.listRuns()) if (run.delegation?.role === 'worker') assert.equal(await manager.awaitRunTermination(run.id, 15_000), true);
       while (work.pending.size) await Promise.allSettled([...work.pending.keys()]);
-      manager.dispose(); store.flush();
+      manager.dispose(); store.persistence.flush();
     }
     await controller?.close();
     process.env = saved;

@@ -124,7 +124,7 @@ async function benchmark(argv: string[], cleanups: Array<() => unknown>): Promis
   clearProjectProbeCache();
   const store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
   const contexts = new ProjectContexts({ createRunner, createManager: (store, root, options) => new RealRunManager(store, root, { ...options, acquireCiResources }), home: selectedHome, listProjects: () => listProjects(selectedHome) });
-  cleanups.push(() => { contexts.disposeAll(); store.flush(); });
+  cleanups.push(() => { contexts.disposeAll(); store.persistence.flush(); });
   await registerProject(repoRoot, undefined, selectedHome);
   const app = createApp({
     home: selectedHome, repoRoot, store, version: '0.0.0-bench', contexts, workspaceEvents: new WorkspaceEventBus(),
@@ -151,7 +151,7 @@ async function benchmark(argv: string[], cleanups: Array<() => unknown>): Promis
       receipts: workers.map((worker) => ({ requestId: randomUUID(), workerId: worker.id, requestHash: 'b'.repeat(64) })),
     },
   });
-  store.flush();
+  store.persistence.flush();
   const workerIds = new Set(workers.map((worker) => worker.id));
 
   // ---- helpers ---------------------------------------------------------------------------------

@@ -94,6 +94,6 @@ try {
 } finally {
   manager.cancel(workerId);
   await until(() => !manager.isActive(workerId), 30_000).catch(() => {});
-  manager.dispose(); store.flush();
+  manager.dispose(); store.persistence.flush();
   process.exit(failed ? 1 : 0);
 }

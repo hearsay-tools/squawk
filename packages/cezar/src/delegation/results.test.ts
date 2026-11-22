@@ -55,7 +55,7 @@ describe('parent-owned collected worker results', () => {
     expect(reopened.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(result);
     expect(reopened.workerResults.readWorkerResultDiff(f.parent.id, run.id)).toContain('[REDACTED]');
     expect(readPersistedText(join(f.root, '.ai/cezar'))).not.toContain('diff --git');
-    reopened.flush();
+    reopened.persistence.flush();
   });
   it('reuses the retained diff after retention reclaims the worker directory (#575)', async () => {
     const run = await worker(); await ensureOwnedWorkspace(f.root, run);
@@ -184,7 +184,7 @@ describe('parent-owned collected worker results', () => {
     if (parent.delegation?.role !== 'root') throw Error('fixture');
     reopened.commitDelegation([{ id: parent.id, delegation: { ...parent.delegation, receipts: [] } }]);
     await expect(f.service.collect(f.caller, { workerId: run.id })).rejects.toMatchObject({ code: 'denied_scope' });
-    reopened.flush();
+    reopened.persistence.flush();
   });
   it.each(['absent', 'pending', 'malformed'] as const)('denies absent-child collection with %s deletion evidence', async kind => {
     const run = await worker();
@@ -203,7 +203,7 @@ describe('parent-owned collected worker results', () => {
     const before = readPersistedText(dataDir);
     await expect(f.service.collect(f.caller, { workerId: run.id })).rejects.toMatchObject({ code: 'denied_scope' });
     expect(readPersistedText(dataDir)).toBe(before);
-    reopened.flush();
+    reopened.persistence.flush();
   });
   it('a stopped public status is partial and unsettled until private termination is proven', async () => {
     const run = await worker(); const generation = f.store.workerExecutions.commitWorkerExecutionStart(run.id);

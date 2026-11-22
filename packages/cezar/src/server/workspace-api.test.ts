@@ -61,7 +61,7 @@ describe('the workspace settings API (step 2.7)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
     if (savedBrowseRoot === undefined) delete process.env.CEZ_BROWSE_ROOT;

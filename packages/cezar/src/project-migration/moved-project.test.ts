@@ -44,7 +44,7 @@ function newTask(root: string): string {
     const run = store.createRun({ title: 'new', task: 'new', workflow: 'quick-task', steps: [] });
     // Settled, as a task that finished before the next start: a live one would block a move.
     setRunStatus(store, run.id, 'review');
-    store.flush();
+    store.persistence.flush();
     expect(store.claims.sourceDataDir(run.id)).toBe(projectPaths(root).write);
     return run.id;
   } finally { store.close(); }
@@ -84,7 +84,7 @@ describe('a moved project', { timeout: TIMEOUT }, () => {
       expect(store.claims.runOwnership(TASK)).not.toBe('fallback');
       expect(store.claims.writeRefusal(TASK)).toBeUndefined();
       expect(store.updateRun(TASK, { title: 'continued' })?.title).toBe('continued');
-      store.flush();
+      store.persistence.flush();
       // The preview host's check: the moved worktree and the run are both writable.
       const worktree = store.getRun(TASK)!.worktreePath!;
       expect(worktree).toBe(moved(project, project.taskPath));
@@ -140,7 +140,7 @@ describe('a moved project', { timeout: TIMEOUT }, () => {
       expect(projectMoveMarked(project.root)).toBe(true);
       expect(context.dataDir).toBe(project.newDir);
       const run = context.store.createRun({ title: 'after', task: 'after', workflow: 'quick-task', steps: [] });
-      context.store.flush();
+      context.store.persistence.flush();
       expect(context.store.claims.sourceDataDir(run.id)).toBe(project.newDir);
       expect(context.store.claims.writeRefusal(TASK)).toBeUndefined();
     } finally { await contexts.disposeAll(); ownership.releaseAll(); }

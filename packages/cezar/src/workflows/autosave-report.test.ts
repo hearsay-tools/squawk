@@ -88,7 +88,7 @@ describe('autosave report in the handoff and cockpit (#1004)', () => {
     if (bin) rmSync(bin, { recursive: true, force: true });
     bin = undefined;
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

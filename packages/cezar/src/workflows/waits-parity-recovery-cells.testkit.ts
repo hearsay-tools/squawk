@@ -150,7 +150,7 @@ export function recoveryCells(runners: string[], it: typeof registerTest = regis
       const { p, w } = await parentWithWorker(runner);
       await parentTurn(p.id, toolCall('cezar_wait', { kind: WAIT_KIND.worker, worker_ids: [w.id], timeout_seconds: 600 }), () => parkedOn(p.id, workerWaits(p.id)[0]));
       const wait = workerWaits(p.id)[0]!;
-      store.flush();
+      store.persistence.flush();
       const disk = readPersistedRuns(join(root, '.ai/cezar')).map(row => {
         if (row.id !== p.id) return row;
         const { waits: _waits, ...rest } = row;

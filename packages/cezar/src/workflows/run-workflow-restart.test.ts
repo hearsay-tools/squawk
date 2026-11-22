@@ -32,7 +32,7 @@ describe('RunManager workflow restart', () => {
     fixture.store.addStep(record.id, { id: 'later', name: 'Later', kind: STEP_KIND.check });
     fixture.store.updateStep(record.id, 'task', { status: STEP_STATUS.done, finishedAt: new Date().toISOString() });
     setRunStatus(fixture.store, record.id, RUN_STATUS.queued, { currentStepId: undefined, workflowDef: workflow });
-    fixture.store.flush();
+    fixture.store.persistence.flush();
 
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();
@@ -66,7 +66,7 @@ describe('RunManager workflow restart', () => {
     setRunStatus(fixture.store, record.id, RUN_STATUS.running, { currentStepId: 'task', workflowDef: workflow, continuationMessage: {
         id: 'restart-task', text: 'mock:cezar-done recover', origin: 'lifecycle', createdAt: new Date().toISOString(),
       } });
-    fixture.store.flush();
+    fixture.store.persistence.flush();
 
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();

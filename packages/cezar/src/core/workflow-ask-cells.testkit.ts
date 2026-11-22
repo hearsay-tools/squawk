@@ -83,7 +83,7 @@ export const describeWorkflowAsk = workflowAsk((backend, row) => async () => {
       expect(semaphore.busy()).toBe(0);
 
       if (row.id === 'Q5') {
-        store.flush();
+        store.persistence.flush();
         const dataDir = join(repoRoot, '.ai/cezar');
         const checkpoint = readPersistedRuns(dataDir);
         // Preserve the exact disk boundary while stopping test-owned processes.

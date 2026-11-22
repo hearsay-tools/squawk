@@ -46,7 +46,7 @@ async function migrateWith(project: MigrationProject, kept?: readonly string[]) 
 
 function setArchived(dataDir: string, id: string, archived: boolean): void {
   const store = RunStore.open(dataDir, { keepLive: true });
-  try { store.archive.setArchived(id, archived); store.flush(); } finally { store.close(); }
+  try { store.archive.setArchived(id, archived); store.persistence.flush(); } finally { store.close(); }
 }
 
 describe('a project move with tasks that can still resume', { timeout: TIMEOUT }, () => {
@@ -171,7 +171,7 @@ describe('a project move with tasks that can still resume', { timeout: TIMEOUT }
     try {
       const worker = store.getRun(WORKER)!;
       setRunStatus(store, WORKER, 'done', { archived: false, workflowDef, delegation: { ...worker.delegation!, context } as never });
-      store.flush();
+      store.persistence.flush();
     } finally { store.close(); }
     writeFileSync(join(project.dataDir, 'runs', `${WORKER}.identity.json`), JSON.stringify({ kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) }), { mode: 0o600 });
     const contextHash = workerContextHash(context);

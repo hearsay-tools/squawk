@@ -50,7 +50,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
     expect(JSON.stringify(reopened.getRun(w.id))).not.toMatch(/execution|generation/);
     expect(existsSync(workspace(w).path)).toBe(false);
-    const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() }); expect(await other.awaitRunTermination(w.id, 10)).toBe(true); other.dispose(); reopened.flush();
+    const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() }); expect(await other.awaitRunTermination(w.id, 10)).toBe(true); other.dispose(); reopened.persistence.flush();
   });
 
   it('requeues a stopped untouched owned worker under normal capacity and preserves parent guards', async () => {
@@ -116,7 +116,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       execFileSync('git', ['branch', workspace(w).branch], { cwd: root });
       expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'incomplete' });
       expect(execFileSync('git', ['branch', '--list', workspace(w).branch], { cwd: root, encoding: 'utf8' })).toContain(workspace(w).branch);
-    } finally { detach(); other.dispose(); reopened.flush(); }
+    } finally { detach(); other.dispose(); reopened.persistence.flush(); }
   });
 
   it('a checkpoint both abandoned and never-materialized does not parse (hearsay-tools/cezarion#839)', async () => {
@@ -152,7 +152,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     try {
       expect(reopened.workerExecutions.readWorkerExecution(w.id)).toBeUndefined();
       expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
-    } finally { detach(); other.dispose(); reopened.flush(); }
+    } finally { detach(); other.dispose(); reopened.persistence.flush(); }
   });
 
   it('an unreadable creation receipt keeps a never-materialized worker\'s destroy incomplete', async () => {
@@ -243,7 +243,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
   });
 
   it('terminal status without a private completion checkpoint never proves termination after restart', async () => {
-    const w = await worker(); setRunStatus(store, w.id, RUN_STATUS.cancelled, { startedAt: new Date().toISOString() }); store.flush();
+    const w = await worker(); setRunStatus(store, w.id, RUN_STATUS.cancelled, { startedAt: new Date().toISOString() }); store.persistence.flush();
     rmSync(join(root, '.ai/cezar/runs', `${w.id}.execution.json`));
     expect(await manager.awaitRunTermination(w.id, 10)).toBe(false);
     expect(manager.requestWorkerStop(w.id).state).toBe('stopping');
@@ -271,7 +271,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     const scratchDir = resolveAgentTmpDir(join(root, '.ai/cezar'), w.id);
     mkdirSync(scratchDir, { recursive: true });
     const scratch = join(scratchDir, 'retained.txt'); writeFileSync(scratch, 'old process scratch');
-    manager.dispose(); setRunStatus(store, w.id, status); store.flush();
+    manager.dispose(); setRunStatus(store, w.id, status); store.persistence.flush();
     store.close(); const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
     try {
       await other.recover();
@@ -287,7 +287,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       expect.soft(child!.exitCode).toBeNull(); expect.soft(child!.signalCode).toBeNull();
       expect.soft(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
       expect(reopened.getRun(w.id)).toBeDefined(); expect(reopened.eventLog.readEvents(w.id).length).toBeGreaterThan(0);
-    } finally { other.dispose(); reopened.flush(); child?.kill('SIGKILL'); }
+    } finally { other.dispose(); reopened.persistence.flush(); child?.kill('SIGKILL'); }
   });
 
   it.each(['missing', 'malformed', 'starting'] as const)('cannot replace %s private execution evidence with a fresh generation', async shape => {
@@ -360,7 +360,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     expect(other.isActive(w.id)).toBe(false); expect(existsSync(workspace(w).path)).toBe(false);
     rmSync(join(root, '.ai/cezar/runs', `${w.id}.execution.json`));
     expect(other.requestWorkerStop(w.id).state).toBe('stopping');
-    expect(await other.awaitRunTermination(w.id, 10)).toBe(false); other.dispose(); reopened.flush();
+    expect(await other.awaitRunTermination(w.id, 10)).toBe(false); other.dispose(); reopened.persistence.flush();
   });
 
   it('rejects human queued/startup input under destruction or parent Finish intent', async () => {

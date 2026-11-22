@@ -76,7 +76,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       const prior = store.workerExecutions.readWorkerExecution(w.id)!;
       expect(prior.phase).toBe('starting');
       expect(readRecord(w.id)).toMatchObject({ generation: prior.generation, controller: { pid: process.pid }, processes: [{ pid: first!.proc.pid }] });
-      manager.dispose(); setRunStatus(store, w.id, status); store.flush();
+      manager.dispose(); setRunStatus(store, w.id, status); store.persistence.flush();
       setController(w.id, { pid: await deadPid(), startToken: '1' });
       store.close(); const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
       const service = new DelegationService(workerCleanups()); service.registerProject({ home: testHome(), id: 'reopened', root, store: reopened, manager: other });
@@ -106,7 +106,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it("destroy ends a crashed generation's owned child that ignores SIGTERM, then completes", async () => {
@@ -120,7 +120,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(child.proc.signalCode).toBe('SIGKILL');
         expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ ...prior, phase: 'complete' });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it('a live foreign controller keeps the generation: nothing is finalized or signalled', async () => {
@@ -140,7 +140,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(existsSync(workspace(w).path)).toBe(true);
         expect(foreign.proc.exitCode).toBeNull(); expect(foreign.proc.signalCode).toBeNull();
         expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it.each(['malformed', 'another generation'] as const)('a present but %s record proves nothing: no finalization, no reap', async shape => {
@@ -154,7 +154,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
           error: 'worker process record is unreadable; termination cannot be proven' });
         expect(existsSync(workspace(w).path)).toBe(true);
         expect(reopened.workerExecutions.readWorkerExecution(w.id)).toEqual(prior);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it('resume right after a cached alive probe re-probes, so a survivor that just died does not refuse it', async () => {
@@ -166,7 +166,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(other.continueRun(w.id, { text: 'resume' })).toEqual({ ok: true });
         await until(() => launches() === 2);
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(prior.generation);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it('recovery preserves a live worker scratchpad after finalizing its dead generation (#515)', async () => {
@@ -186,7 +186,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(reopened.getRun(w.id)?.status).toBe('waiting');
         expect(readFileSync(join(scratch, 'notes'), 'utf8')).toBe('answer still needed');
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it("a process outside the worker's scope working in its scratch neither keeps a dead generation alive nor is signalled", async () => {
@@ -201,7 +201,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(holder.proc.exitCode).toBeNull(); expect(holder.proc.signalCode).toBeNull();
         expect(kills.mock.calls.filter(([pid, signal]) => Math.abs(pid) === holder.proc.pid && signal !== 0)).toEqual([]);
         expect(own.mock.calls).toEqual([]);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
 
     it.each(['inside', 'after'] as const)('a parked parent wait resolves once a survivor dies %s the fast re-probe window', async window => {
@@ -225,7 +225,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(wait()?.outcomes?.some(outcome => outcome.workerId === w.id)).toBe(true);
         expect(wait()!.outcomes).toEqual([expect.objectContaining({ workerId: w.id, revision: 0, status: WORKER_OUTCOME_STATUS.failed })]);
-      } finally { vi.useRealTimers(); other.dispose(); reopened.flush(); }
+      } finally { vi.useRealTimers(); other.dispose(); reopened.persistence.flush(); }
     });
 
     it('a recorded survivor is re-probed on the backoff cadence until it dies (hearsay-tools/cezarion#879)', async () => {
@@ -266,7 +266,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
     it.runIf(process.platform === 'linux')('an unreadable process in the worktree is no evidence: destroy finalizes a legacy generation without signalling it (hearsay-tools/cezarion#889)', async () => {
       const w = await worker(); await ensureOwnedWorkspace(root, w);
-      store.workerExecutions.commitWorkerExecutionStart(w.id); setRunStatus(store, w.id, RUN_STATUS.failed); store.flush();
+      store.workerExecutions.commitWorkerExecutionStart(w.id); setRunStatus(store, w.id, RUN_STATUS.failed); store.persistence.flush();
       manager.dispose(); store.close(); rmSync(recordPath(w.id)); // an absent legacy ledger leaves the scan as the only evidence
       const holder = await nonDumpableHolder(workspace(w).path);
       const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true }); const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
@@ -277,7 +277,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.workerExecutions.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
         expect(existsSync(workspace(w).path)).toBe(false);
         expect(holder.running).toBe(true); // its cwd is gone, but nothing signalled it
-      } finally { detach(); other.dispose(); reopened.flush(); await holder.close(); }
+      } finally { detach(); other.dispose(); reopened.persistence.flush(); await holder.close(); }
     });
 
     it('a legacy generation (no record) with no process in the worktree is finalized', async () => {
@@ -289,7 +289,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.workerExecutions.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
-      } finally { other.dispose(); reopened.flush(); }
+      } finally { other.dispose(); reopened.persistence.flush(); }
     });
   });
 

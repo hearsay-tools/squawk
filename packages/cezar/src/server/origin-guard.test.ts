@@ -49,7 +49,7 @@ describe('request-origin guard (#426)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
@@ -322,7 +322,7 @@ describe('request-origin guard — hosted mode (#426)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;

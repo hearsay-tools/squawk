@@ -97,7 +97,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
 
   afterEach(() => {
     contexts.disposeAll();
-    store.flush();
+    store.persistence.flush();
     for (const dir of [home, repoRoot, otherRoot]) rmSync(dir, { recursive: true, force: true });
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
@@ -255,7 +255,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
 
   it('pins through every boot alias and isolates colliding IDs in another project', async () => {
     setRunStatus(store, runId, RUN_STATUS.done);
-    store.flush();
+    store.persistence.flush();
     seedRuns(join(otherRoot, '.ai/cezar'), [store.getRun(runId)!]);
     const other = await registerProject(otherRoot, undefined, testHome());
     for (const path of spellings(bootId, `/runs/${runId}/pin`)) {

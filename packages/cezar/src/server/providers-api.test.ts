@@ -72,7 +72,7 @@ describe('workspace provider API', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
     if (savedModelsLocked === undefined) delete process.env.CEZ_AGENT_MODELS_LOCKED;
     else process.env.CEZ_AGENT_MODELS_LOCKED = savedModelsLocked;

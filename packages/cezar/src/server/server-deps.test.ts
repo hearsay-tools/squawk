@@ -229,7 +229,7 @@ describe('context listeners', () => {
       store = RunStore.open(join(root, '.ai/cezar'));
     });
     afterEach(() => {
-      store.flush();
+      store.persistence.flush();
       rmSync(root, { recursive: true, force: true });
     });
 

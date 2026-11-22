@@ -69,15 +69,15 @@ describe('RunStore.move', () => {
     const optedIn = created();
     store.updateRun(optedIn, { archiveWhenDone: true });
     store.move(optedIn, 'start');
-    store.flush();
+    store.persistence.flush();
     store.move(optedIn, 'succeed');
     expect(committed(optedIn)?.status).toBe(RUN_STATUS.done);
     const plain = created();
     store.move(plain, 'start');
-    store.flush();
+    store.persistence.flush();
     store.move(plain, 'succeed');
     expect(committed(plain)?.status).toBe(RUN_STATUS.running);
-    store.flush();
+    store.persistence.flush();
     expect(committed(plain)?.status).toBe(RUN_STATUS.done);
   });
 
@@ -86,10 +86,10 @@ describe('RunStore.move', () => {
   it('decides durability by the exit and the record, never by the extras', () => {
     const { store, created, committed } = setup();
     const id = created();
-    store.flush();
+    store.persistence.flush();
     store.move(id, 'start', { autoMergePr: false, handoffRecords: { autosave: [] } });
     expect(committed(id)?.status).toBe(RUN_STATUS.queued);
-    store.flush();
+    store.persistence.flush();
     expect(committed(id)?.status).toBe(RUN_STATUS.running);
   });
 
@@ -196,7 +196,7 @@ describe('RunStore.move with a guarded exit', () => {
     const { store, created, committed } = guarded();
     const held = created();
     setRunStatus(store, held, RUN_STATUS.waiting, { autoResumeAt: HOLD_AT, autoResumeAttempts: 2, finishedAt: EARLIER });
-    store.flush();
+    store.persistence.flush();
     store.commitAutoResumeWithdrawal(held);
     expect(committed(held)).toMatchObject({ status: RUN_STATUS.failed });
     // B4 (S7): a settling exit keeps the first settlement time.
@@ -204,7 +204,7 @@ describe('RunStore.move with a guarded exit', () => {
     for (const key of ['autoResumeAt', 'autoResumeAttempts']) expect(committed(held)).not.toHaveProperty(key);
     const attemptsOnly = created();
     setRunStatus(store, attemptsOnly, RUN_STATUS.waiting, { autoResumeAttempts: 2 });
-    store.flush();
+    store.persistence.flush();
     store.commitAutoResumeWithdrawal(attemptsOnly);
     expect(committed(attemptsOnly)).toMatchObject({ status: RUN_STATUS.waiting });
     expect(committed(attemptsOnly)).not.toHaveProperty('autoResumeAttempts');
@@ -218,7 +218,7 @@ describe('RunStore.move with a guarded exit', () => {
     setRunStatus(store, id, RUN_STATUS.running);
     withActivity(id);
     store.updateStep(id, 'b', { status: STEP_STATUS.running });
-    store.flush();
+    store.persistence.flush();
     const before = structuredClone(store.getRun(id));
     const release = blockRunWrites(dir);
     try { expect(() => store.move(id, 'park-release', {}, { stepId: 'b' })).toThrow(); } finally { release(); }

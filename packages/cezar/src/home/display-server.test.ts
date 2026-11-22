@@ -36,7 +36,7 @@ it('names the product in an API refusal and installer label without changing the
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: `not a project folder: ${refusedRoot} is your home directory or a ${name} task worktree` });
   } finally {
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
   }
 });

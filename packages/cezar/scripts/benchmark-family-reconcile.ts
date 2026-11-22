@@ -111,7 +111,7 @@ for (const size of sizes) {
     manager.reconcileWorkerWaits(rootId); // writes the missing projections once
     const times: number[] = [];
     for (let i = 0; i < samples; i++) {
-      store.flush();
+      store.persistence.flush();
       decodes = 0;
       const start = performance.now();
       manager.reconcileWorkerWaits(rootId);

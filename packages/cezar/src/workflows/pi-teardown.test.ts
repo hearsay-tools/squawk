@@ -42,7 +42,7 @@ describe('Pi provider failure survives teardown (#73)', () => {
   });
   afterEach(() => {
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   });

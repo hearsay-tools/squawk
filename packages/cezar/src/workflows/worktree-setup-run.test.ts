@@ -187,7 +187,7 @@ describe('worktree setup on task start (#917)', () => {
     await waitFor(() => f.store.getRun(record.id)?.worktreeSetup?.status === 'running' && countLines() === 1, 'setup to start');
     // The crash: snapshot what was on disk while setup ran, stop this process's work, then
     // restore the snapshot under a fresh store and manager, as a restarted Squawk finds it.
-    f.store.flush();
+    f.store.persistence.flush();
     const snapshot = readPersistedRuns(f.dataDir);
     f.manager.cancel(record.id);
     await waitFor(() => !f.manager.isActive(record.id), 'the first manager to let go');
@@ -218,7 +218,7 @@ describe('worktree setup on task start (#917)', () => {
     const countLines = () => (existsSync(join(f.repoRoot, '.setup-count')) ? readFileSync(join(f.repoRoot, '.setup-count'), 'utf8').split('\n').filter(Boolean).length : 0);
     const record = f.manager.startRun(WORKFLOW, { task: 'do the thing' });
     await waitFor(() => f.store.getRun(record.id)?.worktreeSetup?.status === 'running' && countLines() === 1, 'setup to start');
-    f.store.flush();
+    f.store.persistence.flush();
     const snapshot = readPersistedRuns(f.dataDir);
     f.manager.cancel(record.id);
     await waitFor(() => !f.manager.isActive(record.id), 'the first manager to let go');

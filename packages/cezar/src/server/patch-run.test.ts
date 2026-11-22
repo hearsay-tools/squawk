@@ -34,7 +34,7 @@ describe('PATCH /api/v1/runs/:id', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -105,7 +105,7 @@ describe('PATCH /api/v1/runs/:id', () => {
     expect(await res.json()).toMatchObject({ allowWorkers: false, allowMessaging: false });
     const reopened = RunStore.open(join(repoRoot, '.ai/cezar'));
     expect(reopened.getRun(run.id)).toMatchObject({ allowWorkers: false, allowMessaging: false });
-    reopened.flush();
+    reopened.persistence.flush();
     expect(await (await patch(run.id, { allowWorkers: true })).json()).toMatchObject({ allowWorkers: true, allowMessaging: false });
   });
 

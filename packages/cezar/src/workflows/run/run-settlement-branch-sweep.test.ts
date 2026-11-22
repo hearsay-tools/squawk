@@ -16,7 +16,7 @@ import { noRunners } from '../../core/runners-under-test.testkit.ts';
  *  pass hands the sweep its keep-count, which turns it off at 0. */
 const fixtures: Array<{ root: string; store: RunStore }> = [];
 afterEach(() => {
-  for (const { root, store } of fixtures.splice(0)) { store.flush(); rmSync(root, { recursive: true, force: true }); }
+  for (const { root, store } of fixtures.splice(0)) { store.persistence.flush(); rmSync(root, { recursive: true, force: true }); }
   vi.unstubAllEnvs();
 });
 

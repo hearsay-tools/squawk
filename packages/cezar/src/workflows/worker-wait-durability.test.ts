@@ -30,7 +30,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     if (delegation?.role !== 'worker') throw Error('worker fixture');
     store.commitDelegation([{ id: w.id, delegation: { ...delegation,
       destroy: { requestedAt: new Date().toISOString(), phase: 'complete', remaining: [] } } }]);
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedRuns(join(root, '.ai/cezar'));
     await restart(false, disk);
     await until(() => store.getRun(p.id)?.agentInputs?.some(input => input.id === wait.id && !!input.deliveredAt) === true);
@@ -47,7 +47,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const w = await worker(p.id);
     const wait = register(p.id, [w.id]);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
-    store.flush();
+    store.persistence.flush();
     const replyId = randomUUID(); const body = 'The parser module, reply body marker';
     const disk = readPersistedRuns(join(root, '.ai/cezar')).map(row => {
       if (row.id !== p.id) return row;
@@ -77,7 +77,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     const wait = register(p.id, [w.id], 1); // registered: still counts as an executing turn
     const busy = semaphore.busy(); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    store.flush(); const dataDir = join(root, '.ai/cezar'); const disk = readPersistedText(dataDir);
+    store.persistence.flush(); const dataDir = join(root, '.ai/cezar'); const disk = readPersistedText(dataDir);
     const unblock = blockRunWrites(dataDir);
     try {
       await vi.advanceTimersByTimeAsync(1_000);
@@ -113,9 +113,9 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     expect(store.getRun(p.id)?.continuationMessage?.origin).toBe('human');
     expect(store.getRun(p.id)?.status).toBe('queued'); expect(semaphore.busy()).toBe(1);
     expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.flush();
+    expect(reopened.getRun(p.id)?.continuationMessage?.origin).toBe('human'); reopened.persistence.flush();
     manager.cancel(w.id);
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const opening = store.eventLog.readEvents(p.id).find(event => event.type === 'user-message');
@@ -126,7 +126,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
   });
 
   it('a failed queued human message checkpoint publishes no wait, wake, message or admission changes', async () => {
-    const { p } = await queuedWake(); store.flush();
+    const { p } = await queuedWake(); store.persistence.flush();
     const snapshot = JSON.stringify(store.getRun(p.id));
     const release = blockRunWrites(join(root, '.ai/cezar'));
     try {
@@ -154,7 +154,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
           { type: 'file', mediaType: 'application/pdf', data: 'YQ==' }])).toBe(true);
         expect(waitOf(store.getRun(p.id))).toMatchObject({ id: wait.id, phase: 'wake-pending' });
         expect(store.getRun(p.id)?.queuedMessages?.at(-1)?.text).toBe('startup human update');
-        store.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
+        store.persistence.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
         if (crash === 'checkpoint-failure') {
           const commit = store.commitOutcome.bind(store);
           store.commitOutcome = (...args) => {
@@ -176,7 +176,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
       }
       if (crash === 'after-delivery') {
         expect(store.getRun(p.id)?.queuedMessages?.some(message => message.text === 'startup human update')).not.toBe(true);
-        store.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
+        store.persistence.flush(); checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
       }
       const eventStart = store.eventLog.readEvents(p.id).length;
       await restart(false, checkpoint!);

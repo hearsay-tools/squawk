@@ -126,7 +126,7 @@ it('holds a committed family claim through remote reads and mutations', async ()
   const f = fixture(), other = RunStore.open(f.dir, { keepLive: true, maintenance: true });
   try {
     f.read.mockImplementationOnce(async () => {
-      f.store().flush(); // A store sweep must retain the in-flight family claim.
+      f.store().persistence.flush(); // A store sweep must retain the in-flight family claim.
       expect(other.claims.runOwnership(f.id)).toBe('foreign');
       expect(other.updateRun(f.id, { autoMergePr: false })).toBeUndefined();
       return { available: true, mergeState: { number: 12, url: 'https://github.com/o/r/pull/12',

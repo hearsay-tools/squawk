@@ -196,7 +196,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -498,7 +498,7 @@ describe('handoff journal system prompt (dry run)', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

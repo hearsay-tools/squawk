@@ -46,7 +46,7 @@ function seedFamily(mixed: boolean, live = true) {
   const build = RunStore.open(primary, { keepLive: true });
   const family = seedSettledFamily(build, root);
   if (live) for (const id of [family.parentId, family.workerId]) setRunStatus(build, id, RUN_STATUS.running);
-  build.flush(); build.close();
+  build.persistence.flush(); build.close();
   const records = readPersistedRuns(primary);
   const moved = new Set(mixed ? [family.workerId] : [family.parentId, family.workerId]);
   seedRuns(primary, records.filter(run => !moved.has(run.id)));
@@ -77,7 +77,7 @@ it('keeps a mixed family visible after boot, and Stop adopts it, then settles it
   const stopped = await post(`${family.parentId}/cancel`);
   expect(stopped.status).toBe(200);
   expect(store.getRun(family.parentId)?.status).toBe(RUN_STATUS.cancelled);
-  store.flush();
+  store.persistence.flush();
   expect(primaryIds()).toEqual(expect.arrayContaining([family.parentId, family.workerId]));
   expect(store.claims.isFallbackRun(family.workerId)).toBe(false);
   expect(readFileSync(join(fallback, RUNS_DB_FILE))).toEqual(fallbackBytes);
@@ -96,7 +96,7 @@ it('Archive adopts a fallback-only family; read state and deletion never copy it
   expect(archived.status).toBe(200);
   expect(store.claims.runOwnership(family.parentId)).not.toBe('fallback');
   expect(store.getRun(family.workerId)?.archived).toBe(true);
-  store.flush();
+  store.persistence.flush();
   expect(primaryIds()).toEqual(expect.arrayContaining([family.parentId, family.workerId]));
 });
 

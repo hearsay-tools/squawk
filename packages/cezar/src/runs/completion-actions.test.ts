@@ -15,7 +15,7 @@ function setup(options: { archiveWhenDone?: boolean; autoMergePr?: boolean } = {
   const store = RunStore.open(dir, { keepLive: true });
   cleanups.push(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
   const run = store.createRun({ title: 'task', task: 'task', workflow: 'quick-task', steps: [], ...options });
-  store.flush();
+  store.persistence.flush();
   return { store, id: run.id, dir };
 }
 
@@ -36,7 +36,7 @@ describe('task completion options', () => {
     const { store, id, dir } = setup();
     setRunStatus(store, id, RUN_STATUS.done);
     expect(store.getRun(id)?.archived).toBe(false);
-    store.flush();
+    store.persistence.flush();
     const persisted = readPersistedRuns(dir).find(run => run.id === id);
     expect(persisted).toMatchObject({ status: RUN_STATUS.done });
     expect(persisted?.completionAction).toBeUndefined();
@@ -48,7 +48,7 @@ describe('task completion options', () => {
     expect(store.getRun(id)?.archived).toBe(true);
     store.archive.setArchived(id, false);
     store.updateRun(id, { title: 'restored' });
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(dir, { keepLive: true });
     try { expect(reopened.getRun(id)?.archived).toBe(false); } finally { reopened.close(); }
   });
@@ -95,7 +95,7 @@ it('keeps default-off Finish usable while the database refuses writes', () => {
     expect(store.getRun(id)?.completionAction).toBeUndefined();
     expect(readPersistedRuns(dir)[0].status).toBe('queued');
   } finally { release(); }
-  store.flush();
+  store.persistence.flush();
   expect(readPersistedRuns(dir)[0]).toMatchObject({ status: RUN_STATUS.done, archived: false });
 });
 it('retires pending merge work on explicit unarchive and creates new intent after a later completion', () => {
@@ -133,7 +133,7 @@ describe('completion action across write paths', () => {
       const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.queued, ...extra };
       setRunStatus(store, id, fixtureStatus, fixtureExtras);
     }
-    store.flush();
+    store.persistence.flush();
     expect(store.getRun(id)?.completionAction).toBeUndefined();
     expect(readPersistedRuns(dir).find(run => run.id === id)?.completionAction).toBeUndefined();
     expect(store.archive.completeAction(id, token, 'complete')).toBe(false);

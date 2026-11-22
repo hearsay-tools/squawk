@@ -211,9 +211,9 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     const child = await controller.service.spawn(controller.credentials.authenticate(token)!, { task: 'child', baseline: 'parent-head', requestId: randomUUID() });
     const worker = f.store.getRun(child.workerId)!;
     expect(worker).toMatchObject({ model: 'haiku', agentProfile: settings.agentProfile, systemPrompt: 'parent restriction', workflowDef: { steps: [{ allowedTools: ['Read', 'Bash'], bashAllowlist: ['git status'] }] } });
-    f.store.updateRun(run.id, { model: 'sonnet', systemPrompt: 'changed parent' }); f.store.flush();
+    f.store.updateRun(run.id, { model: 'sonnet', systemPrompt: 'changed parent' }); f.store.persistence.flush();
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.getRun(child.workerId)).toMatchObject({ model: 'haiku', systemPrompt: 'parent restriction', workflowDef: { steps: [{ allowedTools: ['Read', 'Bash'], bashAllowlist: ['git status'] }] } }); reopened.flush();
+    expect(reopened.getRun(child.workerId)).toMatchObject({ model: 'haiku', systemPrompt: 'parent restriction', workflowDef: { steps: [{ allowedTools: ['Read', 'Bash'], bashAllowlist: ['git status'] }] } }); reopened.persistence.flush();
     first.finish(); await until(() => owesRefusal(run.id));
     expect(controller.credentials.authenticate(token)).toBeUndefined();
     expect(admission).toHaveBeenCalled(); admission.mockRestore(); await f.releaseAdmission();

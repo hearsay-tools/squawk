@@ -30,7 +30,7 @@ describe('project reads of an unmoved project', () => {
       store = RunStore.open(paths.write, { keepLive: true });
       expect(new Set(store.listRunIds())).toEqual(new Set([old.id, fallback.id]));
       const run = store.createRun({ title: 'new', task: 'new', workflow: 'quick-task', steps: [] });
-      store.flush();
+      store.persistence.flush();
       expect(store.claims.sourceDataDir(run.id)).toBe(paths.write);
       expect(existsSync(join(repo, '.ai/squawk-migration.json'))).toBe(false);
     } finally { store?.close(); rmSync(repo, { recursive: true, force: true }); }

@@ -57,7 +57,7 @@ describe('recover() and the autonomous flag (#489)', () => {
     await drainFixtureManagers(repoRoot);
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -137,7 +137,7 @@ describe('recover() and the autonomous flag (#489)', () => {
         sessionId: 'previous-session', userPrompt: expect.stringContaining('Continue setup'), resume: true,
       }), expect.any(Function), expect.any(Object));
       expect(store.getRun(id)?.steps.at(-1)?.id).toBe('continue-1');
-      store.flush();
+      store.persistence.flush();
       expect(RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true }).getRun(id)?.autonomous)
         .toBe(autonomous);
     } finally {

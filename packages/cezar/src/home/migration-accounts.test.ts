@@ -73,7 +73,7 @@ it('D1: a crash after deferred configDir publication repairs the record without 
   Home.seed(legacy, legacy.workspaceConfig, { projects: [{ id: 'project', root: project }] });
   const store = RunStore.open(join(project, '.ai', 'cezar'), { keepLive: true });
   const run = store.createRun({ title: 'defer account', workflow: 'quick-task', task: 'test', steps: [], agentProfile: account.id });
-  store.move(run.id, 'start'); store.flush();
+  store.move(run.id, 'start'); store.persistence.flush();
   try { migrateLegacyHome(legacy, target); } finally { store.close(); }
   vi.spyOn(migrationRecord, 'writeMigrationRecord').mockImplementation(() => { throw new Error('crash before record publication'); });
   expect(() => prepareMigrationHome(target, env, { legacy })).toThrow('crash before record publication');
@@ -177,7 +177,7 @@ it('step 7: a live registered run defers its account; the next boot copies it af
   const store = RunStore.open(join(project, '.ai', 'cezar'), { keepLive: true });
   const run = store.createRun({ title: 'live account', workflow: 'quick-task', task: 'test', steps: [], agentProfile: account.id });
   store.move(run.id, 'start');
-  store.flush();
+  store.persistence.flush();
   try {
     expect(planLegacyMigration(legacy, target).deferredAccounts).toEqual([{ id: account.id, configDir: account.configDir }]);
     const copiedAt: string[] = [];
@@ -201,12 +201,12 @@ it('a deferred account stays deferred while a project registered only in the mig
   Home.seed(legacy, legacy.workspaceConfig, { projects: [{ id: 'legacy-project', root: legacyProject }] });
   const first = RunStore.open(join(legacyProject, '.ai', 'cezar'), { keepLive: true });
   const run = first.createRun({ title: 'defer', workflow: 'quick-task', task: 'test', steps: [], agentProfile: account.id });
-  first.move(run.id, 'start'); first.flush();
+  first.move(run.id, 'start'); first.persistence.flush();
   try { migrateLegacyHome(legacy, target); } finally { first.close(); }
   new HomeStore(target).writeJson(target.workspaceConfig, { ...json(target.workspaceConfig), projects: [{ id: 'new-project', root: targetProject }] });
   const second = RunStore.open(join(targetProject, '.ai', 'cezar'), { keepLive: true });
   const live = second.createRun({ title: 'live in migrated home', workflow: 'quick-task', task: 'test', steps: [], agentProfile: account.id });
-  second.move(live.id, 'start'); second.flush();
+  second.move(live.id, 'start'); second.persistence.flush();
   try {
     prepareMigrationHome(target, env, { legacy });
     expect(readMigrationRecord(target)!.deferredAccounts).toEqual([{ id: account.id, configDir: account.configDir }]);

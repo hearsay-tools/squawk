@@ -78,7 +78,7 @@ export class NativeSkillInputQueue {
     };
     this.context.store.updateRun(runId, { queuedMessages: existing
       ? queued.map(entry => entry.id === id ? message : entry) : [...queued, message] });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     pending.push({ session, content: snapshot, messageId: id, persisted });
     this.memory.write(runId, 'nativeSkillInputs', pending);
     this.release(runId, state);

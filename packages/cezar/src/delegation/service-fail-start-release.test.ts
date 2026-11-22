@@ -102,7 +102,7 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
       expect(reopened.listRuns().map(run => run.id)).not.toContain(workerId);
       service.armDestroyRetries('reopened');
       await vi.waitFor(() => expect(reopened.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 15_000 });
-    } finally { detach(); manager.dispose(); reopened.flush(); reopened.close(); }
+    } finally { detach(); manager.dispose(); reopened.persistence.flush(); reopened.close(); }
   });
 
   it.runIf(linux)('does not destroy a worker that was resumed and failed again while its release waited', async () => {

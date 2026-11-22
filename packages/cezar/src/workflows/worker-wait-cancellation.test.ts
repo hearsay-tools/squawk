@@ -78,7 +78,7 @@ it('restarts a cancelled wait and retains its receipt across restarts without a 
   });
 it('failed cancellation checkpoint publishes no wake and keeps the original wait retryable', async () => {
     const p = await parent('mock:slow'); const w = await worker(p.id); const wait = register(p.id, [w.id]);
-    store.flush(); const release = blockRunWrites(join(root, '.ai/cezar'));
+    store.persistence.flush(); const release = blockRunWrites(join(root, '.ai/cezar'));
     try {
       expect(() => manager.cancelWorkerWait(p.id, wait.id)).toThrow();
       expect(waitOf(store.getRun(p.id))).toEqual(wait);

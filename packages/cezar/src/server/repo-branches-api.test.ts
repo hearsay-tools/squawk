@@ -83,7 +83,7 @@ describe('the repo branches API', () => {
 
   afterEach(() => {
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     if (savedHome === undefined) useTestHome(undefined);
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
@@ -182,7 +182,7 @@ describe('the repo branches API', () => {
     // fixture then wrote steps the schema rejects: the reload failed, the claim was refused and
     // Continue answered 'not found' (hearsay-tools/cezarion#886). Evict it every time, assert the
     // claim took, and hold it until Continue is tried, so no timer or git spawn decides the order.
-    store.flush();
+    store.persistence.flush();
     let endHold!: () => void;
     const held = new Promise<void>((resolve) => { endHold = resolve; });
     const claimed = new Promise<(() => void) | null>((resolve) => {
@@ -282,7 +282,7 @@ describe('the repo branches API', () => {
       const plainStore = RunStore.open(join(plain, '.ai/cezar'));
       app = createApp({ home: testHome(), repoRoot: plain, store: plainStore, manager: { isActive: () => false } as unknown as RunManager, version: '0.0.0-test' });
       expect(await branches()).toEqual({ base: '', prStateKnown: false, branches: [], counts: { notLanded: 0, cleanup: 0 } });
-      plainStore.flush();
+      plainStore.persistence.flush();
     } finally {
       rmSync(plain, { recursive: true, force: true });
     }

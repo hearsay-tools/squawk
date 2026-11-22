@@ -23,7 +23,7 @@ export function createReportFixture({ stores, projects, root, publishArtifact, a
             target.updateRun(run.id, { status: 'done' }); settled.push({ projectId, runId: run.id })
           } else { target.updateRun(run.id, { status: 'running' }); live.push({ projectId, runId: run.id }) }
         }
-        target.flush()
+        target.persistence.flush()
       }
       fixture = { settled, live, artifacts }
   }
@@ -33,7 +33,7 @@ export function createReportFixture({ stores, projects, root, publishArtifact, a
       timer = setInterval(() => {
         const run = fixture.live[tick % fixture.live.length]
         const title = `Live title ${++tick}`
-        stores.get(run.projectId).updateRun(run.runId, { title }); stores.get(run.projectId).flush()
+        stores.get(run.projectId).updateRun(run.runId, { title }); stores.get(run.projectId).persistence.flush()
         reportTitles.set(run.runId, title)
       }, 200)
   }
@@ -41,7 +41,7 @@ export function createReportFixture({ stores, projects, root, publishArtifact, a
       const run = fixture.live[0], target = stores.get(run.projectId)
       const source = join(root, 'new-report.html'); writeFileSync(source, '<title>New publication</title><p>New</p>')
       const artifact = await publishArtifact(artifactDirectory(dataDir(root), run.runId), run.runId, source)
-      target.updateRun(run.runId, { title: 'Publication event' }); target.flush()
+      target.updateRun(run.runId, { title: 'Publication event' }); target.persistence.flush()
       reportTitles.set(run.runId, 'Publication event')
       fixture.publication = { id: artifact.id, at: Date.now(), runId: run.runId }
   }

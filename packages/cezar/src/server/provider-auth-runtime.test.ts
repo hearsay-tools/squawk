@@ -90,7 +90,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
 
   afterEach(() => {
     for (const unwatch of unwatchers.splice(0)) unwatch();
-    store.flush();
+    store.persistence.flush();
     rmSync(root, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;

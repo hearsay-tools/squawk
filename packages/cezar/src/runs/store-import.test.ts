@@ -158,7 +158,7 @@ describe('fields this Squawk does not know (the raw-record codec)', () => {
     // Store schema 4 reads the legacy field into the wait list's salvage (unified waits).
     expect(store.getRun('a')?.lastWaitsError).toContain('unreadable');
     store.updateRun('a', { title: 'touched' });
-    store.flush();
+    store.persistence.flush();
     expect(persisted('a')).not.toHaveProperty('lastCiWait');
     expect(persisted('a')).not.toHaveProperty('lastWaits');
     expect(persisted('a')).toMatchObject({ fromNewerSquawk: 1, lastWaitsError: expect.stringContaining('unreadable') });
@@ -175,7 +175,7 @@ describe('fields this Squawk does not know (the raw-record codec)', () => {
     writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a', { fromNewerSquawk: 'kept' }), record('bb', { fromNewerSquawk: 'kept too' })]));
     const store = open();
     store.archive.setArchived('a', true);
-    store.flush();
+    store.persistence.flush();
     store.commitDelegation([{ id: 'bb', delegation: { role: 'invalid' } }]);
     expect(persisted('a')).toMatchObject({ archived: true, fromNewerSquawk: 'kept' });
     expect(persisted('bb')).toMatchObject({ delegation: { role: 'invalid' }, fromNewerSquawk: 'kept too' });
@@ -595,7 +595,7 @@ describe('RunStore.unavailable', () => {
       expect(store.unavailable).toBe(failure);
       expect(() => store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] })).toThrow(failure);
       expect(store.listRunSummaries().runs).toEqual([]);
-      store.flush();
+      store.persistence.flush();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();

@@ -150,7 +150,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     expect(f.manager.continueRun(a.child.workerId, { text: 'again' }).ok).toBe(true);
     expect(f.store.getRun(a.child.workerId)?.delegation).toMatchObject({ executionRevision: 1 });
     const disk = openTestRunStore(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(disk.getRun(a.child.workerId)?.delegation).toMatchObject({ executionRevision: 1 }); disk.flush();
+    expect(disk.getRun(a.child.workerId)?.delegation).toMatchObject({ executionRevision: 1 }); disk.persistence.flush();
     await until(() => sessions.length === 3);
     sessions[2]!.finish('Continuation result-only summary');
     expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);

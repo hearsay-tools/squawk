@@ -192,7 +192,7 @@ export class RunSettlement {
     }
     if (!state.liveSession.cancelled) {
       this.context.store.updateRun(runId, { continuationMessage: undefined });
-      this.context.store.flush();
+      this.context.store.persistence.flush();
     }
     sink.sessionEnded(state.liveSession.cancelled ? 'cancelled' : 'end_turn');
     const incomplete = this.continuationLeftOpen(state, stepId, resumedNext);
@@ -290,7 +290,7 @@ export class RunSettlement {
       this.host.move(runId, 'requeue', {}, { stepId: atContinue.workflowStep(workflow, next)!.id, cursor: 'start' });
       // The workflow remainder is a crash boundary. Persist it before the
       // finally block awaits worktree autosave and installs its in-memory job.
-      this.context.store.flush();
+      this.context.store.persistence.flush();
       return undefined;
     }
     return this.succeedContinuation(runId);
@@ -491,7 +491,7 @@ export class RunSettlement {
       if (step.status === 'running') this.context.store.updateStep(runId, step.id, { status: 'waiting' });
     }
     this.host.move(runId, 'park');
-    this.context.store.flush();
+    this.context.store.persistence.flush();
   }
 
   /** An ordinary owned worker cannot accept an inactive Continue. Once its
@@ -535,7 +535,7 @@ export class RunSettlement {
     this.context.store.eventLog.appendEvent(runId, { type: 'lifecycle', stepId, message: `step "${stepId}" ended without done — Continue to resume it` });
     if (run.delegation?.role === 'worker' && await this.settleIdleClosedWorker(runId, stepId)) return;
     this.host.move(runId, 'park');
-    this.context.store.flush();
+    this.context.store.persistence.flush();
   }
 
   /** What a closed session leaves to do on the run, also for a disposed manager's run. */

@@ -40,7 +40,7 @@ describe('recover() reads legacy generated-inbox records — hearsay-tools/cezar
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }],
     });
     store.updateRun(id, { workflowDef: WORKFLOW_DEF, generateFollowups });
-    store.flush();
+    store.persistence.flush();
     return id;
   };
 

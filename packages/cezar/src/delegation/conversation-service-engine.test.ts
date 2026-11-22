@@ -49,7 +49,7 @@ describe('durable conversations', () => {
     expect(f.store.getRun(w.id)?.steps.filter(step => step.synthetic === 'continuation')).toHaveLength(1);
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(w.id)?.continuationMessage).toEqual(f.store.getRun(w.id)?.continuationMessage);
-    expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { messages: [a.message] } }); reopened.flush();
+    expect(reopened.getRun(f.parent.id)?.delegation).toMatchObject({ conversation: { messages: [a.message] } }); reopened.persistence.flush();
   });
   // hearsay-tools/squawk#3337: a cancelled worker, and one with no recorded session, restart from their worktree.
   it('parent --resume restarts a cancelled worker whose worktree and branch exist', async () => {
@@ -127,7 +127,7 @@ describe('durable conversations', () => {
     expect(f.store.getRun(w.id)?.continuationMessage).toBeUndefined();
     expect(f.store.getRun(w.id)?.agentInputs).toEqual(inputs);
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.getRun(w.id)?.continuationMessage).toBeUndefined(); reopened.flush();
+    expect(reopened.getRun(w.id)?.continuationMessage).toBeUndefined(); reopened.persistence.flush();
   });
   it('uses the new instruction when explicitly resuming a failed continuation', async () => {
     const w = await completedWorker();

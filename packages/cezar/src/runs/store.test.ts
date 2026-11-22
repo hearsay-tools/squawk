@@ -92,7 +92,7 @@ describe('RunStore save lifecycle (#124)', () => {
       expect(existsSync(join(dataDir, 'tmp', status)), status).toBe(live);
       if (live) expect(readFileSync(join(dataDir, 'tmp', status, 'note.txt'), 'utf8')).toBe(status);
     }
-    store.flush();
+    store.persistence.flush();
   });
 
   it('archive keeps the scratch of a run whose job still runs (hearsay-tools/squawk#3138)', () => {
@@ -111,7 +111,7 @@ describe('RunStore save lifecycle (#124)', () => {
     const store = RunStore.open(dataDir, { keepLive: true });
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(ids.map((id) => [store.getRun(id)?.archived, existsSync(join(dataDir, 'tmp', id))])).toEqual([[true, false], [true, true]]);
-    store.flush();
+    store.persistence.flush();
   });
 
   it('retention archives a finished run past the newest 300 and keeps its row', async () => {
@@ -140,7 +140,7 @@ describe('RunStore save lifecycle (#124)', () => {
       pullRequestUrl: 'https://github.com/o/r/pull/42', title: 'keep me',
     });
     expect(store.listRunSummaries().runs.some((run) => run.id === oldestId && run.archived && run.title === 'keep me')).toBe(true);
-    store.flush();
+    store.persistence.flush();
     await store.archive.historyIdle();
     const indexed = readRunIndexFromDisk(dataDir).runs.find((run) => run.id === oldestId);
     expect(indexed).toMatchObject({
@@ -163,7 +163,7 @@ describe('RunStore save lifecycle (#124)', () => {
     const store = RunStore.open(dataDir);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(store.getRun(pinnedId)).toMatchObject({ archived: false, pinned: true, title: 'pinned overflow' });
-    store.flush();
+    store.persistence.flush();
   });
 
   // hearsay-tools/squawk#777: a delegation root leaves with its workers, and only once none is live.
@@ -190,7 +190,7 @@ describe('RunStore save lifecycle (#124)', () => {
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(ids.map((id) => store.getRun(id)?.archived)).toEqual([true, true, false, false, false, false, false, false]);
     expect(store.getRun(pinnedWorker)?.pinned).toBe(true);
-    store.flush();
+    store.persistence.flush();
   });
 
   it('retention does not archive a held pinned run past 300', () => {
@@ -206,7 +206,7 @@ describe('RunStore save lifecycle (#124)', () => {
     expect(store.heldIds()).toContain(pinnedId);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
     expect(store.getRun(pinnedId)).toMatchObject({ archived: false, pinned: true, title: 'held pinned overflow' });
-    store.flush();
+    store.persistence.flush();
   });
 
   // hearsay-tools/cezarion#2319: the decoded record decides on both paths; the SQL rule only narrows.
@@ -224,7 +224,7 @@ describe('RunStore save lifecycle (#124)', () => {
       if (path === 'held') expect(store.runPins.pin(record.id, 'active')).toBeDefined();
       store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
       const run = store.getRun(record.id);
-      store.flush();
+      store.persistence.flush();
       return run;
     };
 
@@ -252,7 +252,7 @@ describe('RunStore save lifecycle (#124)', () => {
     seedRuns(dataDir, archived);
     const store = RunStore.open(dataDir);
     store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
-    store.flush();
+    store.persistence.flush();
     expect(store.listRunSummaries().runs.filter((run) => run.archived)).toHaveLength(501);
     expect(store.getRun('archived-0')).toMatchObject({ archived: true });
     expect(store.getRun('archived-500')).toMatchObject({ archived: true });
@@ -265,7 +265,7 @@ describe('RunStore save lifecycle (#124)', () => {
     rmSync(dataDir, { recursive: true });
 
     if (trigger === 'timer') vi.advanceTimersByTime(300);
-    else store.flush();
+    else store.persistence.flush();
 
     expect(error).not.toHaveBeenCalled();
     expect(existsSync(dataDir)).toBe(false);
@@ -289,7 +289,7 @@ describe('RunStore save lifecycle (#124)', () => {
     ));
     expect(readPersistedRuns(dataDir)).toEqual([]);
     // The failed save left the row pending, so the next one writes it.
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).map((saved) => saved.id)).toEqual([run.id]);
   });
 
@@ -358,7 +358,7 @@ describe('RunStore — directional usage persistence', () => {
       usageInvocationEpoch: 1,
     });
     expect(store.getRun(run.id)).toMatchObject({ inputTokens: 120, outputTokens: 30 });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir).getRun(run.id);
     expect(reopened).toMatchObject({ inputTokens: 120, outputTokens: 30 });
@@ -384,7 +384,7 @@ describe('RunStore — directional usage persistence', () => {
       steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }],
     });
     store.updateStep(reported.id, 'task', { costUsd: 0 });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(reported.id)?.costUsd).toBe(0);
@@ -440,7 +440,7 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
       titleSummary: 'Catch AuthError in the login handler',
       diffStat: { adds: 10, dels: 2, files: 3 },
     });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     const loaded = reopened.getRun(run.id);
@@ -454,7 +454,7 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
     const normal = store.createRun({ title: 'fix the login bug', workflow: 'quick-task', task: 'fix', steps: [] });
     store.updateRun(narrowed.id, { diffStat: { adds: 1, dels: 0, files: 1, repointed: true } });
     store.updateRun(normal.id, { diffStat: { adds: 10, dels: 2, files: 3 } });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(narrowed.id)?.diffStat).toEqual({ adds: 1, dels: 0, files: 1, repointed: true });
@@ -575,7 +575,7 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
       task: 'plain task',
       steps: [],
     });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(pinned.id)?.effort).toBe('high');
@@ -600,7 +600,7 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
       task: 'interactive task',
       steps: [],
     });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(autonomous.id)?.autonomous).toBe(true);
@@ -724,7 +724,7 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
   it('persists a creation scalar even when its collection evidence is already present', () => {
     const { store, run } = freshRun();
     store.updateRun(run.id, { pullRequests: [{ number: 812, url: 'https://github.com/o/r/pull/812', source: 'created' }] });
-    store.flush();
+    store.persistence.flush();
     store.eventLog.recordCreatedPr(run.id, 'https://github.com/o/r/pull/812');
     store.close();
     const reopened = RunStore.open(dataDir);
@@ -944,7 +944,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
       titleSummary: 'Set GITHUB_TOKEN=gho_thisisarealsecrettoken123456 in CI',
       error: 'auth failed for gho_thisisarealsecrettoken123456',
     });
-    store.flush();
+    store.persistence.flush();
 
     expect(store.getRun(run.id)?.error).toBe('auth failed for [REDACTED]');
     const raw = readPersistedText(dataDir);
@@ -996,7 +996,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
       status: STEP_STATUS.failed,
       error: 'auth failed for gho_thisisarealsecrettoken123456',
     });
-    store.flush();
+    store.persistence.flush();
 
     expect(store.getRun(run.id)?.steps[0]?.error).toBe('auth failed for [REDACTED]');
     const raw = readPersistedText(dataDir);
@@ -1050,7 +1050,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
       steps: [],
     });
     expect(run.title).toBe('rotate [REDACTED]');
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedText(dataDir)).not.toContain(
       'gho_thisisarealsecrettoken123456',
     );
@@ -1092,7 +1092,7 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     const run = store.createRun({ title: both, workflow: 'quick-task', task: 'task', steps: [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent }] });
     store.updateRun(run.id, { title: both, titleSummary: both, error: both });
     store.updateStep(run.id, 'task', { error: both });
-    store.flush();
+    store.persistence.flush();
 
     expect(store.redaction.redactText(both)).toBe(expected);
     const saved = store.getRun(run.id);
@@ -1249,7 +1249,7 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
       type: 'result',
       result: 'See https://github.com/open-mercato/cezar/pull/1',
     });
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(dataDir);
     expect(reopened.getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/1',
@@ -1282,7 +1282,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
   it('marker numbers land on the record and persist', () => {
     const { store, run } = freshRun();
     store.eventLog.applyMarkerRefs(run.id, { pr: 442, issue: 433 });
-    store.flush();
+    store.persistence.flush();
     const loaded = RunStore.open(dataDir).getRun(run.id);
     expect(loaded?.prNumber).toBe(442);
     expect(loaded?.issueNumber).toBe(433);
@@ -1432,7 +1432,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
       markerRefs: { pr: 5366 },
       prNumber: 5366,
     });
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/open-mercato/pull/4326',
     );
@@ -1448,7 +1448,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
       referencedPrCandidates: ['https://github.com/open-mercato/cezar/pull/777'],
       markerRefs: { pr: 500 },
     });
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun(run.id)?.referencedPullRequestUrl).toBeUndefined();
   });
 
@@ -1459,7 +1459,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
       referencedPrCandidates: undefined,
       markerRefs: { pr: 777 },
     });
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun(run.id)?.referencedPullRequestUrl).toBe(
       'https://github.com/open-mercato/cezar/pull/777',
     );
@@ -1513,7 +1513,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
       store.eventLog.appendEvent(run.id, { type: 'result', result:
         'Working https://github.com/open-mercato/cezar/issues/1200' });
       expect(run.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/1200');
-      store.flush();
+      store.persistence.flush();
       expect(RunStore.open(dataDir).getRun(run.id)?.issueNumber).toBe(1200);
     });
 
@@ -1584,7 +1584,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
       referencedIssueUrl: 'https://github.com/open-mercato/cezar/issues/1216',
       referencedIssueCandidates: ['https://github.com/open-mercato/cezar/issues/1200',
         'https://github.com/open-mercato/cezar/issues/1216'] });
-    store.flush();
+    store.persistence.flush();
     store.close();
     expect(readRunIndexFromDisk(dataDir).runs.find(row => row.id === run.id)?.issueNumber).toBe(1200);
     const reopened = RunStore.open(dataDir);
@@ -1807,7 +1807,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       onRunWrite(store.lifecycle, (record: RunRecord) => seen.push(record.referencedPullRequestUrl));
 
       store.updateRun(run.id, { task }); // the mutation used by queued RunManager.editTask
-      store.flush();
+      store.persistence.flush();
 
       expect(run.referencedPullRequestUrl).toBeUndefined();
       expect(run.referencedIssueUrl).toBeUndefined();
@@ -1833,7 +1833,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(kind === 'pull' ? run.referencedPullRequestUrl : run.referencedIssueUrl).toBeUndefined();
       store.updateRun(run.id, { task: 'review other/repo and acme/service #42' });
       expect(kind === 'pull' ? run.referencedPullRequestUrl : run.referencedIssueUrl).toBeUndefined();
-      store.flush();
+      store.persistence.flush();
     });
 
     it('does not match a prompt URL number prefix or override an explicit marker', () => {
@@ -1844,7 +1844,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       store.eventLog.applyMarkerRefs(run.id, { pr: 42 });
       store.updateRun(run.id, { task: 'review https://github.com/other/repo/pull/420 again' });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
-      store.flush();
+      store.persistence.flush();
     });
 
     it('collects newly pasted prompt URLs before notifying readers of a queued edit', () => {
@@ -1859,7 +1859,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedPrCandidates).toEqual([foreignPr]);
       expect(run.referencedIssueCandidates).toEqual([foreignIssue]);
       expect(seen).toEqual([[foreignPr, foreignIssue]]);
-      store.flush();
+      store.persistence.flush();
     });
 
     it('collects replacement prompt URLs while retaining old evidence and independent ownership', () => {
@@ -1877,7 +1877,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       }
       expect(run.referencedPrCandidates).toEqual([foreignPr, newPr]);
       expect(run.referencedIssueCandidates).toEqual([foreignIssue, newIssue]);
-      store.flush();
+      store.persistence.flush();
     });
 
     it('keeps newly pasted multiple candidates ambiguous without inventing an issue number', () => {
@@ -1890,7 +1890,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedPullRequestUrl).toBeUndefined();
       expect(run.referencedIssueUrl).toBeUndefined();
       expect(run.issueNumber).toBeUndefined();
-      store.flush();
+      store.persistence.flush();
     });
 
     it('restores references through repeated foreign/local edits without replacing owned numbers', () => {
@@ -1908,7 +1908,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       }
       expect(run.referencedPrCandidates).toEqual([foreignPr]);
       expect(run.referencedIssueCandidates).toEqual([foreignIssue]);
-      store.flush();
+      store.persistence.flush();
       expect(readPersistedRuns(dataDir)[0].referencedPullRequestUrl).toBe(foreignPr);
     });
 
@@ -1921,7 +1921,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedIssueUrl).toBe(foreignIssue);
       // A bare repository names no issue; reusing evidence must not invent a trusted number seed.
       expect(run.issueNumber).toBeUndefined();
-      store.flush();
+      store.persistence.flush();
     });
 
     it('reapplies ambiguity before repository scoping after every edit', () => {
@@ -1933,7 +1933,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         expect(run.referencedPullRequestUrl).toBe(task.includes('#42') ? foreignPr : undefined);
         expect(run.referencedPrCandidates).toEqual([foreignPr, localPr]);
       }
-      store.flush();
+      store.persistence.flush();
     });
 
     it('updates only janitor-owned issue numbers as the selected candidate changes', () => {
@@ -1951,7 +1951,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedIssueUrl).toBe(second);
       expect(run.issueNumber).toBe(44);
       expect(run.referencedIssueCandidates).toEqual([foreignIssue, second]);
-      store.flush();
+      store.persistence.flush();
     });
 
     it('keeps marker authority separate from the created PR when resolving edited prompts', () => {
@@ -1967,7 +1967,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.issueNumber).toBe(43);
       expect(run.markerRefs).toEqual({ pr: 99, issue: 43 });
       expect(run.pullRequestUrl).toBe('https://github.com/other/repo/pull/99');
-      store.flush();
+      store.persistence.flush();
     });
 
     it('preserves created PR ownership and an independently supplied issue number', () => {
@@ -1978,7 +1978,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(run.referencedIssueUrl).toBeUndefined();
       expect(run.issueNumber).toBe(7);
       expect(run.pullRequestUrl).toBe('https://github.com/other/repo/pull/99');
-      store.flush();
+      store.persistence.flush();
     });
 
     it.each([
@@ -1990,7 +1990,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       store.updateRun(run.id, { task });
       expect(run.referencedPullRequestUrl).toBe(foreignPr);
       expect(run.referencedIssueUrl).toBe(foreignIssue);
-      store.flush();
+      store.persistence.flush();
     });
 
     // One rule for both write paths (hearsay-tools/cezarion#2323): a durable patch that edits the
@@ -2029,7 +2029,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         onRunWrite(store.lifecycle, (record: RunRecord) => seen.push(referenceFields(record)));
 
         store.updateRun(run.id, { task: edit, ...extra });
-        store.flush();
+        store.persistence.flush();
 
         expect(referenceFields(store.getRun(run.id))).toEqual(expected);
         expect(seen.at(-1)).toEqual(expected);
@@ -2059,7 +2059,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       expect(record?.issueNumber).toBeUndefined();
       expect(record?.referencedPrCandidates).toEqual([foreignPr]);
       expect(record?.referencedIssueCandidates).toEqual([foreignIssue]);
-      store.flush();
+      store.persistence.flush();
     });
 
     it.each(collisions)('repairs a stored collision after reload: %s', (task) => {
@@ -2088,7 +2088,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       store.eventLog.appendEvent(run.id, { type: 'result', result: `${foreignPr} ${foreignIssue}` });
       expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(foreignPr);
       expect(store.getRun(run.id)?.referencedIssueUrl).toBe(foreignIssue);
-      store.flush();
+      store.persistence.flush();
     });
   });
 
@@ -2160,7 +2160,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
       const seed = RunStore.open(dataDir);
       const run = seed.createRun({ title: 't', workflow: 'w', task: record.task, steps: [] });
       seed.updateRun(run.id, record);
-      seed.flush();
+      seed.persistence.flush();
 
       const reopened = RunStore.open(dataDir);
       // Snapshot the VALUE, not the record: `getRun` hands back the live object the sweep
@@ -2256,7 +2256,7 @@ describe("RunStore — a task never adopts another repository's ref (#945)", () 
         type: 'result',
         result: 'See https://github.com/supabase/cli/pull/6056 and https://github.com/supabase/cli/issues/42.',
       });
-      store.flush(); // headless run completes before repository discovery
+      store.persistence.flush(); // headless run completes before repository discovery
 
       store.setRepoHandle(HANDLE);
 
@@ -2405,7 +2405,7 @@ describe('RunStore — queuedMessages (#472)', () => {
         },
       ],
     });
-    store.flush();
+    store.persistence.flush();
 
     const reopened = RunStore.open(dataDir);
     const stack = reopened.getRun(run.id)?.queuedMessages;
@@ -2465,7 +2465,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
 
     const updated = store.readFlags.setRead(id);
     expect(updated?.seenAt).toBeDefined();
-    store.flush();
+    store.persistence.flush();
 
     expect(RunStore.open(dataDir).getRun(id)?.seenAt).toBe(updated?.seenAt);
   });
@@ -2486,7 +2486,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     // field being ABSENT, so an empty-string receipt would read as "seen at the epoch".
     expect(updated?.seenAt).toBeUndefined();
     expect(Object.hasOwn(updated!, 'seenAt')).toBe(false);
-    store.flush();
+    store.persistence.flush();
 
     expect(RunStore.open(dataDir).getRun(id)?.seenAt).toBeUndefined();
   });
@@ -2819,7 +2819,7 @@ describe('RunStore — pinned tasks (#935)', () => {
     expect(updated?.pinned).toBe(true);
     expect(updated?.pinnedAt).toBeDefined();
 
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(dataDir).getRun(id)?.pinned).toBe(true);
   });
 
@@ -2830,7 +2830,7 @@ describe('RunStore — pinned tasks (#935)', () => {
     const id = newRun(store);
     store.readFlags.setPinned(id, true);
     store.readFlags.setPinned(id, false);
-    store.flush();
+    store.persistence.flush();
 
     const persisted = readPersistedRuns(dataDir) as Array<
       Record<string, unknown>
@@ -2860,10 +2860,10 @@ describe('RunStore — pinned tasks (#935)', () => {
     store.readFlags.setPinned(id, true);
     expect(store.getRun(id)).not.toHaveProperty('pinned');
     expect(store.getRun(id)).not.toHaveProperty('pinnedAt');
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(dataDir);
     reopened.archive.setArchived(id, false);
-    reopened.flush();
+    reopened.persistence.flush();
     expect(reopened.getRun(id)).not.toHaveProperty('pinned');
     expect(reopened.getRun(id)).not.toHaveProperty('pinnedAt');
   });
@@ -3211,7 +3211,7 @@ describe('RunRecord.worktreeSetup (#917)', () => {
     seedRuns(dataDir, [LEGACY_RUN]);
     const store = RunStore.open(dataDir, { keepLive: true });
     store.updateRun('legacy-1', { worktreeSetup: settled });
-    store.flush();
+    store.persistence.flush();
     store.close();
     const reopened = RunStore.open(dataDir, { keepLive: true });
     expect(reopened.getRun('legacy-1')?.worktreeSetup).toEqual(settled);
@@ -3295,7 +3295,7 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
     const store = RunStore.open(dataDir);
     expect(store.listRunSummaries().runs.map((run) => [run.id, run.title])).toEqual([[BAD.id, BAD.title]]);
-    store.flush();
+    store.persistence.flush();
     expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, title: BAD.title });
     store.close();
   });
@@ -3305,7 +3305,7 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
     const store = RunStore.open(dataDir, { keepLive: true });
     expect(store.getRun(BAD.id)?.status).toBe(RUN_STATUS.queued);
-    store.flush();
+    store.persistence.flush();
     expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, status: RUN_STATUS.queued });
     store.close();
   });

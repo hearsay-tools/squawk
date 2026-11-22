@@ -80,7 +80,7 @@ describe('attributed input queue', () => {
     const store = RunStore.open(dir);
     try {
       const record = store.createRun({ title: 'task', task: 'task', workflow: 'quick-task', steps: [] });
-      store.flush();
+      store.persistence.flush();
       const release = blockRunWrites(dir);
       const events: unknown[] = [];
       onRunWrite(store.lifecycle, event => events.push(event));
@@ -91,7 +91,7 @@ describe('attributed input queue', () => {
       store.commitAgentInputs(record.id, [input]);
       expect(record.agentInputs).toEqual([input]);
       expect(RunStore.open(dir, { keepLive: true }).getRun(record.id)?.agentInputs).toEqual([input]);
-    } finally { store.flush(); rmSync(dir, { recursive: true, force: true }); }
+    } finally { store.persistence.flush(); rmSync(dir, { recursive: true, force: true }); }
   });
 });
 
@@ -252,7 +252,7 @@ it('ask replay requires a validated successful-delivery checkpoint for the curre
     expect(pendingAsk()).toBe(true);
     store.eventLog.appendEvent(record.id, { type: 'human-input-delivered', askSeq: second.seq });
     expect(pendingAsk()).toBe(false);
-  } finally { manager.dispose(); store.flush(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { manager.dispose(); store.persistence.flush(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 it.each(['cancelled', 'finish requested', 'disposed'] as const)(
@@ -441,7 +441,7 @@ it('inbox cannot reserve an input in the active opening Continue prompt', async 
 
 it('failed claim and ACK checkpoints publish nothing and the same receipt can retry', async () => {
   await withInboxRun(({ store, manager, dir, runId, enqueue }) => {
-    const first = enqueue('first'), generation = randomUUID(); store.flush();
+    const first = enqueue('first'), generation = randomUUID(); store.persistence.flush();
     let release = blockRunWrites(dir);
     expect(() => manager.reserveInboxInputs(runId, generation, [first.id])).toThrow();
     expect(store.getRun(runId)?.agentInputs).toEqual([first]);
@@ -496,7 +496,7 @@ it.each(['live', 'expired'] as const)('restart recovers a %s receipt and expiry 
       expect(reopened.eventLog.readEvents(runId).filter(event => event.type === 'note' && String(event.message).startsWith('Messages retained; continuation unavailable: '))).toHaveLength(1);
       expect(reopened.getRun(runId)?.agentInputs?.[0]?.deliveredAt).toBeUndefined();
       expect(() => recovered.acknowledgeInbox(runId, generation, receipt.receiptId)).toThrow();
-    } finally { recovered.dispose(); reopened.flush(); }
+    } finally { recovered.dispose(); reopened.persistence.flush(); }
   }, true);
 });
 
@@ -521,7 +521,7 @@ it('a continuation refused across several admission retries writes the retained 
       expect(resume.mock.calls.length).toBeGreaterThanOrEqual(tries + 4);
       expect(resume.mock.results.every(result => result.type === 'return' && !result.value.ok)).toBe(true);
       expect(notes()).toHaveLength(1);
-    } finally { recovered.dispose(); reopened.flush(); }
+    } finally { recovered.dispose(); reopened.persistence.flush(); }
   }, true);
 });
 
@@ -595,6 +595,6 @@ it('restart after durable inbox ACK retires the wake without creating a continua
       expect(reopened.getRun(runId)?.continuationMessage).toBeUndefined();
       expect(reopened.getRun(runId)?.status).toBe('waiting');
       expect(recovered.acknowledgeInbox(runId, generation, receiptId)).toBe('already-acknowledged');
-    } finally { recovered.dispose(); reopened.flush(); }
+    } finally { recovered.dispose(); reopened.persistence.flush(); }
   }, true);
 });

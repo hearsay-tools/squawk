@@ -73,7 +73,7 @@ describe('native skills do not materialize Squawk copies', () => {
   afterEach(async () => {
     for (const end of finish) end();
     await drainFixtureManagers(repoRoot);
-    store.flush();
+    store.persistence.flush();
     vi.restoreAllMocks();
     rmSync(repoRoot, { recursive: true, force: true });
   });

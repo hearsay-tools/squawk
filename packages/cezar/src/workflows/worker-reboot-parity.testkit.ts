@@ -56,7 +56,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     manager.dispose();
     const boot = Number(/^btime (\d+)$/m.exec(readFileSync('/proc/stat', 'utf8'))![1]) * 1000;
     store.updateRun(orphan.id, { createdAt: new Date(boot - 60_000).toISOString() });
-    store.flush();
+    store.persistence.flush();
     // Restore only crash evidence, not a forged completion: native children have really exited.
     writeFileSync(join(files, `${orphan.id}.execution.json`), JSON.stringify(proof));
     writeFileSync(join(files, `${orphan.id}.processes.json`), JSON.stringify({ ...processes, controller: { pid: ABSENT_PROCESS_PID, startToken: '11111111-1111-4111-8111-111111111111:100' } }));
@@ -100,7 +100,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       expect(semaphore.busy()).toBe(0);
       // Production 60s timers, no shortened override or manual scratch cleanup call: recovered
       // cleanup releases every resource on its next wake while the holder still runs.
-      detach(); manager.dispose(); store.flush(); reopenRuntime();
+      detach(); manager.dispose(); store.persistence.flush(); reopenRuntime();
       await manager.recover();
       service = new DelegationService(workerCleanups()); detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       service.armDestroyRetries('project');

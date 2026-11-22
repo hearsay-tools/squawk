@@ -73,7 +73,7 @@ describe('Stop before the first Codex turn (#493)', { timeout: 15_000 }, () => {
         if (pid !== undefined) await vi.waitFor(() => expect(processExited(pid)).toBe(true), waitOptions);
         for (const record of store.listRuns()) unregisterRunProcess(record.id);
         manager.dispose();
-        store.flush();
+        store.persistence.flush();
         rmSync(root, { recursive: true, force: true });
       }
     } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }

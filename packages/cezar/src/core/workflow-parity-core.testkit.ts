@@ -169,7 +169,7 @@ export async function driveRun(
     if (duringWork) await duringWork;
     if (duringError) throw duringError;
     if (afterSettled) await afterSettled({ store, manager, runId: started.id });
-    store.flush();
+    store.persistence.flush();
     // Cleanup mutates the live record; return the observed state before cancellation.
     return { statuses, record: structuredClone(record()), events: readRunEvents(repoRoot, started.id) };
   } finally {
@@ -332,7 +332,7 @@ async function restartOwnedInputRun(
   state: OwnedInputState, repoRoot: string, parentRunId: string, options: OwnedInputOptions,
   beforeOpen?: (dataDir: string) => void,
 ): Promise<{ store: RunStore; manager: RunManager }> {
-  state.store!.flush();
+  state.store!.persistence.flush();
   const dataDir = join(repoRoot, '.ai/cezar');
   const index = readPersistedRuns(dataDir);
   // The transcripts belong to the checkpoint too: the cancel that stops the processes below

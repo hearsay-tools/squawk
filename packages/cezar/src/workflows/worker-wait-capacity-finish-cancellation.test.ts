@@ -45,7 +45,7 @@ it('restart durably reconciles cancelled roots with superseded Finish intent', a
     const p = await parent('mock:cezar-ask'); await until(() => store.getRun(p.id)?.status === 'waiting'); await restart();
     store.commitRootFinishIntent(p.id);
     setRunStatus(store, p.id, RUN_STATUS.cancelled, { finishedAt: new Date().toISOString() });
-    store.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
+    store.persistence.flush(); const checkpoint = readPersistedRuns(join(root, '.ai/cezar'));
     await restart(false, checkpoint);
     expect(store.getRun(p.id)?.status).toBe('cancelled');
     const disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === p.id)!;

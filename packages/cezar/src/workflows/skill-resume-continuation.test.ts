@@ -105,7 +105,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     for (const session of sessions) session.finish();
     await drainFixtureManagers(repoRoot);
     manager.dispose();
-    store.flush();
+    store.persistence.flush();
     restoreProcesses();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();

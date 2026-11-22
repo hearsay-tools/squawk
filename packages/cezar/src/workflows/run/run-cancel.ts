@@ -59,7 +59,7 @@ export class RunCancel {
   private cancelActiveRun(runId: string, state: ActiveRun): void {
     state.liveSession.cancel();
     this.context.store.updateRun(runId, { stopping: true });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     state.liveSession.revokeCiTools?.(); state.liveSession.clearCiRevoker();
     state.liveSession.revokeDelegation?.(); state.liveSession.clearDelegationRevoker();
     clearIdleTimer(state);
@@ -89,14 +89,14 @@ export class RunCancel {
     this.line.takePending(runId);
     // The exit writes the cancellation's one lifecycle event; a queued run's says so (B12).
     this.context.store.move(runId, 'cancel', {}, { event: CANCELLED_WHILE_QUEUED });
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     if (this.workerExecutions.admitted(runId) === false) void this.workerExecutions.finishWorkerExecution(runId);
   }
 
   private cancelRunWithoutSession(runId: string, hadWaits: boolean, retiredRefusal: boolean, cancelledFinish: boolean): boolean {
     if (this.line.hasStarting(runId)) {
       this.context.store.updateRun(runId, { stopping: true });
-      this.context.store.flush();
+      this.context.store.persistence.flush();
       return true;
     }
     if (cancelledFinish) return true;
@@ -123,7 +123,7 @@ export class RunCancel {
     if (hadWaits || retiredRefusal) this.context.store.eventLog.appendEvent(run.id, { type: 'note', message: hadWaits ? WAITS_DISCARDED_NOTE : REFUSAL_DISCARDED_NOTE });
     this.host.cancelAutoResume(run.id);
     for (const child of liveWorkers) this.cancel(child.id);
-    this.context.store.flush();
+    this.context.store.persistence.flush();
     return true;
   }
 

@@ -400,7 +400,7 @@ export const RUN_GROUPS = {
                   await waitFor(() => !manager.isActive(runId) && store.getRun(runId)?.status === 'done', 60_000);
                   expect(store.getRun(runId)?.markerRefs?.pr).toBe(817);
                 }
-                store.flush();
+                store.persistence.flush();
                 expect(readPersistedRuns(dataDir).find(run => run.id === runId)?.pullRequests?.map((pr: NonNullable<RunRecord['pullRequests']>[number]) => pr.number))
                   .toEqual(continuation ? [812, 813, 814, 815, 816, 817] : [812, 813, 814, 815, 816]);
               }, { beforeStart: ({ repoRoot }) => { dataDir = join(repoRoot, '.ai/cezar'); } });

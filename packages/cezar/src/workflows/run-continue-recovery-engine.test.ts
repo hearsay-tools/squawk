@@ -48,7 +48,7 @@ describe('RunManager.continueRun override', () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     runnerHook.runner = undefined;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -267,7 +267,7 @@ describe('RunManager check retry recovery', () => {
     fixture.store.updateStep(record.id, 'verify', { status: STEP_STATUS.running, iterations: 1 });
     fixture.store.addStep(record.id, { id: 'later', name: 'Later', kind: STEP_KIND.check });
     setRunStatus(fixture.store, record.id, RUN_STATUS.running, { currentStepId: 'verify', workflowDef: workflow });
-    fixture.store.flush();
+    fixture.store.persistence.flush();
 
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot);
     await fixture.manager.recover();
@@ -314,7 +314,7 @@ describe('native /skill triggers survive a continuation (#811)', () => {
     if (runId) manager.cancel(runId);
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -424,7 +424,7 @@ describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
     else process.env.CEZ_DRY_RUN = savedDryRun;
     if (savedMockStdin === undefined) delete process.env.CEZ_MOCK_STDIN_FILE;
     else process.env.CEZ_MOCK_STDIN_FILE = savedMockStdin;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

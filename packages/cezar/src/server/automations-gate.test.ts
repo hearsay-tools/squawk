@@ -75,7 +75,7 @@ describe('automations gate (#801)', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedAutomations === undefined) delete process.env.CEZ_AUTOMATIONS;
     else process.env.CEZ_AUTOMATIONS = savedAutomations;

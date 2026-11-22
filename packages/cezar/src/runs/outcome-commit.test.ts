@@ -30,7 +30,7 @@ beforeEach(() => {
   directory = join(mkdtempSync(join(tmpdir(), 'cez-outcome-')), '.ai/cezar');
   store = openTestRunStore(directory, { keepLive: true });
   id = store.createRun({ title: 'outcomes', workflow: 'quick-task', task: 'wait', steps: [{ id: 'main', name: 'main', kind: STEP_KIND.agent }] }).id;
-  store.flush();
+  store.persistence.flush();
 });
 afterEach(() => {
   store.close();
@@ -106,7 +106,7 @@ describe('commitOutcome', () => {
     finally { unblock(); unmute(); }
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('outcome checkpoint failed'));
     expect(store.getRun(id)?.waitDeliveryFailures).toBe(2);
-    store.flush();
+    store.persistence.flush();
     expect(committed().waitDeliveryFailures).toBe(2);
   });
 

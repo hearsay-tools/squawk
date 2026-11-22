@@ -65,7 +65,7 @@ describe('project checkout pull', () => {
       version: 'test' });
   });
   afterEach(() => {
-    store?.flush();
+    store?.persistence.flush();
     rmSync(dir, { recursive: true, force: true });
     vi.unstubAllEnvs();
   });

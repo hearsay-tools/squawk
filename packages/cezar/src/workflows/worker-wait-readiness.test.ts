@@ -110,7 +110,7 @@ it('readiness real stopped process wakes its parent only after actual exit and f
 it('readiness review cancels a live worker, live and through recovery', async () => {
     const p = await parent(); const w = await worker(p.id);
     await until(() => store.getRun(p.id)?.status === RUN_STATUS.waiting);
-    store.flush(); const disk = readPersistedRuns(join(root, '.ai/cezar')) as Array<{ id: string; status: string }>;
+    store.persistence.flush(); const disk = readPersistedRuns(join(root, '.ai/cezar')) as Array<{ id: string; status: string }>;
     for (const run of disk) if (run.id === p.id) run.status = RUN_STATUS.review;
     setRunStatus(store, p.id, RUN_STATUS.review); manager.reconcileWorkerWaits();
     expect(store.getRun(w.id)?.status).toBe('cancelled');

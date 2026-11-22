@@ -317,7 +317,7 @@ function runFiles(suffix: string): Map<string, string> {
 }
 /** Event logs (`<id>.ndjson`) as they stand now, for `restart`'s `events`. */
 export function eventCheckpoint(): Map<string, string> {
-  store.flush();
+  store.persistence.flush();
   return runFiles('.ndjson');
 }
 /** Stop everything and recover in a fresh store, as after `serve` stopped. The stop cancels every run;
@@ -330,7 +330,7 @@ export function eventCheckpoint(): Map<string, string> {
  * Every other file stays as the stop wrote it, the event logs too when `events` is not given. */
 export async function restart(fakeClock = false, diskCheckpoint?: readonly unknown[], events?: Map<string, string>) {
   checkpoint('restart-stop-start');
-  store.flush(); const disk = diskCheckpoint ?? readPersistedRuns(join(root, '.ai/cezar'));
+  store.persistence.flush(); const disk = diskCheckpoint ?? readPersistedRuns(join(root, '.ai/cezar'));
   const workerRecords = [...runFiles('.execution.json'), ...[...runFiles('.processes.json')].map(([path, content]) => {
     const record = JSON.parse(content) as { controller: object };
     return [path, JSON.stringify({ ...record, controller: { ...record.controller, pid: ABSENT_PROCESS_PID } })] as const;

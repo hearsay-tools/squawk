@@ -56,7 +56,7 @@ describe('GET /api/v1/health — forge + capabilities', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
@@ -263,7 +263,7 @@ describe('POST /api/v1/runs/:id/open-in-cli — hosted-mode defense in depth', (
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;

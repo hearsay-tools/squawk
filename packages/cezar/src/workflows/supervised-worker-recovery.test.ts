@@ -25,7 +25,7 @@ describe('restart recovery of a worker whose supervisor has settled', { timeout:
     const child = await worker(w.id);
     manager.enqueueOwnedRun(child.id);
     await until(() => store.getRun(child.id)?.status === RUN_STATUS.running);
-    store.flush();
+    store.persistence.flush();
     const disk = readPersistedRuns(join(root, '.ai/cezar')).map(record => record.id === w.id ? { ...record, status: settled, finishedAt: new Date().toISOString() } : record);
     await restart(false, disk);
     await until(() => store.getRun(child.id)?.status === RUN_STATUS.cancelled);

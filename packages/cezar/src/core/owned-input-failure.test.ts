@@ -61,7 +61,7 @@ it.each(['fresh', 'continuation'] as const)('%s acknowledged input checkpoint re
         interrupt();
         expect(checkpointReports()).toEqual([]);
       });
-      store.flush();
+      store.persistence.flush();
       let unblock: (() => void) | undefined;
       // The input supersedes that question with a write to the parent's conversation first; the
       // failure injected here is the input's own delivery checkpoint, after it.

@@ -86,7 +86,7 @@ describe('delegation service durable authority', () => {
       // assertion waits for proof of termination and still catches a missing collect hook (#703).
       await expect.poll(() => f.service.collect(f.caller, { workerId }), { timeout: 10_000, interval: 250 }).toMatchObject({ settled: true });
       expect(reopened.workerExecutions.readWorkerExecution(workerId)).toMatchObject({ generation, phase: 'complete' });
-    } finally { manager.dispose(); reopened.flush(); }
+    } finally { manager.dispose(); reopened.persistence.flush(); }
   });
   it('returns only the retained old cancellation while a queued parent has a newer wait', async () => {
     const { workerId, waitId } = await cancellableWait(); const old = await f.service.cancelWait(f.caller, { waitId });

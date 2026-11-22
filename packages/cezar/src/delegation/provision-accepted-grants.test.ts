@@ -29,7 +29,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
       sessions[1]!.finish(); expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
     }
     // Simulate exactly the public on-disk salvage boundary, keeping private identity intact.
-    f.store.flush(); const dataDir = join(f.root, '.ai/cezar');
+    f.store.persistence.flush(); const dataDir = join(f.root, '.ai/cezar');
     const records = readPersistedRuns(dataDir);
     const record = records.find((r: { id: string }) => r.id === a.child.workerId)!;
     if (damage === 'missing') delete record.workflowDef;

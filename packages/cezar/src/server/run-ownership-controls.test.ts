@@ -49,7 +49,7 @@ describe('controls on a run another Squawk process owns', () => {
     mkdirSync(dataDir, { recursive: true });
     owner = RunStore.open(dataDir, { keepLive: true });
     runId = owner.createRun({ title: 'theirs', workflow: 'quick-task', task: 'theirs', steps: [] }).id;
-    owner.flush();
+    owner.persistence.flush();
     store = RunStore.open(dataDir, { keepLive: true });
     manager = new RunManager(store, repoRoot, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
     app = createApp({ home: testHome(), repoRoot, store, manager, version: '0.0.0-test', providerAuth: connectedProviderAuth() });
@@ -108,7 +108,7 @@ describe('controls on a run another Squawk process owns', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ cancelled: true });
     expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.cancelled });
-    store.flush();
+    store.persistence.flush();
     expect(readPersistedRuns(dataDir).find((run) => run.id === runId)).toMatchObject({ status: RUN_STATUS.cancelled });
     // Settled and let go: nobody claims it now.
     expect(store.claims.runOwnership(runId)).toBe('free');
@@ -175,7 +175,7 @@ describe('adopting a dead owner\'s run for a control', () => {
       owner.updateStep(run.id, 'task', { status: STEP_STATUS.running, startedAt: at, sessionId: 'previous-session', backend: 'claude' });
       setRunStatus(owner, run.id, RUN_STATUS.running, { startedAt: at, currentStepId: 'task' });
     }
-    owner.flush();
+    owner.persistence.flush();
     crashStore(owner);
     expect(store.claims.runOwnership(run.id)).toBe('orphaned');
     return run.id;

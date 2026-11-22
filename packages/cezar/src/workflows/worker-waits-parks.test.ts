@@ -132,11 +132,11 @@ describe('worker parks, slots and session close', { timeout: 45_000 }, () => {
     const deadline = manager.registerWorkerListWait(p.id, { workerIds: [idle.id], timeoutSeconds: 600 }, 'cezar_wait');
     release();
     await until(() => parkedOn(p.id, observed.id));
-    store.flush();
+    store.persistence.flush();
     const before = readPersistedRuns(join(root, '.ai/cezar')) as Array<{ id: string }>;
     // The worker settles durably, and the process dies before the parent observes it.
     fixtureUpdateRun(settles.id, { status: RUN_STATUS.done });
-    store.flush();
+    store.persistence.flush();
     const after = readPersistedRuns(join(root, '.ai/cezar')) as Array<{ id: string }>;
     // bound: the registered 600 s deadline exceeds the 45 s row guard; fake timers drive expiry.
     const disk = before.map(record => record.id === settles.id ? after.find(next => next.id === settles.id)! : record);

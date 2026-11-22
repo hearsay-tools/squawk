@@ -43,7 +43,7 @@ describe('restart recovery of a closed waiting worker', () => {
       setRunStatus(store, w.id, fixtureStatus, fixtureExtras);
     }
     store.updateStep(w.id, 'task', { status: STEP_STATUS.waiting, iterations: 1 });
-    store.flush();
+    store.persistence.flush();
     return w.id;
   }
 

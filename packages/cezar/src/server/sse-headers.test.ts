@@ -28,7 +28,7 @@ describe('SSE responses defeat intermediary buffering', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

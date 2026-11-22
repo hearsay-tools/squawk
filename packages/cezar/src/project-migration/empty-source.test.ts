@@ -102,7 +102,7 @@ describe('a project move with nothing to move and no .ai/squawk/', () => {
     expect(await moveProjectWhenIdle(root, { homes: [], log: () => undefined })).toMatchObject({ status: 'moved' });
     const store = RunStore.open(join(root, '.ai/squawk'), { keepLive: true });
     let id: string;
-    try { id = store.createRun({ title: 'later', task: 'later', workflow: 'quick-task', steps: [] }).id; store.flush(); } finally { store.close(); }
+    try { id = store.createRun({ title: 'later', task: 'later', workflow: 'quick-task', steps: [] }).id; store.persistence.flush(); } finally { store.close(); }
     // A record a newer build wrote, which this build cannot read.
     const database = new DatabaseSync(join(root, '.ai/squawk', RUNS_DB_FILE));
     try { database.prepare('UPDATE runs SET data = ?, archived = 0 WHERE id = ?').run('{"unknown":true}', id); } finally { database.close(); }

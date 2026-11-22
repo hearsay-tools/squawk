@@ -56,7 +56,7 @@ describe('project repository discovery lifetime', () => {
       current.store.updateRun(task.id, { title: 'updated by current context' });
       const added = current.store.createRun({ title: 'new task', workflow: 'w', task: 'new task', steps: [] });
       setRunStatus(current.store, added.id, RUN_STATUS.done);
-      current.store.flush();
+      current.store.persistence.flush();
       const beforeLateLookup = readPersistedText(current.dataDir);
 
       release({ status: 'resolved', handle });

@@ -76,7 +76,7 @@ describe('RunManager directional usage accounting', () => {
     await drainFixtureManagers(repoRoot);
     manager.dispose();
     runnerHook.runner = undefined;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -241,7 +241,7 @@ describe('TurnBookkeeper.recordTurnEnd', () => {
 
   afterAll(async () => {
     await drainFixtureManagers(repoRoot);
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -397,7 +397,7 @@ describe('RunSettlement.settleSuccess — optional review gate', () => {
 
   afterAll(async () => {
     await drainFixtureManagers(repoRoot);
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedGate === undefined) delete process.env.CEZ_REVIEW_GATE;
     else process.env.CEZ_REVIEW_GATE = savedGate;
@@ -493,7 +493,7 @@ describe('a chain of 2 selected skills runs BOTH steps, in order (#410)', () => 
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -573,7 +573,7 @@ describe('a single agent step plus a check step gets NO chain note (#410)', () =
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -933,7 +933,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
     writeFileSync(imagesDir(r.id), 'not a directory');
     manager.enqueueMessage(r.id, [{ type: 'file', mediaType: 'application/pdf', data: 'YQ==' }]);
     expect(store.eventLog.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('could not be saved'))).toBe(true);
-    store.flush();
+    store.persistence.flush();
     const reopened = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
     expect(reopened.getRun(r.id)?.queuedMessages?.[0]?.text).toContain('could not be saved');
   });
@@ -1396,7 +1396,7 @@ describe('queued stacking reaches the backend (#472)', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -1536,7 +1536,7 @@ describe('native Codex requestUserInput parks and resumes the run (#565)', () =>
     if (runId) manager.cancel(runId);
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN; else process.env.CEZ_DRY_RUN = savedDryRun;
     if (savedCodexBin === undefined) delete process.env.CEZ_CODEX_BIN; else process.env.CEZ_CODEX_BIN = savedCodexBin;
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

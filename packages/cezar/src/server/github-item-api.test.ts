@@ -62,7 +62,7 @@ describe('the github item API', () => {
     app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', forgeFactory });
   });
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 

@@ -47,7 +47,7 @@ describe('claims that admit work on a finished run', () => {
     // A materialized worktree, so worktree reclaim has something to claim.
     const worktreePath = join(root, `wt-${run.id.slice(0, 8)}`); mkdirSync(worktreePath);
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString(), branch: `cez/${run.id.slice(0, 8)}`, worktreePath });
-    store.flush();
+    store.persistence.flush();
     return run.id;
   }
 

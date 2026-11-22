@@ -30,7 +30,7 @@ describe('ContinuationAcceptance: Continue override', () => {
   });
 
   afterEach(() => {
-    store.flush();
+    store.persistence.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -55,7 +55,7 @@ describe('ContinuationAcceptance: Continue override', () => {
     expect(manager.continueRun(id, { text: 'Continue setup' })).toEqual({ ok: true });
     expect(store.getRun(id)?.status).toBe('running');
     expect(store.getRun(id)?.autonomous).toBe(autonomous);
-    store.flush();
+    store.persistence.flush();
     expect(RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true }).getRun(id)?.autonomous)
       .toBe(autonomous);
   });
