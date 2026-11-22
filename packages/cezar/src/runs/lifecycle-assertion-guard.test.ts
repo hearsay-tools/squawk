@@ -27,21 +27,37 @@ function* walk(value: unknown): Generator<Node> {
 const isListenerFunction = (node: unknown): node is Node => isNode(node) && (/Function/.test(node.type) || node.type === 'ObjectMethod');
 const nameOf = (node: Node): string | undefined => node.type === 'Identifier' ? node.name as string : undefined;
 
-/** The functions of a file that a `const` or a declaration names. */
-function namedFunctions(nodes: readonly Node[]): Map<string, Node> {
-  const named = new Map<string, Node>();
+const startOf = (node: Node): number => node.start as number;
+const endOf = (node: Node): number => node.end as number;
+
+/** A function a `const` or a declaration names, with the block whose scope holds the name. */
+interface NamedFunction { name: string; fn: Node; scope: Node; hoisted: boolean }
+
+function namedFunctions(nodes: readonly Node[]): NamedFunction[] {
+  const blocks = nodes.filter((node) => node.type === 'BlockStatement' || node.type === 'Program');
+  const scopeOf = (node: Node): Node => blocks
+    .filter((block) => startOf(block) <= startOf(node) && endOf(node) <= endOf(block))
+    .reduce((inner, block) => (endOf(block) - startOf(block) < endOf(inner) - startOf(inner) ? block : inner));
+  const named: NamedFunction[] = [];
   for (const node of nodes) {
-    if (node.type === 'VariableDeclarator' && isListenerFunction(node.init)) named.set(nameOf(node.id as Node) ?? '', node.init);
-    if (node.type === 'FunctionDeclaration' && node.id) named.set(nameOf(node.id as Node) ?? '', node);
+    if (node.type === 'VariableDeclarator' && isListenerFunction(node.init)) named.push({ name: nameOf(node.id as Node) ?? '', fn: node.init, scope: scopeOf(node), hoisted: false });
+    if (node.type === 'FunctionDeclaration' && node.id) named.push({ name: nameOf(node.id as Node) ?? '', fn: node, scope: scopeOf(node), hoisted: true });
   }
   return named;
 }
 
+/** The function `reference` names where it stands: the nearest declaration before it in a block around it, or a function declaration anywhere in one. */
+function resolve(named: readonly NamedFunction[], reference: Node): Node | undefined {
+  return named
+    .filter((entry) => entry.name === nameOf(reference) && startOf(entry.scope) <= startOf(reference) && endOf(reference) <= endOf(entry.scope) && (entry.hoisted || startOf(entry.fn) < startOf(reference)))
+    .reduce<NamedFunction | undefined>((nearest, entry) => (!nearest || startOf(entry.fn) > startOf(nearest.fn) ? entry : nearest), undefined)?.fn;
+}
+
 /** The functions a file hands to `onRunWrite` or to `subscribe({ … })` as listeners. */
-function listenersOf(nodes: readonly Node[], named: ReadonlyMap<string, Node>): Set<Node> {
+function listenersOf(nodes: readonly Node[], named: readonly NamedFunction[]): Set<Node> {
   const listeners = new Set<Node>();
   const take = (arg: unknown): void => {
-    const target = isListenerFunction(arg) ? arg : isNode(arg) ? named.get(nameOf(arg) ?? '') : undefined;
+    const target = isListenerFunction(arg) ? arg : isNode(arg) && arg.type === 'Identifier' ? resolve(named, arg) : undefined;
     if (target) listeners.add(target);
   };
   for (const node of nodes) {
@@ -59,16 +75,16 @@ function listenersOf(nodes: readonly Node[], named: ReadonlyMap<string, Node>): 
 
 /** Each `expect(…)` call inside a lifecycle listener, in `source`. */
 export function assertionsInListeners(source: string, file: string): string[] {
-  const nodes = [...walk(parse(source, { sourceType: 'module', plugins: ['typescript'] }).program.body)];
-  const found = new Set<string>();
+  const nodes = [...walk(parse(source, { sourceType: 'module', plugins: ['typescript'] }).program)];
+  const lines = new Set<number>();
   for (const listener of listenersOf(nodes, namedFunctions(nodes))) {
     for (const node of walk(listener.body)) {
       if (node.type === 'CallExpression' && nameOf(node.callee as Node) === 'expect') {
-        found.add(`${file}:${(node.loc as { start: { line: number } }).start.line} expect inside a lifecycle listener`);
+        lines.add((node.loc as { start: { line: number } }).start.line);
       }
     }
   }
-  return [...found].sort();
+  return [...lines].sort((a, b) => a - b).map((line) => `${file}:${line} expect inside a lifecycle listener`);
 }
 
 describe('assertions in lifecycle listeners', () => {
@@ -83,6 +99,26 @@ describe('assertions in lifecycle listeners', () => {
     expect(assertionsInListeners(source, 'any.ts')).toEqual([
       'any.ts:1 expect inside a lifecycle listener', 'any.ts:2 expect inside a lifecycle listener',
       'any.ts:3 expect inside a lifecycle listener', 'any.ts:5 expect inside a lifecycle listener',
+    ]);
+  });
+
+  it('resolves a named listener where it is registered: the same name in two tests', () => {
+    const source = [
+      "it('first', () => {",
+      '  const onRun = (run) => { expect(run.id).toBe(id); };',
+      '  onRunWrite(store.lifecycle, onRun);',
+      '});',
+      "it('second', () => {",
+      '  const onRun = (run) => { seen.push(run.id); };',
+      '  onRunWrite(store.lifecycle, onRun);',
+      '});',
+      "it('third', () => {",
+      '  onRunWrite(store.lifecycle, hoisted);',
+      '  function hoisted(run) { expect(run).toBeDefined(); }',
+      '});',
+    ].join('\n');
+    expect(assertionsInListeners(source, 'any.ts')).toEqual([
+      'any.ts:2 expect inside a lifecycle listener', 'any.ts:11 expect inside a lifecycle listener',
     ]);
   });
 
