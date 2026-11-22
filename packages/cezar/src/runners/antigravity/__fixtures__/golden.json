@@ -7,7 +7,7 @@
   },
   "providerAuth": {
     "connectedEnv": { "GEMINI_API_KEY": "fixture-present" },
-    "command": { "executable": "agy", "args": ["--version"] },
+    "command": { "executable": "antigravity-cli-not-installed", "args": ["--version"] },
     "connected": { "stdout": "1.5.14", "stderr": "", "exitCode": 0 },
     "disconnected": { "stdout": "1.5.14", "stderr": "", "exitCode": 0 }
   },

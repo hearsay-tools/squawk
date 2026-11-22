@@ -46,7 +46,7 @@ it('continues a session the CLI cannot resume in a fresh session with the full s
   const cwd = await workspace(); const wire = join(cwd, 'wire'); const events: AgentEvent[] = [];
   const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'continue the work',
     resume: true, sessionId: 'registry-session', systemPrompt: 'Shared tail', resumeFallbackSystemPrompt: 'Skill text\n\nShared tail',
-    resumeFallbackSkill: { id: 'probe-alpha', name: 'probe-alpha', args: '' }, env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
+    resumeFallbackSkill: { id: 'probe-alpha', args: '' }, env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
   expect(result.sessionId).not.toBe('registry-session');
   const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   expect(frames.find(frame => frame.method === 'session/new').params._meta).toEqual({ antigravity: { systemPrompt: { append: 'Skill text\n\nShared tail' } } });
