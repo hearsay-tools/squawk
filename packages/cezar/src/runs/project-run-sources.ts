@@ -11,13 +11,14 @@ export interface ProjectRunSource {
 }
 
 /** Validate before opening a writable primary: corruption must never leave a shadow store. */
-export function fallbackRunSource(dataDir: string, parse: (bytes: Buffer) => readonly RunRowInput[] | undefined): ProjectRunSource | undefined {
+export function fallbackRunSource(dataDir: string, parse: (bytes: Buffer) => readonly RunRowInput[] | undefined, failed?: () => void): ProjectRunSource | undefined {
   const directory = dataReadDirs(dataDir)[1];
   if (!directory) return undefined;
   const database = join(directory, RUNS_DB_FILE);
   try {
     return readFallbackSource(directory, database, parse);
   } catch (error) {
+    failed?.();
     warnFallbackRunSource(database, error);
     return { directory, database, jsonRows: [] };
   }
@@ -54,8 +55,8 @@ export function copyFallbackFamily(db: RunDatabase | null, id: string, owner?: R
   return [family, ...db.listIdsByParent(family)];
 }
 
-export function addRunSource(db: RunDatabase, dataDir: string, source: ProjectRunSource, readOnly = false): RunDatabase {
-  return RunDatabase.withProjectSource(db, join(dataDir, RUNS_DB_FILE), source.database, source.jsonRows, readOnly);
+export function addRunSource(db: RunDatabase, dataDir: string, source: ProjectRunSource, readOnly = false, failed?: () => void): RunDatabase {
+  return RunDatabase.withProjectSource(db, join(dataDir, RUNS_DB_FILE), source.database, source.jsonRows, readOnly, failed);
 }
 
 /** Adopted snapshots keep their bytes, so they name their `.ai/squawk/` path. Accept only that exact

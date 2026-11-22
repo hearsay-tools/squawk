@@ -1,3 +1,4 @@
+import { cachedRunIndex } from './run-index-cache.ts';
 import { legacyIndexRows } from './legacy-run-rows.ts';
 import { addRunSource, fallbackRunSource } from './project-run-sources.ts';
 import { existsSync, readFileSync } from 'node:fs';
@@ -32,7 +33,8 @@ export function readRunIndexFromDisk(
   dataDir: string,
   options: { handle?: RepoHandle | null | undefined; archivedWindow?: number; roots?: boolean } = {},
 ): ColdRunIndex {
-  return readCold(dataDir, EMPTY, (db) => readDatabase(db, dataDir, options), () => readLegacyIndex(dataDir, options));
+  return cachedRunIndex(dataDir, options, failed => readCold(dataDir, EMPTY,
+    (db) => readDatabase(db, dataDir, options), () => readLegacyIndex(dataDir, options, failed), failed));
 }
 
 /**
@@ -53,24 +55,25 @@ export function searchRunIndexFromDisk(
 
 /** The source rule both readers share: an imported `runs.db` is the only source, a `runs.db` that
  *  cannot be read contributes `empty`, and before the import the legacy `runs.json` is read. */
-function readCold<T>(dataDir: string, empty: T, fromDatabase: (db: RunDatabase) => T, fromLegacy: () => T): T {
+function readCold<T>(dataDir: string, empty: T, fromDatabase: (db: RunDatabase) => T, fromLegacy: () => T, failed?: () => void): T {
   let db: RunDatabase | null = null;
   try {
     db = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE));
-    const source = fallbackRunSource(dataDir, bytes => legacyIndexRows(bytes, parseRunRecords)?.rows);
+    const source = fallbackRunSource(dataDir, bytes => legacyIndexRows(bytes, parseRunRecords)?.rows, failed);
     if (source) {
       if (db && db.getMeta(RUNS_IMPORT_COMPLETE_KEY) === undefined) { db.close(); db = null; }
       if (!db) {
         const index = join(dataDir, LEGACY_INDEX_FILE);
         const parsed = existsSync(index) ? legacyIndexRows(readFileSync(index), parseRunRecords) : { rows: [] };
-        if (!parsed) return empty;
+        if (!parsed) { failed?.(); return empty; }
         const rows = parsed.rows;
         db = RunDatabase.open(':memory:');
         db.transaction({ upserts: rows, deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'read-only' } });
       }
-      db = addRunSource(db, dataDir, source, true);
+      db = addRunSource(db, dataDir, source, true, failed);
     }
   } catch {
+    failed?.();
     db?.close();
     return empty;
   }
@@ -78,6 +81,7 @@ function readCold<T>(dataDir: string, empty: T, fromDatabase: (db: RunDatabase) 
     try {
       if (db.getMeta(RUNS_IMPORT_COMPLETE_KEY) !== undefined) return fromDatabase(db);
     } catch {
+      failed?.();
       return empty;
     } finally {
       db.close();
@@ -173,7 +177,7 @@ function parseSummary(text: string): RunSummary | undefined {
   }
 }
 
-function readLegacyIndex(dataDir: string, { handle, archivedWindow, roots }: { handle?: RepoHandle | null | undefined; archivedWindow?: number; roots?: boolean }): ColdRunIndex {
+function readLegacyIndex(dataDir: string, { handle, archivedWindow, roots }: { handle?: RepoHandle | null | undefined; archivedWindow?: number; roots?: boolean }, failed?: () => void): ColdRunIndex {
   try {
     const records = readLegacyRecords(dataDir);
     // The window leaves archived workers out, as `RunDatabase.listWindowSummaries` does, and
@@ -186,6 +190,7 @@ function readLegacyIndex(dataDir: string, { handle, archivedWindow, roots }: { h
     const { runs: kept, truncated } = applyWindow(newest, archivedWindow);
     return { runs: kept.map((run) => coldSummary(run, handle)), truncated };
   } catch {
+    failed?.();
     // Corrupt or unreadable index. A project that cannot be read contributes nothing to the
     // index rather than failing the whole workspace's search — the same degrade-quietly rule
     // the rest of the registry follows.

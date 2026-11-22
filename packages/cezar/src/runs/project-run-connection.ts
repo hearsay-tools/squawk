@@ -34,7 +34,7 @@ export class ProjectRunConnection {
   private sourceTable = 'project_json';
 
   constructor(initial: DatabaseSync, readonly target: string, readonly source: string,
-    private readonly openDisk: () => DatabaseSync, private readonly jsonRows: readonly RunRowInput[] | undefined, deferred: boolean) {
+    private readonly openDisk: () => DatabaseSync, private readonly jsonRows: readonly RunRowInput[] | undefined, deferred: boolean, private readonly sourceFailed?: () => void) {
     this.current = initial;
     this.deferred = deferred;
     this.configure(initial);
@@ -135,6 +135,7 @@ export class ProjectRunConnection {
     let attached = false;
     try { table = this.jsonRows ? this.jsonTable(db) : this.attach(db); attached = !this.jsonRows; }
     catch (error) {
+      this.sourceFailed?.();
       try { db.exec('DETACH DATABASE project_fallback'); } catch { /* attach may have failed before publication */ }
       warnFallbackRunSource(this.source, error); table = this.jsonTable(db);
     }

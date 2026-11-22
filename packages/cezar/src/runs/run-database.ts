@@ -334,66 +334,31 @@ export class RunDatabase {
   private readonly path: string;
   /** Set by the first statement that reports the file damaged (SQLITE_CORRUPT or NOTADB). */
   private damaged = false;
-  private readonly statements: {
-    get: StatementSync;
-    getMany: StatementSync;
-    listSummaries: StatementSync;
-    listWindowSummaries: StatementSync;
-    listRootWindowSummaries: StatementSync;
-    getSummaries: StatementSync;
-    listAll: StatementSync;
-    listLive: StatementSync;
-    listByParent: StatementSync;
-    listWorkerIds: StatementSync;
-    listIdsByParent: StatementSync;
-    findByClientRequestId: StatementSync;
-    listWithWorktree: StatementSync;
-    findResourceHolders: StatementSync;
-    listIds: StatementSync;
-    revisionOf: StatementSync;
-    listRevisions: StatementSync;
-    getMeta: StatementSync;
-    upsert: StatementSync;
-    delete: StatementSync;
-    setMeta: StatementSync;
-    deleteMeta: StatementSync;
-    nextSequence: StatementSync;
-    familyOf: StatementSync;
-    familyHasLive: StatementSync;
-    getClaim: StatementSync;
-    getClaims: StatementSync;
-    listClaims: StatementSync;
-    putClaim: StatementSync;
-    releaseClaims: StatementSync;
-    releaseSessionClaims: StatementSync;
-    listForeignClaimedIds: StatementSync;
-    insertConflict: StatementSync;
-    listConflicts: StatementSync;
-  };
+  private readonly statements;
 
   private constructor(db: DatabaseSync, path: string, private readonly project?: ProjectRunConnection) {
     this.db = db;
     this.path = path;
-    this.statements = {
-      get: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE id = ?`),
-      getMany: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE id IN (SELECT value FROM json_each(?))`),
-      listSummaries: db.prepare(`SELECT seq, id, created_at, revision, summary FROM runs ${NEWEST_FIRST} LIMIT ?`),
-      getSummaries: db.prepare(`${SUMMARY_SELECT} WHERE id IN (SELECT value FROM json_each(?))`),
-      listWindowSummaries: db.prepare(`${SUMMARY_SELECT} WHERE archived = 0 UNION ALL SELECT * FROM (${SUMMARY_SELECT} WHERE ${ARCHIVED_ROOT} ${NEWEST_FIRST} LIMIT ?) ${NEWEST_FIRST}`),
-      listRootWindowSummaries: db.prepare(`${SUMMARY_SELECT} WHERE archived = 0 AND parent_run_id IS NULL UNION ALL SELECT * FROM (${SUMMARY_SELECT} WHERE ${ARCHIVED_ROOT} ${NEWEST_FIRST} LIMIT ?) ${NEWEST_FIRST}`),
-      listAll: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs ${NEWEST_FIRST}`),
-      listLive: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE live = 1 ORDER BY seq`),
-      listByParent: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE parent_run_id = ? ${NEWEST_FIRST}`),
-      listWorkerIds: db.prepare('SELECT id FROM runs WHERE parent_run_id IS NOT NULL'),
-      listIdsByParent: db.prepare('SELECT id FROM runs WHERE parent_run_id = ?'),
-      findByClientRequestId: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE client_request_id = ? LIMIT 1`),
-      listWithWorktree: db.prepare(`SELECT ${ROW_COLUMNS} FROM runs WHERE worktree_path IS NOT NULL ORDER BY coalesce(finished_at, created_at) DESC, created_at DESC, seq`),
-      findResourceHolders: db.prepare('SELECT id FROM runs WHERE branch = :branch UNION SELECT id FROM runs WHERE worktree_path = :worktreePath'),
-      listIds: db.prepare('SELECT id FROM runs'),
-      revisionOf: db.prepare('SELECT revision FROM runs WHERE id = ?'),
-      listRevisions: db.prepare('SELECT id, revision FROM runs ORDER BY id'),
-      getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
-      upsert: db.prepare(`
+    this.statements = lazyStatements(db, {
+      get: `SELECT ${ROW_COLUMNS} FROM runs WHERE id = ?`,
+      getMany: `SELECT ${ROW_COLUMNS} FROM runs WHERE id IN (SELECT value FROM json_each(?))`,
+      listSummaries: `SELECT seq, id, created_at, revision, summary FROM runs ${NEWEST_FIRST} LIMIT ?`,
+      getSummaries: `${SUMMARY_SELECT} WHERE id IN (SELECT value FROM json_each(?))`,
+      listWindowSummaries: `${SUMMARY_SELECT} WHERE archived = 0 UNION ALL SELECT * FROM (${SUMMARY_SELECT} WHERE ${ARCHIVED_ROOT} ${NEWEST_FIRST} LIMIT ?) ${NEWEST_FIRST}`,
+      listRootWindowSummaries: `${SUMMARY_SELECT} WHERE archived = 0 AND parent_run_id IS NULL UNION ALL SELECT * FROM (${SUMMARY_SELECT} WHERE ${ARCHIVED_ROOT} ${NEWEST_FIRST} LIMIT ?) ${NEWEST_FIRST}`,
+      listAll: `SELECT ${ROW_COLUMNS} FROM runs ${NEWEST_FIRST}`,
+      listLive: `SELECT ${ROW_COLUMNS} FROM runs WHERE live = 1 ORDER BY seq`,
+      listByParent: `SELECT ${ROW_COLUMNS} FROM runs WHERE parent_run_id = ? ${NEWEST_FIRST}`,
+      listWorkerIds: 'SELECT id FROM runs WHERE parent_run_id IS NOT NULL',
+      listIdsByParent: 'SELECT id FROM runs WHERE parent_run_id = ?',
+      findByClientRequestId: `SELECT ${ROW_COLUMNS} FROM runs WHERE client_request_id = ? LIMIT 1`,
+      listWithWorktree: `SELECT ${ROW_COLUMNS} FROM runs WHERE worktree_path IS NOT NULL ORDER BY coalesce(finished_at, created_at) DESC, created_at DESC, seq`,
+      findResourceHolders: 'SELECT id FROM runs WHERE branch = :branch UNION SELECT id FROM runs WHERE worktree_path = :worktreePath',
+      listIds: 'SELECT id FROM runs',
+      revisionOf: 'SELECT revision FROM runs WHERE id = ?',
+      listRevisions: 'SELECT id, revision FROM runs ORDER BY id',
+      getMeta: 'SELECT value FROM meta WHERE key = ?',
+      upsert: `
         INSERT INTO runs (id, created_at, finished_at, status, archived, live, parent_run_id, client_request_id, group_id,
           worktree_path, branch, base_branch, revision, data, summary)
         VALUES (:id, :createdAt, :finishedAt, :status, :archived, :live, :parentRunId, :clientRequestId, :groupId,
@@ -404,35 +369,35 @@ export class RunDatabase {
           client_request_id = excluded.client_request_id, group_id = excluded.group_id,
           worktree_path = excluded.worktree_path, branch = excluded.branch, base_branch = excluded.base_branch,
           revision = excluded.revision, data = excluded.data, summary = excluded.summary
-        RETURNING seq`),
-      delete: db.prepare('DELETE FROM runs WHERE id = ?'),
-      setMeta: db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'),
-      deleteMeta: db.prepare('DELETE FROM meta WHERE key = ?'),
-      nextSequence: db.prepare(`INSERT INTO meta (key, value) VALUES (?, '1')
-        ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) RETURNING value`),
-      familyOf: db.prepare('SELECT coalesce(parent_run_id, id) AS family FROM runs WHERE id = ?'),
-      familyHasLive: db.prepare('SELECT 1 FROM runs WHERE live = 1 AND (id = :family OR parent_run_id = :family) LIMIT 1'),
-      getClaim: db.prepare(`SELECT ${CLAIM_COLUMNS} FROM run_claims WHERE family = ?`),
-      getClaims: db.prepare(`SELECT ${CLAIM_COLUMNS} FROM run_claims WHERE family IN (SELECT value FROM json_each(?))`),
-      listClaims: db.prepare(`SELECT ${CLAIM_COLUMNS} FROM run_claims`),
-      putClaim: db.prepare(`INSERT INTO run_claims (family, session, pid, start_token, generation)
+        RETURNING seq`,
+      delete: 'DELETE FROM runs WHERE id = ?',
+      setMeta: 'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+      deleteMeta: 'DELETE FROM meta WHERE key = ?',
+      nextSequence: `INSERT INTO meta (key, value) VALUES (?, '1')
+        ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) RETURNING value`,
+      familyOf: 'SELECT coalesce(parent_run_id, id) AS family FROM runs WHERE id = ?',
+      familyHasLive: 'SELECT 1 FROM runs WHERE live = 1 AND (id = :family OR parent_run_id = :family) LIMIT 1',
+      getClaim: `SELECT ${CLAIM_COLUMNS} FROM run_claims WHERE family = ?`,
+      getClaims: `SELECT ${CLAIM_COLUMNS} FROM run_claims WHERE family IN (SELECT value FROM json_each(?))`,
+      listClaims: `SELECT ${CLAIM_COLUMNS} FROM run_claims`,
+      putClaim: `INSERT INTO run_claims (family, session, pid, start_token, generation)
         VALUES (:family, :session, :pid, :startToken, :generation)
         ON CONFLICT (family) DO UPDATE SET session = excluded.session, pid = excluded.pid,
-          start_token = excluded.start_token, generation = excluded.generation`),
-      releaseClaims: db.prepare('DELETE FROM run_claims WHERE session = ? AND family IN (SELECT value FROM json_each(?))'),
-      releaseSessionClaims: db.prepare('DELETE FROM run_claims WHERE session = ?'),
+          start_token = excluded.start_token, generation = excluded.generation`,
+      releaseClaims: 'DELETE FROM run_claims WHERE session = ? AND family IN (SELECT value FROM json_each(?))',
+      releaseSessionClaims: 'DELETE FROM run_claims WHERE session = ?',
       // Two key lookups, not one OR join, which scans runs (hearsay-tools/squawk#3395). CROSS JOIN
       // keeps run_claims outside, so each half searches runs by id or by runs_parent_run_id.
-      listForeignClaimedIds: db.prepare(`SELECT r.id AS id, c.family AS family FROM run_claims c CROSS JOIN runs r
+      listForeignClaimedIds: `SELECT r.id AS id, c.family AS family FROM run_claims c CROSS JOIN runs r
           ON r.id = c.family WHERE c.session <> ?1
         UNION ALL SELECT r.id, c.family FROM run_claims c CROSS JOIN runs r
-          ON r.parent_run_id = c.family WHERE c.session <> ?1`),
-      insertConflict: db.prepare(`INSERT INTO run_conflicts (run_id, detected_at, session, reason, base_revision, base_data,
+          ON r.parent_run_id = c.family WHERE c.session <> ?1`,
+      insertConflict: `INSERT INTO run_conflicts (run_id, detected_at, session, reason, base_revision, base_data,
           local_data, local_deleted, current_revision, current_data)
         VALUES (:runId, :detectedAt, :session, :reason, :baseRevision, :baseData, :localData, :localDeleted,
-          :currentRevision, :currentData) RETURNING seq`),
-      listConflicts: db.prepare('SELECT * FROM run_conflicts ORDER BY seq'),
-    };
+          :currentRevision, :currentData) RETURNING seq`,
+      listConflicts: 'SELECT * FROM run_conflicts ORDER BY seq',
+    });
   }
 
   /**
@@ -491,9 +456,9 @@ export class RunDatabase {
   }
 
   /** Add a read-only source; a read-only (cold) projection never switches its primary to disk. */
-  static withProjectSource(primary: RunDatabase, target: string, source: string, jsonRows?: readonly RunRowInput[], readOnly = false): RunDatabase {
+  static withProjectSource(primary: RunDatabase, target: string, source: string, jsonRows?: readonly RunRowInput[], readOnly = false, sourceFailed?: () => void): RunDatabase {
     const projection = new ProjectRunConnection(primary.db, target, source,
-      () => RunDatabase.open(target).db, jsonRows, primary.path === ':memory:' && !readOnly);
+      () => RunDatabase.open(target).db, jsonRows, primary.path === ':memory:' && !readOnly, sourceFailed);
     return new RunDatabase(projection.connection, target, projection);
   }
 
@@ -531,8 +496,8 @@ export class RunDatabase {
    * counting them is what let them push an older live root out of a newest-N window.
    */
   listWindowSummaries(archivedLimit: number, options: { roots?: boolean | undefined } = {}): RunSummaryRow[] {
-    const statement = options.roots ? this.statements.listRootWindowSummaries : this.statements.listWindowSummaries;
-    return this.run(() => statement.all(archivedLimit)).map(toSummaryRow);
+    return this.run(() => (options.roots ? this.statements.listRootWindowSummaries : this.statements.listWindowSummaries)
+      .all(archivedLimit)).map(toSummaryRow);
   }
 
   /** The summary rows of `ids` that exist, in no particular order. */
@@ -995,4 +960,20 @@ function rollback(db: DatabaseSync): void {
   } catch {
     // The connection is closed or broken; whatever the transaction held is gone with it.
   }
+}
+
+/** Prepare only statements this connection uses; retain each until the connection closes. */
+function lazyStatements<T extends Record<string, string>>(db: DatabaseSync, sql: T): { readonly [K in keyof T]: StatementSync } {
+  const statements = {} as { readonly [K in keyof T]: StatementSync };
+  for (const key of Object.keys(sql) as (keyof T)[]) {
+    Object.defineProperty(statements, key, {
+      configurable: true,
+      get() {
+        const statement = db.prepare(sql[key]!);
+        Object.defineProperty(statements, key, { value: statement });
+        return statement;
+      },
+    });
+  }
+  return statements;
 }
