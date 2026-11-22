@@ -20,6 +20,8 @@ import { attachUpgradeRouter } from './upgrade-router.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */

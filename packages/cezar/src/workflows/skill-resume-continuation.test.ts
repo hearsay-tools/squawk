@@ -25,6 +25,8 @@ import { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps } from './types.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 registerRunner(claudeRunner);
 

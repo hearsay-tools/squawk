@@ -10,6 +10,10 @@ import { ARCHIVED_ROOT, RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { ARCHIVED_WINDOW, RunStore } from './store.ts';
 import type { RunQueries } from './ports.ts';
 import { seedRuns } from './run-store.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /**
  * The windowed run list (#864): every unarchived run, plus the newest `ARCHIVED_WINDOW` archived

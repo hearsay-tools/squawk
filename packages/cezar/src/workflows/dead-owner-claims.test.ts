@@ -14,6 +14,8 @@ import { setRunStatus, crashStore } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-no-runner.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 /**
  * A process that crashed while it still held a settled family in memory leaves that family's claim

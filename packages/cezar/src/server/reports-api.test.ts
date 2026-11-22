@@ -17,6 +17,8 @@ import { artifactDirectory, publishArtifact, readArtifact } from '../artifacts/s
 import { reportsIndex, REPORTS_BACKFILL_KEY } from '../artifacts/reports-index.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 describe('project reports', () => {
   let root: string, dataDir: string, store: RunStore;

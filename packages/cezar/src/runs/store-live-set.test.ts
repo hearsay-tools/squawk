@@ -17,6 +17,10 @@ import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { blockRunWrites, readPersistedRuns, runIds, seedRuns } from './run-store.testkit.ts';
 import { RunStore, type RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
+import { sealTestRunSlots } from './removal-slots.testkit.ts';
+
+// Runs are deleted or reclaimed here; no feature's slot is part of what these cases check.
+sealTestRunSlots();
 
 /**
  * The held set (#779, Amendment 2): `RunStore` keeps only live runs, the runs a RunManager pins,

@@ -8,6 +8,8 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { releaseEndedWorkerBranches } from './family-end.ts';
 import { createOwnedWorkspace } from './workspace.ts';
 import { durableRun, fixture, git, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 /** The branch step of the family-end rule (hearsay-tools/squawk#911): after retention reclaimed a
  *  worker's directory, its branch goes only once the family has ended and no work would be lost. */

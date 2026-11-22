@@ -22,6 +22,8 @@ import { WorkspaceEventBus, createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(opencodeRunner);

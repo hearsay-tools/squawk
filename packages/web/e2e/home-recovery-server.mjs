@@ -11,8 +11,11 @@ const { RunManager } = await load('workflows/run.js')
 const { acquireCiResources } = await load('ci-wait/resources.js')
 const { startServer } = await load('server/start-server.js')
 const { registerBuiltInRunners } = await load('runners/built-in.js')
-// This fixture is a process entry like index.ts: the server reads every registered runner.
+// This fixture is a process entry like index.ts: the server reads every registered runner, and
+// a deletion or a reclaim asks the removal slots.
 registerBuiltInRunners()
+const { registerBuiltInRunSlots } = await load('built-in-run-slots.js')
+registerBuiltInRunSlots()
 const home = Home.sandbox(homeRoot, { layout: 'split' })
 const store = RunStore.open(join(root, '.ai/cezar'))
 const manager = new RunManager(store, root, { home, acquireCiResources })

@@ -17,10 +17,15 @@ const ENTRIES: ReadonlyArray<{ entry: string; call: RegExp }> = [
   { entry: 'packages/cezar/scripts/benchmark-worktree-retention.ts', call: /^async function main\(\): Promise<void> \{\n {2}registerBuiltInRunSlots\(\);$/m },
   { entry: 'packages/cezar/scripts/measure-transcript-facts-health.mjs', call: /^ {2}registerBuiltInRunSlots\(\);$/m },
   { entry: '.ai/scripts/probe-questions.ts', call: TOP_LEVEL },
+  // The browser e2e fixture servers serve the cockpit from the built package.
+  { entry: 'packages/web/e2e/home-recovery-server.mjs', call: /^registerBuiltInRunSlots\(\)$/m },
+  { entry: 'packages/web/scripts/tab-fixture-server.mjs', call: /^registerBuiltInRunSlots\(\)$/m },
+  // The packaged delegation test admits workers in its own process from the installed tarball.
+  { entry: 'packages/cezar/test/e2e/delegation.test.ts', call: /^ {4}registerBuiltInRunSlots\(\);$/m },
 ];
 
 it.each(ENTRIES)('$entry seals the built-in removal slots at its startup', ({ entry, call }) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/registerBuiltInRunSlots \} = await import\(new URL\('built-in-run-slots\.js'|^import \{ registerBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
+  expect(source).toMatch(/registerBuiltInRunSlots \} = await (?:import\(new URL\(|load\()'built-in-run-slots\.js'|^const \{ registerBuiltInRunSlots \} = await load\('built-in-run-slots\.js'\)$|^import \{ registerBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
   expect(source).toMatch(call);
 });

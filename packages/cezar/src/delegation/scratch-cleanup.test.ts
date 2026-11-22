@@ -13,6 +13,8 @@ import { WorkerScratchCleanup } from './scratch-cleanup.ts';
 import { claimJob, jobPaths } from '../jobs/job.ts';
 import { processStartToken } from '../detached-process.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 // os.tmpdir reads Node's original environment even after the workflow fixture replaces process.env.
 const nativeEnvironment = process.env;

@@ -33,6 +33,8 @@ import { projectPaths } from '../project-paths.ts';
 import { createRunner, registerRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 

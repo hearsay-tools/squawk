@@ -29,6 +29,8 @@ import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, wor
 import { createRunner } from '../core/runner-registry.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 registerRunner(claudeRunner);
 

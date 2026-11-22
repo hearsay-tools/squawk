@@ -26,6 +26,8 @@ import { sendAgentReport } from '../runs/webhook.ts';
 import { commitAccepted } from '../delegation/conversations.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { RunWriteRefusedError } from '../runs/store.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 
 

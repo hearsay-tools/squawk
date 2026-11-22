@@ -34,6 +34,8 @@ import * as runnerFactories from '../core/runners-under-test.testkit.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 registerRunner(claudeRunner);
 registerRunner(codexRunner);
 registerRunner(piRunner);

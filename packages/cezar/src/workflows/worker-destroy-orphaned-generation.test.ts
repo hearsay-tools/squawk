@@ -29,6 +29,8 @@ import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+// Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
+import '../built-in-run-slots.testkit.ts';
 
 registerRunner(claudeRunner);
 
