@@ -216,7 +216,7 @@ describe('lifecycle delivery cases', () => {
   it('close() publishes store.closed before the database closes', () => {
     const { store } = setup();
     const openAtDelivery: boolean[] = [];
-    const deliveries = record(store, () => openAtDelivery.push(store.reportSource().db !== null));
+    const deliveries = record(store, () => openAtDelivery.push(store.persistence.reportSource().db !== null));
     store.close();
     expect(deliveries).toEqual([{ type: 'store.closed', payload: {} }]);
     expect(openAtDelivery).toEqual([true]);

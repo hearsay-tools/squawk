@@ -36,9 +36,8 @@ function fakeRuns(dataDir: string) {
   return {
     lifecycle,
     getRun: (id: string) => runs.get(id),
-    reportSource: () => ({ db, dataDir, openFailure: undefined }),
+    persistence: { reportSource: () => ({ db, dataDir, openFailure: undefined }), flush: () => undefined },
     claims: { sourceDataDir: () => dataDir },
-    flush: () => undefined,
     create: () => write(makeRunRecord({ id: randomUUID(), title: 'Source', workflow: 'quick-task', task: 'Report', status: RUN_STATUS.queued, steps: [] })),
     /** One write of a run; a `status` in the patch also publishes `run.status-changed`. */
     update: (id: string, patch: Partial<Omit<RunRecord, 'id'>>) => {

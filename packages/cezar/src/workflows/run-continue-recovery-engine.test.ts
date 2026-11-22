@@ -197,8 +197,8 @@ describe('RunManager check retry recovery', () => {
     setRunStatus(fixture.store, record.id, RUN_STATUS.queued, { workflowDef: workflow });
 
     const flushes: RunRecord[] = [];
-    const originalFlush = fixture.store.flush.bind(fixture.store);
-    vi.spyOn(fixture.store, 'flush').mockImplementation(() => {
+    const originalFlush = fixture.store.persistence.flush.bind(fixture.store.persistence);
+    vi.spyOn(fixture.store.persistence, 'flush').mockImplementation(() => {
       flushes.push(structuredClone(fixture.store.getRun(record.id)!));
       originalFlush();
     });

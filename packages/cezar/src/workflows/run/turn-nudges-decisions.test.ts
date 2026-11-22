@@ -91,7 +91,7 @@ describe('closed-session refusal effects through public recovery', () => {
     const trace: string[] = [];
     let inGate = false;
     let checked = false;
-    const append = store.eventLog.appendEvent.bind(store.eventLog), move = store.move.bind(store), flush = store.flush.bind(store);
+    const append = store.eventLog.appendEvent.bind(store.eventLog), move = store.move.bind(store), flush = store.persistence.flush.bind(store.persistence);
     vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (runId === id && event.type === 'note' && String(event.message).startsWith('Completion blocked:')) {
         inGate = true; trace.push('warning');
@@ -105,7 +105,7 @@ describe('closed-session refusal effects through public recovery', () => {
       if (args[0] === id && inGate) trace.push(args[1]);
       return move(...args);
     });
-    vi.spyOn(store, 'flush').mockImplementation(() => { if (inGate) trace.push('flush'); return flush(); });
+    vi.spyOn(store.persistence, 'flush').mockImplementation(() => { if (inGate) trace.push('flush'); return flush(); });
     // The gate is synchronous. Recovery next enumerates runs after its live-run loop,
     // before rearmRecoveredWakes. Check the complete trace at that owned store boundary.
     const list = store.listRuns.bind(store);
