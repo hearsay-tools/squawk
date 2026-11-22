@@ -42,11 +42,11 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-21 |
+| Step | What | State on 2026-11-22 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
-| 2 | A typed run lifecycle, and a narrower run store | Active: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md) |
+| 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Not filed |
 | 4 | Loader and package format | Not filed |
 | 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
@@ -96,6 +96,16 @@ feature code to decide whether a run may be deleted and to clean up after it. Th
 six lifecycle events, each with a first-party listener; three removal slots (a deletion gate, a
 reclaim preparation and a removal cleanup) in place of those imports; and topic objects behind
 named ports, until `runs/store.ts` is 1,000 lines or fewer.
+
+Done on 2026-11-22.
+[ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md)
+records the result. `RunStore` extends no `EventEmitter`, and every former listener subscribes to
+`store.lifecycle`. Each removal asks the slots it needs: a history deletion the gates and the
+cleanups, a reclaim the gates and the preparation, a scratch removal the gates. Callers take ports from `runs/ports.ts`, and
+13 topic modules are store fields. `runs/store.ts` is 990 lines with no
+`file-length.baseline.json` entry, and `layer-import.baseline.json` holds no `runs/` entry. As rule 5 predicts,
+Squeal still selects about 889 test files for `runs/store.ts`, because most tests build the
+store through testkits.
 
 ### Step 3: open the small tables
 

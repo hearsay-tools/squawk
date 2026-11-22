@@ -1,4 +1,4 @@
-# Deliver opted-in webhooks outside the run lifecycle
+# Deliver opted-in webhooks as a best-effort lifecycle subscriber
 
 Task webhooks are explicit per-run subscriptions. A run with `notify` on reports to every
 project webhook that has task notifications on, for the states that webhook selects. A project once had one webhook target;
