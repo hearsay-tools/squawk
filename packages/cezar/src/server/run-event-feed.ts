@@ -147,7 +147,7 @@ export async function subscribeRunFeed(
   };
   let maxSeq = demand.afterSeq;
   let pendingBytes = 0;
-  let pending: { event: RunEvent; bytes: number }[] = [];
+  let pending: ({ event: RunEvent; bytes: number } | undefined)[] = [];
   let head = 0;
   let wake: (() => void) | undefined;
   const reset = (reason: string, status: 409 | 413 = 409) => { if (!controller.signal.aborted) { stop(); handlers.reset(reason, status); } };
@@ -188,6 +188,7 @@ export async function subscribeRunFeed(
       // RunStore assigns one monotonic clock per run; ignore duplicate/reordered replays.
       const next = pending[head];
       if (next) {
+        pending[head] = undefined; // release consumed payloads before awaiting a slow writer
         head += 1;
         pendingBytes -= next.bytes;
         if (head === pending.length || head > 64) { pending = pending.slice(head); head = 0; }

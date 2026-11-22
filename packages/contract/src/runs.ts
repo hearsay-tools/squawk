@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { agentInputSchema } from './agent-input.ts';
-import { delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
+import { projectDelegationSummary, delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
 import { runnerSchema } from './runner.ts';
 import { runStatusSchema, stepKindSchema, stepStatusSchema } from './run-status.ts';
 import { referenceStatusSchema } from './github.ts';
@@ -565,70 +565,6 @@ const SUMMARY_OPTIONAL_KEYS = [
   'groupId', 'variant', 'pinned', 'runner', 'removedRunner', 'model', 'notify', 'diffStat', 'inputTokens',
   'outputTokens', 'currentStepId', 'error', 'worktreePath',
 ] as const satisfies readonly (keyof RunSummary & keyof RunRecord)[];
-
-// Keep this projection equivalent to runDelegationSummarySchema. Unknown fields are stripped;
-// only the slim fields are validated, never the full permissions/receipts/workspace payload.
-function summaryObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-const SUMMARY_UUID = z.regexes.uuid();
-
-function summaryUuid(value: unknown): value is string {
-  return typeof value === 'string' && SUMMARY_UUID.test(value);
-}
-
-function summaryIds(value: unknown, minimum: number, unique: boolean): value is string[] {
-  return Array.isArray(value) && value.length >= minimum && value.length <= 32 &&
-    Array.from(value).every(summaryUuid) && (!unique || new Set(value).size === value.length);
-}
-
-function projectSummaryOutcomes(value: unknown): { workerId: string }[] | null {
-  if (!Array.isArray(value) || value.length > 32) return null;
-  const outcomes = [];
-  for (const outcome of value) {
-    if (!summaryObject(outcome) || !summaryUuid(outcome.workerId)) return null;
-    outcomes.push({ workerId: outcome.workerId });
-  }
-  return outcomes;
-}
-
-function projectSummaryWait(value: unknown, root: boolean): Record<string, unknown> | null {
-  if (!summaryObject(value)) return null;
-  if (value.phase !== 'registered' && value.phase !== 'parked' && value.phase !== 'wake-pending') return null;
-  const wait: Record<string, unknown> = { phase: value.phase };
-  if (value.requestIds !== undefined && !summaryIds(value.requestIds, 1, false)) return null;
-  if ('requestIds' in value) wait.requestIds = value.requestIds === undefined ? undefined : [...value.requestIds as string[]];
-  if (!root) return wait;
-  if (value.workerIds !== undefined && !summaryIds(value.workerIds, 0, true)) return null;
-  if ('workerIds' in value) wait.workerIds = value.workerIds === undefined ? undefined : [...value.workerIds as string[]];
-  if (value.outcomes !== undefined) {
-    const outcomes = projectSummaryOutcomes(value.outcomes);
-    if (!outcomes) return null;
-    wait.outcomes = outcomes;
-  } else if ('outcomes' in value) wait.outcomes = undefined;
-  return wait;
-}
-
-function projectDelegationSummary(value: unknown): RunSummary['delegation'] {
-  const invalid = { role: 'invalid' } as const;
-  if (!summaryObject(value)) return invalid;
-  if (value.role === 'invalid') return invalid;
-  if (value.role !== 'root' && value.role !== 'worker') return invalid;
-  const out: Record<string, unknown> = { role: value.role };
-  if (value.role === 'worker') {
-    if (!summaryUuid(value.parentRunId)) return invalid;
-    out.parentRunId = value.parentRunId;
-    if (value.supervisorRunId !== undefined && !summaryUuid(value.supervisorRunId)) return invalid;
-    if ('supervisorRunId' in value) out.supervisorRunId = value.supervisorRunId;
-  }
-  if (value.wait !== undefined) {
-    const wait = projectSummaryWait(value.wait, value.role === 'root');
-    if (!wait) return invalid;
-    out.wait = wait;
-  } else if ('wait' in value) out.wait = undefined;
-  return out as RunSummary['delegation'];
-}
 
 /**
  * The one projection from a run record to its list row (#817). Optional keys are copied only when
