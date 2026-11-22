@@ -40,7 +40,7 @@ describe('durable scratch cleanup evidence', () => {
     try {
       await manager.recover(); setRunStatus(store, run.id, RUN_STATUS.cancelled);
       await vi.advanceTimersByTimeAsync(120_000);
-      expect(store.deleteRun(run.id)).toBe(false);
+      expect(store.retention.deleteRun(run.id)).toBe(false);
       expect(existsSync(join(scratch, 'keep'))).toBe(true);
       // Restoration of valid ownership permits the existing recovery path to retry it.
       store.updateRun(run.id, { delegation: run.delegation }); manager.recoverWorkerCleanup();

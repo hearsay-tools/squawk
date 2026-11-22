@@ -259,7 +259,7 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     expect(await releaseEndedWorkerBranches(f.root, f.store, () => () => undefined)).toEqual([]);
     expect(existsSync(join(host, 'parent-work.txt'))).toBe(true);
     expect(await f.service.destroyForHuman('project', workerId)).toMatchObject({ state: 'complete', remaining: [] });
-    expect(f.store.deleteRun(workerId)).toBe(true);
+    expect(f.store.retention.deleteRun(workerId)).toBe(true);
     expect(f.store.getRun(workerId)).toBeUndefined();
     expect(existsSync(join(host, 'parent-work.txt'))).toBe(true);
     expect(git(f.root, 'branch', '--list', '--format=%(refname:short)', 'parent-branch')).toBe('parent-branch');

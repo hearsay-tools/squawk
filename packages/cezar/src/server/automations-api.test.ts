@@ -165,7 +165,7 @@ describe('GitHub automation API', () => {
       // Unsaved changes override cold rows without waiting for the save debounce.
       reopened.updateRun(first.id, { automation: undefined });
       expect(reopened.countAutomationRuns(definition.id)).toBe(2);
-      reopened.deleteRun(second.id);
+      reopened.retention.deleteRun(second.id);
       expect(reopened.countAutomationRuns(definition.id)).toBe(1);
       reopened.flush();
       expect(reopened.countAutomationRuns(definition.id)).toBe(1);

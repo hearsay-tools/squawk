@@ -40,7 +40,7 @@ it('a deletion throws and removes no row, history, artifact or tmp directory', (
   mkdirSync(tmp, { recursive: true });
   store.flush();
 
-  expect(() => store.deleteRun(run.id)).toThrow(UNSEALED);
+  expect(() => store.retention.deleteRun(run.id)).toThrow(UNSEALED);
   store.flush();
   store.close();
 

@@ -289,7 +289,7 @@ describe('startServer routes both sockets through one upgrade listener', () => {
       expect(calls.filter(call => call.kind === 'handle').map(call => call.kind === 'handle' && call.ctx.worktreePath)).toEqual(Array(3).fill(join(repoRoot, 'wt')));
       expect((await connect(`${base}/api/v1/p/default/runs/nope/preview/ws`)).status).toBe(404);
       await expect(connect(`${base}/api/v1/other`)).rejects.toThrow();
-      store.deleteRun(run.id);
+      store.retention.deleteRun(run.id);
       expect(previewHost.release).toHaveBeenCalledWith(run.id, { deleteProfile: true, dataDir: join(repoRoot, '.ai/cezar') });
     } finally {
       await new Promise(done => server.close(done));

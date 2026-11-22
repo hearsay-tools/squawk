@@ -197,7 +197,7 @@ describe('removal cases in a run store', () => {
     failing.cleanup = true;
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    expect(store.deleteRun(run.id)).toBe(true);
+    expect(store.retention.deleteRun(run.id)).toBe(true);
     expect(calls).toEqual(['gate history']);
     expect(existsSync(evidence)).toBe(true);
     store.flush();

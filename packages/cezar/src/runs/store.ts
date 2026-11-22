@@ -10,12 +10,12 @@ import { recordedHolders, workerResourceAuthorized } from './worker-resource-hol
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
 import { defined } from '../core/defined.ts';
-import { assertRunSlotsSealed, deletionRefusal, runRemovalCleanups } from './removal-slots.ts';
-import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerEvidenceRunIds, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
-import { agentTmpDirMayExist, agentTmpDirOwnershipProven, removeAgentTmpDir } from './agent-tmpdir.ts';
+import { deletionRefusal } from './removal-slots.ts';
+import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
+import { agentTmpDirMayExist, agentTmpDirOwnershipProven } from './agent-tmpdir.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-scope/scope.ts';
@@ -39,7 +39,7 @@ import { queuedMessageSchema } from '@open-mercato/cezar-contract/queued-message
 import { previewServerSchema } from '@open-mercato/cezar-contract/preview';
 import { waitSchema, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
-import { isSweepable, UNREAD_RUN_RULE, SWEEPABLE_RUN_RULE, RETENTION_RUN_RULE, REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
+import { isSweepable, UNREAD_RUN_RULE, SWEEPABLE_RUN_RULE, REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
 import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunPullRequest, RunSummary, Wait, WorkerCollectedResult, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
 import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@open-mercato/cezar-contract/run-search';
 import { storedDelegationStateSchema } from './delegation-state.ts';
@@ -47,7 +47,7 @@ import { HistoryCompressor } from './history-compressor.ts';
 import { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { stampOf } from './transcript-facts.ts';
 import { RunTranscriptFacts } from './transcript-facts-topic.ts';
-import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, removeHistory, restoreHistory } from './history-file.ts';
+import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, restoreHistory } from './history-file.ts';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { startToken, type RecordedProcess, type WorkerProcessRecord } from '../core/process-stat.ts';
 import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
@@ -74,7 +74,8 @@ import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop
 import { hasLegacyWaitFields, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
-import { encodeRunRow, familyRootOf, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
+import { encodeRunRow, familyRootOf, isLiveRecord, isLiveStatus, materializedWorktreePath, newestFirst, type ListOrder } from './run-row.ts';
+import { RunRetentionTopic } from './run-retention.ts';
 import { collectRawExtras, encodeRawRecord, type RawExtras } from './raw-record.ts';
 import { ColdReadCache, storedRow, type StoredRow } from './cold-reads.ts';
 import { assertNoLegacyCockpit, assertNoLegacyWriter, backUpLegacyIndex, LEGACY_INDEX_FILE, LegacyWriterError, readLegacyIndex } from './legacy-index.ts';
@@ -83,7 +84,6 @@ import { archiveStoreFamily } from './archive-family.ts';
 import { claimStoreFamilies } from './claim-families.ts';
 import { createStoreOwnedRun, type SpawnCapacityRefusal } from './owned-run-create.ts';
 import { commitStoreWorkerResult } from './worker-result-commit.ts';
-import { supervisedWorkers } from './supervised.ts';
 import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 
@@ -244,8 +244,6 @@ const OPEN_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600];
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
-
-const MAX_RUNS_KEPT = 300;
 
 /** How many archived root runs the run lists carry per project (#864): `GET /run-summaries?archived=recent`
  *  and `GET /workspace/runs-index`. Unarchived runs are never cut; older archived runs page in
@@ -417,19 +415,10 @@ function replaceRecord(target: RunRecord, source: RunRecord): void {
   Object.assign(target, source);
 }
 
-/** Where a run lists: by `createdAt`, then by `seq`, its row's insertion order (see the `runs`
- *  schema). A `RunRow` is one. */
-interface ListOrder {
-  createdAt: string;
-  seq: number;
-}
-
 /** An archived root's place in the archived list, with its summary once it is known: a held run's,
  *  or a searched row's. A row ranked by key alone has none, and its page reads it. */
 type ArchivedKey = ListOrder & { summary?: RunSummary };
 
-/** Newest first, runs created in the same millisecond in insertion order: the order `runs.db`
- *  lists in, and the order every list had while it was a stable sort of the in-memory map. */
 /** Why a `run` event fired, when a delegation checkpoint caused it or nothing durable changed
  *  (`republish`) (in-process only). */
 export type CommitSource = 'delegation-checkpoint' | 'delegation-destroy-progress' | 'live-release';
@@ -458,11 +447,6 @@ function parseEvents(raw: string): RunEvent[] {
       }
     })
     .filter((e): e is RunEvent => e !== null);
-}
-
-function newestFirst(a: ListOrder, b: ListOrder): number {
-  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
-  return a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0;
 }
 
 /** An archived page's cursor: the last row's order, opaque to clients. A held run with no row yet
@@ -571,6 +555,8 @@ export class RunStore {
   private readonly compressor: HistoryCompressor;
   /** What the transcript says about a run (hearsay-tools/squawk#4036). */
   readonly transcriptFacts: RunTranscriptFacts;
+  /** Whether a run may go, and its deletion; the count-based archive (hearsay-tools/squawk#4037). */
+  readonly retention: RunRetentionTopic;
   private readonly liveItems = new LiveItemSnapshots();
 
   /** Capture both sources on the same synchronous sequence boundary before history IO. */
@@ -587,6 +573,25 @@ export class RunStore {
       listFamilyRunIds: (rootId) => this.listFamilyRunIds(rootId),
       listConversationRootIds: () => this.listConversationRootIds(),
       listRunIds: () => this.listRunIds(),
+    });
+    this.retention = new RunRetentionTopic(dataDir, {
+      db: () => this.db, held: this.held, deleted: this.deleted, quarantined: this.quarantined,
+      historyOwed: this.historyOwed, seqs: this.seqs, published: this.published, transcriptFacts: this.transcriptFacts,
+      peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), record: (id) => this.record(id),
+      listWorkersOf: (parentId) => this.listWorkersOf(parentId), isFallbackRun: (id) => this.isFallbackRun(id),
+      hasFallbackRun: (id) => this.hasFallbackRun(id), listOrder: (run) => this.listOrder(run),
+      claimFamilies: (families) => this.claimFamilies(families), markDeleted: (id, family) => this.markDeleted(id, family),
+      scheduleSave: () => this.scheduleSave(), commitIndex: (input) => this.commitIndex(input),
+      commitDelegation: (patches) => this.commitDelegation(patches), applyArchived: (run, archived) => this.applyArchived(run, archived),
+      workerDeletionEvidence: (id) => this.workerDeletionEvidence(id),
+      readWorkerResult: (parentId, workerId) => this.readWorkerResult(parentId, workerId),
+      readWorkerResultDiff: (parentId, workerId) => this.readWorkerResultDiff(parentId, workerId),
+      readDeletedWorkerResult: (parentId, workerId) => this.readDeletedWorkerResult(parentId, workerId),
+      commitWorkerResult: (parentId, value, diffSnapshot) => this.commitWorkerResult(parentId, value, diffSnapshot),
+      readWorkerExecution: (id) => this.readWorkerExecution(id), identityPath: (id) => this.identityPath(id),
+      processesPath: (id) => this.processesPath(id), scopePath: (id) => this.scopePath(id),
+      executionPath: (id) => this.executionPath(id), handoffPath: (runId) => this.handoffPath(runId),
+      imagesDir: (runId) => this.imagesDir(runId),
     });
     this.compressor = new HistoryCompressor(dataDir, (id) => this.isHistoryCompressEligible(id),
       (id, plain, archive) => this.transcriptFacts.index.adoptArchive(id, plain, stampOf(archive)));
@@ -681,7 +686,6 @@ export class RunStore {
   sourceDataDir(id: string): string { return this.isFallbackRun(id) ? dataReadDirs(this.dataDir)[1]! : runDataDir(this.dataDir, id); }
   isFallbackRun(id: string): boolean { return this.db?.isFallback(id) ?? false; }
   hasFallbackRun(id: string): boolean { return this.db?.hasFallback(id) ?? false; }
-  fallbackDeleteError(id: string, kind: 'record' | 'worktree' = 'record'): string | undefined { return fallbackRunDeleteError(this.dataDir, kind === 'record' ? this.hasFallbackRun(id) : this.isFallbackRun(id), this.peek(id)?.worktreePath); }
   /**
    * Open-time load: the live rows, the finished rows a load normalization repairs, then the
    * delegation families of the live ones. A row that does not parse is skipped and left in the
@@ -1513,7 +1517,7 @@ export class RunStore {
     // A new family, so nobody else can hold it; claimed before anything (an NDJSON event) is written.
     if (this.db && !this.claimFamilies([run.id]).has(run.id)) throw new RunWriteRefusedError(run.id, 'foreign');
     this.held.set(run.id, run);
-    this.pruneOldRuns();
+    this.retention.pruneOldRuns();
     this.touch(run, undefined);
     return run;
   }
@@ -2807,117 +2811,6 @@ export class RunStore {
     });
   }
 
-  canDeleteRun(id: string, kind: 'record' | 'worktree' = 'record'): boolean {
-    if (this.fallbackDeleteError(id, kind)) return false;
-    if (deletionRefusal(id, kind === 'record' ? 'history' : 'worktree', this.dataDir)) return false;
-    const run = this.peek(id);
-    if (run?.delegation?.role === 'invalid') return false;
-    if (run?.delegation?.role === 'worker') return supervisedWorkers(this, run).length === 0 && this.workerDeletionEvidence(id);
-    const privateWorkers = workerEvidenceRunIds(this.dataDir);
-    if (!privateWorkers || privateWorkers.includes(id)) return false;
-    if (run?.delegation?.role === 'root') {
-      if (run.delegation.finishRequestedAt && ['queued', 'running', 'waiting'].includes(run.status)) return false;
-      // Keep the parent's receipt and result ownership until each child history is explicitly removed.
-      if (this.listWorkersOf(id).length > 0) return false;
-      return run.delegation.receipts.every(receipt => {
-        if (this.hasRun(receipt.workerId) || receipt.deletion?.phase !== 'complete') return false;
-        // A pending parent deletion already validated the results before removing their bytes.
-        if (run.delegation?.role === 'root' && run.delegation.historyDeletion === 'pending') return true;
-        return this.readDeletedWorkerResult(id, receipt.workerId) !== undefined;
-      });
-    }
-    return this.listWorkersOf(id).length === 0;
-  }
-
-  /** Delegated history deletion is synchronous and checkpointed; any failed byte/index removal remains retryable. */
-  private deleteDelegatedRun(id: string): boolean {
-    const run = this.peek(id)!;
-    try {
-      if (run.delegation?.role === 'worker') {
-        const parent = this.peek(run.delegation.parentRunId)!;
-        if (parent.delegation?.role !== 'root') return false;
-        const receipt = parent.delegation.receipts.find(entry => entry.workerId === id)!;
-        const result = this.readWorkerResult(parent.id, id)!;
-        const deletion = receipt.deletion ?? { phase: 'pending' as const, revision: result.revision,
-          resourceId: run.delegation.workspace.resourceId, generation: this.readWorkerExecution(id)!.generation };
-        this.commitDelegation([{ id: parent.id, delegation: { ...parent.delegation,
-          receipts: parent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion } : entry),
-        } }]);
-        // Do not advertise artifact bytes as retained while interrupted deletion is in progress.
-        this.commitWorkerResult(parent.id, { ...result, observedAt: new Date().toISOString(),
-          diff: result.diff.state === 'available' ? { ...result.diff, snapshotId: randomUUID() } : result.diff,
-          artifacts: result.artifacts.state === 'available' ? { ...result.artifacts,
-            items: result.artifacts.items.map(item => ({ state: 'unavailable' as const, reason: 'unreadable' as const,
-              detail: 'History deletion is in progress', id: item.id, path: item.path })),
-          } : result.artifacts,
-        }, this.readWorkerResultDiff(parent.id, id));
-        this.removeRunHistoryBytes(id);
-        // Delete scratch while its generation evidence still exists; failed removal keeps it.
-        removeAgentTmpDir(this.dataDir, id);
-        if (agentTmpDirMayExist(this.dataDir, id)) return false;
-        // Private process/account evidence is now replaced by the exact parent receipt.
-        rmSync(this.identityPath(id), { force: true });
-        rmSync(this.processesPath(id), { force: true });
-        rmSync(this.scopePath(id), { force: true });
-        rmSync(this.executionPath(id), { force: true });
-        const retained = this.readWorkerResult(parent.id, id)!;
-        this.commitWorkerResult(parent.id, { ...retained, observedAt: new Date().toISOString(),
-          diff: retained.diff.state === 'available' ? { ...retained.diff, snapshotId: randomUUID() } : retained.diff,
-          artifacts: retained.artifacts.state === 'available' ? { ...retained.artifacts,
-            items: retained.artifacts.items.map(item => ({ state: 'deleted' as const, reason: 'missing' as const, id: item.id, path: item.path })),
-          } : retained.artifacts,
-        }, this.readWorkerResultDiff(parent.id, id));
-        this.commitIndex(new Map<string, RunRecord | null>([[parent.id, { ...parent, delegation: { ...parent.delegation,
-          receipts: parent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion: { ...deletion, phase: 'complete' as const } } : entry),
-        } }], [id, null]]));
-      } else if (run.delegation?.role === 'root') {
-        this.commitDelegation([{ id, delegation: { ...run.delegation, historyDeletion: 'pending' } }]);
-        this.removeRunHistoryBytes(id);
-        rmSync(join(runDataDir(this.dataDir, id), 'runs', `${id}-worker-results`), { recursive: true, force: true });
-        this.commitIndex(new Map([[id, null]]));
-      } else return false;
-      removeAgentTmpDir(this.dataDir, id);
-      this.seqs.delete(id);
-      return true;
-    } catch { return false; }
-  }
-
-  private removeRunHistoryBytes(id: string): void {
-    // Fixed owned paths only: never follow context descriptors supplied in persisted metadata.
-    z.uuid().parse(id);
-    const dir = join(runDataDir(this.dataDir, id), 'runs');
-    if (realpathSync(dir) !== resolve(dir)) throw new Error('History storage redirected');
-    this.removeHistoryFiles(id);
-  }
-
-  /** The run's history, handoff and images, then the removal cleanups (`runs/removal-slots.ts`). */
-  private removeHistoryFiles(id: string): void {
-    this.transcriptFacts.index.forget(id);
-    removeHistory(this.dataDir, id);
-    rmSync(this.handoffPath(id), { force: true });
-    rmSync(this.imagesDir(id), { recursive: true, force: true });
-    runRemovalCleanups(id, this.dataDir);
-  }
-
-  deleteRun(id: string): boolean {
-    const refusal = this.fallbackDeleteError(id);
-    if (refusal) throw new Error(refusal);
-    if (!this.canDeleteRun(id)) return false;
-    const run = this.peek(id);
-    if (run && this.db && (this.quarantined.has(id) || !this.claimFamilies([familyKey(run)]).size)) return false;
-    if (run?.delegation?.role === 'worker' || run?.delegation?.role === 'root') return this.deleteDelegatedRun(id);
-    const existed = run !== undefined;
-    this.held.delete(id);
-    if (existed) {
-      this.markDeleted(id, familyKey(run));
-      removeAgentTmpDir(this.dataDir, id);
-      this.seqs.delete(id);
-      this.scheduleSave();
-      this.published.publish('run.deleted', { runId: id });
-    }
-    return existed;
-  }
-
   /** Write the pending rows out now (used on shutdown). */
   flush(): void {
     if (this.saveTimer) {
@@ -2987,65 +2880,6 @@ export class RunStore {
     this.deleted.add(id);
     this.deletedFamilies.set(id, family);
     this.historyOwed.add(id);
-  }
-
-  /** A deleted run's history files and removal cleanups, once the delete of its row has committed.
-   *  Best effort: a failure is logged, and the row stays deleted. */
-  private removeOwedHistory(id: string): void {
-    if (!this.historyOwed.delete(id)) return;
-    try { this.removeHistoryFiles(id); } catch (error) {
-      console.warn(`[hsq] History cleanup of run ${id} is incomplete: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /**
-   * Count-based history retention: of the runs past the newest `MAX_RUNS_KEPT` unarchived ones,
-   * archive each settled task that is not pinned and whose family this store can claim, together
-   * with its workers, once no member of the family is live (hearsay-tools/squawk#777). Ranked over the row keys (the `created_at` index, no record decoded) with memory
-   * laid over them, since a run created or archived since the last save has no row yet; the rows
-   * past the cut are then filtered in `runs.db`, so only real candidates decode. Archived runs
-   * are never deleted by retention — only an explicit delete, worker destruction, or history
-   * deletion removes a run.
-   */
-  private pruneOldRuns(): void {
-    const ranked = new Map<string, ListOrder & { id: string }>();
-    for (const key of this.db?.listKeysWhere('archived = ?', [0]) ?? []) {
-      if (!this.held.has(key.id) && !this.deleted.has(key.id)) ranked.set(key.id, key);
-    }
-    for (const run of this.held.values()) if (!run.archived) ranked.set(run.id, { id: run.id, ...this.listOrder(run) });
-    const overflow = [...ranked.values()].sort(newestFirst).slice(MAX_RUNS_KEPT).map((key) => key.id);
-    if (overflow.length === 0) return;
-    const stale = overflow.flatMap((id) => {
-      const run = this.held.get(id);
-      // Retention must not archive a live task between turns, a pinned run, or a worker on its own.
-      return run && !this.hasFallbackRun(id) && RETENTION_RUN_RULE.matches(run) ? [id] : [];
-    });
-    const skipped = overflow.filter(id => this.hasFallbackRun(id)).length;
-    if (skipped) console.info(`[hsq] Retention skipped ${skipped} read-only fallback run(s) under ${dataReadDirs(this.dataDir)[1]}.`);
-    const cold = overflow.filter((id) => !this.held.has(id) && !this.hasFallbackRun(id));
-    if (cold.length > 0) {
-      // Another process's runs are its own to keep or archive (#779, plan step 3).
-      const rows = this.db!.listWhere(guardedJsonSql(RETENTION_RUN_RULE.sql, 0), [JSON.stringify(cold)]);
-      const writable = this.claimFamilies(rows.map(rowFamily));
-      for (const row of rows) if (writable.has(rowFamily(row))) stale.push(row.id);
-    }
-    for (const id of stale) {
-      const run = this.record(id);
-      if (!run || run.archived || !RETENTION_RUN_RULE.matches(run)) continue;
-      this.archiveSettledFamily(run);
-    }
-  }
-
-  /** Archive a root with its workers unless a member is live, mid-destroy or pinned, or a history
-   *  deletion is under way. Each member is marked dirty: the next save writes the family at once. */
-  private archiveSettledFamily(root: RunRecord): void {
-    assertRunSlotsSealed();
-    const workers = this.listWorkersOf(root.id), family = [root, ...workers];
-    if (family.some((run) => isLiveRecord(run) || run.pinned) || (root.delegation?.role === 'root' && root.delegation.historyDeletion)) return;
-    for (const member of [root, ...workers.flatMap((worker) => this.record(worker.id) ?? [])].filter((run) => !run.archived)) {
-      this.applyArchived(member, true);
-      if (!deletionRefusal(member.id, 'archive-tmp', this.dataDir)) removeAgentTmpDir(this.dataDir, member.id);
-    }
   }
 
   /** Debounced so token-usage updates don't rewrite a row per event. Nothing to schedule without
@@ -3133,7 +2967,7 @@ export class RunStore {
       this.liveItems.forget(id);
       this.base.delete(id);
       this.deletedFamilies.delete(id);
-      this.removeOwedHistory(id);
+      this.retention.removeOwedHistory(id);
     }
     this.dirty.clear();
     this.deleted.clear();

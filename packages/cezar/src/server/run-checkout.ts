@@ -46,7 +46,7 @@ export type CheckoutIntent = 'read' | 'mutate' | 'publish' | 'remove' | 'open';
 export interface RunCheckoutHost {
   root: string;
   store: RunLookup & Pick<RunWrites, 'updateRun'> & Pick<RunAccess, 'sourceDataDir' | 'writeRefusal'> &
-    Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> & Pick<RunFamilyReads, 'listWorkersOf'>;
+    { readonly retention: Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> } & Pick<RunFamilyReads, 'listWorkersOf'>;
   manager: Pick<RunManager, 'isActive' | 'claimForPublish' | 'claimWorktreeReclaim'>;
 }
 
@@ -168,14 +168,14 @@ export async function preparePublishCheckout({ root, store }: RunCheckoutHost, i
 }
 
 function removalRefusal(store: RunCheckoutHost['store'], run: RunRecord, id: string, deletion: RemoveOptions['deletion']): string | undefined {
-  if (deletion === 'inline') return store.fallbackDeleteError(run.id, 'worktree') ?? store.writeRefusal(run.id);
+  if (deletion === 'inline') return store.retention.fallbackDeleteError(run.id, 'worktree') ?? store.writeRefusal(run.id);
   if (deletion === 'worktree') {
-    if (!store.canDeleteRun(id, 'worktree') || run.delegation?.role === 'worker') return 'owned resources require verified worker cleanup';
+    if (!store.retention.canDeleteRun(id, 'worktree') || run.delegation?.role === 'worker') return 'owned resources require verified worker cleanup';
   } else {
     // Delete cleans up after itself: worktree + branch go with the run (spec 006).
     const started = supervisedWorkers(store, run).map(worker => worker.id);
     if (run.delegation?.role === 'worker' && started.length) return `this worker started workers whose history still exists — delete their history first: ${started.join(', ')}`;
-    if (!store.canDeleteRun(id)) return 'owned resources require verified worker cleanup and explicit child history deletion first';
+    if (!store.retention.canDeleteRun(id)) return 'owned resources require verified worker cleanup and explicit child history deletion first';
   }
   return undefined;
 }

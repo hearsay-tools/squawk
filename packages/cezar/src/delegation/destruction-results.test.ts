@@ -50,7 +50,7 @@ describe('verified destruction retains results through explicit history deletion
     // The source was added after this fixture's store opened. Report its duplicate
     // presence through the ordinary query while keeping the live manager attached.
     vi.spyOn(f.store, 'hasFallbackRun').mockImplementation(id => id === workerId);
-    expect(f.store.fallbackDeleteError(workerId)).toContain('.ai/squawk');
+    expect(f.store.retention.fallbackDeleteError(workerId)).toContain('.ai/squawk');
     expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(existsSync(workspace.path)).toBe(false);
     expect(f.store.getRun(workerId)).toBeDefined();
@@ -98,8 +98,8 @@ describe('verified destruction retains results through explicit history deletion
       outcome: 'destroyed', lastExecutionOutcome: 'review-ready', cleanup: 'complete', workspace: { state: 'deleted' },
       summary: { state: 'available', text: 'Completed implementation' }, diff: { state: 'available' }, head: { state: 'deleted', sha: f.sha } });
     expect(existsSync(join(files, `${workerId}-images/worker-context-0.input`))).toBe(true);
-    expect(f.store.canDeleteRun(f.parent.id)).toBe(false);
-    expect(f.store.deleteRun(workerId)).toBe(true);
+    expect(f.store.retention.canDeleteRun(f.parent.id)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(true);
     for (const name of [`${workerId}.ndjson`, `${workerId}.handoff.md`, `${workerId}-images`]) expect(existsSync(join(files, name))).toBe(false);
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
@@ -108,7 +108,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(result).toMatchObject({ settled: true, summary: { text: 'Completed implementation' }, workspace: { state: 'deleted' },
       artifacts: { state: 'available', items: [{ state: 'deleted', id: 'worker-context-0.input' }] } });
     expect(reopened.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
-    expect(reopened.deleteRun(f.parent.id)).toBe(true);
+    expect(reopened.retention.deleteRun(f.parent.id)).toBe(true);
     expect(existsSync(join(files, `${f.parent.id}-worker-results`))).toBe(false);
     reopened.flush();
   });
@@ -117,12 +117,12 @@ describe('verified destruction retains results through explicit history deletion
     await f.service.destroy(f.caller, { workerId }, DISCARD);
     const path = join(files, `${workerId}.execution.json`); const proof = readFileSync(path, 'utf8');
     writeFileSync(path, JSON.stringify({ generation: randomUUID(), phase: 'starting' }));
-    expect(f.store.deleteRun(workerId)).toBe(false); writeFileSync(path, proof);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false); writeFileSync(path, proof);
     const result = f.store.readWorkerResult(f.parent.id, workerId)!;
     expect(result).toBeDefined();
     if (result.diff.state !== 'available') throw Error('missing diff');
     writeFileSync(result.diff.path, '{}');
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true);
   });
   it('checkpoints deletion before bytes and retries failed removal after reopening', async () => {
@@ -136,20 +136,20 @@ describe('verified destruction retains results through explicit history deletion
       }
       return real(path, options);
     });
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     expect(f.store.getRun(workerId)).toBeDefined();
     expect(existsSync(join(files, `${workerId}-images/worker-context-0.input`))).toBe(true);
     vi.mocked(rmSync).mockImplementation(real);
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.deleteRun(workerId)).toBe(true);
+    expect(reopened.retention.deleteRun(workerId)).toBe(true);
     expect(existsSync(join(files, `${workerId}-images`))).toBe(false);
-    expect(reopened.canDeleteRun(f.parent.id)).toBe(true); reopened.flush();
+    expect(reopened.retention.canDeleteRun(f.parent.id)).toBe(true); reopened.flush();
   });
   it('does not remove child history on a failed deletion metadata checkpoint', async () => {
     const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('index disk failure'); });
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true);
     expect(existsSync(join(files, `${workerId}-images/worker-context-0.input`))).toBe(true);
     fault.mockRestore();
@@ -162,7 +162,7 @@ describe('verified destruction retains results through explicit history deletion
       return original(...args);
     });
     await expect(f.service.destroy(f.caller, { workerId }, DISCARD)).rejects.toThrow('final result checkpoint failed');
-    expect(f.store.canDeleteRun(workerId)).toBe(false);
+    expect(f.store.retention.canDeleteRun(workerId)).toBe(false);
     expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
     fault.mockRestore();
     expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
@@ -175,26 +175,26 @@ describe('verified destruction retains results through explicit history deletion
       if (changes.deletes.includes(workerId)) throw Error('final deletion checkpoint failed');
       return original(changes, transaction);
     });
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.execution.json`))).toBe(false);
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ summary: { state: 'available', text: 'Completed implementation' }, diff: { state: 'available' }, settled: true });
     await expect(f.service.destroy(f.caller, { workerId }, DISCARD)).rejects.toMatchObject({ code: 'incompatible_state' });
     fault.mockRestore();
-    expect(f.store.deleteRun(workerId)).toBe(true);
+    expect(f.store.retention.deleteRun(workerId)).toBe(true);
   });
   it('retries interrupted parent deletion after its snapshot directory was removed', async () => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.retention.deleteRun(workerId)).toBe(true);
     const original = runPersistence(f.store).persist;
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation((changes, transaction) => {
       if (changes.deletes.includes(f.parent.id)) throw Error('final parent checkpoint failed');
       return original(changes, transaction);
     });
-    expect(f.store.deleteRun(f.parent.id)).toBe(false);
+    expect(f.store.retention.deleteRun(f.parent.id)).toBe(false);
     expect(existsSync(join(files, `${f.parent.id}-worker-results`))).toBe(false);
     fault.mockRestore();
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.deleteRun(f.parent.id)).toBe(true); reopened.flush();
+    expect(reopened.retention.deleteRun(f.parent.id)).toBe(true); reopened.flush();
   });
   it.each(['missing', 'malformed'] as const)('does not let a %s parent authorize deletion of cleaned child history', async kind => {
     const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
@@ -204,7 +204,7 @@ describe('verified destruction retains results through explicit history deletion
     seedRuns(join(f.root, '.ai/cezar'), kind === 'missing' ? records.filter(run => run.id !== parent.id)
       : records.map(run => run.id === parent.id ? { ...run, delegation: { invalid: true } } : run));
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.deleteRun(workerId)).toBe(false);
+    expect(reopened.retention.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true); reopened.flush();
   });
   it('keeps worker history and parent snapshots through ordinary run retention eviction', async () => {
@@ -229,19 +229,19 @@ describe('verified destruction retains results through explicit history deletion
       error: expect.any(String), deleted: [{ kind: 'worktree', path: workspace.path }] });
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ cleanup: 'incomplete', workspace: { state: 'deleted' },
       head: { state: 'deleted', sha: f.sha }, diff: { state: 'available' } });
-    expect(f.store.deleteRun(workerId)).toBe(false);
+    expect(f.store.retention.deleteRun(workerId)).toBe(false);
     rmSync(lock); expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
   });
   it('allows terminal finished parent deletion only after every child history has a complete deletion receipt', async () => {
     const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
-    expect(f.store.deleteRun(workerId)).toBe(true);
+    expect(f.store.retention.deleteRun(workerId)).toBe(true);
     const parent = f.store.getRun(f.parent.id)!;
     if (parent.delegation?.role !== 'root') throw Error('fixture');
     f.store.commitDelegation([{ id: parent.id, delegation: { ...parent.delegation, finishRequestedAt: new Date().toISOString() } }]);
-    expect(f.store.canDeleteRun(parent.id)).toBe(false);
+    expect(f.store.retention.canDeleteRun(parent.id)).toBe(false);
     setRunStatus(f.store, parent.id, RUN_STATUS.done);
-    expect(f.store.deleteRun(parent.id)).toBe(true);
+    expect(f.store.retention.deleteRun(parent.id)).toBe(true);
   });
   it('denies parent deletion when a missing child has a result but no completed deletion receipt', async () => {
     const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
@@ -249,14 +249,14 @@ describe('verified destruction retains results through explicit history deletion
     seedRuns(join(f.root, '.ai/cezar'), f.store.listRuns().filter(run => run.id !== workerId));
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     expect(reopened.readWorkerResult(f.parent.id, workerId)).toBeDefined();
-    expect(reopened.deleteRun(f.parent.id)).toBe(false); reopened.flush();
+    expect(reopened.retention.deleteRun(f.parent.id)).toBe(false); reopened.flush();
   });
 
   it('refuses spawn under a deleting parent even when its persisted public status is active', async () => {
     interruptedParentDeletion(); setRunStatus(f.store, f.parent.id, RUN_STATUS.running);
     await expect(f.service.spawn(f.caller, { task: 'child', baseline: 'HEAD', requestId: randomUUID() })).rejects.toMatchObject({ code: 'incompatible_state' });
     expect(f.store.listRuns()).toHaveLength(1);
-    expect(f.store.deleteRun(f.parent.id)).toBe(true);
+    expect(f.store.retention.deleteRun(f.parent.id)).toBe(true);
   });
   it('refuses construction from a deleting parent without recreating its resources', () => {
     interruptedParentDeletion();
@@ -268,7 +268,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(existsSync(join(f.root, '.ai/cezar/worktrees', f.parent.id))).toBe(false);
     expect(f.manager.isActive(f.parent.id)).toBe(false);
     expect(f.store.getRun(f.parent.id)?.delegation).toMatchObject({ historyDeletion: 'pending' });
-    expect(f.store.deleteRun(f.parent.id)).toBe(true);
+    expect(f.store.retention.deleteRun(f.parent.id)).toBe(true);
   });
 
   it('refuses the owned-run acceptance boundary after interrupted parent deletion', async () => {
@@ -277,7 +277,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(() => f.store.createOwnedRun({ title: 'child', task: 'child', workflow: 'quick-task', steps: [] }, f.parent.id, randomUUID(), {
       role: 'worker', permissions: [], parentRunId: f.parent.id, workspace }, 'a'.repeat(64), spawnCapacityRefusal)).toThrow('invalid delegation parent');
     expect(runIds(f.store)).toHaveLength(1);
-    expect(f.store.deleteRun(f.parent.id)).toBe(true);
+    expect(f.store.retention.deleteRun(f.parent.id)).toBe(true);
   });
 
 });

@@ -164,7 +164,7 @@ describe('GET /api/v1/workspace/events', () => {
     ]);
 
     // Deletions are stamped too.
-    other.store.deleteRun(otherRun.id);
+    other.store.retention.deleteRun(otherRun.id);
     const withDeleted = await ws.readUntil('event: run-deleted');
     expect(payloadsOf(withDeleted, 'run-deleted')).toEqual([{ id: otherRun.id, project: other.id }]);
   });
@@ -443,7 +443,7 @@ describe('GET /api/v1/workspace/events', () => {
     const bootRun = store.createRun({ title: 'boot', workflow: 'quick-task', task: 'b', steps: [] });
     const otherRun = other.store.createRun({ title: 'other', workflow: 'quick-task', task: 'o', steps: [] });
     store.updateRun(bootRun.id, { title: 'renamed' });
-    other.store.deleteRun(otherRun.id);
+    other.store.retention.deleteRun(otherRun.id);
     emitUsageForTest({ [bootRun.id]: { cpuPct: 1, rssBytes: 2, procCount: 3 } });
     expected.push(`event: usage\ndata: ${JSON.stringify({ project: bootId, usage: { [bootRun.id]: { cpuPct: 1, rssBytes: 2, procCount: 3 } } })}\n\n`);
     // The project's last live row stopped: the legacy stream sends no clearing frame.
@@ -465,7 +465,7 @@ describe('GET /api/v1/workspace/events', () => {
 
     const bootRun = store.createRun({ title: 'boot', workflow: 'quick-task', task: 'secret prompt', steps: [] });
     const otherRun = other.store.createRun({ title: 'other', workflow: 'quick-task', task: 'o', steps: [] });
-    other.store.deleteRun(otherRun.id);
+    other.store.retention.deleteRun(otherRun.id);
     const body = await ws.readUntil('event: run-deleted');
     expect(body).not.toContain('event: run\n');
     expect(body).not.toContain('secret prompt');

@@ -141,9 +141,9 @@ describe('ordered replay/live handoff', () => {
     const task = subscribeRunFeed({ store, dataDir }, demand(), {
       event: async () => {}, reset: reason => { resets.push(reason); },
     }, signal());
-    expect(store.deleteRun(other)).toBe(true);
+    expect(store.retention.deleteRun(other)).toBe(true);
     expect(resets).toEqual([]);
-    expect(store.deleteRun(runId)).toBe(true);
+    expect(store.retention.deleteRun(runId)).toBe(true);
     expect(resets).toEqual(['run removed']);
     expect([listeners('run.event'), listeners('run.deleted'), listeners('store.closed')]).toEqual([0, 0, 0]);
     await task;

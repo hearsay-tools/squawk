@@ -347,7 +347,7 @@ describe('project reports', () => {
     const run = task(); await publish(run.id); await page();
     setRunStatus(store, run.id, RUN_STATUS.done); store.flush();
     await reportsIndex(store).reconcile();
-    expect(store.deleteRun(run.id)).toBe(true); store.flush();
+    expect(store.retention.deleteRun(run.id)).toBe(true); store.flush();
     const db = new DatabaseSync(join(dataDir, 'runs.db'), { readOnly: true });
     try {
       expect(db.prepare('SELECT id FROM runs WHERE id = ?').get(run.id)).toBeUndefined();

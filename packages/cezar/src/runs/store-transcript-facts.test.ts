@@ -106,7 +106,7 @@ describe('RunStore transcript facts (#880)', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
     expect(existsSync(historyPaths(dir, run.id).facts)).toBe(true);
-    store.deleteRun(run.id);
+    store.retention.deleteRun(run.id);
     store.close(); stores.pop();
     expect(existsSync(historyPaths(dir, run.id).facts)).toBe(false);
   });
@@ -233,7 +233,7 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     // Drain every microtask open() queued: the scan must wait for a later turn of the loop.
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(scans).not.toHaveBeenCalled();
-    expect(reopened.deleteRun(others[0]!)).toBe(true);
+    expect(reopened.retention.deleteRun(others[0]!)).toBe(true);
     await reopened.transcriptFacts.factsWarmIdle();
     expect(scans).toHaveBeenCalledTimes(1);
     expect(requested.slice(0, 2)).toEqual([family.parentId, family.workerId]);

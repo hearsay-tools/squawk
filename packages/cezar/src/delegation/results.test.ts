@@ -118,7 +118,7 @@ describe('parent-owned collected worker results', () => {
     await f.service.destroy(f.caller, { workerId: run.id });
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result.artifacts).toMatchObject({ state: 'available', items: [{ state: 'available', id: `published:${artifact.id}` }] });
-    expect(f.store.deleteRun(run.id)).toBe(true);
+    expect(f.store.retention.deleteRun(run.id)).toBe(true);
     expect((await f.service.collect(f.caller, { workerId: run.id })).artifacts).toMatchObject({ state: 'available', items: [{ state: 'deleted', id: `published:${artifact.id}` }] });
   });
   it('bounds artifact descriptors and reports missing bytes honestly', async () => {
@@ -175,7 +175,7 @@ describe('parent-owned collected worker results', () => {
     f.store.appendEvent(run.id, { type: 'image', url: `/api/v1/runs/${run.id}/images/result.png` });
     await f.service.destroy(f.caller, { workerId: run.id });
     const result = await f.service.collect(f.caller, { workerId: run.id });
-    expect(f.store.deleteRun(run.id)).toBe(true);
+    expect(f.store.retention.deleteRun(run.id)).toBe(true);
     f.store.close(); // a restart: the old store must not still own the parent's family
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
     f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: reopened, manager: f.manager });
@@ -190,7 +190,7 @@ describe('parent-owned collected worker results', () => {
     const run = await worker();
     f.store.appendEvent(run.id, { type: 'text', text: 'Retained result' });
     await f.service.destroy(f.caller, { workerId: run.id });
-    expect(f.store.deleteRun(run.id)).toBe(true);
+    expect(f.store.retention.deleteRun(run.id)).toBe(true);
     const dataDir = join(f.root, '.ai/cezar');
     const records = readPersistedRuns(dataDir);
     const receipt = records.find((record: { id: string }) => record.id === f.parent.id)!.delegation.receipts[0];

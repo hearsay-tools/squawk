@@ -102,7 +102,7 @@ describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {
       const [session] = work.liveSessions;
       session!.end();
       await until(() => !manager.isActive(run.id));
-      expect(store.deleteRun(run.id)).toBe(true);
+      expect(store.retention.deleteRun(run.id)).toBe(true);
     }
     expect(external.aborted(12)).toBe(true);
     const settled = structuredClone(store.getRun(run.id));

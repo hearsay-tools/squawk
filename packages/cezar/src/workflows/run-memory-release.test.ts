@@ -132,7 +132,7 @@ describe('run memory release (hearsay-tools/squawk#2064)', () => {
 
   it('releases a deleted run\'s memory', () => {
     const record = settledWithSlot(RUN_STATUS.review);
-    expect(store.deleteRun(record.id)).toBe(true);
+    expect(store.retention.deleteRun(record.id)).toBe(true);
     expect(memory.holds(record.id)).toBe(false);
   });
 

@@ -157,7 +157,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     setRunStatus(store, run.id, RUN_STATUS.waiting);
     const local = agentTmpDir(dataDir, run.id);
     mkdirSync(local, { recursive: true });
-    expect(store.deleteRun(run.id)).toBe(true);
+    expect(store.retention.deleteRun(run.id)).toBe(true);
     expect(existsSync(env.TMPDIR!)).toBe(false);
     expect(existsSync(local)).toBe(false);
   });

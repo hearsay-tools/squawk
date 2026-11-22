@@ -260,7 +260,7 @@ it('settles a queued change refused by a new fallback copy per row, and the rest
     setRunStatus(store, doomed.id, RUN_STATUS.done);
     store.flush();
     const row = (store as unknown as { db: RunDatabase }).db.get(doomed.id)!;
-    expect(store.deleteRun(doomed.id)).toBe(true);
+    expect(store.retention.deleteRun(doomed.id)).toBe(true);
     store.updateRun(fixture.legacy.parentId, { title: 'unrelated' });
     // Before the debounced save, the migrating binary writes the same ID under .ai/squawk/.
     const source = RunDatabase.open(join(fallback, RUNS_DB_FILE));

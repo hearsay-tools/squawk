@@ -151,7 +151,7 @@ describe('the worktrees API on the real engine', { timeout: 30_000 }, () => {
     expect(manager.claimForPublish(id)).toBeNull();
     expect(manager.claimWorktreeReclaim(id)).toBeNull();
     expect(manager.claimForBranchCleanup([id])).toBeNull();
-    expect(store.canDeleteRun(id)).toBe(false);
+    expect(store.retention.canDeleteRun(id)).toBe(false);
     for (const [suffix, method] of [['/remove-worktree', 'POST'], ['', 'DELETE'], ['/git/commit', 'POST'], ['/git/push', 'POST']] as const) {
       expect((await apiRequest(app, `/api/v1/runs/${id}${suffix}`, {
         method, ...(suffix === '/git/commit' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'unsafe' }) } : {}),

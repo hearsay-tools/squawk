@@ -195,7 +195,7 @@ describe('peer conversations', () => {
     const read = f.store.getRun.bind(f.store);
     vi.spyOn(f.store, 'getRun').mockImplementation(id => id === b.id ? undefined : read(id));
     vi.spyOn(f.store, 'isUnreadable').mockImplementation(id => id === b.id);
-    expect(f.store.deleteRun(c.id)).toBe(true);
+    expect(f.store.retention.deleteRun(c.id)).toBe(true);
     const { outcomes } = await f.service.conversation(f.caller, { recipientRunId: c.id });
     expect(outcomes).toEqual([expect.objectContaining({ requestId: toC.message.id, status: 'deleted' })]);
     expect(ledger(f.parent.id)?.outcomes.some(outcome => outcome.requestId === toB.message.id)).toBe(false);
@@ -252,7 +252,7 @@ describe('peer conversations', () => {
     if (delegation.role !== 'root') throw Error('missing root');
     f.store.commitDelegation([{ id: b.id, delegation: { ...delegation, historyDeletion: 'pending' } }]);
     expect((await f.service.conversation(f.caller, { recipientRunId: b.id })).messages.map(entry => entry.id)).toEqual([sent.message.id]);
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     // B's ledger went with it; A's own input from B still makes A a participant.
     expect(await f.service.conversation(f.caller, { recipientRunId: b.id })).toMatchObject({ messages: [], outcomes: [] });
     await expect(f.service.conversation(f.caller, { recipientRunId: randomUUID() })).rejects.toMatchObject({ code: 'denied_scope' });
@@ -281,13 +281,13 @@ describe('peer conversations', () => {
     const b = peer(); const c = peer();
     const fromB = await f.service.send(b.caller, message(f.parent.id, 'progress', { text: 'from B' }));
     setRunStatus(f.store, b.id, RUN_STATUS.done);
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     const fromC = await f.service.send(c.caller, message(f.parent.id, 'progress', { text: 'from C' }));
     const batch = await f.service.inbox(f.caller);
     expect(batch.messages.map(entry => [entry.id, entry.text])).toEqual([[fromB.message.id, 'from B'], [fromC.message.id, 'from C']]);
     expect(batch.receiptId).toBeDefined();
     setRunStatus(f.store, c.id, RUN_STATUS.done);
-    expect(f.store.deleteRun(c.id)).toBe(true);
+    expect(f.store.retention.deleteRun(c.id)).toBe(true);
     expect(await f.service.ackInbox(f.caller, { receiptId: batch.receiptId! })).toEqual({ receiptId: batch.receiptId, status: 'acknowledged' });
     expect(f.store.getRun(f.parent.id)?.agentInputs?.every(input => !!input.deliveredAt)).toBe(true);
   });
@@ -295,7 +295,7 @@ describe('peer conversations', () => {
   it('R15 an inbox read after the sender\'s deletion returns the accepted request as it was sent', async () => {
     const b = peer();
     const request = await f.service.send(b.caller, message(f.parent.id, 'request', { text: 'Which versions?' }));
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     const batch = await f.service.inbox(f.caller);
     expect(batch.messages).toEqual([request.message]);
     expect(batch.messages[0]).toMatchObject({ requestHash: request.message.requestHash, deadline: request.message.deadline });
@@ -327,7 +327,7 @@ describe('peer conversations', () => {
     const b = peer();
     const request = await f.service.send(b.caller, message(f.parent.id));
     setRunStatus(f.store, b.id, RUN_STATUS.done);
-    expect(f.store.deleteRun(b.id)).toBe(true);
+    expect(f.store.retention.deleteRun(b.id)).toBe(true);
     await expect(f.service.reply(f.caller, message(b.id, 'reply', { requestId: request.message.id }))).rejects.toMatchObject({ code: 'denied_scope' });
   });
 

@@ -27,6 +27,20 @@ export function isLiveRecord(run: RunRecord): boolean {
   return run.stopping !== undefined;
 }
 
+/** Where a run lists: by `createdAt`, then by `seq`, its row's insertion order (see the `runs`
+ *  schema). A `RunRow` is one. */
+export interface ListOrder {
+  createdAt: string;
+  seq: number;
+}
+
+/** Newest first, runs created in the same millisecond in insertion order: the order `runs.db`
+ *  lists in, and the order every list had while it was a stable sort of the in-memory map. */
+export function newestFirst(a: ListOrder, b: ListOrder): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+  return a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0;
+}
+
 /** The family a run belongs to, by its root's id. A worker a worker started is filed under the root too. */
 export function familyRootOf(run: Pick<RunRecord, 'id' | 'delegation'>): string | undefined {
   if (run.delegation?.role === 'root') return run.id;
