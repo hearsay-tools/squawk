@@ -54,7 +54,7 @@ describe('peer conversations', () => {
       const b = peer();
       const open = await f.service.send(f.caller, message(b.id));
       setRunStatus(f.store, f.parent.id, RUN_STATUS.review);
-      vi.spyOn(f.store, 'listRuns').mockReturnValue([]);
+      vi.spyOn(f.store.queries, 'listRuns').mockReturnValue([]);
       setRunStatus(f.store, b.id, RUN_STATUS[status]);
       expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: outcome })]);
       expect(projections(f.parent.id)).toContain(`request-outcome:${open.message.id}`);
@@ -95,7 +95,7 @@ describe('peer conversations', () => {
     const open = await f.service.send(f.caller, message(b.id));
     setRunStatus(f.store, f.parent.id, RUN_STATUS.review);
     // The requester has left the live set the run manager's global pass reads.
-    vi.spyOn(f.store, 'listRuns').mockReturnValue([]);
+    vi.spyOn(f.store.queries, 'listRuns').mockReturnValue([]);
     expect(f.store.retention.deleteRun(b.id)).toBe(true);
     expect(ledger(f.parent.id)?.outcomes).toEqual([expect.objectContaining({ requestId: open.message.id, status: 'deleted' })]);
     expect(projections(f.parent.id)).toContain(`request-outcome:${open.message.id}`);

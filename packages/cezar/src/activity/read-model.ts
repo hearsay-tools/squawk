@@ -17,7 +17,7 @@ export interface ToolActivitySource {
 }
 
 /** What the read model needs from a project's run store. It reads; it never writes a run. */
-export type ActivityStore = ActivityRequestStore & Pick<RunQueries, 'listRunSummaries' | 'withReadCache'> & Pick<RunFamilyReads, 'listOwnedWorkers'>;
+export type ActivityStore = ActivityRequestStore & { readonly queries: Pick<RunQueries, 'listRunSummaries' | 'withReadCache'> & Pick<RunFamilyReads, 'listOwnedWorkers'> };
 
 /** One project to read: its store and run manager when this process has loaded it. `ci` is the
  *  check progress of that project's own CI watchers; without it, `ActivityDeps.ci` is read. */
@@ -72,7 +72,7 @@ export function buildActivityProject(source: ActivityProjectSource, deps: Activi
   // request titles all read the same runs (hearsay-tools/cezarion#2378).
   const store = loggingUnreadable(loaded.store, (runId) => deps.onUnreadable?.(source.projectId, runId));
   const ci = loaded.ci ?? deps.ci;
-  return loaded.store.withReadCache(() => loadedProject(store, loaded.isActive, { ...deps, ...(ci ? { ci } : {}) }, options, empty));
+  return loaded.store.queries.withReadCache(() => loadedProject(store, loaded.isActive, { ...deps, ...(ci ? { ci } : {}) }, options, empty));
 }
 
 /**
@@ -89,17 +89,19 @@ function loggingUnreadable(store: ActivityStore, log: (runId: string) => void): 
   return {
     getRun,
     isUnreadable: (id) => store.isUnreadable(id),
-    listRuns: () => store.listRuns(),
     get claims() { return store.claims; },
     get workerExecutions() { return store.workerExecutions; },
-    listRunSummaries: (options) => store.listRunSummaries(options),
-    withReadCache: (fn) => store.withReadCache(fn),
-    // The store skips a worker it cannot read: the receipts name it.
-    listOwnedWorkers: (parentId) => {
-      const workers = store.listOwnedWorkers(parentId);
-      const parent = getRun(parentId);
-      if (parent?.delegation?.role === 'root') for (const receipt of parent.delegation.receipts) if (store.isUnreadable(receipt.workerId)) log(receipt.workerId);
-      return workers;
+    queries: {
+      listRuns: () => store.queries.listRuns(),
+      listRunSummaries: (options) => store.queries.listRunSummaries(options),
+      withReadCache: (fn) => store.queries.withReadCache(fn),
+      // The store skips a worker it cannot read: the receipts name it.
+      listOwnedWorkers: (parentId) => {
+        const workers = store.queries.listOwnedWorkers(parentId);
+        const parent = getRun(parentId);
+        if (parent?.delegation?.role === 'root') for (const receipt of parent.delegation.receipts) if (store.isUnreadable(receipt.workerId)) log(receipt.workerId);
+        return workers;
+      },
     },
   };
 }
@@ -124,7 +126,7 @@ function activeRoots(store: ActivityStore): { active: Set<string>; inReview: num
   const active = new Set<string>();
   const parents = new Set<string>();
   let inReview = 0;
-  for (const summary of store.listRunSummaries({ archivedWindow: 0 }).runs) {
+  for (const summary of store.queries.listRunSummaries({ archivedWindow: 0 }).runs) {
     if (summary.delegation?.role === 'worker') {
       if (isLiveStatus(summary.status)) parents.add(summary.delegation.parentRunId);
       continue;
@@ -143,7 +145,7 @@ type RunContext = { now: number; tools: ToolActivitySource; ci: CiProgressSource
 function activityRoot(store: ActivityStore, root: RunRecord, context: RunContext): ActivityRun {
   const ledger = root.delegation?.role === 'root' ? root.delegation.conversation : undefined;
   const results = root.delegation?.role === 'root' ? root.delegation.results ?? [] : [];
-  const workers = store.listOwnedWorkers(root.id).sort(byCreation)
+  const workers = store.queries.listOwnedWorkers(root.id).sort(byCreation)
     .map((worker): ActivityWorker => {
       const revision = workerRevision(worker);
       return { ...activityRunBase(worker, ledger, context), revision, collected: results.some((result) => result.workerId === worker.id && result.revision === revision) };

@@ -277,7 +277,7 @@ export class WorkerCleanup {
    */
   private async destroySupervised(project: DelegationProject, workerId: string, mode: 'manual' | 'scheduled', startedAt: number): Promise<string | undefined> {
     const worker = project.store.getRun(workerId);
-    for (const child of supervisedWorkers(project.store, worker)) {
+    for (const child of supervisedWorkers(project.store.queries, worker)) {
       const record = child.delegation?.role === 'worker' ? child.delegation : undefined;
       if (!record || (record.destroy?.phase === 'complete' && !record.destroy.remaining.length)) continue;
       const held = (error?: string) => `Worker ${child.id}, which this worker started, is not destroyed yet${error ? `: ${error}` : ''}`.slice(0, 2_000);

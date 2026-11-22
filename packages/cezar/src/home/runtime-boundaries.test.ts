@@ -15,7 +15,7 @@ vi.mock('../server/git.ts', () => ({ getRepoInfo: vi.fn(async (root: string) => 
 
 it('passes the selected Home to boot retention and background branch sweeping', async () => {
   const { root, selected } = runtimeHomes();
-  const store = { listRunIds: () => [] } as unknown as ReconcileStore;
+  const store = { queries: { listRunIds: () => [] } } as unknown as ReconcileStore;
   const manager = {} as RunManager;
   const retention = vi.fn(async () => 17);
   const sweep = vi.fn(async () => null);
@@ -30,7 +30,7 @@ it('passes the selected Home to boot retention and background branch sweeping', 
 it('passes the selected Home to branch-classification config loading', async () => {
   const { root, selected } = runtimeHomes();
   const load = vi.spyOn(config, 'loadConfig');
-  const project = { root, home: selected, store: { listBranchOwners: () => [] }, manager: { isActive: () => false, claimForBranchCleanup: () => null } };
+  const project = { root, home: selected, store: { queries: { listBranchOwners: () => [] } }, manager: { isActive: () => false, claimForBranchCleanup: () => null } };
   await classifyInputFor(project, {} as BranchForge);
   expect(load).toHaveBeenCalledWith(root, selected);
 });

@@ -53,7 +53,7 @@ function fakeStore(runs: RunRecord[]): RetentionStore & { runs: RunRecord[] } {
     runs,
     workerResults: { readWorkerResult: unused, readWorkerResultDiff: unused, readDeletedWorkerResult: unused,
       workerResultSnapshotPath: unused, commitWorkerResult: unused },
-    listRunsWithWorktree: () => runs.filter((r) => r.worktreePath !== undefined && r.worktreeReclaimedAt === undefined),
+    queries: { listRunsWithWorktree: () => runs.filter((r) => r.worktreePath !== undefined && r.worktreeReclaimedAt === undefined) },
     getRun: (id) => runs.find((r) => r.id === id),
     updateRun: (id, patch) => {
       const r = runs.find((x) => x.id === id);

@@ -6,7 +6,7 @@ import type { RunClaims, RunQueries, RunReads, WorkerExecutions } from '../runs/
 import { clampText } from './text.ts';
 
 /** What the request read needs from a project's run store. */
-export type ActivityRequestStore = RunReads & Pick<RunQueries, 'listRuns'> & { readonly claims: Pick<RunClaims, 'listForeignClaimedRunIds'> } & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
+export type ActivityRequestStore = RunReads & { readonly queries: Pick<RunQueries, 'listRuns'> } & { readonly claims: Pick<RunClaims, 'listForeignClaimedRunIds'> } & { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'> };
 
 export interface ActivityRequestOptions {
   now: number;
@@ -38,7 +38,7 @@ const displayTitle = (run: RunRecord | undefined): string | undefined => run && 
  */
 export function readActivityRequests(store: ActivityRequestStore, options: ActivityRequestOptions): ActivityRequestRead {
   const foreign = new Set(store.claims.listForeignClaimedRunIds());
-  const roots = new Set<string>(store.listRuns().map(familyRoot));
+  const roots = new Set<string>(store.queries.listRuns().map(familyRoot));
   for (const id of foreign) {
     const run = store.getRun(id);
     if (run) roots.add(familyRoot(run));

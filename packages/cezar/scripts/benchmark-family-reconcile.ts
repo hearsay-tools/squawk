@@ -106,7 +106,7 @@ for (const size of sizes) {
     const dataDir = join(root, '.ai/cezar');
     const rootId = seed(dataDir, root, size);
     const store = RunStore.open(dataDir, { keepLive: true });
-    if (values.baseline) store.withReadCache = <T>(fn: () => T): T => fn();
+    if (values.baseline) store.queries.withReadCache = <T>(fn: () => T): T => fn();
     const manager = new RunManager(store, root, { home, createRunner: noRunners, acquireCiResources });
     manager.reconcileWorkerWaits(rootId); // writes the missing projections once
     const times: number[] = [];

@@ -635,10 +635,10 @@ describe('workspace runs index API', () => {
       await registerProject(repoRoot, undefined, testHome());
       const other = await registerProject(otherRoot, undefined, testHome());
       seedColdProject(otherRoot, [storedRun({ id: 'cold-needle', title: 'Cold needle' })]);
-      vi.spyOn(store, 'searchRunSummaries').mockImplementation(() => { throw new Error('database is locked'); });
+      vi.spyOn(store.queries, 'searchRunSummaries').mockImplementation(() => { throw new Error('database is locked'); });
       // Only the windowed read the index makes; the app's own boot lists every run.
-      const list = store.listRunSummaries.bind(store);
-      vi.spyOn(store, 'listRunSummaries').mockImplementation((options) => {
+      const list = store.queries.listRunSummaries.bind(store.queries);
+      vi.spyOn(store.queries, 'listRunSummaries').mockImplementation((options) => {
         if (options?.archivedWindow !== undefined) throw new Error('database is locked');
         return list(options);
       });

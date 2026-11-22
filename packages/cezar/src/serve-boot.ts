@@ -18,7 +18,7 @@ import type { getRepoInfo } from './server/git.ts';
 const reconcileDefaults = { pruneOrphans, resolveWorktreeRetention, reclaimWorktrees, sweepMergedBranches, log: (line: string) => console.log(line) };
 
 /** What the startup reconcile reads, and hands on to the retention enforcer and the branch sweep. */
-export type ReconcileStore = Pick<StoreHandle, 'unavailable'> & Pick<RunQueries, 'listRunIds'> & RetentionStore & SweepProject['store'];
+export type ReconcileStore = Pick<StoreHandle, 'unavailable'> & { readonly queries: Pick<RunQueries, 'listRunIds'> } & RetentionStore & SweepProject['store'];
 
 export async function reconcileServeWorktrees(
   repoRoot: string,
@@ -32,7 +32,7 @@ export async function reconcileServeWorktrees(
   // Startup reconcile (spec 006): sweep worktrees whose run no longer exists. Never over a store
   // that could not open (#779): its runs are unknown, and every worktree would look orphaned.
   if (repo && !store.unavailable) {
-    const orphans = await steps.pruneOrphans(repoRoot, new Set(store.listRunIds())).catch(
+    const orphans = await steps.pruneOrphans(repoRoot, new Set(store.queries.listRunIds())).catch(
       () => [] as string[],
     );
     if (orphans.length > 0) {

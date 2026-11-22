@@ -270,7 +270,7 @@ export class WorkerQuestions {
   /** `noticeParkedWorker` for every worker of the family `runId` belongs to: each notice goes to
    *  the task that started its worker. */
   noticeParkedWorkers(runId: string): void {
-    for (const child of familyWorkers(this.context.store, this.context.store.getRun(runId))) this.host.noticeParkedWorker(child.id);
+    for (const child of familyWorkers(this.context.store.queries, this.context.store.getRun(runId))) this.host.noticeParkedWorker(child.id);
   }
 
   /** The worker's pending ask when it went to the parent (a legacy human fallback excluded). */

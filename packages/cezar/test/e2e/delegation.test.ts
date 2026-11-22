@@ -85,18 +85,18 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
   async function until(check: () => boolean | Promise<boolean>, label: string) {
     const deadline = Date.now() + 15_000;
     while (!(await check())) {
-      assert.ok(Date.now() < deadline, `${label}; runs=${JSON.stringify(store?.listRuns())}`);
+      assert.ok(Date.now() < deadline, `${label}; runs=${JSON.stringify(store?.queries.listRuns())}`);
       // e2e-wait: condition-poll — retry interval follows the fixture state probe; never signals readiness
       await new Promise(done => setTimeout(done, 20));
     }
   }
   async function cleanup() {
     if (manager && store) {
-      for (const run of store.listRuns()) {
+      for (const run of store.queries.listRuns()) {
         await writeFile(join(root, 'wire', run.id + '.release'), 'teardown');
         manager.cancel(run.id);
       }
-      for (const run of store.listRuns()) if (run.delegation?.role === 'worker') assert.equal(await manager.awaitRunTermination(run.id, 15_000), true);
+      for (const run of store.queries.listRuns()) if (run.delegation?.role === 'worker') assert.equal(await manager.awaitRunTermination(run.id, 15_000), true);
       while (work.pending.size) await Promise.allSettled([...work.pending.keys()]);
       manager.dispose(); store.persistence.flush();
     }
@@ -222,7 +222,7 @@ rl.on('close', () => queue.then(() => process.exit(0)));
     assert.equal(await readFile(join(repo, 'tracked.txt'), 'utf8'), 'dirty parent only\n');
     await git('commit', '--allow-empty', '-qm', 'parent moved after acceptance');
     assert.deepEqual(await command(spawn), { workerId, baselineSha: baseline });
-    assert.equal(store.listRuns().length, 2);
+    assert.equal(store.queries.listRuns().length, 2);
     const wait = await command(['wait', workerId]);
     assert.equal(wait.wait.phase, 'registered'); assert.match(wait.instruction, /End your turn/);
     await writeFile(join(wire, parent.id + '.release'), 'yield');
@@ -276,7 +276,7 @@ rl.on('close', () => queue.then(() => process.exit(0)));
     assert.equal(store.getRun(workerId)?.status, 'review', 'destroy preserves the review history');
     assert.ok(store.eventLog.readEvents(workerId).length > 0);
     assert.equal(await readFile(join(repo, 'tracked.txt'), 'utf8'), 'dirty parent only\n');
-    const publicState = JSON.stringify([store.listRuns(), ...store.listRuns().map(run => store!.eventLog.readEvents(run.id))]);
+    const publicState = JSON.stringify([store.queries.listRuns(), ...store.queries.listRuns().map(run => store!.eventLog.readEvents(run.id))]);
     for (const env of environments.values()) assert.equal(publicState.includes(env.CEZ_DELEGATION_TOKEN!), false);
   } finally {
     await cleanup();

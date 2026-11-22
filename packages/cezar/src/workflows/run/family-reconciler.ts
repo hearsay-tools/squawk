@@ -228,8 +228,8 @@ export class FamilyReconciler {
    *  the workers a settled worker started. */
   private endedWith(parent: RunRecord): RunRecord[] {
     const workers = isFamilyRecord(parent)
-      ? (parent.status === 'failed' ? [] : familyWorkers(this.context.store, parent))
-      : supervisedWorkers(this.context.store, parent);
+      ? (parent.status === 'failed' ? [] : familyWorkers(this.context.store.queries, parent))
+      : supervisedWorkers(this.context.store.queries, parent);
     return workers.filter(isLiveWorker);
   }
 
@@ -238,7 +238,7 @@ export class FamilyReconciler {
    *  workers it reads, and registration checked that the run may wait on each. */
   private workerObservations(parent: RunRecord, now: string) {
     const family = familyRecordOf(parent, id => this.context.store.getRun(id));
-    const outcomes = familyWorkers(this.context.store, parent).flatMap(child => {
+    const outcomes = familyWorkers(this.context.store.queries, parent).flatMap(child => {
       const outcome = workerOutcome(child, now);
       return outcome && this.context.store.workerExecutions.readWorkerExecution(child.id)?.phase === 'complete' ? [outcome] : [];
     });

@@ -89,17 +89,19 @@ export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions 
   const getRun = (id: string) => (unreadable.has(id) ? undefined : runs.find((run) => run.id === id));
   return {
     lifecycle: new CountedLifecycle(),
-    listRuns: () => runs.filter((run) => (options.held ? options.held.includes(run.id) : isLiveStatus(run.status))),
     claims: { listForeignClaimedRunIds: () => [...(options.foreign ?? [])] },
     getRun,
-    withReadCache: <T>(fn: () => T): T => fn(),
     isUnreadable: (id: string) => unreadable.has(id),
     workerExecutions: { readWorkerExecution: (id: string) => (options.complete?.includes(id) ? { phase: 'complete' } : undefined) },
-    listRunSummaries: () => ({ runs: runs.filter((run) => !run.archived).map((run) => toRunSummary(run)), truncated: false }),
-    listOwnedWorkers: (parentId: string) => {
-      const parent = getRun(parentId);
-      if (parent?.delegation?.role !== 'root') return [];
-      return parent.delegation.receipts.flatMap((receipt) => getRun(receipt.workerId) ?? []);
+    queries: {
+      listRuns: () => runs.filter((run) => (options.held ? options.held.includes(run.id) : isLiveStatus(run.status))),
+      withReadCache: <T>(fn: () => T): T => fn(),
+      listRunSummaries: () => ({ runs: runs.filter((run) => !run.archived).map((run) => toRunSummary(run)), truncated: false }),
+      listOwnedWorkers: (parentId: string) => {
+        const parent = getRun(parentId);
+        if (parent?.delegation?.role !== 'root') return [];
+        return parent.delegation.receipts.flatMap((receipt) => getRun(receipt.workerId) ?? []);
+      },
     },
   } as unknown as ActivityStore & { lifecycle: CountedLifecycle };
 }

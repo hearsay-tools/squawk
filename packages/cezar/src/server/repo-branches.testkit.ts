@@ -10,7 +10,7 @@ import type { BranchForge, ForgePr } from './repo-branches.ts';
 const exec = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 
-/** Records as the branch owners `RunStore.listBranchOwners` would list. */
+/** Records as the branch owners `store.queries.listBranchOwners` would list. */
 export const owners = (runs: readonly RunRecord[]) => runs.flatMap((run) => branchOwnerOf(run) ?? []);
 
 export async function git(cwd: string, ...args: string[]): Promise<string> {

@@ -55,7 +55,7 @@ it('serves a parent\'s workers off its receipts without walking the run index', 
   const unrelated = f.store.createRun({ title: 'unrelated', task: 'unrelated', workflow: 'quick-task', steps: [] });
   setRunStatus(f.store, unrelated.id, RUN_STATUS.done, { archived: true });
   const app = createApp({ home: testHome(), repoRoot: f.root, store: f.store, manager: f.manager, version: 'test', bootProjectId: 'project' });
-  const scan = vi.spyOn(f.store, 'listRuns');
+  const scan = vi.spyOn(f.store.queries, 'listRuns');
   const read = (id: string) => app.request(`http://127.0.0.1/api/v1/runs/${id}/relationships`, { headers: { host: '127.0.0.1' } });
   expect(await (await read(f.parent.id)).json()).toEqual({ workers: [expect.objectContaining({ workerId: spawned.workerId, parentRunId: f.parent.id, settled: false })],
     capacity: { outstanding: 1, limit: 32, created: 1, creationLimit: 1024 }, titles: [expect.objectContaining({ id: spawned.workerId })] });

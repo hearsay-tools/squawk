@@ -83,7 +83,7 @@ function fakeHost({ run, claimHeld, foreignOwner }: State): RunCheckoutHost {
     store: {
       getRun: vi.fn(() => run), claims: { sourceDataDir: vi.fn(() => join(root, 'source')), writeRefusal: vi.fn(() => foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined) },
       updateRun: forbidden,
-      retention: { fallbackDeleteError: forbidden, canDeleteRun: forbidden }, listWorkersOf: forbidden,
+      retention: { fallbackDeleteError: forbidden, canDeleteRun: forbidden }, queries: { listWorkersOf: forbidden },
     },
     manager: { isActive: forbidden, claimForPublish: vi.fn(claimHeld ? () => null : forbidden), claimWorktreeReclaim: vi.fn(claimHeld ? () => null : forbidden) },
   };
@@ -171,7 +171,7 @@ function claimedHost(state: State) {
     root,
     store: {
       getRun: vi.fn(() => { calls.push('lookup'); return state.run; }),
-      updateRun: vi.fn(), listWorkersOf: vi.fn(() => []),
+      updateRun: vi.fn(), queries: { listWorkersOf: vi.fn(() => []) },
       retention: {
         canDeleteRun: vi.fn(() => { calls.push('can-delete'); return state.run?.delegation?.role !== 'worker'; }),
         fallbackDeleteError: vi.fn(() => { calls.push('fallback'); return state.run?.worktreePath ? fallbackProjectWriteError(state.run.worktreePath) : undefined; }),
@@ -197,7 +197,7 @@ describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819
   const refusal = (action: string) => ({ status: 409, body: { error: `this worker runs in its parent's worktree — ${action}` } });
   function sharedHost(run: RunRecord = shared, workers: RunRecord[] = []): RunCheckoutHost {
     return { root, store: { getRun: vi.fn(() => run), updateRun: vi.fn(), claims: { sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined) },
-      retention: { fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true) }, listWorkersOf: vi.fn(() => workers) },
+      retention: { fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true) }, queries: { listWorkersOf: vi.fn(() => workers) } },
       manager: { isActive: vi.fn(() => false), claimForPublish: vi.fn(() => () => undefined), claimWorktreeReclaim: vi.fn(() => () => undefined) } };
   }
 
@@ -245,7 +245,7 @@ describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819
     expect(runCheckout(busy, hostRun.id, 'remove', reclaim)).toEqual(refused);
     expect(busy.manager.claimForPublish).not.toHaveBeenCalled();
     expect(busy.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
-    expect(busy.store.listWorkersOf).toHaveBeenCalledWith(hostRun.id);
+    expect(busy.store.queries.listWorkersOf).toHaveBeenCalledWith(hostRun.id);
     const free = sharedHost(hostRun, [shared]);
     expect(runCheckout(free, hostRun.id, 'remove', removal)).toEqual({ run: hostRun, release: expect.any(Function) });
     expect(runCheckout(free, hostRun.id, 'remove', reclaim)).toEqual({ run: hostRun, release: expect.any(Function) });

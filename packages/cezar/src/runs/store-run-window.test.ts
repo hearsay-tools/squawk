@@ -72,7 +72,7 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe('RunStore.listRunSummaries({ archivedWindow })', () => {
+describe('store.queries.listRunSummaries({ archivedWindow })', () => {
   it('keeps every unarchived run and only the newest archived roots', () => {
     seedIncident();
     const { runs, truncated } = open().queries.listRunSummaries({ archivedWindow: ARCHIVED_WINDOW });
@@ -180,7 +180,7 @@ it('archived search retains summaries whose only match is a PR in the collection
  * what the function answers and which store reads it makes, so splitting it into steps cannot
  * change either.
  */
-describe('RunStore.listArchivedRuns', () => {
+describe('store.queries.listArchivedRuns', () => {
   /** A step status the record schema rejects: the row's stored summary is valid, its record is not. */
   const unreadableSteps = [{ id: 's', name: 's', kind: STEP_KIND.agent, status: 'bogus', iterations: 1, tokensUsed: 0 }];
 

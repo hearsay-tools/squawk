@@ -1,3 +1,4 @@
+import type { RunQueriesTopic } from '../runs/run-queries.ts';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { makeRunRecord, makeTimerWait, RUN_STATUS, WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunStore } from '../runs/store.ts';
@@ -59,7 +60,7 @@ describe('owned wait timer identity', () => {
         for (const wait of [b, a]) setTimeout(() => {}, Date.parse(wait.deadline) - Date.now());
       },
     });
-    const store = unused<RunStore>('store', { listRunIds: () => ['A', 'B'], getRun: id => runs.find(run => run.id === id) });
+    const store = unused<RunStore>('store', { queries: unused<RunQueriesTopic>('queries', { listRunIds: () => ['A', 'B'] }), getRun: id => runs.find(run => run.id === id) });
     observeWaitTimers(manager, store);
     await expect(manager.recover()).rejects.toThrow('ambiguous recovered timer: give recovered waits distinct deadlines');
     expect(recoveries).toBe(0);
@@ -77,7 +78,7 @@ describe('owned wait timer identity', () => {
         for (const wait of [b, a]) setTimeout(() => fired.push(wait.id), Date.parse(wait.deadline) - Date.now());
       },
     });
-    const store = unused<RunStore>('store', { listRunIds: () => ['A', 'B'], getRun: id => runs.find(run => run.id === id) });
+    const store = unused<RunStore>('store', { queries: unused<RunQueriesTopic>('queries', { listRunIds: () => ['A', 'B'] }), getRun: id => runs.find(run => run.id === id) });
     observeWaitTimers(manager, store);
     await manager.recover();
     fireCapturedTimer(a.id);

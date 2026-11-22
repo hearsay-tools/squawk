@@ -165,7 +165,7 @@ function isRunRecord(value: unknown): value is RunRecord {
  *
  * An existing row is replaced in place — the same run arriving 50 times during its life must stay
  * one row, at its position, rather than churning the list order under the reader's cursor. A new
- * one is inserted by `createdAt` descending, matching `store.listRuns()`'s order, so a run that
+ * one is inserted by `createdAt` descending, matching `store.queries.listRuns()`'s order, so a run that
  * appears mid-session lands where a refetch would have put it.
  *
  * The frame's row is the one `GET /run-summaries` answers (`toRunSummary` with the live usage

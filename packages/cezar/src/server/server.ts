@@ -2919,7 +2919,7 @@ export function createApp(deps: ServerDeps) {
       const body = c.req.valid('json');
       const clientRequest = clientRequestOf(body);
       if (clientRequest) {
-        const replay = replayedRun(store, clientRequest);
+        const replay = replayedRun(store.queries, clientRequest);
         if (replay && 'error' in replay) return c.json({ error: replay.error }, replay.status);
         if (replay) return c.json(replay.run, 200 as const);
       }

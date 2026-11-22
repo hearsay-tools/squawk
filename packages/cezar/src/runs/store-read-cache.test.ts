@@ -23,7 +23,7 @@ vi.mock('./raw-record.ts', async (importOriginal) => {
   } };
 });
 
-/** `RunStore.withReadCache` (hearsay-tools/cezarion#2378): one decode per cold run, and every
+/** `store.queries.withReadCache` (hearsay-tools/cezarion#2378): one decode per cold run, and every
  *  write visible to the reads after it. */
 let dataDir: string;
 const stores: RunStore[] = [];
@@ -48,7 +48,7 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe('RunStore.withReadCache', () => {
+describe('store.queries.withReadCache', () => {
   it('decodes a cold run once and answers every read of the scope with that copy', () => {
     const store = open();
     const [first, second] = store.queries.withReadCache(() => [store.getRun(run.id), store.queries.withReadCache(() => store.getRun(run.id))]);

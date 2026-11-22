@@ -60,7 +60,7 @@ const FULL_SHA = /^[0-9a-f]{40}$/;
 export interface ClassifyInput {
   /** Repository top level (`RepoInfo.root`). */
   root: string;
-  /** Every run that owns a branch (`RunStore.listBranchOwners`): the few fields read here. */
+  /** Every run that owns a branch (`store.queries.listBranchOwners`): the few fields read here. */
   runs: readonly BranchOwner[];
   /** The run manager's liveness — a run can be live while its record still says `done`. */
   isActive: (runId: string) => boolean;
@@ -80,7 +80,7 @@ export interface ClassifyInput {
 export interface ClassifyProject {
   root: string;
   home: Home;
-  store: Pick<RunQueries, 'listBranchOwners'>;
+  store: { readonly queries: Pick<RunQueries, 'listBranchOwners'> };
   manager: Pick<RunManager, 'isActive' | 'claimForBranchCleanup'>;
 }
 
@@ -91,7 +91,7 @@ export async function classifyInputFor(project: ClassifyProject, forge: BranchFo
   const config = await loadConfig(project.root, project.home);
   return {
     root: info.root,
-    runs: project.store.listBranchOwners(),
+    runs: project.store.queries.listBranchOwners(),
     isActive: (id) => project.manager.isActive(id),
     configuredBase: config.baseBranch,
     currentBranch: info.branch,

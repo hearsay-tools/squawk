@@ -46,7 +46,7 @@ export type CheckoutIntent = 'read' | 'mutate' | 'publish' | 'remove' | 'open';
 export interface RunCheckoutHost {
   root: string;
   store: RunLookup & Pick<RunWrites, 'updateRun'> & { readonly claims: Pick<RunAccess, 'sourceDataDir' | 'writeRefusal'> } &
-    { readonly retention: Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> } & Pick<RunFamilyReads, 'listWorkersOf'>;
+    { readonly retention: Pick<RunRetention, 'fallbackDeleteError' | 'canDeleteRun'> } & { readonly queries: Pick<RunFamilyReads, 'listWorkersOf'> };
   manager: Pick<RunManager, 'isActive' | 'claimForPublish' | 'claimWorktreeReclaim'>;
 }
 
@@ -173,7 +173,7 @@ function removalRefusal(store: RunCheckoutHost['store'], run: RunRecord, id: str
     if (!store.retention.canDeleteRun(id, 'worktree') || run.delegation?.role === 'worker') return 'owned resources require verified worker cleanup';
   } else {
     // Delete cleans up after itself: worktree + branch go with the run (spec 006).
-    const started = supervisedWorkers(store, run).map(worker => worker.id);
+    const started = supervisedWorkers(store.queries, run).map(worker => worker.id);
     if (run.delegation?.role === 'worker' && started.length) return `this worker started workers whose history still exists — delete their history first: ${started.join(', ')}`;
     if (!store.retention.canDeleteRun(id)) return 'owned resources require verified worker cleanup and explicit child history deletion first';
   }
@@ -187,7 +187,7 @@ function removeCheckout({ store, manager }: RunCheckoutHost, id: string, options
   if (options.checksActive && manager.isActive(id)) return active;
   const shared = options.deletion === 'record' ? undefined : sharedWorkspaceRefusal(run, 'remove');
   if (shared) return shared;
-  if (hostsLiveSharedWorker(run, (rootId) => store.listWorkersOf(rootId))) return { status: 409, body: { error: SHARED_HOST_REFUSAL } };
+  if (hostsLiveSharedWorker(run, (rootId) => store.queries.listWorkersOf(rootId))) return { status: 409, body: { error: SHARED_HOST_REFUSAL } };
   const refused = removalRefusal(store, run, id, options.deletion);
   if (refused) return { status: 409, body: { error: refused } };
   if (isUsageLimitHold(run)) return { status: 409, body: { error: 'run is waiting on a usage-limit hold — choose Don’t resume in the task’s usage-limit hint, then retry' } };

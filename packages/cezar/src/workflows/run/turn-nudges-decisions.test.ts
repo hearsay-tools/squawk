@@ -108,8 +108,8 @@ describe('closed-session refusal effects through public recovery', () => {
     vi.spyOn(store.persistence, 'flush').mockImplementation(() => { if (inGate) trace.push('flush'); return flush(); });
     // The gate is synchronous. Recovery next enumerates runs after its live-run loop,
     // before rearmRecoveredWakes. Check the complete trace at that owned store boundary.
-    const list = store.listRuns.bind(store);
-    vi.spyOn(store, 'listRuns').mockImplementation((...args) => {
+    const list = store.queries.listRuns.bind(store.queries);
+    vi.spyOn(store.queries, 'listRuns').mockImplementation((...args) => {
       if (inGate) {
         expect(trace).toEqual(expected);
         checked = true;

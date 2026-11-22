@@ -11,7 +11,7 @@ import type { detectEnvironment } from './core/backend-detect.ts';
 import type { PreviewHost } from './preview/host.ts';
 
 function reconcileFixture(unavailable = false) {
-  const store = { unavailable, listRunIds: vi.fn(() => ['live-run']) } as unknown as ReconcileStore;
+  const store = { unavailable, queries: { listRunIds: vi.fn(() => ['live-run']) } } as unknown as ReconcileStore;
   const manager = {} as RunManager;
   const repo = { root: '/repo' } as NonNullable<Awaited<ReturnType<typeof getRepoInfo>>>;
   const steps = {
@@ -28,7 +28,7 @@ describe('reconcileServeWorktrees', () => {
   it.each(['no repo', 'unavailable store'])('skips reconciliation with %s', async (reason) => {
     const { store, manager, repo, steps, home } = reconcileFixture(reason === 'unavailable store');
     await reconcileServeWorktrees('/repo', reason === 'no repo' ? null : repo, store, manager, undefined, steps, home);
-    expect(store.listRunIds).not.toHaveBeenCalled();
+    expect(store.queries.listRunIds).not.toHaveBeenCalled();
     expect(steps.pruneOrphans).not.toHaveBeenCalled();
     expect(steps.resolveWorktreeRetention).not.toHaveBeenCalled();
     expect(steps.reclaimWorktrees).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.clearAllMocks(); 
 function recoveryFixture(unavailable = false) {
   const store = {
     unavailable,
-    listRuns: vi.fn(() => ['queued', 'waiting', 'running', 'done'].map((status) => ({ status }))),
+    queries: { listRuns: vi.fn(() => ['queued', 'waiting', 'running', 'done'].map((status) => ({ status }))) },
     archive: { compressArchivedHistory: vi.fn() },
   } as unknown as RunStore;
   const manager = { recover: vi.fn().mockResolvedValue(undefined) } as unknown as RunManager;
@@ -108,7 +108,7 @@ describe('recoverServeProject', () => {
 
   it('prints nothing with no recovered runs', async () => {
     const f = recoveryFixture();
-    vi.mocked(f.store.listRuns).mockReturnValue([]);
+    vi.mocked(f.store.queries.listRuns).mockReturnValue([]);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await recoverServeProject(f.store, f.manager, f.observer, f.delegation, undefined, f.recover);
     expect(log).not.toHaveBeenCalled();

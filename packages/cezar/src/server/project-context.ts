@@ -572,7 +572,7 @@ export class ProjectContexts {
       // ended — scheduling a `runs.json` write from a context nobody owns any more.
       const repoHandleController = new AbortController();
       this.repoHandleControllers.set(store, repoHandleController);
-      armRepoHandle(store, project.root, (root) => resolveForgeRoot(root, this.deps.forgeFactory), repoHandleController.signal);
+      armRepoHandle(store.repoScope, project.root, (root) => resolveForgeRoot(root, this.deps.forgeFactory), repoHandleController.signal);
       reportsIndex(store).start();
       return { home: this.deps.home, id: project.id, root: project.root, dataDir, store, manager, automationStore };
     } catch (err) {

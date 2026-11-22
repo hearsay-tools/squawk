@@ -244,7 +244,7 @@ describe('the import marker is checked inside the import transaction', () => {
       writeFileSync(scratch + '/ready-' + name, '');
       waitFor(scratch + '/go');
       const store = RunStore.open(dataDir, { retryBusy: true });
-      process.stdout.write(String(store.listRunSummaries().runs.length));
+      process.stdout.write(String(store.queries.listRunSummaries().runs.length));
       store.close();
     `, [name]);
     const results = Promise.all([exitOf(opener('one')), exitOf(opener('two'))]);

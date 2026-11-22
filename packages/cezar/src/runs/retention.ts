@@ -11,7 +11,7 @@ import { hostsLiveSharedWorker } from './shared-hosts.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isEndedRoot, isLiveRecord } from './run-row.ts';
-import type { RunPins, RunAccess, RunFamilyReads, WorkerExecutions, WorkerResults } from './ports.ts';
+import type { RunPins, RunAccess, RunFamilyReads, RunQueries, WorkerExecutions, WorkerResults } from './ports.ts';
 import type { RunRecord, RunStatus } from './store.ts';
 
 /** The "finished" status set — mirrors the statuses `RunStore.archiveFinished` sweeps. A run at the
@@ -96,7 +96,7 @@ export function selectReclaimableWorktrees(
 }
 
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
-type RealStoreMembers = Partial<RunFamilyReads & { readonly claims: Partial<RunAccess>; readonly runPins: Partial<RunPins>; readonly workerExecutions: Partial<WorkerExecutions> }>;
+type RealStoreMembers = Partial<{ readonly queries: Partial<RunFamilyReads>; readonly claims: Partial<RunAccess>; readonly runPins: Partial<RunPins>; readonly workerExecutions: Partial<WorkerExecutions> }>;
 
 /** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
  *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
@@ -104,7 +104,7 @@ export interface RetentionStore {
   /** The worker results a reclaim preparation saves. */
   readonly workerResults: WorkerResults;
   /** The candidates: runs with a materialized worktree (an indexed query, #779). */
-  listRunsWithWorktree(): RunRecord[];
+  readonly queries: Pick<RunQueries, 'listRunsWithWorktree'>;
   getRun(id: string): RunRecord | undefined;
   updateRun(id: string, patch: { worktreeReclaimedAt?: string }): unknown;
 }
@@ -203,11 +203,11 @@ export async function reclaimWorktrees(
   keep: number,
   opts: ReclaimOptions = {},
 ): Promise<string[]> {
-  const runs = store.listRunsWithWorktree();
+  const runs = store.queries.listRunsWithWorktree();
   const byId = new Map(runs.map((r) => [r.id, r]));
   const reclaimed: string[] = [];
   // A real store lists every worker; a structural test store answers from the candidates.
-  const workersOf = (store as RealStoreMembers).listWorkersOf?.bind(store);
+  const workersOf = (store as RealStoreMembers).queries?.listWorkersOf?.bind(store.queries);
   const selected = selectReclaimableWorktrees(runs, keep, (parentId) => store.getRun(parentId), workersOf);
   const readonly = (id: string) => Boolean(byId.get(id) && readOnlyWorktree(repoRoot, store, byId.get(id)!));
   const skipped = selected.filter(readonly).length;
