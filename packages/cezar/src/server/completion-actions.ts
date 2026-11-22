@@ -59,7 +59,7 @@ export class CompletionActionCoordinator {
 
   private async processProjectCompletions(project: ArchiveProject, store: RunStore, valid: () => boolean): Promise<void> {
     if (!valid() || this.stopped) return;
-    const page = store.listCompletionCandidates(this.cursors.get(project.id) ?? 0, 16);
+    const page = store.archive.listCompletionCandidates(this.cursors.get(project.id) ?? 0, 16);
     this.cursors.set(project.id, page.length === 16 ? page.at(-1)!.seq : 0);
     let admitted = 0;
     for (const item of page) {
@@ -79,13 +79,13 @@ export class CompletionActionCoordinator {
     const current = () => {
       if (this.stopped || !valid()) return false;
       const latest = store.getRun(item.id);
-      return store.canCompleteAction(item.id, token) && latest?.branch === run.branch;
+      return store.archive.canCompleteAction(item.id, token) && latest?.branch === run.branch;
     };
     try {
       return await this.runClaimedCompletion(project, store, run, token, key, current);
     } catch {
       if (current()) {
-        store.completeAction(run.id, token, 'blocked', 'PR auto-merge is unavailable. Check GitHub, retry later, or turn it off.');
+        store.archive.completeAction(run.id, token, 'blocked', 'PR auto-merge is unavailable. Check GitHub, retry later, or turn it off.');
         this.backoff(key);
       }
       return true;
@@ -97,12 +97,12 @@ export class CompletionActionCoordinator {
   ): Promise<boolean> {
     if (!current()) return false;
     store.pin(run.id, 'maintenance');
-    if (!store.claimCompletionAction(run.id, token)) return false;
-    await store.prepareArchiveOnMerge(run.id);
+    if (!store.archive.claimCompletionAction(run.id, token)) return false;
+    await store.archive.prepareArchiveOnMerge(run.id);
     if (!current()) return false;
     const result = await this.process(project, run, current);
     if (result === undefined || !current()) return false;
-    store.completeAction(run.id, token, result ? 'blocked' : 'complete', result);
+    store.archive.completeAction(run.id, token, result ? 'blocked' : 'complete', result);
     if (result) this.backoff(key); else this.retries.delete(key);
     return true;
   }

@@ -90,7 +90,7 @@ describe('cez task', () => {
     it('lists slim rows newest first, hides archived unless --all, filters and limits', async () => {
       const a = await start('a');
       const b = await start('b');
-      ctx.store.setArchived(a, true);
+      ctx.store.archive.setArchived(a, true);
       expect(await run(['list'])).toBe(0);
       expect((last().runs as Array<{ id: string }>).map((row) => row.id)).toEqual([b]);
       expect(await run(['list', '--all'])).toBe(0);

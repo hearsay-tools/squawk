@@ -54,7 +54,7 @@ afterEach(async () => {
   while (stores.length > 0) {
     const store = stores.pop()!;
     store.close();
-    await store.historyIdle();
+    await store.archive.historyIdle();
   }
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -74,8 +74,8 @@ describe('RunStore history compression', () => {
     store.updateStep(run.id, 'work', { status: STEP_STATUS.done, sessionId: 'old-session' });
     const first = store.eventLog.appendEvent(run.id, { type: 'note', message: 'before' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(join(root, '.ai/cezar'), run.id);
     expect(existsSync(compressed)).toBe(true);
 

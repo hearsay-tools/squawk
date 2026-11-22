@@ -207,7 +207,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running', pid: job.pid });
       await end();
       // Opening the ended task in the cockpit marks it read: a run event that reaps, but no end.
-      store.setRead(run.id);
+      store.readFlags.setRead(run.id);
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
       expect(readFileSync(job.log, 'utf8')).toBe('measured\n');
       // A Continue that ends again finds no job running, so the directory goes.
@@ -220,13 +220,13 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
       const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;
       const { end } = await gatedJob(dir);
       await finishIdle(run.id);
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running' });
-      store.setArchived(run.id, false);
+      store.archive.setArchived(run.id, false);
       await end();
-      store.setRead(run.id);
+      store.readFlags.setRead(run.id);
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
       expect(existsSync(dir)).toBe(false);
     }, 30_000);
 

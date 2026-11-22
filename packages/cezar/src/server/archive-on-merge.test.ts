@@ -39,7 +39,7 @@ it.each(['disable', 'restore', 'stop', 'continue'] as const)('invalidates late n
   const f = fixture();
   f.lookup.mockImplementationOnce(async (_root: string, identities: ArchivePullRequestIdentity[]) => {
     if (action === 'disable') f.disable();
-    if (action === 'restore') { f.store.setArchived(f.id, true); f.store.setArchived(f.id, false); }
+    if (action === 'restore') { f.store.archive.setArchived(f.id, true); f.store.archive.setArchived(f.id, false); }
     if (action === 'continue') setRunStatus(f.store, f.id, RUN_STATUS.running);
     if (action === 'stop') f.coordinator.stop();
     return identities.map(pr => ({ ...pr, mergedAt: '2026-01-02T00:00:00.000Z' }));

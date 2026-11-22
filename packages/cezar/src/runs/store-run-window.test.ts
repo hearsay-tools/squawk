@@ -104,7 +104,7 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
     seedIncident();
     const store = open();
     const fresh = store.createRun({ title: 'fresh', task: 'fresh', workflow: 'quick-task', steps: [] });
-    store.setArchived(fresh.id, true);
+    store.archive.setArchived(fresh.id, true);
 
     const { runs, truncated } = store.listRunSummaries({ archivedWindow: 200 });
     const archived = ids(runs.filter((run) => run.archived));
@@ -117,7 +117,7 @@ describe('RunStore.listRunSummaries({ archivedWindow })', () => {
   it('lists a run unarchived in memory whose row is still archived past the window', () => {
     seedIncident();
     const store = open();
-    store.setArchived('arch-1', false);
+    store.archive.setArchived('arch-1', false);
 
     const listed = store.listRunSummaries({ archivedWindow: 200 }).runs.find((run) => run.id === 'arch-1');
     expect(listed?.archived).toBe(false);
@@ -283,7 +283,7 @@ describe('RunStore.listArchivedRuns', () => {
     expect(store.getRun('a4')).toBeUndefined();
     expect(store.isUnreadable('a4')).toBe(true);
     // Held and unarchived in memory, while its row is still archived: the record wins.
-    store.setArchived('a3', false);
+    store.archive.setArchived('a3', false);
     // Last: a write commits the deletes pending before it, and this row must still be stored.
     expect(store.retention.deleteRun('a2')).toBe(true);
 

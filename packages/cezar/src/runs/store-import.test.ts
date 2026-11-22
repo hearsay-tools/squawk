@@ -133,7 +133,7 @@ describe('fields this Squawk does not know (the raw-record codec)', () => {
     const store = open();
     store.updateRun('a', { title: 'renamed' });
     store.updateStep('a', 's2', { status: STEP_STATUS.failed });
-    store.setPinned('a', false);
+    store.readFlags.setPinned('a', false);
     store.close();
 
     const reopened = open();
@@ -171,7 +171,7 @@ describe('fields this Squawk does not know (the raw-record codec)', () => {
   it('survive an optimistic write and a durable commit of a run read cold', () => {
     writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a', { fromNewerSquawk: 'kept' }), record('bb', { fromNewerSquawk: 'kept too' })]));
     const store = open();
-    store.setArchived('a', true);
+    store.archive.setArchived('a', true);
     store.flush();
     store.commitDelegation([{ id: 'bb', delegation: { role: 'invalid' } }]);
     expect(persisted('a')).toMatchObject({ archived: true, fromNewerSquawk: 'kept' });

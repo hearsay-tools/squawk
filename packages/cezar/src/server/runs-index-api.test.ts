@@ -600,7 +600,7 @@ describe('workspace runs index API', () => {
     it('finds runs in the owned boot project too', async () => {
       await registerProject(repoRoot, undefined, testHome());
       const run = store.createRun({ title: 'Boot needle', workflow: 'build', task: 't', steps: [] });
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
       expect(ids((await search('?q=needle')).body)).toEqual([run.id]);
     });
 

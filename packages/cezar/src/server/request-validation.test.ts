@@ -86,11 +86,11 @@ describe('request validation bounds (#429)', () => {
 
   it('ignores pin attempts on an archived run over the API', async () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
-    store.setArchived(run.id, true);
+    store.archive.setArchived(run.id, true);
     const response = await postJson(`/api/v1/runs/${run.id}/pin`, { pinned: true });
     expect(response.status).toBe(200);
     expect(await response.json()).not.toHaveProperty('pinned');
-    store.setArchived(run.id, false);
+    store.archive.setArchived(run.id, false);
     expect(store.getRun(run.id)).not.toHaveProperty('pinnedAt');
   });
 
@@ -249,7 +249,7 @@ describe('request validation bounds (#429)', () => {
       const mk = (pinned: boolean) => {
         const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
         setRunStatus(store, run.id, RUN_STATUS.done);
-        if (pinned) store.setPinned(run.id, true);
+        if (pinned) store.readFlags.setPinned(run.id, true);
         return run.id;
       };
       const loose = mk(false);
@@ -271,14 +271,14 @@ describe('request validation bounds (#429)', () => {
       const unpinnedRes = await postJson(path, { scope: 'unpinned' });
       expect(unpinnedRes.status).toBe(200);
       expect(await unpinnedRes.json()).toEqual({ archived: 1, ids: [loose], pinnedIds: [] });
-      store.setArchived(loose, false);
+      store.archive.setArchived(loose, false);
 
       const all = await apiRequest(app, path, { method: 'POST' });
       expect(all.status).toBe(200);
       expect(await all.json()).toEqual({ archived: 1, ids: [loose], pinnedIds: [] });
 
       // #1332: the sidebar's per-tab sweep narrows by automation origin.
-      store.setArchived(loose, false);
+      store.archive.setArchived(loose, false);
       expect((await postJson(path, { automation: 'yes' })).status).toBe(400);
       const automations = await postJson(path, { scope: 'unpinned', automation: true });
       expect(await automations.json()).toEqual({ archived: 0, ids: [], pinnedIds: [] });

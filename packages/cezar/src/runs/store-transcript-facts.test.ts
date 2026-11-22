@@ -90,11 +90,11 @@ describe('RunStore transcript facts (#880)', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:before' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     expect(existsSync(historyPaths(dir, run.id).plain)).toBe(false);
     const reads = countTranscriptReads();
-    store.setArchived(run.id, false);
+    store.archive.setArchived(run.id, false);
     store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:after' });
     expect(store.transcriptFacts.transcriptFacts(run.id).projectionIds).toEqual(['p:before', 'p:after']);
     // Only restoreHistory decodes the archive; the facts never re-read it.
@@ -134,8 +134,8 @@ describe('RunStore transcript facts off the request path (#880)', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'conversation-message', projectionId: 'p:1' });
     setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { compressed, facts } = historyPaths(dir, run.id);
     const st = statSync(compressed);
     expect(JSON.parse(readFileSync(facts, 'utf8')).archive).toEqual({ size: st.size, mtimeMs: st.mtimeMs, ino: st.ino });

@@ -88,7 +88,7 @@ describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { 
     expectSettledParentRefusal(f.w.id, f.p.id, 'cancelled');
     // The issue's reproduction: a later write to the parent starts a family pass, and the worker
     // stays as it is.
-    store.setArchived(f.p.id, true);
+    store.archive.setArchived(f.p.id, true);
     manager.reconcileWorkerWaits();
     expect(store.getRun(f.w.id)?.status).toBe('cancelled');
     expect(eventsOf(f.w.id, 'human-ask-closed')).toHaveLength(1);

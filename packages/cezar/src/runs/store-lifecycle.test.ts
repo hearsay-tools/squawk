@@ -352,21 +352,21 @@ const pick = (run: Readonly<RunRecord>, shape: Partial<RunRecord>) =>
 
 describe('each write path publishes its before, source and exit', () => {
   it.each<WritePathCase>([
-    { key: 'setRead (change)', act: ({ store }, id) => store.setRead(id), before: { seenAt: undefined }, after: { seenAt: any } },
-    { key: 'setUnread (change)', arrange: ({ store, id }) => { store.setRead(id); }, act: ({ store }, id) => store.setUnread(id), before: { seenAt: any }, after: { seenAt: undefined } },
-    { key: 'setPinned (change)', act: ({ store }, id) => store.setPinned(id, true), before: { pinned: undefined }, after: { pinned: true } },
+    { key: 'setRead (change)', act: ({ store }, id) => store.readFlags.setRead(id), before: { seenAt: undefined }, after: { seenAt: any } },
+    { key: 'setUnread (change)', arrange: ({ store, id }) => { store.readFlags.setRead(id); }, act: ({ store }, id) => store.readFlags.setUnread(id), before: { seenAt: any }, after: { seenAt: undefined } },
+    { key: 'setPinned (change)', act: ({ store }, id) => store.readFlags.setPinned(id, true), before: { pinned: undefined }, after: { pinned: true } },
     { key: 'markAllRead', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.done, { finishedAt: '2026-11-21T10:00:00.000Z' }); },
-      act: ({ store }) => store.markAllRead(), before: { seenAt: undefined }, after: { seenAt: any } },
+      act: ({ store }) => store.readFlags.markAllRead(), before: { seenAt: undefined }, after: { seenAt: any } },
     { key: 'applyMarkerRefs', act: ({ store }, id) => store.eventLog.applyMarkerRefs(id, { issue: 9 }), before: { issueNumber: undefined }, after: { issueNumber: 9 } },
     { key: 'recordCreatedPr', act: ({ store }, id) => store.eventLog.recordCreatedPr(id, PR), before: { pullRequestUrl: undefined }, after: { pullRequestUrl: PR } },
     { key: 'debounced archive through applyArchived', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, HOLD); },
       act: ({ store }, id) => store.updateRun(id, { archived: true }),
       before: { status: RUN_STATUS.waiting, archived: false, ...HOLD }, after: { status: RUN_STATUS.failed, archived: true, autoResumeAt: undefined }, exit: 'withdraw-hold' },
     { key: 'committed archive (setArchived)', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting, HOLD); },
-      act: ({ store }, id) => store.setArchived(id, true),
+      act: ({ store }, id) => store.archive.setArchived(id, true),
       before: { status: RUN_STATUS.waiting, archived: false, ...HOLD }, after: { status: RUN_STATUS.failed, archived: true }, exit: 'withdraw-hold' },
     { key: 'archive cascade to a worker in a hold', arrange: (f) => { const { workerId } = f.family(); setRunStatus(f.store, workerId, RUN_STATUS.waiting, HOLD); return workerId; },
-      act: ({ store }, workerId) => store.setArchived((store.getRun(workerId)!.delegation as { parentRunId: string }).parentRunId, true),
+      act: ({ store }, workerId) => store.archive.setArchived((store.getRun(workerId)!.delegation as { parentRunId: string }).parentRunId, true),
       before: { status: RUN_STATUS.waiting, archived: false }, after: { status: RUN_STATUS.failed, archived: true }, exit: 'withdraw-hold' },
     { key: 'commitOutcome', arrange: ({ store, id }) => { setRunStatus(store, id, RUN_STATUS.waiting); },
       act: ({ store }, id) => store.commitOutcome(id, [], { exit: 'resume' }), before: { status: RUN_STATUS.waiting }, after: { status: RUN_STATUS.running }, exit: 'resume' },
@@ -413,7 +413,7 @@ describe('each write path publishes its before, source and exit', () => {
       nested = true;
       setRunStatus(store, workerId, RUN_STATUS.done);
     } });
-    store.setArchived(rootId, true);
+    store.archive.setArchived(rootId, true);
     const changes = deliveries.filter((delivery) => delivery.type === 'run.status-changed' && delivery.payload.run.id === workerId)
       .map((delivery) => { const { exit, from, to } = delivery.payload as RunLifecycleEvents['run.status-changed']; return `${exit}:${from}->${to}`; });
     expect(changes).toEqual(['patch:failed->done', 'withdraw-hold:waiting->failed']);
@@ -431,7 +431,7 @@ describe('each write path publishes its before, source and exit', () => {
       nested = true;
       setRunStatus(store, workerId, RUN_STATUS.done);
     } });
-    store.setArchived(rootId, true);
+    store.archive.setArchived(rootId, true);
     const updates = deliveries.filter((delivery) => delivery.type === 'run.updated' && delivery.payload.run.id === workerId)
       .map((delivery) => delivery.payload as RunLifecycleEvents['run.updated']);
     // A comparer of `before` and `run`, as the webhook's: one transition per change, none twice.

@@ -117,9 +117,9 @@ export class ArchiveOnMergeCoordinator {
     // a run stopped being a candidate so stale entries cannot hold capacity forever.
     for (const [key, state] of this.pending) {
       if (state.projectId !== project.id) continue;
-      await store.prepareArchiveOnMerge(state.rootId);
+      await store.archive.prepareArchiveOnMerge(state.rootId);
       if (!current() || !valid()) return;
-      const snapshot = store.archiveOnMergeSnapshot(state.rootId, repoBase, isActive);
+      const snapshot = store.archive.archiveOnMergeSnapshot(state.rootId, repoBase, isActive);
       if (!snapshot) this.pending.delete(key);
       else out.push(snapshot);
       if (out.length === 4) return out;
@@ -132,13 +132,13 @@ export class ArchiveOnMergeCoordinator {
     isActive: (id: string) => boolean, current: () => boolean, valid: () => boolean,
   ): Promise<ArchiveOnMergeSnapshot[]> {
     const out: ArchiveOnMergeSnapshot[] = [];
-    const page = store.listArchiveOnMergeCandidates(this.cursors.get(project.id) ?? 0, 64);
+    const page = store.archive.listArchiveOnMergeCandidates(this.cursors.get(project.id) ?? 0, 64);
     this.cursors.set(project.id, page.length === 64 ? page.at(-1)!.seq : 0);
     for (const candidate of page) {
-      if (!store.hasArchiveOnMergeAssociations(candidate.id)) continue;
-      await store.prepareArchiveOnMerge(candidate.id);
+      if (!store.archive.hasArchiveOnMergeAssociations(candidate.id)) continue;
+      await store.archive.prepareArchiveOnMerge(candidate.id);
       if (!current() || !valid()) break;
-      const snapshot = store.archiveOnMergeSnapshot(candidate.id, repoBase, isActive);
+      const snapshot = store.archive.archiveOnMergeSnapshot(candidate.id, repoBase, isActive);
       if (snapshot) out.push(snapshot);
       if (out.length === 4) { this.cursors.set(project.id, candidate.seq); break; }
     }
@@ -199,7 +199,7 @@ export class ArchiveOnMergeCoordinator {
     repoBase: string | undefined, current: () => boolean,
   ): Promise<void> {
     await this.deps.withStore(project, async (store, _active, valid) => {
-      if (current() && valid()) store.archiveMergeBlocker(snapshot, missing, repoBase);
+      if (current() && valid()) store.archive.archiveMergeBlocker(snapshot, missing, repoBase);
     });
   }
 
@@ -209,9 +209,9 @@ export class ArchiveOnMergeCoordinator {
   ): Promise<void> {
     await this.deps.withStore(project, async (store, isActive, valid) => {
       if (!await this.archiveSnapshotStillValid(project, repoBase, current, valid)) return;
-      await store.prepareArchiveOnMerge(snapshot.rootId);
+      await store.archive.prepareArchiveOnMerge(snapshot.rootId);
       if (!current() || !valid()) return;
-      store.archiveAfterMerge(snapshot, [...state.merged.values()], repoBase, isActive);
+      store.archive.archiveAfterMerge(snapshot, [...state.merged.values()], repoBase, isActive);
     });
   }
 
@@ -228,7 +228,7 @@ export class ArchiveOnMergeCoordinator {
   private async recordProjectFailure(project: ArchiveProject, roots: readonly string[], current: () => boolean): Promise<void> {
     if (!current()) return;
     await this.deps.withStore(project, async (store, _active, valid) => {
-      if (current() && valid()) for (const id of roots) store.setArchiveBlocker(id, { message: 'Could not confirm PR merge status. Check GitHub or archive manually.' });
+      if (current() && valid()) for (const id of roots) store.archive.setArchiveBlocker(id, { message: 'Could not confirm PR merge status. Check GitHub or archive manually.' });
     }).catch(() => undefined);
     const count = Math.min(5, (this.failures.get(project.id)?.count ?? 0) + 1);
     this.failures.set(project.id, { count, nextAt: Date.now() + Math.min(900_000, this.interval * 2 ** (count - 1)) });

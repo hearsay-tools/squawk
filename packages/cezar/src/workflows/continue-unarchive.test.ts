@@ -30,7 +30,7 @@ function archivedFinished(store: RunStore) {
   });
   store.updateStep(run.id, 'work', { status: STEP_STATUS.done, sessionId: 'old-session' });
   setRunStatus(store, run.id, RUN_STATUS.done);
-  store.setArchived(run.id, true);
+  store.archive.setArchived(run.id, true);
   return run;
 }
 
@@ -66,7 +66,7 @@ describe('continueRun unarchives', () => {
     });
     store.updateStep(run.id, 'work', { status: STEP_STATUS.done });
     setRunStatus(store, run.id, RUN_STATUS.done);
-    store.setArchived(run.id, true);
+    store.archive.setArchived(run.id, true);
 
     expect(manager.continueRun(run.id, { text: 'keep going' })).toMatchObject({ ok: false });
     expect(store.getRun(run.id)?.archived).toBe(true);
@@ -94,7 +94,7 @@ describe('continueRun unarchives', () => {
     );
     store.updateStep(worker.id, 'task', { status: STEP_STATUS.done, sessionId: 'old-session' });
     setRunStatus(store, worker.id, RUN_STATUS.done);
-    store.setArchived(worker.id, true);
+    store.archive.setArchived(worker.id, true);
     const commit = vi.spyOn(store, 'commitWorkerContinuation').mockImplementation(() => {
       throw new Error('checkpoint failed');
     });

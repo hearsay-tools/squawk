@@ -38,7 +38,7 @@ describe('releasing the branches of ended worker families', { timeout: WORKSPACE
     const { root, workspace, store, workerId, parentId } = await reclaimedWorker(false);
     expect(await releaseEndedWorkerBranches(root, store, claim)).toEqual([]);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
-    store.setArchived(parentId, true);
+    store.archive.setArchived(parentId, true);
     expect(await releaseEndedWorkerBranches(root, store, claim)).toEqual([workerId]);
     expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
     expect(store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } });
@@ -48,14 +48,14 @@ describe('releasing the branches of ended worker families', { timeout: WORKSPACE
   it('keeps the branch while the archived root still runs', async () => {
     const { root, workspace, store, parentId } = await reclaimedWorker(false);
     setRunStatus(store, parentId, RUN_STATUS.running);
-    store.setArchived(parentId, true);
+    store.archive.setArchived(parentId, true);
     expect(await releaseEndedWorkerBranches(root, store, claim)).toEqual([]);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
   });
 
   it('keeps a branch with commits no other ref keeps, and a run in use', async () => {
     const { root, workspace, store, workerId, parentId } = await reclaimedWorker(true);
-    store.setArchived(parentId, true);
+    store.archive.setArchived(parentId, true);
     expect(await releaseEndedWorkerBranches(root, store, () => null)).toEqual([]);
     expect(await releaseEndedWorkerBranches(root, store, claim)).toEqual([]);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');

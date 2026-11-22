@@ -27,7 +27,7 @@ afterEach(async () => {
   while (stores.length > 0) {
     const store = stores.pop()!;
     store.close();
-    await store.historyIdle();
+    await store.archive.historyIdle();
   }
   while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
@@ -67,8 +67,8 @@ describe('RunStore history compression', () => {
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'two' });
     const before = store.eventLog.readEvents(run.id);
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
@@ -82,9 +82,9 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
-    store.setArchived(run.id, false);
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
+    store.archive.setArchived(run.id, false);
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(plain)).toBe(true);
     expect(existsSync(compressed)).toBe(false);
@@ -96,8 +96,8 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'gone' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(store.retention.deleteRun(run.id)).toBe(true);
@@ -111,13 +111,13 @@ describe('RunStore history compression', () => {
     const leftPlain = store.createRun({ title: 'plain', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(leftPlain.id, { type: 'note', message: 'plain-body' });
     finish(store, leftPlain.id);
-    store.setArchived(leftPlain.id, true);
+    store.archive.setArchived(leftPlain.id, true);
     const both = store.createRun({ title: 'both', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(both.id, { type: 'note', message: 'A' });
     finish(store, both.id);
-    store.setArchived(both.id, true);
+    store.archive.setArchived(both.id, true);
     store.flush();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     store.close();
     stores.pop();
 
@@ -136,8 +136,8 @@ describe('RunStore history compression', () => {
 
     const reopened = RunStore.open(dir);
     stores.push(reopened);
-    reopened.compressArchivedHistory();
-    await reopened.historyIdle();
+    reopened.archive.compressArchivedHistory();
+    await reopened.archive.historyIdle();
     expect(existsSync(plainLeft.plain)).toBe(false);
     expect(existsSync(plainLeft.compressed)).toBe(true);
     expect(readHistoryText(dir, leftPlain.id)).toBe(original);
@@ -163,13 +163,13 @@ describe('RunStore history compression', () => {
       const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
       store.eventLog.appendEvent(run.id, { type: 'note', message: 'x' });
       finish(store, run.id);
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
       return run.id;
     });
     await vi.waitFor(() => expect(started.length).toBeGreaterThanOrEqual(1), { timeout: HANG_GUARD_MS });
     store.close();
     release();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     expect(started.length).toBeLessThan(runs.length);
     spy.mockRestore();
   });
@@ -182,9 +182,9 @@ describe('RunStore history compression', () => {
     expect(owner.pin(run.id, 'active')).toBeDefined();
     const historyFile = await import('./history-file.ts');
     const spy = vi.spyOn(historyFile, 'compressHistory').mockResolvedValue('skipped');
-    owner.setArchived(run.id, true);
+    owner.archive.setArchived(run.id, true);
     owner.flush();
-    await owner.historyIdle();
+    await owner.archive.historyIdle();
     spy.mockRestore();
 
     const { plain, compressed } = historyPaths(dir, run.id);
@@ -196,8 +196,8 @@ describe('RunStore history compression', () => {
 
     const other = openStore(dir).store;
     expect(other.runOwnership(run.id)).toBe('foreign');
-    other.compressArchivedHistory();
-    await other.historyIdle();
+    other.archive.compressArchivedHistory();
+    await other.archive.historyIdle();
 
     expect(existsSync(plain)).toBe(true);
     expect(readFileSync(plain, 'utf8')).toContain('owned');
@@ -210,9 +210,9 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'before' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
+    store.archive.setArchived(run.id, true);
     store.eventLog.appendEvent(run.id, { type: 'lifecycle', message: 'variant picked' });
-    await store.historyIdle();
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
@@ -226,13 +226,13 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'live' });
     setRunStatus(store, run.id, RUN_STATUS.running);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(plain)).toBe(true);
     expect(existsSync(compressed)).toBe(false);
     finish(store, run.id);
-    await store.historyIdle();
+    await store.archive.historyIdle();
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
   });
@@ -242,13 +242,13 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'old' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'after-restore' });
     expect(existsSync(plain)).toBe(true);
-    await store.historyIdle();
+    await store.archive.historyIdle();
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
     expect(readHistoryText(dir, run.id)).toContain('after-restore');
@@ -262,10 +262,10 @@ describe('RunStore history compression', () => {
     const boom = store.createRun({ title: 'boom', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(boom.id, { type: 'note', message: 'boom-body' });
     finish(store, boom.id);
-    store.setArchived(ok.id, true);
-    store.setArchived(boom.id, true);
+    store.archive.setArchived(ok.id, true);
+    store.archive.setArchived(boom.id, true);
     store.flush();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     store.close();
     stores.pop();
 
@@ -286,8 +286,8 @@ describe('RunStore history compression', () => {
       return original(dataDir, id);
     });
     const reopened = openStore(dir).store;
-    expect(() => reopened.compressArchivedHistory()).not.toThrow();
-    await reopened.historyIdle();
+    expect(() => reopened.archive.compressArchivedHistory()).not.toThrow();
+    await reopened.archive.historyIdle();
     expect(existsSync(okPaths.compressed)).toBe(true);
     expect(existsSync(okPaths.plain)).toBe(false);
     spy.mockRestore();
@@ -298,8 +298,8 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const before = store.getRun(run.id)!;
     const historyFile = await import('./history-file.ts');
     const spy = vi.spyOn(historyFile, 'restoreHistory').mockImplementation(() => {
@@ -323,10 +323,10 @@ describe('RunStore history compression', () => {
     const other = store.createRun({ title: 'other', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(other.id, { type: 'note', message: 'A' });
     finish(store, other.id);
-    store.setArchived(prefixRun.id, true);
-    store.setArchived(other.id, true);
+    store.archive.setArchived(prefixRun.id, true);
+    store.archive.setArchived(other.id, true);
     store.flush();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     store.close();
     stores.pop();
 
@@ -347,8 +347,8 @@ describe('RunStore history compression', () => {
     const historyFile = await import('./history-file.ts');
     const restore = vi.spyOn(historyFile, 'restoreHistory');
     const reopened = openStore(dir).store;
-    reopened.compressArchivedHistory();
-    await reopened.historyIdle();
+    reopened.archive.compressArchivedHistory();
+    await reopened.archive.historyIdle();
     expect(restore).not.toHaveBeenCalled();
     expect(existsSync(prefixPaths.plain)).toBe(false);
     expect(existsSync(prefixPaths.compressed)).toBe(true);
@@ -366,8 +366,8 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'bulk' });
     finish(store, run.id);
-    expect(store.archiveFinished().ids).toEqual([run.id]);
-    await store.historyIdle();
+    expect(store.archive.archiveFinished().ids).toEqual([run.id]);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
@@ -379,7 +379,7 @@ describe('RunStore history compression', () => {
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'via-update' });
     finish(store, run.id);
     store.updateRun(run.id, { archived: true });
-    await store.historyIdle();
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, run.id);
     expect(existsSync(compressed)).toBe(true);
     expect(existsSync(plain)).toBe(false);
@@ -419,8 +419,8 @@ describe('RunStore history compression', () => {
     store.eventLog.appendEvent(worker.id, { type: 'note', message: 'old' });
     store.updateStep(worker.id, 'task', { status: STEP_STATUS.done, sessionId: 'old-session' });
     setRunStatus(store, worker.id, RUN_STATUS.done);
-    store.setArchived(worker.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(worker.id, true);
+    await store.archive.historyIdle();
     const { plain, compressed } = historyPaths(dir, worker.id);
     expect(existsSync(compressed)).toBe(true);
     store.commitWorkerContinuation(worker.id, 'continue-line', { archived: false });
@@ -438,8 +438,8 @@ describe('RunStore history compression', () => {
     writeFileSync(plain, 'new');
     writeFileSync(compressed, br('old'));
     expect(store.getRun(run.id)!.archived).toBe(false);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     expect(existsSync(plain)).toBe(false);
     expect(brotliDecompressSync(readFileSync(compressed)).toString()).toBe('new');
     expect(brotliDecompressSync(readFileSync(`${compressed}.orphaned`)).toString()).toBe('old');
@@ -455,8 +455,8 @@ describe('RunStore history compression', () => {
     writeFileSync(compressed, br('old'));
     writeFileSync(`${compressed}.orphaned`, 'already');
     expect(store.getRun(run.id)!.archived).toBe(false);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     expect(existsSync(plain)).toBe(false);
     expect(brotliDecompressSync(readFileSync(compressed)).toString()).toBe('new');
     expect(readFileSync(`${compressed}.orphaned`, 'utf8')).toBe('already');
@@ -469,9 +469,9 @@ describe('RunStore history compression', () => {
       const run = store.createRun({ title: `t${i}`, workflow: 'w', task: 'task', steps: [] });
       store.eventLog.appendEvent(run.id, { type: 'note', message: `m${i}` });
       finish(store, run.id);
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
     }
-    await store.historyIdle();
+    await store.archive.historyIdle();
     store.flush();
     store.close();
     stores.pop();
@@ -479,8 +479,8 @@ describe('RunStore history compression', () => {
     const reopened = openStore(dir).store;
     const claimsBefore = listClaims(dir);
     const take = vi.spyOn(RunDatabase.prototype, 'takeClaims');
-    reopened.compressArchivedHistory();
-    await reopened.historyIdle();
+    reopened.archive.compressArchivedHistory();
+    await reopened.archive.historyIdle();
     expect(take).not.toHaveBeenCalled();
     expect(listClaims(dir)).toEqual(claimsBefore);
   });
@@ -492,11 +492,11 @@ describe('RunStore history compression', () => {
     finish(store, run.id);
     const { plain, compressed } = historyPaths(dir, run.id);
     const before = readFileSync(plain);
-    store.setArchived(run.id, true);
+    store.archive.setArchived(run.id, true);
     store.flush();
     const other = openStore(dir).store;
     expect(other.pin(run.id, 'active')).toBeDefined();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     expect(existsSync(plain)).toBe(true);
     expect(readFileSync(plain).equals(before)).toBe(true);
     expect(existsSync(compressed)).toBe(false);
@@ -520,13 +520,13 @@ describe('RunStore history compression', () => {
       return original(...args);
     });
     try {
-      store.setArchived(run.id, true);
+      store.archive.setArchived(run.id, true);
       await vi.waitFor(() => expect(spy).toHaveBeenCalled(), { timeout: HANG_GUARD_MS });
       store.flush();
       const other = openStore(dir).store;
       expect(other.pin(run.id, 'active')).toBeDefined();
       release();
-      await store.historyIdle();
+      await store.archive.historyIdle();
       expect(existsSync(plain)).toBe(true);
       expect(readFileSync(plain).equals(before)).toBe(true);
       expect(existsSync(compressed)).toBe(false);
@@ -540,15 +540,15 @@ describe('RunStore history compression', () => {
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
     store.eventLog.appendEvent(run.id, { type: 'note', message: 'keep' });
     finish(store, run.id);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
+    store.archive.setArchived(run.id, true);
+    await store.archive.historyIdle();
     const before = store.getRun(run.id)!;
     const historyFile = await import('./history-file.ts');
     const spy = vi.spyOn(historyFile, 'restoreHistory').mockImplementation(() => {
       throw new Error('restore failed');
     });
     try {
-      expect(() => store.setArchived(run.id, false)).toThrow(/restore failed/);
+      expect(() => store.archive.setArchived(run.id, false)).toThrow(/restore failed/);
       const after = store.getRun(run.id)!;
       expect(after.archived).toBe(true);
       expect(after.status).toBe(before.status);
@@ -577,8 +577,8 @@ describe('RunStore history compression', () => {
       });
     });
     try {
-      store.setArchived(run.id, true);
-      await store.historyIdle();
+      store.archive.setArchived(run.id, true);
+      await store.archive.historyIdle();
       const { plain, compressed } = historyPaths(dir, run.id);
       expect(existsSync(compressed)).toBe(true);
       expect(existsSync(plain)).toBe(false);

@@ -141,7 +141,7 @@ describe('RunStore save lifecycle (#124)', () => {
     });
     expect(store.listRunSummaries().runs.some((run) => run.id === oldestId && run.archived && run.title === 'keep me')).toBe(true);
     store.flush();
-    await store.historyIdle();
+    await store.archive.historyIdle();
     const indexed = readRunIndexFromDisk(dataDir).runs.find((run) => run.id === oldestId);
     expect(indexed).toMatchObject({
       title: 'keep me', archived: true, pullRequestUrl: 'https://github.com/o/r/pull/42', issueNumber: 7,
@@ -2454,7 +2454,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     const id = finishedRun(store, 'done');
     expect(store.getRun(id)?.seenAt).toBeUndefined();
 
-    const updated = store.setRead(id);
+    const updated = store.readFlags.setRead(id);
     expect(updated?.seenAt).toBeDefined();
     store.flush();
 
@@ -2463,16 +2463,16 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
 
   it('setRead returns undefined for an unknown id', () => {
     const store = RunStore.open(dataDir);
-    expect(store.setRead('nope')).toBeUndefined();
+    expect(store.readFlags.setRead('nope')).toBeUndefined();
   });
 
   it('setUnread clears the receipt, round-trips, and returns the record (#775)', () => {
     const store = RunStore.open(dataDir);
     const id = finishedRun(store, 'done');
-    store.setRead(id);
+    store.readFlags.setRead(id);
     expect(store.getRun(id)?.seenAt).toBeDefined();
 
-    const updated = store.setUnread(id);
+    const updated = store.readFlags.setUnread(id);
     // Cleared, not blanked: `isUnread` and the store's own `markAllRead` both key on the
     // field being ABSENT, so an empty-string receipt would read as "seen at the epoch".
     expect(updated?.seenAt).toBeUndefined();
@@ -2486,13 +2486,13 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     const store = RunStore.open(dataDir);
     const id = finishedRun(store, 'done');
 
-    expect(store.setUnread(id)?.seenAt).toBeUndefined();
-    expect(store.setUnread(id)?.seenAt).toBeUndefined();
+    expect(store.readFlags.setUnread(id)?.seenAt).toBeUndefined();
+    expect(store.readFlags.setUnread(id)?.seenAt).toBeUndefined();
   });
 
   it('setUnread returns undefined for an unknown id', () => {
     const store = RunStore.open(dataDir);
-    expect(store.setUnread('nope')).toBeUndefined();
+    expect(store.readFlags.setUnread('nope')).toBeUndefined();
   });
 
   it('a run put back to unread is counted again by the next markAllRead sweep', () => {
@@ -2500,11 +2500,11 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     // other reader already computes, so the badge, the sweep and the marker all agree again.
     const store = RunStore.open(dataDir);
     const id = finishedRun(store, 'done');
-    store.setRead(id);
-    expect(store.markAllRead()).toBe(0);
+    store.readFlags.setRead(id);
+    expect(store.readFlags.markAllRead()).toBe(0);
 
-    store.setUnread(id);
-    expect(store.markAllRead()).toBe(1);
+    store.readFlags.setUnread(id);
+    expect(store.readFlags.markAllRead()).toBe(1);
     expect(store.getRun(id)?.seenAt).toBeDefined();
   });
 
@@ -2519,10 +2519,10 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     const failedUnread = finishedRun(store, 'failed');
     const cancelled = finishedRun(store, 'cancelled');
     const alreadyRead = finishedRun(store, 'done');
-    store.setRead(alreadyRead);
+    store.readFlags.setRead(alreadyRead);
     const running = store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [] }).id;
 
-    expect(store.markAllRead()).toBe(2);
+    expect(store.readFlags.markAllRead()).toBe(2);
     expect(store.getRun(doneUnread)?.seenAt).toBeDefined();
     expect(store.getRun(failedUnread)?.seenAt).toBeDefined();
     // Cancelled and still-running runs are never unread, so they stay untouched.
@@ -2530,7 +2530,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     expect(store.getRun(running)?.seenAt).toBeUndefined();
 
     // Idempotent: a second sweep finds nothing left unread.
-    expect(store.markAllRead()).toBe(0);
+    expect(store.readFlags.markAllRead()).toBe(0);
   });
 
   it('archiving retires a pending usage-limit resume — one run; the sweep skips scheduled runs', () => {
@@ -2545,20 +2545,20 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
       return id;
     };
     const one = limited();
-    store.setArchived(one, true);
+    store.archive.setArchived(one, true);
     expect(store.getRun(one)?.autoResumeAt).toBeUndefined();
     expect(store.getRun(one)?.autoResumeAttempts).toBeUndefined();
 
     // The sweep no longer takes a run waiting out a usage limit (#780): it stays put and keeps
     // its resume, so the "archive finished" sweep never cancels a promise by accident.
     const waiting = limited();
-    expect(store.archiveFinished().ids).not.toContain(waiting);
+    expect(store.archive.archiveFinished().ids).not.toContain(waiting);
     expect(store.getRun(waiting)?.archived).toBe(false);
     expect(store.getRun(waiting)?.autoResumeAt).toBeDefined();
 
     // Un-archiving restores the task, never the promise — that would resume a task the user
     // has already walked away from once.
-    store.setArchived(one, false);
+    store.archive.setArchived(one, false);
     expect(store.getRun(one)?.autoResumeAt).toBeUndefined();
   });
 
@@ -2569,10 +2569,10 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     // would take a pointless write and `run` broadcast on every sweep.
     const store = RunStore.open(dataDir);
     const archived = finishedRun(store, 'done');
-    store.setArchived(archived, true);
+    store.archive.setArchived(archived, true);
     const active = finishedRun(store, 'done');
 
-    expect(store.markAllRead()).toBe(1);
+    expect(store.readFlags.markAllRead()).toBe(1);
     expect(store.getRun(active)?.seenAt).toBeDefined();
     expect(store.getRun(archived)?.seenAt).toBeUndefined();
   });
@@ -2589,7 +2589,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     const ordinary = finishedRun(store, 'done');
 
     // The count is the badge's number: one, not two.
-    expect(store.markAllRead()).toBe(1);
+    expect(store.readFlags.markAllRead()).toBe(1);
     expect(store.getRun(ordinary)?.seenAt).toBeDefined();
     expect(store.getRun(scheduled)?.seenAt).toBeUndefined();
   });
@@ -2608,7 +2608,7 @@ describe('RunStore — read receipts (#unread-done-items)', () => {
     setRunStatus(store, id, RUN_STATUS.waiting, { autoResumeAt: '2026-08-03T18:41:48.000Z' });
     setRunStatus(store, id, RUN_STATUS.running);
     expect(store.getRun(id)?.autoResumeAt).toBeUndefined();
-    expect(store.markAllRead()).toBe(0);
+    expect(store.readFlags.markAllRead()).toBe(0);
   });
 });
 
@@ -2806,7 +2806,7 @@ describe('RunStore — pinned tasks (#935)', () => {
     const id = newRun(store);
     expect(store.getRun(id)?.pinned).toBeUndefined();
 
-    const updated = store.setPinned(id, true);
+    const updated = store.readFlags.setPinned(id, true);
     expect(updated?.pinned).toBe(true);
     expect(updated?.pinnedAt).toBeDefined();
 
@@ -2819,8 +2819,8 @@ describe('RunStore — pinned tasks (#935)', () => {
     // heard of pins.
     const store = RunStore.open(dataDir);
     const id = newRun(store);
-    store.setPinned(id, true);
-    store.setPinned(id, false);
+    store.readFlags.setPinned(id, true);
+    store.readFlags.setPinned(id, false);
     store.flush();
 
     const persisted = readPersistedRuns(dataDir) as Array<
@@ -2836,31 +2836,31 @@ describe('RunStore — pinned tasks (#935)', () => {
     const store = RunStore.open(dataDir);
     const id = newRun(store);
     setRunStatus(store, id, RUN_STATUS.running);
-    expect(store.setPinned(id, true)?.pinned).toBe(true);
-    expect(store.setPinned(id, true)?.pinned).toBe(true);
+    expect(store.readFlags.setPinned(id, true)?.pinned).toBe(true);
+    expect(store.readFlags.setPinned(id, true)?.pinned).toBe(true);
     // Unpinning something that was never pinned is legal too, and changes nothing.
     const other = newRun(store);
-    expect(store.setPinned(other, false)?.pinned).toBeUndefined();
+    expect(store.readFlags.setPinned(other, false)?.pinned).toBeUndefined();
   });
 
   it('ignores late pin requests after archive and never restores hidden pin state', () => {
     const store = RunStore.open(dataDir);
     const id = newRun(store);
-    store.setPinned(id, true);
-    store.setArchived(id, true);
-    store.setPinned(id, true);
+    store.readFlags.setPinned(id, true);
+    store.archive.setArchived(id, true);
+    store.readFlags.setPinned(id, true);
     expect(store.getRun(id)).not.toHaveProperty('pinned');
     expect(store.getRun(id)).not.toHaveProperty('pinnedAt');
     store.flush();
     const reopened = RunStore.open(dataDir);
-    reopened.setArchived(id, false);
+    reopened.archive.setArchived(id, false);
     reopened.flush();
     expect(reopened.getRun(id)).not.toHaveProperty('pinned');
     expect(reopened.getRun(id)).not.toHaveProperty('pinnedAt');
   });
 
   it('answers undefined for a run it does not know', () => {
-    expect(RunStore.open(dataDir).setPinned('no-such-run', true)).toBeUndefined();
+    expect(RunStore.open(dataDir).readFlags.setPinned('no-such-run', true)).toBeUndefined();
   });
 
   it('archiving clears the pin — one run and in bulk', () => {
@@ -2869,20 +2869,20 @@ describe('RunStore — pinned tasks (#935)', () => {
     // goes through a route.
     const store = RunStore.open(dataDir);
     const one = newRun(store);
-    store.setPinned(one, true);
-    store.setArchived(one, true);
+    store.readFlags.setPinned(one, true);
+    store.archive.setArchived(one, true);
     expect(store.getRun(one)?.pinned).toBeUndefined();
     expect(store.getRun(one)?.pinnedAt).toBeUndefined();
 
     const swept = newRun(store);
     setRunStatus(store, swept, RUN_STATUS.done, { finishedAt: '2026-08-29T10:00:00.000Z' });
-    store.setPinned(swept, true);
-    expect(store.archiveFinished().archived).toBeGreaterThanOrEqual(1);
+    store.readFlags.setPinned(swept, true);
+    expect(store.archive.archiveFinished().archived).toBeGreaterThanOrEqual(1);
     expect(store.getRun(swept)?.archived).toBe(true);
     expect(store.getRun(swept)?.pinned).toBeUndefined();
 
     // Un-archiving restores the task, never the pin — the same rule the pending resume follows.
-    store.setArchived(one, false);
+    store.archive.setArchived(one, false);
     expect(store.getRun(one)?.pinned).toBeUndefined();
   });
 
@@ -2946,12 +2946,12 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
   it('archiving a parent archives every owned worker and touches both', () => {
     const store = RunStore.open(dataDir);
     const { parent, worker } = parentWithWorker(store, 'running');
-    store.setPinned(worker.id, true);
+    store.readFlags.setPinned(worker.id, true);
     setRunStatus(store, worker.id, RUN_STATUS.waiting, { autoResumeAt: '2026-08-03T18:41:48.000Z', autoResumeAttempts: 1 });
     const touched: string[] = [];
     onRunWrite(store.lifecycle, (run) => touched.push(run.id));
 
-    expect(store.setArchived(parent.id, true)?.archived).toBe(true);
+    expect(store.archive.setArchived(parent.id, true)?.archived).toBe(true);
 
     expect(store.getRun(parent.id)?.archived).toBe(true);
     expect(store.getRun(worker.id)?.archived).toBe(true);
@@ -2964,10 +2964,10 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
   it('unarchiving a parent unarchives those workers', () => {
     const store = RunStore.open(dataDir);
     const { parent, worker } = parentWithWorker(store, 'done');
-    store.setArchived(parent.id, true);
+    store.archive.setArchived(parent.id, true);
     expect(store.getRun(worker.id)?.archived).toBe(true);
 
-    store.setArchived(parent.id, false);
+    store.archive.setArchived(parent.id, false);
 
     expect(store.getRun(parent.id)?.archived).toBe(false);
     expect(store.getRun(parent.id)?.archivedAt).toBeUndefined();
@@ -2979,7 +2979,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     const store = RunStore.open(dataDir);
     const { parent, worker } = parentWithWorker(store, 'done');
 
-    store.setArchived(worker.id, true);
+    store.archive.setArchived(worker.id, true);
 
     expect(store.getRun(worker.id)?.archived).toBe(true);
     expect(store.getRun(parent.id)?.archived).toBe(false);
@@ -2991,7 +2991,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     expect(store.getRun(parent.id)?.status).toBe('done');
     expect(store.getRun(worker.id)?.status).toBe('running');
 
-    expect(store.archiveFinished().archived).toBe(2);
+    expect(store.archive.archiveFinished().archived).toBe(2);
 
     expect(store.getRun(parent.id)?.archived).toBe(true);
     expect(store.getRun(worker.id)?.archived).toBe(true);
@@ -3003,7 +3003,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     expect(store.getRun(parent.id)?.status).toBe('done');
     expect(store.getRun(worker.id)?.status).toBe('done');
 
-    expect(store.archiveFinished().archived).toBe(2);
+    expect(store.archive.archiveFinished().archived).toBe(2);
 
     expect(store.getRun(parent.id)?.archived).toBe(true);
     expect(store.getRun(worker.id)?.archived).toBe(true);
@@ -3023,14 +3023,14 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
       };
       const unpinned = { done: mk('done'), failed: mk('failed'), cancelled: mk('cancelled') };
       const pinnedDone = mk('done');
-      store.setPinned(pinnedDone, true);
+      store.readFlags.setPinned(pinnedDone, true);
       const pinnedRunning = mk('running');
-      store.setPinned(pinnedRunning, true);
+      store.readFlags.setPinned(pinnedRunning, true);
       const scheduled = mk('failed');
       setRunStatus(store, scheduled, RUN_STATUS.waiting, { autoResumeAt: SCHEDULED_AT, autoResumeAttempts: 1 });
       const scheduledPinned = mk('failed');
       setRunStatus(store, scheduledPinned, RUN_STATUS.waiting, { autoResumeAt: SCHEDULED_AT, autoResumeAttempts: 1 });
-      store.setPinned(scheduledPinned, true);
+      store.readFlags.setPinned(scheduledPinned, true);
       const running = mk('running');
       const { parent, worker } = parentWithWorker(store, 'running');
       const lone = parentWithWorker(store, 'done');
@@ -3041,7 +3041,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     it("'unpinned' takes the unpinned finished runs and their parents, nothing else", () => {
       const store = RunStore.open(dataDir);
       const f = fixture(store);
-      const result = store.archiveFinished('unpinned');
+      const result = store.archive.archiveFinished('unpinned');
       expect([...result.ids].sort()).toEqual(
         [...Object.values(f.unpinned), f.parent.id].sort(),
       );
@@ -3054,7 +3054,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     it("'pinned' takes only finished pinned runs and reports the pins it dropped", () => {
       const store = RunStore.open(dataDir);
       const f = fixture(store);
-      const result = store.archiveFinished('pinned');
+      const result = store.archive.archiveFinished('pinned');
       expect(result.ids).toEqual([f.pinnedDone]);
       expect(result.pinnedIds).toEqual([f.pinnedDone]);
       expect(store.getRun(f.pinnedDone)?.archived).toBe(true);
@@ -3067,7 +3067,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     it('no scope takes both sets, minus scheduled runs and lone workers', () => {
       const store = RunStore.open(dataDir);
       const f = fixture(store);
-      const result = store.archiveFinished();
+      const result = store.archive.archiveFinished();
       expect([...result.ids].sort()).toEqual(
         [...Object.values(f.unpinned), f.pinnedDone, f.parent.id].sort(),
       );
@@ -3083,7 +3083,7 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
       (scope) => {
         const store = RunStore.open(dataDir);
         const f = fixture(store);
-        store.archiveFinished(scope);
+        store.archive.archiveFinished(scope);
         for (const id of [f.scheduled, f.scheduledPinned]) {
           expect(store.getRun(id)?.archived).toBe(false);
           expect(store.getRun(id)?.autoResumeAt).toBe(SCHEDULED_AT);
@@ -3095,9 +3095,9 @@ describe('RunStore — archive cascades to owned workers (#250)', () => {
     it('undo path: unarchiving a swept parent brings its workers back', () => {
       const store = RunStore.open(dataDir);
       const f = fixture(store);
-      store.archiveFinished('unpinned');
+      store.archive.archiveFinished('unpinned');
       expect(store.getRun(f.worker.id)?.archived).toBe(true);
-      store.setArchived(f.parent.id, false);
+      store.archive.setArchived(f.parent.id, false);
       expect(store.getRun(f.parent.id)?.archived).toBe(false);
       expect(store.getRun(f.worker.id)?.archived).toBe(false);
     });
@@ -3318,13 +3318,13 @@ describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squ
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('1 run(s)'));
     expect(runIds(store)).toEqual([LEGACY_RUN.id]);
     store.setRepoHandle(HANDLE);
-    expect(store.markAllRead()).toBe(0);
+    expect(store.readFlags.markAllRead()).toBe(0);
     expect(store.listQuarantinedRunIds()).toEqual([]);
     expect(store.countAutomationRuns('automation')).toBe(0);
     expect(store.findNonArchivedRunByIssue('o/r', 1)).toBeUndefined();
     expect(store.findRunIdsByAutomationReceipt(['receipt']).size).toBe(0);
     expect(store.listBranchOwners()).toEqual([]);
-    expect(store.archiveFinished().ids).toEqual([LEGACY_RUN.id]);
+    expect(store.archive.archiveFinished().ids).toEqual([LEGACY_RUN.id]);
     store.close();
     const db = RunDatabase.open(join(dataDir, RUNS_DB_FILE));
     try {

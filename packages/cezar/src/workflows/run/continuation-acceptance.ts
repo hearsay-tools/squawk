@@ -118,7 +118,7 @@ export class ContinuationAcceptance {
     const content = continuation.content(opts);
     const message = content.length ? this.queuedInput.toQueuedMessage(runId, content) : undefined;
     this.autoResumeScheduler.clearAutoResume(runId);
-    this.context.store.setArchived(runId, false);
+    this.context.store.archive.setArchived(runId, false);
     this.host.move(runId, 'continue-line', { stopping: undefined,
       ...(message ? { queuedMessages: [...(current.queuedMessages ?? []), message] } : {}) });
     this.context.store.flush();

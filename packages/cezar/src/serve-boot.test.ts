@@ -91,7 +91,7 @@ describe('recoverServeProject', () => {
     await recoverServeProject(f.store, f.manager, f.observer, f.delegation, projectId, f.recover);
     expect(f.recover).toHaveBeenCalledWith(f.store, expect.any(Function), f.observer);
     expect(f.manager.recover).toHaveBeenCalledOnce();
-    expect(f.manager.recover).toHaveBeenCalledBefore(vi.mocked(f.store.compressArchivedHistory));
+    expect(f.manager.recover).toHaveBeenCalledBefore(vi.mocked(f.store.archive.compressArchivedHistory));
     expect(f.armDestroyRetries).toHaveBeenCalledWith(projectId ?? 'default');
     expect(log).toHaveBeenCalledWith('  recovered 3 run(s) from the previous session');
   });
@@ -101,7 +101,7 @@ describe('recoverServeProject', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await recoverServeProject(f.store, f.manager, f.observer, f.delegation, undefined, f.recover);
     expect(f.recover).not.toHaveBeenCalled();
-    expect(f.store.compressArchivedHistory).not.toHaveBeenCalled();
+    expect(f.store.archive.compressArchivedHistory).not.toHaveBeenCalled();
     expect(f.armDestroyRetries).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith('  recovered 3 run(s) from the previous session');
   });

@@ -325,7 +325,7 @@ export class ProjectContexts {
       return await work(store, current);
     } finally {
       finish();
-      if (store) { await store.historyIdle(); store.close(); }
+      if (store) { await store.archive.historyIdle(); store.close(); }
       temporaryOwnership.releaseAll();
     }
   }
@@ -560,7 +560,7 @@ export class ProjectContexts {
       await manager.recover();
       // Archived transcripts left plain (or both-present after a crash) — fire-and-forget,
       // never delays boot (#818).
-      store.compressArchivedHistory();
+      store.archive.compressArchivedHistory();
       this.deps.afterRecover?.({ id: project.id, root: project.root, store, manager, home: this.deps.home });
       // Which repository this project IS (#945), so the referenced tier stops adopting another
       // repo's PR/issue as a task's subject. Fire-and-forget on purpose — it costs a `gh` spawn

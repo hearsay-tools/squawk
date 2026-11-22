@@ -46,7 +46,7 @@ describe('task completion options', () => {
     const { store, id, dir } = setup({ archiveWhenDone: true });
     setRunStatus(store, id, RUN_STATUS.done);
     expect(store.getRun(id)?.archived).toBe(true);
-    store.setArchived(id, false);
+    store.archive.setArchived(id, false);
     store.updateRun(id, { title: 'restored' });
     store.flush();
     const reopened = RunStore.open(dir, { keepLive: true });
@@ -102,11 +102,11 @@ it('retires pending merge work on explicit unarchive and creates new intent afte
   const { store, id } = setup({ archiveWhenDone: true, autoMergePr: true });
   setRunStatus(store, id, RUN_STATUS.done);
   const token = store.getRun(id)!.completionAction!.id;
-  store.setArchived(id, true); store.setArchived(id, false);
-  expect(store.completeAction(id, token, 'complete')).toBe(false);
+  store.archive.setArchived(id, true); store.archive.setArchived(id, false);
+  expect(store.archive.completeAction(id, token, 'complete')).toBe(false);
   setRunStatus(store, id, RUN_STATUS.queued); setRunStatus(store, id, RUN_STATUS.done);
   expect(store.getRun(id)?.completionAction?.id).not.toBe(token);
-  expect(store.completeAction(id, token, 'complete')).toBe(false);
+  expect(store.archive.completeAction(id, token, 'complete')).toBe(false);
 });
 
 it('keeps completion visible when transcript facts have not been loaded', () => {
@@ -136,7 +136,7 @@ describe('completion action across write paths', () => {
     store.flush();
     expect(store.getRun(id)?.completionAction).toBeUndefined();
     expect(readPersistedRuns(dir).find(run => run.id === id)?.completionAction).toBeUndefined();
-    expect(store.completeAction(id, token, 'complete')).toBe(false);
+    expect(store.archive.completeAction(id, token, 'complete')).toBe(false);
     {
       const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.done, ...extra };
       setRunStatus(store, id, fixtureStatus, fixtureExtras);
