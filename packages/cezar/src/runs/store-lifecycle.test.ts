@@ -417,6 +417,31 @@ describe('each write path publishes its before, source and exit', () => {
     expect(changes).toEqual(['patch:failed->done', 'withdraw-hold:waiting->failed']);
   });
 
+  it('a commit of several runs publishes each run as this commit wrote it, so a before/run comparer counts a sibling\'s change once', () => {
+    const fixture = setup();
+    const { store } = fixture;
+    const { rootId, workerId } = family(fixture);
+    setRunStatus(store, workerId, RUN_STATUS.waiting, HOLD);
+    const deliveries = record(store);
+    let nested = false;
+    store.lifecycle.subscribe({ 'run.updated': ({ run }) => {
+      if (run.id !== rootId || nested) return;
+      nested = true;
+      setRunStatus(store, workerId, RUN_STATUS.done);
+    } });
+    store.setArchived(rootId, true);
+    const updates = deliveries.filter((delivery) => delivery.type === 'run.updated' && delivery.payload.run.id === workerId)
+      .map((delivery) => delivery.payload as RunLifecycleEvents['run.updated']);
+    // A comparer of `before` and `run`, as the webhook's: one transition per change, none twice.
+    expect(updates.map(({ before, run }) => `${before.status}->${run.status}`)).toEqual(['failed->done', 'waiting->failed']);
+    const outer = updates.at(-1)!.run;
+    expect(Object.isFrozen(outer)).toBe(true);
+    expect(store.getRun(workerId)?.status).toBe(RUN_STATUS.done);
+    const change = deliveries.find((delivery) => delivery.type === 'run.status-changed' && delivery.payload.run.id === workerId
+      && delivery.payload.exit === 'withdraw-hold')!.payload as RunLifecycleEvents['run.status-changed'];
+    expect(change.run).toBe(outer);
+  });
+
   it('owned-run creation publishes run.created from the commit', () => {
     const fixture = setup();
     const deliveries = record(fixture.store);

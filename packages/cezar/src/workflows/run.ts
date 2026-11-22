@@ -64,7 +64,8 @@ export { contentBlocksOf, highestImageSeq, mediaTypeFor, pastedAttachmentsNote, 
 import type { ContentBlock } from '../core/agent-runner.ts';
 import type { ToolActivityFeed, ToolActivityTracker } from '../activity/tool-activity.ts';
 import * as queuedRevival from './run/queued-revival.ts';
-import { RUN_IN_USE_ELSEWHERE, type CommitSource, type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
+import type { RunUpdateSource } from '../runs/lifecycle.ts';
+import { RUN_IN_USE_ELSEWHERE, type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
 import type { RunWrites } from '../runs/ports.ts';
 import { WorkspaceSemaphore, type AccountHolds } from '../workspace/semaphore.ts';
 import { type WorkflowDef } from './types.ts';
@@ -130,8 +131,12 @@ export class RunManager {
 
   #disposed = false;
 
-  readonly #onDelegationRun = (run: RunRecord, source?: CommitSource): void => {
-    this.#modules.familyReconciler.onDelegationRun(run, source);
+  /** A commit publishes a frozen copy of what it wrote: the reconciler reads the held record, which
+   *  its own nested writes change. A conflict publishes the record the reconciler reads (the other
+   *  writer's, held or not) and is a durable write, which carries no source. */
+  readonly #onDelegationRun = (run: RunRecord, source?: RunUpdateSource): void => {
+    if (source === 'conflict') this.#modules.familyReconciler.onDelegationRun(run);
+    else this.#modules.familyReconciler.onDelegationRun(this.#store.getRun(run.id) ?? run, source);
   };
 
   /** A run that ended releases its memory (hearsay-tools/squawk#2064); so does a deleted one. */
@@ -139,6 +144,8 @@ export class RunManager {
     this.#modules.memory.releaseIfEnded(run.id, () => this.#store.getRun(run.id), () => this.isActive(run.id));
   };
   readonly #releaseDeletedRunMemory = (runId: string): void => { this.#modules.memory.release(runId); };
+  /** This manager's lifecycle subscriptions; dispose removes them. */
+  readonly #unsubscribeLifecycle: Array<() => void> = [];
 
   /** `.ai/cezar` — where the per-task handoff files live. */
   readonly #dataDir: string;
@@ -250,10 +257,16 @@ export class RunManager {
     // oxlint-disable-next-line cez/liveness-timer-outside-owner -- The manager interval watches all runs.
     this.#repoRediscovery = setInterval(() => this.#modules.line.rediscoverRepo(), REPO_REDISCOVERY_MS);
     this.#repoRediscovery.unref?.();
-    this.#store.on('run', this.#onDelegationRun);
-    this.#store.on('deleted', this.#modules.wakeAdmission.onRunDeleted);
-    this.#store.on('run', this.#releaseEndedRunMemory);
-    this.#store.on('deleted', this.#releaseDeletedRunMemory);
+    // Two subscribers, so a reconciler or wake admission that throws still lets memory release run.
+    this.#unsubscribeLifecycle.push(this.#store.lifecycle.subscribe({
+      'run.created': ({ run }) => this.#onDelegationRun(run),
+      'run.updated': ({ run, source }) => this.#onDelegationRun(run, source),
+      'run.deleted': ({ runId }) => this.#modules.wakeAdmission.onRunDeleted(runId),
+    }), this.#store.lifecycle.subscribe({
+      'run.created': ({ run }) => this.#releaseEndedRunMemory(run),
+      'run.updated': ({ run }) => this.#releaseEndedRunMemory(run),
+      'run.deleted': ({ runId }) => this.#releaseDeletedRunMemory(runId),
+    }));
   }
 
 
@@ -282,10 +295,7 @@ export class RunManager {
     this.#workerWorkspaces = undefined;
     this.#modules.orphans.dispose();
     this.#modules.workerExecutions.dispose();
-    this.#store.off('run', this.#onDelegationRun);
-    this.#store.off('deleted', this.#modules.wakeAdmission.onRunDeleted);
-    this.#store.off('run', this.#releaseEndedRunMemory);
-    this.#store.off('deleted', this.#releaseDeletedRunMemory);
+    for (const unsubscribe of this.#unsubscribeLifecycle.splice(0)) unsubscribe();
     this.#toolActivity?.detach();
     this.#modules.familyReconciler.dispose();
     this.#modules.inboxClaims.dispose();
