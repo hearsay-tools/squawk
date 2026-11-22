@@ -4,9 +4,8 @@ import { resolve } from 'node:path';
 import { operatorHomeEntry, prepareOperatorHome } from './home/entry.ts';
 import { bindManagedCliHome } from './managed-install/runtime-home.ts';
 import type { Home } from './home/home.ts';
-import { runSubcommand } from './subcommands.ts';
+import { runSubcommand, prepareCommandRuntime } from './subcommands.ts';
 import { getRepoInfo } from './server/git.ts';
-import { prepareCommandRuntime } from './cli-runtime.ts';
 import { projectPaths } from './project-paths.ts';
 import { assertProjectAdmitted, projectAdmissionRefusal } from './server/cockpit-ownership.ts';
 import type { serverCommand } from './server-command.ts';
@@ -172,7 +171,9 @@ async function dispatch(deps: CliDeps): Promise<void> {
   if (printCliMetadata(deps, values, help)) return;
 
   const command = positionals[0] ?? 'serve';
-  await prepareCommandRuntime(command);
+  if (['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall'].includes(command)) {
+    await prepareCommandRuntime(command);
+  }
   const task = positionals.slice(1).join(' ').trim();
   homeEntry = commandHomeEntry(command, task);
   const cwd = resolve(values.repo ?? deps.process.cwd());

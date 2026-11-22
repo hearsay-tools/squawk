@@ -4,7 +4,6 @@
  * its command runs.
  */
 
-import { prepareCommandRuntime } from './cli-runtime.ts';
 import type { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts';
 import { readInstallMarker } from './home/install-marker.ts';
@@ -51,8 +50,30 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
 
 /** Run `argv[0]` when it names a subcommand and answer its exit code; anything else is not ours. */
 export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home = () => resolveHome({ purpose: 'cli', env })): Promise<number | undefined> {
-  if (SUBCOMMAND_NAMES.some(name => name === argv[0])) await prepareCommandRuntime(argv[0]!);
+  if (SUBCOMMAND_NAMES.some(name => name === argv[0])) await prepareCommandRuntime(argv[0]!, argv.slice(1));
   // Only operator runners call the lazy Home factory. Task runners keep two arguments.
   const run = await loadSubcommand(argv[0], () => home());
   return run ? run(argv.slice(1), env) : undefined;
+}
+
+/** Install process services before loading commands that read runner or removal registries. */
+export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
+  const help = argv.some(arg => arg === '--help' || arg === '-h');
+  const worker = command === 'worker' && (argv.length === 0 || help || argv[0] === 'help' || argv[0] === 'spawn');
+  const backup = command === 'backup' && await backupNeedsRunners(argv);
+  if (!worker && !backup && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
+    'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
+  const { registerBuiltInRunners } = await import('./runners/built-in.ts');
+  registerBuiltInRunners();
+  const { registerBuiltInRunSlots } = await import('./built-in-run-slots.ts');
+  registerBuiltInRunSlots();
+}
+
+/** Match the command's parser, including options before the operation and literal option values. */
+async function backupNeedsRunners(argv: readonly string[]): Promise<boolean> {
+  const { parseBackupArgs } = await import('./workspace/backups.ts');
+  try {
+    const { values, positionals } = parseBackupArgs(argv);
+    return !values.help && ['restore', 'import', 'ignore'].includes(positionals[0] ?? '');
+  } catch { return false; } // The command reports its own usage errors.
 }

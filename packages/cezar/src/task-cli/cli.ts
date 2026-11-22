@@ -82,7 +82,7 @@ export const OPERATIONS: Record<string, Operation> = {
       'request-id': { type: 'string', help: '<UUID>     Retry-safe id; reuse it when retrying this start.' },
       workflow: { type: 'string', help: '<name>       Workflow (default quick-task).' },
       skill: { type: 'string', help: '<name>          Run one discovered skill instead of a workflow.' },
-      runner: { type: 'string', help: `<id>           ${knownRunnerIds().join(' | ')}.` },
+      runner: { type: 'string', get help() { return `<id>           ${knownRunnerIds().join(' | ')}.`; } },
       backend: { type: 'string', help: '<id>          Alias of --runner.' },
       model: { type: 'string', help: '<model>         Model override.' },
       effort: { type: 'string', help: '<level>       Reasoning effort.' },

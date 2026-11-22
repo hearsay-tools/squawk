@@ -8,8 +8,12 @@ import { resolveHome } from './home/resolve.ts';
 import type { Home } from './home/home.ts';
 import { main, defaultCliDeps } from './cli-dispatch.ts';
 import type { TaskAccess } from './headless-run.ts';
-import { prepareCommandRuntime } from './cli-runtime.ts';
+import { prepareCommandRuntime } from './subcommands.ts';
 import { onTerminal } from './serve-listener.ts';
+import { installWindowsIdentityStore } from './delegation/windows-identity-store.ts';
+
+// Workspace receipts and markers use the host's identity store (ADR 0032).
+installWindowsIdentityStore();
 
 warnLegacyEnv(process.env);
 
