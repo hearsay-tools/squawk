@@ -9,14 +9,15 @@ import type { RunDatabase } from '../runs/run-database.ts';
 import { REPORTS_BACKFILL_KEY, type IndexedArtifact, type ReportRow, type ReportCursor } from '../runs/report-rows.ts';
 import { parseStoredSummary } from '../runs/run-summary-page.ts';
 import type { RunLifecycleEvents, RunLifecycleSource } from '../runs/lifecycle.ts';
-import type { RunAccess, StoreHandle } from '../runs/ports.ts';
+import type { RunAccess, RunLookup, StoreHandle } from '../runs/ports.ts';
+import type { RunRecord } from '../runs/store.ts';
 import { artifactRunsRoot, scanArtifactsForIndex, checkArtifactContentForIndex } from './store.ts';
 
 export { REPORTS_BACKFILL_KEY } from '../runs/report-rows.ts';
 const cursorSchema = z.tuple([z.iso.datetime(), z.uuid()]);
-/** What the index reads from a run store: its database, a run's files, the write-out before a read,
- *  and the lifecycle whose run changes drive the report watch. */
-export interface ReportsStore extends Pick<RunAccess, 'sourceDataDir'>, Pick<StoreHandle, 'flush'> {
+/** What the index reads from a run store: its database, a run's record and files, the write-out
+ *  before a read, and the lifecycle whose run changes drive the report watch. */
+export interface ReportsStore extends RunLookup, Pick<RunAccess, 'sourceDataDir'>, Pick<StoreHandle, 'flush'> {
   reportSource(): { db: RunDatabase | null; dataDir: string; openFailure: Error | undefined };
   readonly lifecycle: RunLifecycleSource;
 }
@@ -89,13 +90,18 @@ export class ReportsIndex {
       this.changes.seed(row.runId, summary ? reportMetadataKey(summary) : undefined);
     }
     const unsubscribe = store.lifecycle.subscribe({
-      'run.created': ({ run }) => this.changes.run(run, isLiveStatus(run.status), this.db.reports.forRun(run.id).length > 0),
-      'run.updated': ({ run, before }) =>
-        this.changes.run(run, isLiveStatus(run.status) || isLiveStatus(before.status), this.db.reports.forRun(run.id).length > 0),
+      'run.created': ({ run }) => this.watchRun(store.getRun(run.id) ?? run, false),
+      'run.updated': ({ run, before, source }) => this.watchRun(source === 'conflict' ? run : store.getRun(run.id) ?? run, isLiveStatus(before.status)),
       'run.status-changed': this.onStatusChanged,
       'run.deleted': ({ runId }) => this.changes.deleted(runId),
       'store.closed': () => { this.closed = true; this.changes.close(); unsubscribe(); },
     });
+  }
+
+  /** The record as it stands now goes to the watch, not the write's snapshot: an earlier listener's
+   *  nested write of the run reaches the index first. A conflict's payload is the other writer's record. */
+  private watchRun(run: RunRecord, wasLive: boolean): void {
+    this.changes.run(run, isLiveStatus(run.status) || wasLive, this.db.reports.forRun(run.id).length > 0);
   }
 
   /** A run that left the live set: its final scan, now or when the last shelf closes. */

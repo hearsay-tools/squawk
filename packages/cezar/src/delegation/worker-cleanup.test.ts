@@ -46,6 +46,16 @@ describe('WorkerCleanup on the run lifecycle', () => {
     cleanup.detach();
   });
 
+  it('reads the worker as it stands now: an older failed snapshot that arrives last releases nothing', async () => {
+    const run = failedWorker();
+    const current = { ...run, status: RUN_STATUS.running };
+    const { lifecycle, serialized, cleanup } = cleanupOf(current, () => 'complete');
+    lifecycle.publish('run.updated', { run, before: snapshotRun(run) });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(releases(serialized, run.id)).toBe(0);
+    cleanup.detach();
+  });
+
   it('checks a created run too, as the store emitter did', async () => {
     const run = failedWorker();
     const { lifecycle, serialized, cleanup } = cleanupOf(run, () => 'complete');

@@ -76,7 +76,12 @@ export class WorkerCleanup {
     this.destroyAttentionAttempts = options.attentionAttempts ?? DESTROY_ATTENTION_ATTEMPTS;
     this.terminationTimeoutMs = options.terminationTimeoutMs ?? 30_000;
     this.manualLockWaitMs = options.manualLockWaitMs ?? MANUAL_DESTROY_LOCK_WAIT_MS;
-    this.unsubscribe = project.store.lifecycle.subscribe({ 'run.created': ({ run }) => this.onRun(run), 'run.updated': ({ run }) => this.onRun(run) });
+    // The record as it stands now, not the write's snapshot: an earlier listener's nested write of
+    // the run reaches this one first. A conflict's payload is the other writer's record.
+    this.unsubscribe = project.store.lifecycle.subscribe({
+      'run.created': ({ run }) => this.onRun(project.store.getRun(run.id) ?? run),
+      'run.updated': ({ run, source }) => this.onRun(source === 'conflict' ? run : project.store.getRun(run.id) ?? run),
+    });
   }
 
   /** Every run change, a status change or not (a worker's execution completes in a write that

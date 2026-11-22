@@ -35,6 +35,7 @@ function fakeRuns(dataDir: string) {
   };
   return {
     lifecycle,
+    getRun: (id: string) => runs.get(id),
     reportSource: () => ({ db, dataDir, openFailure: undefined }),
     sourceDataDir: () => dataDir,
     flush: () => undefined,
@@ -201,4 +202,17 @@ it('unsubscribes from the lifecycle when the store closes', () => {
   expect(store.lifecycle.subscriptions).toBe(1);
   store.close();
   expect(store.lifecycle.subscriptions).toBe(0);
+});
+it('sends the run as it stands now when an older snapshot of it arrives last', async () => {
+  const run = task(); await publish(run.id); store.update(run.id, { status: RUN_STATUS.done });
+  await reportsIndex(store).list({});
+  const frames: ReportsFrame[] = []; reportsIndex(store).onChange(frame => frames.push(frame));
+  const older = snapshotRun(store.getRun(run.id)!);
+  store.update(run.id, { title: 'Newer' });
+  // An outer write's snapshot, delivered after the nested write that renamed the run.
+  store.lifecycle.publish('run.updated', { run: older as RunRecord, before: older });
+  expect(frames.map(frame => frame.type === 'metadata' && frame.runs[0]!.taskTitle)).toEqual(['Newer']);
+  // A conflict's payload is the other writer's record, and it counts.
+  store.lifecycle.publish('run.updated', { run: { ...older, title: 'Theirs' }, before: older, source: 'conflict' });
+  expect(frames.map(frame => frame.type === 'metadata' && frame.runs[0]!.taskTitle)).toEqual(['Newer', 'Theirs']);
 });

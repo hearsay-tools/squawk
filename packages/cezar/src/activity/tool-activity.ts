@@ -176,6 +176,9 @@ export class ToolActivityTracker implements ToolActivitySource {
       },
     };
     let attached = true;
+    // The record as it stands now, not the write's snapshot: an earlier listener's nested write of
+    // the run reaches this feed first, so the snapshot of the outer write can arrive last. A
+    // conflict's payload is the other writer's record.
     const onRun = (run: RunRecord) => {
       if (isLiveStatus(run.status)) {
         if (this.runs.get(run.id)?.stopped) this.runs.delete(run.id);
@@ -184,8 +187,8 @@ export class ToolActivityTracker implements ToolActivitySource {
       }
     };
     const unsubscribe = store.lifecycle.subscribe({
-      'run.created': ({ run }) => onRun(run),
-      'run.updated': ({ run }) => onRun(run),
+      'run.created': ({ run }) => onRun(store.getRun(run.id) ?? run),
+      'run.updated': ({ run, source }) => onRun(source === 'conflict' ? run : store.getRun(run.id) ?? run),
       'run.deleted': ({ runId }) => this.drop(runId),
     });
     const redact = (text: string) => store.redactText(text);

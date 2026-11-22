@@ -340,6 +340,19 @@ describe('ToolActivityTracker', () => {
     expect(tracked.read('stopped', clock.now)).toBeUndefined();
   });
 
+  it('reads the run as it stands now when an older snapshot of it arrives last, and a conflict’s record as given', () => {
+    const { tracked, read } = tracker();
+    const store = fakeStore();
+    const feed = tracked.attach(store);
+    feed.observe(RUN, started(tool('a')));
+    // The outer write's snapshot says review; a nested write already made the run live again.
+    const stale = makeRunRecord({ id: RUN, status: RUN_STATUS.review });
+    store.lifecycle.publish('run.updated', { run: stale, before: snapshotRun(stale) });
+    expect(read()?.tool?.title).toBe('Ran a');
+    store.lifecycle.publish('run.updated', { run: stale, before: snapshotRun(stale), source: 'conflict' });
+    expect(read()).toBeUndefined();
+  });
+
   it('drops the runs a feed fed when it detaches, stops listening, and ignores later events', () => {
     const { tracked } = tracker();
     const store = fakeStore();
