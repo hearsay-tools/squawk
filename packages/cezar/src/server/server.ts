@@ -70,7 +70,7 @@ import type { DelegationController } from '../delegation/provision.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { githubItemParamsSchema } from '@open-mercato/cezar-contract/github';
 import { workerDestroyRequestSchema, workerEmptyRequestSchema, runRelationshipsSchema } from '@open-mercato/cezar-contract/delegation';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { AutomationStore } from '../automations/store.ts';
 import { createAutomationService, onceCreateAnswer } from '../automations/service.ts';
@@ -174,7 +174,7 @@ import {
   runEventsQuerySchema, runHistoryQuerySchema,
   runIdParamSchema,
 } from '@open-mercato/cezar-contract/events';
-import { resolveAttachmentPath } from '../workflows/attachment-path.ts';
+import { resolveAttachmentPathAsync } from '../workflows/attachment-path.ts';
 import { artifactParamsSchema, fileLinkQuerySchema } from '@open-mercato/cezar-contract/artifacts';
 import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/store.ts';
 import { artifactPreview, loadFileLink, rasterMime } from '../artifacts/resolve.ts';
@@ -295,6 +295,7 @@ import {
   isSafeAssetFilename,
   resolveGetRequest,
 } from './static-ui.ts';
+import { compression, createStaticAssets, isFile } from './static-assets.ts';
 import { registerBrandFileRoutes } from './brand-file-routes.ts';
 export interface ServerDeps extends ActivityServerDeps {
   home: Home;
@@ -806,6 +807,11 @@ export function createApp(deps: ServerDeps) {
   };
 
   const app = new Hono();
+  app.use('*', compression);
+  // One cache per app: immutable bundle bytes and their negotiated encodings share a cap.
+  // Live shell and worker files bypass it so a rebuild appears on the next request.
+  // Compression runs outside route families and leaves live event streams untouched.
+  const staticResponse = createStaticAssets();
 
   // Reject oversized request bodies before they reach any handler (#429). GETs
   // and SSE carry no body, so this only ever gates the mutating routes.
@@ -913,7 +919,7 @@ export function createApp(deps: ServerDeps) {
   const webDir = resolveWebDir();
   const distDir = join(webDir, 'dist');
   const HTML_TYPE = 'text/html; charset=utf-8';
-  const staticFile = (name: string, type: string) => (c: Context): Response => {
+  const staticFile = (name: string, type: string) => async (c: Context): Promise<Response> => {
     // Read per request — the files are tiny and this keeps dev iteration live.
     //
     // Served out of the Vite build: the files are `public/` assets of the web package, which the
@@ -922,25 +928,24 @@ export function createApp(deps: ServerDeps) {
     // paths. Without a build there is nothing to serve, which is a 404 rather than a crash (the
     // shell route answers the same dev-only state with its build hint).
     const path = join(distDir, name);
-    if (!existsSync(path)) return c.json({ error: 'not found' }, 404);
-    return new Response(readFileSync(path), { headers: { 'content-type': type } });
+    return staticResponse(c.req.raw, path, { 'content-type': type });
   };
 
   // Stable SharedWorker identity across same-origin tabs; its imported chunks stay hashed.
-  app.get('/live-worker.js', (c) => {
-    const response = staticFile('live-worker.js', 'text/javascript; charset=utf-8')(c);
+  app.get('/live-worker.js', async (c) => {
+    const response = await staticFile('live-worker.js', 'text/javascript; charset=utf-8')(c);
     response.headers.set('Cache-Control', 'no-cache');
     return response;
   });
 
   let hintLogged = false;
-  const serveShell = (c: Context): Response | undefined => {
+  const serveShell = async (c: Context): Promise<Response | undefined> => {
     const distIndex = join(distDir, 'index.html');
-    // existsSync per request, like the reads below: `npm run build:web` in a
+    // Async stat per request, like the reads below: `npm run build:web` in a
     // running cockpit takes effect on the next reload, no restart.
     const target = resolveGetRequest({
       path: c.req.path,
-      distExists: existsSync(distIndex),
+      distExists: await isFile(distIndex),
     });
     if (target === 'passthrough') return undefined;
     if (target === 'build-hint') {
@@ -954,27 +959,22 @@ export function createApp(deps: ServerDeps) {
         headers: { 'content-type': HTML_TYPE },
       });
     }
-    return new Response(readFileSync(distIndex), {
-      headers: { 'content-type': HTML_TYPE },
-    });
+    return staticResponse(c.req.raw, distIndex, { 'content-type': HTML_TYPE });
   };
 
   // Hashed bundles/fonts of the built app. Vite fingerprints every name, so
   // the bytes behind a URL never change — cache them hard. Only plain
   // filenames are served: `basename('..')` is `'..'` (it resolves to the
-  // assets dir itself and readFileSync would throw EISDIR), so dot-segments
+  // assets dir itself and readFile would throw EISDIR), so dot-segments
   // and separator-bearing params get a 404, not a 500.
-  app.get('/assets/:file', (c) => {
+  app.get('/assets/:file', async (c) => {
     const file = c.req.param('file');
     if (!isSafeAssetFilename(file)) return c.json({ error: 'not found' }, 404);
     const path = join(distDir, 'assets', file);
-    if (!existsSync(path) || !statSync(path).isFile()) return c.json({ error: 'not found' }, 404);
-    return new Response(readFileSync(path), {
-      headers: {
-        'content-type': assetContentType(file),
-        'cache-control': ASSET_CACHE_CONTROL,
-      },
-    });
+    return staticResponse(c.req.raw, path, {
+      'content-type': assetContentType(file),
+      'cache-control': ASSET_CACHE_CONTROL,
+    }, true);
   });
 
   registerBrandFileRoutes(app, staticFile);
@@ -3282,19 +3282,19 @@ export function createApp(deps: ServerDeps) {
       });
     })
 
-    .get('/runs/:id/images/:file', paramZodValidator(attachmentFileParamSchema), (c) => {
+    .get('/runs/:id/images/:file', paramZodValidator(attachmentFileParamSchema), async (c) => {
       const { store } = c.get('project');
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
       const file = c.req.valid('param').file;
-      const path = resolveAttachmentPath(store.claims.sourceDataDir(run.id), run.id, file);
+      const path = await resolveAttachmentPathAsync(store.claims.sourceDataDir(run.id), run.id, file);
       if (!path) return c.json({ error: 'not found' }, 404);
       const ext = file.split('.').pop() ?? '';
       const image = IMAGE_TYPES[ext];
       // An image answers exactly as it always has — the cockpit renders it in an `<img>`.
       // Everything else is a user-supplied file (#950) and leaves under the download headers.
       const type = image ?? FILE_TYPES[ext] ?? 'application/octet-stream';
-      return new Response(readFileSync(path), {
+      return new Response(await readFile(path), {
         headers: {
           'content-type': type,
           'cache-control': 'private, max-age=31536000, immutable',
@@ -4592,7 +4592,7 @@ export function createApp(deps: ServerDeps) {
   // an unknown API path must never answer with HTML.
   // Without a web/dist build this serves the built-in build-hint page (dev-only
   // state — the published tarball ships web/dist), never a 404.
-  routed.get('*', (c) => serveShell(c) ?? c.notFound());
+  routed.get('*', async (c) => await serveShell(c) ?? c.notFound());
 
   return routed;
 }

@@ -2,7 +2,7 @@ import type { Context, Hono } from 'hono';
 import { productIdentity } from '../home/identity.ts';
 import { webAppManifest } from './web-app-manifest.ts';
 
-type StaticFile = (name: string, type: string) => (c: Context) => Response;
+type StaticFile = (name: string, type: string) => (c: Context) => Response | Promise<Response>;
 
 /** The fixed-name files of the web build: the brand marks and the home-screen install pair.
  *  `staticFile` reads each one from `web/dist`. static-ui.ts lists the same paths, so the shell

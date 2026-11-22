@@ -1,5 +1,6 @@
 import { runDataDir } from '../legacy-runs.ts';
 import { closeSync, openSync, realpathSync, statSync } from 'node:fs';
+import { open, realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 
 /** Generated names only. Reject encodings rather than decoding attacker-controlled paths twice. */
@@ -30,6 +31,23 @@ export function resolveAttachmentPath(dataDir: string, runId: string, name: stri
     // Documents carry no inline bytes, so stat alone cannot prove the agent can read them.
     const fd = openSync(path, 'r');
     closeSync(fd);
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+/** HTTP twin of the guarded resolver; keep all filesystem work off the event loop. */
+export async function resolveAttachmentPathAsync(dataDir: string, runId: string, name: string): Promise<string | null> {
+  if (!isAttachmentFileName(runId) || !isAttachmentFileName(name)) return null;
+  try {
+    const expected = join(await realpath(runDataDir(dataDir, runId)), 'runs', `${runId}-images`);
+    const dir = await realpath(expected);
+    if (dir !== expected || !(await stat(dir)).isDirectory()) return null;
+    const path = await realpath(join(dir, name));
+    if (!path.startsWith(`${dir}${sep}`) || !(await stat(path)).isFile()) return null;
+    const file = await open(path, 'r');
+    await file.close();
     return path;
   } catch {
     return null;
