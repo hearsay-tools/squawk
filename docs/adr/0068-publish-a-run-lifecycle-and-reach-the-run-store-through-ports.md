@@ -25,7 +25,8 @@ and a caller reaches the store through named ports. Paths are under `packages/ce
   shallow frozen copy of what the write wrote. On a debounced write, a republish or a conflict,
   `run` is the held record, which a later write changes in place. `run.status-changed` reads `to`
   before any listener runs. A listener that needs the current record re-reads it with
-  `store.getRun(run.id) ?? run`; a listener that compares `before` with `run` keeps the payload.
+  `store.getRun(run.id) ?? run`. A listener that compares `before` with `run` compares them
+  synchronously, before it yields; after an `await` it copies the fields it needs first or re-reads.
 - A store write replaces a nested value (the steps array, a step object) and never changes it in
   place, so `before` stays true.
 - There is no replay: a subscriber gets no current runs. A load or an adoption that applies an exit
@@ -40,9 +41,11 @@ what it needs as a parameter; nothing is bound in hiding. The kinds are `history
 `archive-tmp` and `scratch`. `registerBuiltInRunSlots()` (`built-in-run-slots.ts`, a `shell`
 file) fills and seals the registry. Each process entry calls it beside `registerBuiltInRunners()`.
 
-- Fail closed: deletion, reclaim, family archive, worker family end, worker admission, the terminal
-  scratch reap and the startup orphan sweep each throw before their first side effect in a process
-  that never sealed the registry.
+- Fail closed: deletion, reclaim, family archive, worker family end, the terminal scratch reap and
+  the startup orphan sweep each throw before their first side effect in a process that never
+  sealed the registry. Worker admission fails closed through the registry of worker executions
+  (below): its first read of `store.workerExecutions` throws before it stops a process or appends
+  an event.
 - Preview has no slot. `ReclaimOptions.previewHost` is typed `{ release(runId): Promise<void> }`;
   the release runs after the clean and HEAD-reachable checks and never blocks a removal.
 - A feature-owned store topic registers through `runs/worker-executions-registry.ts`: one factory

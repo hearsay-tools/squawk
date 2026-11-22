@@ -175,8 +175,9 @@ Rules:
 - **`run` is this write's value.** On a commit, `run` is a shallow frozen copy of what the write
   wrote. On a debounced write, a republish or a conflict, it is the held record, which a later
   write changes in place. `run.status-changed` reads `to` before any listener runs. A listener
-  that needs the current record re-reads it with `store.getRun(run.id) ?? run`; a listener that
-  compares `before` with `run` keeps the payload (planner decision, built in B3).
+  that needs the current record re-reads it with `store.getRun(run.id) ?? run`. A listener that
+  compares `before` with `run` compares them synchronously, before it yields; after an `await` it
+  copies the fields it needs first or re-reads (planner decision, built in B3).
 - **Timing does not change.** A committed write publishes after the commit. A debounced write
   publishes when `touch` runs, before its SQLite write, as `run` is emitted today. The feeds keep
   their timing.
@@ -222,9 +223,11 @@ with `deriveWebhookState(run)`, so the `seen` map goes. A restart publishes noth
 - `registerBuiltInRunSlots()` lives in a `shell` file, because it imports the features. Each
   process entry calls it once, in `src/index.ts` before the CLI dispatch, beside
   `registerBuiltInRunners()`.
-- **Fail closed.** A deletion, a reclaim, a family archive, a worker family end, a worker
-  admission, the terminal scratch reap or the startup orphan sweep in a process whose registry
-  was never sealed throws an error that names the missing registration, and removes nothing.
+- **Fail closed.** A deletion, a reclaim, a family archive, a worker family end, the terminal
+  scratch reap or the startup orphan sweep in a process whose registry was never sealed throws an
+  error that names the missing registration, and removes nothing. A worker admission fails closed
+  through the worker executions registry (D5 below): its first read of `store.workerExecutions`
+  throws before it stops a process or appends an event.
   Tests seal the registry through a shared testkit (`runs/removal-slots.testkit.ts`,
   `built-in-run-slots.testkit.ts`), with only the slots they need, and no global setup.
 
