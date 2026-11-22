@@ -4,6 +4,7 @@
  * its command runs.
  */
 
+import { prepareCommandRuntime } from './cli-runtime.ts';
 import type { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts';
 import { readInstallMarker } from './home/install-marker.ts';
@@ -50,6 +51,7 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
 
 /** Run `argv[0]` when it names a subcommand and answer its exit code; anything else is not ours. */
 export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home = () => resolveHome({ purpose: 'cli', env })): Promise<number | undefined> {
+  if (SUBCOMMAND_NAMES.some(name => name === argv[0])) await prepareCommandRuntime(argv[0]!);
   // Only operator runners call the lazy Home factory. Task runners keep two arguments.
   const run = await loadSubcommand(argv[0], () => home());
   return run ? run(argv.slice(1), env) : undefined;
