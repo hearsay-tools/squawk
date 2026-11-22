@@ -112,6 +112,16 @@ export function resolveIssueReference(run: RunRecord, handle?: RepoHandle | null
   return resolveReferencedRef(candidates, run.task, declared, handle);
 }
 
+/** Check only the fields restoration writes, without copying or walking the run record. */
+export function isOriginatingIssueCurrent(run: RunRecord): boolean {
+  const origin = originatingIssue(run);
+  if (origin === undefined || run.markerRefs?.issue === undefined) return true;
+  if (run.issueNumber !== origin || Object.hasOwn(run, 'referencedIssueNumberSeeded')) return false;
+  if (run.referencedIssueCandidates === undefined && refUrlNumber(run.referencedIssueUrl) === origin) return true;
+  const url = resolveIssueReference(run);
+  return Object.hasOwn(run, 'referencedIssueUrl') && run.referencedIssueUrl === url;
+}
+
 export function restoreOriginatingIssue(run: RunRecord): void {
   const origin = originatingIssue(run);
   if (origin === undefined || run.markerRefs?.issue === undefined) return;

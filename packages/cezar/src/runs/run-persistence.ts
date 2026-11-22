@@ -5,7 +5,6 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 import { storedRow, type ColdReadCache, type StoredRow } from './cold-reads.ts';
 import { publishRunWrite, snapshotRun, type RunLifecycle } from './lifecycle.ts';
@@ -22,7 +21,7 @@ import {
   type RunConflictEvidence, type RunDatabase, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRowInput, type RunWriteFence,
 } from './run-database.ts';
 import type { RunExitId } from './run-exits.ts';
-import { rescopeRun, restoreOriginatingIssue } from './run-references.ts';
+import { rescopeRun, isOriginatingIssueCurrent } from './run-references.ts';
 import type { RunRetentionTopic } from './run-retention.ts';
 import { encodeRunRow } from './run-row.ts';
 import type { RunStoreOpenError } from './store-open-error.ts';
@@ -258,10 +257,8 @@ export class RunPersistenceTopic implements RunPersistence {
     const encode = (run: RunRecord) => {
       const encoded = encodeRawRecord(run, (this.base.get(run.id) ?? this.coldBase.get(run.id))?.extras);
       extras.set(run.id, encoded.extras);
-      const projected = { ...run };
-      restoreOriginatingIssue(projected);
       upserts.push({ ...encodeRunRow(run, encoded.data),
-        issueAttributionCurrent: isDeepStrictEqual(projected, run) });
+        issueAttributionCurrent: isOriginatingIssueCurrent(run) });
     };
     for (const [id, next] of staged) {
       if (next) encode(next);

@@ -147,14 +147,16 @@ export async function subscribeRunFeed(
   };
   let maxSeq = demand.afterSeq;
   let pendingBytes = 0;
-  let pending: RunEvent[] = [];
+  let pending: ({ event: RunEvent; bytes: number } | undefined)[] = [];
+  let head = 0;
   let wake: (() => void) | undefined;
   const reset = (reason: string, status: 409 | 413 = 409) => { if (!controller.signal.aborted) { stop(); handlers.reset(reason, status); } };
   const onEvent = ({ runId, event }: { runId: string; event: RunEvent }) => {
     if (runId !== demand.runId || event.seq <= maxSeq || controller.signal.aborted) return;
-    pendingBytes += Buffer.byteLength(JSON.stringify(event));
+    const bytes = Buffer.byteLength(JSON.stringify(event));
+    pendingBytes += bytes;
     if (pendingBytes > byteLimit) { reset('live buffer exceeded — reload history'); return; }
-    pending.push(event);
+    pending.push({ event, bytes });
     wake?.();
   };
   const unsubscribe = context.store.lifecycle.subscribe({
@@ -184,9 +186,13 @@ export async function subscribeRunFeed(
     } while (!controller.signal.aborted);
     while (!controller.signal.aborted) {
       // RunStore assigns one monotonic clock per run; ignore duplicate/reordered replays.
-      const event = pending.shift();
-      if (event) {
-        pendingBytes -= Buffer.byteLength(JSON.stringify(event));
+      const next = pending[head];
+      if (next) {
+        pending[head] = undefined; // release consumed payloads before awaiting a slow writer
+        head += 1;
+        pendingBytes -= next.bytes;
+        if (head === pending.length || head > 64) { pending = pending.slice(head); head = 0; }
+        const { event } = next;
         if (event.seq > maxSeq) { await write(event); maxSeq = event.seq; }
       } else {
         await new Promise<void>(resolve => { wake = resolve; });

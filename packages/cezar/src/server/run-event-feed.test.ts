@@ -121,6 +121,31 @@ describe('ordered replay/live handoff', () => {
     expect(listeners('run.event')).toBe(baseline);
     expect([listeners('run.deleted'), listeners('store.closed')]).toEqual([0, 0]);
   });
+  it('measures live events once and drains bursts across queue compaction', async () => {
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'start' });
+    const controller = new AbortController();
+    const seen: number[] = [];
+    let measured = 0;
+    let received!: () => void;
+    const drained = new Promise<void>(resolve => { received = resolve; });
+    const task = subscribeRunFeed({ store, dataDir }, demand(), {
+      async event(event) {
+        seen.push(event.seq);
+        if (event.seq === 1 || event.seq === 131) {
+          for (let seq = event.seq + 1; seq <= event.seq + 130; seq++) {
+            const next = { seq, ts: '', type: 'note', text: 'burst',
+              toJSON() { measured++; return { seq, ts: '', type: 'note', text: 'burst' }; } };
+            (store.lifecycle as RunLifecycle).publish('run.event', { runId, event: next });
+          }
+        }
+        if (event.seq === 261) received();
+      }, reset: () => { received(); },
+    }, controller.signal);
+    try { await drained; } finally { controller.abort(); await task; }
+    expect(seen).toEqual(Array.from({ length: 261 }, (_, i) => i + 1));
+    expect(measured).toBe(260);
+  });
+
   it('bounds a slow live consumer and stops on overflow', async () => {
     const controller = new AbortController();
     let released!: () => void;

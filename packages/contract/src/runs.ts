@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { agentInputSchema } from './agent-input.ts';
-import { delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
+import { projectDelegationSummary, delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
 import { runnerSchema } from './runner.ts';
 import { runStatusSchema, stepKindSchema, stepStatusSchema } from './run-status.ts';
 import { referenceStatusSchema } from './github.ts';
@@ -569,7 +569,7 @@ const SUMMARY_OPTIONAL_KEYS = [
 /**
  * The one projection from a run record to its list row (#817). Optional keys are copied only when
  * present, so the wire never carries an `undefined` the schema calls absent; `delegation` goes
- * through `runDelegationSummarySchema`, which strips paths, permissions and receipts; `usage` is
+ * through the slim structural projection, which strips paths, permissions and receipts; `usage` is
  * the live sample a caller attached, never persisted.
  */
 export function toRunSummary(run: RunRecord & { usage?: ProcessUsage | undefined }): RunSummary {
@@ -592,8 +592,7 @@ export function toRunSummary(run: RunRecord & { usage?: ProcessUsage | undefined
     // Never throw: one malformed record must cost its own row's delegation, not the whole list or
     // the cockpit's stream loop. A delegation that does not parse grants nothing, which is exactly
     // what the persisted quarantine role says.
-    const delegation = runDelegationSummarySchema.safeParse(run.delegation);
-    summary.delegation = delegation.success ? delegation.data : { role: 'invalid' };
+    summary.delegation = projectDelegationSummary(run.delegation);
   }
   // The parsed slim delegation, not the raw one: a malformed record must not throw here either.
   const waitingOn = computeWaitingOn({ ...run, delegation: withRootLedger(summary.delegation as RunSummary['delegation'], run.delegation) });

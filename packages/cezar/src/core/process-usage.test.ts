@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { aggregateTreeUsage, parsePsOutput, registerRunProcess,
+import { buildProcessIndex, aggregateIndexedTreeUsage, aggregateTreeUsage, parsePsOutput, registerRunProcess,
   replaceRunProcess, recordUsageSampleForTest, unregisterRunProcess } from './process-usage.ts';
 
 describe('run process replacement', () => {
@@ -48,6 +48,15 @@ describe('aggregateTreeUsage', () => {
   const procs = parsePsOutput(
     ['500 1 100000 10', '501 500 50000 5', '502 501 25000 2', '900 1 999999 99'].join('\n'),
   );
+
+  it('reuses one snapshot index across roots, including missing roots and cycles', () => {
+    const rows = [...procs, { pid: 1, ppid: 502, rssKb: 10, cpuPct: 0 }];
+    const index = buildProcessIndex(rows);
+    for (const root of [500, 501, 900, 12345]) {
+      expect(aggregateIndexedTreeUsage(index, root)).toEqual(aggregateTreeUsage(rows, root));
+    }
+    expect(aggregateIndexedTreeUsage(index, 500)?.procCount).toBe(5);
+  });
 
   it('sums RSS over the whole descendant tree, in bytes', () => {
     const usage = aggregateTreeUsage(procs, 500);
