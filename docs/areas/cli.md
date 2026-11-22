@@ -230,7 +230,7 @@ CLI starts do not change
 the cockpit composer's recent picks or skill-usage ranking.
 Without either flag, `start` still runs `quick-task`.
 
-`--runner <claude|codex|opencode|pi|omp>` picks the runner, as in a workflow step and
+`--runner <claude|codex|opencode|pi|omp|antigravity>` picks the runner, as in a workflow step and
 `hsq discover --runner`; `--model` and `--effort` pin the rest. `--backend` is a permanent
 alias of `--runner` with no warning. Giving both with different values exits 64.
 

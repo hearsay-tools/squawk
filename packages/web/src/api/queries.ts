@@ -194,7 +194,7 @@ export const queryKeys = {
   get uiState() {
     return [queryScope(), 'ui-state'] as const
   },
-  /** The Settings → Agents knobs (`GET /api/config`, R6 1.5). */
+  /** The Settings → Agent defaults knobs (`GET /api/config`, R6 1.5). */
   get config() {
     return [queryScope(), 'config'] as const
   },
@@ -1179,7 +1179,7 @@ export function useRepoCommit(sha: string | undefined) {
   })
 }
 
-/** The Settings → Agents knobs (R6 1.5): base branch, default runner, system prompt, per-runner
+/** The Settings → Agent defaults knobs (R6 1.5): base branch, default runner, system prompt, per-runner
  *  model presets. Task-start surfaces read this project-scoped query for both runner and model
  *  defaults; `/api/health` is workspace-level and intentionally describes only the boot repo. */
 export function useConfig() {

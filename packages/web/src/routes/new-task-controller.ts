@@ -25,7 +25,7 @@ import {
   resolveAutoApply,
 } from '@/lib/prompt-templates'
 import { bumpSkillUsage, orderSkillsByUsage } from '@/lib/skills'
-import { usableRunners } from '@/lib/provider-status'
+import { uninstalledRunners, usableRunners } from '@/lib/provider-status'
 import { taskWebhooks } from '@/lib/webhook'
 import { useNavigate } from '@/lib/project-router'
 
@@ -197,6 +197,7 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   const providers = useProviderStatus()
   const registered = useRunners()
   const runners = usableRunners(providers.data, registered.data)
+  const uninstalled = uninstalledRunners(providers.data, registered.data)
   const defaultRunner = config.data?.defaultRunner
   const preferredRunner = defaultRunner ?? 'claude'
   const runner = runners.length > 0 ? resolveRunner(draft.runner, runners, preferredRunner) : null
@@ -226,6 +227,7 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
     providers: providerState,
     registered,
     runners,
+    uninstalled,
     defaultRunner,
     runner,
     displayRunner,

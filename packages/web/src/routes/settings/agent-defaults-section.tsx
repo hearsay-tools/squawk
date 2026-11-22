@@ -35,7 +35,7 @@ import { ProviderSettings } from './provider-settings'
 import { SettingsAgentPicker } from './settings-agent-picker'
 
 /**
- * Settings → Agents (R6 Step 1.5, spec §"Settings"): today's scattered `PUT /api/config` knobs
+ * Settings → Agent defaults (R6 Step 1.5, spec §"Settings"): today's scattered `PUT /api/config` knobs
  * in one place — default runner, per-runner model presets, THE system prompt (this is its
  * single edit surface: the /new composer intentionally has none, user decision in R4), and the
  * base branch (also settable from the Git view's branch picker; both write the same key).
@@ -52,7 +52,7 @@ import { SettingsAgentPicker } from './settings-agent-picker'
  *  over-limit draft is a disabled Save with a reason, not a 400 round-trip. */
 const SYSTEM_PROMPT_MAX = 20_000
 
-export function AgentsSection() {
+export function AgentDefaultsSection() {
   const config = useConfig()
   // One row per runner here, so every runner's own host catalog is needed at once (#794) —
   // unlike the composer, which only ever renders the runner the user picked.
@@ -182,7 +182,7 @@ function AgentsForm({
 
   return (
     <div
-      data-slot="agents-section"
+      data-slot="agent-defaults-section"
       className="mx-auto flex w-full max-w-2xl flex-col gap-7 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
     >
       <DefaultAgentField

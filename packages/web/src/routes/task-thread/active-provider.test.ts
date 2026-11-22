@@ -55,8 +55,8 @@ describe('active task provider availability', () => {
   })
 
   it.each([
-    ['disabled', { provider: 'claude', status: 'connected', enabled: false }, 'Claude Code is disabled. Enable it in Settings → Agents → Providers.'],
-    ['disconnected', { provider: 'claude', status: 'disconnected', enabled: true }, 'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.'],
+    ['disabled', { provider: 'claude', status: 'connected', enabled: false }, 'Claude Code is disabled. Enable it in Settings → Agent defaults → Providers.'],
+    ['disconnected', { provider: 'claude', status: 'disconnected', enabled: true }, 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.'],
   ] as const)('reports the fixed server-safe reason for a %s active provider', (_case, row, reason) => {
     const status = providers({ providers: [row, ...providers().providers.slice(1)] })
 
@@ -94,7 +94,7 @@ describe('active task provider availability', () => {
     expect(existingProviderAvailability(closed, status, RUNNERS_RESPONSE)).toEqual({
       provider: 'claude',
       usable: false,
-      reason: 'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.',
+      reason: 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     })
   })
 })

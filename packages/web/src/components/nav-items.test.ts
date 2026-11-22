@@ -31,7 +31,7 @@ describe('activeNavPath', () => {
     // The nested Settings area: deeper routes fall to the Settings item.
     ['/settings', '/settings'],
     ['/settings/appearance', '/settings'],
-    ['/settings/agents', '/settings'],
+    ['/settings/agent-defaults', '/settings'],
 
     // Full-screen surfaces with no nav home — nothing may light up.
     ['/new', null],
@@ -165,7 +165,7 @@ describe('isPushedRoute', () => {
     ['/p/cezar', false],
     ['/git', false],
     ['/p/cezar/git/commits', false],
-    ['/settings/agents', false],
+    ['/settings/agent-defaults', false],
     ['/new', false],
   ]
   for (const [pathname, pushed] of cases) {

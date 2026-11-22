@@ -90,7 +90,7 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 ### Managed CLI installation
 
 A `cli.installSource.managed` declares a host-target manifest and an HTTPS download
-prefix. Settings → Agent accounts installs, updates and removes it through
+prefix. Settings → Agents installs, updates and removes it through
 `/api/v1/runner-install/:runner`, gated by `settingsAdmin`. Reads return progress
 without awaiting the network; manifests refresh at most hourly while the pane is
 open, or on demand. Boot and task start never fetch a manifest. The managed CLI
@@ -360,7 +360,7 @@ Squawk is not married to one vendor. Every agent step runs through a single
 | **OpenCode** _(experimental)_ | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; OpenCode's own permission config governs. Squawk answers OpenCode's built-in asks (outside-worktree reads, `.env` reads, the repeated-call guard) once, unless your config has a rule for that permission. Any other ask shows a permission card in the cockpit, and the run waits for your answer. |
 | **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi tool names. The default list, which adds the harness extras `Subagent`, `SubagentSupervisor` and `SubagentWait`, sends no allowlist: `--no-builtin-tools` plus a bundled extension that activates those built-ins, so MCP servers (`direct`, `codemode` and `deferred` exposure) and other pi extensions' tools stay callable. The six base tools alone, the list a worker inherits from a Claude parent, take the same path. A narrowed `allowedTools`, or one that names any tool outside that default set (an `mcp__` tool, `WebFetch` or a custom tool), uses pi's `--tools` allowlist, so a step that grants named tools reaches only those; a list that maps to nothing becomes `--no-tools` (or only the Squawk tools). A configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
 | **OMP** _(experimental)_ | [`omp`](https://github.com/can1357/oh-my-pi) | Persistent `--mode rpc` over JSONL (Oh My Pi, a pi fork); models use the `provider/model` convention and are discovered from `omp models --json`. | Maps `allowedTools` onto OMP's `--tools` allowlist (`[]` becomes `--no-tools`); default sessions also pass `todo`, `lsp`, `ast_edit`, `task` and `wait`. A configured `bashAllowlist` disables `bash` because OMP cannot express command-prefix rules. `--tools` filters built-in tools only, so MCP and extension tools stay callable under a narrowed list. |
-| **Antigravity** | The Google Antigravity CLI, installed from Settings > Accounts > Install CLI (or `agy` on PATH, or `HSQ_ANTIGRAVITY_BIN`) | `antigravity acp --gemini-dir <account> --app-data-dir antigravity-cli` over ACP stdio. Uses the shared ACP layer. No interactive terminal handoff. Browser sign-in uses `settingsAdmin`, including host-granted hosted cockpits. | Native permission requests follow the task grant and Bash prefixes. Granted requests proceed; ungranted requests fail, or reach the approval card with `HSQ_APPROVAL_GATE=1`. A native `ask_question` reaches the question card. See [Antigravity tool access](#antigravity-tool-access). |
+| **Antigravity** | The Google Antigravity CLI, installed from Settings → Agents > Install CLI (or `agy` on PATH, or `HSQ_ANTIGRAVITY_BIN`) | `antigravity acp --gemini-dir <account> --app-data-dir antigravity-cli` over ACP stdio. Uses the shared ACP layer. No interactive terminal handoff. Browser sign-in uses `settingsAdmin`, including host-granted hosted cockpits. | Native permission requests follow the task grant and Bash prefixes. Granted requests proceed; ungranted requests fail, or reach the approval card with `HSQ_APPROVAL_GATE=1`. A native `ask_question` reaches the question card. See [Antigravity tool access](#antigravity-tool-access). |
 
 ### Minimal sessions
 
@@ -513,7 +513,7 @@ their own `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`. Only native instruction fi
 `GEMINI.md`) and skill folders (`config/skills`, `antigravity-cli/skills`, `skills`) link back to
 the user's default Gemini home; existing account files are preserved.
 
-Settings → Agent accounts offers personal Google sign-in through `antigravity acp --login`. The
+Settings → Agents offers personal Google sign-in through `antigravity acp --login`. The
 CLI prints a consent link whose redirect is `https://antigravity.google/oauth-callback`; that page
 shows a code. The user pastes the code, or the full address of that page, into the same dialog.
 Squawk accepts a bare code, or an address with this sign-in's single state and a single code, and

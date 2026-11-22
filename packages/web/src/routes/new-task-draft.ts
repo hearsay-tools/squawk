@@ -161,6 +161,7 @@ function isSource(raw: unknown): raw is TaskSource {
 // independently — swapping the pill back and forth never round-trips through a stale singleton.
 const cache = new Map<string, NewTaskDraft>()
 const revisions = new Map<string, number>()
+const stored = new Map<string, boolean>()
 
 /** A write (including a remount) invalidates cleanup from an older submission. */
 export function draftRevision(projectId: string | null = null): number {
@@ -188,9 +189,17 @@ export function writeDraft(next: NewTaskDraft, projectId: string | null = null):
   cache.set(key, { ...next })
   try {
     localStorage.setItem(key, JSON.stringify(next))
+    stored.set(key, true)
   } catch {
     // Storage disabled/full — the in-memory cache still survives navigation this session.
+    stored.set(key, false)
   }
+}
+
+/** True when the last write of this draft reached localStorage, so a reload restores it. The
+ *  reload-on-upgrade guard trusts the draft's text only then. */
+export function draftStored(projectId: string | null = null): boolean {
+  return stored.get(storageKey(projectId)) ?? false
 }
 
 /** After a successful submit: the text is spent AND the source resets to nothing.
@@ -210,6 +219,7 @@ export function clearStartedDraft(projectId: string | null = null, expectedRevis
 export function resetDraft(): void {
   cache.clear()
   revisions.clear()
+  stored.clear()
   try {
     for (const key of Object.keys(localStorage)) {
       if (key === STORAGE_KEY || key.startsWith(`${STORAGE_KEY}:`)) localStorage.removeItem(key)

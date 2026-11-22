@@ -3,9 +3,9 @@ import { BellIcon, BotIcon, FoldersIcon, GaugeIcon, KeyRoundIcon, PaletteIcon } 
 import { FileCogIcon, FileTextIcon, FolderGit2Icon } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
-import { AccountsSection } from './accounts-section'
+import { GlobalAgentsSection } from './accounts-section'
 import { AgentConfigSection } from './agent-config-section'
-import { AgentsSection } from './agents-section'
+import { AgentDefaultsSection } from './agent-defaults-section'
 import { AppearanceSection } from './appearance'
 import { NotificationsSection } from './notifications-section'
 import { ProjectsSection } from './projects-section'
@@ -30,8 +30,8 @@ import { WorktreesSection } from './worktrees-section'
 export type SettingsSectionId =
   | 'sidebar'
   | 'appearance'
-  | 'accounts'
   | 'agents'
+  | 'agent-defaults'
   | 'agent-config'
   | 'resources'
   | 'worktrees'
@@ -65,11 +65,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   // ---- project scope (`/p/<projectId>/settings/…`) — settings that describe THIS repo -------
   {
-    id: 'agents',
-    title: 'Agents',
+    id: 'agent-defaults',
+    title: 'Agent defaults',
     description: 'Default runner, models and system prompt.',
     icon: BotIcon,
-    component: AgentsSection,
+    component: AgentDefaultsSection,
     scope: 'project',
   },
   {
@@ -123,11 +123,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   { id: 'tasks', title: 'Tasks', description: 'Automatic task archiving after pull requests merge.', icon: FolderGit2Icon, component: TasksSection, scope: 'global' },
   {
-    id: 'accounts',
-    title: 'Agent accounts',
-    description: 'Second logins, and the agent and models a project uses when it has chosen none.',
+    id: 'agents',
+    title: 'Agents',
+    description: 'Install, version and sign-in for each agent, and the agent and models a project uses when it has chosen none.',
     icon: KeyRoundIcon,
-    component: AccountsSection,
+    component: GlobalAgentsSection,
     scope: 'global',
   },
   {

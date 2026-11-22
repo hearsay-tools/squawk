@@ -6,8 +6,8 @@ import { CreateProjectDialog } from '@/components/create-project-dialog'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
-import { Link } from '@/lib/project-router'
-import { TOOL_LINK_CLASS, TOOL_SETTINGS_PATH, toolHint, toolStateLabel, toolTone } from '@/lib/tool-status'
+import { Link as RouterLink } from 'react-router'
+import { TOOL_LINK_CLASS, TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
 import { githubRepoBase } from '@/lib/tasks-table'
 
 type HealthQuery = ReturnType<typeof useHealth>
@@ -50,7 +50,7 @@ function ToolsDiagnosticsSection({ health, copying, onCopy }: {
     <section className="space-y-4 rounded-xl border border-border bg-card p-6 max-md:p-4" aria-labelledby="tools-heading">
       <div className="flex items-center justify-between gap-3">
         <h2 id="tools-heading" className="text-lg font-normal leading-[1.5]">Tools diagnostics</h2>
-        <Link to={TOOL_SETTINGS_PATH} data-slot="tools-settings" className={TOOL_LINK_CLASS}>Tool settings ›</Link>
+        <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings" className={TOOL_LINK_CLASS}>Tool settings ›</RouterLink>
       </div>
       <p className="text-[13px] leading-[1.5] text-muted-foreground">Check the tools available to this local workspace.</p>
       {health.isError ? <p role="alert" className="text-sm text-destructive">Could not refresh tool diagnostics. Recheck to retry.</p> : null}
@@ -65,7 +65,7 @@ function ToolsDiagnosticsSection({ health, copying, onCopy }: {
             </dt>
             <dd className="flex min-w-0 flex-1 items-center gap-x-3 text-muted-foreground">
               <span className="min-w-0 break-words">{toolStateLabel(check)}{check.version ? ` · ${check.version}` : ''}</span>
-              {check.available ? null : <Link to={TOOL_SETTINGS_PATH} data-slot="tool-setup" className={`${TOOL_LINK_CLASS} ml-auto`}>Set up ›</Link>}
+              {check.available ? null : <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup" className={`${TOOL_LINK_CLASS} ml-auto`}>Set up ›</RouterLink>}
             </dd>
             {hint ? <dd data-slot="tool-hint" className="basis-full min-w-0 break-words pl-[15px] text-xs leading-snug text-muted-foreground">{hint}</dd> : null}
           </div>

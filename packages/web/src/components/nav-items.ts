@@ -88,7 +88,7 @@ function inArea(pathname: string, prefix: string): boolean {
  *
  * Longest matching prefix wins, which is what disambiguates nested areas: the `/` root only
  * matches the exact path (see `inArea`), so every deeper route falls to its own item —
- * `/settings/agents` lights Settings, `/git/commits` lights Git.
+ * `/settings/agent-defaults` lights Settings, `/git/commits` lights Git.
  */
 export function activeNavPath(pathname: string): string | null {
   let best: { to: string; length: number } | null = null

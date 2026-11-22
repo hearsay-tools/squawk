@@ -1,14 +1,13 @@
 import { SettingsIcon, WrenchIcon } from '@/components/design-icons'
 
 import type { ReactNode } from 'react'
-import { Link } from '@/lib/project-router'
 import { Link as RouterLink } from 'react-router'
 
 import type { BackendCheck, HealthResponse } from '@open-mercato/cezar-api-client'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { runnerIds } from '@/api/runners'
 import { StatusDot } from '@/components/status-dot'
-import { TOOL_SETTINGS_PATH, toolHint, toolTone } from '@/lib/tool-status'
+import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolTone } from '@/lib/tool-status'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +21,7 @@ import {
  * The sidebar footer's Tools dropdown (spec, "App shell & navigation" footer): one compact
  * trigger — aggregate status dot + "Tools" — opening a menu that lists every tool the server
  * probed (`/api/health` `checks[]`), each with its status dot and version, a setup link when
- * unavailable, and a cog row into Settings → Agents.
+ * unavailable, and a cog row into global Settings → Agents.
  *
  * The rows are exactly `checks[]`, never a hardcoded tool list: what the menu claims is
  * installed is what the server actually probed, or the menu says nothing at all (no health
@@ -141,14 +140,14 @@ export function ToolsMenu({
           <RouterLink to="/tools">Tools diagnostics</RouterLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link
+          <RouterLink
             to={TOOL_SETTINGS_PATH}
             data-slot="tools-settings"
             className="gap-2 text-[13px] text-muted-foreground"
           >
             <SettingsIcon className="size-3.5" aria-hidden="true" />
             Tool settings
-          </Link>
+          </RouterLink>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -179,15 +178,15 @@ function AvailableToolRow({ check }: { check: BackendCheck }) {
 
 /**
  * A missing tool: red dot + "not found", the server's `hint` verbatim as the secondary line
- * (degradation doctrine — the server writes those for people), and "Set up →" into Settings →
- * Agents. The whole row is the link, so the DropdownMenuItem closes the menu on navigation.
+ * (degradation doctrine — the server writes those for people), and "Set up →" into global
+ * Settings → Agents. The whole row is the link, so the DropdownMenuItem closes the menu on navigation.
  */
 function UnavailableToolRow({ check }: { check: BackendCheck }) {
   const hint = toolHint(check)
   return (
     <DropdownMenuItem asChild>
-      <Link
-        to={TOOL_SETTINGS_PATH}
+      <RouterLink
+        to={toolSetupPath(check.name)}
         data-slot="tool-row"
         data-tool={check.name}
         data-available="false"
@@ -214,7 +213,7 @@ function UnavailableToolRow({ check }: { check: BackendCheck }) {
             Set up →
           </span>
         </span>
-      </Link>
+      </RouterLink>
     </DropdownMenuItem>
   )
 }

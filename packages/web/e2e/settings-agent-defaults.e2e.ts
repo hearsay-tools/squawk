@@ -8,7 +8,7 @@ import { waitForConfig } from './poll'
 import { waitForSettingsControl } from './settings-control'
 
 /**
- * Settings → Agents (R6 Step 1.5) end-to-end against the shared dry-run environment: edit each
+ * Settings → Agent defaults (R6 Step 1.5) end-to-end against the shared dry-run environment: edit each
  * knob through the real form and read the write back from `GET /api/v1/config` — the server's
  * truth, not the query cache — then prove a cold load renders the persisted values.
  *
@@ -19,7 +19,7 @@ import { waitForSettingsControl } from './settings-control'
  */
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
-const sessionId = `e2e-settings-agents-${process.pid}`
+const sessionId = `e2e-settings-agent-defaults-${process.pid}`
 
 const DESKTOP = { width: 1440, height: 900 }
 
@@ -81,8 +81,8 @@ function setTextarea(selector: string, value: string) {
 }
 
 const gotoAgents = () => {
-  browser.goto(`${baseUrl}/settings/agents`)
-  browser.waitForFunction(`document.querySelector('[data-slot="agents-section"]') !== null`)
+  browser.goto(`${baseUrl}/settings/agent-defaults`)
+  browser.waitForFunction(`document.querySelector('[data-slot="agent-defaults-section"]') !== null`)
 }
 
 beforeEach(() => {
@@ -153,7 +153,7 @@ describe('settings → agents against the live dry-run server', () => {
     expect(
       String(browser.evaluate(`document.querySelector('[data-slot="agents-system-prompt"]').value`)),
     ).toBe('Always add tests. (e2e)')
-    browser.screenshot(`${artifactsDir}/settings-agents.png`)
+    browser.screenshot(`${artifactsDir}/settings-agent-defaults.png`)
 
     // Neutralize for the suites that follow (afterAll restores the file itself too).
     browser.click('.settings-agent-picker summary')

@@ -181,4 +181,4 @@ export function missingAntigravity(dir: string): AntigravityLaunch {
   return unleased(join(dir, NOT_INSTALLED));
 }
 
-export const ANTIGRAVITY_MISSING = 'The Antigravity CLI is not installed. Install it from Settings > Accounts > Install CLI, put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.';
+export const ANTIGRAVITY_MISSING = 'The Antigravity CLI is not installed. Install it from Settings > Agents > Install CLI, put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.';

@@ -23,7 +23,7 @@ registerRunner(opencodeRunner);
 // GET /config reads every runner's native default model.
 
 /**
- * `GET/PUT /api/v1/config` (R6 Step 1.5 — Settings → Agents). The contract under
+ * `GET/PUT /api/v1/config` (R6 Step 1.5 — Settings → Agent defaults). The contract under
  * test: GET answers every Settings-editable knob in one shape; PUT merges into
  * the RAW config.json (user keys survive, defaults never materialize); the R6
  * keys (`systemPrompt`, `defaultModels`) are additive — `null`/`''` clears,

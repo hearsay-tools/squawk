@@ -5,7 +5,7 @@ import { useConfig, useProviderStatus, useRunnerModels } from '@/api/queries'
 import { useRunners } from '@/api/runners'
 import type { CreateRunInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill, type RunnerAccountChoice } from '@/components/picker-pill'
-import { usableRunners } from '@/lib/provider-status'
+import { uninstalledRunners, usableRunners } from '@/lib/provider-status'
 import {
   effortOptionsForModel,
   modelsForRunner,
@@ -60,6 +60,8 @@ export interface ResolvedEngine {
   effortOptions: ReturnType<typeof effortOptionsForModel>
   /** The backends this host offers — the runner pill renders only when there is a choice. */
   runners: readonly Runner[]
+  /** Registered runners whose CLI is missing; the pill lists them as links to their Settings card. */
+  uninstalled: readonly Runner[]
   /** What the active project's server context would pick from its authoritative config. */
   defaultRunner?: Runner | undefined
   /** True only after provider status confirms at least one connected backend. */
@@ -82,6 +84,7 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const config = useConfig()
   const registered = useRunners()
   const runners = usableRunners(providers.data, registered.data)
+  const uninstalled = uninstalledRunners(providers.data, registered.data)
   // `/api/health` is deliberately boot-project-only. Runner policy is per project, so every
   // scoped start surface must read the active project's `/api/config` instead (#699).
   const defaultRunner = config.data?.defaultRunner
@@ -112,6 +115,7 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
     effort: modelsLocked ? '' : resolveEffort(pick.effort, effortOptions),
     effortOptions,
     runners,
+    uninstalled,
     defaultRunner,
     canRun: providers.isSuccess && runners.length > 0,
     modelsLocked,
@@ -163,6 +167,13 @@ export function engineRunBody(
     ...engineBody(resolved),
     ...(resolved.account ? { agentProfile: resolved.account } : {}),
   }
+}
+
+/** Shown when there is a choice to make: more than one runner, or — where accounts are offered —
+ *  more than one login for one of them — or a missing CLI to point at its Settings card. */
+function runnerPillShown(resolved: ResolvedEngine, accountChoices: readonly RunnerAccountChoice[]): boolean {
+  const { runners, uninstalled } = resolved
+  return runners.length > 1 || uninstalled.length > 0 || runners.some((id) => hasAccountChoice(accountChoices, id))
 }
 
 export function EnginePills({
@@ -226,10 +237,7 @@ export function EnginePills({
   const models = modelsForRunner(runner, registered.data, catalog.data, [pick.model, config.data?.defaultModels?.[runner]])
   const unavailable = disabled || !canRun
   const accountChoices = accounts ? resolved.accounts : []
-  // Shown when there is a choice to make: more than one runner, or — where accounts are offered —
-  // more than one login for one of them. A host with neither sees no pill, exactly as before.
-  const showRunnerPill =
-    runners.length > 1 || runners.some((id) => hasAccountChoice(accountChoices, id))
+  const showRunnerPill = runnerPillShown(resolved, accountChoices)
 
   const runnerPill = showRunnerPill ? (
     <RunnerPill
@@ -237,6 +245,7 @@ export function EnginePills({
       icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
       fieldLabel
       runners={runners}
+      uninstalled={resolved.uninstalled}
       value={runner}
       accounts={accountChoices}
       account={accounts ? resolved.account : null}

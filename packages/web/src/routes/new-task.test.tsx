@@ -717,7 +717,7 @@ describe('the plan flow', () => {
     expect(start.disabled).toBe(true)
     expect(screen.getByText('Connect an agent provider before starting a task.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/settings/agents#providers',
+      '/settings/agent-defaults#providers',
     )
     start.removeAttribute('disabled')
     fireEvent.click(start)

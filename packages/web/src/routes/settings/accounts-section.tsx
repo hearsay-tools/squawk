@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router'
 
 import { ApiError, putWorkspaceConfig } from '@/api/client'
 
@@ -23,8 +24,9 @@ import {
   type AgentProfile,
   type AgentProfilesResponse,
 } from '@open-mercato/cezar-api-client/contract/agent-profiles'
-import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
+import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
+import { agentCardId } from '@/lib/agents-settings-path'
 import type {
   BackendCheck,
   ProviderId,
@@ -45,7 +47,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StatusDot, type StatusDotTone } from '@/components/status-dot'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { agentPickerRows } from '@/components/default-agent-picker'
 import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
@@ -56,14 +57,19 @@ import { ManagedCli } from './managed-cli'
 import { SettingsAgentPicker } from './settings-agent-picker'
 
 /**
- * Global settings → Agent accounts (spec `.ai/specs/2026-07-29-agent-profiles.md`).
+ * Global settings → Agents (spec `.ai/specs/2026-07-29-agent-profiles.md`,
+ * hearsay-tools/squawk#4094).
  *
- * One tab per agent, because the questions a reader has are per agent — is it installed, which
- * version, am I signed in, which folder, and which logins do I have. Stacking every agent on one
- * scroll made the answer to "what's up with Codex" something you had to hunt for.
+ * One card per registered runner, because the questions a reader has are per agent — is it
+ * installed, which version, am I signed in, which folder, and which logins do I have. Each card
+ * has an id (`agentCardId`), so the runner picker and the Tools menu link straight to it.
  *
- * Global, for the same reason Projects and Resources are: a config dir describes the person and
- * the machine, never a repo.
+ * Global, for the same reason Projects and Resources are: the binaries and the config dirs
+ * describe the person and the machine, never a repo.
+ *
+ * Permissions follow the server: account rows, Add, Rename and Remove need an editable listing
+ * (local only, ADR 0055); managed install and browser sign-in need `settingsAdmin`. A hosted
+ * cockpit shows the same cards without what those rules withhold.
  *
  * Rename and Remove live in the account card's action row. Remove requires confirmation. The
  * page shows no account identity: who a login is signed in as never crosses the boundary
@@ -88,118 +94,90 @@ const STATUS_PRESENTATION = {
   unknown: { label: 'Could not verify', tone: 'danger' },
 } as const satisfies Record<string, { label: string; tone: StatusDotTone }>
 
-export function AccountsSection() {
+export function GlobalAgentsSection() {
   const profiles = useAgentProfiles()
   const runners = useRunners()
 
   if (profiles.isPending || runners.isPending) {
     return (
       <p data-slot="accounts-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
-        Loading agent accounts…
+        Loading agents…
       </p>
     )
   }
-  if (profiles.isError) {
+  const error = profiles.error ?? runners.error
+  if (error) {
     return (
       <CenteredState
         icon={<IdCardIcon />}
         tone="danger"
-        title="Agent accounts did not load"
-        subtitle={profiles.error.message}
+        title="Agents did not load"
+        subtitle={error.message}
         heading="h2"
       />
     )
   }
-  if (runners.isError) {
-    return (
-      <CenteredState
-        icon={<IdCardIcon />}
-        tone="danger"
-        title="Agent accounts did not load"
-        subtitle={runners.error.message}
-        heading="h2"
-      />
-    )
-  }
-  return <AccountsPane data={profiles.data} runners={runners.data} />
+  return <AgentsPane data={profiles.data!} runners={runners.data!} />
 }
 
-function AccountsPane({ data, runners }: { data: AgentProfilesResponse; runners: RunnersResponse }) {
+/** Scroll to the card a link named (`#agent-<id>`) once the cards exist. The router does not
+ *  scroll to a hash on client navigation, so a link from the runner picker would land at the
+ *  top of the page without this. */
+function useScrollToCard() {
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash) return
+    const card = document.getElementById(decodeURIComponent(hash.slice(1)))
+    if (!card) return
+    card.scrollIntoView?.({ block: 'start' })
+    card.focus({ preventScroll: true })
+  }, [hash])
+}
+
+function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: RunnersResponse }) {
   const health = useHealth()
   const [adding, setAdding] = useState<ProviderId | null>(null)
   const [confirming, setConfirming] = useState<AgentProfile | null>(null)
   const remove = useRemoveAgentProfile()
-
-  // Every agent gets a tab, including one that cannot carry a second login: the tab is where its
-  // install state and config folder live, and hiding OpenCode would just move the question
-  // "is OpenCode set up?" somewhere else.
-  const providers: readonly ProviderId[] = runners.runners.map((entry) => entry.id)
-
-  if (!data.editable) {
-    return (
-      <div
-        data-slot="accounts-section"
-        className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 md:p-6"
-      >
-
-        <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
-          Agent accounts are managed from the machine that owns the checkout — this cockpit runs in
-          hosted mode.
-        </p>
-        {health.data?.capabilities?.settingsAdmin === true ? runners.runners.filter(entry => entry.browserLogin).map(entry => (
-          <div key={entry.id}>
-            <p>{entry.displayName} · discovered account</p>
-            <BrowserSignInButton provider={entry.id} label={entry.displayName} />
-          </div>
-        )) : null}
-        {runners.runners.filter(entry => entry.managedInstall).map(entry => (
-          <div key={entry.id}>
-            <h3>{entry.displayName}</h3>
-            <ManagedCli runner={entry.id} />
-          </div>
-        ))}
-      </div>
-    )
-  }
+  useScrollToCard()
 
   return (
     <div
       data-slot="accounts-section"
       className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
     >
-      <div>
-
-        <p className="text-[13px] text-muted-foreground">
-          Manage runner installations, logins and defaults for new projects.
+      <p className="text-[13px] text-muted-foreground">
+        Install, update and sign in to each agent, and set what a project runs when it has not chosen.
+      </p>
+      {data.editable ? null : (
+        <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
+          Agent accounts are managed from the machine that owns the checkout — this cockpit runs in
+          hosted mode.
         </p>
-      </div>
+      )}
 
-      <Tabs defaultValue="claude">
-        <TabsList variant="line" data-slot="accounts-tabs">
-          {providers.map((provider) => (
-            <TabsTrigger key={provider} value={provider} data-provider={provider}>
-              {runnerDisplayName(runners, provider)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {providers.map((provider) => (
-          <TabsContent key={provider} value={provider} className="pt-4">
-            <AgentTab
-              provider={provider}
-              runners={runners}
-              // `checks` is read defensively: health is also patched in place from the WS topic and
-              // seeded by route gates, so a partially-populated cache entry is a real state — and
-              // "Checking…" is the honest thing to show for it.
-              check={health.data?.checks?.find((c) => c.name === provider)}
-              accounts={data.profiles.filter((p) => p.provider === provider)}
-              canCarryAccounts={data.profileCapableProviders.includes(provider)}
-              onAdd={() => setAdding(provider)}
-              onRemove={setConfirming}
-            />
-          </TabsContent>
+      {/* Every agent gets a card, including one that cannot carry a second login: the card is
+          where its install state lives, and hiding OpenCode would just move the question
+          "is OpenCode set up?" somewhere else. */}
+      <div data-slot="agent-cards" className="flex flex-col gap-4">
+        {runners.runners.map((entry) => (
+          <AgentCard
+            key={entry.id}
+            entry={entry}
+            // `checks` is read defensively: health is also patched in place from the WS topic and
+            // seeded by route gates, so a partially-populated cache entry is a real state — and
+            // "Checking…" is the honest thing to show for it.
+            check={health.data?.checks?.find((c) => c.name === entry.id)}
+            settingsAdmin={health.data?.capabilities?.settingsAdmin === true}
+            runners={runners}
+            editable={data.editable}
+            accounts={data.profiles.filter((p) => p.provider === entry.id)}
+            canCarryAccounts={data.profileCapableProviders.includes(entry.id)}
+            onAdd={() => setAdding(entry.id)}
+            onRemove={setConfirming}
+          />
         ))}
-      </Tabs>
+      </div>
 
       <DefaultsForNewProjects runners={runners} />
 
@@ -252,65 +230,103 @@ function AccountsPane({ data, runners }: { data: AgentProfilesResponse; runners:
   )
 }
 
+/** The host check as one line: Checking…, Installed · version, or Not installed with the hint. */
+function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCheck | undefined }) {
+  if (check === undefined) return <span data-slot="agent-installed">Checking…</span>
+  if (!check.available) {
+    return (
+      <span data-slot="agent-installed">
+        Not installed{entry.installHint ? <> — <code className="break-all">{entry.installHint}</code></> : null}
+      </span>
+    )
+  }
+  return (
+    <>
+      <span data-slot="agent-installed">Installed</span>
+      {check.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
+    </>
+  )
+}
+
 /** One agent: what the machine has, then the logins configured for it. */
-function AgentTab({
-  provider,
-  runners,
+function AgentCard({
+  entry,
   check,
+  settingsAdmin,
+  runners,
+  editable,
   accounts,
   canCarryAccounts,
   onAdd,
   onRemove,
 }: {
-  provider: ProviderId
-  runners: RunnersResponse
+  entry: RunnerEntry
   /** The `/api/v1/health` probe for this CLI — the ONE place a version can honestly come from. */
   check: BackendCheck | undefined
+  settingsAdmin: boolean
+  runners: RunnersResponse
+  /** The account listing is editable: a local cockpit (ADR 0055). */
+  editable: boolean
   accounts: AgentProfile[]
   canCarryAccounts: boolean
   onAdd: () => void
   onRemove: (account: AgentProfile) => void
 }) {
-  const installed = check?.available === true
-  const managedInstall = runnerEntry(runners, provider)?.managedInstall === true
+  const provider = entry.id
+  // The managed installer reports its own installed and latest versions; it renders only under
+  // `settingsAdmin`, so without that grant the host check is the readout.
+  const managed = entry.managedInstall === true && settingsAdmin
   const discoveredCount = accounts.filter((account) => account.isDefault).length
+  const titleId = `${agentCardId(provider)}-title`
 
   return (
-    <div data-slot="accounts-provider" data-provider={provider} className="flex flex-col gap-4">
+    <section
+      id={agentCardId(provider)}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      data-slot="accounts-provider"
+      data-provider={provider}
+      className="settings-agent-card flex flex-col gap-4 rounded-lg border border-border bg-card p-4"
+    >
       {/* Facts about the BINARY, not about any one account: a version and an install are shared by
           every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 className="settings-account-provider-title">{runnerDisplayName(runners, provider)}</h3>
-      {managedInstall ? <ManagedCli runner={provider} /> : null}
+      <h3 id={titleId} className="settings-account-provider-title">{entry.displayName}</h3>
+      {managed ? <ManagedCli runner={provider} /> : null}
       <div className="settings-account-installation settings-readout">
-        {managedInstall ? null : check === undefined ? <span>Checking…</span> : installed ? (
-          <span data-slot="agent-installed">Installed</span>
-        ) : (
-          <span data-slot="agent-installed">Not installed — <code>{runnerEntry(runners, provider)?.installHint}</code></span>
-        )}
-        {!managedInstall && installed && check?.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
-        <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
+        {managed ? null : <InstallReadout entry={entry} check={check} />}
+        {editable ? (
+          <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
+        ) : null}
       </div>
 
-      <ul className="bg-card">
-        {accounts.map((account) => (
-          <AccountRow key={account.id} account={account} runners={runners} onRemove={() => onRemove(account)} />
-        ))}
-      </ul>
-
-      {canCarryAccounts ? (
-        <div className="settings-account-add-row">
-          <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
+      {editable ? (
+        <>
+          <ul>
+            {accounts.map((account) => (
+              <AccountRow key={account.id} account={account} runners={runners} onRemove={() => onRemove(account)} />
+            ))}
+          </ul>
+          {canCarryAccounts ? (
+            <div className="settings-account-add-row">
+              <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
+            </div>
+          ) : (
+            <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
+              {entry.displayName} can only hold one account here: it keeps its credentials
+              outside its config folder, so a second folder would change settings without changing the
+              login — which would say “work account” while billing the other one.
+            </p>
+          )}
+        </>
+      ) : entry.browserLogin ? (
+        // Hosted: no account paths, but the host grant still allows browser sign-in to the
+        // discovered account (BrowserSignInButton renders nothing without it).
+        <div data-slot="hosted-sign-in" className="flex flex-wrap items-center gap-3">
+          <p className="text-[13px] text-muted-foreground">Discovered account</p>
+          <BrowserSignInButton provider={provider} label={entry.displayName} />
         </div>
       ) : null}
-
-      {!canCarryAccounts ? (
-        <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-          {runnerDisplayName(runners, provider)} can only hold one account here: it keeps its credentials
-          outside its config folder, so a second folder would change settings without changing the
-          login — which would say “work account” while billing the other one.
-        </p>
-      ) : null}
-    </div>
+    </section>
   )
 }
 

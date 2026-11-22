@@ -52,7 +52,7 @@ import {
   useProviderReadyFocus,
   useSourceSelection,
 } from './new-task-controller'
-import { composerRunModeNote } from './new-task-draft'
+import { composerRunModeNote, draftStored } from './new-task-draft'
 import { QUICK_TASK, type DraftTaskSource as TaskSource } from './new-task-form'
 import { parseNewTaskParams } from './new-task-params'
 import {
@@ -118,12 +118,14 @@ export function NewTaskRoute() {
 
   const repo = useRepo()
   const uiState = useUiState()
-  // Settings → Agents runner/model policy for this project. `/api/health` is boot-bound and
+  // Settings → Agent defaults runner/model policy for this project. `/api/health` is boot-bound and
   // cannot answer these per-project defaults when another project is active (#699).
   const config = useConfig()
   const workspaceConfig = useWorkspaceConfig()
 
   const { draft, update, clearStarted, submissionPending, mounted } = useNewTaskDraft(draftProjectId, deepLink, linkedRunner)
+  // `update` writes the draft before it sets state, so this render sees the latest write.
+  const persisted = draftStored(draftProjectId)
   const engine = useEngineSelection(draft, config)
   const accounts = useAccountSelection(engine.displayRunner, draft.agentProfile)
   const sources = useSourceSelection(draft.source, uiState, engine.displayRunner, accounts.agentProfile)
@@ -162,7 +164,7 @@ export function NewTaskRoute() {
       className="relative isolate flex min-h-full flex-col overflow-x-clip pb-16"
     >
 
-      <div data-slot="new-task-layout" ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-11 pt-12 max-md:px-[18px] max-md:pt-[22px]">
+      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-11 pt-12 max-md:px-[18px] max-md:pt-[22px]">
         <NewTaskHeader />
 
 
@@ -182,6 +184,7 @@ export function NewTaskRoute() {
           onPendingChange={(pending) => { submissionPending.current = pending }}
           value={draft.text}
           onValueChange={(text) => update({ text })}
+          draftPersisted={persisted}
           autoFocus
           placeholder="Describe a task for the agent — / for skills…"
           ariaLabel="Describe a task for the agent"
@@ -246,7 +249,7 @@ export function NewTaskRoute() {
           startUnavailableReason={unavailableReason}
           startUnavailableAction={
             !providers.isPending ? (
-              <Link to="/settings/agents#providers">Configure providers</Link>
+              <Link to="/settings/agent-defaults#providers">Configure providers</Link>
             ) : undefined
           }
           onStepsChange={(steps) => setPlan((current) => (current ? { ...current, steps } : current))}

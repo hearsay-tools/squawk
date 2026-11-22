@@ -205,7 +205,7 @@ export function runnerOverride(
 }
 
 /** The effective model: the user's pick when it exists in the selected runner's presets, else
- *  the configured per-runner default (Settings → Agents `defaultModels`, R6 1.5) when IT is a
+ *  the configured per-runner default (Settings → Agent defaults `defaultModels`, R6 1.5) when IT is a
  *  known preset, else auto (`''`). An explicit pick — including picking auto — always beats
  *  the configured default (`picked: ''` is a pick; only `null` means "never touched").
  *  Deliberately STRICTER than legacy, which kept a stale `taskModel` in state while displaying

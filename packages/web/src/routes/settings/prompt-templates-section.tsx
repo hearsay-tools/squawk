@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils'
  *
  * Zero-config: an untouched repo shows `DEFAULT_PROMPT_TEMPLATES` with nothing persisted yet.
  * The first Save writes the full (possibly edited-in-place) list to `ui-state.json`'s additive
- * `promptTemplates` key — same "edit locally, explicit Save" shape as Settings → Agents' system
+ * `promptTemplates` key — same "edit locally, explicit Save" shape as Settings → Agent defaults' system
  * prompt, because a PUT on every keystroke would be a worse control, not a simpler one.
  */
 export function PromptTemplatesSection() {

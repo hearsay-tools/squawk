@@ -41,6 +41,8 @@ With a grant, every user that cockpit admits can:
 - save the project's worktree setup commands;
 - complete browser sign-in to a runner's discovered account or an existing named account, which
   writes credentials on the host. Hosted sign-in uses the consent link and pasted redirect.
+- install, update and remove a managed agent CLI, such as the Antigravity CLI, from
+  **Settings → Agents**, which downloads an executable that later runs on the host.
 
 That is **host command execution as the cockpit's user**. Enable it only when the deployment admits
 the people you would trust with a shell on this machine.

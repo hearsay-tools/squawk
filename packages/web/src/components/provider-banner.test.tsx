@@ -166,7 +166,7 @@ describe('ProviderBanner', () => {
     })
 
     expect(screen.getByRole('link', { name: 'Open agent settings' }).getAttribute('href')).toBe(
-      '/p/cezar/settings/agents#providers',
+      '/p/cezar/settings/agent-defaults#providers',
     )
   })
 
@@ -226,11 +226,11 @@ describe('ProviderBanner', () => {
     )
   })
 
-  it('links to the active project Settings → Agents providers anchor', () => {
+  it('links to the active project Settings → Agent defaults providers anchor', () => {
     renderBanner()
 
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/p/cezar/settings/agents#providers',
+      '/p/cezar/settings/agent-defaults#providers',
     )
   })
 

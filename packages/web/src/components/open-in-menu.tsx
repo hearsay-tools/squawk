@@ -40,7 +40,7 @@ import {
 /**
  * The shared "Open in…" menu: hand a local path to whichever app the machine actually has.
  *
- * Extracted from the task thread's run header when Settings → Agent accounts needed the same
+ * Extracted from the task thread's run header when Settings → Agents needed the same
  * choice for a config file (a user asked for "system tools or for example vscode" — the same
  * question the thread already answered for a worktree). One menu, one icon table, one place where
  * an unknown target degrades to a generic glyph.

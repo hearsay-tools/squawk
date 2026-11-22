@@ -1001,7 +1001,7 @@ it.each(['/tasks', '/tools', '/activity'])('keeps sidebar navigation on its disp
   expect(queryScope()).toBe('shop')
 })
 
-it.each(['/p/shop/settings/agents', '/settings/global/appearance'])('shows scoped Settings groups instead of tasks at %s', async (entry) => {
+it.each(['/p/shop/settings/agent-defaults', '/settings/global/appearance'])('shows scoped Settings groups instead of tasks at %s', async (entry) => {
   serve({
     '/api/v1/health': { ...HEALTH, bootProject: 'cezar' },
     '/api/v1/projects': { bootProject: 'cezar', projects: [PROJECT, { ...PROJECT, id: 'shop', name: 'Shop' }] },
@@ -1009,13 +1009,14 @@ it.each(['/p/shop/settings/agents', '/settings/global/appearance'])('shows scope
   renderShell(entry)
   const project = entry.startsWith('/p/shop') ? 'shop' : 'cezar'
   const group = await screen.findByRole('navigation', { name: `This project · ${project === 'shop' ? 'Shop' : 'cezar'}` })
-  expect(within(group).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe(`/p/${project}/settings/agents`)
+  expect(within(group).getByRole('link', { name: 'Agent defaults' }).getAttribute('href')).toBe(`/p/${project}/settings/agent-defaults`)
   // The project group leads with General, the project index.
   expect(within(group).getByRole('link', { name: 'General' }).getAttribute('href')).toBe(`/p/${project}/settings`)
-  expect([...group.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['General', 'Sidebar', 'Agents', 'Agent config', 'Worktrees', 'Prompt templates'])
+  expect([...group.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['General', 'Sidebar', 'Agent defaults', 'Agent config', 'Worktrees', 'Prompt templates'])
   const global = screen.getByRole('navigation', { name: 'Global · every project' })
   expect(within(global).getByRole('link', { name: 'Appearance' }).getAttribute('href')).toBe('/settings/global/appearance')
-  expect([...global.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Appearance', 'Notifications', 'Resources', 'Tasks', 'Agent accounts', 'Projects'])
+  expect(within(global).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/settings/global/agents')
+  expect([...global.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Appearance', 'Notifications', 'Resources', 'Tasks', 'Agents', 'Projects'])
   expect(within(global).getByRole('link', { name: 'Tasks' }).getAttribute('href')).toBe('/settings/global/tasks')
   expect(within(global).queryByRole('link', { name: 'Keyboard' })).toBeNull()
   // The global area has no index page, so its group has no General row.

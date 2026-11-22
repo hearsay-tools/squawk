@@ -22,7 +22,9 @@ equivalent).
 - An [ngrok account](https://dashboard.ngrok.com) and its **authtoken**.
 - A **reserved domain** on ngrok (recommended, so the URL is stable) — optional;
   without one you get an ephemeral URL.
-- At least one logged-in agent CLI — `claude`, `codex`, or OpenCode (experimental).
+- At least one logged-in agent CLI — `claude`, `codex`, or OpenCode (experimental). Or
+  install the Antigravity CLI later from **Settings → Agents**, after
+  [`hsq remote-settings enable`](./remote-settings.md), and sign in there with a Google account.
 
 ---
 

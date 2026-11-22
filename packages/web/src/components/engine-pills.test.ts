@@ -23,6 +23,7 @@ const resolved = (over: Partial<ResolvedEngine> = {}): ResolvedEngine => ({
   effort: '',
   effortOptions: EFFORT_OPTIONS,
   runners: ['claude'],
+  uninstalled: [],
   defaultRunner: 'claude',
   canRun: true,
   providerPending: false,

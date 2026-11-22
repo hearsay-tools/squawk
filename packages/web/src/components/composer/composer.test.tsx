@@ -7,6 +7,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { createQueryClient } from '@/api/query-client'
 import { resetToasts, Toaster } from '@/components/ui/toaster'
 
+import { hasUnsentInput } from '@/lib/version-reload'
+
 import { MAX_ATTACHMENT_BYTES } from './composer-attachments'
 import { Composer, type ComposerProps } from './composer'
 
@@ -123,6 +125,39 @@ function stubComposerSpeech() {
     fail: () => act(() => recognition.onerror?.({ error: 'audio-capture' })),
   }
 }
+
+describe('the reload-on-upgrade guard reads the composer state (hearsay-tools/squawk#4094)', () => {
+  it('holds the reload during dictation and for dictated text, which fire no input event', () => {
+    const speech = stubComposerSpeech()
+    const { textarea } = renderComposer()
+    expect(hasUnsentInput()).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Start dictation' }))
+    expect(hasUnsentInput()).toBe(true)
+    speech.result('spoken words')
+    fireEvent.click(screen.getByRole('button', { name: 'Insert transcription' }))
+    expect(textarea.value).toBe('spoken words')
+    expect(hasUnsentInput()).toBe(true)
+    type(textarea, '')
+    expect(hasUnsentInput()).toBe(false)
+  })
+
+  it('holds the reload for an attachment, even when the host stores the text', async () => {
+    const { textarea } = renderComposer({ draftPersisted: true })
+    type(textarea, 'kept by the host draft')
+    expect(hasUnsentInput()).toBe(false)
+    paste(textarea, [pngFile('shot.png')])
+    await screen.findByLabelText('Remove shot.png')
+    expect(hasUnsentInput()).toBe(true)
+  })
+
+  it('holds the reload for unsent text no host stores, and releases it on unmount', () => {
+    const { textarea } = renderComposer()
+    type(textarea, 'half a reply')
+    expect(hasUnsentInput()).toBe(true)
+    cleanup()
+    expect(hasUnsentInput()).toBe(false)
+  })
+})
 
 describe('dictation in the composer draft', () => {
   it('inserts speech after the draft and restores focus and the caret without sending', () => {

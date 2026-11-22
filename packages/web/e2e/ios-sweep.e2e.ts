@@ -177,8 +177,8 @@ describe('iOS sweep — every primary view at 390×844', () => {
     sweep('settings-skills', '/settings/skills', '[data-slot="skill-row"]')
   })
 
-  it('/settings/agents', () => {
-    sweep('settings-agents', '/settings/agents', '[data-route="settings-agents"]')
+  it('/settings/agent-defaults', () => {
+    sweep('settings-agent-defaults', '/settings/agent-defaults', '[data-route="settings-agent-defaults"]')
   })
 
   it('/settings/global/notifications', () => {

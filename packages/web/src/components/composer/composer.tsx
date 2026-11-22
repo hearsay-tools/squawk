@@ -24,6 +24,7 @@ import { insertTemplate } from '@/lib/prompt-templates'
 import { isEditableTarget } from '@/lib/use-command-shortcut'
 import { bumpSkillUsage, filterSkills, fuzzyMatch, isProjectSkill } from '@/lib/skills'
 import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
+import { useUnsentDraft } from '@/lib/version-reload'
 
 import {
   fileToPendingAttachment,
@@ -131,6 +132,9 @@ export interface ComposerProps {
    */
   value?: string
   onValueChange?: (text: string) => void
+  /** The host stores the text itself (the /new draft writes localStorage), so unsent text alone
+   *  does not hold back the reload on upgrade. Attachments and a dictation in progress still do. */
+  draftPersisted?: boolean
   /** Focus the textarea on mount — the /new hero, where typing is the whole point of arriving. */
   autoFocus?: boolean
   /** Phone reading mode for task threads; /new retains its full composer. */
@@ -214,6 +218,11 @@ const COMPOSER_DEFAULTS = {
 // mirrored to both — updater functions resolve against whichever is authoritative end now.
 function defined<T>(value: T | undefined, fallback: T): T {
   return value === undefined ? fallback : value
+}
+
+/** What a reload would lose: unsent text no host stores, any attachment, a dictation in progress. */
+export function composerHoldsUnsentInput(text: string, attachments: number, dictating: boolean, textPersisted: boolean): boolean {
+  return attachments > 0 || dictating || (!textPersisted && text.trim() !== '')
 }
 
 function composerInput(props: ComposerProps): Required<Pick<ComposerProps,
@@ -337,6 +346,7 @@ export function Composer(props: ComposerProps) {
     mobileDisclosureKey, footerStart, footerEnd, sessionControls, executionOptions, agentOptions,
     sendAriaLabel, disabled, disabledReason, allowEmptySubmit, placeholder, ariaLabel,
     autocompleteSkills, skillRunner, skillAccount, quickReplies, getMentionCandidates, ref,
+    draftPersisted,
   } = composerInput(props)
   const { text, textRef, setText } = useComposerText(value, onValueChange)
   const [images, setImages] = useState<PendingAttachment[]>([])
@@ -707,6 +717,7 @@ export function Composer(props: ComposerProps) {
     showStop: composerShowStop(onStop, stopPending),
   }
   const recording = dictation.recording
+  useUnsentDraft(composerHoldsUnsentInput(text, images.length, recording !== null, draftPersisted === true))
   const dictationButton = dictation.supported ? <ComposerDictationButton mode={mode} onStart={() => { if (!editsBlocked()) dictation.start() }} /> : null
   const finishControl = mode.primaryFinish ? <ComposerFinishButton mode={mode} onFinish={() => void onFinish?.()} /> : null
   const stopControl = mode.showStop ? <ComposerStopButton mode={mode} onStop={() => void stop()} /> : null

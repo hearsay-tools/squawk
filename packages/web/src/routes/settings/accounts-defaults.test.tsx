@@ -14,7 +14,7 @@ import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
 /**
- * Global settings → Agent accounts, "Defaults for new projects" (spec 2026-07-29-agent-profiles):
+ * Global settings → Agents, "Defaults for new projects" (spec 2026-07-29-agent-profiles):
  * the agent and models a project uses when it has chosen none. An account is a project's own
  * choice, so this block offers none.
  *
@@ -128,7 +128,7 @@ function renderAccounts() {
   })
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/settings/global/accounts']}>
+      <MemoryRouter initialEntries={['/settings/global/agents']}>
         <AppRoutes />
         <Toaster />
       </MemoryRouter>
@@ -150,7 +150,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('Agent accounts → Defaults for new projects', () => {
+describe('Agents → Defaults for new projects', () => {
   it('survives a server that has never heard of agent defaults', async () => {
     // Version skew, and it crashed this page for real: Vite serves this bundle while `dist/` or
     // another process serves the API, so an older server answers `/workspace/config` with no

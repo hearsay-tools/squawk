@@ -52,7 +52,7 @@ describe('settings → appearance against the live dry-run server', () => {
     // The GLOBAL nav: the original sections plus Tasks and Agent Accounts,
     // and nothing project-scoped.
     const nav = '[data-slot="settings-nav"][data-scope="global"]'
-    expect(browser.evaluate(`[...document.querySelectorAll('${nav} [data-section]')].map(el => el.dataset.section).sort()`)).toEqual(['accounts', 'appearance', 'notifications', 'projects', 'resources', 'tasks'])
+    expect(browser.evaluate(`[...document.querySelectorAll('${nav} [data-section]')].map(el => el.dataset.section).sort()`)).toEqual(['agents', 'appearance', 'notifications', 'projects', 'resources', 'tasks'])
     expect(browser.count(`${nav} [aria-current="page"][data-section="appearance"]`)).toBe(1)
   })
 

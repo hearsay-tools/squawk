@@ -1,4 +1,4 @@
-import { ISSUE_142, ISSUE_139, PROVIDERS_MULTI, PROVIDERS_NONE, jsonResponse, stubFetch, rows, promptField, promptValue, BASE, openDetail, health, MULTI_BACKEND, SINGLE_BACKEND, pickPill, postedRun, waitForAgentRunEnabled, selectSkill } from './github.testkit'
+import { ISSUE_142, ISSUE_139, PROVIDERS_MULTI, PROVIDERS_NONE, PROVIDERS_NONE_MISSING, jsonResponse, stubFetch, rows, promptField, promptValue, BASE, openDetail, health, MULTI_BACKEND, SINGLE_BACKEND, pickPill, postedRun, waitForAgentRunEnabled, selectSkill } from './github.testkit'
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,10 +33,10 @@ afterEach(() => {
 })
 
 describe('the hand-to-agent backend pills (#401)', () => {
-  it('a single-backend host hides the runner pill but still offers the model', async () => {
+  it('a single-backend host with no missing CLI hides the runner pill but still offers the model', async () => {
     // A real one-check health response — the default stub 404s /api/v1/health, which exercises
     // the no-data fallback instead and would pass for the wrong reason.
-    stubFetch({ 'GET /api/v1/health': SINGLE_BACKEND })
+    stubFetch({ 'GET /api/v1/health': SINGLE_BACKEND, 'GET /api/v1/providers/status': () => jsonResponse(PROVIDERS_NONE_MISSING) })
     await openDetail()
 
     await waitFor(() => expect(document.querySelector('[data-slot="model-pill"]')).not.toBeNull())
@@ -148,7 +148,7 @@ describe('the hand-to-agent backend pills (#401)', () => {
       document.querySelector<HTMLButtonElement>('[data-slot="model-pill"]')?.disabled,
     ).toBe(true)
     expect(screen.getByRole('link', { name: 'Configure providers' }).getAttribute('href')).toBe(
-      '/p/acme/settings/agents#providers',
+      '/p/acme/settings/agent-defaults#providers',
     )
 
     fireEvent.change(promptField(), { target: { value: 'Keep this editable.' } })
@@ -187,7 +187,7 @@ describe('the hand-to-agent backend pills (#401)', () => {
           providers: [
             { provider: 'claude', status: 'disconnected', enabled: true },
             { provider: 'codex', status: 'connected', enabled: true },
-            { provider: 'opencode', status: 'not-installed', enabled: true },
+            { provider: 'opencode', status: 'disconnected', enabled: true },
           ],
         } satisfies ProviderStatusResponse),
     })
@@ -212,7 +212,7 @@ describe('the hand-to-agent backend pills (#401)', () => {
           providers: [
             { provider: 'claude', status: 'connected', enabled: false },
             { provider: 'codex', status: 'connected', enabled: true },
-            { provider: 'opencode', status: 'not-installed', enabled: true },
+            { provider: 'opencode', status: 'disconnected', enabled: true },
           ],
         } satisfies ProviderStatusResponse),
     })
@@ -431,6 +431,7 @@ describe('the hand-to-agent agent account', () => {
   it('a host with one runner and one login is unchanged — no pill, no agentProfile', async () => {
     const sent = stubFetch({
       'GET /api/v1/health': SINGLE_BACKEND,
+      'GET /api/v1/providers/status': () => jsonResponse(PROVIDERS_NONE_MISSING),
       'GET /api/v1/workspace/agent-profiles': agentProfiles([login('claude', 'default', 'Default')]),
     })
     await openDetail()

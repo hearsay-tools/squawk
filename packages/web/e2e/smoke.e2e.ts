@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { visibilitySampleExpression, waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv } from './agent-browser'
+import { withFiniteLive } from './finite-live'
 import { readSharedProjects, writeSharedProjects } from './workspace-registry'
 
 /**
@@ -256,30 +257,36 @@ describe('cockpit app shell', () => {
     //
     // Without an empty update-action slot, the shorter nightly now fits in full. Use a longer
     // release string to exercise truncation without pushing the header outside the 264px column.
+    //
+    // The live SharedWorker would push the server's real health over its socket; a version that
+    // differs from the routed one reads as an upgrade and reloads the page. `withFiniteLive`
+    // keeps every health read on the routed fixture.
     const health = (await fetch(`${baseUrl}/api/v1/health`).then((r) => r.json())) as { version: string; capabilities: Record<string, unknown> }
     browser.routeJson('**/api/v1/health', {
       ...health, capabilities: { ...health.capabilities, localHandoff: false },
       version: NIGHTLY, latestVersion: null,
     })
-    let overflow: { label: string; title: string; escaped: string[]; truncated: boolean }
+    let overflow!: { label: string; title: string; escaped: string[]; truncated: boolean }
     try {
-      browser.goto(baseUrl + scoped('/'))
-      overflow = waitForSettledSample(browser, `(() => {
-      const chip = document.querySelector('[data-slot="version-chip"]')
-      if (chip?.textContent !== ${JSON.stringify(`v${NIGHTLY}`)}) return null
-      const label = chip.querySelector('span:not([data-slot])')
-      if (!label) return null
-      const headerRight = document.querySelector('[data-slot="sidebar-footer"]').getBoundingClientRect().right
-      const escaped = [...document.querySelectorAll('[data-slot="sidebar-footer"] [data-slot="version-action"]')]
-        .filter((el) => el.getBoundingClientRect().right > headerRight)
-        .map((el) => el.dataset.slot)
-      return {
-        label: label.textContent,
-        title: chip.getAttribute('title'),
-        escaped,
-        truncated: label.scrollWidth > Math.ceil(label.getBoundingClientRect().width),
-      }
-    })()`) as typeof overflow
+      await withFiniteLive(browser, () => {
+        browser.goto(baseUrl + scoped('/'))
+        overflow = waitForSettledSample(browser, `(() => {
+        const chip = document.querySelector('[data-slot="version-chip"]')
+        if (chip?.textContent !== ${JSON.stringify(`v${NIGHTLY}`)}) return null
+        const label = chip.querySelector('span:not([data-slot])')
+        if (!label) return null
+        const headerRight = document.querySelector('[data-slot="sidebar-footer"]').getBoundingClientRect().right
+        const escaped = [...document.querySelectorAll('[data-slot="sidebar-footer"] [data-slot="version-action"]')]
+          .filter((el) => el.getBoundingClientRect().right > headerRight)
+          .map((el) => el.dataset.slot)
+        return {
+          label: label.textContent,
+          title: chip.getAttribute('title'),
+          escaped,
+          truncated: label.scrollWidth > Math.ceil(label.getBoundingClientRect().width),
+        }
+      })()`) as typeof overflow
+      })
 
       expect(overflow.label).toBe(`v${NIGHTLY}`)
       expect(overflow.escaped).toEqual([])

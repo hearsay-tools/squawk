@@ -46,6 +46,27 @@ offered, and a saved id it does not name falls to `resolveRunner`'s pick
 (`OPEN_IN_ICONS`) turns the route's `icon` into a component, and an unknown key shows the generic
 glyph. `useRunnerModelCatalogs(runnerIds)` makes one catalog query for each listed runner.
 
+**Runner setup lives on one page.** Global Settings → Agents (`/settings/global/agents`) has one
+card per registered runner: install state and version from health checks, managed install, accounts,
+sign-in and the defaults for new projects. Each card has the id `agent-<runner>`; link to it with
+`agentCardPath` (`packages/web/src/lib/agents-settings-path.ts`) and the plain react-router `Link`.
+The project page Settings → Agent defaults (`/p/<id>/settings/agent-defaults`) holds the repo's
+runner, models, system prompt and providers. A runner picker lists a runner whose provider status is
+`not-installed` after its choices, greyed out, as a link to that card (`uninstalledRunners`); it is
+never a radio choice, so picking it starts nothing. A disabled runner pill (no runner connected)
+still opens when it lists such a link; its choices stay locked (`choicesDisabled`).
+
+**Reload on server upgrade.** `VersionReloadNotice` (in the shell's banner row) reloads the page
+when health reports a `version` other than the first one this page's query client saw, because the
+code and the runners list (`staleTime: Infinity`) belong to the old server. It records the target
+in `sessionStorage` and never reloads twice for one version. It waits while unsent input exists,
+and says so in the notice (`packages/web/src/lib/version-reload.ts`). A message composer reports
+its own state through `useUnsentDraft`: text, attachments and a dictation in progress, which change
+React state with no input event. Text the host stores (`draftPersisted`, true on /new only while the
+last draft write reached localStorage) does not count; attachments always do. Any other field counts
+when the user typed into it and its text differs from what it showed at first focus (clearing a saved
+value counts), except inside `[data-persisted-draft]` (a draft store that writes on every change).
+
 ## Activity view
 
 The Activity tab shows live work: `/p/:projectId/activity` for one project and `/activity` for all projects. The spec is `.ai/specs/2026-11-05-live-activity-view.md`; the code is in `packages/web/src/routes/activity/`. Keep these rules when you change it:

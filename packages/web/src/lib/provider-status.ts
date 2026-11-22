@@ -188,3 +188,17 @@ export function providerStatusFor(
 ): ProviderStatus | undefined {
   return completeProviderRows(status)?.find((row) => row.provider === provider)
 }
+
+/** The registered runners the host reports as not installed, in the runners list's display
+ *  order. Runner pickers list them greyed out, as links to their global Settings card, so a
+ *  runner never disappears from the picker just because its CLI is missing. Empty until both
+ *  the provider status and the runners list have answered. */
+export function uninstalledRunners(
+  status: ProviderStatusResponse | undefined,
+  runners: RunnersResponse | undefined,
+): Runner[] {
+  const rows = completeProviderRows(status)
+  if (rows === null) return []
+  const missing = new Set(rows.filter((row) => row.status === 'not-installed').map((row) => row.provider))
+  return (runners?.runners ?? []).map((entry) => entry.id).filter((runner) => missing.has(runner))
+}

@@ -127,7 +127,7 @@ call `cezar_wait` with `kind: "pr"` instead. `kind: "ci"` itself was replaced by
 the new spelling.
 
 The adapters are bundled for Claude (including `claude-cli`), Codex, OpenCode,
-Pi and OMP. Internal socket/capability environment values are runtime wiring,
+Pi, OMP and Antigravity (through its private `squawk` MCP bridge). Internal socket/capability environment values are runtime wiring,
 not settings to create or share. If the tool is unavailable or denied, its error
 is surfaced while ordinary tasks continue. See [the CI-wait protocol](../AGENT_PROTOCOL.md#ci-wait-tool-contract-474)
 for the owners of the limits and the harness evidence required before a runner ships.

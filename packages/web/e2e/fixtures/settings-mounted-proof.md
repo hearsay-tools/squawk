@@ -4,7 +4,7 @@ Run serially from the repository root after `npm ci` and `sh .ai/scripts/test-en
 
 ```
 node --import tsx packages/web/e2e/fixtures/settings-mounted-proof.ts
-npm run test:e2e -- settings-agents.e2e.ts
+npm run test:e2e -- settings-agent-defaults.e2e.ts
 ```
 
 The fixture borrows that worktree's real dry-run server and owns a native browser session. It restores its prompt and branch configuration, releases held responses, detaches CDP and closes the session on completion. Stop the borrowed environment with `sh .ai/scripts/test-env-down.sh` when finished.
@@ -25,9 +25,9 @@ The audit covers every e2e file referring to settings, all direct settings prope
 
 | Sites | Boundary and disposition |
 | --- | --- |
-| `settings-agents`: base-branch options read, selection and clearing | Independently loaded repo control; explicit target gate before read and intrinsic setter gate. Original branch and persistence assertions retained. |
-| `settings-agents`: model setter; runner Codex and cleanup Claude clicks | Provider status independently enables these controls. Intrinsic select gate and target enabled gate before the original native clicks; existing pending/disconnected component guards retained. |
-| `settings-agents`: prompt setter; cold model/prompt property reads | Setter has intrinsic mounted/enabled gate; property reads use mounted/options gate permitting disabled controls. Original input and expected values retained. |
+| `settings-agent-defaults`: base-branch options read, selection and clearing | Independently loaded repo control; explicit target gate before read and intrinsic setter gate. Original branch and persistence assertions retained. |
+| `settings-agent-defaults`: model setter; runner Codex and cleanup Claude clicks | Provider status independently enables these controls. Intrinsic select gate and target enabled gate before the original native clicks; existing pending/disconnected component guards retained. |
+| `settings-agent-defaults`: prompt setter; cold model/prompt property reads | Setter has intrinsic mounted/enabled gate; property reads use mounted/options gate permitting disabled controls. Original input and expected values retained. |
 | `settings-resources` / `settings-monitoring` | Worktrees/Resources sections mount with their config forms. Setters already wait for enabled targets; the wake field is conditional on local mode in that same form and has an explicit target wait before edit. Cold reads mount with the saved config. No independently loaded unguarded control found. |
 | `composer-defaults` Resources setter | Its `resources-composer-defaults` target wait mounts the same config form and select atomically; one action after navigation. No independent target mount. |
 | `settings-agent-config`, `settings-skills`, `skills-update` | Async catalog/list/detail work uses target-specific waits before dependent reads or actions. No matching unguarded conditional control found. |

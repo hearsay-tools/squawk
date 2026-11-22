@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seedRuns } from './seed-runs'
 import { waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv, servedRoot } from './agent-browser'
+import { withFiniteLive } from './finite-live'
 import { readSharedProjects, snapshotSharedHome, writeSharedProjects } from './workspace-registry'
 import { applyContrastQaVariant, contrastQaVariants, contrastSampleExpression, restoreContrastQaDefaults, type ContrastSample } from './contrast'
 /**
@@ -185,50 +186,50 @@ describe('phone Tools page (#621 follow-up)', () => {
       // One real probe answer with the last tool turned into a missing one, so the hint and
       // "Set up ›" have something to render whatever this machine has installed.
       const health = (await fetch(`${baseUrl}/api/v1/health`).then((r) => r.json())) as { checks: Array<Record<string, unknown>>; capabilities: Record<string, unknown> }
-      // Keep the routed health fixture isolated from real WebSocket health snapshots, which can
-      // replace it in the query cache. localHandoff:false prevents the
-      // health subscription; these assertions do not depend on local handoff.
-      health.capabilities = { ...health.capabilities, localHandoff: false }
+      // The live SharedWorker would push the real health snapshot over its socket and replace this
+      // fixture in the query cache; `withFiniteLive` keeps every health read on the routed fixture.
       const missing = health.checks.length - 1
       health.checks[missing] = { name: health.checks[missing]!.name, available: false, hint: 'Install it and reload the cockpit.' }
       browser.routeJson('**/api/v1/health', health)
       try {
-        browser.goto(`${baseUrl}/p/${projectId}/`)
-        applyContrastQaVariant(browser, variant)
-        browser.waitForFunction(`document.querySelector(${JSON.stringify(MENU)}) !== null`)
-        browser.click(MENU)
-        // The drawer slides in: tap only once it has come to rest, or the tap lands on the overlay.
-        browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)})?.getBoundingClientRect().left === 0`)
-        browser.click(`${DRAWER} [data-slot="drawer-tools"]`)
-        browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)}) === null && document.querySelector('[data-route="workspace-tools"] [data-slot="tool-row"]') !== null`)
-        // Bring the section under the top bar: the floating New task button sits over the lower-right otherwise.
-        browser.evaluate(`document.querySelector('#tools-heading').scrollIntoView({ block: 'start' })`)
-        browser.waitForFunction(`document.querySelector('[data-slot="tools-settings"]').getBoundingClientRect().top < 200`)
+        await withFiniteLive(browser, () => {
+          browser.goto(`${baseUrl}/p/${projectId}/`)
+          applyContrastQaVariant(browser, variant)
+          browser.waitForFunction(`document.querySelector(${JSON.stringify(MENU)}) !== null`)
+          browser.click(MENU)
+          // The drawer slides in: tap only once it has come to rest, or the tap lands on the overlay.
+          browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)})?.getBoundingClientRect().left === 0`)
+          browser.click(`${DRAWER} [data-slot="drawer-tools"]`)
+          browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)}) === null && document.querySelector('[data-route="workspace-tools"] [data-slot="tool-row"]') !== null`)
+          // Bring the section under the top bar: the floating New task button sits over the lower-right otherwise.
+          browser.evaluate(`document.querySelector('#tools-heading').scrollIntoView({ block: 'start' })`)
+          browser.waitForFunction(`document.querySelector('[data-slot="tools-settings"]').getBoundingClientRect().top < 200`)
 
-        const page = waitForSettledSample(browser, `(() => {
-          const rows = [...document.querySelectorAll('[data-route="workspace-tools"] [data-slot="tool-row"]')]
-          return {
-            rows: rows.map((row) => ({ available: row.getAttribute('data-available'), tone: row.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone'), state: row.querySelector('dd > span')?.textContent, hint: row.querySelector('[data-slot="tool-hint"]')?.textContent ?? null, setup: row.querySelector('[data-slot="tool-setup"]')?.getBoundingClientRect().height ?? null })),
-            settings: document.querySelector('[data-slot="tools-settings"]')?.getBoundingClientRect().height,
-            overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-          }
-        })()`) as { rows: Array<{ available: string; tone: string; state: string; hint: string | null; setup: number | null }>; settings: number; overflow: boolean }
-        expect(page.rows.length).toBe(health.checks.length)
-        // Compare against the routed payload, not a fixed count: a CI runner may lack other tools too.
-        page.rows.forEach((row, index) => {
-          const check = health.checks[index]!
-          if (row.available === 'true') expect([row.tone, row.state?.startsWith('Installed'), row.setup]).toEqual(['success', true, null])
-          else expect([row.tone, row.state, row.hint]).toEqual(['danger', 'Not installed', (check.hint as string | undefined) ?? null])
+          const page = waitForSettledSample(browser, `(() => {
+            const rows = [...document.querySelectorAll('[data-route="workspace-tools"] [data-slot="tool-row"]')]
+            return {
+              rows: rows.map((row) => ({ available: row.getAttribute('data-available'), tone: row.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone'), state: row.querySelector('dd > span')?.textContent, hint: row.querySelector('[data-slot="tool-hint"]')?.textContent ?? null, setup: row.querySelector('[data-slot="tool-setup"]')?.getBoundingClientRect().height ?? null })),
+              settings: document.querySelector('[data-slot="tools-settings"]')?.getBoundingClientRect().height,
+              overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            }
+          })()`) as { rows: Array<{ available: string; tone: string; state: string; hint: string | null; setup: number | null }>; settings: number; overflow: boolean }
+          expect(page.rows.length).toBe(health.checks.length)
+          // Compare against the routed payload, not a fixed count: a CI runner may lack other tools too.
+          page.rows.forEach((row, index) => {
+            const check = health.checks[index]!
+            if (row.available === 'true') expect([row.tone, row.state?.startsWith('Installed'), row.setup]).toEqual(['success', true, null])
+            else expect([row.tone, row.state, row.hint]).toEqual(['danger', 'Not installed', (check.hint as string | undefined) ?? null])
+          })
+          expect(page.rows[missing]!.hint).toBe('Install it and reload the cockpit.')
+          expect(page.rows.filter((row) => row.setup !== null)).toHaveLength(health.checks.filter((check) => check.available !== true).length)
+          expect(page.rows.find((row) => row.setup !== null)!.setup).toBeGreaterThanOrEqual(44)
+          expect(page.settings).toBeGreaterThanOrEqual(44)
+          expect(page.overflow).toBe(false)
+
+          browser.click('[data-slot="tools-settings"]')
+          // Tool settings is the global Agents page, outside every project.
+          browser.waitForFunction(`location.pathname === '/settings/global/agents' && document.querySelector('[data-route="settings-global-agents"]') !== null`)
         })
-        expect(page.rows[missing]!.hint).toBe('Install it and reload the cockpit.')
-        expect(page.rows.filter((row) => row.setup !== null)).toHaveLength(health.checks.filter((check) => check.available !== true).length)
-        expect(page.rows.find((row) => row.setup !== null)!.setup).toBeGreaterThanOrEqual(44)
-        expect(page.settings).toBeGreaterThanOrEqual(44)
-        expect(page.overflow).toBe(false)
-
-        browser.click('[data-slot="tools-settings"]')
-        // The unscoped link only becomes the project's page once LegacyPathRedirect has run and the section rendered.
-        browser.waitForFunction(`location.pathname === ${JSON.stringify(`/p/${projectId}/settings/agents`)} && document.querySelector('[data-route="settings-agents"]') !== null`)
       } finally {
         browser.unroute('**/api/v1/health')
       }

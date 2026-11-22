@@ -10,8 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Link as RouterLink } from 'react-router'
+import { agentCardPath } from '@/lib/agents-settings-path'
 import { runnerEntries, useRunners } from '@/api/runners'
 
 /**
@@ -219,6 +222,7 @@ export function PickerPill({
   options,
   onPick,
   disabled = false,
+  choicesDisabled = false,
   readOnly = false,
   hint,
   disabledHint,
@@ -226,6 +230,7 @@ export function PickerPill({
   searchPlaceholder,
   icon,
   fieldLabel = false,
+  footer,
 }: {
   slot: string
   ariaLabel: string
@@ -237,6 +242,8 @@ export function PickerPill({
   options: ReadonlyArray<{ value: string; label: string; desc?: string }>
   onPick: (value: string) => void
   disabled?: boolean
+  /** The menu opens, but its choices cannot be picked; only the footer's links work. */
+  choicesDisabled?: boolean
   /** Display the resolved value without presenting a selector. */
   readOnly?: boolean
   /** Hover explanation for the enabled pill — what the setting does (e.g. the model pill). */
@@ -246,6 +253,8 @@ export function PickerPill({
   status?: string | undefined
   /** Add a name filter above longer option catalogs. */
   searchPlaceholder?: string
+  /** Menu items after the choices that are not choices (links out). Never part of the radio group. */
+  footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -350,6 +359,7 @@ export function PickerPill({
             <DropdownMenuRadioItem
               key={option.value}
               value={option.value}
+              disabled={choicesDisabled}
               className={cn('gap-2.5', searchPlaceholder && 'min-h-11')}
               onPointerMove={retainSearchFocus}
               onPointerLeave={retainSearchFocus}
@@ -379,6 +389,7 @@ export function PickerPill({
             {status}
           </DropdownMenuItem>
         ) : null}
+        {footer}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -435,8 +446,12 @@ export function RunnerPill({
   repoAccount,
   icon,
   fieldLabel,
+  uninstalled = [],
 }: {
   runners: readonly Runner[]
+  /** Registered runners whose CLI is missing: listed after the choices, greyed out, each a link
+   *  to its card on global Settings → Agents. Picking one navigates there and starts nothing. */
+  uninstalled?: readonly Runner[]
   icon?: ReactNode | undefined
   fieldLabel?: boolean | undefined
   value: Runner
@@ -468,6 +483,9 @@ export function RunnerPill({
   // to, else the discovered account. Falls back to the plain runner row for an agent with one login
   // — and for an override naming an account that has since been deleted, which must not leave the
   // pill pointing at nothing.
+  // A disabled pill still opens when it lists a missing CLI: the install links are the way out of
+  // "no runner is ready", so they stay reachable while the choices stay locked.
+  const linksOnly = disabled && uninstalled.length > 0
   const selected = account ?? repoAccount?.[value] ?? DEFAULT_AGENT_ACCOUNT_ID
   const value_ = options.some((option) => option.value === choiceValue(value, selected))
     ? choiceValue(value, selected)
@@ -481,12 +499,39 @@ export function RunnerPill({
       ariaLabel="Runner"
       label={options.find((option) => option.value === value_)?.label ?? value}
       value={value_}
-      disabled={disabled}
+      disabled={disabled && !linksOnly}
+      choicesDisabled={linksOnly}
       onPick={(next) => {
         const [runner, picked] = next.split(':')
         onPick(runner as Runner, picked ?? null)
       }}
       options={options}
+      footer={<UninstalledRunnerLinks runners={uninstalled} />}
     />
+  )
+}
+
+/** Not-installed runners as menu links to their Settings card. Greyed by colour, not opacity, so
+ *  the text keeps its contrast. A link, not a radio row: it can never become the task's runner. */
+function UninstalledRunnerLinks({ runners }: { runners: readonly Runner[] }) {
+  const registered = useRunners().data
+  const entries = runnerEntries(registered).filter((entry) => runners.includes(entry.id))
+  if (entries.length === 0) return null
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {entries.map((entry) => (
+        <DropdownMenuItem key={entry.id} asChild className="gap-2.5 ps-8">
+          <RouterLink to={agentCardPath(entry.id)} data-slot="runner-install-link" data-runner={entry.id}>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[13px] font-medium text-muted-foreground">{entry.id}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Not installed · <span className="font-medium text-accent-text">Install in Settings</span>
+              </span>
+            </span>
+          </RouterLink>
+        </DropdownMenuItem>
+      ))}
+    </>
   )
 }

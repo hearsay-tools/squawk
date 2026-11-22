@@ -1,6 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PickerPill, PickerPillGroup } from './picker-pill'
+import { QueryClientProvider } from '@tanstack/react-query'
+import type { Runner } from '@open-mercato/cezar-api-client'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+import { PickerPill, PickerPillGroup, RunnerPill } from './picker-pill'
 
 afterEach(cleanup)
 
@@ -277,5 +282,65 @@ describe('PickerPill catalog status', () => {
     expect(document.activeElement).toBe(option)
     fireEvent.keyDown(option, { key: 'Enter' })
     await waitFor(() => expect(onPick).toHaveBeenCalledWith(selected))
+  })
+})
+
+describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)', () => {
+  function renderRunnerPill(onPick = vi.fn(), disabled = false, uninstalled: Runner[] = ['opencode']) {
+    const client = seedRunners(createQueryClient())
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/p/boot/new']}>
+          <RunnerPill runners={['claude', 'codex']} uninstalled={uninstalled} value="claude" onPick={onPick} disabled={disabled} />
+          <Routes>
+            <Route path="*" element={<LocationProbe />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    return onPick
+  }
+  function LocationProbe() {
+    const location = useLocation()
+    return <span data-testid="location">{`${location.pathname}${location.hash}`}</span>
+  }
+
+  it('lists a missing runner after the choices, as a link to its Settings card, not a choice', async () => {
+    renderRunnerPill()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
+    const choices = await screen.findAllByRole('menuitemradio')
+    expect(choices.map((item) => item.textContent)).toEqual([
+      expect.stringContaining('claude'),
+      expect.stringContaining('codex'),
+    ])
+    const link = screen.getByRole('menuitem', { name: /opencode/ })
+    expect(link.textContent).toContain('Not installed')
+    expect(link.textContent).toContain('Install in Settings')
+    // Global settings live outside every project: no `/p/<id>` prefix.
+    expect(link.getAttribute('href')).toBe('/settings/global/agents#agent-opencode')
+  })
+
+  it('navigates to the card and picks nothing when the missing runner is chosen', async () => {
+    const onPick = renderRunnerPill()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /opencode/ }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
+    expect(onPick).not.toHaveBeenCalled()
+  })
+
+  it('keeps the install links reachable while the pill is disabled, with the choices locked', async () => {
+    const onPick = renderRunnerPill(vi.fn(), true)
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
+    const choices = await screen.findAllByRole('menuitemradio')
+    expect(choices.every((item) => item.getAttribute('aria-disabled') === 'true')).toBe(true)
+    fireEvent.click(choices[1]!)
+    expect(onPick).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('menuitem', { name: /opencode/ }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
+  })
+
+  it('stays closed when disabled with no missing runner to link to', () => {
+    renderRunnerPill(vi.fn(), true, [])
+    expect((screen.getByRole('button', { name: 'Runner' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })

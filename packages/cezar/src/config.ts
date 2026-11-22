@@ -77,7 +77,7 @@ const configSchema = z.object({
    */
   systemPrompt: z.string().trim().min(1).max(20_000).optional().catch(undefined),
   /**
-   * Per-runner default model preset (Settings → Agents, redesign R6 1.5): the
+   * Per-runner default model preset (Settings → Agent defaults, redesign R6 1.5): the
    * model id the composer preselects for that runner. Missing = auto (the
    * runner decides). A capability (`model`), never a vendor config format.
    * A record keyed by registered id, checked against the registry when config

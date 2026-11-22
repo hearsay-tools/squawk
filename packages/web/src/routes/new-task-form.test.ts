@@ -206,7 +206,7 @@ describe('model option resolution', () => {
     expect(resolveModel(null, 'claude', RUNNERS_RESPONSE)).toBe('')
   })
 
-  it('resolveModel falls back to the Settings → Agents per-runner preset (R6 1.5)', () => {
+  it('resolveModel falls back to the Settings → Agent defaults per-runner preset (R6 1.5)', () => {
     const defaults = { claude: 'opus', codex: 'not-a-preset' }
     // Untouched pill: the configured preset for THIS runner preselects.
     expect(resolveModel(null, 'claude', RUNNERS_RESPONSE, defaults)).toBe('opus')

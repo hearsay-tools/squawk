@@ -22,7 +22,7 @@ export interface BackendCheck {
 
 /**
  * Probe the host for everything cez leans on: the agent CLIs (`claude`, and
- * the optional `codex` / `opencode` / `pi` / `omp` alternatives), `gh` (GitHub auth for
+ * the optional `codex` / `opencode` / `pi` / `omp` / `antigravity` alternatives), `gh` (GitHub auth for
  * PR creation) and `git`. Nothing is required except at least one agent CLI —
  * the GUI degrades gracefully, only offers the runners that are present, and
  * shows the hints for the rest.

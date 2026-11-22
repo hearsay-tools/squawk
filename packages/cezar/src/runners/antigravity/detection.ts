@@ -8,5 +8,5 @@ export const ANTIGRAVITY_DETECTION = {
   identify: checkAntigravityCli,
   banner: { pattern: /^\d+\.\d+\.\d+$/, label: 'the Google Antigravity CLI' },
   availableHint: 'Uses GEMINI_API_KEY, GOOGLE_API_KEY, or the Google sign-in of the selected account.',
-  missingHint: 'Install the Antigravity CLI from Settings > Accounts > Install CLI, or put agy on PATH.',
+  missingHint: 'Install the Antigravity CLI from Settings > Agents > Install CLI, or put agy on PATH.',
 } as const satisfies RunnerDetection;

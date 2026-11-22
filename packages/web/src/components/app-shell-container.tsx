@@ -11,6 +11,7 @@ import { ListViewProvider } from '@/components/list-view'
 import { automationsAvailable } from '@/lib/capabilities'
 import { ProviderBannerContainer } from '@/components/provider-banner-container'
 import { HomeRecoveryBanner } from '@/components/home-recovery-banner'
+import { VersionReloadNotice } from '@/components/version-reload-notice'
 import { SidebarProjectHeader } from '@/components/sidebar-project-header'
 import { ProjectRail, ProjectRailPlaceholder } from '@/components/project-rail'
 import { useProjectSwitch } from '@/components/use-project-switch'
@@ -204,7 +205,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
         forgeAvailable={forgeAvailable}
         // Hidden unless health reports the opt-in automations capability (#801).
         automationsAvailable={automations}
-        banner={<><HomeRecoveryBanner /><ProviderBannerContainer /></>}
+        banner={<><VersionReloadNotice /><HomeRecoveryBanner /><ProviderBannerContainer /></>}
         sidebarList={viewSidebar}
         taskQuickList={<TaskQuickListContainer projectId={sidebarProjectId} boot={sidebarBoot} />}
         sidebarProjectId={sidebarProjectId}
