@@ -227,11 +227,11 @@ export function threadFilePaths(state: ThreadState): string[] {
     }
   }
   // Later mention beats earlier: keep each path's LAST occurrence, then newest first.
-  const deduped: string[] = []
+  const deduped = new Set<string>()
   for (let i = seen.length - 1; i >= 0; i -= 1) {
-    if (!deduped.includes(seen[i]!)) deduped.push(seen[i]!)
+    deduped.add(seen[i]!)
   }
-  return deduped
+  return [...deduped]
 }
 
 export function threadFooter(status: RunStatus, error?: string): ThreadFooter {

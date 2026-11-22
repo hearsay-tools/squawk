@@ -422,3 +422,13 @@ describe('groupThreadItems — worker conversation', () => {
     expect(group.batches[0]).toMatchObject({ kind: 'reply', messages: [reply] })
   })
 })
+
+it('reuses grouping only for the same immutable entries snapshot', () => {
+  const entries: readonly ThreadEntry[] = [tool('one', 'read', 'completed')]
+  const first = groupThreadItems(entries)
+  expect(groupThreadItems(entries)).toBe(first)
+  const updated = [...entries, tool('two', 'read', 'completed')]
+  expect(groupThreadItems(updated)).not.toBe(first)
+  expect(groupThreadItems(updated)[0]?.kind).toBe('context-group')
+  expect(first[0]?.kind).toBe('tool-card')
+})

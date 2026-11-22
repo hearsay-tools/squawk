@@ -16,7 +16,20 @@ const MAX_HISTORY_PAGES = 5
 const COMPACT_LIVE_AT_EVENTS = 200
 const MAX_LIVE_EVENTS = 5_000
 
-function orderedUnique(...groups: readonly RunEvent[][]): RunEvent[] {
+export function orderedUnique(...groups: readonly RunEvent[][]): RunEvent[] {
+  // Most updates append live frames after already ordered history pages.
+  const appended: RunEvent[] = []
+  let lastSeq = -Infinity
+  let increasing = true
+  for (const group of groups) {
+    for (const event of group) {
+      if (event.seq <= lastSeq) { increasing = false; break }
+      appended.push(event)
+      lastSeq = event.seq
+    }
+    if (!increasing) break
+  }
+  if (increasing) return appended
   const bySeq = new Map<number, RunEvent>()
   for (const group of groups) {
     for (const event of group) bySeq.set(event.seq, event)

@@ -21,6 +21,8 @@ import {
 import { useRunHistory, type RunHistoryState } from '@/api/run-history'
 import { pendingAskOf } from '@open-mercato/cezar-api-client/contract/pending-ask'
 import { asksQuestion } from '@open-mercato/cezar-api-client/contract/waits'
+import { runTitle } from '@/lib/task-groups'
+import type { RunSummary } from '@open-mercato/cezar-api-client'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Composer } from '@/components/composer/composer'
@@ -173,6 +175,12 @@ export function TaskThreadRoute() {
   )
 }
 
+/** Query structural sharing keeps token/usage-only list updates out of the transcript. */
+const selectThreadRuns = (runs: RunSummary[]) => ({
+  titles: Object.fromEntries(runs.map(run => [run.id, runTitle(run)])),
+  backends: Object.fromEntries(runs.map(run => [run.id, run.currentStepBackend ?? run.runner])),
+})
+
 /** The loaded thread. The header owns its own data hooks (mutations, the runs list); the
  *  thread body stays presentational — tests drive it with reduced fixture states directly. */
 export function ThreadView({
@@ -192,7 +200,7 @@ export function ThreadView({
   onMarkedUnread?: ((runId: string) => void) | undefined
 }) {
   useActiveProjectId()
-  const runs = useRuns()
+  const runs = useRuns(selectThreadRuns)
   // Attention reads the open human wait on the record; the transcript's unanswered ask only
   // decides whether the composer answers it (hearsay-tools/cezarion#1236, split by fact).
   const { pendingAsk, transcriptAsk, pendingAskId, historyLoading } = pendingThreadAsk(history, currentThread)
@@ -296,8 +304,8 @@ export function ThreadView({
   // cache entry the Workers section reads.
   const delegated = run.delegation?.role === 'root' || run.delegation?.role === 'worker'
   const relationships = useRunRelationships(run.id, { enabled: delegated })
-  const taskTitles = useMemo(() => titlesFromRuns(run, runs.data, relationships.data?.titles), [run, runs.data, relationships.data])
-  const recipientBackends = useMemo(() => recipientBackendsFromRuns(run, runs.data), [run, runs.data])
+  const taskTitles = useMemo(() => ({ ...titlesFromRuns(run, undefined, relationships.data?.titles), ...runs.data?.titles, [run.id]: runTitle(run) }), [run, runs.data, relationships.data])
+  const recipientBackends = useMemo(() => ({ ...runs.data?.backends, ...recipientBackendsFromRuns(run, undefined) }), [run, runs.data])
   const renderPermission = useCallback((permission: ThreadPermission) => <PermissionCard permission={permission} runId={run.id} sessionOpen={sessionOpen} />, [run.id, sessionOpen])
   const messageActions = useMemo<Readonly<Record<string, TranscriptMessageActions>> | undefined>(() => {
     if (edit === undefined) return undefined

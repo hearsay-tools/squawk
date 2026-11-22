@@ -133,6 +133,20 @@ function placeAsk(entry: ThreadEntry, pendingAskId: string | null, pinnedAsk: Th
   return entry.resolved ? entry : { ...entry, resolved: true }
 }
 
+const presentedEntries = new WeakMap<readonly ThreadEntry[], readonly ThreadEntry[]>()
+
+/** Reconciliation can copy asks and receipts. Reuse the last equal presentation per turn. */
+function stablePresentedEntries(source: readonly ThreadEntry[], next: readonly ThreadEntry[]): readonly ThreadEntry[] {
+  const previous = presentedEntries.get(source)
+  if (previous?.length === next.length && next.every((entry, index) => {
+    const old = previous[index]!
+    return entry === old || (Object.keys(entry).length === Object.keys(old).length &&
+      Object.entries(entry).every(([key, value]) => value === old[key as keyof ThreadEntry]))
+  })) return previous
+  presentedEntries.set(source, next)
+  return next
+}
+
 /** The main run record plus reduced turns, without rendering or backend inspection. */
 export function mainTranscriptSections(
   run: ApiRun,
@@ -189,13 +203,13 @@ export function mainTranscriptSections(
         : {}),
       ...(turn.startedAt !== undefined ? { startedAt: turn.startedAt } : {}),
       ...(turn.completed?.ts !== undefined ? { completedAt: turn.completed.ts } : {}),
-      entries: overlayAgentInputNotes(run, turn.items.filter(entry => !run.task || !isSkillInputEcho(entry, 'opening')).map(entry => {
+      entries: stablePresentedEntries(turn.items, overlayAgentInputNotes(run, turn.items.filter(entry => !run.task || !isSkillInputEcho(entry, 'opening')).map(entry => {
         if (entry.kind === 'ask' && answeredAsks.has(entry.id)) return { ...entry, placement: 'origin' as const }
         if (pendingAskId !== undefined && entry.kind === 'ask') return placeAsk(entry, pendingAskId, pinnedAsk)
         if (entry.kind !== 'permission') return entry
         visiblePermissions.add(entry.requestId)
         return currentPermissions.get(entry.requestId) ?? (entry.status === 'pending' ? { ...entry, status: 'expired' as const } : entry)
-      })),
+      }))),
     })
   }
   // Compact context keeps live approvals older than the visible page. Put those cards at
@@ -279,7 +293,7 @@ export function buildTranscriptRows(
         content: { kind: 'user-message', message: section.userMessage },
       })
     }
-    for (const block of groupThreadItems([...section.entries])) {
+    for (const block of groupThreadItems(section.entries)) {
       rows.push({
         key: `${section.id}:${block.id}`,
         scope: section.id,
@@ -509,7 +523,7 @@ function GroupedEntries({
   taskTitles?: TaskTitleMap | undefined
   recipientBackends?: RecipientBackendMap | undefined
 }) {
-  return groupThreadItems([...entries]).map((block) => (
+  return groupThreadItems(entries).map((block) => (
     <ThreadBlockRenderer key={block.id} block={block} scope={scope} renderAsk={renderAsk} renderPermission={renderPermission} runId={runId} taskTitles={taskTitles} recipientBackends={recipientBackends} />
   ))
 }

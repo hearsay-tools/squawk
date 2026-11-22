@@ -111,7 +111,18 @@ export function splitToolTitle(title: string): { verb: string; detail?: string }
   return { verb: title }
 }
 
-export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
+const groupedEntries = new WeakMap<readonly ThreadEntry[], ThreadBlock[]>()
+
+/** Entries and their items are immutable snapshots; weak keys release discarded turns. */
+export function groupThreadItems(allEntries: readonly ThreadEntry[]): ThreadBlock[] {
+  const cached = groupedEntries.get(allEntries)
+  if (cached) return cached
+  const blocks = buildThreadBlocks(allEntries)
+  groupedEntries.set(allEntries, blocks)
+  return blocks
+}
+
+function buildThreadBlocks(allEntries: readonly ThreadEntry[]): ThreadBlock[] {
   // Pass 0 — plan-kind tools (TodoWrite / todoList / todowrite) never render in the thread:
   // the plan dock is their surface (#382); a card here would only duplicate the checklist as
   // raw input JSON. Filtering the flat list drops them from children lists too.
