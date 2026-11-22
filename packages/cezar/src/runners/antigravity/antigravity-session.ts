@@ -132,9 +132,7 @@ export class AntigravitySession implements AgentSession {
     if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); }
     // The response that ends a turn carries every prompt sent into it: none is held after it.
     if (event.type === 'turn.completed') this.humanHolds.clear();
-    if (event.type === 'turn.completed' && event.stopReason === 'error' && !this.reportedFailure) {
-      this.failedTurn = event; return;
-    }
+    if (event.type === 'turn.completed' && event.stopReason === 'error' && this.failedTurnEnded(event)) return;
     if (event.type === 'turn.completed' && event.usage) {
       this.output.tokensUsed += event.usage.total;
       this.emit({ type: 'token-usage', tokensUsed: this.output.tokensUsed });
@@ -147,6 +145,13 @@ export class AntigravitySession implements AgentSession {
       this.armQuietEnd();
       if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
     }
+  }
+  /** A failed turn is held until the session reports the failure. One the agent started on its
+   *  own has no prompt that rejects, so it fails the session here, as a failed prompt does. */
+  private failedTurnEnded(event: Extract<UiEvent, { type: 'turn.completed' }>): boolean {
+    if (!this.reportedFailure) { this.failedTurn = event; return true; }
+    if (!this.busy) queueMicrotask(() => this.fail(new Error(this.providerError ?? 'Antigravity reported an agent execution error')));
+    return false;
   }
   /** ask_question ends the prompt with the question as text; the next prompt is the answer. */
   private openAsk(toolCallId: string, input: unknown): void {

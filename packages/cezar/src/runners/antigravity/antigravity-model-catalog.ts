@@ -10,7 +10,7 @@ import { agentHomeDir } from '../../paths.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityPersonalSignIn } from './login-probe.ts';
-import { antigravityExecutable } from './executable.ts';
+import { antigravityExecutable, resolveAntigravityCommand } from './executable.ts';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
 
 const optionSchema = z.object({ value: z.string(), name: z.string() });
@@ -21,7 +21,7 @@ const configsSchema = z.array(z.object({ id: z.string(), category: z.string().op
 export async function antigravityModelCatalogKey(options: ModelDiscoveryContext): Promise<string> {
   const executable = antigravityExecutable();
   if (!executable) throw new Error('The Antigravity CLI is not installed');
-  const file = await stat(executable, { bigint: true });
+  const file = await stat(resolveAntigravityCommand(executable), { bigint: true });
   const env = { ...process.env, ...profileEnv('antigravity', options.accountHome) };
   const home = agentHomeDir('antigravity', env);
   const hash = createHash('sha256').update(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || '');

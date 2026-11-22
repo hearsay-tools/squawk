@@ -54,6 +54,13 @@ it('continues a session the CLI cannot resume in a fresh session with the full s
   expect(events).toContainEqual(expect.objectContaining({ type: 'note', message: expect.stringContaining('could not resume session registry-session') }));
 });
 
+it('fails the session result when a turn the agent started on its own fails', async () => {
+  const cwd = await workspace(); const events: AgentEvent[] = [];
+  await expect(new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:late-error' }, event => events.push(event)))
+    .rejects.toThrow('agent executor error');
+  expect(events.filter(event => event.type === 'done')).toEqual([]);
+});
+
 it('says when a grant without Read cannot stop native file reads', async () => {
   const cwd = await workspace(); const events: AgentEvent[] = [];
   await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'explicit', tools: ['Bash'] }, userPrompt: 'inspect' }, event => events.push(event));

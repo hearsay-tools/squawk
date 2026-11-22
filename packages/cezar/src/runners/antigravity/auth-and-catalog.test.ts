@@ -8,7 +8,7 @@ import { antigravityRunner } from './definition.ts';
 import { ANTIGRAVITY_CODE_REDIRECT, antigravityLoginResponse, startAntigravitySignIn } from './browser-sign-in.ts';
 import { discoverAntigravityModels, antigravityModelCatalogKey } from './antigravity-model-catalog.ts';
 import { antigravityLogin } from './login-probe.ts';
-import { antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusUnverified, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
+import { resolveAntigravityCommand, antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusUnverified, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
 
 registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
@@ -44,6 +44,25 @@ it('signs two accounts in through --login with the pasted code or landing URL, a
     expect((await readFile(loginLog, 'utf8')).trim().split('\n').sort()).toEqual(['fixture-code-only', `${ANTIGRAVITY_CODE_REDIRECT}?state=fixture-state&code=fixture-url-only`].sort());
     expect(JSON.stringify(log.mock.calls)).not.toContain('fixture-');
   } finally { await Promise.all(flows.map(flow => flow.close())); }
+});
+
+it('fails the sign-in, not the cockpit, when the CLI closes its input before the code arrives', async () => {
+  const dir = await root(); const quitter = join(dir, 'quitter');
+  await writeFile(quitter, `#!/bin/sh\necho '  ${consent}'\nexec 0<&-\nexit 0\n`, { mode: 0o755 });
+  vi.stubEnv('HSQ_ANTIGRAVITY_BIN', quitter);
+  const flow = await startAntigravitySignIn(join(dir, 'account'));
+  try {
+    await flow.completion;
+    await expect(flow.redirect('4/fixture-code')).rejects.toThrow('The sign-in has ended');
+  } finally { await flow.close(); }
+});
+
+it('resolves a bare-name override through PATH before checking it', async () => {
+  const dir = await root(); const path = join(dir, 'path'); await mkdir(path);
+  await copyFile(bin, join(path, 'agy')); await chmod(join(path, 'agy'), 0o755);
+  expect(resolveAntigravityCommand('agy', { PATH: path })).toBe(join(path, 'agy'));
+  vi.stubEnv('PATH', `${path}:${process.env.PATH ?? ''}`);
+  expect(await checkAntigravityCli('agy')).toBe(true);
 });
 
 it('rejects the completion when the CLI refuses the pasted code', async () => {

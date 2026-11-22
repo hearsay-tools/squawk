@@ -64,6 +64,7 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
   const deadline = setTimeout(() => { void close(); }, SIGN_IN_TIMEOUT_MS);
   try {
     if (child.pid) launch.bindProcess(child.pid);
+    child.stdin.on('error', () => { /* A write after the CLI exited; redirect() reports it. */ });
     child.on('error', error => { spawnError = (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error(ANTIGRAVITY_MISSING) : error; });
     child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk: string) => { stderr = (stderr + chunk).slice(-16_384); });
     const lines = createInterface({ input: child.stdout });
@@ -88,7 +89,11 @@ export async function startAntigravitySignIn(accountHome?: string): Promise<Runn
         if (submitted) throw new Error('The code has already been submitted. Check sign-in status.');
         const response = antigravityLoginResponse(url, value);
         submitted = true;
-        child.stdin.end(`${response}\n`);
+        // The CLI may already have closed its input or exited: fail this sign-in, not the cockpit.
+        await new Promise<void>((resolve, reject) => {
+          if (!child.stdin.writable) { reject(new Error('The sign-in has ended. Start a new sign-in.')); return; }
+          child.stdin.end(`${response}\n`, (error?: Error | null) => error ? reject(new Error('The sign-in has ended. Start a new sign-in.')) : resolve());
+        });
       },
       close: async () => { url = ''; await close(); },
     };

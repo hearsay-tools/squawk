@@ -158,6 +158,12 @@ async function runtimeProbe(text, turn) {
 async function runPrompt(text, turn) {
   if (await runtimeProbe(text, turn)) return;
   if (text.includes('mock:permission-late')) return latePermission(turn);
+  if (text.includes('mock:late-error')) {
+    // A background command wakes the idle session, and that model step fails.
+    content('agent_message_chunk', 'Started in the background.');
+    turn.afterTurn = async () => { content('agent_message_chunk', '\n⚠ agent executor error: 503 Service Unavailable'); update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }); };
+    return;
+  }
   if (scheduleWakeup(text)) return;
   if (process.env.CEZ_MOCK_PERMISSION_PROBE === '1') await policyProbe();
   if (text.includes('mock:acp-extended-updates')) extendedUpdates();

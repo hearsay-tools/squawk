@@ -21,9 +21,19 @@ export function antigravityCliOutput(help: string, version: string): boolean {
   return help.startsWith('Usage of antigravity:') && /^\s+acp\s/m.test(help) && /^\d+\.\d+\.\d+$/.test(version.trim());
 }
 
+/** A bare command name (an override such as `agy`) resolves through PATH, as the spawn does. */
+export function resolveAntigravityCommand(path: string, env: NodeJS.ProcessEnv = process.env): string {
+  if (path.includes('/') || path.includes('\\')) return path;
+  const suffixes = process.platform === 'win32' ? ['.exe', ''] : [''];
+  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
+    for (const suffix of suffixes) if (executableFile(join(dir, `${path}${suffix}`))) return join(dir, `${path}${suffix}`);
+  }
+  return path;
+}
+
 function identityOf(path: string): string | undefined {
   try {
-    const target = realpathSync(path);
+    const target = realpathSync(resolveAntigravityCommand(path));
     const file = statSync(target, { bigint: true });
     return [target, file.dev, file.ino, file.size, file.mtimeNs, file.ctimeNs, file.mode].join(':');
   } catch { return undefined; }
@@ -47,7 +57,8 @@ export function checkAntigravityCli(path: string): Promise<boolean> {
   const known = identities.get(identity);
   if (known !== undefined) return Promise.resolve(known);
   // Go's flag package may exit 2 after --help; the text decides. --version must succeed.
-  const run = (args: string[]) => execFileAsync(path, args, RUN).then(output => ({ ...output, status: 0 }),
+  const command = resolveAntigravityCommand(path);
+  const run = (args: string[]) => execFileAsync(command, args, RUN).then(output => ({ ...output, status: 0 }),
     (error: { stdout?: string; stderr?: string; code?: unknown }) =>
       typeof error.code === 'number' ? { stdout: error.stdout ?? '', stderr: error.stderr ?? '', status: error.code } : undefined);
   const check = (async () => {
