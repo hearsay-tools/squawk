@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { visibilitySampleExpression, waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv } from './agent-browser'
+import { withFiniteLive } from './finite-live'
 import { readSharedProjects, writeSharedProjects } from './workspace-registry'
 
 /**
@@ -267,7 +268,7 @@ describe('cockpit app shell', () => {
     })
     let overflow!: { label: string; title: string; escaped: string[]; truncated: boolean }
     try {
-      await browser.withFiniteLive(() => {
+      await withFiniteLive(browser, () => {
         browser.goto(baseUrl + scoped('/'))
         overflow = waitForSettledSample(browser, `(() => {
         const chip = document.querySelector('[data-slot="version-chip"]')

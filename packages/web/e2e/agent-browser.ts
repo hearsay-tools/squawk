@@ -888,25 +888,6 @@ export class AgentBrowser {
     })
   }
 
-  /** Run `work` while this tab's new documents have no SharedWorker, so the cockpit sends its
-   *  live demand as finite HTTP that `routeJson` fixtures answer. The live SharedWorker outlives
-   *  documents in this profile and pushes real server state over its socket: its health snapshot
-   *  replaces a routed health fixture, and a routed version that differs from it reads as a
-   *  server upgrade, which reloads the page (hearsay-tools/squawk#4094). */
-  async withFiniteLive(work: () => void): Promise<void> {
-    await this.withPageSession(async (request) => {
-      await request('Page.enable', {})
-      const { identifier } = await request('Page.addScriptToEvaluateOnNewDocument', {
-        source: 'globalThis.SharedWorker=class{constructor(){throw new Error("blocked: this test serves routed fixtures")}}',
-      })
-      try {
-        work()
-      } finally {
-        await request('Page.removeScriptToEvaluateOnNewDocument', { identifier })
-      }
-    })
-  }
-
   /** Move a real pointer without clicking, for hover targets whose bounding-box center is covered. */
   moveTo(x: number, y: number): void {
     this.run(['mouse', 'move', String(Math.round(x)), String(Math.round(y))])

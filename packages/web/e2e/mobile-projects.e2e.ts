@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seedRuns } from './seed-runs'
 import { waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv, servedRoot } from './agent-browser'
+import { withFiniteLive } from './finite-live'
 import { readSharedProjects, snapshotSharedHome, writeSharedProjects } from './workspace-registry'
 import { applyContrastQaVariant, contrastQaVariants, contrastSampleExpression, restoreContrastQaDefaults, type ContrastSample } from './contrast'
 /**
@@ -191,7 +192,7 @@ describe('phone Tools page (#621 follow-up)', () => {
       health.checks[missing] = { name: health.checks[missing]!.name, available: false, hint: 'Install it and reload the cockpit.' }
       browser.routeJson('**/api/v1/health', health)
       try {
-        await browser.withFiniteLive(() => {
+        await withFiniteLive(browser, () => {
           browser.goto(`${baseUrl}/p/${projectId}/`)
           applyContrastQaVariant(browser, variant)
           browser.waitForFunction(`document.querySelector(${JSON.stringify(MENU)}) !== null`)
