@@ -450,8 +450,13 @@ function RailBottom({ roomToExpand, expanded, toggle, railId, allProjectsActive,
 }
 
 /** Capture focus before React removes the static rows during the sortable handover. */
-function StaticRailProjects({ children, rememberFocus }: { children: React.ReactNode; rememberFocus: () => void }) {
-  React.useLayoutEffect(() => rememberFocus, [rememberFocus])
+function StaticRailProjects({ children, rememberFocus, restoreFocus }: {
+  children: React.ReactNode; rememberFocus: () => void; restoreFocus: () => void
+}) {
+  React.useLayoutEffect(() => {
+    restoreFocus()
+    return rememberFocus
+  }, [rememberFocus, restoreFocus])
   return <>{children}</>
 }
 
@@ -502,7 +507,7 @@ export function ProjectRail({ projects, signals, version, projectTarget = homeOf
       onSwitchProject={onSwitchProject} onSelectProject={onSelectProject} sort={sort} />
   }
   const staticProjects = (
-    <StaticRailProjects rememberFocus={rememberFocus}>
+    <StaticRailProjects rememberFocus={rememberFocus} restoreFocus={restoreFocus}>
       {projects.map((project) => renderProject(project))}
     </StaticRailProjects>
   )

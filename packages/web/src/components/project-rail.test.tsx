@@ -8,6 +8,12 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { PROJECT_RAIL_EXPANDED_STORAGE_KEY } from '@/lib/project-rail-expanded'
 import type { ProjectSignal } from '@/lib/project-signal'
 
+const sortableChunk = vi.hoisted(() => ({ pending: Promise.resolve() }))
+vi.mock('./project-rail-sortable', async (importOriginal) => {
+  await sortableChunk.pending
+  return importOriginal()
+})
+
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
 })
@@ -415,12 +421,27 @@ describe('ProjectRail reorder', () => {
     })
   }
 
-  it('keeps the given order and links while the sortable list loads', async () => {
-    renderRail({ projects: [project('gamma'), project('alpha'), project('beta')], canReorder: true, onReorder: () => {} })
-    expect(order()).toEqual(['gamma', 'alpha', 'beta'])
-    expect(link('gamma').getAttribute('href')).toBe('/p/gamma/')
-    expect(link('gamma').getAttribute('aria-describedby')).toBeNull()
+  it('keeps order, links and focus when ui-state arrives before the sortable chunk', async () => {
+    let loadChunk!: () => void
+    sortableChunk.pending = new Promise<void>((resolve) => { loadChunk = resolve })
+    const projects = [project('gamma'), project('alpha'), project('beta')]
+    const onReorder = vi.fn()
+    const { rerender } = renderRail({ projects, canReorder: false, onReorder })
     link('gamma').focus()
+    rerender(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/p/toolkit-dev/']}>
+          <ProjectRail projects={projects} signals={new Map()} version="0.15.0" canReorder onReorder={onReorder} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+    // The chunk is still pending: the new fallback must already hold keyboard focus.
+    try {
+      expect(order()).toEqual(['gamma', 'alpha', 'beta'])
+      expect(link('gamma').getAttribute('href')).toBe('/p/gamma/')
+      expect(link('gamma').getAttribute('aria-describedby')).toBeNull()
+      expect(document.activeElement).toBe(link('gamma'))
+    } finally { loadChunk() }
     await waitFor(() => expect(link('gamma').getAttribute('aria-describedby')).toBeTruthy())
     expect(document.activeElement).toBe(link('gamma'))
     expect(order()).toEqual(['gamma', 'alpha', 'beta'])
