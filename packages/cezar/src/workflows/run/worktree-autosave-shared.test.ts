@@ -20,7 +20,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function autosave(): WorktreeAutosave {
   const gone = () => { throw new Error('the run record is gone'); };
   return new WorktreeAutosave({ repoRoot: join(root, 'repo-root'), dataDir: join(root, 'data'), disposed: () => false,
-    store: { getRun: gone, appendEvent: gone }, work: { track: (_name: string, work: Promise<void>) => work } } as unknown as RunModuleContext,
+    store: { getRun: gone, eventLog: { appendEvent: gone } }, work: { track: (_name: string, work: Promise<void>) => work } } as unknown as RunModuleContext,
   { holdForMaintenance: () => null, reapTerminalScratch: () => undefined, releaseSlot: () => undefined, saveWorktree: async () => undefined, trackTurn: () => undefined });
 }
 

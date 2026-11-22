@@ -61,8 +61,8 @@ export function boundaryOrderFixture(autonomous = false): BoundaryOrderFixture {
     sendMessage: call('human-input', true), sendAgentMessage: call('agent-input', Promise.resolve()),
     holdsHumanInput: call('holds', false), discardQueuedMessages: call('discard', undefined), end: call('end', undefined), interrupt: call('interrupt', undefined) };
   state.liveSession.attachSession(wire); state.liveSession.selectStep('step');
-  const append = store.appendEvent.bind(store);
-  vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => { log.push(`event:${event.type}`); return append(id, event); });
+  const append = store.eventLog.appendEvent.bind(store.eventLog);
+  vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => { log.push(`event:${event.type}`); return append(id, event); });
   const flush = store.flush.bind(store);
   vi.spyOn(store, 'flush').mockImplementation(() => { log.push('flush'); flush(); });
   const context = unused<RunModuleContext>('context', { store, repoRoot: root, dataDir: join(root, '.ai/cezar'), disposed: () => false,

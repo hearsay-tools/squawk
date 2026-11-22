@@ -47,8 +47,8 @@ describe("worker waits through RunManager", { timeout: 30_000 }, () => {
         expect(wake?.deliveredAt).toBeUndefined();
         const charged = store.getRun(p.id)?.automaticWakes ?? 0; // the first turn's nudge
         let disk: RunRecord | undefined;
-        const append = store.appendEvent.bind(store);
-        const checkpoint = vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+        const append = store.eventLog.appendEvent.bind(store.eventLog);
+        const checkpoint = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
           // The charge precedes its note. Read before forwarding so this event cannot flush it.
           if (id === p.id && event.type === 'note' && String(event.message).startsWith(NO_WAIT_NUDGE_NOTE)) {
             disk = (readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[]).find(run => run.id === p.id);

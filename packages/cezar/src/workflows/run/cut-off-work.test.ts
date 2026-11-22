@@ -37,8 +37,10 @@ describe('cutOffWork', () => {
 
 describe('recordCutOffWork', () => {
   const logOf = (events: unknown[]) => ({
-    readEvents: () => [...events],
-    appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; },
+    eventLog: {
+      readEvents: () => [...events],
+      appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; },
+    },
   });
 
   it('ends each cut-off item as declined, so a later restart names nothing again', () => {
@@ -64,7 +66,7 @@ describe('recordCutOffWork', () => {
 
 it('a second crash in the resumed turn replaces the names the checkpoint still holds', () => {
   const events: unknown[] = [turn, tool('a', 'running')];
-  const log = { readEvents: () => [...events], appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; } };
+  const log = { eventLog: { readEvents: () => [...events], appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; } } };
   const start: { restarted: true; cutOff?: CutOffWork } = { restarted: true };
   const first = withCutOff(log, 'run', start);
   expect(first.cutOff).toEqual({ tools: ['Bash: Ran a'] });

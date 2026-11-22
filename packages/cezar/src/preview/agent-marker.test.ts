@@ -20,7 +20,7 @@ function store(runIds: string[]) {
   return {
     events,
     getRun: (id: string) => (runIds.includes(id) ? ({ id } as never) : undefined),
-    appendEvent: (runId: string, event: Record<string, unknown>) => { events.push({ runId, event }); return event as never; },
+    eventLog: { appendEvent: (runId: string, event: Record<string, unknown>) => { events.push({ runId, event }); return event as never; } },
   };
 }
 
@@ -56,8 +56,8 @@ describe('agent crash markers (hearsay-tools/cezarion#784)', () => {
     markAgentConnected(dir, 'run-1');
     markAgentConnected(dir, 'run-2');
     const runs = store(['run-1', 'run-2']);
-    const append = runs.appendEvent;
-    runs.appendEvent = (runId, event) => {
+    const append = runs.eventLog.appendEvent;
+    runs.eventLog.appendEvent = (runId, event) => {
       if (runId === 'run-1') throw new Error('disk full');
       return append(runId, event);
     };

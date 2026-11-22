@@ -107,7 +107,7 @@ describe('sweepRegisteredPreviewLeftovers', () => {
 });
 
 /** The store members `armPreview` uses. A run it is never asked about needs none of them. */
-const armedStore = () => ({ lifecycle: new RunLifecycle(), getRun: () => undefined, appendEvent: (): never => { throw new Error('no run was expected'); } });
+const armedStore = () => ({ lifecycle: new RunLifecycle(), getRun: () => undefined, eventLog: { appendEvent: (): never => { throw new Error('no run was expected'); } } });
 
 describe('armPreview', () => {
   it("appends the disconnected a crash left out before anything else runs (hearsay-tools/cezarion#784)", () => {
@@ -115,7 +115,7 @@ describe('armPreview', () => {
     mkdirSync(join(a.dataDir, 'preview', 'run-crashed'), { recursive: true });
     writeFileSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'), '');
     const events: unknown[] = [];
-    const store = { lifecycle: new RunLifecycle(), getRun: () => ({ id: 'run-crashed' }), appendEvent: (_runId: string, event: unknown) => events.push(event) };
+    const store = { lifecycle: new RunLifecycle(), getRun: () => ({ id: 'run-crashed' }), eventLog: { appendEvent: (_runId: string, event: unknown) => events.push(event) } };
     armPreview(store as unknown as Parameters<typeof armPreview>[0], a.dataDir, noHost);
     expect(events).toEqual([{ type: 'preview.agent-browser', state: 'disconnected' }]);
     expect(existsSync(join(a.dataDir, 'preview', 'run-crashed', 'agent-connected'))).toBe(false);

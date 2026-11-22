@@ -213,7 +213,7 @@ describe('ToolActivityTracker', () => {
     const record = (id: string) => makeRunRecord({ id, status: statuses.get(id) ?? RUN_STATUS.running });
     return {
       lifecycle,
-      redactText: (text: string) => text.split('hunter2-secret').join('[REDACTED]'),
+      redaction: { redactText: (text: string) => text.split('hunter2-secret').join('[REDACTED]') },
       getRun: record,
       /** One write of the run that sets `status`, as the store publishes it. */
       change(id: string, status: RunRecord['status']) {

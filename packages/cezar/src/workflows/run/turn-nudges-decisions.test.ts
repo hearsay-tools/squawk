@@ -91,8 +91,8 @@ describe('closed-session refusal effects through public recovery', () => {
     const trace: string[] = [];
     let inGate = false;
     let checked = false;
-    const append = store.appendEvent.bind(store), move = store.move.bind(store), flush = store.flush.bind(store);
-    vi.spyOn(store, 'appendEvent').mockImplementation((runId, event) => {
+    const append = store.eventLog.appendEvent.bind(store.eventLog), move = store.move.bind(store), flush = store.flush.bind(store);
+    vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (runId === id && event.type === 'note' && String(event.message).startsWith('Completion blocked:')) {
         inGate = true; trace.push('warning');
       } else if (runId === id && inGate) {

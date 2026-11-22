@@ -203,7 +203,7 @@ function invokeReceipt(operation: string, f: ReturnType<typeof receiptFixture>) 
 it.each(['latched', 'interrupt', 'event'] as const)('preserves durable unread input through retirement failure: %s', failure => {
   const f = receiptFixture(); f.accept();
   vi.spyOn(store, 'commitOutcome').mockImplementation(() => { throw new Error('refused'); });
-  const append = vi.spyOn(store, 'appendEvent');
+  const append = vi.spyOn(store.eventLog, 'appendEvent');
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   if (failure === 'latched') f.state.inputState.recordInputError('earlier failure');
   if (failure === 'interrupt') vi.mocked(f.session.interrupt).mockImplementation(() => { throw new Error('interrupt refused'); });

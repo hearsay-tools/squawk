@@ -53,7 +53,7 @@ export const SETTLEMENT_GROUPS = {
             expect(manager.finish(runId)).toBe(true);
             await waitFor(() => !manager.isActive(runId) && store.workerExecutions.readWorkerExecution(runId)?.phase === 'complete');
             const unrelated = seedSettledFamily(store, repoRoot);
-            const reads = vi.spyOn(store, 'readEvents');
+            const reads = vi.spyOn(store.eventLog, 'readEvents');
             try {
               cleanupCheckpoint(store, runId);
               expect(store.workerExecutions.readWorkerExecution(runId)?.phase).toBe('complete');

@@ -60,11 +60,11 @@ describe('PreviewHost', () => {
   it('holds no port and starts nothing when the start record write is refused, and a retry starts', async () => {
     const { host, ctx, devServers } = make();
     let refuse = true;
-    const appendEvent = ctx.store.appendEvent.bind(ctx.store);
-    ctx.store = { ...ctx.store, appendEvent: ((id, event) => {
+    const appendEvent = ctx.store.eventLog.appendEvent.bind(ctx.store.eventLog);
+    ctx.store = { ...ctx.store, eventLog: { appendEvent: ((id, event) => {
       if (refuse) throw new Error('run is read only');
       return appendEvent(id, event);
-    }) as RunContext['store']['appendEvent'] };
+    }) as RunContext['store']['eventLog']['appendEvent'] } };
     const viewer = fakeViewer();
     await host.open(ctx, viewer, { port: 5173 });
     await host.run(ctx.runId, 5173);
@@ -1268,8 +1268,8 @@ describe('PreviewHost', () => {
       const { host, ctx, store } = make();
       const marker = join(ctx.dataDir, 'preview', ctx.runId, 'agent-connected');
       const markedAtEvent: boolean[] = [];
-      const append = store.appendEvent;
-      store.appendEvent = (runId, event) => {
+      const append = store.eventLog.appendEvent;
+      store.eventLog.appendEvent = (runId, event) => {
         if (event.type === 'preview.agent-browser') markedAtEvent.push(existsSync(marker));
         return append(runId, event);
       };
@@ -1287,7 +1287,7 @@ describe('PreviewHost', () => {
       const marker = join(ctx.dataDir, 'preview', ctx.runId, 'agent-connected');
       const grant = host.grantAgent(ctx.runId, () => ctx);
       const { link } = await connect(host, grant.token);
-      store.appendEvent = () => { throw new Error('disk full'); };
+      store.eventLog.appendEvent = () => { throw new Error('disk full'); };
       expect(() => (link as { close(): void }).close()).not.toThrow();
       expect(existsSync(marker)).toBe(true);
       await vi.advanceTimersByTimeAsync(PREVIEW_BROWSER_IDLE_MS);

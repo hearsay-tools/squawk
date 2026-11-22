@@ -37,8 +37,8 @@ export function refusalCells(runners: string[], it: typeof registerTest = regist
         // The run as the nudge note is written: the note follows the submission and the charge.
         let atNudge: { status?: string; waits?: Wait[]; automaticWakes?: number | undefined; delegation?: unknown } | undefined;
         const publicationFailures: unknown[] = [];
-        const append = store.appendEvent.bind(store);
-        vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+        const append = store.eventLog.appendEvent.bind(store.eventLog);
+        vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
           if (id === p.id && event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE) && !atNudge) {
             const run = store.getRun(p.id)!;
             try {

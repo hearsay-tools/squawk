@@ -272,9 +272,9 @@ describe('terminal delegation checkpoint reconciliation (#661)', () => {
   it.each(['family', 'live'] as const)('does not lose a %s request emitted during reconciliation', scope => {
     // A live family is reached by the unnamed pass; the settled one by its checkpoint.
     if (scope === 'live') setRunStatus(store, b.workerId, RUN_STATUS.running);
-    const append = store.appendEvent.bind(store);
+    const append = store.eventLog.appendEvent.bind(store.eventLog);
     let changed = false;
-    vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+    vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       if (!changed && id === a.parentId && event.type === 'conversation-message') {
         changed = true;
         if (scope === 'family') cleanupCheckpoint(store, b.workerId);

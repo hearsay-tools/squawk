@@ -59,11 +59,11 @@ describe('conversation settlement', () => {
     const { projectConversationEvents } = await import('./conversations.ts');
     const { root, worker } = records();
     const projected: string[] = [];
-    const store = { getRun: lookupOf([root, worker]), hasProjection: () => false,
+    const store = { getRun: lookupOf([root, worker]), eventLog: { hasProjection: () => false,
       appendEvent: (id: string) => {
         if (id === worker.id) throw new RunWriteRefusedError(id, 'fallback', 'read only under .ai/squawk/');
         projected.push(id);
-      } } as unknown as import('../runs/store.ts').RunStore;
+      } } } as unknown as import('../runs/store.ts').RunStore;
     projectConversationEvents(store, root);
     expect(projected).toEqual([root.id]);
   });
@@ -75,9 +75,9 @@ describe('conversation settlement', () => {
     const eventsOf = (id: string) => { if (!byRun.has(id)) byRun.set(id, []); return byRun.get(id)!; };
     worker.agentInputs = [{ id: request.id, source: agentInputSchema.shape.source.enum.agent, parentRunId: root.id, text: request.text, createdAt: now,
       deliveredAt: '2026-09-08T20:00:01.000Z', consumedAt: '2026-09-08T20:00:05.000Z' }];
-    const store = { getRun: (id: string) => [root, worker].find(run => run.id === id), readEvents: (id: string) => eventsOf(id),
+    const store = { getRun: (id: string) => [root, worker].find(run => run.id === id), eventLog: { readEvents: (id: string) => eventsOf(id),
       hasProjection: (id: string, projectionId: string) => eventsOf(id).some(event => event.projectionId === projectionId),
-      appendEvent: (id: string, event: Record<string, unknown>) => { eventsOf(id).push(event); } } as unknown as import('../runs/store.ts').RunStore;
+      appendEvent: (id: string, event: Record<string, unknown>) => { eventsOf(id).push(event); } } } as unknown as import('../runs/store.ts').RunStore;
     projectConversationEvents(store, root); projectConversationEvents(store, root);
     const consumed = [...byRun.values()].flat().filter(event => event.type === 'conversation-message' && event.delivery === 'consumed');
     expect(consumed).toHaveLength(2); // one per participant

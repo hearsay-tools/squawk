@@ -60,13 +60,15 @@ function fakeRuns(dataDir: string) {
     sourceDataDir: () => dataDir,
     runOwnership: (id) => (runs.has(id) ? 'held' : undefined),
     updateRun: (id, patch) => write(id, patch),
-    appendEvent: (runId, event) => {
-      const line = { ...event, seq: ++seq, ts: new Date().toISOString() } as RunEvent;
-      events.set(runId, [...(events.get(runId) ?? []), line]);
-      const file = historyPaths(dataDir, runId).plain;
-      mkdirSync(dirname(file), { recursive: true });
-      appendFileSync(file, `${JSON.stringify(line)}\n`);
-      return line;
+    eventLog: {
+      appendEvent: (runId, event) => {
+        const line = { ...event, seq: ++seq, ts: new Date().toISOString() } as RunEvent;
+        events.set(runId, [...(events.get(runId) ?? []), line]);
+        const file = historyPaths(dataDir, runId).plain;
+        mkdirSync(dirname(file), { recursive: true });
+        appendFileSync(file, `${JSON.stringify(line)}\n`);
+        return line;
+      },
     },
   };
   return {

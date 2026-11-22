@@ -468,7 +468,7 @@ describe('delegation service durable authority', () => {
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     const writes = vi.spyOn(f.store, 'commitDelegation');
     const results = vi.spyOn(f.store.workerResults, 'commitWorkerResult');
-    const events = vi.spyOn(f.store, 'appendEvent');
+    const events = vi.spyOn(f.store.eventLog, 'appendEvent');
     release(terminated);
     // Await the attempt itself so every write it could make precedes the absence checks.
     await attempts[0];
@@ -525,7 +525,7 @@ describe('delegation service durable authority', () => {
       detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
       const oldResults = results.mock.calls.length;
       const writes = vi.spyOn(f.store, 'commitDelegation');
-      const events = vi.spyOn(f.store, 'appendEvent');
+      const events = vi.spyOn(f.store.eventLog, 'appendEvent');
       writeFileSync(release, '');
       await expect(destroying).rejects.toMatchObject({ code: 'denied_scope' });
       expect(writes).not.toHaveBeenCalled();

@@ -66,9 +66,9 @@ describe('RunManager memory guard', () => {
 
   it('ignores an active run before its session attaches and preserves autonomous startup', async () => {
     let sampled = false;
-    let addedEvents: ReturnType<typeof f.store.readEvents> = [];
-    const append = f.store.appendEvent.bind(f.store);
-    vi.spyOn(f.store, 'appendEvent').mockImplementation((id, event) => {
+    let addedEvents: ReturnType<typeof f.store.eventLog.readEvents> = [];
+    const append = f.store.eventLog.appendEvent.bind(f.store.eventLog);
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       const result = append(id, event);
       if (event.type === 'step-start') {
         expect(f.manager.isActive(id)).toBe(true);

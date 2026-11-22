@@ -74,7 +74,7 @@ const runs = () => new Map<string, { id: string; title: string; worktreePath?: s
 
 async function boot(opts: { host?: PreviewSocketHost; log?: (line: string) => void; dataDir?: string } = {}) {
   const records = runs();
-  const store = { getRun: (id: string) => records.get(id), appendEvent: () => undefined } as unknown as RunContext['store'];
+  const store = { getRun: (id: string) => records.get(id), eventLog: { appendEvent: () => undefined } } as unknown as RunContext['store'];
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end();
@@ -215,7 +215,7 @@ describe('the preview WebSocket', () => {
   it('reaps a viewer that stops answering the protocol ping', async () => {
     const { host, calls } = fakeHost();
     const records = runs();
-    const store = { getRun: (id: string) => records.get(id), appendEvent: () => undefined } as unknown as RunContext['store'];
+    const store = { getRun: (id: string) => records.get(id), eventLog: { appendEvent: () => undefined } } as unknown as RunContext['store'];
     const server = createServer();
     const socket = createPreviewSocket({ host, verify: () => ({ trusted: true }), resolveProject: async () => ({ store, dataDir: worktree }), heartbeatMs: 40 });
     attachUpgradeRouter(server, [socket.route]);

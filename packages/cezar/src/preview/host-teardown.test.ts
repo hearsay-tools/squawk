@@ -30,7 +30,7 @@ it.each(['release', 'replacement'] as const)('reopening during real process tear
   const command = [process.execPath, fixture, '--port', String(port), '--fork', '--ignore-term', ...guard.args].map(part => JSON.stringify(part)).join(' ');
   const registration = { port, command, label: 'fixture', registeredAt: new Date().toISOString(), answeredAtRegistration: false };
   const run = { id: 'run-1', previewServers: [registration] };
-  const ctx: RunContext = { runId: run.id, title: 'teardown', worktreePath: root, dataDir: root, store: { getRun: () => run, appendEvent: () => undefined } as unknown as RunContext['store'] };
+  const ctx: RunContext = { runId: run.id, title: 'teardown', worktreePath: root, dataDir: root, store: { getRun: () => run, eventLog: { appendEvent: () => undefined } } as unknown as RunContext['store'] };
   let dev!: DevServer;
   // The real teardown runs; the stop the host awaits settles only once the test opens the gate.
   let tornDown: Promise<void> | undefined;

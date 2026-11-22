@@ -408,9 +408,9 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
 
   it('an interruption whose transcript write fails keeps the wait open and retries, so the wait never outruns the activity view', async () => {
     const { id, wait } = await parkedOnSubagents();
-    const real = store.appendEvent.bind(store);
+    const real = store.eventLog.appendEvent.bind(store.eventLog);
     let refuse = true;
-    const append = vi.spyOn(store, 'appendEvent').mockImplementation((runId, event) => {
+    const append = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (refuse && event.type === 'item.completed') { refuse = false; throw Error('injected: disk full'); }
       return real(runId, event);
     });
@@ -479,9 +479,9 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
     await until(() => turnEnds(id) > turns && store.getRun(id)?.status === RUN_STATUS.waiting);
     expect(subagentWait(id)).toBeUndefined();
     const retry = observationClock(() => /\bat SubagentWaits\.armRetry \(/.test(new Error().stack ?? ''));
-    const real = store.appendEvent.bind(store);
+    const real = store.eventLog.appendEvent.bind(store.eventLog);
     let refuse = true;
-    const append = vi.spyOn(store, 'appendEvent').mockImplementation((runId, event) => {
+    const append = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((runId, event) => {
       if (refuse && event.type === 'item.completed') { refuse = false; throw Error('injected: disk full'); }
       return real(runId, event);
     });

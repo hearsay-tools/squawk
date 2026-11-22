@@ -352,7 +352,7 @@ describe('durable conversations', () => {
     const w = await worker();
     const request = { id: randomUUID(), recipientRunId: w.id, kind: 'progress' as const, text: 'update', timeoutSeconds: 600 };
     const notify = vi.spyOn(f.manager, 'deliverConversationInput');
-    vi.spyOn(f.store, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
     await expect(f.service.send(f.caller, request)).resolves.toMatchObject({ effect: 'applied', delivery: 'queued', message: { id: request.id, state: 'accepted' } });
     expect(f.store.getRun(w.id)?.agentInputs).toHaveLength(1); expect(notify).not.toHaveBeenCalled();
     expect(await f.service.send(f.caller, request)).toMatchObject({ delivery: 'queued' });
@@ -364,7 +364,7 @@ describe('durable conversations', () => {
     const w = await worker();
     const sent = await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'question', timeoutSeconds: 600 });
     const reconcile = vi.spyOn(f.manager, 'reconcileWorkerWaits');
-    vi.spyOn(f.store, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
+    vi.spyOn(f.store.eventLog, 'appendEvent').mockImplementationOnce(() => { throw Error('projection unavailable'); });
     await expect(f.service.cancelRequest(f.caller, { requestId: sent.message.id })).rejects.toThrow('projection unavailable');
     reconcile.mockClear();
     const outcome = await f.service.cancelRequest(f.caller, { requestId: sent.message.id });

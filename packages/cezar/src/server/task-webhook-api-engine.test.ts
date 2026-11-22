@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunStore, type RunRecord } from '../runs/store.ts';
+import { RunStore, type RunEvent, type RunRecord } from '../runs/store.ts';
 import type { RunManager, StartRunInput } from '../workflows/run.ts';
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
@@ -90,7 +90,7 @@ describe('task webhook API (run engine)', () => {
         expect(after.status).not.toBe('running');
         await vi.waitFor(() => {
           const reader = RunStore.open(join(other, '.ai/cezar'));
-          let events: ReturnType<RunStore['readEvents']>;
+          let events: RunEvent[];
           try { events = reader.eventLog.readEvents('live'); } finally { reader.close(); }
           expect(events.find((event) => event.type === 'webhook.dry-run')).toMatchObject({
             event: 'task.status',

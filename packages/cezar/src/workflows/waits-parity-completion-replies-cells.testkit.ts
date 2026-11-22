@@ -41,8 +41,8 @@ export function completionRepliesCells(runners: string[], it: typeof registerTes
       store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });
       await until(() => gated(run.id));
       const atNudges: Wait[][] = [];
-      const append = store.appendEvent.bind(store);
-      vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+      const append = store.eventLog.appendEvent.bind(store.eventLog);
+      vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
         if (id === run.id && event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE)) atNudges.push(store.getRun(run.id)?.waits ?? []);
         return append(id, event);
       });

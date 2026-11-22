@@ -194,8 +194,8 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     releases.push(() => child.kill('SIGKILL'));
     await new Promise<void>(resolve => child.stdout!.once('data', () => resolve()));
     let failedWrite = false;
-    const append = store.appendEvent.bind(store);
-    vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+    const append = store.eventLog.appendEvent.bind(store.eventLog);
+    vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       if (id === w.id && event.type === 'user-message' && event.text === 'buffered during startup' && !failedWrite) {
         failedWrite = true; throw Error('controlled event write failure');
       }

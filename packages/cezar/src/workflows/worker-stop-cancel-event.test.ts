@@ -48,8 +48,8 @@ describe('a worker Stop and its cancellation event', { timeout: 30_000 }, () => 
     manager.enqueueOwnedRun(w.id);
     await until(() => !!liveSession(w.id));
     const interrupt = vi.spyOn(liveSession(w.id)!, 'interrupt');
-    const append = store.appendEvent.bind(store);
-    const refused = vi.spyOn(store, 'appendEvent').mockImplementation((id, event) => {
+    const append = store.eventLog.appendEvent.bind(store.eventLog);
+    const refused = vi.spyOn(store.eventLog, 'appendEvent').mockImplementation((id, event) => {
       if (event.type === 'lifecycle' && event.message === 'run cancelled') throw new Error('ENOSPC: no space left on device');
       return append(id, event);
     });
