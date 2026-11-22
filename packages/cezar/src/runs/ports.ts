@@ -8,6 +8,7 @@
  * `.ai/specs/2026-11-21-run-lifecycle-and-store-ports.md`), and the port then points at the module
  * that implements it. A later slice may move a method between ports when its topic moves. The store stays the only writer of status and exit fields (ADR 0056).
  */
+import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunStore } from './store.ts';
 import type { TranscriptFacts } from './transcript-facts.ts';
 
@@ -94,13 +95,13 @@ export interface TranscriptFactsPort {
   factsWarmIdle(): Promise<void>;
 }
 
-/** A worker's collected result. */
+/** A worker's collected result (`runs/worker-results.ts`, `store.workerResults`). */
 export interface WorkerResults {
-  readWorkerResult: RunStore['readWorkerResult'];
-  readWorkerResultDiff: RunStore['readWorkerResultDiff'];
-  readDeletedWorkerResult: RunStore['readDeletedWorkerResult'];
-  workerResultSnapshotPath: RunStore['workerResultSnapshotPath'];
-  commitWorkerResult: RunStore['commitWorkerResult'];
+  readWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined;
+  readWorkerResultDiff(parentId: string, workerId: string): string | undefined;
+  readDeletedWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined;
+  workerResultSnapshotPath(parentId: string, workerId: string, snapshotId: string): string;
+  commitWorkerResult(parentId: string, value: WorkerCollectedResult, diffSnapshot?: string, opts?: { ignoreCleanup?: boolean }): WorkerCollectedResult;
 }
 
 /** A worker's execution, scope and processes. */

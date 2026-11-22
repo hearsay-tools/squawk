@@ -51,8 +51,8 @@ function fakeStore(runs: RunRecord[]): RetentionStore & { runs: RunRecord[] } {
   const unused = () => { throw new Error('worker results are not read here'); };
   return {
     runs,
-    readWorkerResult: unused, readWorkerResultDiff: unused, readDeletedWorkerResult: unused,
-    workerResultSnapshotPath: unused, commitWorkerResult: unused,
+    workerResults: { readWorkerResult: unused, readWorkerResultDiff: unused, readDeletedWorkerResult: unused,
+      workerResultSnapshotPath: unused, commitWorkerResult: unused },
     listRunsWithWorktree: () => runs.filter((r) => r.worktreePath !== undefined && r.worktreeReclaimedAt === undefined),
     getRun: (id) => runs.find((r) => r.id === id),
     updateRun: (id, patch) => {

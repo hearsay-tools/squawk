@@ -26,7 +26,7 @@ export function topLevelAssistantText(event: RunEvent): string | undefined {
 export async function collectWorkerEvidence(repoRoot: string, store: RunStore, run: RunRecord): Promise<{ result: WorkerCollectedResult; diffSnapshot?: string }> {
   if (run.delegation?.role !== 'worker') throw Error('missing worker ownership');
   const delegation = run.delegation;
-  const previous = store.readWorkerResult(delegation.parentRunId, run.id);
+  const previous = store.workerResults.readWorkerResult(delegation.parentRunId, run.id);
   // One async read (#880): an archived transcript decodes with the async brotli API.
   const allEvents = await store.readEventsAsync(run.id);
   const events = allEvents.filter(event => event.seq > (delegation.executionStartSeq ?? -1));
@@ -107,14 +107,14 @@ async function readWorkerDiff(repoRoot: string, store: RunStore, run: RunRecord,
     const observation = await workspaceKindOf(run).readDiff(repoRoot, run);
     diffSnapshot = observation.diff;
     const snapshotId = randomUUID();
-    diff = { state: 'available', snapshotId, path: store.workerResultSnapshotPath(delegation.parentRunId, run.id, snapshotId), truncated: observation.truncated };
+    diff = { state: 'available', snapshotId, path: store.workerResults.workerResultSnapshotPath(delegation.parentRunId, run.id, snapshotId), truncated: observation.truncated };
   } catch { if (!cleanup.destroyed) diff = { state: 'unavailable', reason: 'unverified' }; }
   // Re-read after the live workspace checks. A concurrent reclaim can commit a
   // snapshot while this collect still holds a `previous` captured as undefined.
   if (diffSnapshot === undefined) {
-    const stored = store.readWorkerResult(delegation.parentRunId, run.id);
+    const stored = store.workerResults.readWorkerResult(delegation.parentRunId, run.id);
     if (stored?.revision === workerRevision(run) && stored.diff.state === 'available') {
-      const retained = store.readWorkerResultDiff(delegation.parentRunId, run.id);
+      const retained = store.workerResults.readWorkerResultDiff(delegation.parentRunId, run.id);
       if (retained !== undefined) { diffSnapshot = retained; diff = { ...stored.diff, snapshotId: randomUUID() }; }
     }
   }

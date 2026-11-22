@@ -52,8 +52,8 @@ describe('parent-owned collected worker results', () => {
     expect(result.summary.state === 'available' && result.summary.text.length).toBe(4000);
     expect(JSON.stringify(result)).not.toContain(f.token);
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
-    expect(reopened.readWorkerResult(f.parent.id, run.id)).toEqual(result);
-    expect(reopened.readWorkerResultDiff(f.parent.id, run.id)).toContain('[REDACTED]');
+    expect(reopened.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(result);
+    expect(reopened.workerResults.readWorkerResultDiff(f.parent.id, run.id)).toContain('[REDACTED]');
     expect(readPersistedText(join(f.root, '.ai/cezar'))).not.toContain('diff --git');
     reopened.flush();
   });
@@ -78,7 +78,7 @@ describe('parent-owned collected worker results', () => {
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result.diff.state).toBe('available');
     expect(result.summary).toMatchObject({ state: 'available', text: 'Older worker done' });
-    expect(f.store.readWorkerResultDiff(f.parent.id, run.id)).toContain('older.txt');
+    expect(f.store.workerResults.readWorkerResultDiff(f.parent.id, run.id)).toContain('older.txt');
   });
   it('never turns tool output into a summary and marks failures and running evidence partial', async () => {
     const run = await worker(); f.store.appendEvent(run.id, { type: 'tool-result', result: 'Success!' });
@@ -100,16 +100,16 @@ describe('parent-owned collected worker results', () => {
     const collecting = f.service.collect(f.caller, { workerId: run.id });
     f.store.commitWorkerContinuation(run.id, 'continue-line');
     await expect(collecting).rejects.toMatchObject({ code: 'incompatible_state' });
-    expect(f.store.readWorkerResult(f.parent.id, run.id)).toBeUndefined();
+    expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toBeUndefined();
   });
   it('retains historical evidence but does not reuse a previous execution assistant summary', async () => {
     const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'Old summary' }); setRunStatus(f.store, run.id, RUN_STATUS.review);
     const old = await f.service.collect(f.caller, { workerId: run.id });
     f.store.commitWorkerContinuation(run.id, 'continue-line');
-    expect(f.store.readWorkerResult(f.parent.id, run.id)).toEqual(old);
+    expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(old);
     const result = await f.service.collect(f.caller, { workerId: run.id });
     expect(result).toMatchObject({ revision: 1, partial: true, summary: { state: 'unavailable' } });
-    expect(() => f.store.commitWorkerResult(f.parent.id, old)).toThrow();
+    expect(() => f.store.workerResults.commitWorkerResult(f.parent.id, old)).toThrow();
   });
   it('collects published output through worktree cleanup and marks it deleted with history', async () => {
     const run = await worker();
@@ -146,7 +146,7 @@ describe('parent-owned collected worker results', () => {
     else vi.mocked(fsyncSync).mockImplementationOnce(fd => { descriptor = fd; vi.mocked(closeSync).mockClear(); throw Error('snapshot fsync failed'); });
     // New evidence: an identical result is already durable and writes nothing (hearsay-tools/cezarion#879).
     const changed = { ...first, observedAt: new Date(Date.parse(first.observedAt) + 1).toISOString(), summary: { state: 'unavailable' as const, reason: 'no-assistant-output' as const } };
-    expect(() => f.store.commitWorkerResult(f.parent.id, changed)).toThrow(`snapshot ${operation} failed`);
+    expect(() => f.store.workerResults.commitWorkerResult(f.parent.id, changed)).toThrow(`snapshot ${operation} failed`);
     // Reproduce another file opening before the descriptor assertion (hearsay-tools/cezarion#940).
     const reopened = openSync(join(dir, before[0]!), 'r');
     try {
@@ -154,7 +154,7 @@ describe('parent-owned collected worker results', () => {
       expect(fstatSync(reopened).isFile()).toBe(true);
       // Earlier reads can close the same number; only calls after the injected fault prove cleanup.
       expect(closeSync).toHaveBeenCalledExactlyOnceWith(descriptor);
-      expect(f.store.readWorkerResult(f.parent.id, run.id)).toEqual(first);
+      expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(first);
       expect(readdirSync(dir)).toEqual(before);
     } finally { closeSync(reopened); }
   });
@@ -167,7 +167,7 @@ describe('parent-owned collected worker results', () => {
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('disk failure'); });
     await expect(f.service.collect(f.caller, { workerId: run.id })).rejects.toThrow('disk failure');
     expect(published).not.toHaveBeenCalled();
-    expect(f.store.readWorkerResult(f.parent.id, run.id)).toEqual(first); fault.mockRestore();
+    expect(f.store.workerResults.readWorkerResult(f.parent.id, run.id)).toEqual(first); fault.mockRestore();
   });
   it('reads retained parent evidence after child history deletion but denies a missing ownership receipt', async () => {
     const run = await worker(); f.store.appendEvent(run.id, { type: 'text', text: 'Retained summary' });
@@ -216,10 +216,10 @@ describe('parent-owned collected worker results', () => {
     const run = await worker(); await ensureOwnedWorkspace(f.root, run);
     const first = await f.service.collect(f.caller, { workerId: run.id });
     expect(first.diff.state).toBe('available');
-    const original = f.store.readWorkerResultDiff(f.parent.id, run.id);
+    const original = f.store.workerResults.readWorkerResultDiff(f.parent.id, run.id);
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('disk failure'); });
-    expect(() => f.store.commitWorkerResult(f.parent.id, first, 'replacement')).toThrow();
-    expect(f.store.readWorkerResultDiff(f.parent.id, run.id)).toBe(original); fault.mockRestore();
+    expect(() => f.store.workerResults.commitWorkerResult(f.parent.id, first, 'replacement')).toThrow();
+    expect(f.store.workerResults.readWorkerResultDiff(f.parent.id, run.id)).toBe(original); fault.mockRestore();
   });
 
 });
@@ -235,8 +235,8 @@ describe('unchanged worker results (hearsay-tools/cezarion#879)', () => {
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     const generation = f.store.commitWorkerExecutionStart(workerId); f.store.commitWorkerExecutionComplete(workerId, generation);
     const result = await f.service.collect(f.caller, { workerId });
-    const dir = dirname(f.store.workerResultSnapshotPath(f.parent.id, workerId, randomUUID()));
-    return { workerId, result, diff: f.store.readWorkerResultDiff(f.parent.id, workerId), files: () => readdirSync(dir).sort() };
+    const dir = dirname(f.store.workerResults.workerResultSnapshotPath(f.parent.id, workerId, randomUUID()));
+    return { workerId, result, diff: f.store.workerResults.readWorkerResultDiff(f.parent.id, workerId), files: () => readdirSync(dir).sort() };
   }
   /** The same evidence, observed a minute later under a new snapshot identity. */
   const later = (result: Awaited<ReturnType<typeof collected>>['result']) => ({ ...result,
@@ -249,8 +249,8 @@ describe('unchanged worker results (hearsay-tools/cezarion#879)', () => {
     const before = files();
     vi.mocked(fsyncSync).mockClear();
     const commits = vi.spyOn(f.store, 'commitDelegation');
-    const kept = f.store.commitWorkerResult(f.parent.id, later(result), diff);
-    expect(kept).toEqual(f.store.readWorkerResult(f.parent.id, workerId));
+    const kept = f.store.workerResults.commitWorkerResult(f.parent.id, later(result), diff);
+    expect(kept).toEqual(f.store.workerResults.readWorkerResult(f.parent.id, workerId));
     expect(kept.observedAt).toBe(result.observedAt);
     expect(files()).toEqual(before);
     expect(fsyncSync).not.toHaveBeenCalled();
@@ -260,25 +260,25 @@ describe('unchanged worker results (hearsay-tools/cezarion#879)', () => {
   it('changed diff bytes or a changed field still write a new snapshot', async () => {
     const { workerId, result, diff, files } = await collected();
     const before = files();
-    f.store.commitWorkerResult(f.parent.id, later(result), `${diff}\n# changed`);
+    f.store.workerResults.commitWorkerResult(f.parent.id, later(result), `${diff}\n# changed`);
     expect(files()).not.toEqual(before);
-    expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('# changed');
+    expect(f.store.workerResults.readWorkerResultDiff(f.parent.id, workerId)).toContain('# changed');
     const changed = files();
     const summary = { state: 'unavailable' as const, reason: 'no-assistant-output' as const };
-    const next = later(f.store.readWorkerResult(f.parent.id, workerId)!);
-    f.store.commitWorkerResult(f.parent.id, { ...next, observedAt: new Date(Date.parse(next.observedAt) + 60_000).toISOString(), summary }, `${diff}\n# changed`);
+    const next = later(f.store.workerResults.readWorkerResult(f.parent.id, workerId)!);
+    f.store.workerResults.commitWorkerResult(f.parent.id, { ...next, observedAt: new Date(Date.parse(next.observedAt) + 60_000).toISOString(), summary }, `${diff}\n# changed`);
     expect(files()).not.toEqual(changed);
-    expect(f.store.readWorkerResult(f.parent.id, workerId)?.summary).toEqual(summary);
+    expect(f.store.workerResults.readWorkerResult(f.parent.id, workerId)?.summary).toEqual(summary);
   });
 
   it('ignoreCleanup treats a cleaning and a retained payload as one: it is already durable', async () => {
     const { result, diff, files } = await collected();
     const before = files();
     vi.mocked(fsyncSync).mockClear();
-    f.store.commitWorkerResult(f.parent.id, { ...later(result), cleanup: 'cleaning' }, diff, { ignoreCleanup: true });
+    f.store.workerResults.commitWorkerResult(f.parent.id, { ...later(result), cleanup: 'cleaning' }, diff, { ignoreCleanup: true });
     expect(files()).toEqual(before);
     expect(fsyncSync).not.toHaveBeenCalled();
-    f.store.commitWorkerResult(f.parent.id, { ...later(result), cleanup: 'cleaning' }, diff);
+    f.store.workerResults.commitWorkerResult(f.parent.id, { ...later(result), cleanup: 'cleaning' }, diff);
     expect(files()).not.toEqual(before);
     expect(fsyncSync).toHaveBeenCalled();
   });

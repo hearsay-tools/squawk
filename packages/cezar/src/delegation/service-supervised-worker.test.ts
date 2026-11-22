@@ -113,7 +113,7 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
     const result = await f.service.collect(W.w, { workerId: C.id });
     expect(result).toMatchObject({ workerId: C.id, parentRunId: f.parent.id, settled: true,
       workspace: { kind: 'shared', path: W.directory }, changes: { state: 'changed', paths: ['review.txt'] } });
-    expect(f.store.readWorkerResult(f.parent.id, C.id)).toMatchObject({ workerId: C.id, revision: result.revision });
+    expect(f.store.workerResults.readWorkerResult(f.parent.id, C.id)).toMatchObject({ workerId: C.id, revision: result.revision });
     expect(await f.service.collect(f.caller, { workerId: C.id })).toMatchObject({ workerId: C.id, changes: { state: 'changed' } });
 
     // Each lists what it may inspect; the root's entry names the supervisor.
@@ -182,7 +182,7 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
     const blockers = () => {
       const ids = supervisedReceipts(run(f.parent.id), W.id).map(receipt => receipt.workerId);
       return parentReadiness(run(W.id), f.parent.id, ids.map(workerId => ({ workerId, run: f.store.getRun(workerId),
-        terminated: f.store.readWorkerExecution(workerId)?.phase === 'complete', result: f.store.readWorkerResult(f.parent.id, workerId) })));
+        terminated: f.store.readWorkerExecution(workerId)?.phase === 'complete', result: f.store.workerResults.readWorkerResult(f.parent.id, workerId) })));
     };
     expect(blockers()).toEqual([{ workerId: C.id, reason: 'outstanding' }]);
     await C.finish();

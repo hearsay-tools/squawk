@@ -90,7 +90,7 @@ describe('destroy backoff recovery', { timeout: 90_000 }, () => {
     const parent = f.store.getRun(f.parent.id)!;
     if (parent.delegation?.role !== 'root') throw Error('root');
     expect(parent.delegation.results?.map(entry => entry.workerId).sort()).toEqual([a.workerId, b.workerId].sort());
-    for (const { workerId } of [a, b]) expect(f.store.readWorkerResult(f.parent.id, workerId)).toMatchObject({ workerId });
+    for (const { workerId } of [a, b]) expect(f.store.workerResults.readWorkerResult(f.parent.id, workerId)).toMatchObject({ workerId });
   });
 
   it.runIf(linux)('keeps retry state beside the worker delegation, so the stored delegation is what an older cezar parses', async () => {

@@ -5,7 +5,7 @@
  * removal slots (`runs/removal-slots.ts`) on every path. `RunStore` keeps one of these as
  * `store.retention`; worktree retention is `runs/retention.ts`.
  */
-import type { DelegationState, RunRecord, WorkerCollectedResult } from '@open-mercato/cezar-contract';
+import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
 import { RETENTION_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
 import { randomUUID } from 'node:crypto';
 import { realpathSync, rmSync } from 'node:fs';
@@ -16,7 +16,7 @@ import { agentTmpDirMayExist, removeAgentTmpDir } from './agent-tmpdir.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
 import { removeHistory } from './history-file.ts';
 import type { RunLifecycle } from './lifecycle.ts';
-import type { RunRetention } from './ports.ts';
+import type { RunRetention, WorkerResults } from './ports.ts';
 import { fallbackRunDeleteError } from './project-run-sources.ts';
 import { assertRunSlotsSealed, deletionRefusal, runRemovalCleanups } from './removal-slots.ts';
 import { familyKey, rowFamily } from './run-claims.ts';
@@ -54,10 +54,7 @@ export interface RetentionState {
   applyArchived(run: RunRecord, archived: boolean): boolean;
   /** The worker deletion checks stay in the store, in today's order, until D5 (C1 decision). */
   workerDeletionEvidence(id: string): boolean;
-  readWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined;
-  readWorkerResultDiff(parentId: string, workerId: string): string | undefined;
-  readDeletedWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined;
-  commitWorkerResult(parentId: string, value: WorkerCollectedResult, diffSnapshot?: string): WorkerCollectedResult;
+  readonly workerResults: WorkerResults;
   readWorkerExecution(id: string): WorkerExecution | undefined;
   identityPath(id: string): string;
   processesPath(id: string): string;
@@ -88,7 +85,7 @@ export class RunRetentionTopic implements RunRetention {
         if (this.state.hasRun(receipt.workerId) || receipt.deletion?.phase !== 'complete') return false;
         // A pending parent deletion already validated the results before removing their bytes.
         if (run.delegation?.role === 'root' && run.delegation.historyDeletion === 'pending') return true;
-        return this.state.readDeletedWorkerResult(id, receipt.workerId) !== undefined;
+        return this.state.workerResults.readDeletedWorkerResult(id, receipt.workerId) !== undefined;
       });
     }
     return this.state.listWorkersOf(id).length === 0;
@@ -102,20 +99,20 @@ export class RunRetentionTopic implements RunRetention {
         const parent = this.state.peek(run.delegation.parentRunId)!;
         if (parent.delegation?.role !== 'root') return false;
         const receipt = parent.delegation.receipts.find(entry => entry.workerId === id)!;
-        const result = this.state.readWorkerResult(parent.id, id)!;
+        const result = this.state.workerResults.readWorkerResult(parent.id, id)!;
         const deletion = receipt.deletion ?? { phase: 'pending' as const, revision: result.revision,
           resourceId: run.delegation.workspace.resourceId, generation: this.state.readWorkerExecution(id)!.generation };
         this.state.commitDelegation([{ id: parent.id, delegation: { ...parent.delegation,
           receipts: parent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion } : entry),
         } }]);
         // Do not advertise artifact bytes as retained while interrupted deletion is in progress.
-        this.state.commitWorkerResult(parent.id, { ...result, observedAt: new Date().toISOString(),
+        this.state.workerResults.commitWorkerResult(parent.id, { ...result, observedAt: new Date().toISOString(),
           diff: result.diff.state === 'available' ? { ...result.diff, snapshotId: randomUUID() } : result.diff,
           artifacts: result.artifacts.state === 'available' ? { ...result.artifacts,
             items: result.artifacts.items.map(item => ({ state: 'unavailable' as const, reason: 'unreadable' as const,
               detail: 'History deletion is in progress', id: item.id, path: item.path })),
           } : result.artifacts,
-        }, this.state.readWorkerResultDiff(parent.id, id));
+        }, this.state.workerResults.readWorkerResultDiff(parent.id, id));
         this.removeRunHistoryBytes(id);
         // Delete scratch while its generation evidence still exists; failed removal keeps it.
         removeAgentTmpDir(this.dataDir, id);
@@ -125,13 +122,13 @@ export class RunRetentionTopic implements RunRetention {
         rmSync(this.state.processesPath(id), { force: true });
         rmSync(this.state.scopePath(id), { force: true });
         rmSync(this.state.executionPath(id), { force: true });
-        const retained = this.state.readWorkerResult(parent.id, id)!;
-        this.state.commitWorkerResult(parent.id, { ...retained, observedAt: new Date().toISOString(),
+        const retained = this.state.workerResults.readWorkerResult(parent.id, id)!;
+        this.state.workerResults.commitWorkerResult(parent.id, { ...retained, observedAt: new Date().toISOString(),
           diff: retained.diff.state === 'available' ? { ...retained.diff, snapshotId: randomUUID() } : retained.diff,
           artifacts: retained.artifacts.state === 'available' ? { ...retained.artifacts,
             items: retained.artifacts.items.map(item => ({ state: 'deleted' as const, reason: 'missing' as const, id: item.id, path: item.path })),
           } : retained.artifacts,
-        }, this.state.readWorkerResultDiff(parent.id, id));
+        }, this.state.workerResults.readWorkerResultDiff(parent.id, id));
         this.state.commitIndex(new Map<string, RunRecord | null>([[parent.id, { ...parent, delegation: { ...parent.delegation,
           receipts: parent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion: { ...deletion, phase: 'complete' as const } } : entry),
         } }], [id, null]]));

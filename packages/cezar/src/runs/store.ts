@@ -1,6 +1,6 @@
-import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, upgradeRemovedRunnerResult, withKeptFields } from './legacy-run-rows.ts';
+import { legacyIndexRows, readableSavedRunner, upgradeLegacyRunRow, withKeptFields } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
-import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
+import { addRunSource, copyFallbackFamily, fallbackRunSource, fallbackRunDeleteError } from './project-run-sources.ts';
 import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
 import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, stepTotals, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
@@ -15,7 +15,7 @@ import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal,
 import { agentTmpDirMayExist, agentTmpDirOwnershipProven } from './agent-tmpdir.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-scope/scope.ts';
@@ -23,7 +23,6 @@ import { WorkerScopes } from '../worker-scope/worker-scopes.ts';
 import { readPrivateRecord, writePrivateRecord } from './private-record-file.ts';
 import {
   delegationStateSchema,
-  workerResultFileSchema,
   workerDestroyRetrySchema,
 } from '@open-mercato/cezar-contract/delegation';
 import { agentInputSchema, inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -40,7 +39,7 @@ import { previewServerSchema } from '@open-mercato/cezar-contract/preview';
 import { waitSchema, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { isSweepable, UNREAD_RUN_RULE, SWEEPABLE_RUN_RULE, REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
-import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunPullRequest, RunSummary, Wait, WorkerCollectedResult, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
+import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunPullRequest, RunSummary, Wait, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
 import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@open-mercato/cezar-contract/run-search';
 import { storedDelegationStateSchema } from './delegation-state.ts';
 import { HistoryCompressor } from './history-compressor.ts';
@@ -83,7 +82,7 @@ import { RunStoreOpenError, toRunStoreOpenError } from './store-open-error.ts';
 import { archiveStoreFamily } from './archive-family.ts';
 import { claimStoreFamilies } from './claim-families.ts';
 import { createStoreOwnedRun, type SpawnCapacityRefusal } from './owned-run-create.ts';
-import { commitStoreWorkerResult } from './worker-result-commit.ts';
+import { WorkerResultsTopic } from './worker-results.ts';
 import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 
@@ -557,6 +556,8 @@ export class RunStore {
   readonly transcriptFacts: RunTranscriptFacts;
   /** Whether a run may go, and its deletion; the count-based archive (hearsay-tools/squawk#4037). */
   readonly retention: RunRetentionTopic;
+  /** The saved snapshot of a worker's collected result (hearsay-tools/squawk#4038). */
+  readonly workerResults: WorkerResultsTopic;
   private readonly liveItems = new LiveItemSnapshots();
 
   /** Capture both sources on the same synchronous sequence boundary before history IO. */
@@ -574,6 +575,12 @@ export class RunStore {
       listConversationRootIds: () => this.listConversationRootIds(),
       listRunIds: () => this.listRunIds(),
     });
+    this.workerResults = new WorkerResultsTopic(dataDir, {
+      peek: (id) => this.peek(id), hasRun: (id) => this.hasRun(id), hasFallbackRun: (id) => this.hasFallbackRun(id),
+      writeDir: (id) => this.writeDir(id), sourceDataDir: (id) => this.sourceDataDir(id),
+      redactResult: (result) => this.redact({ type: 'worker-result', seq: 0, ts: result.observedAt, result }).result,
+      redactText: (text) => this.redactText(text), commitDelegation: (patches) => this.commitDelegation(patches),
+    });
     this.retention = new RunRetentionTopic(dataDir, {
       db: () => this.db, held: this.held, deleted: this.deleted, quarantined: this.quarantined,
       historyOwed: this.historyOwed, seqs: this.seqs, published: this.published, transcriptFacts: this.transcriptFacts,
@@ -584,10 +591,7 @@ export class RunStore {
       scheduleSave: () => this.scheduleSave(), commitIndex: (input) => this.commitIndex(input),
       commitDelegation: (patches) => this.commitDelegation(patches), applyArchived: (run, archived) => this.applyArchived(run, archived),
       workerDeletionEvidence: (id) => this.workerDeletionEvidence(id),
-      readWorkerResult: (parentId, workerId) => this.readWorkerResult(parentId, workerId),
-      readWorkerResultDiff: (parentId, workerId) => this.readWorkerResultDiff(parentId, workerId),
-      readDeletedWorkerResult: (parentId, workerId) => this.readDeletedWorkerResult(parentId, workerId),
-      commitWorkerResult: (parentId, value, diffSnapshot) => this.commitWorkerResult(parentId, value, diffSnapshot),
+      workerResults: this.workerResults,
       readWorkerExecution: (id) => this.readWorkerExecution(id), identityPath: (id) => this.identityPath(id),
       processesPath: (id) => this.processesPath(id), scopePath: (id) => this.scopePath(id),
       executionPath: (id) => this.executionPath(id), handoffPath: (runId) => this.handoffPath(runId),
@@ -1832,51 +1836,6 @@ export class RunStore {
     this.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
   }
 
-  private workerResultsDir(parentId: string, write = false): string { return workerResultsDirectory(write ? this.writeDir(parentId) : this.sourceDataDir(parentId), parentId, write); }
-
-  workerResultSnapshotPath(parentId: string, workerId: string, snapshotId: string): string {
-    return join(runDataDir(this.dataDir, parentId), 'runs', `${z.uuid().parse(parentId)}-worker-results`, `${z.uuid().parse(workerId)}.${z.uuid().parse(snapshotId)}.json`);
-  }
-
-  private readWorkerResultFile(parentId: string, workerId: string): z.infer<typeof workerResultFileSchema> | undefined {
-    const parent = this.peek(parentId);
-    if (parent?.delegation?.role !== 'root' || !parent.delegation.receipts.some(receipt => receipt.workerId === workerId)) return undefined;
-    const reference = parent.delegation.results?.find(result => result.workerId === workerId);
-    if (!reference) return undefined;
-    try {
-      const path = join(this.workerResultsDir(parentId), `${z.uuid().parse(workerId)}.${z.uuid().parse(reference.snapshotId)}.json`);
-      const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-      let raw: string;
-      try { const info = fstatSync(fd); if (!info.isFile() || info.size > 3_145_728) return undefined; raw = readFileSync(fd, 'utf8'); } finally { closeSync(fd); }
-      const file = workerResultFileSchema.parse(upgradeRemovedRunnerResult(JSON.parse(raw)));
-      if (!bindWorkerResultPath(file.result.diff, this.dataDir, this.hasFallbackRun(parentId), parentId, path)) return undefined;
-      if (file.result.parentRunId !== parentId || file.result.workerId !== workerId || file.result.workspace.ownerRunId !== workerId || file.result.revision !== reference.revision || file.result.observedAt !== reference.observedAt ||
-        (file.result.diff.state === 'available' && (file.result.diff.snapshotId !== reference.snapshotId || file.diffSnapshot === undefined))) return undefined;
-      return file;
-    } catch { return undefined; }
-  }
-
-  readWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined {
-    return this.readWorkerResultFile(parentId, workerId)?.result;
-  }
-  readWorkerResultDiff(parentId: string, workerId: string): string | undefined {
-    return this.readWorkerResultFile(parentId, workerId)?.diffSnapshot;
-  }
-
-  /** Publish a pointer only after its redacted immutable snapshot reaches disk. */
-  commitWorkerResult(parentId: string, value: WorkerCollectedResult, diffSnapshot?: string, opts: { ignoreCleanup?: boolean } = {}): WorkerCollectedResult {
-    return commitStoreWorkerResult({
-      redactResult: (result) => this.redact({ type: 'worker-result', seq: 0, ts: result.observedAt, result }).result,
-      peek: (id) => this.peek(id),
-      readWorkerResultFile: (id, workerId) => this.readWorkerResultFile(id, workerId),
-      readWorkerResult: (id, workerId) => this.readWorkerResult(id, workerId),
-      redactText: (text) => this.redactText(text),
-      workerResultSnapshotPath: (id, workerId, snapshotId) => this.workerResultSnapshotPath(id, workerId, snapshotId),
-      workerResultsDir: (id) => this.workerResultsDir(id, true),
-      commitDelegation: (patches) => this.commitDelegation(patches),
-    }, parentId, value, diffSnapshot, opts);
-  }
-
   /** Create an owned worker run and its parent receipt; `createStoreOwnedRun` holds the checks. */
   createOwnedRun(
     input: Parameters<RunStore['createRun']>[0],
@@ -2774,19 +2733,6 @@ export class RunStore {
     } catch { return false; }
   }
 
-  /** Complete replacement evidence can stand in for absent child history, never for a present execution. */
-  readDeletedWorkerResult(parentId: string, workerId: string): WorkerCollectedResult | undefined {
-    if (this.hasRun(workerId)) return undefined;
-    const parent = this.peek(parentId);
-    if (parent?.delegation?.role !== 'root' || parent.delegation.historyDeletion) return undefined;
-    const deletion = parent.delegation.receipts.find(receipt => receipt.workerId === workerId)?.deletion;
-    if (deletion?.phase !== 'complete') return undefined;
-    const result = this.readWorkerResult(parentId, workerId);
-    return result?.settled && ['review', 'done', 'failed', 'cancelled'].includes(result.status) &&
-      result.cleanup === 'complete' && result.revision === deletion.revision &&
-      result.workspace.resourceId === deletion.resourceId ? result : undefined;
-  }
-
   /** A deleted child's receipt replaces the private proof only after the deletion checkpoint. */
   private workerDeletionEvidence(id: string): boolean {
     const child = this.peek(id);
@@ -2800,7 +2746,7 @@ export class RunStore {
     const parent = this.peek(child.delegation.parentRunId);
     if (parent?.delegation?.role !== 'root' || parent.delegation.historyDeletion) return false;
     const receipt = parent.delegation.receipts.find(entry => entry.workerId === id);
-    const result = this.readWorkerResult(parent.id, id);
+    const result = this.workerResults.readWorkerResult(parent.id, id);
     if (!receipt || !result?.settled || result.cleanup !== 'complete' || result.status !== child.status ||
       result.revision !== (child.delegation.executionRevision ?? 0)) return false;
     const { state: _state, ...workspace } = result.workspace;

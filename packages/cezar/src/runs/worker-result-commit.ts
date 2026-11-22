@@ -1,5 +1,5 @@
 /**
- * Publish a worker-result snapshot and its parent pointer. `RunStore.commitWorkerResult` is a
+ * Publish a worker-result snapshot and its parent pointer. `WorkerResultsTopic.commitWorkerResult` is a
  * thin call into `commitStoreWorkerResult`; ownership, obsolescence and disk writes stay here.
  */
 import { randomUUID } from 'node:crypto';

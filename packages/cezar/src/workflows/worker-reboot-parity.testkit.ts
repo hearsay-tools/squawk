@@ -115,7 +115,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
         (store.getRun(orphan.id)!.delegation as { destroy?: { phase: string } }).destroy?.phase === 'complete');
       expect(holder.running).toBe(true); // its cwd is gone, but nothing signalled it
       expect(execFileSync('git', ['branch', '--list', workspace.branch], { cwd: root, encoding: 'utf8' }).trim()).toBe('');
-      expect(store.readWorkerResult(p.id, orphan.id)).toMatchObject({ settled: true, cleanup: 'complete' });
+      expect(store.workerResults.readWorkerResult(p.id, orphan.id)).toMatchObject({ settled: true, cleanup: 'complete' });
       expect(store.getRun(p.id)?.status).toBe('done');
       expect(store.retention.canDeleteRun(orphan.id)).toBe(true);
       await holder.close(); holderClosed = true;

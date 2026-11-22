@@ -5,10 +5,10 @@ import { collectWorkerEvidence } from './results.ts';
 
 /** Snapshot parent-owned worker evidence before the checkout goes. A collect/commit failure
  *  returns false so the directory is left for the next pass. */
-async function preserveWorkerResult(repoRoot: string, store: WorkerResults, run: RunRecord): Promise<boolean> {
+async function preserveWorkerResult(repoRoot: string, store: { readonly workerResults: WorkerResults }, run: RunRecord): Promise<boolean> {
   if (run.delegation?.role !== 'worker') return true;
   const evidence = await collectWorkerEvidence(repoRoot, store as RunStore, run);
-  store.commitWorkerResult(run.delegation.parentRunId, evidence.result, evidence.diffSnapshot);
+  store.workerResults.commitWorkerResult(run.delegation.parentRunId, evidence.result, evidence.diffSnapshot);
   return evidence.diffSnapshot !== undefined || evidence.result.diff.state === 'available';
 }
 
