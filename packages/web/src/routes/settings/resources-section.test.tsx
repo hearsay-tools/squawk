@@ -111,12 +111,12 @@ afterEach(() => {
 })
 
 describe('Global settings → Resources', () => {
-  it('shows loading while the workspace config is pending', () => {
+  it('shows loading while the workspace config is pending', async () => {
     serve()
     vi.mocked(fetch).mockReturnValueOnce(new Promise<Response>(() => {}))
     renderResources()
 
-    expect(screen.getByText('Loading resource settings…')).toBeTruthy()
+    expect(await screen.findByText('Loading resource settings…')).toBeTruthy()
     expect(parallelSelect()).toBeNull()
   })
 

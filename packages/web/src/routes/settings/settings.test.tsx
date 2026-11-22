@@ -98,7 +98,7 @@ function gateSeededClient() {
   return client
 }
 
-function renderAt(entry: string) {
+async function renderAt(entry: string) {
   render(
     <QueryClientProvider client={gateSeededClient()}>
       <ThemeProvider>
@@ -110,6 +110,7 @@ function renderAt(entry: string) {
       </ThemeProvider>
     </QueryClientProvider>,
   )
+  await screen.findByRole('navigation', { name: 'Settings sections' })
 }
 
 beforeEach(() => serve())
@@ -140,8 +141,8 @@ const GLOBAL_SECTIONS = [
 ]
 
 describe('the settings shell', () => {
-  it('renders the mobile PROJECT nav from the registry — project sections only', () => {
-    renderAt('/settings/agent-defaults')
+  it('renders the mobile PROJECT nav from the registry — project sections only', async () => {
+    await renderAt('/settings/agent-defaults')
     const nav = document.querySelector('[data-slot="settings-nav-mobile"]')!
     const ids = [...nav.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
     expect(ids).toEqual(PROJECT_SECTIONS)
@@ -150,8 +151,8 @@ describe('the settings shell', () => {
     expect(document.querySelector('[data-slot="settings-nav"]')).toBeNull()
   })
 
-  it('names the directly linked section in the mobile disclosure', () => {
-    renderAt('/settings/global/projects')
+  it('names the directly linked section in the mobile disclosure', async () => {
+    await renderAt('/settings/global/projects')
     const disclosure = document.querySelector<HTMLDetailsElement>('.settings-section-picker')!
     expect(disclosure.open).toBe(false)
     expect(disclosure.querySelector('summary')?.textContent).toBe('Projects')
@@ -159,7 +160,7 @@ describe('the settings shell', () => {
   })
 
   it('navigates from the mobile disclosure and closes it on the new section', async () => {
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
     const disclosure = document.querySelector<HTMLDetailsElement>('.settings-section-picker')!
     disclosure.open = true
     fireEvent.click(disclosure.querySelector('[data-section="resources"]')!)
@@ -167,8 +168,8 @@ describe('the settings shell', () => {
     expect(document.querySelector<HTMLDetailsElement>('.settings-section-picker')?.open).toBe(false)
   })
 
-  it('every section keeps a way BACK to the index: the "General" nav entry', () => {
-    renderAt('/settings/worktrees')
+  it('every section keeps a way BACK to the index: the "General" nav entry', async () => {
+    await renderAt('/settings/worktrees')
     // Project scope: scoped like every other project link, and pointing at the area index.
     expect(
       document.querySelector('[data-slot="settings-nav-mobile"] [data-slot="settings-nav-index"]')?.getAttribute('href'),
@@ -177,21 +178,21 @@ describe('the settings shell', () => {
     expect(document.querySelector('[data-slot="settings-nav-index"][aria-current="page"]')).toBeNull()
   })
 
-  it('"General" is the current page on the index itself, and absent from the global area', () => {
-    renderAt('/settings')
+  it('"General" is the current page on the index itself, and absent from the global area', async () => {
+    await renderAt('/settings')
     expect(
       document.querySelector('[data-slot="settings-nav-mobile"] [data-slot="settings-nav-index"]')?.getAttribute('aria-current'),
     ).toBe('page')
     cleanup()
 
     // The global area has no index page to go back to.
-    renderAt('/settings/global/resources')
+    await renderAt('/settings/global/resources')
     expect(document.querySelector('[data-slot="settings-nav-mobile"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="settings-nav-index"]')).toBeNull()
   })
 
-  it('renders the mobile GLOBAL nav at /settings/global — global sections, unprefixed links', () => {
-    renderAt('/settings/global/appearance')
+  it('renders the mobile GLOBAL nav at /settings/global — global sections, unprefixed links', async () => {
+    await renderAt('/settings/global/appearance')
     const nav = document.querySelector('[data-slot="settings-nav-mobile"]')!
     expect(nav.getAttribute('data-scope')).toBe('global')
     const ids = [...nav.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
@@ -205,8 +206,8 @@ describe('the settings shell', () => {
     expect(nav.querySelector('[data-section="skills"]')).toBeNull()
   })
 
-  it('/settings is the project registry as an index — one card per visible section', () => {
-    renderAt('/settings')
+  it('/settings is the project registry as an index — one card per visible section', async () => {
+    await renderAt('/settings')
     const index = document.querySelector('[data-slot="settings-index"]')!
     const ids = [...index.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
     expect(ids).toEqual(PROJECT_SECTIONS)
@@ -220,14 +221,14 @@ describe('the settings shell', () => {
     )
   })
 
-  it('/settings/global has no index: it lands on Appearance', () => {
-    renderAt('/settings/global')
+  it('/settings/global has no index: it lands on Appearance', async () => {
+    await renderAt('/settings/global')
     expect(document.querySelector('[data-route="settings-global-appearance"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="settings-index"]')).toBeNull()
   })
 
   it('a moved section keeps its old URL working: /settings/appearance → the global twin', async () => {
-    renderAt('/settings/appearance')
+    await renderAt('/settings/appearance')
     // Legacy flat URL → boot project → the section's new global home. Two redirects, one hop
     // each, and the address bar ends up naming the real place.
     await waitFor(() => {
@@ -239,7 +240,7 @@ describe('the settings shell', () => {
 describe('the appearance section (global scope)', () => {
   it('normalizes a persisted legacy accent while applying density at boot', async () => {
     serve({ appearance: { accent: 'violet', density: 'compact' } })
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
 
     await waitFor(() => {
       expect(localStorage.getItem('cez-accent')).toBe('cezarion')
@@ -251,7 +252,7 @@ describe('the appearance section (global scope)', () => {
 
   it('keeps the sole accent in the full appearance payload', async () => {
     serve({ appearance: { density: 'compact' } })
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
     await waitFor(() => {
       expect(screen.getByRole('radio', { name: 'Compact' }).getAttribute('aria-checked')).toBe('true')
     })
@@ -268,7 +269,7 @@ describe('the appearance section (global scope)', () => {
 
   it('density flips back to the default and the attribute comes OFF the root', async () => {
     serve({ appearance: { density: 'compact' } })
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
     await waitFor(() => {
       expect(document.documentElement.dataset.density).toBe('compact')
     })
@@ -284,7 +285,7 @@ describe('the appearance section (global scope)', () => {
 
   it('reading width round-trip: Wide stamps the root and PUTs the full object; back to Narrow clears it', async () => {
     serve({ appearance: { accent: 'violet' } })
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
     // Wait for the server value to normalize so the pending load cannot clobber the width write.
     await waitFor(() => {
       expect(localStorage.getItem('cez-accent')).toBe('cezarion')
@@ -309,7 +310,7 @@ describe('the appearance section (global scope)', () => {
   })
 
   it('theme rides the existing theme system: class + localStorage, no ui-state write', async () => {
-    renderAt('/settings/global/appearance')
+    await renderAt('/settings/global/appearance')
 
     fireEvent.click(screen.getByRole('radio', { name: 'Light' }))
     expect(document.documentElement.classList.contains('light')).toBe(true)
@@ -344,7 +345,7 @@ describe('the settings split writes the right store', () => {
     ;(FakeNotification as unknown as { permission: string }).permission = 'granted'
     vi.stubGlobal('Notification', FakeNotification)
 
-    renderAt('/settings/global/notifications')
+    await renderAt('/settings/global/notifications')
     const toggle = await screen.findByRole('switch', { name: 'Notify when an agent needs you' })
     fireEvent.click(toggle)
 
@@ -354,7 +355,7 @@ describe('the settings split writes the right store', () => {
   })
 
   it('agent defaults → the project-scoped /api/v1/config, never the workspace routes', async () => {
-    renderAt('/settings/agent-defaults')
+    await renderAt('/settings/agent-defaults')
     const runner = await waitFor(() => {
       const el = document.querySelector<HTMLButtonElement>('[data-slot="agents-runner"] [data-value="codex"]')
       expect(el).not.toBeNull()

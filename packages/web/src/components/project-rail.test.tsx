@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -415,8 +415,12 @@ describe('ProjectRail reorder', () => {
     })
   }
 
-  it('renders the projects in the order it is given', () => {
+  it('keeps the given order and links while the sortable list loads', async () => {
     renderRail({ projects: [project('gamma'), project('alpha'), project('beta')], canReorder: true, onReorder: () => {} })
+    expect(order()).toEqual(['gamma', 'alpha', 'beta'])
+    expect(link('gamma').getAttribute('href')).toBe('/p/gamma/')
+    expect(link('gamma').getAttribute('aria-describedby')).toBeNull()
+    await waitFor(() => expect(link('gamma').getAttribute('aria-describedby')).toBeTruthy())
     expect(order()).toEqual(['gamma', 'alpha', 'beta'])
   })
 
@@ -434,10 +438,11 @@ describe('ProjectRail reorder', () => {
     expect(grip('alpha')).toBeNull()
   })
 
-  it('gives every expanded row a labelled grip button that says where it is', () => {
+  it('gives every expanded row a labelled grip button that says where it is', async () => {
     setViewport(1600)
     localStorage.setItem(PROJECT_RAIL_EXPANDED_STORAGE_KEY, '1')
     renderRail({ projects: three, canReorder: true, onReorder: () => {} })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     expect(screen.getByRole('navigation', { name: 'Projects' }).getAttribute('data-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: 'Reorder alpha, position 1 of 3' })).toBe(grip('alpha'))
     expect(grip('gamma')?.getAttribute('aria-label')).toBe('Reorder gamma, position 3 of 3')
@@ -445,8 +450,9 @@ describe('ProjectRail reorder', () => {
     expect(link('alpha').contains(grip('alpha'))).toBe(false)
   })
 
-  it('keeps a collapsed mark a link, with the reorder instructions attached', () => {
+  it('keeps a collapsed mark a link, with the reorder instructions attached', async () => {
     renderRail({ projects: three, canReorder: true, onReorder: () => {} })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     expect(screen.getByRole('navigation', { name: 'Projects' }).getAttribute('data-expanded')).toBe('false')
     expect(grip('alpha')).toBeNull()
     expect(link('alpha').getAttribute('role')).toBeNull()
@@ -464,6 +470,7 @@ describe('ProjectRail reorder', () => {
     }
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const activator = expanded ? grip('alpha')! : link('alpha')
     activator.focus()
@@ -482,6 +489,7 @@ describe('ProjectRail reorder', () => {
     // a local order the rail paints the OLD order for that frame and the row visibly snaps back.
     const onReorder = vi.fn()
     const { rerender } = renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     link('alpha').focus()
 
@@ -508,6 +516,7 @@ describe('ProjectRail reorder', () => {
   it('does not lift a collapsed mark on Enter, so the link still navigates', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     link('alpha').focus()
     await press(link('alpha'), 'Enter')
@@ -520,6 +529,7 @@ describe('ProjectRail reorder', () => {
   it('lifts a collapsed mark by touch on a long press, and leaves a finger swipe to the browser', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const target = link('alpha')
     const touch = (y: number) => ({ touches: [{ clientX: 30, clientY: y }], changedTouches: [{ clientX: 30, clientY: y }] })
@@ -556,6 +566,7 @@ describe('ProjectRail reorder', () => {
   it('cancels the click that ends a pointer drag, so the link does not load a page', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const target = link('alpha')
 

@@ -243,9 +243,9 @@ const ROUTE_CASES: Array<[url: string, route: string]> = [
 ]
 
 describe('scoped route map (/p/:projectId)', () => {
-  it('opens shared workspace diagnostics without forcing a project redirect', () => {
+  it('opens shared workspace diagnostics without forcing a project redirect', async () => {
     renderAt('/tools')
-    expect(routeName()).toBe('workspace-tools')
+    await waitFor(() => expect(routeName()).toBe('workspace-tools'))
   })
   it('opens the global activity view without forcing a project redirect', async () => {
     renderAt('/activity')
@@ -259,18 +259,19 @@ describe('scoped route map (/p/:projectId)', () => {
     expect(routeName()).toBe('activity')
   })
   for (const [url, route] of ROUTE_CASES) {
-    it(`/p/${BOOT}${url} → ${route}`, () => {
+    it(`/p/${BOOT}${url} → ${route}`, async () => {
       renderAt(`/p/${BOOT}${url}`)
-      expect(routeName()).toBe(route)
+      await vi.dynamicImportSettled()
+      await waitFor(() => expect(routeName()).toBe(route))
     })
   }
 
   // A task worktree never registers itself, so the registry has no row for the boot project;
   // the desktop title names it the way the sidebar header does, from the repo root (#622).
-  it('names an unregistered boot project in the Settings title from its repo root', () => {
+  it('names an unregistered boot project in the Settings title from its repo root', async () => {
     const health = { ...HEALTH, repo: { root: '/home/u/worktrees/a5523045', branch: 'main' } } as unknown as typeof HEALTH
     renderAt(`/p/${BOOT}/settings`, { health, registry: { ...REGISTRY, projects: [] } })
-    const title = screen.getByRole('heading', { level: 1 }).textContent
+    const title = (await screen.findByRole('heading', { level: 1 })).textContent
     expect(title).toContain('a5523045')
     expect(title).not.toContain('this project')
   })
@@ -311,8 +312,9 @@ describe('scoped route map (/p/:projectId)', () => {
 
   // The area rule (nav links, tab links…) — spot-checked through the Settings shell, whose
   // section links are plain flat `to`s routed through the scope-aware Link.
-  it('navigation links generated inside a project carry its prefix', () => {
+  it('navigation links generated inside a project carry its prefix', async () => {
     renderAt(`/p/${BOOT}/settings`)
+    await waitFor(() => expect(document.querySelector('[data-slot="settings-index"]')).not.toBeNull())
     const link = document.querySelector('[data-slot="settings-index"] a[data-section="agent-defaults"]')
     expect(link?.getAttribute('href')).toBe(`/p/${BOOT}/settings/agent-defaults`)
   })
@@ -372,17 +374,18 @@ describe('the global settings area (/settings/global)', () => {
     ['/settings/global/agents', 'settings-global-agents'],
   ]
   for (const [url, route] of GLOBAL_CASES) {
-    it(`${url} → ${route}, unscoped`, () => {
+    it(`${url} → ${route}, unscoped`, async () => {
       renderAt(url)
-      expect(routeName()).toBe(route)
+      await vi.dynamicImportSettled()
+      await waitFor(() => expect(routeName()).toBe(route))
       // Never redirected into a project: the pathname is the one that was asked for.
       expect(currentPathname()).toBe(url)
     })
   }
 
-  it('/settings/global has no index page: it lands on Appearance', () => {
+  it('/settings/global has no index page: it lands on Appearance', async () => {
     renderAt('/settings/global')
-    expect(routeName()).toBe('settings-global-appearance')
+    await waitFor(() => expect(routeName()).toBe('settings-global-appearance'))
     expect(currentPathname()).toBe('/settings/global/appearance')
   })
 
@@ -393,7 +396,7 @@ describe('the global settings area (/settings/global)', () => {
     it(`/${path} renders the disabled state while the capability is off`, async () => {
       renderAt(`/p/${BOOT}/${path}`)
       expect(currentPathname()).toBe(`/p/${BOOT}/${path}`)
-      expect(routeName()).toBe('automations')
+      await waitFor(() => expect(routeName()).toBe('automations'))
       expect(await screen.findByText('Automations are off')).not.toBeNull()
       expect(screen.getByText(/Unset CEZ_AUTOMATIONS/)).not.toBeNull()
     })
@@ -402,9 +405,9 @@ describe('the global settings area (/settings/global)', () => {
   // The window before health answers is the one that bites: `/automations/new` used to paint a
   // full creation form optimistically, so a cold deep link on a gated server offered a submit
   // that POSTs into a 409. No mode renders until the capability is known.
-  it('holds every /automations mode on a loading state until health answers', () => {
+  it('holds every /automations mode on a loading state until health answers', async () => {
     renderAt(`/p/${BOOT}/automations/new`, { health: null })
-    expect(routeName()).toBe('automations')
+    await waitFor(() => expect(routeName()).toBe('automations'))
     expect(screen.getByText('Loading automations…')).not.toBeNull()
     expect(document.querySelector('#automation-name')).toBeNull()
     expect(screen.queryByText('Automations are off')).toBeNull()
@@ -412,21 +415,21 @@ describe('the global settings area (/settings/global)', () => {
 
   // A moved section's old URL, in both spellings a bookmark can have it.
   for (const id of ['appearance', 'notifications', 'resources']) {
-    it(`/settings/${id} carries query AND hash through BOTH redirect hops`, () => {
+    it(`/settings/${id} carries query AND hash through BOTH redirect hops`, async () => {
       // The legacy flat URL takes two hops — `LegacyPathRedirect` into the boot project, then
       // the moved-section redirect out to the global twin. `settingsSectionPath` returns a bare
       // pathname, so the second hop is exactly where a bookmark's `?…#…` used to disappear.
       renderAt(`/settings/${id}?tab=x&y=a%2Fb#anchor`)
       expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(routeName()).toBe(`settings-global-${id}`)
+      await waitFor(() => expect(routeName()).toBe(`settings-global-${id}`))
       expect(currentSearch()).toBe('?tab=x&y=a%2Fb')
       expect(currentHash()).toBe('#anchor')
     })
 
-    it(`/p/${BOOT}/settings/${id} carries query AND hash on the single hop`, () => {
+    it(`/p/${BOOT}/settings/${id} carries query AND hash on the single hop`, async () => {
       renderAt(`/p/${BOOT}/settings/${id}?tab=x#anchor`)
       expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(routeName()).toBe(`settings-global-${id}`)
+      await waitFor(() => expect(routeName()).toBe(`settings-global-${id}`))
       expect(currentSearch()).toBe('?tab=x')
       expect(currentHash()).toBe('#anchor')
     })

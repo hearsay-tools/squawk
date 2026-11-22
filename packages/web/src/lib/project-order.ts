@@ -1,5 +1,3 @@
-import { arrayMove } from '@dnd-kit/sortable'
-
 /**
  * The one answer to "in what order do the projects go?" (hearsay-tools/cezarion#438, a port of
  * open-mercato/cezar#952 adapted to this fork's project rail).
@@ -90,14 +88,17 @@ export function orderProjects<T extends OrderableProject>(
 /**
  * The list to persist after a drag: the id at `from` lifted out and dropped at `to`.
  *
- * The move itself is dnd-kit's own `arrayMove` — the same function its sorting strategies use to
- * work out where each item lands, so the persisted order cannot drift from the order the drag
- * previewed. What this adds is the guard: `arrayMove` happily takes an out-of-range index and
- * splices at the end, while a drop that resolved to nothing must be a no-op. It is called from an
- * event handler, so it returns the input rather than throwing.
+ * Invalid drop indices leave the order unchanged. Return a copy so callers never mutate the
+ * given order, including when the drop is a no-op.
  */
 export function moveProjectId(ids: readonly string[], from: number, to: number): string[] {
   if (from === to) return [...ids]
   if (from < 0 || to < 0 || from >= ids.length || to >= ids.length) return [...ids]
-  return arrayMove([...ids], from, to)
+  return arrayMove(ids, from, to)
+}
+
+function arrayMove<T>(items: readonly T[], from: number, to: number): T[] {
+  const next = [...items]
+  next.splice(to, 0, next.splice(from, 1)[0]!)
+  return next
 }

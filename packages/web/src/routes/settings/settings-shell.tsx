@@ -6,7 +6,7 @@ import { useActiveProjectIdentity } from '@/components/sidebar-project-header'
 import { Link as ScopedLink, NavLink as ScopedNavLink } from '@/lib/project-router'
 import { ProjectGeneral } from './project-general'
 import { ArchiveOnMergeField } from './archive-on-merge-field'
-import { visibleSettingsSections, type SettingsScope, type SettingsSection } from './registry'
+import { GLOBAL_SETTINGS_HOME, settingsSectionPath, visibleSettingsSections, type SettingsScope, type SettingsSection } from './registry'
 
 /**
  * The registry-driven Settings shell (R6 Step 1.3, spec §"Settings").
@@ -40,14 +40,6 @@ import { visibleSettingsSections, type SettingsScope, type SettingsSection } fro
  * `GLOBAL_SETTINGS_HOME` and every global entry point (rail, mobile drawer, cross-link) links
  * there directly.
  */
-
-/** The area's URL root — also what `SettingsSkillsRedirect` and the legacy redirects target. */
-export function settingsSectionPath(scope: SettingsScope, id: SettingsSection['id']): string {
-  return scope === 'global' ? `/settings/global/${id}` : `/settings/${id}`
-}
-
-/** Where "Global settings" lands: the area has no index page of its own (header comment). */
-export const GLOBAL_SETTINGS_HOME = settingsSectionPath('global', 'appearance')
 
 /** Global links bypass the project prefix; project links get it. See the header comment. */
 function navComponents(scope: SettingsScope) {

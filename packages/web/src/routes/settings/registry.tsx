@@ -1,18 +1,19 @@
-import { TasksSection } from './archive-on-merge-field'
 import { BellIcon, BotIcon, FoldersIcon, GaugeIcon, KeyRoundIcon, PaletteIcon } from '@/components/design-icons'
 import { FileCogIcon, FileTextIcon, FolderGit2Icon } from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+import { lazy, type ComponentType, type SVGProps } from 'react'
 
-import { GlobalAgentsSection } from './accounts-section'
-import { AgentConfigSection } from './agent-config-section'
-import { AgentDefaultsSection } from './agent-defaults-section'
-import { AppearanceSection } from './appearance'
-import { NotificationsSection } from './notifications-section'
-import { ProjectsSection } from './projects-section'
-import { PromptTemplatesSection } from './prompt-templates-section'
-import { ResourcesSection } from './resources-section'
-import { SidebarSection } from './sidebar-section'
-import { WorktreesSection } from './worktrees-section'
+const GlobalAgentsSection = lazy(() => import('./accounts-section').then((m) => ({ default: m.GlobalAgentsSection })))
+const AgentConfigSection = lazy(() => import('./agent-config-section').then((m) => ({ default: m.AgentConfigSection })))
+const AgentDefaultsSection = lazy(() => import('./agent-defaults-section').then((m) => ({ default: m.AgentDefaultsSection })))
+const AppearanceSection = lazy(() => import('./appearance').then((m) => ({ default: m.AppearanceSection })))
+const NotificationsSection = lazy(() => import('./notifications-section').then((m) => ({ default: m.NotificationsSection })))
+const ProjectsSection = lazy(() => import('./projects-section').then((m) => ({ default: m.ProjectsSection })))
+const PromptTemplatesSection = lazy(() => import('./prompt-templates-section').then((m) => ({ default: m.PromptTemplatesSection })))
+const ResourcesSection = lazy(() => import('./resources-section').then((m) => ({ default: m.ResourcesSection })))
+const SidebarSection = lazy(() => import('./sidebar-section').then((m) => ({ default: m.SidebarSection })))
+const WorktreesSection = lazy(() => import('./worktrees-section').then((m) => ({ default: m.WorktreesSection })))
+
+const TasksSection = lazy(() => import('./archive-on-merge-field').then((m) => ({ default: m.TasksSection })))
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -147,3 +148,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 export function visibleSettingsSections(scope: SettingsScope): SettingsSection[] {
   return SETTINGS_SECTIONS.filter((section) => section.scope === scope)
 }
+
+/** Settings paths stay synchronous with the section metadata and route matcher. */
+export function settingsSectionPath(scope: SettingsScope, id: SettingsSectionId): string {
+  return scope === 'global' ? `/settings/global/${id}` : `/settings/${id}`
+}
+
+export const GLOBAL_SETTINGS_HOME = settingsSectionPath('global', 'appearance')
