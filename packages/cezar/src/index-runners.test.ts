@@ -53,20 +53,21 @@ it('migrates legacy accounts before remote-settings status in a cold process', (
   const root = mkdtempSync(join(tmpdir(), 'hsq-cli-migration-'));
   const script = `
     import { strict as assert } from 'node:assert';
-    import { readFileSync } from 'node:fs';
+    import { mkdirSync, readFileSync } from 'node:fs';
     import { Home } from './packages/cezar/src/home/home.ts';
     import { prepareOperatorHome } from './packages/cezar/src/home/entry.ts';
     import { runSubcommand } from './packages/cezar/src/subcommands.ts';
     const legacy = Home.sandbox(${JSON.stringify(root)} + '/legacy', { layout: 'legacy' });
     const target = Home.sandbox(${JSON.stringify(root)} + '/target');
-    const account = { id: 'work', provider: 'claude', configDir: '/external/claude-work', label: '', addedAt: '' };
+    const account = { id: 'work', provider: 'claude', configDir: legacy.root + '/claude-work', label: '', addedAt: '' };
+    mkdirSync(account.configDir);
     Home.seed(legacy, legacy.workspaceConfig, { agentProfiles: [account],
       projects: [{ root: '/project', agentProfile: { claude: 'work' } }] });
     const env = { HSQ_URL: 'http://127.0.0.1:1' };
     assert.equal(await runSubcommand(['remote-settings', 'status'], env,
       () => prepareOperatorHome(target, 'remote-settings', env, { legacy })), 0);
     const saved = JSON.parse(readFileSync(target.agentAccounts, 'utf8'));
-    assert.deepEqual(saved.accounts, [account]);
+    assert.deepEqual(saved.accounts, [{ ...account, configDir: target.data + '/accounts/work' }]);
     assert.deepEqual(saved.selections, { '/project': { claude: 'work' } });
   `;
   try {

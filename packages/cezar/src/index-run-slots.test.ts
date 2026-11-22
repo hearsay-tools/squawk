@@ -49,3 +49,17 @@ it.each(commands)('%s %j initializes process services before its handler', async
     });
   }
 });
+
+it.each([
+  ['backup', '--help'], ['backup', '-h'],
+  ['remote-settings', '--help'], ['remote-settings', '-h'], ['remote-settings', 'help'],
+])('%s %s skips operator Home preparation and runner registration', async (command, flag) => {
+  vi.resetModules();
+  const { runSubcommand } = await import('./subcommands.ts');
+  const { knownRunnerIds } = await import('./core/runner-registry.ts');
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    expect(await runSubcommand([command!, flag!], {}, () => { throw new Error('Unexpected Home preparation'); })).toBe(0);
+    expect(knownRunnerIds()).toEqual([]);
+  } finally { log.mockRestore(); }
+});

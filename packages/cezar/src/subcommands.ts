@@ -28,7 +28,7 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
       return (await import('./server-install/migrate-cli.ts')).runServerMigrateCommand(argv, env, { legacy, target });
     };
     case 'backup': return async (argv, env) => {
-      const selected = home(env);
+      const selected = operatorHelp('backup', argv) ? resolveHome({ purpose: 'cli', env }) : home(env);
       const source = selected.layout === 'split' && argv[0] === 'list' && !hasInstallMarker(selected.config)
         ? resolveHome({ purpose: 'cli', env, layout: 'legacy' }) : selected;
       return (await import('./workspace/backup-cli.ts')).runBackupCommand(argv, env, source, { contained: source !== selected });
@@ -42,7 +42,7 @@ export async function loadSubcommand(name: string | undefined, home: (env: NodeJ
     case 'message': return (await import('./delegation/cli.ts')).runMessageCommand;
     case 'worker': return (await import('./delegation/cli.ts')).runWorkerCommand;
     case 'remote-settings': return async (argv, env) => {
-      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, ['help', '--help', '-h'].includes(argv[0] ?? '')
+      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, operatorHelp('remote-settings', argv)
         ? resolveHome({ purpose: 'cli', env }) : home(env));
     };
     default: return undefined;
@@ -62,11 +62,16 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const help = argv.some(arg => arg === '--help' || arg === '-h');
   const worker = command === 'worker' && (argv.length === 0 || help || argv[0] === 'help' || argv[0] === 'spawn');
   const operator = command === 'backup' || command === 'remote-settings';
-  const operatorRuntime = operator && !['help', '--help', '-h'].includes(argv[0] ?? '');
+  const operatorRuntime = operator && !operatorHelp(command, argv);
   if (!worker && !operatorRuntime && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
     'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
   const { registerBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
   const { registerBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   registerBuiltInRunSlots();
+}
+
+/** Help must skip both runtime registration and the migrating operator Home factory. */
+function operatorHelp(command: string, argv: readonly string[]): boolean {
+  return ['--help', '-h', ...(command === 'remote-settings' ? ['help'] : [])].includes(argv[0] ?? '');
 }
