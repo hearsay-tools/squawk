@@ -10,8 +10,8 @@
 **Parallel coding agents orchestrator** — a local cockpit for running and
 tracking AI coding-agent tasks in your repo.
 
-Type a task, pick a workflow and an agent — **Claude Code, Codex, OpenCode, pi or
-OMP (OpenCode, pi and OMP experimental), or a mix of them per step** — and watch it work live: steps, tool calls,
+Type a task, pick a workflow and an agent — **Claude Code, Codex, OpenCode, pi,
+OMP or Antigravity (OpenCode, pi and OMP experimental), or a mix of them per step** — and watch it work live: steps, tool calls,
 tokens, diffs, in a browser cockpit that runs entirely on your machine.
 Your CLI logins, your `gh`, your files. No accounts, no database server, no cloud.
 
@@ -84,7 +84,8 @@ it does better than any of them:
 - 🪶 **Genuinely zero config.** `npx -p @hearsay-tools/squawk hsq` in your repo and you're running —
   no wizard, no API keys, no env vars, no schema, no database server. It rides the
   `claude` / `codex` / `opencode` / `pi` / `omp` logins and the `gh` you already have, and every
-  missing piece degrades gracefully instead of blocking you.
+  missing piece degrades gracefully instead of blocking you. The Google Antigravity CLI
+  installs and signs in from **Settings → Agents**.
 - 🖥️ **Built for a server (VPS mode).** Squawk is made to live on a **VPS, cloud,
   or dedicated box** as an always-on janitor for your repo — headless-first, with
   a mobile-friendly cockpit you drive from anywhere. It's a coding server you can
@@ -135,7 +136,7 @@ and an orchestrator keeps a whole queue of them moving.
   subagents from the stopped process stopped with it and that its shell commands
   may have stopped. The cockpit shows this notice beside your message.
 - 🔀 **Locked into one agent vendor.** Most tools wed you to a single CLI. Squawk
-  drives **Claude Code, Codex, OpenCode, pi and OMP** (OpenCode, pi and OMP
+  drives **Claude Code, Codex, OpenCode, pi, OMP and Antigravity** (OpenCode, pi and OMP
   experimental) through one runner seam — set a
   default, pick a backend per task, or mix them inside one workflow (implement
   with one agent, review with another) — and through **OpenCode**, **pi** or
@@ -175,7 +176,8 @@ the [`codex` CLI](https://github.com/openai/codex),
 [OpenCode](https://opencode.ai), the
 [pi](https://github.com/badlogic/pi-mono), or
 [OMP](https://github.com/can1357/oh-my-pi) — and, optionally, `git` and the
-`gh` CLI.
+`gh` CLI. You can also install the Google Antigravity CLI from **Settings → Agents**
+once the cockpit runs. Sign in there with a Google account, or set `GEMINI_API_KEY`.
 
 ```bash
 cd your-repo
@@ -261,7 +263,7 @@ resolves to the latest stable release.
 
 You describe a task. Squawk runs it as a **workflow** — an ordered list of agent
 steps and shell checks — shelling out to your locally installed agent CLI
-(Claude Code by default; Codex, OpenCode, pi and OMP are drop-in
+(Claude Code by default; Codex, OpenCode, pi, OMP and Antigravity are drop-in
 alternatives, per task or per step). Each task gets its own git worktree; the
 cockpit streams every event live and leaves the diff on the task's branch for
 you to inspect.
@@ -278,7 +280,7 @@ you to inspect.
    ┌──────────────────────────────┐     ┌────────────────────────────────┐
    │  git worktree per task       │     │  agent CLI  (your login)       │
    │  (isolated branch, parallel) │◄───►│  claude · codex · opencode ·   │
-   └──────────────────────────────┘     │  cursor · pi · omp             │
+   └──────────────────────────────┘     │  pi · omp · antigravity        │
         │                               │  Bash open · no prompts        │
         │                               └────────────────────────────────┘
         │  agent text · tool calls · tool results · tokens · cost

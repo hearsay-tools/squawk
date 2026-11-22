@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useHealth } from '@/api/queries'
 import { Button } from '@/components/ui/button'
-import { alreadyReloadedFor, hasUnsavedText, observeServerVersion, reloadForVersion } from '@/lib/version-reload'
+import { alreadyReloadedFor, hasUnsavedText, observeServerVersion, reloadForVersion, trackTyping } from '@/lib/version-reload'
 
 /** How often a waiting reload checks again whether the unsaved text is gone. */
 const RETRY_MS = 2000
@@ -18,6 +18,9 @@ export function VersionReloadNotice({ reload }: { reload?: () => void }) {
   const page = useQueryClient()
   const [target, setTarget] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('reloading')
+
+  // From the first render on, so text typed before an upgrade counts.
+  useEffect(() => trackTyping(), [])
 
   useEffect(() => {
     const changed = observeServerVersion(page, version)

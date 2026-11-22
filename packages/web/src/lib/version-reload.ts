@@ -12,9 +12,10 @@
  * - **No loop.** Before it reloads, the page records the target version in `sessionStorage`. A
  *   page that sees a change to a version it already reloaded for does not reload again; it shows
  *   the notice with a manual Reload button instead.
- * - **No lost text.** While an editable field holds text that no draft store keeps, the reload
- *   waits and the notice says why. A field inside `[data-persisted-draft]` is kept by its draft
- *   store (the new-task composer writes localStorage on every change), so it does not block.
+ * - **No lost text.** While a field the user typed into still holds text that no draft store
+ *   keeps, the reload waits and the notice says why. A field that only shows a saved value was
+ *   never typed into, so it does not block. A field inside `[data-persisted-draft]` is kept by its
+ *   draft store (the new-task composer writes localStorage on every change), so it does not block.
  */
 
 export const RELOADED_FOR_KEY = 'hsq:reloaded-for-version'
@@ -63,10 +64,21 @@ const EDITABLE = [
   '[contenteditable="true"]',
 ].join(', ')
 
-/** True when an editable field holds text that a reload would lose. */
+const typedInto = new WeakSet<EventTarget>()
+
+/** Remember every field the user types into. Returns the cleanup. */
+export function trackTyping(target: Document = document): () => void {
+  const onInput = (event: Event) => {
+    if (event.target) typedInto.add(event.target)
+  }
+  target.addEventListener('input', onInput, true)
+  return () => target.removeEventListener('input', onInput, true)
+}
+
+/** True when a field the user typed into holds text that a reload would lose. */
 export function hasUnsavedText(root: ParentNode = document): boolean {
   for (const element of root.querySelectorAll<HTMLElement>(EDITABLE)) {
-    if (element.closest('[data-persisted-draft]')) continue
+    if (!typedInto.has(element) || element.closest('[data-persisted-draft]')) continue
     if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
       if (element.disabled || element.readOnly) continue
       if (element.value.trim() !== '') return true

@@ -43,9 +43,11 @@ platforms slot in without touching the engine.
 
 ## How it works (all providers)
 
-1. **Dependencies** — detect the agent CLIs (`claude`/`codex`/`opencode`),
+1. **Dependencies** — detect the agent CLIs (`claude`/`codex`/`opencode`/`pi`/`omp`/`antigravity`),
    `gh`, `git`; offer to install what's missing. (Tools in `~/.local/bin` / nvm
-   are found via your login-shell PATH.)
+   are found via your login-shell PATH.) The Antigravity CLI installs from
+   **Settings → Agents** in the cockpit instead, which a remote cockpit allows only after
+   [`hsq remote-settings enable`](./remote-settings.md).
 2. **Public front** — stand up the reverse proxy / tunnel that terminates
    TLS and challenges every request for a login.
 3. **Identity** — a username + password (type your own or auto-generate a

@@ -32,7 +32,7 @@ steps:
     skill: project-conventions   # optional — a skill id reported by this step’s runner
     # model: opus                # optional per-step model override
     # effort: high               # optional per-step effort: low · medium · high · xhigh · max
-    # runner: codex              # optional per-step backend: claude · codex · opencode · cursor · pi · omp
+    # runner: codex              # optional per-step backend: claude · codex · opencode · pi · omp · antigravity
     # timeoutMs: 7200000          # optional agent-step wall-clock cap (2 hours); 0 = no limit
     # allowedTools: [Read, Edit, Write, Grep, Glob, Bash]
   - id: verify

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RELOADED_FOR_KEY,
   alreadyReloadedFor,
   hasUnsavedText,
   observeServerVersion,
   reloadForVersion,
+  trackTyping,
 } from './version-reload'
 
 afterEach(() => {
@@ -38,24 +39,47 @@ describe('the reload loop guard', () => {
 })
 
 describe('hasUnsavedText', () => {
-  it('is false for empty, disabled and read-only fields', () => {
-    document.body.innerHTML = '<textarea></textarea><input type="text" value="x" disabled><input value="y" readonly><input type="search" value="filter">'
+  let stop: () => void
+  beforeEach(() => { stop = trackTyping() })
+  afterEach(() => stop())
+
+  /** Type into a field the way a person does: set the value, then fire `input`. */
+  const type = (element: HTMLElement, value: string) => {
+    if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) element.value = value
+    else element.textContent = value
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('is false for a field that only shows a saved value', () => {
+    document.body.innerHTML = '<input value="~/projects"><textarea>saved prompt</textarea>'
+    expect(hasUnsavedText()).toBe(false)
+  })
+
+  it('is false for typed fields that are empty, disabled or read-only', () => {
+    document.body.innerHTML = '<textarea></textarea><input type="text"><input type="search">'
+    const [textarea, text, search] = document.body.children as unknown as [HTMLTextAreaElement, HTMLInputElement, HTMLInputElement]
+    type(textarea, '   ')
+    type(text, 'x')
+    text.disabled = true
+    type(search, 'filter')
     expect(hasUnsavedText()).toBe(false)
   })
 
   it('is true for a typed reply, an input or a content-editable field', () => {
     document.body.innerHTML = '<textarea></textarea>'
-    document.querySelector('textarea')!.value = 'half a reply'
+    type(document.querySelector('textarea')!, 'half a reply')
     expect(hasUnsavedText()).toBe(true)
-    document.body.innerHTML = '<input value="name">'
+    document.body.innerHTML = '<input>'
+    type(document.querySelector('input')!, 'name')
     expect(hasUnsavedText()).toBe(true)
-    document.body.innerHTML = '<div contenteditable="true">note</div>'
+    document.body.innerHTML = '<div contenteditable="true"></div>'
+    type(document.querySelector<HTMLElement>('[contenteditable]')!, 'note')
     expect(hasUnsavedText()).toBe(true)
   })
 
   it('ignores text a draft store keeps', () => {
     document.body.innerHTML = '<div data-persisted-draft><textarea></textarea></div>'
-    document.querySelector('textarea')!.value = 'kept in localStorage'
+    type(document.querySelector('textarea')!, 'kept in localStorage')
     expect(hasUnsavedText()).toBe(false)
   })
 })

@@ -46,7 +46,8 @@ describe('VersionReloadNotice', () => {
   })
 
   it('reloads once when the server version changes, and says so', async () => {
-    const { reload, upgrade } = setup()
+    // A field that only shows a saved value does not hold the reload back.
+    const { reload, upgrade } = setup(<input aria-label="Folder" defaultValue="~/projects" />)
     await upgrade('1.1.0')
     expect(reload).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('status').textContent).toContain('Squawk was updated to 1.1.0. Reloading…')
@@ -66,12 +67,13 @@ describe('VersionReloadNotice', () => {
   it('waits while a field holds unsent text, then reloads once it is cleared', async () => {
     // Only the retry interval is faked: React Query's notify timeout must still run.
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
-    const { reload, upgrade } = setup(<textarea aria-label="Reply" defaultValue="half a reply" />)
+    const { reload, upgrade } = setup(<textarea aria-label="Reply" />)
+    fireEvent.input(screen.getByLabelText('Reply'), { target: { value: 'half a reply' } })
     await upgrade('1.1.0')
     expect(reload).not.toHaveBeenCalled()
     expect(screen.getByRole('status').textContent).toContain('reloads once your unsent text is sent or cleared')
 
-    fireEvent.change(screen.getByLabelText('Reply'), { target: { value: '' } })
+    fireEvent.input(screen.getByLabelText('Reply'), { target: { value: '' } })
     act(() => { vi.advanceTimersByTime(2000) })
     expect(reload).toHaveBeenCalledTimes(1)
   })

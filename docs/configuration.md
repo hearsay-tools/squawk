@@ -9,7 +9,7 @@ JSON:
 ```jsonc
 {
   "worktreeRetention": 10,   // keep the last N finished worktrees on disk; 0 = unlimited (no reclaim, no branch sweep)
-  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode" · "pi" · "omp"
+  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode" · "pi" · "omp" · "antigravity"
   "modelsLocked": true,      // optional: native per-runner model is fixed/read-only; runner stays selectable
   "plannerModel": "sonnet",  // model the "Plan first" button uses to draft chains
   "baseBranch": "develop",   // branch worktrees fork from + PRs target (also settable in the Git view)
@@ -140,7 +140,8 @@ line. Like setup, a hosted cockpit shows it read-only until the host operator ru
 
 Squawk picks *which* agent runs; **Settings → Agent config** lets you edit *how* it
 behaves — the raw config files Claude, Codex, OpenCode, pi and OMP read
-for settings, MCP, and memory. In the multi-project cockpit the section is project-scoped:
+for settings, MCP, and memory. Antigravity exposes no files here: Squawk sends it tools and
+instructions over ACP, and its pane notes that it uses your existing Antigravity setup. In the multi-project cockpit the section is project-scoped:
 repo-relative files resolve from the selected project's root, while user-scope
 files continue to resolve from the agent's home.
 
@@ -186,7 +187,7 @@ Useful environment variables:
 | `HSQ_CLAUDE_BIN=/path/to/claude`, `CEZ_CLAUDE_BIN=/path/to/claude` | Override the Claude executable for model discovery and execution. A set `HSQ_CLAUDE_BIN` wins over `CEZ_CLAUDE_BIN`; an explicit binary argument wins over both. |
 | `HSQ_CODEX_BIN=/path/to/codex`, `CEZ_CODEX_BIN=/path/to/codex` | Override which `codex` binary is used. |
 | `HSQ_OPENCODE_BIN=/path/to/opencode`, `CEZ_OPENCODE_BIN=/path/to/opencode` | Override which `opencode` binary is used. |
-| `HSQ_ANTIGRAVITY_BIN=/path/to/agy`, `CEZ_ANTIGRAVITY_BIN=/path/to/agy` | Override the Antigravity CLI executable. Unset, Squawk runs the CLI installed from Settings > Accounts, then `agy` or `antigravity` on PATH. The override must be the CLI: its `--help` lists `acp`. |
+| `HSQ_ANTIGRAVITY_BIN=/path/to/agy`, `CEZ_ANTIGRAVITY_BIN=/path/to/agy` | Override the Antigravity CLI executable. Unset, Squawk runs the CLI installed from Settings → Agents, then `agy` or `antigravity` on PATH. The override must be the CLI: its `--help` lists `acp`. |
 | `HSQ_PI_BIN=/path/to/pi`, `CEZ_PI_BIN=/path/to/pi` | Override which `pi` binary is used. |
 | `HSQ_OMP_BIN=/path/to/omp`, `CEZ_OMP_BIN=/path/to/omp` | Override which `omp` (Oh My Pi) binary is used. |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `OMP_PROFILE` | The agents' **own** variables, honoured where the vendor documents one. Setting one moves that agent's **default account** — the config folder (for omp, the profile) Squawk discovers. A *second* login of the same CLI is deliberately not an environment setting, since one process-wide value cannot differ per project: add it under **Settings → Agents** and pick it per project. |
