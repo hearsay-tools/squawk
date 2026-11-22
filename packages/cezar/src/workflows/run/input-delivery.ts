@@ -437,7 +437,7 @@ export class InputDelivery {
     inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
     if (this.host.line.retireAdmission(runId)) transitionTurnBoundary(state, { kind: 'input-ack', phase: 'wake-turn', session: state.liveSession.session });
-    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
+    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) });
     if (!state.boundary.pendingHumanAsk) this.flushAgentInputs(runId);
     this.resumeParkedRun(runId, state);
   }
@@ -901,7 +901,7 @@ export class InputDelivery {
     const attached: ContentBlock[] = persisted.length
       ? [...expanded, pastedAttachmentsNote(persisted)]
       : expanded.length ? expanded : [{ type: 'text', text: 'The user attached a document, but it could not be saved. Ask them to attach it again before discussing its contents.' }];
-    const answeringAskSeq = pendingHumanAskSeq(this.context.store, runId);
+    const answeringAskSeq = pendingHumanAskSeq(this.context.store.transcriptFacts, runId);
     // An answer opening a turn carries held conversation messages after the answer.
     const bundle = answeringAskSeq !== undefined && state.boundary.atTurnBoundary === state.liveSession.session
       ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id))) : undefined;
@@ -932,7 +932,7 @@ export class InputDelivery {
       this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq: answeringAskSeq });
     }
     inputReceipts.commitAnswer(this.context, runId, state, { askSeq: answeringAskSeq, bundle }, messageId);
-    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
+    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) });
     // A native answer or a full bundle leaves remaining messages to steer behind the answer.
     if (answeringAskSeq !== undefined && !state.boundary.pendingHumanAsk) this.flushAgentInputs(runId, beforeHumanReset);
     this.resumeParkedRun(runId, state, beforeHumanReset);

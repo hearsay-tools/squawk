@@ -51,7 +51,7 @@ async function parkForSettlement({ store, manager, runId }: SettlementFixture,
       if (hasTail) {
         // bound: wait for the cezar_ask question to reach the parent before expiring the
         // continuation (hearsay-tools/cezarion#2410).
-        await waitFor(() => store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined, FIXTURE_STEP_MS);
+        await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined, FIXTURE_STEP_MS);
         expect(store.getRun(runId)?.steps.map(step => step.status)).toEqual(['waiting', 'pending']);
       }
       if (continuation) {

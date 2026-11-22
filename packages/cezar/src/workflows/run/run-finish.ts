@@ -73,7 +73,7 @@ export class RunFinish {
       retireDoneAccepted(this.context.store, runId, 'reconsidered', `completion refused: ${refusal.code}`);
       return refuse(refusal.code, refusal.message, refusal.workers);
     }
-    try { recordDoneAccepted(this.context.store, runId, { session: generation, at: new Date().toISOString(), summary: parsed.summary }); }
+    try { recordDoneAccepted(this.context.store, this.context.store.transcriptFacts, runId, { session: generation, at: new Date().toISOString(), summary: parsed.summary }); }
     catch { return refuse('unavailable', doneErrorMessage('unavailable')); }
     const next = state.boundary.nextStep?.session === state.liveSession.session ? state.boundary.nextStep.label : undefined;
     return { ok: true, finishes: 'at_turn_end', ...(next === undefined ? { completes: 'task' as const } : { completes: 'step' as const, next_step: next }), open_waits };
@@ -245,10 +245,10 @@ export class RunFinish {
  *  tool answers, so a restart still finishes the run on it. The last event, the waits and the last
  *  agent input then (`factsAtDone`) order what is new to the done. A done that replaces one still on record keeps its spent
  *  free turn, so calling done again earns no second free delivery. */
-function recordDoneAccepted(store: RunWrites & RunLookup & TranscriptFactsPort, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
+function recordDoneAccepted(store: RunWrites & RunLookup, facts: TranscriptFactsPort, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
   const run = store.getRun(runId);
   if (!run) return;
-  store.commitOutcome(runId, { kind: 'done-accepted', done: { session: done.session, at: done.at, seq: store.transcriptFacts(runId).lastSeq, ...factsAtDone(run),
+  store.commitOutcome(runId, { kind: 'done-accepted', done: { session: done.session, at: done.at, seq: facts.transcriptFacts(runId).lastSeq, ...factsAtDone(run),
     ...(done.summary === undefined ? {} : { summary: done.summary }), ...(run.doneAccepted?.freeTurn ? { freeTurn: true as const } : {}) } });
 }
 

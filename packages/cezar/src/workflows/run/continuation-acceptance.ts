@@ -81,7 +81,7 @@ export class ContinuationAcceptance {
       beforeFinalStep: run => workflowPosition.waitingBeforeFinalWorkflowStep(run, (record, step) => this.host.isSyntheticContinuation(record, step), record => this.waitingWorkflowStepIndex(record)),
       waitingStepIndex: run => this.waitingWorkflowStepIndex(run),
       pendingFallback: () => this.workerQuestions.pendingWorkerFallback(runId),
-      pendingAsk: () => hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)),
+      pendingAsk: () => hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)),
       rootFinishing: run => this.host.executionBlockedByRootFinish(run),
       answeredElsewhere: () => this.workerQuestions.answeredElsewhere(runId),
       ciStepIndex: run => workflowPosition.ciWorkflowResumeStepIndex(run),

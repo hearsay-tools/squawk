@@ -19,7 +19,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     await until(() => !waitOf(store.getRun(p.id)));
     expect(store.getRun(w.id)?.status).toBe('waiting');
     expect(store.readEvents(w.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
-    expect(store.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeDefined();
+    expect(store.transcriptFacts.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeDefined();
     // The worker's question is a conversation message; the wait's timeout notice is the parent's own.
     expect(store.getRun(p.id)?.agentInputs?.find(input => !input.conversation)?.text).toContain('waiting');
   });

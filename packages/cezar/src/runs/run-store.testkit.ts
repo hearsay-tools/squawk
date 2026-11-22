@@ -177,8 +177,8 @@ export function crashStore(store: RunStore): void {
  * `hasPendingHumanAsk` summary mirrored until phase 4b (hearsay-tools/cezarion#1236). The open
  * human wait is the display fact; this is the delivery one.
  */
-export function hasPendingAsk(store: TranscriptFactsPort, runId: string): boolean {
-  return store.transcriptFacts(runId).pendingAsk !== undefined;
+export function hasPendingAsk(store: { readonly transcriptFacts: TranscriptFactsPort }, runId: string): boolean {
+  return store.transcriptFacts.transcriptFacts(runId).pendingAsk !== undefined;
 }
 
 

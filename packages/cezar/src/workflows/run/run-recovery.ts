@@ -80,14 +80,14 @@ export class RunRecovery {
     const inScope = (run: RunRecord) => familyRootId === undefined || familyOf(run) === familyRootId;
     try {
     this.familyReconciler.setRecoveryFactsPending(true);
-    await this.context.store.prepareRecoveryFacts(familyRootId);
+    await this.context.store.transcriptFacts.prepareRecoveryFacts(familyRootId);
     if (this.context.disposed()) return;
     // Public terminal state can precede the private completion checkpoint. Such a family
     // has no live/deferred anchor, but orphan settlement still appends its lifecycle event.
     // Prepare only eligible starting generations' families before any repair mutation;
     // retain IDs, never an ownership or execution snapshot, across readiness.
     const { orphanWorkerIds, orphanFactIds } = this.collectOrphanWorkerGenerations(familyRootId, inScope);
-    await this.context.store.prepareTranscriptFacts(orphanFactIds);
+    await this.context.store.transcriptFacts.prepareTranscriptFacts(orphanFactIds);
     if (this.context.disposed()) return;
     this.familyReconciler.setRecoveryFactsPending(false);
     // Recovery reads the live set (#779): `listRuns()` is the runs `open` loaded by the `live`
@@ -269,7 +269,7 @@ export class RunRecovery {
    *  Squawk's own wait not shown as that ask is replaced, as the live ask does: a crash between
    *  saving the ask and replacing it leaves that wait open (review of #1437). */
   private adoptTranscriptAsk(runId: string): boolean {
-    const askSeq = pendingHumanAskSeq(this.context.store, runId);
+    const askSeq = pendingHumanAskSeq(this.context.store.transcriptFacts, runId);
     const human = WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? {}));
     if (askSeq === undefined || !this.context.store.getRun(runId) || human.some(wait => !isSquawkHumanWait(wait) || wait.askSeq === askSeq)) return false;
     this.host.humanWaits.withdrawSquawkHumanWaits(runId);
@@ -286,7 +286,7 @@ export class RunRecovery {
   private settleAnsweredLegacyAsk(runId: string): boolean {
     const legacy = WAIT_KINDS.human.selectOpen(this.context.store.getRun(runId)?.waits ?? []).filter(wait => wait.turnId === 'legacy' && wait.askSeq === undefined);
     // Only facts read from a non-empty transcript are evidence of the answer (review of #1437).
-    const facts = this.context.store.knownTranscriptFacts(runId);
+    const facts = this.context.store.transcriptFacts.knownTranscriptFacts(runId);
     if (!legacy.length || !facts || facts.bytes === 0 || facts.pendingGateSeq !== undefined) return false;
     try {
       return this.context.store.commitOutcome(runId, { kind: 'answered', waitIds: legacy.map(wait => wait.id) }).answered.length > 0;
@@ -320,7 +320,7 @@ export class RunRecovery {
       this.parkOnOpenWaits(run);
       return true;
     }
-    if (run.delegation && run.delegation.role !== 'invalid' && hasPendingHumanAsk(run.id, id => pendingHumanAskSeq(this.context.store, id))) {
+    if (run.delegation && run.delegation.role !== 'invalid' && hasPendingHumanAsk(run.id, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id))) {
       // A pending question leaves its waits open: they re-arm, and a result still wakes the run.
       this.parkOnOpenWaits(run);
       // Only the durable, explicitly human payload may resume an unanswered
@@ -336,7 +336,7 @@ export class RunRecovery {
     // A human message no longer withdraws a wait, so an interrupted or queued run with queued
     // messages still owes their delivery: it recovers as below, with its waits armed
     // (hearsay-tools/cezarion#1233). A parked one stays parked; its wake folds them in.
-    if (run.waits?.length && !hasPendingHumanAsk(run.id, id => pendingHumanAskSeq(this.context.store, id)) && (run.status === 'waiting' || !run.queuedMessages?.length)) {
+    if (run.waits?.length && !hasPendingHumanAsk(run.id, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) && (run.status === 'waiting' || !run.queuedMessages?.length)) {
       this.parkOnOpenWaits(run);
       return true;
     }

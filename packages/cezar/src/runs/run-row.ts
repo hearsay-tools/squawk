@@ -27,6 +27,13 @@ export function isLiveRecord(run: RunRecord): boolean {
   return run.stopping !== undefined;
 }
 
+/** The family a run belongs to, by its root's id. A worker a worker started is filed under the root too. */
+export function familyRootOf(run: Pick<RunRecord, 'id' | 'delegation'>): string | undefined {
+  if (run.delegation?.role === 'root') return run.id;
+  if (run.delegation?.role === 'worker') return run.delegation.parentRunId;
+  return undefined;
+}
+
 /** A worker family's root once the family may end (hearsay-tools/squawk#911): archived, settled
  *  (done, failed or cancelled) and not live. A user may archive a running root; that is no end. */
 export function isEndedRoot(run: RunRecord): boolean {

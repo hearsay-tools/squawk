@@ -78,7 +78,7 @@ describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { 
       fail.mockRestore();
       refuseInput?.mockRestore();
       expect(eventsOf(f.w.id, 'human-ask-closed')).toEqual([]);
-      expect(store.transcriptFacts(f.w.id).pendingAsk?.seq).toBe(f.askSeq);
+      expect(store.transcriptFacts.transcriptFacts(f.w.id).pendingAsk?.seq).toBe(f.askSeq);
       expect(store.getRun(f.w.id)?.waits).toEqual([expect.objectContaining({ via: WAIT_VIA['no-wait'], askSeq: f.askSeq })]);
       if (failing === 'outcome') expect(conversationOf(f.p.id)?.outcomes.some(outcome => outcome.requestId === f.requestId) ?? false).toBe(false);
       // A crash now: recovery finds the worker waiting on the question with no process left.

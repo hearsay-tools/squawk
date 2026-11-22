@@ -218,7 +218,7 @@ it('resolves a second step slash prompt before adding its chain context', async 
   await opened;
   // The first step has accepted done; its turn end starts the next step.
   f.store.commitOutcome(record.id, { kind: 'done-accepted', done: { session: 'native-input', at: new Date().toISOString(),
-    seq: f.store.transcriptFacts(record.id).lastSeq, ...factsAtDone(f.store.getRun(record.id)!) } });
+    seq: f.store.transcriptFacts.transcriptFacts(record.id).lastSeq, ...factsAtDone(f.store.getRun(record.id)!) } });
   emit({ type: 'turn-end' });
   await waitForProduct(f.manager, f.store, () => launches.length === 2);
   expect(launches[1]?.skill).toMatchObject({ id: 'known', path: '/listed/known' });

@@ -85,7 +85,7 @@ describe('the completion gate outside a turn end', () => {
     id = store.createRun({ title: 'gate', task: 'work', workflow: 'quick-task', steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] }).id;
     setRunStatus(store, id, RUN_STATUS.running, { currentStepId: 'task' });
     store.updateStep(id, 'task', { status: STEP_STATUS.running });
-    await store.factsWarmIdle();
+    await store.transcriptFacts.factsWarmIdle();
     active.clear(); vi.clearAllMocks();
     session = {
       get open() { return true; }, result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }),

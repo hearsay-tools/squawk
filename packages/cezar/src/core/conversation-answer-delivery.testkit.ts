@@ -156,7 +156,7 @@ export const answerDeliveryCells = answerDeliveryFamilies({
           await waitFor(() => !!input(store, runId, id)?.deliveredAt);
           // The beside turn ends and parks for a question again.
           await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes(input(store, runId, id)!.text)));
-          await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting && store.transcriptFacts(runId).pendingAsk !== undefined);
+          await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting && store.transcriptFacts.transcriptFacts(runId).pendingAsk !== undefined);
           // Delivered beside the card, not instead of it: the original question is still open.
           expect(question(seq)).toBeDefined();
         }
@@ -174,7 +174,7 @@ export const answerDeliveryCells = answerDeliveryFamilies({
         await answerFixture.restart();
         ({ store, manager } = answerFixture);
       }
-      const pending = store.transcriptFacts(runId).pendingAsk!;
+      const pending = store.transcriptFacts.transcriptFacts(runId).pendingAsk!;
       const answered = pending.seq;
       const start = lastSeq(store, runId);
       const answer = `Vitest ${promptFor(backend, held.scenario)}`;

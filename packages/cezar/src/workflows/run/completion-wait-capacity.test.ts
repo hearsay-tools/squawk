@@ -89,7 +89,7 @@ it.each(['endTurn', 'settleTurn'] as const)('%s parks and frees the slot after a
     parkOnWaits: (id: string, state: typeof f.state) => admission.parkOnWaits(id, state),
   });
   if (entry === 'endTurn') {
-    f.store.commitOutcome(f.run.id, { kind: 'done-accepted', done: { session: 'generation', at: new Date().toISOString(), seq: f.store.transcriptFacts(f.run.id).lastSeq, ...factsAtDone(f.store.getRun(f.run.id)!) } });
+    f.store.commitOutcome(f.run.id, { kind: 'done-accepted', done: { session: 'generation', at: new Date().toISOString(), seq: f.store.transcriptFacts.transcriptFacts(f.run.id).lastSeq, ...factsAtDone(f.store.getRun(f.run.id)!) } });
     f.settler.endTurn(f.run.id, f.state, unused<UiEventSink>('sink'), { stepId: 'step', scheduleWakeup: undefined });
   } else {
     expect(f.settler.settleTurn(f.run.id, f.state, 'ack', {

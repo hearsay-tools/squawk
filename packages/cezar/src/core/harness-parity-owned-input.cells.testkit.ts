@@ -73,7 +73,7 @@ export const OWNED_INPUT_GROUPS = {
             expect(store.getRun(runId)?.agentInputs?.map(input => input.id)).toEqual([first.id, second.id, reply]);
             // The answer retired this ask; the answered turn's end may raise Squawk's fallback question
             // on the idle worker (hearsay-tools/cezarion#1301), which is a new one.
-            expect(store.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
+            expect(store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
             expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
             await waitFor(() => store.getRun(runId)?.status === 'waiting');
             const afterAsk = agentInput(parentRunId, 'mock:agent-echo after ask');
@@ -161,7 +161,7 @@ export const OWNED_INPUT_GROUPS = {
             manager.enqueueOwnedRun(runId);
             await waitFor(() => store.readEvents(runId).some(e => e.type === 'ask.requested'));
             const askSeq = store.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
-            await waitFor(() => store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined && store.getRun(runId)?.status === 'waiting');
+            await waitFor(() => store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined && store.getRun(runId)?.status === 'waiting');
             const session = [...fixtureWork(manager).liveSessions][0]!;
             // The session refuses the parent's answer once: it stays queued, and the ask stays pending.
             const refuse = vi.spyOn(session, 'sendMessage').mockReturnValue(false);
@@ -169,7 +169,7 @@ export const OWNED_INPUT_GROUPS = {
             await waitFor(() => refuse.mock.calls.length > 0 || !!store.getRun(runId)?.agentInputs?.find(entry => entry.id === reply)?.deliveredAt);
             refuse.mockRestore();
             expect(store.getRun(runId)?.agentInputs?.find(entry => entry.id === reply)?.deliveredAt).toBeUndefined();
-            expect(store.transcriptFacts(runId).pendingAsk?.seq).toBe(askSeq);
+            expect(store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).toBe(askSeq);
             expect(store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([]);
             expect(hasPendingAsk(store, runId)).toBe(true);
             const input = agentInput(parentRunId);
@@ -185,7 +185,7 @@ export const OWNED_INPUT_GROUPS = {
             expect(recovered.store.readEvents(runId).filter(e => e.type === 'human-input-delivered')).toEqual([expect.objectContaining({ askSeq, source: 'parent' })]);
             // The answer retired this ask; the answered turn's end may raise Squawk's fallback question
             // on the idle worker (hearsay-tools/cezarion#1301), which is a new one.
-            expect(recovered.store.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
+            expect(recovered.store.transcriptFacts.transcriptFacts(runId).pendingAsk?.seq).not.toBe(askSeq);
           });
         }, 60_000);
 
@@ -221,7 +221,7 @@ export const OWNED_INPUT_GROUPS = {
             manager.enqueueOwnedRun(runId);
             // The idle worker parks on Squawk's fallback question, routed to its parent
             // (hearsay-tools/cezarion#1301, hearsay-tools/cezarion#2410).
-            await waitFor(() => store.getRun(runId)?.status === 'waiting' && store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
+            await waitFor(() => store.getRun(runId)?.status === 'waiting' && store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
             store.flush();
             let unblock: (() => void) | undefined;
             // The input supersedes that question with a write to the parent's conversation first; the

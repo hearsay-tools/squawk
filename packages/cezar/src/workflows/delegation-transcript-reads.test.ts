@@ -130,7 +130,7 @@ describe('delivering a message to a worker reads no transcript (#880)', { timeou
     // A fresh ask checkpoint has no routing marker. answeredElsewhere must consult pendingAnswer,
     // which calls routedAsk, before the public delivery can answer this question.
     const ask = liveStore.appendEvent(w.id, { type: 'ask.requested', requestId: randomUUID(), questions });
-    expect(liveStore.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeUndefined();
+    expect(liveStore.transcriptFacts.transcriptFacts(w.id).pendingAsk?.routedMessageId).toBeUndefined();
     const reads = countTranscriptReads((path) => path.includes(w.id));
     expect(liveManager.sendMessage(w.id, [{ type: 'text', text: 'Pick: A' }])).toBe(true);
     expect(reads.counts).toEqual({ files: [], decompress: 0 });

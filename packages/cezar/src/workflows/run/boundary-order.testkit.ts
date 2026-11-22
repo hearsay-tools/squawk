@@ -93,7 +93,7 @@ export function boundaryOrderFixture(autonomous = false): BoundaryOrderFixture {
   const settler = new TurnSettler(context, host, 60_000, 40, 'wait for workers', 3600);
   traceBoundary(log);
   onTestFinished(async () => {
-    clearIdleTimer(state); store.flush(); await store.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
+    clearIdleTimer(state); store.flush(); await store.transcriptFacts.factsWarmIdle(); store.close(); rmSync(root, { recursive: true, force: true });
   });
   log.length = 0;
   return { root, run, store, log, state, wire, active, context, waitEngine, humanWaits, questions, questionHost, host, line, settler };

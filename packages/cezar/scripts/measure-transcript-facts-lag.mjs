@@ -35,7 +35,7 @@ try {
   await delay(periodMs * 2);
   const start = performance.now();
   store = RunStore.open(dir);
-  await store.factsWarmIdle();
+  await store.transcriptFacts.factsWarmIdle();
   const end = performance.now();
   while (!ticks.some(tick => tick.at > end)) await delay(periodMs);
   clearInterval(timer);

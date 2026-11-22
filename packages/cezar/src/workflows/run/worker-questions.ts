@@ -63,7 +63,7 @@ export class WorkerQuestions {
   routeWorkerQuestion(workerId: string): void {
     const worker = this.context.store.getRun(workerId);
     if (worker?.delegation?.role !== 'worker') return;
-    const ask = this.context.store.transcriptFacts(workerId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(workerId).pendingAsk;
     if (!ask || ask.fallback) return;
     // A stopped worker's question closes first, whatever answer is queued for it: no conversation
     // outcome closes a question that never reached the parent, and the close retires that answer.
@@ -132,7 +132,7 @@ export class WorkerQuestions {
   answerUndelivered(workerId: string, askSeq: number, reason: string): void {
     const run = this.context.store.getRun(workerId);
     if (!run || this.undeliveredAnswer(workerId, askSeq)) return;
-    const ask = this.context.store.transcriptFacts(workerId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(workerId).pendingAsk;
     if (ask?.seq !== askSeq) return;
     const spent = this.host.countAutomaticWakes(workerId) + 1;
     if (this.isWorkerFallbackAsk(workerId, askSeq) || spent > this.maxAutoContinues) { this.closeQuestion(workerId, askSeq, 'undeliverable', reason); return; }
@@ -157,7 +157,7 @@ export class WorkerQuestions {
   /** The answers queued for the worker's pending question that it has not taken: the parent's
    *  replies to the routed question, and Squawk's answer when it was not delivered. */
   private queuedAnswerIds(workerId: string): string[] {
-    const ask = this.context.store.transcriptFacts(workerId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(workerId).pendingAsk;
     const routedId = ask?.routedMessageId;
     const cezar = ask ? this.undeliveredAnswerId(workerId, ask.seq) : undefined;
     // The worker's own routing marker names the request, so a parent ledger that cannot be read
@@ -176,7 +176,7 @@ export class WorkerQuestions {
   /** The worker's pending question closes unanswered (hearsay-tools/cezarion#2410), and Squawk's own
    *  human wait for it goes. Idempotent: a question that already closed is left alone. */
   closeQuestion(workerId: string, askSeq: number, reason: QuestionCloseReason, detail?: string): void {
-    if (this.context.store.transcriptFacts(workerId).pendingAsk?.seq !== askSeq) return;
+    if (this.context.store.transcriptFacts.transcriptFacts(workerId).pendingAsk?.seq !== askSeq) return;
     // An answer accepted for it and not yet taken goes first, so no later turn reads it as an
     // unrelated message. A failed write leaves the question pending for the next sweep.
     try { for (const id of this.queuedAnswerIds(workerId)) this.host.retireUnreadParentQuestion(workerId, id); }
@@ -184,7 +184,7 @@ export class WorkerQuestions {
     if (detail) this.context.store.appendEvent(workerId, { type: 'note', tone: 'warning', message: `Question not delivered to the parent: ${detail}.` });
     this.context.store.appendEvent(workerId, { type: 'human-ask-closed', askSeq, reason });
     this.host.withdrawSquawkHumanWaits(workerId);
-    this.host.updatePendingHumanAsk(workerId, hasPendingHumanAsk(workerId, id => pendingHumanAskSeq(this.context.store, id)));
+    this.host.updatePendingHumanAsk(workerId, hasPendingHumanAsk(workerId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)));
   }
 
   /**
@@ -242,7 +242,7 @@ export class WorkerQuestions {
     // A question goes to the parent through `routeWorkerQuestion`; a prose gate does not, so it gets a notice.
     // Queued input wakes the worker, so the turn that takes it decides at its own park.
     return worker.status === 'waiting' && parkedByTurn(worker) && !worker.stopping &&
-      !this.context.store.transcriptFacts(worker.id).pendingAsk && !this.host.active(worker.id)?.boundary.pendingHumanAsk &&
+      !this.context.store.transcriptFacts.transcriptFacts(worker.id).pendingAsk && !this.host.active(worker.id)?.boundary.pendingHumanAsk &&
       !this.host.hasQueuedAgentInputs(worker.id);
   }
 
@@ -278,7 +278,7 @@ export class WorkerQuestions {
     const run = this.context.store.getRun(runId);
     if (run?.delegation?.role !== 'worker') return undefined;
     // Indexed at append time (#880): the reconcile and every message to a worker ask this.
-    const ask = this.context.store.transcriptFacts(runId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     if (!ask || ask.fallback || ask.routedMessageId === undefined) return undefined;
     const root = this.context.store.getRun(run.delegation.parentRunId);
     const message = root?.delegation?.role === 'root'
@@ -295,7 +295,7 @@ export class WorkerQuestions {
       if (input) return { askSeq: routed.askSeq, input, source: 'parent' };
     }
     // Squawk's answer stands whether or not the parent's ledger can be read again.
-    const ask = this.context.store.getRun(runId)?.delegation?.role === 'worker' ? this.context.store.transcriptFacts(runId).pendingAsk : undefined;
+    const ask = this.context.store.getRun(runId)?.delegation?.role === 'worker' ? this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk : undefined;
     const input = ask && !ask.fallback ? this.undeliveredAnswer(runId, ask.seq) : undefined;
     return ask && input && !input.deliveredAt ? { askSeq: ask.seq, input, source: 'cezar' } : undefined;
   }
@@ -304,14 +304,14 @@ export class WorkerQuestions {
   answerSource(runId: string, input: AgentInput): QuestionAnswerSource | undefined {
     const routed = this.routedAsk(runId);
     if (routed && answersQuestion(routed.message, input)) return 'parent';
-    const ask = this.context.store.transcriptFacts(runId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     return ask && input.purpose === 'undelivered-question' && input.id === this.undeliveredAnswerId(runId, ask.seq) ? 'cezar' : undefined;
   }
 
   /** The worker's pending question belongs to its parent or to Squawk: no human answers it. The
    *  worker's own routing marker decides, so a parent ledger that cannot be read hides nothing. */
   answeredElsewhere(runId: string): boolean {
-    const ask = this.context.store.getRun(runId)?.delegation?.role === 'worker' ? this.context.store.transcriptFacts(runId).pendingAsk : undefined;
+    const ask = this.context.store.getRun(runId)?.delegation?.role === 'worker' ? this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk : undefined;
     return !!ask && !ask.fallback && ask.routedMessageId !== undefined || !!this.pendingAnswer(runId);
   }
 
@@ -372,7 +372,7 @@ export class WorkerQuestions {
       projectConversationEvents(this.context.store, this.context.store.getRun(parentId)!);
     }
     for (const run of workers) {
-      const ask = this.context.store.transcriptFacts(run.id).pendingAsk;
+      const ask = this.context.store.transcriptFacts.transcriptFacts(run.id).pendingAsk;
       if (ask) this.closeQuestion(run.id, ask.seq, 'parent-stopped');
     }
   }
@@ -395,7 +395,7 @@ export class WorkerQuestions {
     const questions = [{ header: WORKER_FALLBACK_HEADER, question: WORKER_FALLBACK_QUESTION(runId) }];
     this.context.store.appendEvent(runId, { type: 'note', ...(stepId ? { stepId } : {}), message: WORKER_FALLBACK_NOTE });
     const wait = this.host.openHumanAlias(runId, state, 'no-wait', { questions });
-    if (wait && wait.askSeq === undefined && pendingHumanAskSeq(this.context.store, runId) === undefined) {
+    if (wait && wait.askSeq === undefined && pendingHumanAskSeq(this.context.store.transcriptFacts, runId) === undefined) {
       this.context.store.appendEvent(runId, { type: 'ask.requested', requestId: randomUUID(), questions, ...(stepId ? { stepId } : {}) });
       this.host.prepareHumanAsk(state);
       this.host.markHumanWaitSurfaced(runId, wait, { questions });
@@ -405,14 +405,14 @@ export class WorkerQuestions {
 
   /** The worker's pending question is the one `askParentForWorker` raised. */
   isWorkerFallbackAsk(runId: string, askSeq: number): boolean {
-    const ask = this.context.store.transcriptFacts(runId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     const questions = ask?.seq === askSeq ? askRequestOf({ questions: ask.questions })?.questions : undefined;
     return questions?.length === 1 && questions[0]!.header === WORKER_FALLBACK_HEADER && questions[0]!.question === WORKER_FALLBACK_QUESTION(runId);
   }
 
   /** The worker's pending question is Squawk's fallback question. */
   pendingWorkerFallback(runId: string): boolean {
-    const ask = this.context.store.transcriptFacts(runId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     return this.context.store.getRun(runId)?.delegation?.role === 'worker' && !!ask && this.isWorkerFallbackAsk(runId, ask.seq);
   }
 
@@ -436,7 +436,7 @@ export class WorkerQuestions {
    */
   supersedeWorkerFallback(runId: string): boolean {
     const run = this.context.store.getRun(runId);
-    const ask = this.context.store.transcriptFacts(runId).pendingAsk;
+    const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     if (run?.delegation?.role !== 'worker' || !ask || !this.isWorkerFallbackAsk(runId, ask.seq)) return false;
     const root = this.context.store.getRun(run.delegation.parentRunId);
     const requestId = ask.routedMessageId;
@@ -456,7 +456,7 @@ export class WorkerQuestions {
     }
     this.context.store.appendEvent(runId, { type: 'human-ask-closed', askSeq: ask.seq, reason: 'superseded' });
     this.host.withdrawSquawkHumanWaits(runId);
-    this.host.updatePendingHumanAsk(runId, hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)));
+    this.host.updatePendingHumanAsk(runId, hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)));
     return true;
   }
 

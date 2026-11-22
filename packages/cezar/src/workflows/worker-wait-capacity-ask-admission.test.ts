@@ -60,7 +60,7 @@ for (const role of ['root', 'worker'] as const) {
         // A worker's question is its parent's to answer (hearsay-tools/cezarion#2410).
         grantSteer(p.id);
         manager.enqueueOwnedRun(w.id);
-        await until(() => store.getRun(w.id)?.status === 'waiting' && store.transcriptFacts(w.id).pendingAsk?.routedMessageId !== undefined);
+        await until(() => store.getRun(w.id)?.status === 'waiting' && store.transcriptFacts.transcriptFacts(w.id).pendingAsk?.routedMessageId !== undefined);
       }
       const sessions = [...work.liveSessions];
       const session = role === 'root' ? sessions[0] : sessions[1];

@@ -48,8 +48,8 @@ it("sends a worker's cezar_ask question to its active parent as a request", asyn
     const { p, service, callerFor } = await delegatingParent({ permissions: ['spawn', 'wait', 'steer'] });
     await until(() => store.getRun(p.id)?.status === 'waiting');
     const w = await worker(p.id, 'mock:cezar-ask');
-    const facts = store.transcriptFacts.bind(store);
-    const route = vi.spyOn(store, 'transcriptFacts').mockImplementation(id => {
+    const facts = store.transcriptFacts.transcriptFacts.bind(store.transcriptFacts);
+    const route = vi.spyOn(store.transcriptFacts, 'transcriptFacts').mockImplementation(id => {
       const value = facts(id);
       const { pendingAsk: _pendingAsk, ...withoutAsk } = value;
       return id === w.id ? withoutAsk : value;

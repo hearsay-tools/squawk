@@ -39,7 +39,7 @@ export function verifyFacts(dataDir, fixtures, store) {
     assert.equal(facts.version, 1);
     assert.equal(facts.bytes, fixture.bytes);
     assert.equal(facts.lastSeq, fixture.events);
-    assert.deepEqual(store.transcriptFacts(fixture.id), facts);
+    assert.deepEqual(store.transcriptFacts.transcriptFacts(fixture.id), facts);
     if (fixture.archived) {
       const stat = statSync(join(dataDir, 'runs', `${fixture.id}.ndjson.br`));
       assert.deepEqual(facts.archive, { size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino });

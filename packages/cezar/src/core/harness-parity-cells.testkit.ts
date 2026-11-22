@@ -106,7 +106,7 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
         await withOwnedInputRun('opencode', 'ask', async fixture => {
           const { runId, parentRunId } = fixture;
           fixture.manager.enqueueOwnedRun(runId);
-          await waitFor(() => fixture.store.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
+          await waitFor(() => fixture.store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
           const input = agentInput(parentRunId);
           expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
           const { store, manager } = await fixture.restart();

@@ -28,7 +28,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
       expect(answered(f.p.id, askSeq)).toBe(false);
       expect(asks(f.p.id).map(event => event.seq)).toEqual([askSeq]);
       expect(humanOpen(f.p.id)).toEqual([expect.objectContaining({ phase: WAIT_PHASE.open, askSeq })]);
-      expect(store.transcriptFacts(f.p.id).pendingAsk?.seq).toBe(askSeq);
+      expect(store.transcriptFacts.transcriptFacts(f.p.id).pendingAsk?.seq).toBe(askSeq);
       expect(deriveAttention(store.getRun(f.p.id)!).label).toBe('needs you');
       // The human's answer checkpoints that same question.
       expect(manager.sendMessage(f.p.id, [{ type: 'text', text: 'Parser' }])).toBe(true);
@@ -68,7 +68,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
       expect(answered(f.p.id, askSeq)).toBe(false);
       expect(asks(f.p.id).map(event => event.seq)).toEqual([askSeq]);
       expect(humanOpen(f.p.id)).toEqual([expect.objectContaining({ phase: WAIT_PHASE.open, askSeq })]);
-      expect(store.transcriptFacts(f.p.id).pendingAsk?.seq).toBe(askSeq);
+      expect(store.transcriptFacts.transcriptFacts(f.p.id).pendingAsk?.seq).toBe(askSeq);
       expect(deriveAttention(store.getRun(f.p.id)!).label).toBe('needs you');
       expect(manager.sendMessage(f.p.id, [{ type: 'text', text: 'Parser' }])).toBe(true);
       await until(() => answered(f.p.id, askSeq));

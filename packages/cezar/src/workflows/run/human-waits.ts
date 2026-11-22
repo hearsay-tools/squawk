@@ -88,7 +88,7 @@ export class HumanWaits {
    *  is pending waits on that question instead, and raises nothing. */
   turnEndHumanWait(runId: string): HumanWaitEntry | undefined {
     const wait = this.unsurfacedHumanWait(runId);
-    if (!wait || !hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return wait;
+    if (!wait || !hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id))) return wait;
     this.markHumanWaitSurfaced(runId, wait);
     return undefined;
   }
@@ -116,14 +116,14 @@ export class HumanWaits {
 
   /** The pending question's `askSeq`, unless the answer this turn opened with answers it. */
   private currentQuestionSeq(runId: string, state: ActiveRun | undefined): number | undefined {
-    const pending = pendingHumanAskSeq(this.context.store, runId);
+    const pending = pendingHumanAskSeq(this.context.store.transcriptFacts, runId);
     return answeringAskSeq(state) === pending ? undefined : pending;
   }
 
   /** Record which question a human wait is shown as: the pending card or gate, whose answer settles
    *  it. A card shown in place of the wait's own replaces it. A wait already shown is left alone. */
   markHumanWaitSurfaced(runId: string, wait: HumanWaitEntry, shownCard?: AskRequest): void {
-    const askSeq = pendingHumanAskSeq(this.context.store, runId);
+    const askSeq = pendingHumanAskSeq(this.context.store.transcriptFacts, runId);
     const latest = WAIT_KINDS.human.select(this.context.store.getRun(runId)?.waits ?? []).find(entry => entry.id === wait.id);
     if (askSeq === undefined || !latest || latest.phase !== 'open' || latest.askSeq !== undefined) return;
     const { questions: _questions, context: _context, ...kept } = latest;
@@ -142,7 +142,7 @@ export class HumanWaits {
   surfaceHumanWait(runId: string, state: ActiveRun | undefined, wait = this.unsurfacedHumanWait(runId)): void {
     if (!wait || wait.askSeq !== undefined) return;
     if (wait.source === 'cezar') { this.showSquawkHumanWait(runId, state, wait); return; }
-    if (pendingHumanAskSeq(this.context.store, runId) === undefined) {
+    if (pendingHumanAskSeq(this.context.store.transcriptFacts, runId) === undefined) {
       const run = this.context.store.getRun(runId);
       const stepId = state?.liveSession.currentStepId ?? run?.currentStepId ?? run?.steps.at(-1)?.id;
       if (wait.questions) {

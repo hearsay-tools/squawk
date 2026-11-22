@@ -232,7 +232,7 @@ it('ask replay requires a validated successful-delivery checkpoint for the curre
   const dir = mkdtempSync(join(tmpdir(), 'cez-ask-checkpoint-'));
   const store = RunStore.open(dir);
   const manager = new RunManager(store, dir, { acquireCiResources: acquireInertCiResources, createRunner: spiedRunners, home: testHome() });
-  const pendingAsk = () => store.transcriptFacts(recordId).pendingGateSeq !== undefined;
+  const pendingAsk = () => store.transcriptFacts.transcriptFacts(recordId).pendingGateSeq !== undefined;
   let recordId: string;
   try {
     const record = store.createRun({ title: 'task', task: 'task', workflow: 'quick-task', steps: [] });
@@ -330,7 +330,7 @@ it('ACK cannot answer a newly visible human ask or drain its queued successor', 
     acknowledge(); await delivered;
     expect(store.getRun(runId)?.agentInputs).toEqual([{ ...input, deliveredAt: expect.any(String) }, second]);
     expect(send).toHaveBeenCalledOnce(); expect(human).not.toHaveBeenCalled();
-    expect(store.transcriptFacts(runId).pendingGateSeq).toBeDefined();
+    expect(store.transcriptFacts.transcriptFacts(runId).pendingGateSeq).toBeDefined();
     expect(store.readEvents(runId).filter(event => event.type === 'human-input-delivered')).toEqual([]);
   });
 });

@@ -261,7 +261,7 @@ export class TurnSettler {
       nudgePending: nudgeRefusedAt(state, session),
       turnAsk: !!turn.ask,
       nativeAsk: !!state.boundary.pendingHumanAsk,
-      question: !!turn.ask || turn.humanGate || !!state.boundary.pendingHumanAsk || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)),
+      question: !!turn.ask || turn.humanGate || !!state.boundary.pendingHumanAsk || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)),
       agentWaits: this.host.humanWaits.holdsAgentWaits(runId),
       squawkHumanWait: (run?.waits ?? []).some(isSquawkHumanWait),
       stepScope: !!session && state.boundary.nextStep?.session === session,

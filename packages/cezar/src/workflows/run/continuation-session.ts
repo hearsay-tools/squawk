@@ -218,7 +218,7 @@ export class ContinuationSession {
 
   /** The human ask a human Continue answers, and the human waits that answer settles. */
   private openingAnswer(runId: string, state: ActiveRun, opening: ContinuationOpening): OpeningAnswer {
-    const askSeq = opening.checkpoint?.origin === 'human' ? pendingHumanAskSeq(this.context.store, runId) : undefined;
+    const askSeq = opening.checkpoint?.origin === 'human' ? pendingHumanAskSeq(this.context.store.transcriptFacts, runId) : undefined;
     state.inputState.answerOpeningAsk(askSeq);
     // The human waits this answer answers; one the opening turn opens is its next question.
     const waits = askSeq === undefined ? []
@@ -406,7 +406,7 @@ export class ContinuationSession {
     }, runId, stepId, state, record, { prompt, images, persistedImages, persistedAttachments });
     prompt = opening.prompt;
     const answer = this.openingAnswer(runId, state, opening);
-    transitionTurnBoundary(state, { kind: 'session-open', phase: 'restore-question', session: state.liveSession.session, pending: answer.askSeq === undefined && hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
+    transitionTurnBoundary(state, { kind: 'session-open', phase: 'restore-question', session: state.liveSession.session, pending: answer.askSeq === undefined && hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store.transcriptFacts, id)) });
 
     const onEvent = createSessionEventHandler(this.context, this.sessionEventHost, {
       runId, state, turn, stepId, backend, sink, tokenBase: 0,
