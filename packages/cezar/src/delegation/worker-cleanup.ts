@@ -362,7 +362,7 @@ export class WorkerCleanup {
         JSON.stringify(current.delegation) !== JSON.stringify(snapshot.delegation)) throw new Error('Worker changed before cleanup checkpoint');
       // This immutable parent payload must be durable before the first destructive operation. A
       // payload already on disk is durable, whatever cleanup phase it names (hearsay-tools/cezarion#879).
-      project.store.commitWorkerResult(evidence.result.parentRunId, evidence.result, evidence.diffSnapshot, { ignoreCleanup: true });
+      project.store.workerResults.commitWorkerResult(evidence.result.parentRunId, evidence.result, evidence.diffSnapshot, { ignoreCleanup: true });
       assertAttached();
       check();
       const release = project.manager.claimWorkerCleanup(workerId);
@@ -397,7 +397,7 @@ export class WorkerCleanup {
       persist(result.state, result.remaining, result.error);
       // Preserve the captured bytes even if Git removal was only partially successful.
       const removed = workspaceDirectoryRemoved(workspace, result.remaining);
-      project.store.commitWorkerResult(evidence.result.parentRunId, { ...evidence.result, observedAt: new Date().toISOString(),
+      project.store.workerResults.commitWorkerResult(evidence.result.parentRunId, { ...evidence.result, observedAt: new Date().toISOString(),
         cleanup: result.state, outcome: result.state === 'complete' ? 'destroyed' : evidence.result.lastExecutionOutcome,
         workspace: { ...workspace, state: removed ? 'deleted' : evidence.result.workspace.state },
         head: removed ? { state: 'deleted', reason: 'missing', ...('sha' in evidence.result.head ? { sha: evidence.result.head.sha } : {}) } : evidence.result.head,

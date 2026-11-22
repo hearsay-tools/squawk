@@ -467,7 +467,7 @@ describe('delegation service durable authority', () => {
     const replacementManager = replacementManagerFor(f);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     const writes = vi.spyOn(f.store, 'commitDelegation');
-    const results = vi.spyOn(f.store, 'commitWorkerResult');
+    const results = vi.spyOn(f.store.workerResults, 'commitWorkerResult');
     const events = vi.spyOn(f.store, 'appendEvent');
     release(terminated);
     // Await the attempt itself so every write it could make precedes the absence checks.
@@ -508,8 +508,8 @@ describe('delegation service durable authority', () => {
     vi.stubEnv('TEST_OWNED_GIT_BLOCKED', blocked);
     vi.stubEnv('TEST_OWNED_GIT_RELEASE', release);
     vi.stubEnv('PATH', `${bin}:${process.env.PATH}`);
-    const originalCommit = f.store.commitWorkerResult.bind(f.store);
-    const results = vi.spyOn(f.store, 'commitWorkerResult').mockImplementation((parentId, value, diff) => {
+    const originalCommit = f.store.workerResults.commitWorkerResult.bind(f.store.workerResults);
+    const results = vi.spyOn(f.store.workerResults, 'commitWorkerResult').mockImplementation((parentId, value, diff) => {
       const committed = originalCommit(parentId, value, diff);
       writeFileSync(armed, '');
       return committed;

@@ -27,8 +27,8 @@ export interface DeletionGate {
 /** What a reclaim preparation gets from the reclaim: the repository and the store it reclaims in. */
 export interface ReclaimContext {
   readonly repoRoot: string;
-  /** The store the reclaim runs in. */
-  readonly store: WorkerResults;
+  /** The store the reclaim runs in, and the worker results it saves. */
+  readonly store: { readonly workerResults: WorkerResults };
 }
 
 /** Work that must finish before a reclaimed worktree goes. A rejection stops the reclaim. */

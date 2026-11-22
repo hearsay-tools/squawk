@@ -96,11 +96,13 @@ export function selectReclaimableWorktrees(
 }
 
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
-type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & WorkerExecutions & WorkerResults>;
+type RealStoreMembers = Partial<RunAccess & RunFamilyReads & RunPins & WorkerExecutions>;
 
 /** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
  *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
-export interface RetentionStore extends WorkerResults {
+export interface RetentionStore {
+  /** The worker results a reclaim preparation saves. */
+  readonly workerResults: WorkerResults;
   /** The candidates: runs with a materialized worktree (an indexed query, #779). */
   listRunsWithWorktree(): RunRecord[];
   getRun(id: string): RunRecord | undefined;

@@ -362,7 +362,7 @@ export function fixtureUpdateRun(id: string, patch: NonNullable<Parameters<typeo
 export async function collect(id: string) {
   const run = store.getRun(id)!;
   const evidence = await collectWorkerEvidence(root, store, run);
-  return store.commitWorkerResult(run.delegation?.role === 'worker' ? run.delegation.parentRunId : '', evidence.result, evidence.diffSnapshot);
+  return store.workerResults.commitWorkerResult(run.delegation?.role === 'worker' ? run.delegation.parentRunId : '', evidence.result, evidence.diffSnapshot);
 }
 export async function queuedWake(runner: string = 'claude') {
   const p = await parent('mock:hold', runner); const w = await worker(p.id, 'mock:slow');

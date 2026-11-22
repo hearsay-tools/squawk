@@ -244,7 +244,7 @@ export class FamilyReconciler {
     // Explicit history deletion replaces the live execution proof with a completed
     // parent receipt. Keep its acknowledged outcome while other all-wait workers run.
     const deletedResults = new Map(receiptsOf(family).flatMap(receipt => {
-      const result = this.context.store.readDeletedWorkerResult(family!.id, receipt.workerId);
+      const result = this.context.store.workerResults.readDeletedWorkerResult(family!.id, receipt.workerId);
       return result ? [[receipt.workerId, result] as const] : [];
     }));
     for (const result of deletedResults.values()) {

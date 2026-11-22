@@ -324,13 +324,13 @@ describe('project run sources', () => {
       diff: { state: 'available', snapshotId, path, truncated: false }, artifacts: { state: 'available', items: [], truncated: false } }, diffSnapshot: 'retained patch' });
     writeFileSync(path, bytes);
     const store = open();
-    expect(store.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
+    expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
     expect(store.adoptFallbackFamily(workerId)).toBe(true);
     store.updateRun(workerId, { title: 'explicit write' });
     store.flush();
     expect(store.sourceDataDir(parentId)).toBe(root('cezar'));
-    expect(store.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
-    expect(store.readWorkerResult(parentId, workerId)?.diff).toMatchObject({ path: join(root('cezar'), 'runs', `${parentId}-worker-results`, `${workerId}.${snapshotId}.json`) });
+    expect(store.workerResults.readWorkerResultDiff(parentId, workerId)).toBe('retained patch');
+    expect(store.workerResults.readWorkerResult(parentId, workerId)?.diff).toMatchObject({ path: join(root('cezar'), 'runs', `${parentId}-worker-results`, `${workerId}.${snapshotId}.json`) });
     expect(readFileSync(path, 'utf8')).toBe(bytes);
   });
 

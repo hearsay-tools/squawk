@@ -227,7 +227,7 @@ if (group === 'reviewed-integration') {
     expect(existsSync(firstA.cwd)).toBe(false);
     expect(git(repo, 'rev-parse', `refs/heads/${ownedWorkspace(resultA.workspace).branch}`)).toBe(resultA.head.sha);
     expect(store.retention.canDeleteRun(a)).toBe(false);
-    expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
+    expect(store.workerResults.readWorkerResultDiff(p.id, a)).toContain('+alpha');
     expect(await destroy(p.id, b, 0, '--discard-work')).toMatchObject({ state: 'complete', remaining: [] });
     expect(manager.finish(p.id)).toBe(true);
     await until(() => !manager.isActive(p.id), 'parent session closes at review');
@@ -239,7 +239,7 @@ if (group === 'reviewed-integration') {
     controller = await DelegationController.start(cleanup); controller.attachProject({ home: testHome(), id: 'integration', root: repo, store, manager });
     await manager.recover();
     expect(store.getRun(p.id)?.status).toBe(RUN_STATUS.review);
-    expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
+    expect(store.workerResults.readWorkerResultDiff(p.id, a)).toContain('+alpha');
     expect(store.getRun(a)?.delegation).toMatchObject({ destroy: { phase: 'incomplete', remaining: ['branch'] } });
     for (const path of readdirSync(control).filter(path => path.startsWith(p.id))) rmSync(join(control, path));
     expect(manager.continueRun(p.id, { text: 'Retry owned cleanup and inspect retained evidence' }).ok).toBe(true);
@@ -254,8 +254,8 @@ if (group === 'reviewed-integration') {
       expect(existsSync(join(repo, '.ai/cezar/runs', `${id}.ndjson`))).toBe(false);
       expect(await collect(p.id, id)).toMatchObject({ outcome: workerCollectedResultSchema.shape.outcome.enum.destroyed, settled: true, cleanup: 'complete', workspace: { state: 'deleted' }, summary: { state: 'available' }, diff: { state: 'available' }, head: { state: 'deleted' } });
     }
-    expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
-    expect(store.readWorkerResultDiff(p.id, b)).toContain('+beta');
+    expect(store.workerResults.readWorkerResultDiff(p.id, a)).toContain('+alpha');
+    expect(store.workerResults.readWorkerResultDiff(p.id, b)).toContain('+beta');
     expect(git(parentPath, 'show', 'HEAD:shared.txt')).toBe('alpha');
     expect(git(parentPath, 'rev-parse', 'HEAD')).toBe(integratedHead);
     const publicState = JSON.stringify([store.listRuns(), ...store.listRuns().map(run => store.readEvents(run.id))]);
@@ -304,7 +304,7 @@ if (group === 'parent-cancellation') {
     expect(store.getRun(p.id)?.status).toBe(RUN_STATUS.cancelled);
     expect(store.getRun(completed)?.status).toBe(RUN_STATUS.review);
     expect(readFileSync(join(result.workspace.path, 'shared.txt'), 'utf8')).toBe('retained\n');
-    expect(store.readWorkerResultDiff(p.id, completed)).toContain('+retained');
+    expect(store.workerResults.readWorkerResultDiff(p.id, completed)).toContain('+retained');
     expect(store.readWorkerExecution(live)?.phase).toBe('complete');
     expect(store.getRun(live)?.worktreePath && existsSync(store.getRun(live)!.worktreePath!)).toBe(true);
   }, 90_000);

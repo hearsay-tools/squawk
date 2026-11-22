@@ -20,7 +20,7 @@ const cleanup = (name: string, fails = false): RemovalCleanup => ({
 const first = gate('first', 'history'), second = gate('second', 'archive-tmp');
 const run = makeRunRecord({ id: 'run-1' });
 // The preparations here read no store.
-const context = { repoRoot: '/repo', store: {} as WorkerResults };
+const context = { repoRoot: '/repo', store: {} as { workerResults: WorkerResults } };
 
 it('throws on every read before the seal, naming the missing registration', async () => {
   const slots = await fresh();

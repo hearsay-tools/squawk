@@ -58,7 +58,7 @@ describe('verified destruction retains results through explicit history deletion
     await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.retention.deleteRun(workerId)).toBe(true);
     f.manager.reconcileWorkerWaits();
     expect(entry()).toMatchObject({ phase: WAIT_PHASE.open, outcomes: [{ workerId, revision: 1, status: WORKER_OUTCOME_STATUS.review }] });
-    const retained = f.store.readWorkerResult(f.parent.id, workerId)!;
+    const retained = f.store.workerResults.readWorkerResult(f.parent.id, workerId)!;
     if (retained.diff.state !== 'available') throw Error('fixture diff');
     const bytes = readFileSync(retained.diff.path, 'utf8');
     writeFileSync(retained.diff.path, '{}');
@@ -74,7 +74,7 @@ describe('verified destruction retains results through explicit history deletion
 
   it('denies replacement evidence whose retained workspace names a different owner', async () => {
     const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.retention.deleteRun(workerId)).toBe(true);
-    const result = f.store.readWorkerResult(f.parent.id, workerId)!;
+    const result = f.store.workerResults.readWorkerResult(f.parent.id, workerId)!;
     if (result.diff.state !== 'available') throw Error('fixture diff');
     const file = JSON.parse(readFileSync(result.diff.path, 'utf8'));
     file.result.workspace.ownerRunId = randomUUID();
