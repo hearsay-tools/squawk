@@ -46,6 +46,18 @@ describe('Markdown', () => {
     expect(document.querySelector('[data-slot="link-safety-dialog"]')).toBeNull()
   })
 
+  it('keeps rewrite trust separate across messages and literal links in the same message', () => {
+    const literal = '/p/cache/tasks/shared/files?path=%2Ftmp%2Fsafe.md'
+    render(<TaskFileContext.Provider value={{ runId: 'shared', projectId: 'cache' }}>
+      <Markdown>{'[rewritten](/tmp/safe.md)'}</Markdown>
+      <Markdown>{`[literal](${literal}) and [rewritten again](/tmp/safe.md)`}</Markdown>
+    </TaskFileContext.Provider>)
+    fireEvent.click(screen.getByRole('link', { name: 'rewritten again' }))
+    expect(document.querySelector('[data-slot="link-safety-dialog"]')).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'literal' }))
+    expect(document.querySelector('[data-slot="link-safety-dialog"]')).not.toBeNull()
+  })
+
   it('opens a publication link without the confirm: the read-only reader is its only destination', () => {
     const href = '/p/owner/tasks/owner-task/files?artifact=4c15e25b-a08c-438d-a32b-fd1a8c6c90e2'
     render(<TaskFileContext.Provider value={{ runId: 'owner-task', projectId: 'owner' }}><Markdown>{`[Report](${href})`}</Markdown></TaskFileContext.Provider>)

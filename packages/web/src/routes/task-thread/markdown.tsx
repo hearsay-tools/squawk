@@ -3,6 +3,7 @@ import { memo, useContext, useMemo } from 'react'
 import {
   Streamdown,
   defaultRemarkPlugins,
+  defaultRehypePlugins,
   type CodeHighlighterPlugin,
   type LinkSafetyConfig,
 } from 'streamdown'
@@ -38,6 +39,8 @@ interface MdastNode {
   value?: string
   url?: string | undefined
   children?: MdastNode[]
+  identifier?: string
+  position?: { start: { offset?: number }; end: { offset?: number } }
 }
 
 /**
@@ -108,14 +111,57 @@ const LINK_SAFETY: LinkSafetyConfig = {
 /** Where a refused document image points: the reserved `.invalid` TLD never resolves. */
 const REFUSED_IMAGE = 'https://refused.invalid/'
 
-/**
- * A fresh cache key per `Markdown` memo, for its closure plugins. Streamdown caches its unified
- * processors module-wide, keyed by each plugin's function NAME plus its JSON options, so a
- * closure plugin is built once, by whichever instance renders first, and every later instance
- * gets that one's captured state: task B's file links opened task A's Files tab, and the
- * internal-link record filled a Set no component read. An `instance` option keys each memo's
- * plugins apart; a processor evicted from the cache is rebuilt from the same closures.
- */
+/** Trust belongs to a parsed node, never to a destination shared by messages. */
+const rewrittenLinks = new WeakSet<object>()
+type LinkFile = { data: Record<string, unknown> }
+function linkPosition(node: MdastNode): string | null {
+  const start = node.position?.start.offset
+  const end = node.position?.end.offset
+  return start === undefined || end === undefined ? null : `${start}:${end}`
+}
+
+function taskLinks(context: NonNullable<React.ContextType<typeof TaskFileContext>>) {
+  return (tree: MdastNode, file: LinkFile) => {
+    const trusted = new Set<string>()
+    const definitions = new Map<string, boolean>()
+    // Only a link this walk REWROTE skips the link-safety confirm. A cockpit URL the author
+    // wrote themselves, even one naming this task, keeps it: `taskFileHref` returns null for it.
+    const walk = (node: MdastNode): void => {
+      if ((node.type === 'link' || node.type === 'definition') && node.url) {
+        const target = taskFileHref(node.url, context)
+        if (node.type === 'definition' && node.identifier && !definitions.has(node.identifier)) definitions.set(node.identifier, target !== null)
+        if (target) {
+          node.url = target
+          const position = linkPosition(node)
+          if (node.type === 'link' && position !== null) trusted.add(position)
+        }
+      }
+      node.children?.forEach(walk)
+    }
+    walk(tree)
+    const references = (node: MdastNode): void => {
+      const position = linkPosition(node)
+      if (node.type === 'linkReference' && node.identifier && definitions.get(node.identifier) && position !== null) trusted.add(position)
+      node.children?.forEach(references)
+    }
+    references(tree)
+    file.data.taskLinks = trusted
+  }
+}
+
+/** Runs after sanitization. VFile data is private to this parse, including reference links. */
+function markTaskLinks() {
+  return (tree: MdastNode & { tagName?: string }, file: LinkFile) => {
+    const walk = (node: MdastNode & { tagName?: string }): void => {
+      const position = linkPosition(node)
+      if (node.tagName === 'a' && position !== null && file.data.taskLinks instanceof Set && file.data.taskLinks.has(position)) rewrittenLinks.add(node)
+      node.children?.forEach(walk)
+    }
+    walk(tree)
+  }
+}
+
+// Image resolvers capture document-specific state, so they still need distinct keys.
 let markdownInstances = 0
 
 /**
@@ -148,19 +194,6 @@ export const Markdown = memo(function Markdown({
   const fileContext = useContext(TaskFileContext)
   const contextual = useMemo(() => {
     const instance = { instance: ++markdownInstances }
-    const internal = new Set<string>()
-    // Only a link this walk REWROTE skips the link-safety confirm. A cockpit URL the author
-    // wrote themselves, even one naming this task, keeps it: `taskFileHref` returns null for it.
-    function taskLinks() {
-      const walk = (node: MdastNode): void => {
-        if ((node.type === 'link' || node.type === 'definition') && node.url && fileContext) {
-          const target = taskFileHref(node.url, fileContext)
-          if (target) { node.url = target; internal.add(target) }
-        }
-        node.children?.forEach(walk)
-      }
-      return walk
-    }
     const resolvedImages = new Set<string>()
     // Images resolve HERE, on the mdast, because Streamdown's harden step blocks every relative
     // `src` before a component could see it (with its own unthemed "Image blocked" pill). The
@@ -178,15 +211,15 @@ export const Markdown = memo(function Markdown({
       }
       return walk
     }
-    const links = fileContext ? [[taskLinks, instance] satisfies [typeof taskLinks, typeof instance]] : []
+    const links = fileContext ? [[taskLinks, fileContext] satisfies [typeof taskLinks, typeof fileContext]] : []
     const images = document && imageSrc ? [[documentImages, instance] satisfies [typeof documentImages, typeof instance]] : []
     return {
       remark: [...(breaks ? HARD_BREAKS : Object.values(defaultRemarkPlugins)), ...links, ...images],
       components: {
-        ...(fileContext || document ? { a: ({ href, children }: { href?: string | undefined; children?: React.ReactNode }) => {
+        ...(fileContext || document ? { a: ({ href, children, node }: { href?: string | undefined; children?: React.ReactNode; node?: object | undefined }) => {
           // A snapshot has no live directory. Relative links cannot silently target the host.
           if (document && !fileContext && !/^(?:https?:|mailto:|#)/i.test(href ?? '')) return <span>{children}</span>
-          return <TaskLink href={href} internal={internal.has(href ?? '')}>{children}</TaskLink>
+          return <TaskLink href={href} internal={node !== undefined && rewrittenLinks.has(node)}>{children}</TaskLink>
         } } : {}),
         ...(document ? { img: ({ src, alt }: { src?: unknown; alt?: string | undefined }) => {
           if (typeof src === 'string' && resolvedImages.has(src)) return <img src={src} alt={alt ?? ''} loading="lazy" />
@@ -201,6 +234,7 @@ export const Markdown = memo(function Markdown({
       plugins={{ code: shikiPlugin }}
       shikiTheme={[SYN_THEME, SYN_THEME]}
       {...defined({
+        rehypePlugins: fileContext ? [...Object.values(defaultRehypePlugins), markTaskLinks] : undefined,
         remarkPlugins: fileContext || (document && imageSrc) ? contextual.remark : breaks ? HARD_BREAKS : undefined,
         allowedElements: inline ? INLINE_ELEMENTS : undefined,
         unwrapDisallowed: inline || undefined,

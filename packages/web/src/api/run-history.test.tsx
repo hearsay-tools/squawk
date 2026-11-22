@@ -7,7 +7,7 @@ import type { RunHistoryContext, RunHistoryPage } from '@open-mercato/cezar-api-
 import { TOOL_STATUSES } from '@open-mercato/cezar-api-client/protocol/ui-events'
 import { flushAnimationFrames, installAnimationFrameQueue } from '../test/animation-frames'
 import { getRunHistory, getRunHistoryContext } from './client'
-import { useRunHistory } from './run-history'
+import { orderedUnique, useRunHistory } from './run-history'
 
 vi.mock('./client', () => ({
   getRunHistory: vi.fn(),
@@ -525,5 +525,18 @@ describe('useRunHistory', () => {
     unmount()
     await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(3))
     vi.unstubAllGlobals()
+  })
+})
+
+describe('history event ordering', () => {
+  const event = (seq: number, message = String(seq)) => ({ seq, message, ts: '2026-07-30T00:00:00.000Z', type: 'note' as const })
+  it('appends ordered nonoverlapping groups, including empty inputs', () => {
+    expect(orderedUnique()).toEqual([])
+    expect(orderedUnique([], [event(1), event(2)], [], [event(3)])).toEqual([event(1), event(2), event(3)])
+  })
+  it('sorts disordered groups and keeps the last event for an overlapping sequence', () => {
+    expect(orderedUnique([event(3), event(1)], [event(2), event(3, 'latest')])).toEqual([
+      event(1), event(2), event(3, 'latest'),
+    ])
   })
 })
