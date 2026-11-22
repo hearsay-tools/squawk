@@ -190,4 +190,45 @@ export const MIGRATIONS: readonly string[] = [
   `,
   REPORTS_MIGRATION,
   MERGE_WAIT_MIGRATION, DESTROYED_WORKTREE_MIGRATION, CONVERSATION_MEMBERS_MIGRATION, AUTOMATION_RUNS_MIGRATION,
+  `
+  -- Schema 15 keeps the named columns and rows unchanged. Reading summary must not walk
+  -- the overflow pages of data. Rebuild for existing databases and for fresh migration chains.
+  CREATE TABLE runs_v15 (
+    seq INTEGER PRIMARY KEY,
+    id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    archived INTEGER NOT NULL,
+    live INTEGER NOT NULL,
+    parent_run_id TEXT,
+    client_request_id TEXT,
+    group_id TEXT,
+    worktree_path TEXT,
+    branch TEXT,
+    base_branch TEXT,
+    revision INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    data TEXT NOT NULL
+  ) STRICT;
+  INSERT INTO runs_v15 (seq, id, created_at, finished_at, status, archived, live, parent_run_id,
+    client_request_id, group_id, worktree_path, branch, base_branch, revision, summary, data)
+  SELECT seq, id, created_at, finished_at, status, archived, live, parent_run_id,
+    client_request_id, group_id, worktree_path, branch, base_branch, revision, summary, data FROM runs;
+  DROP TABLE runs;
+  ALTER TABLE runs_v15 RENAME TO runs;
+  CREATE INDEX runs_created_at ON runs (created_at DESC, seq);
+  CREATE INDEX runs_status ON runs (status);
+  CREATE INDEX runs_live ON runs (live) WHERE live = 1;
+  CREATE INDEX runs_parent_run_id ON runs (parent_run_id) WHERE parent_run_id IS NOT NULL;
+  CREATE INDEX runs_client_request_id ON runs (client_request_id) WHERE client_request_id IS NOT NULL;
+  CREATE INDEX runs_group_id ON runs (group_id) WHERE group_id IS NOT NULL;
+  CREATE INDEX runs_worktree_path ON runs (worktree_path) WHERE worktree_path IS NOT NULL;
+  CREATE INDEX runs_branch ON runs (branch) WHERE branch IS NOT NULL;
+  CREATE INDEX runs_unarchived ON runs (created_at DESC, seq) WHERE archived = 0;
+  CREATE INDEX runs_archived_roots ON runs (archived, created_at DESC, seq) WHERE parent_run_id IS NULL;
+  CREATE INDEX runs_archive_on_merge ON runs (seq)
+    WHERE archived = 0 AND live = 0 AND parent_run_id IS NULL
+      AND status IN ('review', 'done', 'failed', 'cancelled');
+  `,
 ];

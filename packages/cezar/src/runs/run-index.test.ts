@@ -1,5 +1,6 @@
+import { DatabaseSync } from 'node:sqlite';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -443,3 +444,99 @@ describe('cold reads of runs.db', () => {
   expect(readFileSync(join(dir, RUNS_DB_FILE))).toEqual(bytes);
   store.close();
  });
+
+describe('cold index cache', () => {
+  it('reuses an unchanged index without opening SQLite and isolates nested caller changes', () => {
+    seedRuns(dir, [record({ markerRefs: { issue: 43 } })]);
+    readRunIndexFromDisk(dir); // SQLite may create its read-only WAL sidecars on the first read.
+    const first = readRunIndexFromDisk(dir);
+    const open = vi.spyOn(RunDatabase, 'openReadOnly');
+    first.runs[0]!.title = 'caller changed';
+    first.runs[0]!.markerRefs!.issue = 999;
+    first.runs.pop();
+    expect(readRunIndexFromDisk(dir).runs[0]).toMatchObject({ title: 'Research', markerRefs: { issue: 43 } });
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('invalidates on a WAL-only commit, including a same-size overwrite of existing WAL frames', () => {
+    seedRuns(dir, [record()]);
+    const writer = RunDatabase.open(join(dir, RUNS_DB_FILE));
+    try {
+      const raw = new DatabaseSync(join(dir, RUNS_DB_FILE));
+      try {
+        raw.exec('PRAGMA wal_autocheckpoint = 0');
+        readRunIndexFromDisk(dir);
+        readRunIndexFromDisk(dir);
+        raw.exec(`UPDATE runs SET summary = json_set(summary, '$.title', 'Changed!')`);
+        expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Changed!');
+        raw.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        raw.exec(`UPDATE runs SET summary = json_set(summary, '$.title', 'Changed2')`);
+        expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Changed2');
+        // RESTART reuses the WAL allocation rather than making size alone a change signal.
+        raw.exec('PRAGMA wal_checkpoint(RESTART)');
+        raw.exec(`UPDATE runs SET summary = json_set(summary, '$.title', 'Changed3')`);
+        expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Changed3');
+      } finally { raw.close(); }
+    } finally { writer.close(); }
+  });
+
+  it('invalidates on same-size JSON writes and file replacement without a delay', () => {
+    const path = join(dir, 'runs.json');
+    writeFileSync(path, JSON.stringify([record()]));
+    expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Research');
+    writeFileSync(path, JSON.stringify([record({ title: 'Changed!' })]));
+    expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Changed!');
+    const replacement = join(dir, 'replacement');
+    writeFileSync(replacement, JSON.stringify([record({ title: 'Replaced' })]));
+    renameSync(replacement, path);
+    expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Replaced');
+  });
+
+  it('separates window, root and repository-handle options by their values', () => {
+    seedRuns(dir, [record(), record({ id: 'archived', archived: true }),
+      record({ id: 'worker', delegation: workerOf('cold') })]);
+    const read = (options: Parameters<typeof readRunIndexFromDisk>[1]) => readRunIndexFromDisk(dir, options);
+    expect(read({ archivedWindow: 0 }).runs).toHaveLength(2);
+    expect(read({ archivedWindow: 0, roots: true }).runs).toHaveLength(1);
+    expect(read({ archivedWindow: 1, roots: true }).runs).toHaveLength(2);
+    expect(read({}).runs[0]?.referencedPullRequestUrl).toBe(foreignPr);
+    expect(read({ handle }).runs[0]?.referencedPullRequestUrl).toBeUndefined();
+    const other = { owner: 'foreign', name: 'repo' };
+    expect(read({ handle: other }).runs[0]?.referencedPullRequestUrl).toBe(foreignPr);
+    other.owner = 'local';
+    expect(read({ handle: other }).runs[0]?.referencedPullRequestUrl).toBeUndefined();
+  });
+
+  it('invalidates when a fallback JSON source changes or becomes an imported database', () => {
+    const primary = join(dir, '.ai', 'cezar'), fallback = join(dir, '.ai', 'squawk');
+    mkdirSync(primary, { recursive: true });
+    mkdirSync(fallback, { recursive: true });
+    const index = join(fallback, 'runs.json');
+    writeFileSync(index, JSON.stringify([record()]));
+    readRunIndexFromDisk(primary);
+    expect(readRunIndexFromDisk(primary).runs[0]?.title).toBe('Research');
+    writeFileSync(index, JSON.stringify([record({ title: 'Changed!' })]));
+    expect(readRunIndexFromDisk(primary).runs[0]?.title).toBe('Changed!');
+    seedRuns(fallback, [record({ title: 'Database' })]);
+    expect(readRunIndexFromDisk(primary).runs[0]?.title).toBe('Database');
+  });
+
+  it('retries a transient read failure with no file change', () => {
+    seedRuns(dir, [record()]);
+    vi.spyOn(RunDatabase, 'openReadOnly').mockImplementationOnce(() => { throw new Error('transient busy'); });
+    expect(readRunIndexFromDisk(dir).runs).toEqual([]);
+    expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Research');
+  });
+
+  it('invalidates when the database inode is replaced', () => {
+    seedRuns(dir, [record()]);
+    readRunIndexFromDisk(dir);
+    readRunIndexFromDisk(dir);
+    const replacement = join(dir, 'next');
+    mkdirSync(replacement);
+    seedRuns(replacement, [record({ title: 'Replaced' })]);
+    renameSync(join(replacement, RUNS_DB_FILE), join(dir, RUNS_DB_FILE));
+    expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Replaced');
+  });
+
+});

@@ -11,13 +11,14 @@ export interface ProjectRunSource {
 }
 
 /** Validate before opening a writable primary: corruption must never leave a shadow store. */
-export function fallbackRunSource(dataDir: string, parse: (bytes: Buffer) => readonly RunRowInput[] | undefined): ProjectRunSource | undefined {
+export function fallbackRunSource(dataDir: string, parse: (bytes: Buffer) => readonly RunRowInput[] | undefined, failed?: () => void): ProjectRunSource | undefined {
   const directory = dataReadDirs(dataDir)[1];
   if (!directory) return undefined;
   const database = join(directory, RUNS_DB_FILE);
   try {
     return readFallbackSource(directory, database, parse);
   } catch (error) {
+    failed?.();
     warnFallbackRunSource(database, error);
     return { directory, database, jsonRows: [] };
   }
