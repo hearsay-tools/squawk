@@ -227,8 +227,9 @@ const MARKER = 'CEZ:';
 
 /**
  * Where v1 text may end now. The server strips protocol markers per v1 event, line by line
- * (`stripTaskMarkers`), so a marker split across chunks would leak its tail. The open line is
- * held from the point where it holds, or may still grow into, `CEZ:` until it ends.
+ * (`stripTaskMarkers`), and joins events into the turn text with a newline (`appendTurnText`).
+ * So an open line that holds, or may still grow into, `CEZ:` is held whole until it ends: a
+ * split would leak a marker's tail, or turn prose before `CEZ:` into a marker line.
  */
 function markerSafeEnd(text: string, released: number): number {
   const lineStart = text.lastIndexOf('\n') + 1;
@@ -237,7 +238,7 @@ function markerSafeEnd(text: string, released: number): number {
   for (let length = MARKER.length - 1; at < 0 && length > 0; length--) {
     if (line.endsWith(MARKER.slice(0, length))) at = line.length - length;
   }
-  return at < 0 ? text.length : Math.max(released, lineStart + at);
+  return at < 0 ? text.length : Math.max(released, lineStart);
 }
 
 function toolItem(wire: AcpTool, previous: UiToolItem | undefined): UiToolItem {

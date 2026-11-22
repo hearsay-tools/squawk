@@ -83,24 +83,34 @@ const texts = (events: AcpEvents, chunks: string[]): void => {
   for (const text of chunks) events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
 };
 
-it('streams v1 text per chunk but holds a line that may become a marker until it is whole', () => {
+function v1Texts(): { events: AcpEvents; v1: string[] } {
   const v1: string[] = [];
   const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
   events.begin();
-  texts(events, ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.']);
-  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n\n- done', '.']);
+  return { events, v1 };
+}
+
+it('streams v1 text per chunk but holds a line that may become a marker until it is whole', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.\n']);
+  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n\n- done', '.\n']);
   texts(events, ['All done. C', 'E', 'Z:DONE']);
-  expect(v1.at(-1)).toBe('All done. ');
+  expect(v1).toHaveLength(3);
   events.finish('end_turn');
-  expect(v1.slice(3)).toEqual(['All done. ', 'CEZ:DONE']);
+  expect(v1.slice(3)).toEqual(['All done. CEZ:DONE']);
+});
+
+it('keeps prose and a marker on one line in one v1 text', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['I will emit CEZ:PR=442']);
+  events.finish('end_turn');
+  expect(v1).toEqual(['I will emit CEZ:PR=442']);
 });
 
 it('releases a held prefix once the line grows past it', () => {
-  const v1: string[] = [];
-  const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
-  events.begin();
+  const { events, v1 } = v1Texts();
   texts(events, ['See C', 'I logs']);
-  expect(v1).toEqual(['See ', 'CI logs']);
+  expect(v1).toEqual(['See CI logs']);
 });
 
 it('emits held text once when a text listener flushes again', () => {
@@ -113,6 +123,6 @@ it('emits held text once when a text listener flushes again', () => {
   events.begin();
   texts(events, ['Done. CEZ:D']);
   events.flush();
-  expect(v1).toEqual(['Done. ', 'CEZ:D']);
+  expect(v1).toEqual(['Done. CEZ:D']);
   expect(completed).toHaveLength(1);
 });
