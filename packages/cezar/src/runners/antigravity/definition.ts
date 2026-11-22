@@ -20,7 +20,7 @@ export const antigravityRunner = defineRunner({
   models: { ...ANTIGRAVITY_MODELS, loadSettings: async () => (await import('./model-settings.ts')).antigravityModelSettings },
   accounts: { ...ANTIGRAVITY_ACCOUNTS, homeDir: (env, home) => env.GEMINI_HOME?.trim() || join(home, '.gemini') },
   env: ANTIGRAVITY_ENV, mock: ANTIGRAVITY_MOCK, display: ANTIGRAVITY_DISPLAY,
-  login: { ...ANTIGRAVITY_LOGIN, executable: () => productEnv('ANTIGRAVITY_BIN') ?? antigravityExecutable() ?? 'agy' },
+  login: { ...ANTIGRAVITY_LOGIN, executable: () => productEnv('ANTIGRAVITY_BIN') ?? antigravityExecutable() ?? 'antigravity-cli-not-installed' },
   configFiles: ANTIGRAVITY_CONFIG_FILES, extraTools: ANTIGRAVITY_EXTRA_TOOLS,
   loadLogin: async () => (await import('./login-probe.ts')).antigravityLogin,
   loadBrowserSignIn: async () => (await import('./browser-sign-in.ts')).startAntigravitySignIn,

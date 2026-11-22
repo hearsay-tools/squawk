@@ -42,6 +42,27 @@ it('saves system instructions on session/new, prepends them to a resumed opening
   expect(created._meta).toEqual({ antigravity: { systemPrompt: { append: 'Follow these instructions' } } });
 });
 
+it('continues a session the CLI cannot resume in a fresh session with the full system prompt and the skill', async () => {
+  const cwd = await workspace(); const wire = join(cwd, 'wire'); const events: AgentEvent[] = [];
+  const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'continue the work',
+    resume: true, sessionId: 'registry-session', systemPrompt: 'Shared tail', resumeFallbackSystemPrompt: 'Skill text\n\nShared tail',
+    resumeFallbackSkill: { id: 'probe-alpha', name: 'probe-alpha', args: '' }, env: { CEZ_MOCK_STDIN_FILE: wire } }, event => events.push(event));
+  expect(result.sessionId).not.toBe('registry-session');
+  const frames = (await readFile(wire, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  expect(frames.find(frame => frame.method === 'session/new').params._meta).toEqual({ antigravity: { systemPrompt: { append: 'Skill text\n\nShared tail' } } });
+  expect(frames.find(frame => frame.method === 'session/prompt').params.prompt).toEqual([{ type: 'text', text: '/probe-alpha continue the work' }]);
+  expect(events).toContainEqual(expect.objectContaining({ type: 'note', message: expect.stringContaining('could not resume session registry-session') }));
+});
+
+it('says when a grant without Read cannot stop native file reads', async () => {
+  const cwd = await workspace(); const events: AgentEvent[] = [];
+  await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'explicit', tools: ['Bash'] }, userPrompt: 'inspect' }, event => events.push(event));
+  expect(events).toContainEqual(expect.objectContaining({ type: 'note', message: expect.stringContaining('cannot stop native file reads') }));
+  const granted: AgentEvent[] = [];
+  await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'explicit', tools: ['Read', 'Bash'] }, userPrompt: 'inspect' }, event => granted.push(event));
+  expect(granted.filter(event => event.type === 'note' && event.message.includes('native file reads'))).toEqual([]);
+});
+
 it('launches the CLI ACP server on the account folder with per-account file token storage', async () => {
   const cwd = await workspace(); const account = join(cwd, 'account');
   const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:account-homes', env: { GEMINI_HOME: account } });

@@ -8,7 +8,7 @@ import { antigravityRunner } from './definition.ts';
 import { ANTIGRAVITY_CODE_REDIRECT, antigravityLoginResponse, startAntigravitySignIn } from './browser-sign-in.ts';
 import { discoverAntigravityModels, antigravityModelCatalogKey } from './antigravity-model-catalog.ts';
 import { antigravityLogin } from './login-probe.ts';
-import { antigravityCliOutput, antigravityOnPath, isAntigravityCli } from './executable.ts';
+import { antigravityCliOutput, antigravityOnPath, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
 
 registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
@@ -143,7 +143,11 @@ it('recognizes the CLI by its help and version, not by its name', async () => {
   // The Antigravity IDE launcher shares the name; the PATH walk goes on to the CLI.
   await writeFile(join(first, 'agy'), '#!/bin/sh\necho "Usage: antigravity [options][paths...]"\n', { mode: 0o755 });
   await copyFile(bin, join(second, 'antigravity')); await chmod(join(second, 'antigravity'), 0o755);
-  expect(isAntigravityCli(join(first, 'agy'))).toBe(false);
-  expect(antigravityOnPath({ PATH: `${first}:${second}` })).toBe(join(second, 'antigravity'));
-  expect(antigravityOnPath({ PATH: first })).toBeUndefined();
+  // Status reads see only finished checks; they start the checks they still need.
+  expect(cachedAntigravityOnPath({ PATH: `${first}:${second}` })).toBeUndefined();
+  expect(await checkAntigravityCli(join(first, 'agy'))).toBe(false);
+  expect(await antigravityOnPath({ PATH: `${first}:${second}` })).toBe(join(second, 'antigravity'));
+  expect(knownAntigravityCli(join(second, 'antigravity'))).toBe(true);
+  expect(cachedAntigravityOnPath({ PATH: `${first}:${second}` })).toBe(join(second, 'antigravity'));
+  expect(await antigravityOnPath({ PATH: first })).toBeUndefined();
 });

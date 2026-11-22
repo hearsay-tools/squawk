@@ -464,8 +464,9 @@ can slot in the same way.
 
 Squawk runs the Google Antigravity CLI. It resolves the executable in this order:
 `HSQ_ANTIGRAVITY_BIN`, the managed install's active release, then `agy` or `antigravity` on
-PATH. On PATH it checks each entry until one is the CLI: `--help` starts `Usage of
-antigravity:` and lists `acp`, and `--version` prints a bare version. A session, a model probe
+PATH. On PATH it checks each entry until one is the CLI, off the event loop: `--help` starts `Usage of
+antigravity:` and lists `acp`, and `--version` prints a bare version. Detection stamps and status reads use only finished
+checks; a candidate that is not the CLI is never run as one. A session, a model probe
 and a sign-in lease the managed release before spawn, bind the lease to the child at once and
 release it after exit, so an update cannot remove a running release. The cockpit binds its
 Home for these leases once, at its operator entry.
@@ -474,7 +475,9 @@ Every fresh or resumed session runs in `default` mode. Squawk answers native per
 requests from the tool grant and Bash command prefixes. Granted requests proceed; ungranted
 requests fail. With `HSQ_APPROVAL_GATE=1`, ungranted requests reach the native approval card
 instead. MCP tools arrive as `mcp_<server>_<tool>`; Squawk reads the server and tool from that
-name, so its own `squawk` tools stay trusted. Client file reads require Read. A native
+name, so its own `squawk` tools stay trusted. CLI 1.5.14 runs `read_file` with no permission
+request, so a tool grant cannot withhold native file reads; a step whose grant lacks Read gets a
+note that says so. A native
 `ask_question` call ends the prompt with the question as text; Squawk shows it as a question
 card that keeps the free-text answer, and sends the chosen answer as the next prompt.
 
@@ -490,7 +493,9 @@ The CLI saves the session/new system prompt with the session and appends a resen
 Squawk sends it on session/new only and never resends it on session/resume. A resumed session
 gets it prepended to its opening turn instead, as Codex and OpenCode do
 (`systemPromptOnResume: 'in-thread'`), so a Continue or a recovery still reads the current
-instructions.
+instructions. When the CLI refuses `session/resume` (a session the retired registry server saved,
+or a removed conversation), the runner opens a fresh session with the full system prompt and the
+skill, and says so in a note.
 
 Antigravity status reports credential presence. `GEMINI_API_KEY` (or `GOOGLE_API_KEY`, mapped
 in the child) connects without an account folder; Settings names the environment source.

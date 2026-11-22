@@ -7,6 +7,7 @@ import { spawnSessionLeader, signalSession } from '../../core/session-process.ts
 import { SessionDescendants } from '../../core/session-descendants.ts';
 import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
 import { AcpSession } from '../acp/session.ts';
+import { AcpRpcError } from '../acp/transport.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
@@ -19,7 +20,7 @@ import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
 import { ANTIGRAVITY_WIRE_HOOKS, antigravityUpdateError } from './wire-updates.ts';
-import { ANTIGRAVITY_MISSING, launchAntigravity, type AntigravityLaunch } from './executable.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
 import type { UiAskQuestion, UiEvent } from '../../core/ui-events.ts';
 
@@ -45,6 +46,8 @@ export class AntigravitySession implements AgentSession {
   private readonly queue: ContentBlock[][] = [];
   private bridge: Awaited<ReturnType<typeof antigravityMcp>>;
   private ready = false;
+  /** session/resume failed and a fresh session continues the task. */
+  private lostSession = false;
   private inflight = 0;
   private get busy(): boolean { return this.inflight > 0; }
   private providerError: string | undefined;
@@ -71,7 +74,7 @@ export class AntigravitySession implements AgentSession {
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(spec);
-    this.launch = launchAntigravity(bin) ?? { executable: 'agy', bindProcess() {}, release() {} };
+    this.launch = launchAntigravity(bin) ?? missingAntigravity(this.runtime.temp);
     this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     try { if (this.child.pid) this.launch.bindProcess(this.child.pid); }
     catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)); }
@@ -115,7 +118,7 @@ export class AntigravitySession implements AgentSession {
         readTextFile: params => antigravityReadFile(params, spec.cwd, spec.toolGrant),
         // The CLI saves the session/new system prompt with the session and appends a resent one,
         // so a resume prepends it to the opening turn instead (systemPromptOnResume 'in-thread').
-        sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: spec.systemPrompt ?? '' } } } } : {},
+        sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: (this.lostSession ? spec.resumeFallbackSystemPrompt : undefined) ?? spec.systemPrompt ?? '' } } } } : {},
         filterUpdate: update => {
           const failure = antigravityUpdateError(update);
           this.providerError = failure ?? this.providerError;
@@ -157,7 +160,7 @@ export class AntigravitySession implements AgentSession {
     this.bridge = await antigravityMcp(this.spec, this.runtime.env);
     if (!this.open) return;
     await this.acp.initialize();
-    await this.acp.open({ cwd: this.spec.cwd, ...(this.spec.resume && this.spec.sessionId ? { sessionId: this.spec.sessionId } : {}), mcpServers: this.bridge ? [this.bridge.descriptor] : [] });
+    await this.openSession(this.bridge ? [this.bridge.descriptor] : []);
     // A saved accept-edits or plan mode must never bypass the permission policy on Continue.
     await this.acp.setConfigOption('mode', 'default');
     if (this.spec.model) await this.acp.setConfigOption('model', this.spec.model);
@@ -168,17 +171,34 @@ export class AntigravitySession implements AgentSession {
       else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} ${option ? `does not offer effort ${this.spec.effort}` : 'has no effort setting'}; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
+    // The CLI runs read_file with no permission request, so the policy cannot withhold reads.
+    const grant = this.spec.toolGrant;
+    if (grant.kind !== 'unset' && !grant.tools.includes('Read')) this.emit({ type: 'note', message: 'Antigravity reads files without asking for permission; this step\'s tool grant does not include Read, but it cannot stop native file reads.' });
     this.ready = true;
     void this.submit(this.opening()).catch(error => this.fail(error));
     this.options.onAgentInputReady?.();
+  }
+  /** A session the CLI cannot reopen (one the retired registry server saved, or a removed
+   *  conversation) continues in a fresh session, with the full system prompt and the skill. */
+  private async openSession(mcpServers: Record<string, unknown>[]): Promise<void> {
+    const sessionId = this.spec.resume ? this.spec.sessionId : undefined;
+    if (!sessionId) { await this.acp.open({ cwd: this.spec.cwd, mcpServers }); return; }
+    try { await this.acp.open({ cwd: this.spec.cwd, sessionId, mcpServers }); }
+    catch (error) {
+      if (!(error instanceof AcpRpcError)) throw error;
+      this.lostSession = true;
+      this.emit({ type: 'note', message: `Antigravity could not resume session ${sessionId} (${error.message}); continuing in a new session.` });
+      await this.acp.open({ cwd: this.spec.cwd, mcpServers });
+    }
   }
   /** `onAcknowledged` runs when the CLI takes the input: a steer when the running prompt answers
    *  for it, any prompt at its own response. */
   /** A resumed session carries spec.systemPrompt in its opening turn, as the other in-thread
    *  runners do: the CLI keeps the session/new prompt, and a resent _meta prompt would be appended. */
   private opening(): ContentBlock[] {
-    const content = openingContent(this.spec, !!this.spec.resume);
-    if (!(this.spec.resume && this.spec.sessionId && this.spec.systemPrompt)) return content;
+    const resumed = !!this.spec.resume && !this.lostSession;
+    const content = openingContent(this.spec, resumed);
+    if (!(resumed && this.spec.sessionId && this.spec.systemPrompt)) return content;
     const last = content.at(-1);
     if (last?.type !== 'text') return content;
     return [...content.slice(0, -1), { ...last, text: prependSystemPrompt(this.spec.systemPrompt, last.text) }];

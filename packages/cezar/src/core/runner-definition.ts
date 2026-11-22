@@ -210,7 +210,7 @@ export interface RunnerDetection {
    */
   readonly banner?: { readonly pattern: RegExp; readonly label: string };
   /** A check beyond the banner that a resolved executable is this CLI, such as its help text. */
-  readonly identify?: (bin: string) => boolean;
+  readonly identify?: (bin: string) => Promise<boolean>;
   /** First capture is the version in a multiline banner. Identity still checks the full banner. */
   readonly versionPattern?: RegExp;
   /** The hint that goes with a CLI that answered. */

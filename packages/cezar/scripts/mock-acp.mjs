@@ -312,7 +312,9 @@ async function handle(frame) {
       // Like the CLI, each session gets its own id; recordings show it as mock-acp-session.
       sessionParams = frame.params; sessionId = mintedId = `mock-acp-${randomUUID()}`;
       reply(frame.id, { sessionId, configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
-    case 'session/resume': case 'session/load': context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
+    // A conversation the CLI does not hold (one the retired registry server saved) is refused.
+    case 'session/resume': case 'session/load': if (frame.params.sessionId === 'registry-session') { write({ id: frame.id, error: { code: -32603, message: 'conversation not found' } }); break; }
+      context.session.resumeAfterAsk = true; sessionParams = frame.params; sessionId = frame.params.sessionId; reply(frame.id, { configOptions: [{ id: 'thought_level', category: 'thought_level', currentValue: 'medium' }] }); break;
     case 'session/set_config_option': setConfig(frame); break;
     case 'session/prompt': await prompt(frame); break;
     case 'session/cancel': active?.cancel(); break;

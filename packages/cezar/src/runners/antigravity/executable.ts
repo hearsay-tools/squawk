@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { accessSync, constants, realpathSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { productEnv } from '../../core/product-env.ts';
@@ -9,7 +10,8 @@ import { ANTIGRAVITY_CLI } from './cli.ts';
 /** The names Google's CLI is installed under: `agy` (Windows, symlinks) and `antigravity` (archives). */
 const PATH_NAMES = ['agy', 'antigravity'] as const;
 const source = ANTIGRAVITY_CLI.installSource.managed;
-const identities = new Map<string, boolean>();
+const identities = new Map<string, boolean | Promise<boolean>>();
+const execFileAsync = promisify(execFile);
 
 /** `--help` names the CLI and its `acp` command; `--version` prints a bare version. The Antigravity
  *  IDE launcher and the retired registry server print neither. */
@@ -17,21 +19,52 @@ export function antigravityCliOutput(help: string, version: string): boolean {
   return help.startsWith('Usage of antigravity:') && /^\s+acp\s/m.test(help) && /^\d+\.\d+\.\d+$/.test(version.trim());
 }
 
-/** Each executable is checked once per file identity; a replaced file is checked again. */
-export function isAntigravityCli(path: string): boolean {
-  let identity: string;
+function identityOf(path: string): string | undefined {
   try {
     const target = realpathSync(path);
     const file = statSync(target, { bigint: true });
-    identity = [target, file.dev, file.ino, file.size, file.mtimeNs, file.ctimeNs, file.mode].join(':');
-  } catch { return false; }
+    return [target, file.dev, file.ino, file.size, file.mtimeNs, file.ctimeNs, file.mode].join(':');
+  } catch { return undefined; }
+}
+const RUN = { encoding: 'utf8', timeout: 10_000, maxBuffer: 262_144, windowsHide: true } as const;
+// `--help` exits 0 or 2 by Go's flag package; the text decides.
+const verdict = (help: { stdout: string; stderr: string } | undefined, version: { stdout: string } | undefined) =>
+  !!help && !!version && antigravityCliOutput(`${help.stdout}${help.stderr}`, version.stdout);
+
+/** The cached answer for this file, from metadata only: undefined until a check has finished. */
+export function knownAntigravityCli(path: string): boolean | undefined {
+  const identity = identityOf(path);
+  const known = identity ? identities.get(identity) : false;
+  return known instanceof Promise ? undefined : known;
+}
+
+/** Checks an executable once per file identity, off the event loop; a replaced file is checked again. */
+export function checkAntigravityCli(path: string): Promise<boolean> {
+  const identity = identityOf(path);
+  if (!identity) return Promise.resolve(false);
   const known = identities.get(identity);
-  if (known !== undefined) return known;
-  const run = (args: string[]) => spawnSync(path, args, { encoding: 'utf8', timeout: 10_000, maxBuffer: 262_144, windowsHide: true });
-  const help = run(['--help']);
-  const version = help.error ? undefined : run(['--version']);
-  // `--help` exits 0 or 2 by Go's flag package; the text decides.
-  const cli = !!version && !version.error && version.status === 0 && antigravityCliOutput(`${help.stdout}${help.stderr}`, version.stdout);
+  if (known !== undefined) return Promise.resolve(known);
+  const run = (args: string[]) => execFileAsync(path, args, RUN).catch((error: { stdout?: string; stderr?: string; code?: unknown }) =>
+    typeof error.code === 'number' ? { stdout: error.stdout ?? '', stderr: error.stderr ?? '' } : undefined);
+  const check = (async () => {
+    const help = await run(['--help']);
+    const cli = verdict(help, help ? await run(['--version']) : undefined);
+    identities.set(identity, cli);
+    return cli;
+  })();
+  identities.set(identity, check);
+  return check;
+}
+
+/** The same check, blocking: only a session start whose PATH candidate is still unchecked uses it. */
+function checkAntigravityCliSync(path: string): boolean {
+  const identity = identityOf(path);
+  if (!identity) return false;
+  const known = identities.get(identity);
+  if (typeof known === 'boolean') return known;
+  const help = spawnSync(path, ['--help'], RUN);
+  const version = help.error ? undefined : spawnSync(path, ['--version'], RUN);
+  const cli = !version?.error && version?.status === 0 && verdict(help, version);
   identities.set(identity, cli);
   return cli;
 }
@@ -44,16 +77,29 @@ function executableFile(path: string): boolean {
   } catch { return false; }
 }
 
-/** The first PATH entry that holds the CLI under one of its names. */
-export function antigravityOnPath(env: NodeJS.ProcessEnv = process.env): string | undefined {
+function pathCandidates(env: NodeJS.ProcessEnv): string[] {
   const suffixes = process.platform === 'win32' ? ['.exe', ''] : [''];
-  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const name of PATH_NAMES) {
-      for (const suffix of suffixes) {
-        const path = join(dir, `${name}${suffix}`);
-        if (executableFile(path) && isAntigravityCli(path)) return path;
-      }
-    }
+  return (env.PATH ?? '').split(delimiter).filter(Boolean)
+    .flatMap(dir => PATH_NAMES.flatMap(name => suffixes.map(suffix => join(dir, `${name}${suffix}`))))
+    .filter(executableFile);
+}
+
+/** The first PATH entry that holds the CLI under one of its names. */
+export async function antigravityOnPath(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  for (const path of pathCandidates(env)) if (await checkAntigravityCli(path)) return path;
+  return undefined;
+}
+
+/**
+ * The same answer from metadata only, for detection stamps and status reads: the first candidate
+ * already known to be the CLI. Unchecked candidates are checked in the background, so a later call
+ * (and the detection stamp) sees them.
+ */
+export function cachedAntigravityOnPath(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  for (const path of pathCandidates(env)) {
+    const known = knownAntigravityCli(path);
+    if (known) return path;
+    if (known === undefined) { void checkAntigravityCli(path); return undefined; }
   }
   return undefined;
 }
@@ -68,7 +114,7 @@ export function managedAntigravity(): string | undefined {
 
 /** HSQ_ANTIGRAVITY_BIN, else the managed install, else the CLI on PATH. Undefined: not installed. */
 export function antigravityExecutable(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  return productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? antigravityOnPath(env);
+  return productEnv('ANTIGRAVITY_BIN', env) ?? managedAntigravity() ?? cachedAntigravityOnPath(env);
 }
 
 export interface AntigravityLaunch {
@@ -88,8 +134,14 @@ export function launchAntigravity(override: string | undefined): AntigravityLaun
     const lease = home ? leaseManagedCli(home, 'antigravity', source) : null;
     if (lease) return lease;
   } catch { /* An unreadable managed install falls through to PATH. */ }
-  const found = antigravityOnPath();
+  const found = pathCandidates(process.env).find(checkAntigravityCliSync);
   return found ? unleased(found) : undefined;
+}
+
+/** A launch that cannot start: spawning it fails with ENOENT, which reports ANTIGRAVITY_MISSING.
+ *  A rejected PATH binary (the IDE launcher, the registry server) is never run. */
+export function missingAntigravity(dir: string): AntigravityLaunch {
+  return unleased(join(dir, 'antigravity-cli-not-installed'));
 }
 
 export const ANTIGRAVITY_MISSING = 'The Antigravity CLI is not installed. Install it from Settings > Accounts > Install CLI, put agy on PATH, or set HSQ_ANTIGRAVITY_BIN.';

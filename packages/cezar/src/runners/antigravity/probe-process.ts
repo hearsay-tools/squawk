@@ -7,7 +7,7 @@ import { antigravityEnv } from './runtime-env.ts';
 import type { AcpHooks } from '../acp/protocol.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure } from './native-diagnostics.ts';
-import { ANTIGRAVITY_MISSING, launchAntigravity, type AntigravityLaunch } from './executable.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 
 /** Short-lived authentication/catalog process. No prompt or tools; bounded stderr stays in memory. */
 export class AntigravityProbe {
@@ -29,7 +29,7 @@ export class AntigravityProbe {
   constructor(bin: string | undefined, env: Record<string, string>, timeoutMs: number, hooks: AcpHooks = {}) {
     const runtime = antigravityEnv({ env });
     this.cwd = runtime.temp; this.env = runtime.env; this.geminiDir = runtime.geminiDir;
-    this.launch = launchAntigravity(bin) ?? { executable: 'agy', bindProcess() {}, release() {} };
+    this.launch = launchAntigravity(bin) ?? missingAntigravity(this.cwd);
     try {
       this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.geminiDir), { cwd: this.cwd, env: this.env });
       if (this.child.pid) this.launch.bindProcess(this.child.pid);

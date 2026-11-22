@@ -113,7 +113,7 @@ export async function probeRunner(name: string, detection: RunnerDetection): Pro
     const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
     const banner = stdout.trim();
     const version = detection.versionPattern?.exec(banner)?.[1]?.trim() ?? banner;
-    if (detection.banner && (!detection.banner.pattern.test(banner) || detection.identify?.(bin) === false)) {
+    if (detection.banner && (!detection.banner.pattern.test(banner) || await detection.identify?.(bin) === false)) {
       return {
         name,
         available: false,

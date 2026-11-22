@@ -9,7 +9,7 @@ export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   resumeFallbackSkill: { honored: true, via: 'leading /id args when opening a fresh session' },
   images: { honored: true, via: 'session/prompt image content' },
   cwd: { honored: true, via: 'session/new cwd and the only active workspace; native command cwd is the task checkout' },
-  toolGrant: { honored: true, via: 'default mode plus fail-closed session/request_permission policy' },
+  toolGrant: { honored: true, via: 'default mode plus fail-closed session/request_permission policy; CLI 1.5.14 runs read_file with no request, so a grant cannot withhold native reads (a note says so when Read is not granted)' },
   restrictCrossSessionMessaging: { honored: false, reason: 'The Antigravity CLI send_message tool reaches only the session\'s own subagents; it has no tool that messages another session' },
   minimal: { honored: false, reason: 'The Antigravity CLI offers no minimal or no-context launch mode' },
   additionalDirectories: { honored: false, reason: 'The CLI --add-dir flag is not verified to keep the task checkout as command cwd; the registry server let extra roots displace it' },
@@ -19,5 +19,5 @@ export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   timeoutMs: { honored: true, via: 'wall-clock process-tree deadline' },
   sessionId: { honored: true, via: 'saved sessionId on session/resume; session/new mints its own UUID' },
   resume: { honored: true, via: 'session/resume without history replay; the saved system prompt carries over' },
-  resumeFallbackSystemPrompt: { honored: false, reason: 'a failed session/resume fails the step; there is no fresh-session fallback' },
+  resumeFallbackSystemPrompt: { honored: true, via: 'a refused session/resume opens a fresh session whose session/new carries it, with a note' },
 };

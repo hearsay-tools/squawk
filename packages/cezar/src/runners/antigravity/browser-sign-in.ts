@@ -8,7 +8,7 @@ import { spawnSessionLeader, signalSession } from '../../core/session-process.ts
 import { BrowserSignInStartError, redactBrowserSignInDetails } from '../../core/browser-sign-in-error.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
-import { ANTIGRAVITY_MISSING, launchAntigravity } from './executable.ts';
+import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity } from './executable.ts';
 
 /** Where `agy acp --login` sends Google. That page shows a code; its URL also carries it. */
 export const ANTIGRAVITY_CODE_REDIRECT = 'https://antigravity.google/oauth-callback';
@@ -45,7 +45,7 @@ export function antigravityLoginResponse(consent: string, value: string): string
 /** `agy acp --login` prints a consent link and reads the pasted code on stdin. No code or URL is logged. */
 export async function startAntigravitySignIn(accountHome?: string): Promise<RunnerBrowserSignIn> {
   const runtime = antigravityEnv({ env: { ...profileEnv('antigravity', accountHome), BROWSER: '/bin/false' } });
-  const launch = launchAntigravity(productEnv('ANTIGRAVITY_BIN')) ?? { executable: 'agy', bindProcess() {}, release() {} };
+  const launch = launchAntigravity(productEnv('ANTIGRAVITY_BIN')) ?? missingAntigravity(runtime.temp);
   let stderr = '';
   let spawnError: Error | undefined;
   const child = spawnSessionLeader(launch.executable, antigravityLaunchArgs(runtime.geminiDir, ['--login']), { cwd: runtime.temp, env: runtime.env });
