@@ -227,8 +227,8 @@ describe('phone Tools page (#621 follow-up)', () => {
         expect(page.overflow).toBe(false)
 
         browser.click('[data-slot="tools-settings"]')
-        // The unscoped link only becomes the project's page once LegacyPathRedirect has run and the section rendered.
-        browser.waitForFunction(`location.pathname === ${JSON.stringify(`/p/${projectId}/settings/agent-defaults`)} && document.querySelector('[data-route="settings-agent-defaults"]') !== null`)
+        // Tool settings is the global Agents page, outside every project.
+        browser.waitForFunction(`location.pathname === '/settings/global/agents' && document.querySelector('[data-route="settings-global-agents"]') !== null`)
       } finally {
         browser.unroute('**/api/v1/health')
       }
