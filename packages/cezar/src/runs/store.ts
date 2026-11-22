@@ -1917,12 +1917,12 @@ export class RunStore extends EventEmitter {
       completionArchiveBlocker: run => this.completionArchiveBlocker(run),
       stageArchive: (staged, run, archived) => this.stageArchive(staged, run, archived, exits),
     });
-    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined])), to = new Map([...staged].map(([id, next]) => [id, next?.status]));
+    const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined])), committed = new Map([...staged].map(([id, next]) => [id, snapshotRun(next ?? undefined)]));
     if (!this.db) throw this.openFailure ?? new Error('runs database unavailable: nothing can be saved');
     this.assertWritable(staged);
     this.persist(staged);
-    // Preserve existing record references, but expose the entire transaction before its first event.
-    // A finished run joins the held set for the commit and leaves at the next sweep.
+    // Preserve existing record references, but expose the entire transaction before its first event, which
+    // carries the record this commit wrote (`committed`). A finished run is held until the next sweep.
     for (const [id, next] of staged) {
       this.coldReads.forget(id);
       if (!next) { this.held.delete(id); continue; }
@@ -1934,7 +1934,7 @@ export class RunStore extends EventEmitter {
     try {
       for (const id of staged.keys()) {
         const run = this.held.get(id);
-        if (run) { publishRunWrite(this.published, run, before.get(id), source, exits.get(id), to.get(id)); this.emit('run', run, source); }
+        if (run) { publishRunWrite(this.published, committed.get(id) ?? run, before.get(id), source, exits.get(id)); this.emit('run', run, source); }
         else { this.published.publish('run.deleted', { runId: id }); this.emit('deleted', id); }
       }
     } finally {

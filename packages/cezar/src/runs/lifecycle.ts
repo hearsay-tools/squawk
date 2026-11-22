@@ -24,10 +24,13 @@ export type RunStatusCause = RunExitId | 'conflict' | 'patch';
 
 export interface RunLifecycleEvents {
   'run.created': { run: RunRecord };
-  /** `before` is a shallow frozen copy of the record taken at the entry of the write path. */
+  /** `run` is this write's record, a value: a shallow frozen copy on a commit; on a debounced write,
+   *  a republish or a conflict, the held record, which a later write changes in place. Never write
+   *  into it or keep it; re-read through the store for the current record. `before` is a shallow
+   *  frozen copy of the record taken at the entry of the write path. */
   'run.updated': { run: RunRecord; before: Readonly<RunRecord>; source?: RunUpdateSource };
-  /** Follows the `run.updated` of the same write. `run` is the live record, which a later write may
-   *  have changed since; `from` and `to` are this write's. */
+  /** Follows the `run.updated` of the same write, with the same `run`; `from` and `to` are this
+   *  write's. */
   'run.status-changed': { run: RunRecord; exit: RunStatusCause; from: RunStatus; to: RunStatus };
   'run.deleted': { runId: string };
   'run.event': { runId: string; event: RunEvent };
@@ -84,13 +87,14 @@ export function snapshotRun(run: RunRecord | undefined): Readonly<RunRecord> | u
 /**
  * Publish one record write: `run.created` when there was no record before it, else `run.updated`,
  * then `run.status-changed` when the status moved. `exit` is the exit the write applied; a status
- * no exit wrote is a `patch`. `to` is the status this write set.
+ * no exit wrote is a `patch`.
  */
 export function publishRunWrite(lifecycle: RunLifecycle, run: RunRecord, before: Readonly<RunRecord> | undefined,
-  source?: RunUpdateSource, exit?: RunExitId, to: RunStatus = run.status): void {
+  source?: RunUpdateSource, exit?: RunExitId): void {
   if (!before) { lifecycle.publish('run.created', { run }); return; }
-  // `to` is read before any listener runs (a commit of several runs passes each one's): a nested
-  // write may change the held record, and publishes its own change.
+  // `to` is read before any listener runs: a nested write may change a held record, and publishes
+  // its own change.
+  const to = run.status;
   lifecycle.publish('run.updated', { run, before, ...(source ? { source } : {}) });
   if (before.status === to) return;
   const cause = source === 'conflict' ? 'conflict' : exit ?? 'patch';

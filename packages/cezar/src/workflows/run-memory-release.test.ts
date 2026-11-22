@@ -7,7 +7,7 @@ import { createFixtureManager, drainFixtureManagers } from './fixture-manager.te
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentSession, ContentBlock } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
@@ -138,5 +138,25 @@ describe('run memory release (hearsay-tools/squawk#2064)', () => {
     const record = settledWithSlot(RUN_STATUS.review);
     manager.dispose();
     expect(memory.holds(record.id)).toBe(false);
+  });
+
+  it('a family reconciler that throws is logged, and memory release still runs and the write goes on', () => {
+    const record = settledWithSlot(RUN_STATUS.review);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // The reconciler lists the runs awaiting a settled peer; nothing else in this write lists runs.
+    vi.spyOn(store, 'listRuns').mockImplementation(() => { throw new Error('reconcile failed'); });
+    try {
+      expect(setRunStatus(store, record.id, RUN_STATUS.done)?.status).toBe(RUN_STATUS.done);
+    } finally { vi.restoreAllMocks(); }
+    expect(memory.holds(record.id)).toBe(false);
+    expect(errors).toHaveBeenCalledWith(`[hsq] run lifecycle listener failed on run.updated for run ${record.id}: reconcile failed`);
+  });
+
+  it('dispose unsubscribes from the run lifecycle: a later write releases no memory', () => {
+    const record = settledWithSlot(RUN_STATUS.review);
+    manager.dispose();
+    memory.write(record.id, 'retainedNote', 'after dispose');
+    setRunStatus(store, record.id, RUN_STATUS.done);
+    expect(memory.holds(record.id)).toBe(true);
   });
 });
