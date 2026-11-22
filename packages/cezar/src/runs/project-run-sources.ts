@@ -55,8 +55,8 @@ export function copyFallbackFamily(db: RunDatabase | null, id: string, owner?: R
   return [family, ...db.listIdsByParent(family)];
 }
 
-export function addRunSource(db: RunDatabase, dataDir: string, source: ProjectRunSource, readOnly = false): RunDatabase {
-  return RunDatabase.withProjectSource(db, join(dataDir, RUNS_DB_FILE), source.database, source.jsonRows, readOnly);
+export function addRunSource(db: RunDatabase, dataDir: string, source: ProjectRunSource, readOnly = false, failed?: () => void): RunDatabase {
+  return RunDatabase.withProjectSource(db, join(dataDir, RUNS_DB_FILE), source.database, source.jsonRows, readOnly, failed);
 }
 
 /** Adopted snapshots keep their bytes, so they name their `.ai/squawk/` path. Accept only that exact

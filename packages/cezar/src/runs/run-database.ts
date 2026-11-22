@@ -456,9 +456,9 @@ export class RunDatabase {
   }
 
   /** Add a read-only source; a read-only (cold) projection never switches its primary to disk. */
-  static withProjectSource(primary: RunDatabase, target: string, source: string, jsonRows?: readonly RunRowInput[], readOnly = false): RunDatabase {
+  static withProjectSource(primary: RunDatabase, target: string, source: string, jsonRows?: readonly RunRowInput[], readOnly = false, sourceFailed?: () => void): RunDatabase {
     const projection = new ProjectRunConnection(primary.db, target, source,
-      () => RunDatabase.open(target).db, jsonRows, primary.path === ':memory:' && !readOnly);
+      () => RunDatabase.open(target).db, jsonRows, primary.path === ':memory:' && !readOnly, sourceFailed);
     return new RunDatabase(projection.connection, target, projection);
   }
 

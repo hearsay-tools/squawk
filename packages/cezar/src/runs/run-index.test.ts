@@ -539,4 +539,31 @@ describe('cold index cache', () => {
     expect(readRunIndexFromDisk(dir).runs[0]?.title).toBe('Replaced');
   });
 
+
+  it('retries a transient fallback attach failure after validation with unchanged source files', () => {
+    const primary = join(dir, '.ai', 'cezar'), fallback = join(dir, '.ai', 'squawk');
+    mkdirSync(primary, { recursive: true });
+    mkdirSync(fallback, { recursive: true });
+    seedRuns(primary, [record({ id: 'primary' })]);
+    seedRuns(fallback, [record({ id: 'fallback' })]);
+    const writer = RunDatabase.open(join(primary, RUNS_DB_FILE));
+    try {
+      readRunIndexFromDisk(primary);
+      readRunIndexFromDisk(primary);
+      writer.transaction({ upserts: [encodeRunRow(decodeRunRecord(JSON.stringify(record({ id: 'primary', title: 'Changed!' })))!)], deletes: [] });
+      const prepare = DatabaseSync.prototype.prepare;
+      let failAttach = true;
+      vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSync, sql: string) {
+        if (sql.startsWith('ATTACH DATABASE') && failAttach) {
+          failAttach = false;
+          throw new Error('transient attach failure after validation');
+        }
+        return prepare.call(this, sql);
+      });
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(readRunIndexFromDisk(primary).runs.map(run => run.id)).toEqual(['primary']);
+      expect(readRunIndexFromDisk(primary).runs.map(run => run.id).sort()).toEqual(['fallback', 'primary']);
+    } finally { writer.close(); }
+  });
+
 });

@@ -70,7 +70,7 @@ function readCold<T>(dataDir: string, empty: T, fromDatabase: (db: RunDatabase) 
         db = RunDatabase.open(':memory:');
         db.transaction({ upserts: rows, deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'read-only' } });
       }
-      db = addRunSource(db, dataDir, source, true);
+      db = addRunSource(db, dataDir, source, true, failed);
     }
   } catch {
     failed?.();
