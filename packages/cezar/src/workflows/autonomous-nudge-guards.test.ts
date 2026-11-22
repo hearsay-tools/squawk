@@ -243,6 +243,21 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   });
 
+  it('a late display update of an earlier tool neither answers the no-wait nudge nor its nudge', () => {
+    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'nudge-delivered', session: session });
+    active.set(id, state);
+    nudges.armNoWaitNudgeReplyTimer(id, state);
+    transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'record', session, nudge: { cause: 'no-wait', state: 'submitted' } });
+    // Antigravity fills a completed tool's output from the CLI transcript after the turn ended.
+    const late = { type: 'item.updated', item: {}, late: true } as const;
+    nudges.noteNoWaitNudgeContent(id, state, session, late);
+    nudges.noteNudgeActivity(id, state, session, late);
+    expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
+    expect(state.boundary.nudge).not.toHaveProperty('answered', true);
+    nudges.noteNoWaitNudgeContent(id, state, session, { type: 'item.updated', item: {} });
+    expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
+  });
+
   it('a late reply from an earlier step session leaves the current step reply bound armed (hearsay-tools/squawk#3740)', () => {
     // Step one's session ran on this ActiveRun; StepLoop attaches step two's session to the same state.
     const first = session;

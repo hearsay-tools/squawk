@@ -491,7 +491,8 @@ folder leaves the command cwd on the checkout (docs/runners/antigravity-wire.md)
 The CLI sends no result for a read, an MCP call or a subagent tool. Squawk reads it from the
 session's transcript in the account folder
 (`antigravity-cli/brain/<session>/.system_generated/logs/transcript_full.jsonl`) and adds it to
-the completed tool card, bounded to 64 Ki characters. That file is the CLI's private format,
+the completed tool card (`item.updated` with `late: true`, which never counts as a reply to a
+nudge), bounded to 64 Ki characters. That file is the CLI's private format,
 pinned for CLI 1.5.14 by a golden; when it is missing or changes shape, the card has no output and
 the run goes on. The CLI writes a provider failure as the message `"\n⚠ <error>\n"`; when that
 message is the turn's last work, the turn and the session fail. After an accepted `cezar_done` the

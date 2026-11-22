@@ -102,7 +102,7 @@ it('fills a read card from the CLI transcript row written after the wire complet
   const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:transcript-read', env: { GEMINI_HOME: join(cwd, 'account') } }, undefined, {
     onUiEvent: event => { ui.push(event); if (event.type === 'item.updated' && event.item.kind === 'tool' && event.item.output) resolveAmended(event); },
   });
-  expect(await amended).toMatchObject({ type: 'item.updated', item: { id: 'call_transcript', name: 'Read', status: 'completed', output: '1: mock transcript line' } });
+  expect(await amended).toMatchObject({ type: 'item.updated', late: true, item: { id: 'call_transcript', name: 'Read', status: 'completed', output: '1: mock transcript line' } });
   expect(ui.find(event => event.type === 'item.completed' && event.item.kind === 'tool')).toMatchObject({ item: { id: 'call_transcript' } });
   session.end();
   await session.result;

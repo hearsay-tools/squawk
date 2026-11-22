@@ -305,6 +305,9 @@ export interface UiItemDeltaEvent {
 export interface UiItemUpdatedEvent {
   type: 'item.updated';
   item: UiItem;
+  /** The runner filled in a field it could read only after the item completed (Antigravity reads a
+   *  tool's output from the CLI transcript): a display update, never the agent's own activity. */
+  late?: true;
 }
 
 /** Final snapshot of an item — safe to persist (snapshots, not deltas). */

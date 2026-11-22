@@ -74,7 +74,7 @@ export class AntigravitySession implements AgentSession {
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
   /** Reads read, MCP and subagent results from the CLI transcript; the wire carries none. */
-  private readonly toolOutputs = new AntigravityToolOutputs(item => this.options.onUiEvent?.({ type: 'item.updated', item }));
+  private readonly toolOutputs = new AntigravityToolOutputs(item => this.options.onUiEvent?.({ type: 'item.updated', item, late: true }));
   /** The native subagent guard could not be written; boot says so. */
   private guardMissing = false;
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,

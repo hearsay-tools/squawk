@@ -278,7 +278,8 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
    `send_message`, `run_workflow` and `swarm` by whole name. The folder is outside the checkout
    and goes with the session's temp folder.
 10. A read, MCP or subagent tool whose completed update carries no result gets its output from
-    the session's transcript row, as an `item.updated` of the completed card.
+    the session's transcript row, as an `item.updated` of the completed card marked `late: true`.
+    Nudge accounting ignores it: it is a display update, not the agent's reply.
 
 ### Native subagents and tool results (hearsay-tools/squawk#4098, hearsay-tools/squawk#4099)
 
