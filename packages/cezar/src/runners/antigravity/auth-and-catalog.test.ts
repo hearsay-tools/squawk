@@ -8,7 +8,7 @@ import { antigravityRunner } from './definition.ts';
 import { ANTIGRAVITY_CODE_REDIRECT, antigravityLoginResponse, startAntigravitySignIn } from './browser-sign-in.ts';
 import { discoverAntigravityModels, antigravityModelCatalogKey } from './antigravity-model-catalog.ts';
 import { antigravityLogin } from './login-probe.ts';
-import { resolveAntigravityCommand, antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusUnverified, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
+import { resolveAntigravityCommand, antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusFromPath, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
 
 registerRunner(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
@@ -177,9 +177,9 @@ it('runs a still-unchecked PATH candidate for a cold status read and accepts it 
   await copyFile(bin, join(path, 'agy')); await chmod(join(path, 'agy'), 0o755);
   const env = { PATH: path };
   expect(antigravityStatusExecutable(env)).toBe(join(path, 'agy'));
-  expect(antigravityStatusUnverified(env)).toBe(true);
+  expect(antigravityStatusFromPath(env)).toBe(true);
   expect(await antigravityInstalled(env)).toBe(true);
-  expect(antigravityStatusUnverified(env)).toBe(false);
+  expect(antigravityStatusFromPath({ ...env, HSQ_ANTIGRAVITY_BIN: join(path, 'agy') })).toBe(false);
   expect(antigravityStatusExecutable(env)).toBe(join(path, 'agy'));
   expect(antigravityStatusExecutable({ PATH: empty })).toBe('antigravity-cli-not-installed');
 });
@@ -191,7 +191,14 @@ it('reports a later CLI on PATH as installed when an IDE launcher comes first on
   await copyFile(bin, join(second, 'antigravity')); await chmod(join(second, 'antigravity'), 0o755);
   const env = { ...process.env, PATH: `${first}:${second}` };
   const ide = { stdout: 'Antigravity IDE 2.0\n', stderr: '', exitCode: 0 };
+  // Two cold reads both ran the launcher; once one has verified the CLI, the other agrees.
+  const reads = await Promise.all([antigravityLogin.inspect!(ide, env), antigravityLogin.inspect!(ide, env)]);
+  expect(reads).toEqual(['connected', 'connected']);
   expect(await antigravityLogin.inspect!(ide, env)).toBe('connected');
+  // An empty override reads as unset everywhere, including the status command.
+  vi.stubEnv('PATH', env.PATH);
+  expect(antigravityRunner.login.executable()).toBe(join(second, 'antigravity'));
+  expect(antigravityRunner.detection.binOverride()).toBeUndefined();
 });
 
 it('rejects a CLI look-alike whose --version fails', async () => {

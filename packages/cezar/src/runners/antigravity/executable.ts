@@ -143,10 +143,11 @@ export async function antigravityInstalled(env: NodeJS.ProcessEnv = process.env)
   return !!(productEnv('ANTIGRAVITY_BIN', env) || managedAntigravity() || await antigravityOnPath(env));
 }
 
-/** The status command may have run a PATH candidate not yet known to be the CLI: no override, no
- *  managed release and no verified PATH entry, but a candidate exists. */
-export function antigravityStatusUnverified(env: NodeJS.ProcessEnv = process.env): boolean {
-  return !antigravityExecutable(env) && pathCandidates(env).length > 0;
+/** The status command ran a PATH entry: no override, no managed release, and a candidate exists.
+ *  Whichever entry it ran, the cached CLI check (`antigravityInstalled`) decides, so concurrent
+ *  cold reads agree. The answer depends on files, not on which checks have finished. */
+export function antigravityStatusFromPath(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !productEnv('ANTIGRAVITY_BIN', env) && !managedAntigravity() && pathCandidates(env).length > 0;
 }
 
 export function antigravityExecutable(env: NodeJS.ProcessEnv = process.env): string | undefined {

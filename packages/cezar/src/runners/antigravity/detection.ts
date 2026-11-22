@@ -2,7 +2,7 @@ import { productEnv } from '../../core/product-env.ts';
 import type { RunnerDetection } from '../../core/runner-definition.ts';
 import { cachedAntigravityOnPath, checkAntigravityCli, managedAntigravity } from './executable.ts';
 export const ANTIGRAVITY_DETECTION = {
-  binary: 'agy', binOverride: () => productEnv('ANTIGRAVITY_BIN'), dryRun: 'unless-bin-override',
+  binary: 'agy', binOverride: () => productEnv('ANTIGRAVITY_BIN') || undefined, dryRun: 'unless-bin-override',
   locate: () => managedAntigravity() ?? cachedAntigravityOnPath(),
   // The CLI prints a bare version; its --help names the CLI and the acp command.
   identify: checkAntigravityCli,
