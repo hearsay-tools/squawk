@@ -43,7 +43,7 @@ writeFileSync(join(process.env.CEZ_HOME, 'config.json'), JSON.stringify({ projec
 /** The index workload: 808 index roots in two truncated projects (each window holds 200 archived
  *  roots of 210), plus one running delegation parent in `boot` with four running workers. */
 const seedIndex = (store, projectId) => {
-  for (let i = 0; i < 210; i++) store.setArchived(store.createRun({ title: `Archived ${projectId} ${i}`, task: 'archived', workflow: 'quick-task', steps: [] }).id, true)
+  for (let i = 0; i < 210; i++) store.archive.setArchived(store.createRun({ title: `Archived ${projectId} ${i}`, task: 'archived', workflow: 'quick-task', steps: [] }).id, true)
   indexRoots[projectId] = []
   for (let i = 0; i < (projectId === 'boot' ? 203 : 204); i++) {
     const run = store.createRun({ title: `Index ${projectId} ${i}`, task: 'index', workflow: 'quick-task', steps: [] })
