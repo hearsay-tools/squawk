@@ -75,6 +75,8 @@ export interface ClaimsState {
 
 export class RunClaimsTopic implements RunAccess, RunClaims {
   constructor(private readonly dataDir: string, private readonly state: ClaimsState) {}
+  /** Heal verification stamps found by open(); written at close, so open makes no commit. */
+  private pendingHealMeta: Record<string, string> = {};
   private get db(): RunDatabase | null { return this.state.db(); }
   private get owner(): ClaimOwner | undefined { return this.state.owner(); }
   private get keepLive(): boolean { return this.state.keepLive(); }
@@ -130,7 +132,7 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
       }
     }
     const stale = this.automationHealRows(verified);
-    if (!projectWriteRefused(this.dataDir)) saveHealMeta(this.db!, verified);
+    if (!projectWriteRefused(this.dataDir)) this.pendingHealMeta = verified;
     const restamp = this.claimFamilies(stale.map(rowFamily));
     for (const row of stale) {
       if (this.state.held.has(row.id)) continue;
@@ -145,6 +147,13 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
     for (const rootId of this.state.anchoredFamilies()) this.holdFamily(rootId, decode);
     this.releaseUnheldClaims();
     if (unreadable > 0) console.warn(`[hsq] ${unreadable} run(s) in ${RUNS_DB_FILE} could not be read; they are left in the database untouched.`);
+  }
+
+  /** Write the heal stamps open() found; best effort, so a failed write never blocks close. */
+  flushHealMeta(): void {
+    const meta = this.pendingHealMeta;
+    this.pendingHealMeta = {};
+    if (this.db) saveHealMeta(this.db, meta);
   }
 
   /** Complete only after a scan finds no stale row, including rows already held for saving. */

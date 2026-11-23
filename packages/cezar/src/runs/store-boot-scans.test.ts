@@ -104,3 +104,16 @@ it('loads only foreign records, caches corroborated scope, and invalidates by ha
   expect(full.mock.calls.flatMap(([ids]) => ids)).toContain('foreign');
   changed.close();
 });
+
+it('commits nothing while opening a clean database and writes the heal stamps at close', () => {
+  seedRuns(dir, [record('clean')]);
+  const commits = vi.spyOn(RunDatabase.prototype, 'transaction');
+  const store = RunStore.open(dir);
+  expect(commits).not.toHaveBeenCalled();
+  expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBeUndefined();
+  store.close();
+  expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBe('1');
+  const scan = vi.spyOn(RunDatabase.prototype, 'listWhere');
+  openClose();
+  expect(scan.mock.calls.some(([sql]) => sql === AUTOMATION_ORIGIN_HEAL_SQL)).toBe(false);
+});
