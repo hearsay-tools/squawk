@@ -1,5 +1,5 @@
 {
-  "$comment": "Poll loops the server unit tests carried when the deadline rule landed (hearsay-tools/cezarion#1203). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation. Floor-equal bounds and wait bounds from parameter defaults recorded by hearsay-tools/squawk#3765; all entries continue to shrink.",
+  "$comment": "Poll loops the server unit tests carried when the deadline rule landed (hearsay-tools/cezarion#1203). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation.",
   "sites": [
     {
       "file": "autosave-attribution.test.ts",
@@ -34,7 +34,7 @@
     {
       "file": "preview/dev-server.test.ts",
       "rule": "poll-deadline",
-      "site": "while (await probePort(port)) {",
+      "site": "while (await probePort(fixturePort(supervisor))) {",
       "count": 1
     },
     {

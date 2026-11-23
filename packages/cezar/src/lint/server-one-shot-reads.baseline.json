@@ -80,10 +80,10 @@
       "count": 1
     },
     {
-      "file": "runners/acp/session.test.ts",
+      "file": "preview/dev-server.test.ts",
       "rule": "one-shot-read",
-      "site": "expect(acknowledged).toBe(true);",
-      "count": 1
+      "site": "const recordPath = join(root, 'preview', `${registrations.get(supervisor)!.port}.pid.json`);",
+      "count": 2
     },
     {
       "file": "runners/fixture/fixture-runner.test.ts",
