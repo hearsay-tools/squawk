@@ -1,5 +1,4 @@
-import { knownRunnerIds, registerRunner } from './runner-registry.ts';
-import type { RunnerDefinition } from './runner-definition.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
@@ -248,11 +247,7 @@ async function withSkillResumeRun(
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
-  if (!knownRunnerIds().includes(backend)) {
-    const definitions = Object.values(await import(`../runners/${backend}/definition.ts`)) as RunnerDefinition[];
-    if (definitions.length !== 1 || definitions[0]?.id !== backend) throw new Error(`Runner ${backend} must export its definition`);
-    registerRunner(definitions[0]);
-  }
+  runnerDefinition(backend);
   const adapter = HARNESS_ADAPTERS[backend]!;
   const saved: Array<[string, string | undefined]> = [];
   const remember = (name: string, value: string | undefined) => {
