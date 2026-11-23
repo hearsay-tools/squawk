@@ -117,12 +117,10 @@ function oneShotReadIndices(lines: string[]): number[] {
 function oneShotInputIndices(source: string, lineOf: LineLookup): number[] {
   const waits = callSpans(source, /\b(waitFor\w*|poll\w*|retry\w*)\(/g)
   const found = new Set<number>()
-  let nextWaitIdx = 0
   for (const input of callSpans(source, /\b\w+\.(click|press|fill)\(/g)) {
     const end = input.textStart + input.text.length
     if (waits.some(call => call.start < input.start && call.textStart + call.text.length > end)) continue
-    while (nextWaitIdx < waits.length && (waits[nextWaitIdx]?.start ?? 0) <= end) nextWaitIdx += 1
-    const candidate = waits[nextWaitIdx]
+    const candidate = firstSpanAfter(waits, end)
     const next = candidate && lineOf(candidate.start) - lineOf(end) <= 3 ? candidate : undefined
     if (!next || !/activeElement|\.(?:value|checked|selected|selectionStart)\b/.test(next.text)) continue
     // A click that clears a field may submit it. Enter/Space may submit too. Only repeat a
@@ -135,6 +133,18 @@ function oneShotInputIndices(source: string, lineOf: LineLookup): number[] {
     found.add(lineOf(input.start))
   }
   return [...found]
+}
+
+/** First span in `spans` (sorted by `start`) whose `start` is strictly greater than `offset`. */
+function firstSpanAfter(spans: CallSpan[], offset: number): CallSpan | undefined {
+  let lo = 0
+  let hi = spans.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if ((spans[mid]?.start ?? 0) <= offset) lo = mid + 1
+    else hi = mid
+  }
+  return spans[lo]
 }
 
 /** A DOM node kept on window or another holder survives a query, not a render. Read it again
