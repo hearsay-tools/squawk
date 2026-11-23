@@ -341,7 +341,7 @@ export function productEnvReads(source: string, file = 'file.ts'): EnvRead[] {
 /** Permanent non-setting reads, separate from the migration baseline. Exact expressions
  * keep new indexing sites visible; named product settings can never use this exemption. */
 export const nonSettingEnvReads = [
-  { file: 'packages/cezar/src/ci-wait/tool-catalog.ts', form: 'computed', expression: 'env[preferred]', reason: 'Include a defined preferred controller entry in native adapter allowlists, including clears.' },
+  { file: 'packages/cezar/src/ci-wait/tool-names.ts', form: 'computed', expression: 'env[preferred]', reason: 'Include a defined preferred controller entry in native adapter allowlists, including clears.' },
   { file: 'packages/cezar/src/core/agent-env.ts', form: 'computed', expression: 'source[name]', reason: 'Generic case-insensitive Bedrock/Vertex third-party toggle lookup.' },
   { file: 'packages/cezar/src/home/kind-roots.ts', form: 'computed', expression: 'env[name]', reason: 'XDG kind-root lookup; not a product setting.' },
   { file: 'packages/cezar/src/home/resolve.ts', form: 'computed', expression: 'env[name]', reason: 'Project HOME_LAYOUT_ENV OS/XDG roots into the layout resolver.' },

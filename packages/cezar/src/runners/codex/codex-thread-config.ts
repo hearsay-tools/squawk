@@ -1,4 +1,4 @@
-import { squawkToolEnvNames } from '../../ci-wait/tool-catalog.ts';
+import { squawkToolEnvNames } from '../../ci-wait/tool-names.ts';
 import type { AgentRunSpec } from '../../core/agent-runner.ts';
 
 /** Config overrides for a minimal session (`AgentRunSpec.minimal`): no hooks, plugins, apps,

@@ -14,7 +14,7 @@ import { createMiddleware } from 'hono/factory';
 import { previewStopResult } from '../preview/registration.ts';
 import { askErrorMessage, askInvalidInput, ciErrorMessage, ToolsUnavailableError, doneErrorMessage, doneInvalidInput, previewInvalidInput, previewOversized, previewRefusal, scheduleInvalidInput, scheduleRefusal, waitInvalidInput } from './errors.ts';
 export { ToolsUnavailableError } from './errors.ts';
-import { automationsToolEnabled, previewToolEnabled } from './tool-catalog.ts';
+import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
 import { SCHEDULED_TASK_LIMITS, scheduleTaskAnswerSchema, scheduleTaskRequestSchema, scheduledTasksAnswerSchema, scheduledTasksRequestSchema, type ScheduleTaskAnswer, type ScheduleTaskRequest, type ScheduledTasksAnswer, type ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkAskAnswerSchema, squawkAskRequestSchema, squawkCancelWaitAnswerSchema, squawkCancelWaitRequestSchema, squawkDoneAnswerSchema, squawkDoneRequestSchema, squawkWaitAnswerSchema, squawkWaitRequestSchema, type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput, type Wait, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import { ciWaitErrorCodeSchema } from '@open-mercato/cezar-contract/ci-wait';

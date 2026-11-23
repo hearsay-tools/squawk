@@ -20,7 +20,7 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/ci-wait/tool-catalog.ts",
+      "file": "packages/cezar/src/ci-wait/tool-env.ts",
       "target": "packages/cezar/src/automations/enabled.ts",
       "count": 1,
       "reason": "feature:automations: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"

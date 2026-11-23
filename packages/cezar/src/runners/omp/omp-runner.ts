@@ -36,7 +36,7 @@ import { ownLookup } from '../../core/own-lookup.ts';
 import { signalSession, spawnSessionLeader } from '../../core/session-process.js';
 import { buildChildEnv } from '../../core/agent-env.js';
 import type { SkillInputIdentity, UiEvent } from '../../core/ui-events.js';
-import { squawkToolNames } from '../../ci-wait/tool-catalog.js';
+import { squawkToolNames } from '../../ci-wait/tool-names.js';
 import { readNdjson } from '../../core/ndjson.js';
 import {
   createOmpUiState,

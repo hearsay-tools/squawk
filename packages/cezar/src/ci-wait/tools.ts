@@ -1,7 +1,9 @@
 import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkToolDefinitions, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
-export { previewToolEnabled, automationsToolEnabled, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition, squawkToolNames, squawkToolEnvNames } from './tool-catalog.ts';
+export { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
+export { previewToolEnabled, automationsToolEnabled } from './tool-env.ts';
+export { squawkToolNames, squawkToolEnvNames } from './tool-names.ts';
 import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, callPreviewServe, callPreviewStop, callScheduleTask, callAutomation, callScheduledTasks } from './client.ts';
 
 /**
