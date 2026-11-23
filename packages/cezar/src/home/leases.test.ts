@@ -1,3 +1,4 @@
+import { cliCommandsSealed } from '../core/cli-registry.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
@@ -26,6 +27,7 @@ it('prepares embedded server homes and keeps their lease until close', async () 
   const home = homePaths(root, join(root, 'cache'), root);
   const server = createServer();
   prepareHomeLifecycle(home)(server);
+  expect(cliCommandsSealed()).toBe(true);
   server.listen(0, '127.0.0.1');
   try {
     await once(server, 'listening');

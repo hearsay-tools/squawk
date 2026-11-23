@@ -1,3 +1,4 @@
+import { cliCommand, registeredCliCommands } from './core/cli-registry.ts';
 import { commandText, oldCommandNotice } from './home/command.ts';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
@@ -32,29 +33,7 @@ function cliHelp(): string {
   return `Squawk — local cockpit for AI agent tasks in your repo
 
 Usage:
-  cez                       start the cockpit (server + GUI) for the current repo
-  cez run "<task>"          run a task headless in the terminal
-  cez init                  scaffold .ai/squawk/ (example workflow + skill)
-  cez projects              list the projects this cockpit serves
-                            (also: projects add [<dir>] · projects remove|rm <id> ·
-                             projects tag <id> [<tag>…])
-  cez backup list [<file>]   list rotating registry and account backups
-  cez backup restore <file> [--at <time>] restore JSON from a backup
-  cez discover              list host runners, models, and advertised effort levels
-  cez worker                manage owned workers (see: worker --help)
-  cez message               message tasks (see: message --help)
-  cez task                  start/watch/steer cockpit tasks from the terminal (see: task --help)
-  cez automation            create and manage automations from a task (see: automation --help)
-  cez webhook               list and send to the project webhooks open to agents (see: webhook --help)
-  cez artifact publish <path> publish a local task artifact (see: artifact --help)
-  cez job start <name> -- <cmd> run a long command that outlives the agent session (see: job --help)
-  cez server-install        interactive wizard to host Squawk on a server
-  cez server-deploy         redeploy a new version (reload the service) + verify
-  cez server-uninstall      reverse a server-install
-  hsq migrate [--dry-run]  migrate the legacy home into the split layout
-  hsq migrate --resolve-legacy <file> restore|accept  resolve legacy recovery first
-  hsq migrate-project [--dry-run] move this project's state from .ai/cezar/ to .ai/squawk/, offline
-  cez remote-settings       enable|status|disable remote edits of agent config and worktree setup
+${registeredCliCommands().flatMap(command => command.usage).join('\n')}
 
 Options:
   -p, --port <n>              cockpit port (default 4321; server-install: this
@@ -97,11 +76,6 @@ async function admitProjectCommand(command: string, repoRoot: string): Promise<v
   const dataDir = projectPaths(repoRoot).write;
   if (projectAdmissionRefusal(dataDir)?.reason === 'journal') await (await import('./project-migration/recovery.ts')).recoverProjectMigration(repoRoot);
   assertProjectAdmitted(dataDir);
-}
-
-/** `run` without a task is a usage error: runCommand prints usage, and Home stays unprepared. */
-function commandHomeEntry(command: string, task: string): string {
-  return command === 'run' && !task ? 'run-usage' : command;
 }
 
 export async function main(deps: CliDeps): Promise<void> {
@@ -171,59 +145,21 @@ async function dispatch(deps: CliDeps): Promise<void> {
   if (printCliMetadata(deps, values, help)) return;
 
   const command = positionals[0] ?? 'serve';
-  if (['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall'].includes(command)) {
-    await prepareCommandRuntime(command);
-  }
+  const definition = cliCommand(command);
+  if (definition?.parseMode === 'root') await prepareCommandRuntime(command, positionals.slice(1));
   const task = positionals.slice(1).join(' ').trim();
-  homeEntry = commandHomeEntry(command, task);
+  homeEntry = cliCommand(command)?.homeEntry?.(positionals) ?? command;
   const cwd = resolve(values.repo ?? deps.process.cwd());
   const repoInfo = await deps.getRepoInfo(cwd);
   const repoRoot = repoInfo?.root ?? cwd;
   await admitProjectCommand(command, repoRoot);
 
-  switch (command) {
-    case 'serve':
-      await deps.serveCommand(home(), repoRoot, Number(values.port), !values['no-open'], values['bind-host']);
-      return;
-    case 'run':
-      await deps.runCommand(home(), repoRoot, task, values.workflow, values.model,
-        { allowWorkers: !values['no-workers'], allowMessaging: !values['no-messaging'] });
-      return;
-    case 'init':
-      home();
-      await deps.initCommand(repoRoot);
-      return;
-    case 'projects':
-      // Registry-only (no server, no HTTP) — see workspace/projects-cli.ts.
-      deps.process.exitCode = await deps.runProjectsCommand(positionals.slice(1), { defaultRoot: repoRoot, home: home() });
-      return;
-    case 'server-install':
-      await deps.serverCommand('install', home(), repoRoot, values.platform, {
-        yes: Boolean(values.yes),
-        reconfigure: values.reconfigure,
-        reinstall: Boolean(values.reinstall),
-        domain: values.domain,
-        port: portExplicit ? Number(values.port) : undefined,
-        externalProxy: Boolean(values['external-proxy']),
-        bindHost: values['bind-host'],
-      });
-      return;
-    case 'server-deploy':
-      await deps.serverCommand('deploy', home(), repoRoot, values.platform, {
-        yes: Boolean(values.yes),
-        domain: values.domain,
-      });
-      return;
-    case 'server-uninstall':
-      await deps.serverCommand('uninstall', home(), repoRoot, values.platform, {
-        yes: Boolean(values.yes),
-        domain: values.domain,
-      });
-      return;
-    default:
-      deps.console.error(`unknown command: ${command}\n`);
-      deps.console.log(help());
-      deps.process.exitCode = 1;
+  if (definition?.parseMode === 'root') {
+    const run = await definition.load();
+    await run({ deps, home, repoRoot, task, positionals, values, portExplicit });
+    return;
   }
+  deps.console.error(`unknown command: ${command}\n`);
+  deps.console.log(help());
+  deps.process.exitCode = 1;
 }
-

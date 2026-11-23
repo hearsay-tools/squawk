@@ -1,3 +1,4 @@
+import './cli-boot.testkit.ts';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';

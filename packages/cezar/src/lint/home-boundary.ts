@@ -7,7 +7,7 @@ import { bare, field, item, reportNode, scanSource, viewOrder } from './ast-tree
 export const homeReadersFile = 'packages/cezar/src/lint/home-readers.baseline.json';
 export interface HomeReader { file: string; kind: 'homedir'; calls: number; reason: string }
 export interface HomeSite { kind: 'cezarHomeDir' | 'resolveHome' | 'homedir' | 'test-selection'; offset: number }
-const ENTRY_POINTS = new Set(['packages/cezar/src/index.ts', 'packages/cezar/src/subcommands.ts']);
+const ENTRY_POINTS = new Set(['packages/cezar/src/index.ts', 'packages/cezar/src/subcommands.ts', 'packages/cezar/src/built-in-cli-commands.ts']);
 const SHARED_SETUP = 'packages/cezar/vitest.setup.ts';
 const HOME_DIR = 'packages/cezar/src/home/';
 export const TEST_FILE = /\.(?:test|testkit)\.[cm]?[jt]sx?$/;

@@ -1,8 +1,10 @@
+import { registeredCliCommands } from '../core/cli-registry.ts';
+import '../cli-boot.testkit.ts';
 import { tmpdir } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import { defaultCliDeps, main, type CliDeps } from '../cli-dispatch.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { loadSubcommand, SUBCOMMAND_NAMES } from '../subcommands.ts';
+import { loadSubcommand } from '../subcommands.ts';
 
 /** `migrate-project` (hearsay-tools/cezarion#3089) is registered, advertised and runs. */
 
@@ -24,7 +26,7 @@ function cli(args: string[], runSubcommand: CliDeps['runSubcommand'] = defaultCl
 
 describe('migrate-project', () => {
   it('is registered, advertised and dispatched', async () => {
-    expect(SUBCOMMAND_NAMES).toContain('migrate-project');
+    expect(registeredCliCommands().filter(command => command.parseMode === 'subcommand').map(command => command.name)).toContain('migrate-project');
     const run = (async (argv, env) => {
       const runner = await loadSubcommand(argv[0], () => testHome());
       return runner ? runner(argv.slice(1), env) : undefined;

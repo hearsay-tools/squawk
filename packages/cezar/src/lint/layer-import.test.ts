@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -174,4 +175,10 @@ describe('layer-import (hearsay-tools/squawk#3706)', () => {
     expect(readLayerMap().length).toBeGreaterThan(0);
     for (const entry of readLayerImportExceptions()) expect(entry.reason).toMatch(/^(?:feature:[a-z-]+|runner): /);
   });
+});
+
+it('places CLI boot composition in shell and passive command metadata in core', () => {
+  const map = readLayerMap(fileURLToPath(new URL('./layers.json', import.meta.url)));
+  expect(layerOf('built-in-cli-commands.ts', map)).toBe('shell');
+  expect(layerOf('core/cli-registry.ts', map)).toBe('core');
 });

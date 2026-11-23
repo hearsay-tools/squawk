@@ -1,3 +1,5 @@
+import '../cli-boot.testkit.ts';
+import { registeredCliCommands } from '../core/cli-registry.ts';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -9,7 +11,7 @@ import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import { RunStore } from '../runs/store.ts';
 import { projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
-import { SUBCOMMAND_NAMES } from '../subcommands.ts';
+
 import { migrateProject, ProjectMigrationRefusedError, resumeProjectMigration } from './engine.ts';
 import { migrate, moved, rows, TIMEOUT } from './engine.testkit.ts';
 import { describeProjectMigrationPlan, NOT_REWRITTEN, planProjectMigration } from './plan.ts';
@@ -151,7 +153,7 @@ describe.each([{ linked: false }, { linked: true }])('a project migration (linke
 describe('migration entry points', () => {
   it('registers the migration commands, and refuses to run without the fence held by this process', async () => {
     for (const name of ['migrate', 'server-migrate', 'migrate-project'] as const) {
-      expect(SUBCOMMAND_NAMES.includes(name)).toBe(true);
+      expect(registeredCliCommands().filter(command => command.parseMode === 'subcommand').map(command => command.name).includes(name)).toBe(true);
     }
     const src = join(import.meta.dirname, '..');
     const sources = readdirSync(src, { recursive: true, encoding: 'utf8' })
@@ -159,11 +161,11 @@ describe('migration entry points', () => {
       .map(path => ({ path, text: readFileSync(join(src, path), 'utf8') }));
     // P4b3 (hearsay-tools/cezarion#3089): early recovery at each entry.
     expect(sources.filter(({ text }) => /project-migration\//.test(text)).map(({ path }) => path).sort()).toEqual([
-      'artifacts/cli.ts', 'cli-dispatch.ts', 'project-commands.ts', 'serve-command.ts', 'server/project-context.ts',
-      'server/server.ts', 'server/start-server.ts', 'server/workspace-projects.ts', 'subcommands.ts']);
+      'artifacts/cli.ts', 'built-in-cli-commands.ts', 'cli-dispatch.ts', 'project-commands.ts', 'serve-command.ts', 'server/project-context.ts',
+      'server/server.ts', 'server/start-server.ts', 'server/workspace-projects.ts']);
     // The command, and the cockpit's prepare step (recovery, then the automatic move).
     expect(sources.filter(({ text }) => /\bmigrateProject(?:Offline)?\(|\bmoveProjectWhenIdle\(|\bprepare(?:Project|Projects|BeforeTicks)\(|project-migration\/cli\.ts/.test(text))
-      .map(({ path }) => path).sort()).toEqual(['serve-command.ts', 'server/project-context.ts', 'server/server.ts', 'server/start-server.ts', 'subcommands.ts']);
+      .map(({ path }) => path).sort()).toEqual(['built-in-cli-commands.ts', 'serve-command.ts', 'server/project-context.ts', 'server/server.ts', 'server/start-server.ts']);
     const root = join(import.meta.dirname, 'nowhere');
     const unheld = { lock: join(root, '.ai/squawk-migration.lock'), journal: join(root, '.ai/squawk-migration.json'), release: () => undefined };
     await expect(migrateProject({ repoRoot: root, fence: unheld })).rejects.toThrow(/needs the project's migration fence/);

@@ -1,70 +1,25 @@
-/**
- * The CLI subcommands that take flags of their own, so `index.ts` runs them before its global
- * parseArgs: their flags are not cockpit flags (#504, #774, #1576). Each module loads only when
- * its command runs.
- */
-
 import type { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts';
-import { readInstallMarker } from './home/install-marker.ts';
-export type SubcommandRunner = (argv: string[], env: NodeJS.ProcessEnv) => Promise<number>;
+import { cliCommand } from './core/cli-registry.ts';
+export type { SubcommandRunner } from './core/cli-registry.ts';
 
-export const SUBCOMMAND_NAMES = ['backup', 'discover', 'artifact', 'job', 'task', 'automation', 'webhook', 'worker', 'message', 'remote-settings', 'migrate', 'server-migrate', 'migrate-project'] as const;
-
-/** An unreadable marker still marks the split home as in use: list it, as before the fallback. */
-function hasInstallMarker(root: string): boolean {
-  try { return readInstallMarker(root) !== undefined; } catch { return true; }
+export async function loadSubcommand(name: string | undefined, home: (env: NodeJS.ProcessEnv) => Home = env => resolveHome({ purpose: 'cli', env })) {
+  const command = cliCommand(name ?? '');
+  return command?.parseMode === 'subcommand' ? command.load(home) : undefined;
 }
 
-/** The runner for `name`, or nothing when `name` is not a subcommand. */
-export async function loadSubcommand(name: string | undefined, home: (env: NodeJS.ProcessEnv) => Home = env => resolveHome({ purpose: 'cli', env })): Promise<SubcommandRunner | undefined> {
-  switch (name) {
-    case 'migrate': return (await import('./home/migration-cli.ts')).runMigrationCommand;
-    case 'migrate-project': return (await import('./project-migration/cli.ts')).migrateProjectRunner(env => {
-      return [resolveHome({ purpose: 'cli', env, layout: 'legacy' }), resolveHome({ purpose: 'cli', env, layout: 'split' })];
-    });
-    case 'server-migrate': return async (argv, env) => {
-      const legacy = resolveHome({ purpose: 'cli', env, layout: 'legacy' }), target = resolveHome({ purpose: 'cli', env, layout: 'split' });
-      return (await import('./server-install/migrate-cli.ts')).runServerMigrateCommand(argv, env, { legacy, target });
-    };
-    case 'backup': return async (argv, env) => {
-      const selected = operatorHelp('backup', argv) ? resolveHome({ purpose: 'cli', env }) : home(env);
-      const source = selected.layout === 'split' && argv[0] === 'list' && !hasInstallMarker(selected.config)
-        ? resolveHome({ purpose: 'cli', env, layout: 'legacy' }) : selected;
-      return (await import('./workspace/backup-cli.ts')).runBackupCommand(argv, env, source, { contained: source !== selected });
-    };
-    case 'discover': return (await import('./discovery/cli.ts')).runDiscoverCommand;
-    case 'artifact': return (await import('./artifacts/cli.ts')).runArtifactCommand;
-    case 'job': return (await import('./jobs/cli.ts')).runJobCommand;
-    case 'task': return (await import('./task-cli/cli.ts')).runTaskCommand;
-    case 'automation': return (await import('./automations/automation-cli.ts')).runAutomationCommand;
-    case 'webhook': return (await import('./webhooks/cli.ts')).runWebhookCommand;
-    case 'message': return (await import('./delegation/cli.ts')).runMessageCommand;
-    case 'worker': return (await import('./delegation/cli.ts')).runWorkerCommand;
-    case 'remote-settings': return async (argv, env) => {
-      return (await import('./remote-settings-cli.ts')).runRemoteSettingsCommand(argv, env, undefined, operatorHelp('remote-settings', argv)
-        ? resolveHome({ purpose: 'cli', env }) : home(env));
-    };
-    default: return undefined;
-  }
-}
-
-/** Run `argv[0]` when it names a subcommand and answer its exit code; anything else is not ours. */
 export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home = () => resolveHome({ purpose: 'cli', env })): Promise<number | undefined> {
-  if (SUBCOMMAND_NAMES.some(name => name === argv[0])) await prepareCommandRuntime(argv[0]!, argv.slice(1));
-  // Only operator runners call the lazy Home factory. Task runners keep two arguments.
-  const run = await loadSubcommand(argv[0], () => home());
-  return run ? run(argv.slice(1), env) : undefined;
+  const command = cliCommand(argv[0] ?? '');
+  if (command?.parseMode !== 'subcommand') return undefined;
+  await prepareCommandRuntime(command.name, argv.slice(1));
+  const run = await loadSubcommand(command.name, () => home());
+  return run!(argv.slice(1), env);
 }
 
 /** Install process services before loading commands that read runner or removal registries. */
 export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
-  const help = argv.some(arg => arg === '--help' || arg === '-h');
-  const worker = command === 'worker' && (argv.length === 0 || help || argv[0] === 'help' || argv[0] === 'spawn');
-  const operator = command === 'backup' || command === 'remote-settings';
-  const operatorRuntime = operator && !operatorHelp(command, argv);
-  if (!worker && !operatorRuntime && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
-    'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
+  const definition = cliCommand(command);
+  if (!definition || definition.runtimeMode === 'none' || (typeof definition.runtimeMode === 'function' && !definition.runtimeMode(argv))) return;
   const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
   sealBuiltInRunners();
@@ -74,9 +29,4 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();
-}
-
-/** Help must skip both runtime registration and the migrating operator Home factory. */
-function operatorHelp(command: string, argv: readonly string[]): boolean {
-  return ['--help', '-h', ...(command === 'remote-settings' ? ['help'] : [])].includes(argv[0] ?? '');
 }

@@ -1,9 +1,11 @@
+import { registeredCliCommands } from './core/cli-registry.ts';
+import './cli-boot.testkit.ts';
 import { describe, expect, it } from 'vitest';
-import { loadSubcommand, runSubcommand, SUBCOMMAND_NAMES } from './subcommands.ts';
+import { loadSubcommand, runSubcommand } from './subcommands.ts';
 
 describe('CLI subcommands', () => {
   it('loads a runner for every subcommand', async () => {
-    for (const name of SUBCOMMAND_NAMES) expect(typeof (await loadSubcommand(name))).toBe('function');
+    for (const { name } of registeredCliCommands().filter(command => command.parseMode === 'subcommand')) expect(typeof (await loadSubcommand(name))).toBe('function');
   });
 
   it('leaves the cockpit commands and flags to index.ts', async () => {

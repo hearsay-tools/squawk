@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { resolveHome } from './resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 import { runSubcommand } from '../subcommands.ts';

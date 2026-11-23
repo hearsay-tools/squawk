@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';

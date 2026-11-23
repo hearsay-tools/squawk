@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';

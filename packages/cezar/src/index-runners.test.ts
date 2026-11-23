@@ -1,3 +1,4 @@
+import './cli-boot.testkit.ts';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -65,6 +66,7 @@ it('migrates legacy accounts before remote-settings status in a cold process', (
     mkdirSync(account.configDir);
     Home.seed(legacy, legacy.workspaceConfig, { agentProfiles: [account],
       projects: [{ root: '/project', agentProfile: { claude: 'work' } }] });
+    await import('./packages/cezar/src/cli-boot.testkit.ts');
     const env = { HSQ_URL: 'http://127.0.0.1:1' };
     assert.equal(await runSubcommand(['remote-settings', 'status'], env,
       () => prepareOperatorHome(target, 'remote-settings', env, { legacy })), 0);

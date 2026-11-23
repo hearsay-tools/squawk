@@ -1,3 +1,4 @@
+import './cli-boot.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { defaultCliDeps, main, type CliDeps } from './cli-dispatch.ts';
 import { testHome } from './home/test-home.testkit.ts';

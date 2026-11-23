@@ -1,3 +1,5 @@
+import { registerBuiltInCliCommands, sealBuiltInCliCommands } from '../built-in-cli-commands.ts';
+import { knownCliCommand } from '../core/cli-registry.ts';
 import { commandText } from './command.ts';
 import { productEnv } from '../core/product-env.ts';
 import { existsSync, readdirSync } from 'node:fs';
@@ -9,25 +11,22 @@ import { prepareMigrationHome, type MigrationBootOptions } from './migration-boo
 import { holdCockpitLease } from './leases.ts';
 import { HomeStore, readHomeFile } from './store.ts';
 import { authorizeHomeEntry, registryFiles } from './entry-authorization.ts';
-import { isValidRestore } from '../workspace/backups.ts';
 
 export type HomeEntry = 'serve' | 'init' | 'run' | 'projects' | 'backup' | 'remote-settings'
   | 'server-install' | 'server-deploy' | 'server-uninstall' | 'migrate'
   | 'server-migrate';
 
-const entries: readonly string[] = ['serve', 'init', 'run', 'projects', 'backup', 'remote-settings',
-  'server-install', 'server-deploy', 'server-uninstall'];
-
 /** Backup listing, help and invalid restore input are pure reads; a valid restore retains its unconditional preparation. */
 export function operatorHomeEntry(argv: readonly string[]): string | undefined {
-  return argv[0] === 'backup' && !isValidRestore(argv.slice(1)) ? 'backup-read' : argv[0];
+  return knownCliCommand(argv[0] ?? 'serve')?.homeEntry?.(argv) ?? argv[0];
 }
 
 /** Boot must still work with a read-only home. Mutations retain their own throwing contracts. */
 export function prepareOperatorHome(home: Home, command: string | undefined, env = process.env, migration?: MigrationBootOptions): Home {
   command ??= 'serve';
-  if (!entries.includes(command)) return home;
-  const unconditional = ['serve', 'init', 'run', 'backup'].includes(command);
+  const definition = knownCliCommand(command);
+  if (!definition || definition.homeMode === 'none') return home;
+  const unconditional = definition.homeMode === 'unconditional';
   const boot = prepareMigrationHome(home, env, { ...migration, deferFresh: !unconditional });
   if (boot.kind === 'staged') return home;
   if (boot.kind === 'legacy') home = boot.home;
@@ -68,6 +67,9 @@ export function serverInstanceForPort(home: Home, port: number): string {
 
 /** Refuse a changed Home before server consumers read; hold presence for the listener's lifetime. */
 export function prepareHomeLifecycle(home: Home, instance?: string): (server: ServerType) => void {
+  // Embedded servers enter here without the CLI executable boot.
+  registerBuiltInCliCommands();
+  sealBuiltInCliCommands();
   const preparedHome = prepareOperatorHome(home, 'serve', process.env);
   if (preparedHome !== home) {
     throw new Error(commandText(`[hsq] refusing to serve home ${home.root}: preparation selected ${preparedHome.root}. Prepare the home before starting the server.`));
