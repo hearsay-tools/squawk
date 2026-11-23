@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { expect, it } from 'vitest';
 import type { SquawkWaitRequest } from '@open-mercato/cezar-contract';
 import { WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';

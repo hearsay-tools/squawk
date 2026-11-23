@@ -39,7 +39,7 @@ export class AutomationToolsSlot {
 
 export type ToolHost = {
   store: RunStore;
-  registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, signal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry>;
+  registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, signal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry | import('@open-mercato/cezar-contract/waits').PluginWaitEntry>;
   registerAsk(runId: string, request: SquawkAskRequest, generation: string, signal?: AbortSignal): Promise<HumanWaitEntry>;
   cancelWait(runId: string, waitId: string, generation: string): { cancelled: true } | { cancelled: false; code: 'not_found' | 'already_resolved' | 'human_question' };
   acceptDone(runId: string, generation: string, request: SquawkDoneRequest, signal?: AbortSignal): SquawkDoneAnswer;

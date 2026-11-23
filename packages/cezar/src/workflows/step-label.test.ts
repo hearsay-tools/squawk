@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { stepLabel } from './run.ts';

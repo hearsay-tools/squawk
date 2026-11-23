@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { Home } from '../home/home.ts';

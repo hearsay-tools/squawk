@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';

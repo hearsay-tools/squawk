@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 // Its fixtures delete, reclaim or archive runs, or start worker executions: the shipped removal slots.
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../built-in-run-slots.testkit.ts';

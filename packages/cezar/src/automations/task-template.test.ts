@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';

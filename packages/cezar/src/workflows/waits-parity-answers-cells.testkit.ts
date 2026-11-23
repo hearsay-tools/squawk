@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { waitPartDescribers, sessionOf, runnerBoundary, prompted, nativeWire, ASK_CONTEXT, questions, pendingQuestion, humanOpen, answerOf, settled, answered, inputsFor, fireTimer } from './waits-parity-fixture.testkit.ts';
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';

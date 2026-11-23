@@ -1,5 +1,6 @@
 import { registerBuiltInStepKinds, sealBuiltInStepKinds } from './workflows/step-kind-registry.ts';
 import './ci-wait/tools.testkit.ts';
+import './built-in-wait-kinds.testkit.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from './built-in-run-slots.ts';
 
 // Importing this module seals the shipped removal slots, as each process entry does. A test that

@@ -1,5 +1,5 @@
 import { cleanupTaskWorktreeSkills } from '../../worktree-skill-cleanup.ts';
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { waitPolicyForWait } from './wait-kinds.ts';
 import { runDataDir } from '../../legacy-runs.ts';
 import { fallbackProjectWriteError } from '../../project-paths.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
@@ -222,7 +222,7 @@ export class ContinuationSession {
     state.inputState.answerOpeningAsk(askSeq);
     // The human waits this answer answers; one the opening turn opens is its next question.
     const waits = askSeq === undefined ? []
-      : openWaits(this.context.store.getRun(runId) ?? {}).filter(wait => WAIT_KINDS[wait.kind].userAnswers).map(wait => wait.id);
+      : openWaits(this.context.store.getRun(runId) ?? {}).filter(wait => waitPolicyForWait(wait).userAnswers).map(wait => wait.id);
     return { askSeq, waits, ...(opening.answerSource ? { answerSource: opening.answerSource } : {}) };
   }
 

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';

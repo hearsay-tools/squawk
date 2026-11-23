@@ -1,4 +1,4 @@
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { waitPolicyForWait } from './wait-kinds.ts';
 import { randomUUID } from 'node:crypto';
 import { waitErrorCodeSchema, type Wait, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
 import { squawkWaitRequestSchema, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
@@ -9,12 +9,12 @@ import type { ToolHost } from './squawk-tools.ts';
 import { registrationIdentity, replayRegistration } from './wait-registration.ts';
 
 function accepted(host: ToolHost, runId: string, wait: Wait, receipt: WaitRegistrationReceipt | undefined, operationId: string, replayed: boolean): WaitRegistration {
-  if (WAIT_KINDS[wait.kind].answerKind(wait) === undefined || !('deadline' in wait) || wait.deadline === undefined) throw new Error('invalid registration receipt');
+  if (waitPolicyForWait(wait).answerKind(wait) === undefined) throw new Error('invalid registration receipt');
   const run = host.store.getRun(runId);
   const current = [...run?.waits ?? [], ...run?.lastWaits ?? []].find(row => row.id === wait.id);
   return { answer: { ok: true, effect: replayed || receipt?.deduplicated ? 'unchanged' : 'applied', operation_id: operationId,
     deduplicated: receipt?.deduplicated ?? false, replayed, wait_phase: current?.phase ?? 'unavailable',
-    wait_id: wait.id, kind: waitAnswerKind(wait), deadline: wait.deadline, open_waits: openWaitList(run?.waits ?? []) }, wait };
+    wait_id: wait.id, kind: waitAnswerKind(wait), ...('deadline' in wait && wait.deadline !== undefined ? { deadline: wait.deadline } : {}), open_waits: openWaitList(run?.waits ?? []) }, wait };
 }
 function refused(host: ToolHost, runId: string, request: SquawkWaitRequestInput, error: unknown): WaitRegistration {
   const fields = error && typeof error === 'object' ? error : {};

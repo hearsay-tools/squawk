@@ -1,5 +1,5 @@
 import type { WaitEngine } from './wait-engine.ts';
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { ReadonlyMapView } from './readonly-collections.ts';
 import type { SubagentChild, SubagentWaitEntry } from '@open-mercato/cezar-contract/waits';
@@ -238,7 +238,7 @@ export class SubagentWaits {
   supersedeOnRunnerResume(runId: string): void {
     if (this.host.isAdmitted(runId)) return;
     const run = this.context.store.getRun(runId);
-    const ids = (run?.waits ?? []).filter(wait => WAIT_KINDS[wait.kind].runnerResumeCancels.includes(wait.phase)).map(wait => wait.id);
+    const ids = (run?.waits ?? []).filter(wait => waitPolicyForWait(wait).runnerResumeCancels.includes(wait.phase)).map(wait => wait.id);
     if (ids.length) this.supersede(runId, ids);
     else this.clearGrace(runId);
   }

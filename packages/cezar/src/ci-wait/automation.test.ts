@@ -1,4 +1,5 @@
 import './tools.testkit.ts';
+import '../built-in-wait-kinds.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { callAutomation } from './client.ts';
 import { CiToolController } from './controller.ts';

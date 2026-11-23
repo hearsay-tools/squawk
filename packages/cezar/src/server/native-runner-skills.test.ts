@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';

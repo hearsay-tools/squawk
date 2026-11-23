@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 // Its managers settle runs, which reclaims worktrees and ends worker families: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';

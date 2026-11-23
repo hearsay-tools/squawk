@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { assertPromptResponseCompletion } from '../core/owned-input-delivery.testkit.ts';
 import { waitPartDescribers, runnerBoundary, sessionOf, flushMicrotasks, prompted, nudgeNotes, idleClock, turnEnds, nativeWire, gated, humanOpen, repliesDoneAgain, workerParent, ignoreRefusal, workerWaits, blockedDone, blockingWorker, liveRefusal, replyBlockedAgain, parkedOn, viaOf, expectPoolCapacity, parentWithWorker, uncollectedRefusal } from './waits-parity-fixture.testkit.ts';

@@ -1,4 +1,5 @@
 import './tools.testkit.ts';
+import '../built-in-wait-kinds.testkit.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';

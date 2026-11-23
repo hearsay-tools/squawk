@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { waitPartDescribers, pendingQuestion, humanOpen, asks, answerOf, settled, answered, nativeWire, questions, ASK_CONTEXT, sessionOf, turnEnds, prompted, gated, parkedOn, waitOfKind, stepStatus, viaOf } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NOTE, MAX_AUTO_CONTINUES } from './run.ts';

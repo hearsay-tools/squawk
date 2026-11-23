@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import type { WireRow } from '../workflows/native-session-wire.testkit.ts';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // These tests pin the five built-in runners' config files, so they register only those five.
 import { registerRunner } from '../core/runner-registry.ts';

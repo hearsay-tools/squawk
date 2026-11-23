@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { expect, it, vi } from 'vitest';
 import { runtimeHomes } from './runtime-isolation.testkit.ts';
 import { reconcileServeWorktrees, type ReconcileStore } from '../serve-boot.ts';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { waitPartDescribers, github, nativeWire, pr, parkedOn, waitOfKind, turnEnds, fireTimer, settled, prompted, timerText, agentWaits, inputsFor, viaOf, sessionOf, runnerBoundary, expectPoolCapacity, sessionStoreEnv, useSessionStore } from './waits-parity-fixture.testkit.ts';
 import { nativeTimerDelay } from './run.ts';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { Home } from '../home/home.ts';

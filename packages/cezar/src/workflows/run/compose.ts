@@ -167,7 +167,7 @@ export interface FacadeHost {
   hasUnansweredHumanAsk(runId: string): boolean;
   cancelAutoResume(runId: string): boolean;
   rootFinishRequested(runId: string): boolean;
-  registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry>;
+  registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry | import('@open-mercato/cezar-contract/waits').PluginWaitEntry>;
   cancelWait(runId: string, waitId: string, generation: string): ReturnType<WaitRegistry['cancelWait']>;
   acceptDone(runId: string, generation: string, request: SquawkDoneRequest, signal?: AbortSignal): SquawkDoneAnswer;
   preview?: PreviewHostLike | undefined;

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { workflowAutonomousParity } from './workflow-autonomous-rows.testkit.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';

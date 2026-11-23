@@ -1,5 +1,5 @@
 import type { WaitEngine } from './wait-engine.ts';
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { Wait, WaitingOn } from '@open-mercato/cezar-contract/waits';
@@ -74,7 +74,7 @@ export class WakeAdmission {
     if (!waits.length) return;
     this.host.waitEngine.cancel(runId, waits.map(wait => wait.id));
     for (const wait of waits) {
-      this.context.store.eventLog.appendEvent(runId, { type: 'note', message: WAIT_KINDS[wait.kind].capNote(wait, this.maxAutoContinues) });
+      this.context.store.eventLog.appendEvent(runId, { type: 'note', message: waitPolicyForWait(wait).capNote(wait, this.maxAutoContinues) });
     }
   }
 
@@ -414,7 +414,7 @@ export class WakeAdmission {
 /** Native subagents live in the session, so any park with a subagent wait open keeps the session
  *  and a slot, whichever wait ranks first (hearsay-tools/cezarion#2431). */
 function holdsNativeSubagents(run: RunRecord): boolean {
-  return openWaits(run).some((wait) => WAIT_KINDS[wait.kind].holdsSession);
+  return openWaits(run).some((wait) => waitPolicyForWait(wait).holdsSession);
 }
 
 /** Whether the park keeps the session and a slot. Live children hold them even when their wait

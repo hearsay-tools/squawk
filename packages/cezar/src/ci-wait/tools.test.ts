@@ -1,4 +1,5 @@
 import './tools.testkit.ts';
+import '../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';

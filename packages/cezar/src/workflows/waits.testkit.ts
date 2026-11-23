@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import type { RunManager } from './run.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { afterEach, expect, vi } from 'vitest';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { workerWaitEntryToLegacy, type DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import type { InboxClaim } from '@open-mercato/cezar-contract/agent-input';

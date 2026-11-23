@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
