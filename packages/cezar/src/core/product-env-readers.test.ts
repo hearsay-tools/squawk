@@ -9,7 +9,8 @@ import { resolveGlobalArchiveOnMerge } from '../archive-on-merge-setting.ts';
 import { agentModelsLocked } from './agent-model-policy.ts';
 import { providerAuthChecksDisabled } from './provider-auth.ts';
 import { workspaceConfigSchema } from '../workspace/config.ts';
-import { previewToolEnabled, automationsToolEnabled } from '../ci-wait/tools.ts';
+import { previewToolEnabled } from '../preview/tool-env.ts';
+import { automationsToolEnabled } from '../automations/tool-env.ts';
 
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });

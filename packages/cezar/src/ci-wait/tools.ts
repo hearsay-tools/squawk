@@ -1,11 +1,9 @@
 import { agentToolInstructions, agentToolMetadata, enabledAgentTools, type AgentToolResult } from './tool-registry.ts';
 import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
-import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
-export { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
-export { previewToolEnabled, automationsToolEnabled } from './tool-env.ts';
+import { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition } from './tool-catalog.ts';
+export { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition } from './tool-catalog.ts';
 export { squawkToolNames, squawkToolEnvNames } from './tool-names.ts';
-import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, callPreviewServe, callPreviewStop, callScheduleTask, callAutomation, callScheduledTasks } from './client.ts';
+import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait } from './client.ts';
 
 /**
  * The one list of Squawk tools (#781). The MCP adapter lists it, Pi's extension registers it, and
@@ -70,54 +68,10 @@ export function formatDoneTool(answer: Awaited<ReturnType<typeof callSquawkDone>
   return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${hint}` }], isError: !answer.ok, details: answer };
 }
 
-/** JSON first, then the hint as a plain sentence: the shape every Squawk tool answers in. */
-export async function invokePreviewTool(input: unknown) {
-  return formatPreviewTool(await callPreviewServe(input));
-}
-export function formatPreviewTool(result: Awaited<ReturnType<typeof callPreviewServe>>) {
-  return { content: [{ type: 'text' as const, text: `${JSON.stringify(result)}\n${result.hint}` }], isError: !result.ok, details: result };
-}
-export async function invokePreviewStopTool(input: unknown) {
-  return formatPreviewStopTool(await callPreviewStop(input));
-}
-export function formatPreviewStopTool(result: Awaited<ReturnType<typeof callPreviewStop>>) {
-  return { content: [{ type: 'text' as const, text: `${JSON.stringify(result)}\n${result.hint}` }], isError: !result.ok, details: result };
-}
-export const PREVIEW_STOP_TOOL: SquawkTool = { definition: previewStopToolDefinition, trigger: `load when your Squawk-started preview server needs stopping or restarting.`, label: 'Stop live preview', invoke: invokePreviewStopTool };
-
-function scheduleHint(answer: ScheduleTaskAnswer | ScheduledTasksAnswer): string {
-  if (answer.ok) return 'Done. due_at is UTC: tell the user that time in their time zone, and name the zone.';
-  return answer.code === 'automations_off' || answer.code === 'unavailable' ? 'Not scheduled. Tell the user, and do not retry.' : 'Not changed. Fix the call from the message, or continue without it.';
-}
-export async function invokeScheduleTaskTool(input: unknown) {
-  return formatScheduleTaskTool(await callScheduleTask(input));
-}
-export function formatScheduleTaskTool(answer: Awaited<ReturnType<typeof callScheduleTask>>) {
-  return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${scheduleHint(answer)}` }], isError: !answer.ok, details: answer };
-}
-export async function invokeScheduledTasksTool(input: unknown) {
-  return formatScheduledTasksTool(await callScheduledTasks(input));
-}
-export function formatScheduledTasksTool(answer: Awaited<ReturnType<typeof callScheduledTasks>>) {
-  return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${scheduleHint(answer)}` }], isError: !answer.ok, details: answer };
-}
-export async function invokeAutomationTool(input: unknown) {
-  return formatAutomationTool(await callAutomation(input));
-}
-export function formatAutomationTool(answer: Awaited<ReturnType<typeof callAutomation>>) {
-  const hint = answer.ok ? 'Report the url and preview matches, or the next occurrence in the user’s time zone.' : 'Stop and report the error. Do not substitute another automation mechanism.';
-  return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${hint}` }], isError: !answer.ok, details: answer };
-}
-export const AUTOMATION_TOOL: SquawkTool = { definition: automationToolDefinition, trigger: 'load when the user asks for recurring work, or wants to inspect or activate an automation.', label: 'Automations', invoke: invokeAutomationTool };
-export const SCHEDULE_TASK_TOOL: SquawkTool = { definition: scheduleTaskToolDefinition, trigger: 'load when work should start later as a new task (in an hour, tomorrow, next week) instead of keeping this session waiting.', label: 'Schedule a task', invoke: invokeScheduleTaskTool };
-export const SCHEDULED_TASKS_TOOL: SquawkTool = { definition: scheduledTasksToolDefinition, trigger: 'load when you need to list, change, pause, resume or cancel a one-time scheduled task.', label: 'Scheduled tasks', invoke: invokeScheduledTasksTool };
-
 export const WAIT_TOOL: SquawkTool = { definition: waitToolDefinition, trigger: 'load when you are waiting on CI for a PR or on a background job you started, or want to re-check something later; end your turn after it answers.', label: 'Wait', invoke: invokeWaitTool };
 export const ASK_TOOL: SquawkTool = { definition: askToolDefinition, trigger: 'load for a user decision or missing input; provide the full draft or findings in its rendered context field.', label: 'Ask the user', invoke: invokeAskTool };
 export const CANCEL_WAIT_TOOL: SquawkTool = { definition: cancelWaitToolDefinition, trigger: 'load when a wait you registered is no longer needed.', label: 'Cancel wait', invoke: invokeCancelWaitTool };
 export const DONE_TOOL: SquawkTool = { definition: doneToolDefinition, trigger: 'load when the task is complete and verified.', label: 'Done', invoke: invokeDoneTool };
-export const PREVIEW_TOOL: SquawkTool = { definition: previewToolDefinition, trigger: 'load when you have started, or are about to start, a web server the user should click through.', label: 'Live preview', invoke: invokePreviewTool };
-
 export function squawkTools(env: NodeJS.ProcessEnv = process.env): SquawkTool[] {
   return enabledAgentTools(env).map(tool => ({ definition: agentToolMetadata(tool), trigger: tool.trigger, label: tool.label, invoke: tool.invoke }));
 }

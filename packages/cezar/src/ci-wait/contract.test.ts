@@ -176,7 +176,7 @@ describe('private preview-serve route', () => {
 
   it('the MCP adapter returns the result as JSON plus the hint, isError when not ok', async () => {
     vi.stubEnv('CEZ_PREVIEW', '1');
-    const { invokePreviewTool } = await import('./tools.ts');
+    const { invokePreviewTool } = await import('../preview/tools.ts');
     const { env } = await session();
     vi.stubEnv('CEZ_TOOL_SOCKET', env.CEZ_TOOL_SOCKET!); vi.stubEnv('CEZ_TOOL_TOKEN', env.CEZ_TOOL_TOKEN!);
     const result = await invokePreviewTool(valid);

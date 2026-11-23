@@ -1,11 +1,9 @@
 import { commandText } from '../home/command.ts';
-import { productIdentity } from '../home/identity.ts';
 import type { AskErrorCode, DoneErrorCode, WaitErrorCode, Wait } from '@open-mercato/cezar-contract/waits';
 import { TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
 import { MESSAGING_OFF } from '../delegation/policy.ts';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
-import type { CiWaitErrorCode, PreviewResultCode, PreviewServeResult } from '@open-mercato/cezar-contract';
-import type { ScheduledTaskRefusalCode } from '@open-mercato/cezar-contract/scheduled-tasks';
+import type { CiWaitErrorCode } from '@open-mercato/cezar-contract';
 import type { z } from 'zod';
 
 /** Safe diagnostics shared by the manager and private transport. Never forward raw errors. */
@@ -193,45 +191,6 @@ export function doneInvalidInput(error?: z.ZodError): string {
 
 // #781: `cezar_preview_serve` results. Every one carries the agent's next step; none quotes a
 // secret, an environment value or another task's path.
-const EXAMPLE_CALL = '{ "command": "npm run dev -- --port 5173 --strictPort", "port": 5173 }';
-
-/** The refusals Squawk's tool server answers itself; registration codes come from its owner. */
-export function previewRefusal(code: Extract<PreviewResultCode, 'preview_disabled' | 'headless' | 'unavailable'>): PreviewServeResult {
-  switch (code) {
-    case 'preview_disabled': return { ok: false, code, message: 'Live preview is not enabled in this cockpit.', hint: 'Do not retry. Tell the user the server command and port so they can open it themselves.' };
-    case 'headless': return { ok: false, code, message: `No cockpit is attached to this run (\`${productIdentity().command} run\`).`, hint: 'Do not retry. Report the command and port in your final message.' };
-    case 'unavailable': return { ok: false, code, message: `Squawk's tool server did not answer.`, hint: 'Retry once. If it fails again, continue without preview and report the command and port in your message.' };
-  }
-}
-
-const FIELD_RULES: Record<string, string> = {
-  command: 'must be a string of 1 to 1024 characters',
-  port: 'must be an integer between 1 and 65535',
-  cwd: 'must be a path relative to the worktree root',
-  label: 'must be a string of 1 to 48 characters',
-  path: 'must be a path starting with "/"',
-};
-
-export function previewOversized(): PreviewServeResult {
-  return { ok: false, code: 'invalid_input', message: 'The arguments exceed 16 KiB.', hint: `Send only the documented fields, e.g. ${EXAMPLE_CALL}, and call again.` };
-}
-
-/** Names the first failing field and its rule, then a valid example call. */
-export function previewInvalidInput(error: z.ZodError, input: unknown): PreviewServeResult {
-  const field = error.issues.map(issue => issue.path[0]).find((key): key is string => typeof key === 'string' && key in FIELD_RULES);
-  if (!field) {
-    return { ok: false, code: 'invalid_input', message: 'The arguments must be a JSON object with `command` and `port`.', hint: `Call again with a JSON object, e.g. ${EXAMPLE_CALL}.` };
-  }
-  const value = input !== null && typeof input === 'object' ? (input as Record<string, unknown>)[field] : undefined;
-  const got = value === undefined ? 'nothing' : JSON.stringify(value).slice(0, 64);
-  return {
-    ok: false,
-    code: 'invalid_input',
-    message: `\`${field}\` ${FIELD_RULES[field]} (got ${got}).`,
-    hint: `"${field}" ${FIELD_RULES[field]}. A valid call: ${EXAMPLE_CALL}. Fix the field and call again.`,
-  };
-}
-
 // hearsay-tools/cezarion#1233: `cezar_wait` and `cezar_cancel_wait` refusals name the first
 // failing field and its rule, never the value the agent sent.
 const WAIT_FIELD_RULES: Record<string, string> = {
@@ -259,40 +218,6 @@ export function waitInvalidInput(error?: z.ZodError): string {
   const field = error?.issues.map(entry => entry.path[0]).find((key): key is string => typeof key === 'string' && key in WAIT_FIELD_RULES);
   if (field) return `\`${field}\` ${WAIT_FIELD_RULES[field]}.`;
   return `The arguments must be a JSON object: ${WAIT_FIELDS}.`;
-}
-
-// hearsay-tools/cezarion#1465: `cezar_schedule_task` and `cezar_scheduled_tasks` refusals.
-const scheduleMessages: Record<Extract<ScheduledTaskRefusalCode, 'automations_off' | 'unavailable'>, string> = {
-  automations_off: `Automations are off in this cockpit (CEZ_AUTOMATIONS=0), so Squawk cannot schedule a task. Tell the user.`,
-  unavailable: `Squawk could not reach its scheduler for this session. Tell the user; scheduling needs a running cockpit.`,
-};
-export function scheduleRefusal(code: ScheduledTaskRefusalCode, message?: string): { ok: false; code: ScheduledTaskRefusalCode; message: string } {
-  return { ok: false, code, message: message ?? scheduleMessages[code as keyof typeof scheduleMessages] ?? 'Invalid arguments.' };
-}
-
-const SCHEDULE_FIELD_RULES: Record<string, string> = {
-  action: 'must be "list", "show", "update", "pause", "enable" or "cancel"',
-  id: 'must be the id of a one-time schedule a list or a create answered',
-  archived: 'must be "include" or "only"',
-  name: 'must be a string of 1 to 200 characters',
-  prompt: 'must be a string of 1 to 100000 characters',
-  at: 'must be a UTC time YYYY-MM-DDTHH:MMZ; give at or delay, not both',
-  delay: 'must be a duration such as 30m, 6h or 7d; give at or delay, not both',
-  latest_start: 'must be a duration such as 30m, 6h or 7d',
-  workflow: 'must be a workflow name',
-  runner: 'must be a runner name',
-  model: 'must be a model id',
-  effort: 'must be an effort level',
-  enable: 'must be true or false',
-};
-
-/** Names the unknown field or the first failing field and its rule, never the value sent. */
-export function scheduleInvalidInput(error?: z.ZodError): string {
-  const issue = error?.issues[0];
-  if (issue?.code === 'unrecognized_keys') return `Unknown field ${issue.keys.map(key => JSON.stringify(key.slice(0, 64))).join(', ')}.`;
-  const field = error?.issues.map(entry => entry.path[0]).find((key): key is string => typeof key === 'string' && key in SCHEDULE_FIELD_RULES);
-  if (field) return `\`${field}\` ${SCHEDULE_FIELD_RULES[field]}.`;
-  return 'The arguments must be a JSON object.';
 }
 
 /** A safe refusal shared by tool and delegation transports. */

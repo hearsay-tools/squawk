@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { AutomationToolsSlot, squawkToolHandlers, type ToolHost } from './run/squawk-tools.ts';

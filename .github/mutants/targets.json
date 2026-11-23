@@ -279,13 +279,15 @@
       "runAndReportServerCommand"
     ]
   },
+  "packages/cezar/src/automations/tools.ts": {
+    "tier": "guards",
+    "guards": ["scheduleHint", "invokeScheduleTaskTool"]
+  },
   "packages/cezar/src/ci-wait/tools.ts": {
     "tier": "guards",
     "guards": [
-      "scheduleHint",
       "invokeDoneTool",
-      "invokeWaitTool",
-      "invokeScheduleTaskTool"
+      "invokeWaitTool"
     ]
   },
   "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": {

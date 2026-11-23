@@ -4,15 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
-import { callScheduleTask, callSquawkDone, callSquawkWait } from './client.ts';
+import { callSquawkDone, callSquawkWait } from './client.ts';
+import { callScheduleTask } from '../automations/tool-client.ts';
 import { squawkToolDefinitions } from './tool-catalog.ts';
 import { squawkToolNames } from './tool-names.ts';
-import { invokeDoneTool, invokeScheduleTaskTool, invokeWaitTool } from './tools.ts';
+import { invokeDoneTool, invokeWaitTool } from './tools.ts';
+import { invokeScheduleTaskTool } from '../automations/tools.ts';
 
 vi.mock('./client.ts', () => ({
   callSquawkAsk: vi.fn(), callSquawkCancelWait: vi.fn(), callSquawkDone: vi.fn(), callSquawkWait: vi.fn(),
-  callPreviewServe: vi.fn(), callPreviewStop: vi.fn(), callScheduleTask: vi.fn(), callScheduledTasks: vi.fn(),
 }));
+
+vi.mock('../automations/tool-client.ts', () => ({ callScheduleTask: vi.fn(), callScheduledTasks: vi.fn(), callAutomation: vi.fn() }));
 
 /** What the agent reads: Squawk's answer as JSON on the first line, then the hint it acts on. */
 function shown(result: { content: Array<{ type: string; text: string }>; isError?: boolean; details: unknown }) {

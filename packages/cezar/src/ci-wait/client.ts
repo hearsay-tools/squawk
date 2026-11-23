@@ -1,31 +1,11 @@
 import type { AgentToolResult } from './tool-registry.ts';
 import { agentToolCatalogSchema, agentToolResultSchema } from '@open-mercato/cezar-contract/agent-tools';
-import { automationToolAnswerSchema, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
-import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { productEnv } from '../core/product-env.ts';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
-import { previewStopResult } from '../preview/registration.ts';
-import { previewRefusal } from './errors.ts';
 import { squawkAskAnswerSchema, squawkCancelWaitAnswerSchema, squawkDoneAnswerSchema, squawkWaitAnswerSchema, type SquawkAskAnswer, type SquawkCancelWaitAnswer, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
-import { SCHEDULED_TASK_LIMITS, scheduleTaskAnswerSchema, scheduledTasksAnswerSchema, type ScheduleTaskAnswer, type ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { previewServeResultSchema, previewStopResultSchema, type PreviewStopResult, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
 
 const UNAVAILABLE = 'CI tool unavailable: the owning session is closed or the private IPC connection failed.';
-const SCHEDULE_UNAVAILABLE = `Squawk could not reach its scheduler: the owning session is closed or the private IPC connection failed.`;
-/**
- * #781: posts the arguments unparsed, so the server names the failing field in its hint. Every
- * transport failure, refusal or unreadable answer becomes the typed `unavailable` result; this
- * never throws.
- */
-export function callPreviewServe(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<PreviewServeResult> {
-  return callTool(input, env, 'cezar_preview_serve', previewServeResultSchema, previewRefusal('unavailable'));
-}
-
-export function callPreviewStop(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<PreviewStopResult> {
-  return callTool(input, env, 'cezar_preview_stop', previewStopResultSchema, previewStopResult('unavailable'));
-}
-
 /** hearsay-tools/cezarion#1233: unparsed like preview, so the server names the failing field. */
 export async function callSquawkWait(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<SquawkWaitAnswer> {
   if (!productEnv('TOOL_SOCKET', env) || !productEnv('TOOL_TOKEN', env)) return { ok: false, effect: 'refused', code: 'unavailable', message: 'No local tool capability is configured. Nothing was created.' };
@@ -52,22 +32,6 @@ export function callSquawkDone(input: unknown, env: NodeJS.ProcessEnv = process.
 /** hearsay-tools/cezarion#1234: unparsed too, so the server names the failing question. */
 export function callSquawkAsk(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<SquawkAskAnswer> {
   return callTool(input, env, 'cezar_ask', squawkAskAnswerSchema, { ok: false, code: 'unavailable', message: UNAVAILABLE });
-}
-
-/**
- * hearsay-tools/cezarion#1465: unparsed too. A list of 50 schedules can pass the 32 KiB the
- * other answers fit in, so these two read up to the schedule answer cap.
- */
-export function callScheduleTask(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<ScheduleTaskAnswer> {
-  return callTool(input, env, 'cezar_schedule_task', scheduleTaskAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
-}
-
-export function callScheduledTasks(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<ScheduledTasksAnswer> {
-  return callTool(input, env, 'cezar_scheduled_tasks', scheduledTasksAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
-}
-
-export function callAutomation(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<AutomationToolAnswer> {
-  return callTool(input, env, 'cezar_automation', automationToolAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes, AUTOMATION_TOOL_CLIENT_TIMEOUT_MS);
 }
 
 export function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, schema: { safeParse(input: unknown): { success: true; data: T } | { success: false } }, unavailable: T, maxAnswerBytes = 32_768, timeoutMs = 15_000, typedErrors = false, method = 'POST', formatted = false): Promise<T> {

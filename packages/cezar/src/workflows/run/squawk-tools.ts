@@ -1,12 +1,12 @@
+import { registeredAgentTools } from '../../ci-wait/tool-registry.ts';
 import { registrationToolHandler } from './wait-registration-tool.ts';
 import { randomUUID } from 'node:crypto';
-import type { CiResources } from '../../ci-wait/resource-pool.ts';
-import { previewCdpSession, previewRunContext, type PreviewHostLike } from '../../preview/registration.ts';
+import type { CiToolController, CiToolSession } from '../../ci-wait/controller.ts';
 import type { RunStore, RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { AutomationToolService, RunModuleContext } from './types.ts';
 import type { SquawkToolHandlers } from '../../ci-wait/controller.ts';
-import { askErrorMessage, waitErrorMessage, scheduleRefusal } from '../../ci-wait/errors.ts';
+import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';
 import { askErrorCodeSchema, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { type SquawkAskAnswer, type SquawkCancelWaitAnswer, type SquawkWaitRequestInput, type SquawkAskRequest, type SquawkDoneRequest, type SquawkDoneAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import type { PreviewServeRequest, PreviewServeResult, PreviewStopRequest, PreviewStopResult } from '@open-mercato/cezar-contract/preview';
@@ -70,21 +70,7 @@ export function squawkToolHandlers(runId: string, generation: string, host: Tool
       return { cancelled: false, code: outcome.code, message: CANCEL_MESSAGES[outcome.code], open_waits: listOpen() } satisfies SquawkCancelWaitAnswer;
     },
     finishTurn: async (request, signal) => host.acceptDone(runId, generation, request, signal),
-    registerPreview: (request, signal) => host.registerPreviewServer(runId, request, signal),
-    stopPreview: (request, signal) => host.stopPreviewServer(runId, request, signal),
-    automation: async (request, signal) => {
-      const tools = await host.awaitAutomationTools(signal);
-      return tools?.automation ? tools.automation(request, signal) : scheduleRefusal('unavailable');
-    },
-    // A schedule belongs to the project, not to this run: any session there may manage one.
-    scheduleTask: async (request, signal) => {
-      const tools = await host.awaitAutomationTools(signal);
-      return tools ? tools.scheduleTask(request) : scheduleRefusal('unavailable');
-    },
-    scheduledTasks: async (request, signal) => {
-      const tools = await host.awaitAutomationTools(signal);
-      return tools ? tools.scheduledTasks(request) : scheduleRefusal('unavailable');
-    },
+    ...Object.assign({}, ...registeredAgentTools().map(tool => tool.sessionHandlers?.(runId, host) ?? {})),
   };
 }
 
@@ -106,10 +92,9 @@ export function toolSessionRefusal(run: RunRecord | undefined, state: ActiveRun 
 
 export interface CiSessionHost {
   active: ReadonlyMap<string, ActiveRun>;
-  ciResources(): CiResources;
+  ciResources(): { controller(): Promise<CiToolController> };
   squawkToolHandlers(runId: string, generation: string): SquawkToolHandlers;
-  preview(): PreviewHostLike | undefined;
-  cockpit(): { origin: string; projectId: string } | undefined;
+  decorateSession(session: CiToolSession, runId: string): CiToolSession;
 }
 
 /** Provision the same capability and descriptor on every start, Continue and recovered launch. */
@@ -123,7 +108,7 @@ export async function provisionCiSession(context: RunModuleContext, host: CiSess
   // which fails this launch; no session runs without the lifecycle tools.
   const controller = await host.ciResources().controller();
   if (context.disposed() || state.liveSession.cancelled || host.active.get(runId) !== state) return;
-  const provisioned = previewCdpSession(controller.provision(host.squawkToolHandlers(runId, generation)), { host: host.preview(), cockpitOrigin: host.cockpit()?.origin, runId, worktree: !!context.store.getRun(runId)?.worktreePath, context: () => previewRunContext(context.store, context.dataDir, runId) });
+  const provisioned = host.decorateSession(controller.provision(host.squawkToolHandlers(runId, generation)), runId);
   state.liveSession.installCiRevoker(provisioned.revoke);
   return provisioned;
 }

@@ -11,7 +11,7 @@ import { testHome } from './test-home.testkit.ts';
 import { productIdentity } from './identity.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
 import { createUbuntuVps } from '../server-install/platforms/ubuntu-vps.ts';
-import { previewRefusal } from '../ci-wait/errors.ts';
+import { previewRefusal } from '../preview/tool-errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
