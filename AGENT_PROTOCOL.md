@@ -472,7 +472,7 @@ holds its anchor, and adds every quoted use of the id.
    the run row with its steps and `workflowDef` steps (`upgradeRemovedRunner`), the stored
    list summary (`upgradeRemovedRunnerSummary`) and the worker-result snapshot
    (`upgradeRemovedRunnerResult`). The fold of a retired id is stored by the next write.
-2. **Load sites of the fold** — `packages/cezar/src/runs/store.ts` (run rows),
+2. **Load sites of the fold** — `packages/cezar/src/runs/run-decode.ts` (run rows),
    `packages/cezar/src/runs/worker-results.ts` (worker results) and
    `packages/cezar/src/runs/run-summary-page.ts` (stored summaries).
 3. **Record schema** — `packages/contract/src/runs.ts` keeps `removedRunner` and the step's
