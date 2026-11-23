@@ -18,13 +18,20 @@ const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSour
   { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 member.once('message', () => process.exit(1));`;
 
-for (const runner of BUILT_IN_RUNNER_IDS.filter(id => runnerDefinition(id).skillCatalog?.source !== 'filesystem')) describe(`${runner} skill probe process cleanup`, () => {
+for (const runner of BUILT_IN_RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
   // Windows uses taskkill trees; leaderless POSIX process groups do not exist there.
   for (const failure of ['hung', 'crashed', 'leader-first'] as const) it.runIf(failure !== 'leader-first' || process.platform !== 'win32')(`${failure}: unavailable with a reason and no child left`, async () => {
     let child!: ChildProcessWithoutNullStreams;
     let exit!: Promise<unknown>;
     const launch: SkillDiscoveryOptions['spawn'] = (_bin, args, cwd, env) => {
-      expect(env).toMatchObject(profileEnv(runner, '/profiles/probe'));
+      if (runner === 'antigravity') {
+        expect(env.GEMINI_HOME).toBe('/profiles/probe');
+        expect(env.GOOGLE_GEMINI_BASE_URL).toBe('http://127.0.0.1:1');
+        expect(args).toContain('--print=/skills');
+        expect(args).toContain('stream-json');
+      } else {
+        expect(env).toMatchObject(profileEnv(runner, '/profiles/probe'));
+      }
       if (runner === 'claude') {
         expect(args).toContain('--no-session-persistence');
         expect(args[args.indexOf('--settings') + 1]).toBe('{"disableAllHooks":true}');
@@ -72,4 +79,19 @@ describe.runIf(process.platform !== 'win32')('leader-first probe cleanup on ever
     else await expect(probe).rejects.toThrow(outcome === 'abort' ? 'cancelled' : 'read failed');
     expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
   }, 5000); // bound: two mock processes start, then the probe waits at most 750ms for group disappearance.
+
+  it('reaps the live child process group when onSpawn throws', async () => {
+    let child!: ChildProcessWithoutNullStreams;
+    const probe = skillProbe('claude', [], {
+      cwd: tmpdir(),
+      spawn: (_bin, _args, cwd, env) => {
+        child = spawnSessionLeader(process.execPath, ['-e', `${ignoreTermSource()} setInterval(() => {}, 1000)`], { cwd, env });
+        return child;
+      },
+    }, async () => 'metadata', {
+      onSpawn: () => { throw new Error('lease bind failed'); },
+    });
+    await expect(probe).rejects.toThrow('lease bind failed');
+    expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+  }, 5000); // bound: child starts, onSpawn throws, and cleanup kills and reaps the group.
 });

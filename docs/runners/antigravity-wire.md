@@ -217,6 +217,22 @@ entity was not found.\n"`, and a broken custom agent as `"\n⚠ failed to constr
 
 ### CLI skills
 
+The standalone CLI lists every project, user, plugin (`plugins/`, `plugins.json`), `skills.json`, and
+built-in skill natively without a model turn through:
+`antigravity --settings '{"modelProvider":"gemini"}' --output-format stream-json --print=/skills`
+(with `GEMINI_API_KEY` set and `GOOGLE_GEMINI_BASE_URL` pointed at an unreachable loopback address).
+It emits a `command_result` event (`command.name: "skills"`, `command.data.skills[]` with `name`,
+`description`, `path`, optional `plugin`, `builtin`, and `model_invocable`), recorded in
+`__fixtures__/skill-list.json`. `--print` ignores `--gemini-dir` and `GEMINI_HOME` and reads
+`$HOME/.gemini`, so Squawk stages a disposable `HOME` linking the real session `HOME`'s top-level
+entries (preserving `~/` manifest resolution), linking the selected account's read-only
+customization entries (inheriting absent shared entries from the default Gemini home without
+creating or mutating the account folder), and copying `config/config.json`.
+
+When `--print=/skills` namespaces a plugin skill as `<plugin>:<skill>`, `antigravity acp` still
+expands only `/<skill>` (not `/<plugin>:<skill>`), so Squawk strips the `<plugin>:` prefix for the
+trigger `id` while keeping `plugin` as metadata.
+
 `available_commands_update`, sent once with the first prompt, lists every skill by name, so the
 wire now names the skills (`cli-interaction-question.ndjson`, the first prompt of the skill
 session). A folder change sends no new update; a later process lists the added skill

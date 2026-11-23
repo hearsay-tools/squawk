@@ -528,7 +528,8 @@ account shares the terminal CLI's skills. `SSH_CONNECTION` makes the CLI keep a 
 in a file per account, `<gemini-dir>/antigravity-cli/antigravity-oauth-token`, instead of one OS
 keyring entry for every account. Named accounts also set
 their own `HOME`/`USERPROFILE` and `XDG_CONFIG_HOME`. Only native instruction files (`AGENTS.md`,
-`GEMINI.md`) and skill folders (`config/skills`, `antigravity-cli/skills`, `skills`) link back to
+`GEMINI.md`), skill folders (`config/skills`, `antigravity-cli/skills`, `skills`), skill/plugin
+manifests (`config/skills.json`, `config/plugins.json`), and plugins (`config/plugins`) link back to
 the user's default Gemini home; existing account files are preserved.
 
 Settings → Agents offers personal Google sign-in through `antigravity acp --login`. The
@@ -557,5 +558,4 @@ Antigravity's private MCP bridge uses the short server alias `squawk` in its des
 permission identities. The CLI qualifies tools as `mcp_<server>_<tool>` and drops a tool whose
 name passes 64 characters; the shared per-session server name can exceed that limit. Other
 runners keep the shared descriptor name.
-The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. The filesystem skill catalog uses the same
-selected account home (ADR 0066).
+The model definition declares `catalogAtAdmission: false`: worker/task admission and alternative-runner suggestions never start this expensive probe. Other runners retain their existing admission checks. Neither boot nor task start waits for this catalog. Skill discovery asks the Antigravity CLI natively (`--settings '{"modelProvider":"gemini"}' --output-format stream-json --print=/skills`) in a disposable `HOME` linked to the selected account home's read-only skill/plugin entries, with zero model turns or network calls (ADR 0066).

@@ -1,6 +1,5 @@
-import { runnerDefinition } from './runner-registry.ts';
 import { setSkillProvisionEngineCells, type SkillProvisionEngineCells } from './skill-provision-parity.testkit.ts';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
@@ -82,12 +81,6 @@ const ENGINE_CELLS: SkillProvisionEngineCells = {
         env: { CEZ_MOCK_STDIN_FILE: wireFile, CEZ_MOCK_ARGS_FILE: argsFile },
         beforeStart: ({ manager, repoRoot }) => {
           writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: native-opening\n    on: session_start\n    target: both\n    template: CONTEXT-RULE-NATIVE-SENTINEL\n');
-          const catalog = runnerDefinition(runner).skillCatalog;
-          if (catalog?.source === 'filesystem') {
-            const skillDir = join(repoRoot, catalog.projectRoots[0]!, 'probe-project');
-            mkdirSync(skillDir, { recursive: true });
-            writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: probe-project\ndescription: Native skill fixture\n---\nUse this skill.');
-          }
           manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner]!.mockBin }) }));
         },
       });

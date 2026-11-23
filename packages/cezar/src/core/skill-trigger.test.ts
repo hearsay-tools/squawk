@@ -6,6 +6,7 @@ import { createClaudeUiState, mapClaudeMessage } from '../runners/claude/claude-
 import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex-ui-mapper.ts';
 import { createOpencodeUiState, mapOpencodeEvent } from '../runners/opencode/opencode-ui-mapper.ts';
 import { createPiUiState, mapPiRpcMessage } from '../runners/pi/pi-ui-mapper.ts';
+import { createAntigravityUiState, mapAntigravityFrame } from '../runners/antigravity/antigravity-ui-mapper.ts';
 import type { UiEvent } from './ui-events.ts';
 import { matchesSkillPrompt } from '../runners/pi/pi-rpc-wire.ts';
 import { slashSkillPrompt, validSkillMessage } from './skill-trigger.ts';
@@ -46,6 +47,7 @@ it.each([
   ['codex', () => mappedSkillEcho('codex', createCodexUiState(), mapCodexNotification)],
   ['opencode', () => mappedSkillEcho('opencode', createOpencodeUiState(), mapOpencodeEvent)],
   ['pi', () => mappedSkillEcho('pi', createPiUiState(), mapPiRpcMessage)],
+  ['antigravity', () => mappedSkillEcho('antigravity', createAntigravityUiState(), mapAntigravityFrame)],
 ] as const)('%s native skill expansion does not duplicate the saved human input', (_runner, events) => {
   expect(events().filter(event => 'item' in event && event.item.kind === 'message' && event.item.role === 'user')).toEqual([]);
 });

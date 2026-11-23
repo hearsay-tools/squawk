@@ -16,9 +16,16 @@ export interface SkillDiscoveryOptions {
   spawn?: ((bin: string, args: readonly string[], cwd: string, env: NodeJS.ProcessEnv) => ChildProcessWithoutNullStreams) | undefined;
 }
 
+export interface SkillProbeExtra {
+  executable?: string | undefined;
+  extraEnv?: Record<string, string> | undefined;
+  onSpawn?: ((pid: number) => void) | undefined;
+}
+
 export function skillExecutable(runner: string, bin?: string): string {
   return bin ?? { claude: productEnv('CLAUDE_BIN'), codex: productEnv('CODEX_BIN'),
-    opencode: productEnv('OPENCODE_BIN'), pi: productEnv('PI_BIN'), omp: productEnv('OMP_BIN') }[runner] ?? (productEnv('DRY_RUN') === '1'
+    opencode: productEnv('OPENCODE_BIN'), pi: productEnv('PI_BIN'), omp: productEnv('OMP_BIN'),
+    antigravity: productEnv('ANTIGRAVITY_BIN') }[runner] ?? (productEnv('DRY_RUN') === '1'
     ? fileURLToPath(new URL(`../../scripts/${runnerDefinition(runner).mock.script}`, import.meta.url)) : runner);
 }
 
@@ -28,11 +35,12 @@ export async function skillProbe<T>(
   args: readonly string[],
   options: SkillDiscoveryOptions,
   read: (child: ChildProcessWithoutNullStreams, signal: AbortSignal, env: NodeJS.ProcessEnv) => Promise<T>,
+  extra: SkillProbeExtra = {},
 ): Promise<T> {
   options.signal?.throwIfAborted();
-  const env = buildChildEnv({ backend: runner, extraEnv: profileEnv(runner, options.accountHome) });
+  const env = buildChildEnv({ backend: runner, extraEnv: { ...profileEnv(runner, options.accountHome), ...extra.extraEnv } });
   const launch = options.spawn ?? ((bin, argv, cwd, env) => spawnSessionLeader(bin, argv, { cwd, env }));
-  const child = launch(skillExecutable(runner, options.bin), args, options.cwd, env);
+  const child = launch(extra.executable ?? skillExecutable(runner, options.bin), args, options.cwd, env);
   const group = child.pid === undefined ? undefined : sessionGroupOf(child.pid);
   const exited = probeExit(child);
   const signal = AbortSignal.any([options.signal ?? new AbortController().signal, AbortSignal.timeout(options.timeoutMs ?? 15_000)]);
@@ -50,7 +58,11 @@ export async function skillProbe<T>(
     signal.addEventListener('abort', onAbort, { once: true });
     if (signal.aborted) onAbort();
   });
+  // If onSpawn throws before Promise.race attaches handlers, killing the child in finally rejects failed.
+  failed.catch(() => {});
+  aborted.catch(() => {});
   try {
+    if (child.pid !== undefined) extra.onSpawn?.(child.pid);
     return await Promise.race([read(child, signal, env), failed, aborted]);
   } finally {
     signal.removeEventListener('abort', onAbort);

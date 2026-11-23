@@ -27,6 +27,5 @@ export const antigravityRunner = defineRunner({
   loadAdapter: async () => new (await import('./antigravity-runner.ts')).AntigravityRunner(),
   loadModelCatalog: async () => (await import('./antigravity-model-catalog.ts')).discoverAntigravityModels,
   loadModelCatalogKey: async () => (await import('./antigravity-model-catalog.ts')).antigravityModelCatalogKey,
-  skillCatalog: { source: 'filesystem', projectRoots: ['.agents/skills', '.agent/skills'], userRoots: ['config/skills', 'antigravity-cli/skills', 'skills'], plugins: false, evidence: 'Antigravity CLI 1.5.14 cli-skill-folders.ndjson; docs/runners/antigravity-wire.md' },
   loadSkillCatalog: async () => (await import('./antigravity-skill-catalog.ts')).discoverAntigravitySkills,
 });

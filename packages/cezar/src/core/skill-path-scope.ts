@@ -10,7 +10,7 @@ export function skillPathScope(path: string, cwd: string, userHome: string): Run
   if (!isAbsolute(path)) return path === '<built-in>' ? 'system' : 'other';
   if (within(cwd, path)) return 'repo';
   const normalized = path.split(sep).join('/');
-  const marker = normalized.search(/\/(?:\.agents|\.claude|\.opencode|\.pi)\/skills?\//);
+  const marker = normalized.search(/\/(?:\.agents?|\.claude|\.opencode|\.pi)\/skills?\//);
   if (marker !== -1) {
     const root = normalized.slice(0, marker);
     if (root !== userHome && within(root, cwd)) return 'repo';

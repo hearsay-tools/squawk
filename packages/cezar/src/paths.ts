@@ -144,7 +144,7 @@ export function agentHomeDir(provider: ProviderId, env: NodeJS.ProcessEnv = proc
   return resolveRunnerHome(provider, accounts, env, agentUserHome(env));
 }
 
-function agentUserHome(env: NodeJS.ProcessEnv): string {
+export function agentUserHome(env: NodeJS.ProcessEnv = process.env): string {
   return env.HOME || env.USERPROFILE || homedir();
 }
 
