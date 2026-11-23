@@ -207,7 +207,8 @@ export function createAutomationService(deps: AutomationServiceDeps) {
       const { root, automationStore, store } = project;
       const availability = await deps.githubAvailability(root);
       const archived = query.archived;
-      const automations = automationStore.list()
+      const definitions = automationStore.list();
+      const automations = definitions
         .filter((automation) => archived === 'include' || (archived === 'only' ? Boolean(automation.archived) : !automation.archived))
         .map((automation) => {
           const logs = automationStore.logs({ automationId: automation.id, limit: 100 });
@@ -237,7 +238,7 @@ export function createAutomationService(deps: AutomationServiceDeps) {
         });
       // The scheduler describes the project, not this page: an `archived` filter must not hide
       // the active schedules from it.
-      const active = automationStore.list().filter((automation) => automation.enabled);
+      const active = definitions.filter((automation) => automation.enabled);
       const nextDue = active
         .map((automation) => (automation.kind === 'schedule' ? automationStore.state(automation.id)?.nextRunAt : automationStore.state(automation.id)?.nextCheckAt))
         .filter(Boolean).sort()[0];

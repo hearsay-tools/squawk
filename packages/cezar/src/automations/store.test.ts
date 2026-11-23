@@ -49,6 +49,83 @@ function watchRenames(fail: (name: string) => Error | undefined = () => undefine
 }
 
 describe('AutomationStore', () => {
+  it('caches parsed logs, indexes automations and returns independent records', async () => {
+    const dir = await directory();
+    const store = AutomationStore.open(dir);
+    await store.appendLog({ automationId: 'a', revision: 1, result: 'launched' });
+    await store.appendLog({ automationId: 'b', revision: 1, result: 'error' });
+    const read = vi.spyOn(fs, 'readFileSync');
+    syncBuiltinESMExports();
+    const first = store.logs();
+    const reads = () => read.mock.calls.filter(([path]) => String(path).endsWith('automation-log.ndjson')).length;
+    expect(reads()).toBe(1);
+    expect(store.logs()).toEqual(first);
+    expect(store.logs({ automationId: 'a' })).toEqual([first[1]]);
+    expect(store.logs({ automationId: 'missing' })).toEqual([]);
+    expect(reads()).toBe(1);
+    first[0]!.reason = 'caller mutation';
+    expect(store.logs()[0]!.reason).toBeUndefined();
+  });
+
+  it('refreshes after external append, same-size edit, replacement, truncation and removal', async () => {
+    const dir = await directory();
+    const store = AutomationStore.open(dir);
+    const row = await store.appendLog({ automationId: 'a', revision: 1, result: 'launched' });
+    const path = join(dir, 'automation-log.ndjson');
+    const write = (rows: unknown[]) => writeFileSync(path, rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+    expect(store.logs()).toEqual([row]);
+    write([row, { ...row, seq: 2 }]);
+    expect(store.logs().map(row => row.seq)).toEqual([2, 1]);
+    const time = fs.statSync(path).mtime;
+    write([row, { ...row, seq: 3 }]);
+    utimesSync(path, time, time);
+    expect(store.logs()[0]!.seq).toBe(3);
+    writeFileSync(path + '.new', JSON.stringify({ ...row, seq: 4 }) + '\n');
+    fs.renameSync(path + '.new', path);
+    expect(store.logs()[0]!.seq).toBe(4);
+    writeFileSync(path, '');
+    expect(store.logs()).toEqual([]);
+    unlinkSync(path);
+    store.reload();
+    expect(store.logs()).toEqual([]);
+  });
+
+  it('invalidates on append and compaction while preserving sequence allocation across stores', async () => {
+    const dir = await directory();
+    const store = AutomationStore.open(dir, { logRetentionCount: 1 });
+    const other = AutomationStore.open(dir);
+    const record = { automationId: 'a', revision: 1, result: 'launched' as const };
+    await store.appendLog(record);
+    expect(store.logs()[0]!.seq).toBe(1);
+    await other.appendLog(record);
+    expect(store.logs()[0]!.seq).toBe(2);
+    await store.appendLog(record);
+    expect(store.logs().map(row => row.seq)).toEqual([3, 2, 1]);
+    await store.compact();
+    expect(store.logs().map(row => row.seq)).toEqual([3]);
+  });
+
+  it('tracks both fallback log paths and preserves projected cursor and filter semantics', async () => {
+    const root = await directory();
+    const primary = join(root, '.ai', 'cezar');
+    const fallback = join(root, '.ai', 'squawk');
+    mkdirSync(primary, { recursive: true });
+    mkdirSync(fallback, { recursive: true });
+    const store = AutomationStore.open(primary);
+    const row = { seq: 10, ts: '2026-11-01T00:00:00.000Z', automationId: 'a', revision: 1, result: 'launched', event: 'pull_request.opened' };
+    const write = (dir: string, rows: unknown[]) => writeFileSync(join(dir, 'automation-log.ndjson'), rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+    write(primary, [row]);
+    expect(store.logs()[0]!.seq).toBe(10);
+    write(fallback, [{ ...row, seq: 20, ts: '2026-11-02T00:00:00.000Z', result: 'error' }]);
+    expect(store.logs().map(row => row.seq)).toEqual([2, 1]);
+    expect(store.logs({ automationId: 'a', result: 'launched', event: 'pull_request.opened', cursor: 2, limit: 1 })).toEqual([{ ...row, seq: 1 }]);
+    expect(store.logs({ since: '2026-11-02', limit: 1 })[0]!.seq).toBe(2);
+    write(primary, [row, { ...row, seq: 30, ts: '2026-11-03T00:00:00.000Z' }]);
+    expect(store.logs().map(row => row.seq)).toEqual([3, 2, 1]);
+    write(fallback, []);
+    expect(store.logs().map(row => row.seq)).toEqual([30, 10]);
+  });
+
   it('writes definitions atomically at private permissions and preserves unknown fields', async () => {
     const dir = await directory();
     const store = AutomationStore.open(dir);
