@@ -164,9 +164,9 @@ describe('cdpOverPipe (hearsay-tools/cezarion#784)', () => {
     const set = vi.spyOn(Map.prototype, 'set');
     const pipe = fakePipe();
     try {
-      const call = pipe.connection.call('Target.attachToTarget', {}, undefined, 100);
+      const call = pipe.connection.call('Page.enable', {}, undefined, 100);
       const pending = set.mock.contexts.at(-1) as Map<number, unknown>;
-      const rejected = expect(call).rejects.toThrow('Target.attachToTarget: CDP command timed out after 100 ms');
+      const rejected = expect(call).rejects.toThrow('Page.enable: CDP command timed out after 100 ms');
       await vi.advanceTimersByTimeAsync(100);
       await rejected;
       expect(pending.size).toBe(0);
@@ -178,6 +178,26 @@ describe('cdpOverPipe (hearsay-tools/cezarion#784)', () => {
     } finally {
       pipe.connection.close();
       set.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['Target.attachToTarget', 'Target.attachToBrowserTarget'])('detaches the session in a late successful %s reply', async method => {
+    vi.useFakeTimers();
+    const pipe = fakePipe();
+    try {
+      const rejected = expect(pipe.connection.call(method, {}, 'PARENT', 100)).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(100);
+      await rejected;
+      pipe.write('{"id":1,"result":{"sessionId":"late"}}\0');
+      expect(pipe.commands).toEqual([
+        { id: 1, method, params: {}, sessionId: 'PARENT' },
+        { id: 2, method: 'Target.detachFromTarget', params: { sessionId: 'late' }, sessionId: 'PARENT' },
+      ]);
+      pipe.write('{"id":2,"result":{}}\0');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      pipe.connection.close();
       vi.useRealTimers();
     }
   });

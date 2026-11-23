@@ -57,6 +57,9 @@ function createConnection(transport: Transport): CdpConnection {
   let nextId = 0;
   let isClosed = false;
   const pending = new Map<number, Pending>();
+  // Keep late attachment ownership until its reply or connection close. Bound silent peers too.
+  const lateAttachments = new Map<number, string | undefined>();
+  const maxLateAttachments = 256;
   const eventFns = new Set<(msg: CdpMessage) => void>();
   let markClosed!: () => void;
   const closed = new Promise<void>(resolve => (markClosed = resolve));
@@ -72,6 +75,14 @@ function createConnection(transport: Transport): CdpConnection {
       const entry = pending.get(msg.id);
       pending.delete(msg.id);
       entry?.resolve(msg);
+      if (lateAttachments.has(msg.id)) {
+        const parentSession = lateAttachments.get(msg.id);
+        lateAttachments.delete(msg.id);
+        const attached = (msg.result as { sessionId?: unknown } | undefined)?.sessionId;
+        if (!msg.error && typeof attached === 'string') {
+          void call('Target.detachFromTarget', { sessionId: attached }, parentSession, 15_000).catch(() => {});
+        }
+      }
     } else if (msg.method) {
       for (const fn of [...eventFns]) fn(msg);
     }
@@ -81,6 +92,7 @@ function createConnection(transport: Transport): CdpConnection {
     isClosed = true;
     for (const [id, entry] of pending) entry.resolve({ id, error: { message: 'CDP connection closed' } });
     pending.clear();
+    lateAttachments.clear();
     eventFns.clear();
     markClosed();
   });
@@ -110,6 +122,11 @@ function createConnection(transport: Transport): CdpConnection {
       if (settled || id === undefined || timeoutMs === undefined) return;
       timer = setTimeout(() => {
         pending.delete(id);
+        if (method === 'Target.attachToTarget' || method === 'Target.attachToBrowserTarget') {
+          lateAttachments.set(id, sessionId);
+          // Closing releases all sessions rather than forgetting ownership when the peer never replies.
+          if (lateAttachments.size > maxLateAttachments) transport.close();
+        }
         reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms${timeoutContext ? `; ${timeoutContext()}` : ''}`));
       }, timeoutMs);
       timer.unref?.();
