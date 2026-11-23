@@ -4,7 +4,7 @@
 
 ## Read first
 
-`packages/cezar/src/index.ts`
+`packages/cezar/src/index.ts`, `packages/cezar/src/core/cli-registry.ts`, `packages/cezar/src/built-in-cli-commands.ts`
 
 ## Two project directories
 
@@ -75,7 +75,7 @@ entries (`run`, `init`, `artifact`, ...) only recover journals and never start a
 
 ## Rules
 
-Uses `node:util` `parseArgs`, no CLI framework. `serve` is the default command. Headless `run` treats `review` as a terminal success status (exit 0). `serve` boots in a fixed order: bind the listener, open the boot store and build its `RunManager`, `recover()` the boot project, then `startServer`. So anything a recovered run needs (its cockpit address, for one) must reach the boot manager at construction, not from `startServer`. `init` never overwrites existing files. Keep `.ai/cezar/.gitignore` maintenance (`ensureDataGitignore`) in sync with any new state file.
+Uses `node:util` `parseArgs`, no CLI framework. `serve` is the default command. All 20 built-in commands register lazily in `core/cli-registry.ts` from `built-in-cli-commands.ts` with `parseMode`, `homeMode`, `runtimeMode`, usage lines, and a lazy `load()` ([ADR 0069](../adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)). `index.ts` registers and seals only the CLI registry before dispatch; `cli-dispatch.ts` generates `--help` from it and `home/entry.ts` reads `homeMode` from it. Only commands whose `runtimeMode` is `'always'` or whose `runtimeMode(argv)` predicate returns true run `prepareCommandRuntime` (`subcommands.ts`) to register and seal runners, removal slots, worker executions, step kinds, agent tools, and wait kinds, keeping cold commands free of runner and store modules. Headless `run` treats `review` as a terminal success status (exit 0). `serve` boots in a fixed order: bind the listener, open the boot store and build its `RunManager`, `recover()` the boot project, then `startServer`. So anything a recovered run needs (its cockpit address, for one) must reach the boot manager at construction, not from `startServer`. `init` never overwrites existing files. Keep `.ai/cezar/.gitignore` maintenance (`ensureDataGitignore`) in sync with any new state file.
 
 ## Task environments and the cockpit home
 
