@@ -1,11 +1,12 @@
 # Open registries and small tables
-Status: active
+Status: done
 
 Step 3 of [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md), epic
 hearsay-tools/squawk#4152. Baseline: `main` at `b4c0510be`. The owner decided the unified
 registry lifecycle on 2026-11-23 (task `caba5208`) and the four remaining design and contract
-decisions on 2026-11-23 (task `1bc159a9`). The work runs as ten slices, one child issue each;
-see [the plan](2026-11-23-open-registries-and-tables-plan.md).
+decisions on 2026-11-23 (task `1bc159a9`). The work landed in ten slices, one child issue each;
+see [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)
+and the [Implementation record](#implementation-record) below.
 
 ## Goal
 
@@ -294,18 +295,35 @@ registrations with `vi.resetModules()` or seal per-file testkits.
 
 ## Implementation record
 
-Epic hearsay-tools/squawk#4152. Updated as each slice merges on `main`.
+Epic hearsay-tools/squawk#4152. Every slice merged as one squash commit on `main`. The result is
+[ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md).
 
 | Slice | Issue | Pull request | Commit on `main` | Notes |
 | --- | --- | --- | --- | --- |
-| Spec & plan | hearsay-tools/squawk#4152 | Pending | Pending | Records owner decisions and plan |
-| S0a | hearsay-tools/squawk#4154 | Pending | Pending | `core/registry.ts` + removal slots & worker executions |
-| S0b | hearsay-tools/squawk#4155 | Pending | Pending | `core/runner-registry.ts` register-then-seal |
-| A1 | hearsay-tools/squawk#4156 | Pending | Pending | Core agent tool registry + IPC catalog/dispatch |
-| A2 | hearsay-tools/squawk#4157 | Pending | Pending | Preview & automation tools move + fixture test |
-| B1 | hearsay-tools/squawk#4158 | Pending | Pending | Contract open plugin wait + cockpit fallbacks |
-| B2 | hearsay-tools/squawk#4159 | Pending | Pending | Core wait-kind registry + lazy `cezar_wait` schema |
-| B3 | hearsay-tools/squawk#4160 | Pending | Pending | Forge, worker, peer, subagent waits move + fixture test |
-| C1 | hearsay-tools/squawk#4161 | Pending | Pending | Open workflow step kinds + fixture test |
-| D1 | hearsay-tools/squawk#4162 | Pending | Pending | Lazy CLI command registry + fixture test |
-| E1 | hearsay-tools/squawk#4163 | Pending | Pending | Data-driven lint rules, docs, ADR 0069, spec close-out |
+| Spec & plan | hearsay-tools/squawk#4152 | hearsay-tools/squawk#4164 | `58dc5e42b` | Records owner decisions and plan |
+| S0a | hearsay-tools/squawk#4154 | hearsay-tools/squawk#4165 | `6fc7ecf23` | `core/registry.ts` + removal slots & worker executions |
+| S0b | hearsay-tools/squawk#4155 | hearsay-tools/squawk#4167 | `f1d839946` | `core/runner-registry.ts` register-then-seal |
+| A1 | hearsay-tools/squawk#4156 | hearsay-tools/squawk#4170 | `9df728ee7` | Core agent tool registry + IPC catalog/dispatch |
+| A2 | hearsay-tools/squawk#4157 | hearsay-tools/squawk#4172 | `cf6342a5a` | Preview & automation tools move + fixture test |
+| B1 | hearsay-tools/squawk#4158 | hearsay-tools/squawk#4166 | `52f8f67c1` | Contract open plugin wait + cockpit fallbacks |
+| B2 | hearsay-tools/squawk#4159 | hearsay-tools/squawk#4171 | `f31b9c9a8` | Core wait-kind registry + lazy `cezar_wait` schema |
+| B3 | hearsay-tools/squawk#4160 | hearsay-tools/squawk#4173 | `d6e39d116` | Forge, worker, peer, subagent waits move + fixture test |
+| C1 | hearsay-tools/squawk#4161 | hearsay-tools/squawk#4169 | `9d7864fbd` | Open workflow step kinds + fixture test |
+| D1 | hearsay-tools/squawk#4162 | hearsay-tools/squawk#4168 | `5ce615fd9` | Lazy CLI command registry + fixture test |
+| E1 | hearsay-tools/squawk#4163 | This PR | Merged with E1 | Data-driven lint rules, docs, ADR 0069, spec close-out |
+
+### Final measurements
+
+- **`layer-import.baseline.json`:** 102 entries at `b4c0510be` -> 93 entries at close-out (9 removed:
+  all 7 required targets plus 2 adjacent entries, `workflows/run/squawk-tools.ts` ->
+  `ci-wait/resource-pool.ts` and `workflows/run/wait-registry.ts` -> `delegation/policy.ts`).
+- **Sealed process-wide registries (7):** `core/runner-registry.ts`, `runs/removal-slots.ts`,
+  `runs/worker-executions-registry.ts`, `ci-wait/tool-registry.ts`,
+  `workflows/run/wait-kind-registry.ts`, `workflows/step-kind-registry.ts`, and
+  `core/cli-registry.ts`.
+- **Zero-core-edit fixture tests (4):** `ci-wait/fixture-tool.test.ts`,
+  `workflows/run/fixture-wait.test.ts`, `workflows/plugin-step.test.ts`, and
+  `core/cli-registry.test.ts`.
+- **Data-driven lint tables:** `workflows/wait-kind-ids.ts` and `workflows/step-kind-ids.ts`
+  replace hardcoded lists in `lint/owner-reader-rules.ts` and `lint/test-enum-literal.ts` and stay
+  verified by `workflows/extension-ids.test.ts`.

@@ -47,7 +47,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
-| 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Active: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md) |
+| 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
 | 4 | Loader and package format | Not filed |
 | 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
 | 6 | Cockpit slots | Not filed |
@@ -109,7 +109,7 @@ store through testkits.
 
 ### Step 3: open the small tables
 
-Filed as epic hearsay-tools/squawk#4152 ([spec](2026-11-23-open-registries-and-tables.md), [plan](2026-11-23-open-registries-and-tables-plan.md)).
+Epic hearsay-tools/squawk#4152 ([spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)).
 
 Slice 0 adopts one two-phase lifecycle rule (**register, then seal, then read**) in `core/registry.ts` and migrates the three existing process-wide registries (`core/runner-registry.ts`, `runs/removal-slots.ts`, and `runs/worker-executions-registry.ts`) onto it before step 3 opens the four new tables (owner decision, 2026-11-23).
 
@@ -121,6 +121,19 @@ plugin validates. Lint rules that hold a list of names read the table.
 
 The owner's layer calls in the core layer map spec say which rows ship with the core: the wait
 kinds `human`, `timer` and `process`, and the tools `cezar_ask`, `cezar_done` and `cezar_wait`.
+
+Done on 2026-11-23.
+[ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)
+records the result. All seven process-wide registries (`core/runner-registry.ts`,
+`runs/removal-slots.ts`, `runs/worker-executions-registry.ts`, `ci-wait/tool-registry.ts`,
+`workflows/run/wait-kind-registry.ts`, `workflows/step-kind-registry.ts`, and
+`core/cli-registry.ts`) use `core/registry.ts` and fail closed when read unsealed. Four fixture
+tests (`ci-wait/fixture-tool.test.ts`, `workflows/run/fixture-wait.test.ts`,
+`workflows/plugin-step.test.ts`, and `core/cli-registry.test.ts`) prove each open table accepts a
+custom extension with zero edits to core files. `layer-import.baseline.json` shrank from 102
+entries to 93 (all seven required target entries plus two adjacent entries removed), and
+`owner-reader-rules.ts` and `test-enum-literal.ts` read plain data modules
+(`workflows/wait-kind-ids.ts`, `workflows/step-kind-ids.ts`).
 
 ### Step 4: loader and package format
 

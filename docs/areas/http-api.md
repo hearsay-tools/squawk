@@ -21,6 +21,18 @@ key of an unregistered runner from an object keyed by runner. The handler narrow
 `registeredRunnerId`. `GET /api/v1/runners` lists the registered runners and their display data
 (hearsay-tools/squawk#3897).
 
+Wait and workflow step unions keep their built-in arms strict and add one open `kind: 'plugin'`
+member ([ADR 0069](../adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)):
+`packages/contract/src/waits.ts`, `wait-tools.ts`, and `activity.ts` carry plugin waits
+(`pluginKind`, `summary`, optional `deadline`, `via`, `payload`, optional `result`), ranked in
+`computeWaitingOn` after `process` and before `timer`, mapped in `deriveAttention` to
+`monitoring` (`label: waitingOn.summary || 'waiting'`), and mapped in `deriveWebhookState` to
+`'waiting-other'`; `packages/contract/src/workflows.ts`, `run-status.ts`, and
+`runs.ts` carry plugin workflow steps (`pluginKind`, optional `config`). Over its private IPC
+socket, `CiToolController` (`ci-wait/controller.ts`, `ci-wait/tool-registry.ts`) serves
+`GET /api/v1/tools` and `POST /api/v1/tools/:name` so external tool hosts discover and invoke
+session-enabled registered tools dynamically.
+
 ## Invariants
 
 Four invariants. A feature that breaks any of them compiles on its own branch and stops working
