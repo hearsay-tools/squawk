@@ -1,7 +1,20 @@
 import { join } from 'node:path';
+import { runGit } from '../git-command.ts';
 import { legacyItemOwner } from '../legacy-runs.ts';
 import { keptAmong } from './live.ts';
-import { currentLeftovers, gitOutput, LEGACY_PROJECT_DIR, legacyStateLeft, MIGRATED_PROJECT_DIR } from './plan.ts';
+import { currentLeftovers, LEGACY_PROJECT_DIR, legacyStateLeft, MIGRATED_PROJECT_DIR } from './plan.ts';
+
+/**
+ * The untracked and ignored files under `.ai/cezar/`; a nested Git worktree is one entry that ends
+ * in `/`. Undefined when the listing may be incomplete: Git failed, or it warned (a directory it
+ * cannot open is skipped with a warning and exit 0).
+ */
+async function untrackedListing(root: string): Promise<string | undefined> {
+  try {
+    const { stdout, stderr } = await runGit(['ls-files', '-z', '--others', '--', LEGACY_PROJECT_DIR], { cwd: root, maxBuffer: 256 * 1024 * 1024, timeout: 60_000 });
+    return stderr.trim() ? undefined : stdout;
+  } catch { return undefined; }
+}
 
 /**
  * Whether a moved project's `.ai/cezar/` holds anything a move would act on now: the cockpit's
@@ -10,7 +23,7 @@ import { currentLeftovers, gitOutput, LEGACY_PROJECT_DIR, legacyStateLeft, MIGRA
  * count: the `cockpit.lock*` ownership claims, tracked files (the move prints their `git mv`), and
  * the items of the tasks the kept-task list names while each can still resume. An item of any
  * other kind, or of a task that has since been archived or deleted, counts. When Git, the kept-task
- * list or a run store cannot be read, the answer is true and the plan decides.
+ * list or a run store cannot be read, or Git warns while it lists, the answer is true and the plan decides.
  */
 export async function legacyMoveWorkLeft(root: string): Promise<boolean> {
   const source = join(root, ...LEGACY_PROJECT_DIR.split('/'));
@@ -20,8 +33,7 @@ export async function legacyMoveWorkLeft(root: string): Promise<boolean> {
   const leftovers = currentLeftovers(destination);
   if (leftovers === undefined) return true;
   const recorded = new Set(leftovers);
-  // Untracked and ignored files; a nested Git worktree is one entry that ends in `/`.
-  const listed = await gitOutput(root, ['ls-files', '-z', '--others', '--', LEGACY_PROJECT_DIR]);
+  const listed = await untrackedListing(root);
   if (listed === undefined) return true;
   const owners = new Set<string>();
   for (const path of listed.split('\0').filter(Boolean)) {

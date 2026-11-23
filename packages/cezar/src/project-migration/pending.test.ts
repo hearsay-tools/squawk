@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
@@ -78,6 +78,17 @@ describe('the check before a moved project is planned', { timeout: TIMEOUT }, ()
     await movedKeepingWorker();
     writeFileSync(join(project.newDir, LEGACY_RUNS_FILE), 'not json');
     expect(await legacyMoveWorkLeft(project.root)).toBe(true);
+  });
+
+  it('finds work when Git skips a directory it cannot open, since the listing may be incomplete', async () => {
+    await movedKeepingWorker();
+    // A kept task's scratch directory: Git warns, skips it and still exits 0.
+    const locked = join(project.dataDir, 'tmp', WORKER);
+    mkdirSync(locked, { recursive: true });
+    writeFileSync(join(locked, 'scratch.txt'), 'x');
+    expect(await legacyMoveWorkLeft(project.root)).toBe(false);
+    chmodSync(locked, 0o000);
+    try { expect(await legacyMoveWorkLeft(project.root)).toBe(true); } finally { chmodSync(locked, 0o700); }
   });
 
   it('says why a moved project\'s leftover items did not move', async () => {
