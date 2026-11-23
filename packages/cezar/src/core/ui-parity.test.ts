@@ -98,7 +98,7 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
       ),
   ],
   ['turn.completed with a stopReason', (events) => events.some((e) => e.type === 'turn.completed' && e.stopReason !== undefined)],
-  ['hook items (hook_response / hook/completed)', (events) => items(events).some((item) => item.kind === 'hook')],
+  ['hook items (hook_response / hook/completed)', (events) => items(events).some((item) => item.kind === 'hook'), 'UI2'],
   // hearsay-tools/cezarion#2431: a child that outlives its spawn call keeps its root task item
   // running, marked `background`, and completes it once when the child ends.
   [BACKGROUND_ROW, (events) => {
@@ -107,13 +107,6 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
     return background.some((item) => item.status === 'running') && background.some((item) => item.status !== 'running');
   }],
 ] as const;
-
-/** hearsay-tools/cezarion#961: a runner whose declared `hookEvents` is `none` streams no hook
- * lifecycle; its facts row names the wire. The inverse assertion keeps a fabricated hook item from
- * erasing the gap.
- */
-const NO_HOOK_TELEMETRY = new Set(runnersWhere(facts => facts.hookEvents === 'none'));
-const HOOK_ROW = 'hook items (hook_response / hook/completed)';
 
 /** hearsay-tools/cezarion#2431: only a runner whose declared `nativeSubagents` is `reported`
  * reports a backgrounded child's end. On a `turn-held` wire no child outlives a parent turn; on
@@ -126,16 +119,10 @@ describe('protocol v2 backend parity (every mapper emits every matrix capability
   for (const backend of BACKENDS) {
     const events = fixtureEvents(backend);
     for (const [name, produced, criterion] of CAPABILITIES) {
-      const planGap = criterion ? mockRows()[backend]!.parityExemptions?.[criterion] : undefined;
-      if (planGap) {
-        it(`${backend} explicitly lacks ${name} (${planGap.reason})`, () => {
-          expect(planGap.kind).toBe('capability-absent');
-          expect(produced(events)).toBe(false);
-        });
-        continue;
-      }
-      if (name === HOOK_ROW && NO_HOOK_TELEMETRY.has(backend)) {
-        it(`${backend} explicitly lacks ${name} (its wire reports no hook lifecycle)`, () => {
+      const gap = criterion ? mockRows()[backend]!.parityExemptions?.[criterion] : undefined;
+      if (gap) {
+        it(`${backend} explicitly lacks ${name} (${gap.reason})`, () => {
+          expect(gap.kind).toBe('capability-absent');
           expect(produced(events)).toBe(false);
         });
         continue;

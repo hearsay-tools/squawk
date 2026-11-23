@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { join } from 'node:path';
 import { lifecycleCall, ciPrompt, toolPrompt, probeCiTool } from './mock-ci-tool.mjs';
-import { scenarioFor, play } from './mock-scenario.mjs';
+import { afterParityPark, scenarioFor, play } from './mock-scenario.mjs';
 import { withoutSessionContextParts } from './mock-session-context.mjs';
 import { loadControls } from './mock-controls.mjs';
 import { waitForRelease } from './mock-lifecycle.mjs';
@@ -78,6 +78,7 @@ async function prompt(frame) {
   const text = promptText(frame);
   if (text === 'mock:account-homes') { accountHomes(frame); return; }
   if (text === 'mock:transcript-read') { transcriptRead(frame); return; }
+  if (text === 'mock:transcript-hooks') { transcriptHooks(frame); return; }
   if (delivery?.rejects(text)) { write({ id: frame.id, error: { code: -32000, message: 'owned turn rejected' } }); return; }
   if (active) { steer(frame, text); return; }
   let cancel;
@@ -117,20 +118,41 @@ function accountHomes(frame) {
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   reply(frame.id, { stopReason: 'end_turn' });
 }
+/** Appends rows to the session's Antigravity transcript file, matching the CLI 1.5.14 layout. */
+function appendTranscriptRows(targetSessionId, rows) {
+  const logs = join(flag('--gemini-dir') ?? '.', 'antigravity-cli', 'brain', targetSessionId, '.system_generated', 'logs');
+  mkdirSync(logs, { recursive: true });
+  appendFileSync(join(logs, 'transcript_full.jsonl'), `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+}
+function hookTranscriptRow(stepIndex, eventName, text) {
+  return {
+    step_index: stepIndex, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+    content: `The following is a <SYSTEM_MESSAGE> not actually sent by the user. It is provided by the system as important information to pay attention to.\n\n<SYSTEM_MESSAGE>\nThe following system message was injected by a ${eventName} hook:\n${text}\n</SYSTEM_MESSAGE>`,
+  };
+}
 /** A read whose completed update carries no result, as on the CLI 1.5.14 wire; its transcript row
  *  lands after that update (cli-tool-output fixture). */
 function transcriptRead(frame) {
-  const logs = join(flag('--gemini-dir') ?? '.', 'antigravity-cli', 'brain', frame.params.sessionId, '.system_generated', 'logs');
   const args = { Path: 'notes.txt' };
   const call = { toolCallId: 'call_transcript', name: 'read_file', args, kind: 'read', title: 'File notes.txt', rawInput: args };
   update({ sessionUpdate: 'tool_call', ...call, status: 'in_progress' });
   update({ sessionUpdate: 'tool_call_update', ...call, status: 'completed' });
-  mkdirSync(logs, { recursive: true });
-  appendFileSync(join(logs, 'transcript_full.jsonl'), `${[
+  appendTranscriptRows(frame.params.sessionId, [
     { step_index: 0, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: 'read_file', args }] },
     { step_index: 1, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-22T21:27:12+01:00\nCompleted At: 2026-11-22T21:27:12+01:00\n1: mock transcript line' },
-  ].map(row => JSON.stringify(row)).join('\n')}\n`);
+  ]);
   content('agent_message_chunk', 'Read notes.txt.');
+  update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+  reply(frame.id, { stopReason: 'end_turn' });
+}
+/** SessionStart and internal SYSTEM reminders written to transcript_full.jsonl, with no tool call. */
+function transcriptHooks(frame) {
+  appendTranscriptRows(frame.params.sessionId, [
+    hookTranscriptRow(1, 'SessionStart', 'SQUEAL · registered at revision 0'),
+    { step_index: 2, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE', content: '<SYSTEM_MESSAGE>\nReminder: work efficiently.\n</SYSTEM_MESSAGE>' },
+  ]);
+  content('agent_message_chunk', 'Checked hooks.');
+  appendTranscriptRows(frame.params.sessionId, [hookTranscriptRow(3, 'Stop', 'Stop hook finished.')]);
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   reply(frame.id, { stopReason: 'end_turn' });
 }
@@ -179,6 +201,7 @@ async function runtimeProbe(text, turn) {
 }
 async function runPrompt(text, turn) {
   if (await runtimeProbe(text, turn)) return;
+  if (text.includes('mock:hook-after-park')) return hookAfterPark(text, turn);
   if (text.includes('mock:permission-late')) return latePermission(turn, text.includes('mock:permission-late-error'));
   // The CLI's quota refusal, verbatim from a live CLI 1.5.14 turn (hearsay-tools/squawk#4098).
   if (text.includes('mock:quota')) { content('agent_message_chunk', '\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 3h54m9s.\n'); return; }
@@ -258,6 +281,17 @@ async function answerAsk(text) {
   const ask = pendingAsk; pendingAsk = undefined;
   update({ sessionUpdate: 'tool_call_update', toolCallId: ask.id, status: 'completed', rawOutput: { output: text } });
   content('agent_message_chunk', `Answer received: ${text}${ask.done || context.session.resumeAfterAsk ? await context.lifecycle(['cezar_done', {}]) : ''}`);
+}
+/** R77: a mid-turn hook in transcript_full.jsonl, a cezar_wait park, then a late hook after the park. */
+async function hookAfterPark(text, turn) {
+  const targetSession = sessionId;
+  appendTranscriptRows(targetSession, [hookTranscriptRow(1, 'PreInvocation', 'Mid-turn hook context.')]);
+  const wait = await context.lifecycle(['cezar_wait', { kind: 'timer', seconds: 600, note: 'Check hook status.' }]);
+  content('agent_message_chunk', `Watching.${wait}`);
+  turn.afterTurn = async () => {
+    await afterParityPark(text);
+    appendTranscriptRows(targetSession, [hookTranscriptRow(5, 'Stop', 'Late hook processed.')]);
+  };
 }
 /** P8: the turn ends after cezar_done; a background command then wakes the idle session, which asks. */
 async function latePermission(turn, fail) {

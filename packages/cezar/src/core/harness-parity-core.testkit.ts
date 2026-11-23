@@ -504,9 +504,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
     'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
-  // hearsay-tools/cezarion#961 wire survey 2026-10-15; each runner's hookEvents comment names its wire.
-  ...exemptWhere('R77', 'scenario-unconstructible', facts => facts.hookEvents === 'none', () =>
-    'This wire carries no hook lifecycle frame: hooks run inside the harness, so no hook item can arrive after a park.'),
   ...exceptRunner('codex').map(backend => ({
     criterion: 'F11', backend, kind: 'scenario-unconstructible' as const,
     reason: 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
@@ -533,6 +530,10 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
 
 // A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
 requireDeclaredWhere('A9', facts => facts.nativeAsk !== 'answerable');
+// R77 & UI2: hook telemetry exists only where hookEvents is 'reported'; a runner declaring 'none'
+// must name its wire gap explicitly in runners/<id>/mock.ts rather than self-exempting via facts.
+requireDeclaredWhere('R77', facts => facts.hookEvents === 'none');
+requireDeclaredWhere('UI2', facts => facts.hookEvents === 'none');
 
 /**
  * One exemption for each runner whose declared facts match (hearsay-tools/cezarion#2991), so a row

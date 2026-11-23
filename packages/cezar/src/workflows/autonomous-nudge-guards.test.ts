@@ -254,6 +254,12 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     nudges.noteNudgeActivity(id, state, session, late);
     expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
     expect(state.boundary.nudge).not.toHaveProperty('answered', true);
+    // A native hook item (including a delayed Antigravity transcript hook) is passive harness output, not a model reply.
+    const hook = { type: 'item.completed', item: { kind: 'hook' } } as const;
+    nudges.noteNoWaitNudgeContent(id, state, session, hook);
+    nudges.noteNudgeActivity(id, state, session, hook);
+    expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
+    expect(state.boundary.nudge).not.toHaveProperty('answered', true);
     nudges.noteNoWaitNudgeContent(id, state, session, { type: 'item.updated', item: {} });
     expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   });

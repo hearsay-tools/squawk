@@ -108,6 +108,19 @@ it('fills a read card from the CLI transcript row written after the wire complet
   await session.result;
 });
 
+it('emits hook items from SYSTEM_SDK transcript rows and ignores internal SYSTEM reminders', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = [];
+  const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:transcript-hooks', env: { GEMINI_HOME: join(cwd, 'account') } }, event => {
+    if (event.type === 'turn-end') session.end();
+  }, { onUiEvent: event => { ui.push(event); } });
+  await session.result;
+  const hooks = ui.flatMap(event => event.type === 'item.completed' && event.item.kind === 'hook' ? [event.item] : []);
+  expect(hooks).toEqual([
+    { kind: 'hook', id: 'hook_step_1', event: 'SessionStart', status: 'completed', entries: [{ kind: 'context', text: 'SQUEAL · registered at revision 0' }] },
+    { kind: 'hook', id: 'hook_step_3', event: 'Stop', status: 'completed', entries: [{ kind: 'context', text: 'Stop hook finished.' }] },
+  ]);
+});
+
 it('keeps an accepted done when the CLI reports a provider error afterwards, and shows the error as a diagnostic', async () => {
   const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];
   const session = new AntigravityRunner({ bin }).startSession({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:permission-late-error' }, event => {

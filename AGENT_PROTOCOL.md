@@ -204,7 +204,8 @@ Owners. Paths are relative to `packages/cezar/src/`.
   `core/harness-parity-core.testkit.ts`. The table holds the rows it selects by facts and the
   rows that span every runner but one. A row for one runner is that runner's
   `mock.parityExemptions` (`runners/<id>/mock.ts`), which the table reads; A9 is declared there
-  exactly where `facts.nativeAsk` is not `answerable`. The wait rows use the same table, except
+  exactly where `facts.nativeAsk` is not `answerable`, and R77 and UI2 exactly where
+  `facts.hookEvents` is `none`. The wait rows use the same table, except
   the subagent wait rows: `SUBAGENT_EXEMPTIONS` in `workflows/waits-subagents-rows.testkit.ts`.
 - **Tiers:** `driveSeam` (`core/harness-parity-core.testkit.ts`) drives a real runner class
   against its own offline mock. `driveRun` (`core/workflow-parity-core.testkit.ts`) drives a

@@ -12,8 +12,8 @@ vi.mock('./runner-fact-rows.testkit.ts', async (load) => {
   const rows = actual.factRows();
   const facts = {
     ...rows,
-    codex: { ...rows.codex, hookEvents: 'none', childWork: 'none', transport: 'http', humanPromptHold: 'acknowledgement' },
-    pi: { ...rows.pi, hookEvents: 'reported', childWork: 'nested', nativePermission: 'after-turn', humanPromptHold: 'consumption' },
+    codex: { ...rows.codex, childWork: 'none', transport: 'http', humanPromptHold: 'acknowledgement' },
+    pi: { ...rows.pi, childWork: 'nested', nativePermission: 'after-turn', humanPromptHold: 'consumption' },
     opencode: { ...rows.opencode, transport: 'stdio', nativePermission: 'none' },
   } as const;
   const rowsById = facts as unknown as Record<string, (typeof facts)[keyof typeof facts]>;
@@ -36,10 +36,6 @@ function where(matches: (facts: RunnerFacts) => boolean): string[] {
 }
 
 describe('parity expectations follow the runner facts rows', () => {
-  it('exempts R77 exactly where the wire carries no hook frame (hookEvents)', () => {
-    expect(exempted('R77')).toEqual(where(facts => facts.hookEvents === 'none'));
-  });
-
   it.each(['S9', 'R12', 'R15'])('exempts %s exactly where the wire carries no child work (childWork)', criterion => {
     expect(exempted(criterion)).toEqual(where(facts => facts.childWork === 'none'));
   });

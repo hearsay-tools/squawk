@@ -7,7 +7,7 @@ export const ANTIGRAVITY_MOCK = {
   sessionStore: { env: 'CEZ_MOCK_ANTIGRAVITY_SESSIONS_FILE', argsFileSuffix: '.antigravity-sessions.json' },
   script: 'mock-acp.mjs', toolGrantObservation: 'permission-policy', promptResponseEndsTurn: true, defaultApprovalEcho: 'Approval response: allow', malformedApprovalEcho: 'Malformed permission refused', binEnv: 'HSQ_ANTIGRAVITY_BIN',
   scenarios: { ...commonScenarios, ...STDIO_ASK_MOCK_SCENARIOS, ...PROVIDER_ERROR_MOCK_SCENARIOS,
-    approval: 'mock:approval', 'approval-turn-end': 'mock:approval-turn-end', 'ask-bad': 'mock:ask-bad', 'ask-resume': 'mock:ask-native mock:resume-cezar-done', 'permission-late': 'mock:permission-late', 'permission-default': 'mock:permission-default', 'approval-malformed': 'mock:approval-malformed', 'provider-unavailable': 'mock:provider-unavailable' },
+    approval: 'mock:approval', 'approval-turn-end': 'mock:approval-turn-end', 'ask-bad': 'mock:ask-bad', 'ask-resume': 'mock:ask-native mock:resume-cezar-done', 'permission-late': 'mock:permission-late', 'permission-default': 'mock:permission-default', 'approval-malformed': 'mock:approval-malformed', 'provider-unavailable': 'mock:provider-unavailable', 'hook-after-park': 'mock:hook-after-park' },
   askResumeCases: [{ kind: 'ask_question', scenario: 'ask-resume', answer: 'Question: Vitest', header: 'Question' }],
   scenarioEnv: { approval: { HSQ_APPROVAL_GATE: '1' }, 'approval-turn-end': { HSQ_APPROVAL_GATE: '1' }, 'permission-late': { HSQ_APPROVAL_GATE: '1' },
     // P8's Continue variant sends permission-late to a run started as cezar-done: its late request needs the same gate.

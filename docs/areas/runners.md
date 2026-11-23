@@ -44,7 +44,7 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `runners/project-agents-file.ts`) names no runner |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
-| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
+| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`, and R77/UI2 exactly where `facts.hookEvents` is `none`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
 | `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
 | `loadAdapter()` | `<id>-runner.ts` (or the adapter's own name) | The `AgentRunner` class |
 
@@ -488,12 +488,13 @@ folder in its own temp folder, outside the checkout, whose `.agents/hooks.json` 
 `swarm`. The agent reads the denial and goes on; Squawk workers replace subagents. An added
 folder leaves the command cwd on the checkout (docs/runners/antigravity-wire.md).
 
-The CLI sends no result for a read, an MCP call or a subagent tool. Squawk reads it from the
+The CLI sends no result for a read, an MCP call or a subagent tool, and sends no hook frame on ACP. Squawk reads both from the
 session's transcript in the account folder
-(`antigravity-cli/brain/<session>/.system_generated/logs/transcript_full.jsonl`) and adds it to
+(`antigravity-cli/brain/<session>/.system_generated/logs/transcript_full.jsonl`): missing tool results amend
 the completed tool card (`item.updated` with `late: true`, which never counts as a reply to a
-nudge), bounded to 64 Ki characters. That file is the CLI's private format,
-pinned for CLI 1.5.14 by a golden; when it is missing or changes shape, the card has no output and
+nudge), and injected hook messages (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`) emit
+`item.completed` `UiHookItem` cards while internal `source: "SYSTEM"` reminders stay hidden, each bounded to 64 Ki characters. That file is the CLI's private format,
+pinned for CLI 1.5.14 by goldens; when it is missing or changes shape, the card has no output and
 the run goes on. The CLI writes a provider failure as the message `"\n⚠ <error>\n"`; when that
 message is the turn's last work, the turn and the session fail. After an accepted `cezar_done` the
 same error is a diagnostic and the run keeps its result.

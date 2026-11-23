@@ -61,12 +61,12 @@ export function nudgeHeldRunning(state: ActiveRun): boolean {
 
 /** The work the no-progress guard counts as the model working (`MODEL_PROGRESS` in
  *  `core/managed-session.ts`), with the UI frames that carry it: a turn start and a top-level item.
- *  Heartbeats, usage, a nested subagent's items and a late display update are not. */
+ *  Heartbeats, usage, hook items, nested subagent items and late display updates are not. */
 function isModelActivity(event: NudgeEvent): boolean {
   if (['turn.started', 'text', 'tool-call', 'tool-result', 'image'].includes(event.type)) return true;
-  return event.type.startsWith('item.') && event.item?.parentItemId === undefined && event.late !== true;
+  return event.type.startsWith('item.') && event.item?.kind !== 'hook' && event.item?.parentItemId === undefined && event.late !== true;
 }
-type NudgeEvent = { type: string; item?: { parentItemId?: string }; late?: true };
+type NudgeEvent = { type: string; item?: { kind?: string; parentItemId?: string }; late?: true };
 
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
@@ -311,14 +311,14 @@ export class TurnNudges {
     return true;
   }
 
-  /** Heartbeats, nested subagent items and late display updates are not a reply. A `turn.started` counts only while the
+  /** Heartbeats, hook items, nested subagent items and late display updates are not a reply. A `turn.started` counts only while the
    *  reply timer runs or after it expired on this session: OpenCode emits a synthetic one
    *  inside `sendAgentMessage`, and a later send goes through `submitAgentInput`, which resumes. */
   isNoWaitNudgeReply(state: ActiveRun, event: NudgeEvent): boolean {
     if (event.type === 'turn.started') return state.boundary.noWaitNudgeReplyTimer !== undefined || state.boundary.noWaitNudgeParked === state.liveSession.session;
     if (event.type === 'text' || event.type === 'tool-call' || event.type === 'tool-result') return true;
     if (event.type === 'item.delta' || !event.type.startsWith('item.')) return false;
-    return event.item?.parentItemId === undefined && event.late !== true;
+    return event.item?.kind !== 'hook' && event.item?.parentItemId === undefined && event.late !== true;
   }
 
   /** A reply to the nudge clears its bound. One that arrives after the bound parked the run resumes

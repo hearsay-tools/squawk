@@ -146,7 +146,7 @@ entity was not found.\n"`, and a broken custom agent as `"\n⚠ failed to constr
 | `nativeAsk` | `answerable` | answerable, by another route | `ask_question` is a `tool_call` (title `Run ask_question`, `rawInput.questions[{question, options, is_multi_select}]`). The question comes as `agent_message_chunk` text ("- [1] (Recommended) Red"), and the prompt ends with `end_turn` while the call is `pending`. The next `session/prompt` is the answer: the call completes in that prompt (`cli-interaction-question.ndjson`). No `session/request_permission`, no `interaction_` id. |
 | `nativeSubagents` | `turn-held` | **`none`** since hearsay-tools/squawk#4098: Squawk denies the subagent tools | `invoke_subagent` completes at once and the child runs as a separate conversation (`brain/<child id>/`, `cli-subagent.ndjson`). A child's permission requests never reach the ACP client, so each command it needs approved times out after 60 s (see [Native subagents and tool results](#native-subagents-and-tool-results-hearsay-toolssquawk4098-hearsay-toolssquawk4099)). |
 | `childWork` | `none` | same | child calls carry no link to `invoke_subagent` (`cli-subagent.ndjson`) |
-| `hookEvents` | `none` | same | no hook frame in any CLI fixture; hooks not probed |
+| `hookEvents` | `none` | **`reported`** (via transcript) | The ACP wire carries no hook frame, but the CLI writes injected hook messages (`SessionStart`, `PreInvocation`, `PostInvocation`, `UserPromptSubmit`, `Stop`) to `transcript_full.jsonl` as `SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"` (`cli-hooks.transcript.jsonl`). Internal CLI reminders use `source: "SYSTEM"` and are ignored. |
 | `humanPromptHold` | `acknowledgement` | same | no consumption signal |
 | `nativeTimerTool` | `null` | **changes to `schedule`** | `/schedule in 20 seconds: …` sent `tool_call` `Run schedule` (`rawInput {DurationSeconds, Prompt}`) and the turn ended. 20 s later, with no prompt open, the call completed and the agent streamed "TIMER-FIRED" (`cli-schedule-timer.ndjson`). The timer wakes an idle session. |
 | `costReport` | `per-turn` | same for prompts | the `session/prompt` result carries the turn's `usage`. Work after the turn (timer, background completion) reports only `usage_update`. |
@@ -279,7 +279,11 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
    and goes with the session's temp folder.
 10. A read, MCP or subagent tool whose completed update carries no result gets its output from
     the session's transcript row, as an `item.updated` of the completed card marked `late: true`.
-    Nudge accounting ignores it: it is a display update, not the agent's reply.
+    Nudge accounting ignores it: it is a display update, not the agent's reply. Injected native
+    hook messages (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`, prefixed with
+    `The following system message was injected by a <Event> hook:`) are read from the same
+    transcript and emitted as `item.completed` `UiHookItem` events; internal `source: "SYSTEM"`
+    reminders are ignored.
 
 ### Native subagents and tool results (hearsay-tools/squawk#4098, hearsay-tools/squawk#4099)
 
@@ -386,6 +390,7 @@ what the mapper makes of the frames.
 | `cli-interaction-question.ndjson` | `ask_question` as text with `end_turn`, then the next prompt as the answer |
 | `cli-subagent.ndjson` | `invoke_subagent`, `manage_subagents`, `send_message` and the child's command |
 | `cli-tool-output.ndjson` | A read, an MCP result, the same read again, an MCP `isError` result and an `invoke_subagent` denied by Squawk's hook; no completed update carries a result. Recorded with a Google sign-in, no shim. `cli-tool-output.transcript.jsonl` is the session's transcript; `cli-tool-output.outputs.json` the output Squawk reads from it for each call |
+| `cli-hooks.transcript.jsonl` | Scrubbed live `SYSTEM_SDK` `SYSTEM_MESSAGE` rows (`SessionStart` and `PreInvocation` hooks) plus an internal `SYSTEM` reminder row; `cli-hooks.expected.json` holds the `UiHookItem` events Squawk maps from it |
 | `cli-background-command.ndjson` | A background command; its completion and the agent's text arrive after the turn |
 | `cli-permission-after-turn.ndjson` | A permission request after the turn ended |
 | `cli-schedule-timer.ndjson` | A `schedule` timer that fires after the turn and wakes the session |

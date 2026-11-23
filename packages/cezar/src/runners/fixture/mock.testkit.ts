@@ -36,5 +36,13 @@ export const FIXTURE_MOCK = {
       kind: 'capability-absent',
       reason: 'The fixture adapter resolves agent input once its stdin line is written, before the mock starts the turn, so no turn ends with its input unacknowledged.',
     },
+    R77: {
+      kind: 'scenario-unconstructible',
+      reason: 'The fixture mock reads one prompt line and emits no hook lifecycle frame, so no hook item can arrive after a park.',
+    },
+    UI2: {
+      kind: 'capability-absent',
+      reason: 'The fixture mock reads one prompt line and emits no hook event.',
+    },
   },
 } as const satisfies RunnerMock;

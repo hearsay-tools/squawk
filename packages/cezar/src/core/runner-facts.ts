@@ -39,8 +39,9 @@ export interface RunnerFacts {
    * the wire carries no child session and no child transcript.
    */
   readonly childWork: 'nested' | 'none';
-  /** Hook runs. `reported`: the wire streams each hook run, which Squawk maps to a hook item.
-   *  `none`: hooks run inside the harness and the wire carries no hook frame. */
+  /** Hook runs. `reported`: the runner emits hook items (from wire frames or its session
+   *  transcript). `none`: hooks run inside the harness with no reported output; a runner declaring
+   *  `none` must declare named `R77` and `UI2` exemptions in `runners/<id>/mock.ts`. */
   readonly hookEvents: 'reported' | 'none';
   /**
    * How long a human prompt on its way to the wire holds agent input back. `none`: agent input is
