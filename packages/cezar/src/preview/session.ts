@@ -210,12 +210,17 @@ export class PreviewSession {
   /** Prepares the page: events, the cursor binding and the injected script, as the prototype did. */
   static async create(cdp: Cdp, opts: SessionOptions = {}): Promise<PreviewSession> {
     const session = new PreviewSession(cdp, opts);
-    await cdp.send('Page.enable');
-    await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true });
-    await cdp.send('Runtime.enable');
-    await cdp.send('Runtime.addBinding', { name: '__cursor' });
-    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
-    return session;
+    try {
+      await cdp.send('Page.enable');
+      await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true });
+      await cdp.send('Runtime.enable');
+      await cdp.send('Runtime.addBinding', { name: '__cursor' });
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
+      return session;
+    } catch (error) {
+      cdp.close();
+      throw error;
+    }
   }
 
   /** Makes `viewer` the one the page streams to and starts the screencast at the current viewport. */
@@ -289,7 +294,7 @@ export class PreviewSession {
     this.viewer = undefined;
     this.disarmWatchdog();
     const reset = this.enqueue(() => this.leaveDensity()).catch(() => {});
-    // CDP calls have no timeout: a queued call that never answers must not keep the session open.
+    // The queue can contain several bounded calls; closing must not wait for all their budgets.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const bound = new Promise<void>(resolve => {
       timer = setTimeout(resolve, CLOSE_WAIT_MS);

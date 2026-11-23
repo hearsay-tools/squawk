@@ -142,6 +142,29 @@ describe('cdpOverPipe (hearsay-tools/cezarion#784)', () => {
     return { connection: cdpOverPipe(toBrowser, fromBrowser), commands, write: (text: string) => fromBrowser.write(text), end: () => fromBrowser.end() };
   }
 
+  it('times out an unanswered call, removes its pending entry and ignores a late reply', async () => {
+    vi.useFakeTimers();
+    const set = vi.spyOn(Map.prototype, 'set');
+    const pipe = fakePipe();
+    try {
+      const call = pipe.connection.call('Target.attachToTarget', {}, undefined, 100);
+      const pending = set.mock.contexts.at(-1) as Map<number, unknown>;
+      const rejected = expect(call).rejects.toThrow('Target.attachToTarget: CDP command timed out after 100 ms');
+      await vi.advanceTimersByTimeAsync(100);
+      await rejected;
+      expect(pending.size).toBe(0);
+      pipe.write('{"id":1,"result":{"sessionId":"late"}}\0');
+      const next = pipe.connection.call('Page.enable', {}, undefined, 100);
+      pipe.write('{"id":2,"result":{}}\0');
+      expect(await next).toMatchObject({ result: {} });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      pipe.connection.close();
+      set.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('ends every command with a NUL byte and names its session only when it has one', async () => {
     const pipe = fakePipe();
     // Never answered: closing the pipe below fails them, which is not what this case checks.

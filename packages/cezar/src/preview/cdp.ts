@@ -29,8 +29,8 @@ export type CdpMessage = {
 export interface CdpConnection {
   /** A page or browser session's client. Undefined is the root session. */
   session(sessionId: string | undefined): Cdp;
-  /** Sends one command and settles with its raw reply, error included: the proxy forwards it as it came. */
-  call(method: string, params: unknown, sessionId: string | undefined): Promise<CdpMessage>;
+  /** Sends one command and settles with its raw reply, error included. Rejects after 15 s by default. */
+  call(method: string, params: unknown, sessionId: string | undefined, timeoutMs?: number): Promise<CdpMessage>;
   /** `call` with a callback run in wire order, before any message read after the reply: a proxy
    *  that forwards replies and events keeps the order the browser sent them in. */
   request(method: string, params: unknown, sessionId: string | undefined, onReply: (msg: CdpMessage) => void): void;
@@ -82,8 +82,8 @@ function createConnection(transport: Transport): CdpConnection {
     markClosed();
   });
 
-  const request = (method: string, params: unknown, sessionId: string | undefined, resolve: (msg: CdpMessage) => void): void => {
-    if (isClosed) return resolve({ error: { message: 'CDP connection closed' } });
+  const request = (method: string, params: unknown, sessionId: string | undefined, resolve: (msg: CdpMessage) => void): number | undefined => {
+    if (isClosed) { resolve({ error: { message: 'CDP connection closed' } }); return; }
     const id = ++nextId;
     pending.set(id, { resolve, method });
     try {
@@ -92,9 +92,26 @@ function createConnection(transport: Transport): CdpConnection {
       pending.delete(id);
       resolve({ id, error: { message: error instanceof Error ? error.message : String(error) } });
     }
+    return id;
   };
-  const call = (method: string, params: unknown, sessionId: string | undefined): Promise<CdpMessage> =>
-    new Promise(resolve => request(method, params, sessionId, resolve));
+  // Internal calls must settle even when Chromium keeps its pipe open but stops answering.
+  // The proxy's wire-ordered request() remains unbounded for agent commands such as evaluations.
+  const call = (method: string, params: unknown, sessionId: string | undefined, timeoutMs = 15_000): Promise<CdpMessage> =>
+    new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      const id = request(method, params, sessionId, reply => {
+        settled = true;
+        clearTimeout(timer);
+        resolve(reply);
+      });
+      if (settled || id === undefined) return;
+      timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms`));
+      }, timeoutMs);
+      timer.unref?.();
+    });
 
   const onEvent = (fn: (msg: CdpMessage) => void) => {
     eventFns.add(fn);

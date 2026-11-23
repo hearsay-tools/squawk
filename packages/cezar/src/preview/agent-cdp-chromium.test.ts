@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import { createPreviewCdpSocket } from '../server/preview-cdp-socket.ts';
 import { attachUpgradeRouter } from '../server/upgrade-router.ts';
 import { previewCdpUrl } from './agent-address.ts';
@@ -25,7 +25,7 @@ allowLaunches('browser');
 
 // bound: page navigation and the first streamed frame settle on their own events;
 // this budget guards a hung browser or stream.
-const BUDGET_MS = 120_000;
+const BUDGET_MS = 30_000;
 const bin = resolveChromium(undefined, undefined, undefined, undefined, testHome());
 
 let servers: Server[] = [];
@@ -47,27 +47,81 @@ async function listen(server: Server): Promise<number> {
 function agentClient(url: string) {
   const ws = new WebSocket(url);
   let nextId = 0;
-  const replies = new Map<number, (msg: { result?: unknown; error?: { message: string } }) => void>();
-  const waiters: Array<{ method: string; sessionId: string; resolve(): void }> = [];
+  type Reply = { result?: unknown; error?: { message: string } };
+  const replies = new Map<number, { resolve(msg: Reply): void; reject(error: Error): void }>();
+  const waiters = new Set<{ method: string; sessionId: string; resolve(): void; reject(error: Error): void }>();
+  let failure: Error | undefined;
+  const fail = (error: Error) => {
+    failure ??= error;
+    for (const reply of replies.values()) reply.reject(failure);
+    replies.clear();
+    for (const waiter of waiters) waiter.reject(failure);
+    waiters.clear();
+  };
+  ws.on('close', (code, reason) => fail(new Error(`Agent CDP socket closed: ${code} ${reason.toString()}`)));
+  ws.on('error', error => fail(error));
   ws.on('message', raw => {
     const msg = JSON.parse(String(raw));
-    if (typeof msg.id === 'number') return replies.get(msg.id)?.(msg);
-    for (const waiter of waiters.splice(0)) {
-      if (waiter.method === msg.method && waiter.sessionId === msg.sessionId) waiter.resolve();
-      else waiters.push(waiter);
+    if (typeof msg.id === 'number') {
+      const reply = replies.get(msg.id);
+      replies.delete(msg.id);
+      reply?.resolve(msg);
+      return;
+    }
+    for (const waiter of waiters) {
+      if (waiter.method === msg.method && waiter.sessionId === msg.sessionId) {
+        waiters.delete(waiter);
+        waiter.resolve();
+      }
     }
   });
-  /** Settles on the next `method` event on `sessionId`; subscribe before the command that causes it. */
-  const next = (method: string, sessionId: string) => new Promise<void>(resolve => waiters.push({ method, sessionId, resolve }));
-  const opened = new Promise<void>((resolve, reject) => { ws.once('open', () => resolve()); ws.once('error', reject); });
+  const unavailable = () => failure ?? (ws.readyState !== WebSocket.OPEN ? new Error(`Agent CDP socket is not open: state ${ws.readyState}`) : undefined);
+  /** Subscribe before the command that causes the event. */
+  const next = (method: string, sessionId: string) => new Promise<void>((resolve, reject) => {
+    const error = unavailable();
+    if (error) return reject(error);
+    // bound: Chromium may keep the socket open without emitting the navigation event.
+    const timer = setTimeout(() => {
+      waiters.delete(waiter);
+      reject(new Error(`Waiting for ${method} on ${sessionId}: timed out; socket state ${ws.readyState}`));
+    }, 30_000);
+    const waiter = { method, sessionId, resolve: () => { clearTimeout(timer); resolve(); }, reject: (error: Error) => { clearTimeout(timer); reject(error); } };
+    waiters.add(waiter);
+  });
+  const opened = new Promise<void>((resolve, reject) => {
+    ws.once('open', () => resolve());
+    ws.once('error', reject);
+    ws.once('close', (code, reason) => reject(new Error(`Opening agent CDP socket: ${code} ${reason.toString()}`)));
+  });
   const send = <T>(method: string, params: Record<string, unknown> = {}, sessionId?: string) =>
     new Promise<T>((resolve, reject) => {
+      const error = unavailable();
+      if (error) return reject(error);
       const id = ++nextId;
-      replies.set(id, msg => (msg.error ? reject(new Error(`${method}: ${msg.error.message}`)) : resolve(msg.result as T)));
-      ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      replies.set(id, { reject, resolve: msg => msg.error ? reject(new Error(`${method}: ${msg.error.message}`)) : resolve(msg.result as T) });
+      ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }), error => {
+        if (error) fail(error);
+      });
     });
   return { ws, opened, send, next };
 }
+
+it('rejects pending and later commands and events when the agent socket closes', async () => {
+  const server = createServer();
+  const sockets = new WebSocketServer({ server });
+  cleanups.push(() => { for (const socket of sockets.clients) socket.terminate(); sockets.close(); });
+  const connected = new Promise<WebSocket>(resolve => sockets.once('connection', resolve));
+  const client = agentClient(`ws://127.0.0.1:${await listen(server)}`);
+  cleanups.push(() => client.ws.terminate());
+  await client.opened;
+  const remote = await connected;
+  const command = expect(client.send('Page.enable')).rejects.toThrow('1011 renderer stalled');
+  const event = expect(client.next('Page.loadEventFired', 'S1')).rejects.toThrow('1011 renderer stalled');
+  remote.close(1011, 'renderer stalled');
+  await Promise.all([command, event]);
+  await expect(client.send('Page.enable')).rejects.toThrow('1011 renderer stalled');
+  await expect(client.next('Page.loadEventFired', 'S1')).rejects.toThrow('1011 renderer stalled');
+});
 
 describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)', () => {
   it.skipIf(process.platform === 'win32' || !bin)('navigates the page the pane streams, and cannot close the browser', async () => {
@@ -108,9 +162,8 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     const viewer = fakeViewer();
     await host.handle(ctx, viewer, { t: 'open', target: { agent: true } });
     const loaded = agent.next('Page.loadEventFired', sessionId);
-    await agent.send('Page.navigate', { url: `http://localhost:${appPort}/` }, sessionId);
-    await loaded;
-    await vi.waitFor(() => expect(viewer.messages).toContainEqual({ t: 'url', url: `http://localhost:${appPort}/` }), { timeout: BUDGET_MS, interval: 50 });
+    await Promise.all([loaded, agent.send('Page.navigate', { url: `http://127.0.0.1:${appPort}/` }, sessionId)]);
+    await vi.waitFor(() => expect(viewer.messages).toContainEqual({ t: 'url', url: `http://127.0.0.1:${appPort}/` }), { timeout: BUDGET_MS, interval: 50 });
     await vi.waitFor(() => expect(viewer.frames.length).toBeGreaterThan(0), { timeout: BUDGET_MS, interval: 50 });
     const { result } = await agent.send<{ result: { value: string } }>('Runtime.evaluate', { expression: 'document.title', returnByValue: true }, sessionId);
     expect(result.value).toBe('agent app');
@@ -126,5 +179,5 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     expect(events.at(-1)).toEqual({ type: 'preview.agent-browser', state: 'disconnected' });
     expect(host.ownsBrowser('run-1')).toBe(true);
     host.detach('run-1', viewer);
-  }, BUDGET_MS * 2);
+  }, 240_000);
 });

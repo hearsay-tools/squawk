@@ -36,11 +36,24 @@ export async function waitForExit(browser: BrowserHandle): Promise<void> {
 export async function launchBrowser(profileDir: string, env: NodeJS.ProcessEnv, home: Home): Promise<BrowserHandle> {
   const bin = resolveChromium(undefined, env, undefined, undefined, home);
   if (!bin) throw new ChromiumMissingError('No Chromium found');
-  const { proc, browser: connection } = await launchChromium(bin, profileDir, env);
+  const { proc, browser: wire } = await launchChromium(bin, profileDir, env);
   let tail = '';
   proc.stderr?.on('data', (chunk: Buffer) => {
     tail = (tail + chunk.toString('utf8')).slice(-STDERR_TAIL_CHARS);
   });
+  const diagnose = (error: unknown): never => {
+    const state = proc.exitCode === null && proc.signalCode === null ? 'running' : `exit=${proc.exitCode}, signal=${proc.signalCode}`;
+    throw new Error(`${error instanceof Error ? error.message : String(error)}; Chromium ${state}; stderr tail: ${tail || '(empty)'}`, { cause: error });
+  };
+  // Keep process diagnostics on calls made later during page and agent session setup too.
+  const connection: CdpConnection = {
+    ...wire,
+    call: (...args) => wire.call(...args).catch(diagnose),
+    session: sessionId => {
+      const client = wire.session(sessionId);
+      return { ...client, send: <T>(method: string, params?: Record<string, unknown>) => client.send<T>(method, params).catch(diagnose) };
+    },
+  };
   // Helpers still write the profile for a moment after the main process exits: end them first.
   const exited = new Promise<BrowserExit>(resolve =>
     proc.once('exit', (code, signal) => {
@@ -64,7 +77,7 @@ export async function launchBrowser(profileDir: string, env: NodeJS.ProcessEnv, 
     return { cdp, connection, pageTargetId: page.targetId, exited, close };
   } catch (error) {
     connection.close();
-    void stopChromium(proc);
+    await stopChromium(proc);
     throw error;
   }
 }
