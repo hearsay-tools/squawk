@@ -301,7 +301,8 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
   const config = useConfig()
   const registered = useRunners()
   const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
-  const catalog = useRunnerModels(effectiveRunner)
+  // The model list comes from the account the scheduled run uses: the project's selection.
+  const catalog = useRunnerModels(effectiveRunner, true, availability.repoAccount?.[effectiveRunner])
   const names = [...new Set([...(workflows.data?.workflows ?? []).map((workflow) => workflow.name), ...(draft.workflow ? [draft.workflow] : [])])]
   const runners = [...new Set([...usable, ...(draft.runner ? [draft.runner] : [])])]
   const models = modelsForRunner(effectiveRunner, registered.data, catalog.data, [draft.model])
