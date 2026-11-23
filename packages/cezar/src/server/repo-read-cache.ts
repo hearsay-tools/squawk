@@ -26,7 +26,7 @@ async function refStamp(root: string): Promise<string | undefined> {
   const dir = join(common, 'refs');
   try {
     const paths = (await readdir(dir, { recursive: true })).sort().map((path) => join(dir, path));
-    return await configFilesKey([join(dirname(stamp.configs[1]!), 'HEAD'), ...paths, join(common, 'packed-refs'), join(common, 'FETCH_HEAD'), ...stamp.configs]);
+    return await configFilesKey([join(dirname(stamp.configs[1]!), 'HEAD'), ...paths, join(common, 'reftable', 'tables.list'), join(common, 'packed-refs'), join(common, 'FETCH_HEAD'), ...stamp.configs]);
   } catch { return undefined; }
 }
 

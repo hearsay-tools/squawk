@@ -487,9 +487,10 @@ async function branchPrState(input: ClassifyInput, drafts: Draft[], pending: Dra
   if (!input.hasRemote) return { ...empty, prStateKnown: false };
   const taskRows = displayPrs ? drafts.filter((d) => d.head.name.startsWith(TASK_PREFIX)) : pending;
   const needHeads = taskRows.filter((d) => !d.run?.pullRequestUrl || refNumberFromUrl(d.run.pullRequestUrl) === null);
+  const initialHeads = [...needHeads, ...named].map((d) => d.head.name);
   const [recorded, initial] = await Promise.all([
     recordedPrs(input, taskRows),
-    input.forge.prsForHeads(input.root, [...needHeads, ...named].map((d) => d.head.name)),
+    initialHeads.length > 0 ? input.forge.prsForHeads(input.root, initialHeads) : Promise.resolve({ available: true, prs: [] as ForgePr[], incomplete: new Set<string>() }),
   ]);
   const { created, needList, prByBranch, available } = recorded;
   // Settled recorded PRs need the lookup for both the merge verdict and replacement display.
