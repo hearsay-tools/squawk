@@ -159,32 +159,45 @@ describe('antigravity skill probe staging', () => {
     }
   }
 
-  it('links sessionHome entries so ~/ manifest paths resolve natively and rewrites reported paths back', async () => {
+  it('links sessionHome entries including .config so ~/ manifest paths resolve natively and rewrites reported paths back', async () => {
     const root = await workspace();
     const repo = join(root, 'repo');
     const fakeHome = join(root, 'user-home');
     await mkdir(repo, { recursive: true });
     await mkdir(join(fakeHome, 'personal-skills', 'demo'), { recursive: true });
+    await mkdir(join(fakeHome, '.config', 'agent-skills', 'cfg-demo'), { recursive: true });
     await mkdir(join(fakeHome, '.gemini', 'config'), { recursive: true });
-    await writeFile(join(fakeHome, '.gemini', 'config', 'skills.json'), '{"entries":[{"path":"~/personal-skills"}]}');
+    await writeFile(join(fakeHome, '.gemini', 'config', 'skills.json'), '{"entries":[{"path":"~/personal-skills"},{"path":"~/.config/agent-skills"}]}');
     await withTempHome(fakeHome, async () => {
       const result = await discoverAntigravitySkills({
         cwd: repo,
         spawn: (_bin, _args, spawnCwd, env) => {
           const observedHome = env.HOME ?? '';
+          expect(env.XDG_CONFIG_HOME).not.toBe(join(observedHome, '.config'));
           const payload = JSON.stringify({
             event: 'command_result',
-            command: { name: 'skills', data: { skills: [{ name: 'demo', path: `${observedHome}/personal-skills/demo/SKILL.md`, builtin: false }] } },
+            command: {
+              name: 'skills',
+              data: {
+                skills: [
+                  { name: 'demo', path: `${observedHome}/personal-skills/demo/SKILL.md`, builtin: false },
+                  { name: 'cfg-demo', path: `${observedHome}/.config/agent-skills/cfg-demo/SKILL.md`, builtin: false },
+                ],
+              },
+            },
           });
           const script = `const fs = require('node:fs');
             fs.writeFileSync(${JSON.stringify(join(root, 'home-link'))}, fs.readlinkSync(${JSON.stringify(join(observedHome, 'personal-skills'))}));
+            fs.writeFileSync(${JSON.stringify(join(root, 'cfg-link'))}, fs.readlinkSync(${JSON.stringify(join(observedHome, '.config'))}));
             console.log(${JSON.stringify(payload)});`;
           return spawnSessionLeader(process.execPath, ['-e', script], { cwd: spawnCwd, env });
         },
       });
       expect(await readFile(join(root, 'home-link'), 'utf8')).toBe(join(fakeHome, 'personal-skills'));
+      expect(await readFile(join(root, 'cfg-link'), 'utf8')).toBe(join(fakeHome, '.config'));
       expect(result.skills).toEqual([
         { id: 'demo', name: 'demo', path: join(fakeHome, 'personal-skills', 'demo', 'SKILL.md'), scope: 'other' },
+        { id: 'cfg-demo', name: 'cfg-demo', path: join(fakeHome, '.config', 'agent-skills', 'cfg-demo', 'SKILL.md'), scope: 'other' },
       ]);
     });
   });

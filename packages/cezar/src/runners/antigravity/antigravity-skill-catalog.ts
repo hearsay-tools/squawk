@@ -92,12 +92,12 @@ function resolveSharedEntry(accountHome: string, defaultHome: string, rel: strin
   return existsSync(shared) ? shared : undefined;
 }
 
-/** Link non-.gemini/.config entries of sessionHome so `~/` paths in skills.json and plugins.json resolve natively. */
+/** Link non-.gemini entries of sessionHome so `~/` paths (including `~/.config/...`) in manifests resolve natively. */
 async function linkSessionHomeEntries(sessionHome: string, probeHome: string): Promise<void> {
   let entries;
   try { entries = await readdir(sessionHome, { withFileTypes: true }); } catch { return; }
   for (const entry of entries) {
-    if (entry.name === '.gemini' || entry.name === '.config') continue;
+    if (entry.name === '.gemini') continue;
     const source = join(sessionHome, entry.name);
     let type: 'dir' | 'file' = entry.isDirectory() ? 'dir' : 'file';
     if (entry.isSymbolicLink()) {
@@ -112,14 +112,15 @@ async function stageProbeHome(
   accountHome: string,
   defaultHome: string,
   sessionHome: string,
-): Promise<{ root: string; home: string; geminiDir: string }> {
+): Promise<{ root: string; home: string; geminiDir: string; xdgConfig: string }> {
   const root = await mkdtemp(join(tmpdir(), 'squawk-antigravity-skills-'));
   const home = join(root, 'home');
   const geminiDir = join(home, '.gemini');
+  const xdgConfig = join(root, 'xdg-config');
   try {
     await mkdir(join(geminiDir, 'config'), { recursive: true });
     await mkdir(join(geminiDir, ANTIGRAVITY_APP_DATA_DIR), { recursive: true });
-    await mkdir(join(home, '.config'), { recursive: true });
+    await mkdir(xdgConfig, { recursive: true });
     await linkSessionHomeEntries(sessionHome, home);
     for (const rel of ANTIGRAVITY_SHARED_SKILL_ENTRIES) {
       const source = resolveSharedEntry(accountHome, defaultHome, rel);
@@ -128,7 +129,7 @@ async function stageProbeHome(
     }
     const config = join(accountHome, 'config', 'config.json');
     if (existsSync(config)) await copyFile(config, join(geminiDir, 'config', 'config.json'));
-    return { root, home, geminiDir };
+    return { root, home, geminiDir, xdgConfig };
   } catch (error) {
     await rm(root, { recursive: true, force: true });
     throw error;
@@ -144,7 +145,7 @@ export async function discoverAntigravitySkills(options: SkillDiscoveryOptions):
   const sessionHome = options.accountHome && accountHome !== defaultHome
     ? resolve(profileEnv('antigravity', accountHome).HOME ?? hostHome)
     : resolve(hostHome);
-  const { root, home, geminiDir } = await stageProbeHome(accountHome, defaultHome, sessionHome);
+  const { root, home, geminiDir, xdgConfig } = await stageProbeHome(accountHome, defaultHome, sessionHome);
   let launch: AntigravityLaunch | undefined;
   try {
     const override = options.bin || productEnv('ANTIGRAVITY_BIN') || (productEnv('DRY_RUN') === '1'
@@ -153,7 +154,7 @@ export async function discoverAntigravitySkills(options: SkillDiscoveryOptions):
     const args = ['--settings', '{"modelProvider":"gemini"}', '--output-format', 'stream-json',
       '--log-file', join(root, 'cli.log'), '--print=/skills'];
     const extraEnv = {
-      HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, '.config'),
+      HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: xdgConfig,
       GEMINI_API_KEY: 'squawk-skill-probe', GOOGLE_GEMINI_BASE_URL: 'http://127.0.0.1:1',
       SSH_CONNECTION: '127.0.0.1 0 127.0.0.1 0', AGY_CLI_DISABLE_AUTO_UPDATE: '1',
     };
