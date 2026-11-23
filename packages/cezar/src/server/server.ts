@@ -1,3 +1,6 @@
+import { memoizeRead } from './bounded-read-cache.ts';
+import { cachedWorktreeSizeBytes } from './worktree-size-cache.ts';
+import { readRepoRefs, forgetRepoRead } from './repo-read-cache.ts';
 import { allocateAgentProfileId } from './agent-profile-id.ts';
 import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
@@ -181,14 +184,14 @@ import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/
 import { artifactPreview, loadFileLink, rasterMime } from '../artifacts/resolve.ts';
 import { toPastedContent, type PastedContent } from '../workflows/pasted-content.ts';
 import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
-import { worktreeDiff, worktreeSizeBytes } from '../git-worktree.ts';
+import { worktreeDiff } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
-import { getBranches, getCommit, getDiff, getLogWithParents, getRepoInfo, getStatus, getTracking } from './git.ts';
+import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
-import { attributeLog, classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
+import { classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
 import { claimRepoGitMutation, localPullBranches, pullRepoCheckout } from './repo-pull.ts';
 import {
   collectChanges,
@@ -3630,7 +3633,9 @@ export function createApp(deps: ServerDeps) {
       // so a live `worktree: false` parent is not treated as gone (#570 honesty).
       const runs = withWorktree.filter((r) => r.worktreePath && existsSync(r.worktreePath));
       // The rows the enforcer would reclaim right now: reclaimable AND past the newest `keep`.
-      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, (id) => store.getRun(id), (id) => store.queries.listWorkersOf(id)));
+      const getRun = memoizeRead((id) => store.getRun(id));
+      const workersOf = memoizeRead((id) => store.queries.listWorkersOf(id));
+      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, getRun, workersOf));
       const worktrees = await Promise.all(
         runs.map(async (r) => ({
           runId: r.id,
@@ -3638,9 +3643,9 @@ export function createApp(deps: ServerDeps) {
           status: r.status,
           branch: r.branch ?? null,
           // POSIX `du` — degrades to null (Windows / du missing / error); never blocks.
-          sizeBytes: await worktreeSizeBytes(r.worktreePath as string),
+          sizeBytes: await cachedWorktreeSizeBytes(r.worktreePath as string),
           finishedAt: r.finishedAt ?? null,
-          reclaimable: isReclaimable(r, (id) => store.getRun(id), (id) => store.queries.listWorkersOf(id)),
+          reclaimable: isReclaimable(r, getRun, workersOf),
           pastKeep: pastKeep.has(r.id),
         })),
       );
@@ -3660,7 +3665,7 @@ export function createApp(deps: ServerDeps) {
         claim: (run) => manager.claimWorktreeReclaim(run.id),
         previewHost: deps.previewHost,
       });
-      if (reclaimed.length > 0) forgetRepoBranches(repoRoot);
+      if (reclaimed.length > 0) { forgetRepoBranches(repoRoot); forgetRepoRead(repoRoot); }
       return c.json({ reclaimed });
     })
 
@@ -3679,7 +3684,7 @@ export function createApp(deps: ServerDeps) {
       if (!worktreeReclaimedAt) {
         return c.json({ error: await reclaimCheckoutError(run) }, 409);
       }
-      forgetRepoBranches(repoRoot);
+      forgetRepoBranches(repoRoot); forgetRepoRead(repoRoot);
       return c.json({ runId: run.id, worktreeReclaimedAt });
     });
 
@@ -4028,7 +4033,7 @@ export function createApp(deps: ServerDeps) {
   // ---- chained family: repo / git (project-scoped) ----
   const repoRoutes = new Hono<ProjectApiEnv>()
     .get('/repo', async (c) => {
-      const { root: repoRoot } = c.get('project');
+      const { root: repoRoot, store } = c.get('project');
       const info = await getRepoInfo(repoRoot);
       if (!info)
         return c.json({
@@ -4039,28 +4044,21 @@ export function createApp(deps: ServerDeps) {
           baseBranch: null,
           tracking: null,
         });
-      const [status, rawLog, branches, config] = await Promise.all([
+
+      // Status stays fresh for edits made outside Squawk; only ref-derived reads are cached.
+      const [status, config] = await Promise.all([
         getStatus(info.root),
-        getLogWithParents(info.root),
-        getBranches(info.root),
         loadConfig(repoRoot, deps.home),
       ]);
-      const [tracking, sources] = await Promise.all([
-        getTracking(info.root, config.baseBranch ?? info.branch),
-        attributeLog(info.root, rawLog, c.get('project').store.queries.listBranchOwners()),
-      ]);
-      // `source` is spread conditionally: absent, never `null`, when no task is known.
-      const log = rawLog.map(({ parents: _parents, ...entry }, i) => {
-        const source = sources[i];
-        return source ? { ...entry, source } : entry;
-      });
+      // The helper validates refs and branch-owner evidence before reusing log attribution.
+      const refs = await readRepoRefs(info, config.baseBranch, store.queries);
       return c.json({
         info,
         status,
-        log,
-        branches,
+        log: refs.log,
+        branches: refs.branches,
         baseBranch: config.baseBranch ?? null,
-        tracking,
+        tracking: refs.tracking,
       });
     })
 
@@ -4093,6 +4091,7 @@ export function createApp(deps: ServerDeps) {
       const release = claimRepoGitMutation(input.root);
       if (!release) return c.json({ error: 'a branch switch or pull is running — try again when it finishes', refused: [] }, 409);
       const result = await deleteBranches(input, body.names, body.confirm).finally(release);
+      forgetRepoRead(input.root);
       if (result.deleted.length === 0) {
         return c.json({ error: result.refused[0]?.reason ?? 'nothing was deleted', refused: result.refused }, 409);
       }
@@ -4169,6 +4168,7 @@ export function createApp(deps: ServerDeps) {
         // Every id, not the live set: the manager may still hold a run whose record already
         // settled (a worker's execution winding down). Ids only, nothing decoded.
         () => store.queries.listRunIds().some((id) => manager.isActive(id)));
+      forgetRepoRead(info.root);
       if (!result.ok) return c.json(result.value, 409);
       return c.json(result.value, 200);
     })
@@ -4182,7 +4182,7 @@ export function createApp(deps: ServerDeps) {
       try {
         const input = c.req.valid('json');
         const result = await createOrSwitchBranch(info.root, input.name, input.from);
-        forgetRepoBranches(info.root);
+        forgetRepoBranches(info.root); forgetRepoRead(info.root);
         if (!result.ok) return c.json({ error: result.error }, 409);
         return c.json({ branch: result.branch, created: result.created });
       } finally {
