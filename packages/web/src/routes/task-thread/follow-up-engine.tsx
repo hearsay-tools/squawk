@@ -162,12 +162,12 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const [pickedRunner, setPickedRunner] = useState<Runner | null>(null)
   const [pickedModel, setPickedModel] = useState<string | null>(null)
   const [pickedEffort, setPickedEffort] = useState<string | null>(null)
-  // The task route reuses this view across parameter changes, so a pick from run A must not
-  // stick when the user opens cached run B. Reset every pill on `run.id` — effort, model
-  // and runner all leak the same way.
-  const [pickedRunId, setPickedRunId] = useState(run.id)
-  if (pickedRunId !== run.id) {
-    setPickedRunId(run.id)
+  // The task route reuses this view across parameter changes, and an owned worker can advance to
+  // another workflow step under the same run id, so reset every pill when either changes.
+  const pickScope = `${run.id}:${workerContinuationStep(run, isStoppedBeforeStarting(run))?.id ?? ''}`
+  const [pickedScope, setPickedScope] = useState(pickScope)
+  if (pickedScope !== pickScope) {
+    setPickedScope(pickScope)
     setPickedRunner(null)
     setPickedModel(null)
     setPickedEffort(null)

@@ -2,7 +2,7 @@ import { controlLocation } from '@open-mercato/cezar-contract/control-locations'
 import type { ProviderId } from '../core/provider-auth.ts';
 import type { ProviderStatusResponse } from '@open-mercato/cezar-contract/workspace';
 import type { RunRecord } from '../runs/store.ts';
-import { registeredRunners, runnerDefinition, resolveRunnerId } from '../core/runner-registry.ts';
+import { registeredRunnerId, registeredRunners, runnerDefinition, resolveRunnerId } from '../core/runner-registry.ts';
 import { providersRequiredByWorkflow as requiredByWorkflow } from '@open-mercato/cezar-contract/workflows';
 import { workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { WorkflowDef } from '@open-mercato/cezar-contract/workflows';
@@ -18,6 +18,31 @@ export function providerForExistingRun(
 ): ProviderId {
   if (override) return override;
   return resolveRunnerId(workerContinuationStep(run)?.runner ?? run.runner);
+}
+
+/** The provider an untouched cancelled run continues on: a worker's first agent step, else the run's runner, else config default. */
+export async function providerForUntouchedRun(
+  run: RunRecord,
+  defaultRunner: () => Promise<ProviderId>,
+): Promise<ProviderId> {
+  const stepRunner = workerContinuationStep(run, true)?.runner;
+  if (stepRunner !== undefined) return resolveRunnerId(stepRunner);
+  return run.runner === undefined ? defaultRunner() : resolveRunnerId(run.runner);
+}
+
+/** Resolve the original, target, and required providers for `POST /runs/:id/continue`. */
+export async function continueRunProviders(
+  run: RunRecord,
+  requestedRunner: string | undefined,
+  untouched: boolean,
+  defaultRunner: () => Promise<ProviderId>,
+): Promise<{ original: ProviderId; target: ProviderId; required: ProviderId[] }> {
+  const original = untouched
+    ? await providerForUntouchedRun(run, defaultRunner)
+    : providerForExistingRun(run);
+  const target = requestedRunner === undefined ? original : registeredRunnerId(requestedRunner);
+  const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, target) : [target];
+  return { original, target, required };
 }
 
 /**

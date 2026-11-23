@@ -63,7 +63,7 @@ function isAgentWorkflowStep(step: WorkflowStepEntry): boolean {
 
 function workerContinuationStepId(run: WorkerContinuationRun): string | undefined {
   const cursorId = run.workflowCursor?.mode === 'resume' ? run.workflowCursor.stepId : undefined;
-  if (cursorId && run.steps.find(step => step.id === cursorId)?.status !== 'done') return cursorId;
+  if (cursorId && run.steps.find(step => step.id === cursorId)?.status === 'failed') return cursorId;
   const session = latestSessionStep(run.steps);
   if (!session) return undefined;
   if (session.synthetic === 'continuation' && session.continuesStepId !== undefined) return session.continuesStepId;

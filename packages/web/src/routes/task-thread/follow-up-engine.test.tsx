@@ -936,4 +936,47 @@ describe('owned worker Continue engine controls', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     await waitFor(() => expect(continueBody()).toEqual({ model: 'sonnet' }))
   })
+
+  it('resets model and effort picks when an owned worker advances to another workflow step', async () => {
+    serve()
+    const client = createQueryClient()
+    const base = workerRun({
+      runner: 'claude',
+      workflowDef: {
+        name: 'two-step',
+        source: 'file',
+        steps: [
+          { id: 'draft', prompt: 'draft', runner: 'claude', model: 'opus', effort: 'high' },
+          { id: 'review', prompt: 'review', runner: 'claude', model: 'haiku', effort: 'low' },
+        ],
+      },
+      steps: [step({ id: 'draft', status: STEP_STATUS.done, backend: 'claude', sessionId: 's-1', startedAt: '2026-11-23T00:01:00.000Z' })],
+    })
+    const tree = (run: ApiRun) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Harness run={run} />
+          <Toaster />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const view = render(tree(base))
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /^Model · / }))
+    const options = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(options.find((o) => o.textContent?.includes('sonnet')) as HTMLElement)
+    expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('sonnet')
+
+    view.rerender(tree({
+      ...base,
+      steps: [
+        ...base.steps,
+        step({ id: 'review', status: STEP_STATUS.done, backend: 'claude', sessionId: 's-2', startedAt: '2026-11-23T00:02:00.000Z' }),
+      ],
+    }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('haiku'))
+    expect(screen.getByRole('button', { name: /^Effort · / }).textContent).toContain('low')
+    requests = requests.filter((r) => !r.url.endsWith('/continue'))
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toEqual({}))
+  })
 })
