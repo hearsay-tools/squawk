@@ -7,6 +7,7 @@ import { OWNER_POLICIES } from './owner-policies.ts';
 import { fragment, inside, key, member, objectProperty, ownerRule, unwrap, unwrapAccess, walk } from './owner-rule.ts';
 import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
+import { BUILT_IN_WAIT_KINDS, LEGACY_WAIT_KINDS } from '../workflows/wait-kind-ids.ts';
 
 const equality = /^(===|!==|==|!=)$/;
 const literalString = (node: EsNode | undefined) => node?.type === 'Literal' ? stringOf(node) : undefined;
@@ -139,7 +140,7 @@ export const serverValidator = ownerRule(OWNER_POLICIES['server-declared-validat
   };
 });
 
-export const WAIT_KIND_LITERALS = ['pr', 'timer', 'process', 'human', 'worker', 'peer', 'subagent', 'ci'];
+export const WAIT_KIND_LITERALS: readonly string[] = [...BUILT_IN_WAIT_KINDS, ...LEGACY_WAIT_KINDS];
 function waitLiteral(node: EsNode | undefined): boolean {
   return WAIT_KIND_LITERALS.includes(literalString(unwrap(node)) ?? '');
 }

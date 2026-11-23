@@ -1,6 +1,8 @@
 import { matchesGlob } from 'node:path';
 import { child, type AstRule, type AstContext, type EsNode } from './ast-rule.ts';
 import { sameBoundary } from './twin-syntax.ts';
+import { BUILT_IN_WAIT_VIAS, CONTRACT_WAIT_KINDS } from '../workflows/wait-kind-ids.ts';
+import { CONTRACT_STEP_KINDS } from '../workflows/step-kind-ids.ts';
 
 // test-enum-literal (hearsay-tools/squawk#3774).
 const MESSAGE =
@@ -18,9 +20,9 @@ const MESSAGE =
 
 export const TEST_ENUM_VALUES: Record<string, readonly string[]> = {
   status: ['queued', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled', 'pending', 'skipped'],
-  kind: ['pr', 'timer', 'human', 'worker', 'process', 'peer', 'subagent', 'plugin', 'agent', 'check'],
+  kind: [...new Set([...CONTRACT_WAIT_KINDS, ...CONTRACT_STEP_KINDS])],
   phase: ['open', 'resolved', 'delivered', 'cancelled'],
-  via: ['cezar_wait', 'cezar_wait_for_ci', 'cezar_ask', 'monitoring-line', 'schedule-wakeup', 'ask-line', 'native-ask', 'no-wait', 'budget', 'cez-worker-wait', 'completion', 'cez-message-wait', 'native-subagents'],
+  via: BUILT_IN_WAIT_VIAS,
   source: ['agent', 'cezar'],
 };
 const FILES = ['packages/*/src/**/*.test.ts', 'packages/*/src/**/*.testkit.ts', 'packages/web/src/test/**/*.ts', 'packages/cezar/test/**/*.ts', 'packages/web/e2e/**/*.ts', 'packages/*/src/**/*.test.tsx', 'packages/web/src/test/**/*.tsx', 'packages/web/e2e/**/*.tsx'];
