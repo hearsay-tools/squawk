@@ -150,6 +150,13 @@ the vitest config excepted) on every `npm test` and compares what it finds with
 landed and it can only shrink. A new site fails the unit gate with the file, the rule and the
 line; the fix is a wait, never a baseline entry.
 
+The scan also flags a one-shot `click`, `press` or `fill` followed by a wait on focus,
+value, checked, selected or selection state. Retry that action inside the wait so a render
+cannot undo it. This rule excludes durable submission and navigation effects; repeating those
+can submit twice. A click followed only by a value wait and Enter/Space keys are excluded
+for the same reason. A DOM element saved on `window` or another holder must be queried again after
+scroll or refresh. The scan reports a saved handle used after that change.
+
 1. **No one-shot read right after an action.** An `expect(browser.evaluate|count|isVisible|
    text|url(...))` within two lines after `click`, `hover`, `fill`, `press`, `goto`,
    `setViewport`, `moveTo`, `dragTo`, `tapAt`, `wheel`, `applyContrastQaVariant`,

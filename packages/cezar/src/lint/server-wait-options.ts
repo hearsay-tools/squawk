@@ -9,7 +9,7 @@ import { type Scope, type WaitFile, VITEST_DEFAULT_MS, isNumber, literalBound, r
  * spells as one string.
  */
 
-/** Where a wait bound written at `node` is read: the function around it, as a wait (a parameter's default is not its bound). */
+/** Where a wait bound written at `node` is read: the function around it, as a wait, including parameter defaults. */
 export function waitScope(file: WaitFile, node: N, at = node.start): Scope {
   const place = placeOf(file.tree, node, true);
   return { ...place, from: place.bounds.at(-1) ?? 0, to: at + 1 };

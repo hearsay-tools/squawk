@@ -2,6 +2,8 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from '
 import { join, relative } from 'node:path';
 
 export const FILE_DURATION_LIMIT_MS = 60_000;
+// Every shard warns at 80% of the hard cap, even outside a PR selection.
+export const FILE_DURATION_WARNING_MS = FILE_DURATION_LIMIT_MS * 0.8;
 // PR runs only: a file the PR changes fails at this limit, any other file warns.
 export const FILE_DURATION_SOFT_LIMIT_MS = 45_000;
 // The shard slowdown needs this many weighted files; with fewer it is 1.
@@ -12,6 +14,7 @@ export const SLOWDOWN_MAX = 3;
 export const CAP_FAILURES_FILE = join('node_modules', '.vite', 'vitest', 'file-duration-cap.txt');
 const OWNER = '.github/scripts/vitest-file-duration.mjs';
 const HARD = `hard limit ${FILE_DURATION_LIMIT_MS} ms (FILE_DURATION_LIMIT_MS in ${OWNER})`;
+const WARNING = `warning threshold ${FILE_DURATION_WARNING_MS} ms (80% of ${HARD})`;
 const SOFT = `soft limit ${FILE_DURATION_SOFT_LIMIT_MS} ms (FILE_DURATION_SOFT_LIMIT_MS in ${OWNER})`;
 
 function manifestDurations() {
@@ -97,6 +100,8 @@ export default class FileDurationReporter {
       else if (changed && scaled >= FILE_DURATION_SOFT_LIMIT_MS) {
         if (changed.has(file)) this.failures.push({ module, file, line: `${measured}; ${SOFT}; the PR changes this file` });
         else this.warnings.push({ file, line: `${measured}; ${SOFT}; warning only: the PR does not change this file` });
+      } else if (scaled >= FILE_DURATION_WARNING_MS) {
+        this.warnings.push({ file, line: `${measured}; ${WARNING}; warning only` });
       }
     }
     this.report();
@@ -105,7 +110,7 @@ export default class FileDurationReporter {
   report() {
     for (const { file, line } of this.failures) console.log(annotation('error', file, line));
     for (const { file, line } of this.warnings) console.log(annotation('warning', file, line));
-    if (this.warnings.length) console.warn(`Vitest file duration soft limit warnings:\n${this.warnings.map(item => item.line).join('\n')}`);
+    if (this.warnings.length) console.warn(`Vitest file duration warnings:\n${this.warnings.map(item => item.line).join('\n')}`);
     if (!this.failures.length) return;
     console.error(`Vitest file duration cap failed:\n${this.failures.map(item => item.line).join('\n')}`);
     process.exitCode = 1;

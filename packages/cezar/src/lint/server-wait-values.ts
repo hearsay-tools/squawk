@@ -15,7 +15,7 @@ export type Bound = number | 'unreadable' | undefined;
 
 export const isNumber = (value: unknown): value is number => typeof value === 'number';
 
-/** A wait bounded by a numeric literal under this is short. Vitest's own default is 1 s. */
+/** A wait bounded by a numeric literal at or below this is short. Vitest's own default is 1 s. */
 export const SHORT_BOUND_MS = 10_000;
 
 /** What Vitest's `vi.waitFor`, `vi.waitUntil` and `expect.poll` wait when given no `timeout`. */
@@ -24,11 +24,11 @@ export const VITEST_DEFAULT_MS = 1_000;
 /** The longest delay a timer keeps: a larger one fires after 1 ms. */
 export const MAX_TIMER_MS = 2 ** 31 - 1;
 
-/** A wait bound is short unless it is a finite number of 10 s or more that a timer keeps. */
-export const isShort = (ms: number | undefined): boolean => ms !== undefined && !(ms >= SHORT_BOUND_MS && ms <= MAX_TIMER_MS);
+/** A wait bound is short unless it is a finite number above 10 s that a timer keeps. */
+export const isShort = (ms: number | undefined): boolean => ms !== undefined && !(ms > SHORT_BOUND_MS && ms <= MAX_TIMER_MS);
 
-/** A poll loop's deadline is short unless it is a finite number of 10 s or more. */
-export const isShortDeadline = (ms: number): boolean => !(ms >= SHORT_BOUND_MS && Number.isFinite(ms));
+/** A poll loop's deadline is short unless it is a finite number above 10 s. */
+export const isShortDeadline = (ms: number): boolean => !(ms > SHORT_BOUND_MS && Number.isFinite(ms));
 
 /** The tree, its names and the place a question is asked from. */
 export interface WaitFile {

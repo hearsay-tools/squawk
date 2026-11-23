@@ -1,4 +1,245 @@
 {
   "$comment": "Wait-discipline sites the cockpit e2e suite carried when the ratchet landed (issue 409). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, then run E2E_WAIT_DISCIPLINE_UPDATE=1 npm test -- e2e-wait-discipline. Rules: packages/web/e2e/README.md.",
-  "sites": []
+  "sites": [
+    {
+      "file": "agents-settings-mobile.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(`[data-slot=\"runner-install-link\"][data-runner=\"${target}\"]`)",
+      "count": 1
+    },
+    {
+      "file": "clear-field.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Backspace')",
+      "count": 1
+    },
+    {
+      "file": "contrast.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Escape')",
+      "count": 1
+    },
+    {
+      "file": "create-project.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click('[data-route=\"workspace-tools\"] [data-action=\"new-project\"]')",
+      "count": 1
+    },
+    {
+      "file": "create-project.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click('[data-slot=\"add-project-new\"]')",
+      "count": 1
+    },
+    {
+      "file": "github-layout.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[data-slot=\"gh-custom-prompt\"]', 'Review this issue and keep this draft')",
+      "count": 1
+    },
+    {
+      "file": "html-report-cards.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(BACK)",
+      "count": 1
+    },
+    {
+      "file": "issue-linked-tasks.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "new-task-hierarchy.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "new-task.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(trigger)",
+      "count": 1
+    },
+    {
+      "file": "new-task.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill(search, ' SEARCH')",
+      "count": 1
+    },
+    {
+      "file": "new-task.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('A')",
+      "count": 1
+    },
+    {
+      "file": "new-task.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('ArrowDown')",
+      "count": 3
+    },
+    {
+      "file": "new-task.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('ArrowUp')",
+      "count": 1
+    },
+    {
+      "file": "pending-question.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(PILL)",
+      "count": 1
+    },
+    {
+      "file": "plan-mode.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[data-slot=\"composer\"] textarea', 'Tighten the flaky suite end to end.')",
+      "count": 1
+    },
+    {
+      "file": "reports.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(back)",
+      "count": 2
+    },
+    {
+      "file": "search-focus.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(picker.trigger)",
+      "count": 1
+    },
+    {
+      "file": "session-footer.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "settings-monitoring.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[data-slot=\"resources-monitoring-wake-interval\"]', '7')",
+      "count": 1
+    },
+    {
+      "file": "sidebar-limits.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('ArrowUp')",
+      "count": 1
+    },
+    {
+      "file": "skill-search-ranking.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click(input)",
+      "count": 1
+    },
+    {
+      "file": "smoke.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('ArrowDown')",
+      "count": 1
+    },
+    {
+      "file": "smoke.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Escape')",
+      "count": 1
+    },
+    {
+      "file": "task-list-virtualization.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill(`${row} input[aria-label=\"Task title\"]`, 'Pinned rename draft')",
+      "count": 1
+    },
+    {
+      "file": "task-list-virtualization.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "task-list-virtualization.e2e.ts",
+      "rule": "stale-element-handle",
+      "site": "browser.evaluate('window.__collapsePreview.click()')",
+      "count": 1
+    },
+    {
+      "file": "task-list-virtualization.e2e.ts",
+      "rule": "stale-element-handle",
+      "site": "browser.waitForFunction(`window.__collapsePreview.getAttribute('aria-expanded') === 'false'`)",
+      "count": 1
+    },
+    {
+      "file": "task-list-virtualization.e2e.ts",
+      "rule": "stale-element-handle",
+      "site": "if (change === 'preview') browser.waitForFunction('window.__collapsePreview.isConnected')",
+      "count": 1
+    },
+    {
+      "file": "task-pr-collection.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('input[aria-label=\"Search tasks across projects\"]', query)",
+      "count": 1
+    },
+    {
+      "file": "task-thread-layout.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[data-slot=\"composer\"] textarea', 'Keep these follow-up instructions')",
+      "count": 1
+    },
+    {
+      "file": "task-thread-layout.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Escape')",
+      "count": 2
+    },
+    {
+      "file": "task-thread-layout.e2e.ts",
+      "rule": "stale-element-handle",
+      "site": "? (() => { const el = document.querySelector('${input}'); return [el === window.__phoneTextarea, el.value, el.selectionStart, el.selectionEnd] })()",
+      "count": 1
+    },
+    {
+      "file": "task-views-layout.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click('[data-column-toggle=\"branch\"]')",
+      "count": 1
+    },
+    {
+      "file": "task-views-layout.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.click('[data-slot=\"task-columns-trigger\"]')",
+      "count": 1
+    },
+    {
+      "file": "touch-targets.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "worker-relationships.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[cmdk-input]', 'Owned worker 1')",
+      "count": 1
+    },
+    {
+      "file": "worker-relationships.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.fill('[cmdk-input]', 'Worker awaiting parent reply')",
+      "count": 1
+    },
+    {
+      "file": "worker-relationships.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "browser.press('Tab')",
+      "count": 1
+    },
+    {
+      "file": "worker-relationships.e2e.ts",
+      "rule": "one-shot-input",
+      "site": "for (let i = 0; i < stops; i++) browser.press('Tab')",
+      "count": 1
+    }
+  ]
 }

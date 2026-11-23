@@ -56,7 +56,7 @@ describe('one-shot read after an action', () => {
       `const pencil = browser.waitForValue('document.querySelector("[data-slot=pencil]")')`,
       `expect(browser.evaluate('1')).toBe(1)`,
     ].join('\n')
-    expect(scanSource('x.e2e.ts', src)).toEqual([])
+    expect(scanSource('x.e2e.ts', src).filter(site => site.rule === 'one-shot-read')).toEqual([])
   })
 
   it('treats the contrast helpers and every seam interaction as actions', () => {
@@ -80,6 +80,68 @@ describe('one-shot read after an action', () => {
   it('counts a read once even when two actions precede it', () => {
     const src = [`browser.click('a')`, `browser.click('b')`, `expect(browser.count('c')).toBe(1)`].join('\n')
     expect(scanSource('x.e2e.ts', src)).toHaveLength(1)
+  })
+})
+
+describe('an input whose effect can be lost to a render', () => {
+  it.each(['click("#save")', 'press("Tab")', 'fill("#name", "new")'])('flags a one-shot %s before a condition wait', input => {
+    const sites = scanSource('x.e2e.ts', `browser.${input}\nbrowser.waitForFunction('document.activeElement.id === "name"')`)
+    expect(sites.filter(site => site.rule === 'one-shot-input')).toEqual([
+      { file: 'x.e2e.ts', rule: 'one-shot-input', line: 1, site: `browser.${input}` },
+    ])
+  })
+
+  it('accepts a submission followed by a wait for its durable effect', () => {
+    expect(scanSource('x.e2e.ts', `browser.click('#submit')\nbrowser.waitForFunction('document.querySelector("#saved") !== null')`)).toEqual([])
+  })
+
+  it.each([`click('[aria-label="Send"]')`, `click('#submit')`, `press('Enter')`, `press('Control+Enter')`, `press('Space')`])('does not recommend retrying submission %s after an input-clear wait', input => {
+    const source = `browser.${input}\nbrowser.waitForFunction('document.querySelector("textarea").value === ""')`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'one-shot-input')).toEqual([])
+  })
+
+  it('accepts an action retried inside the wait, including a multiline action', () => {
+    const source = `await waitForCondition(() => {
+      browser.fill('#name', 'new')
+      return browser.evaluate('document.querySelector("#name").value === "new"')
+    })`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'one-shot-input')).toEqual([])
+  })
+})
+
+describe('a DOM handle kept across a page change', () => {
+  it.each(['window.saved', 'handles.row'])('flags %s after scroll and refresh', holder => {
+    const source = `browser.evaluate(\`${holder}=document.querySelector('#row')\`)
+      browser.evaluate(\`document.querySelector('main').scrollTop=900\`)
+      browser.waitForFunction(\`${holder}.isConnected\`)
+      browser.refresh()
+      browser.evaluate(\`${holder}.click()\`)`
+    const sites = scanSource('x.e2e.ts', source).filter(site => site.rule === 'stale-element-handle')
+    expect(lines(sites)).toEqual([3, 5])
+  })
+
+  it.each(['scrollTop', 'scrollLeft'])('invalidates a saved handle after a named owner %s assignment', property => {
+    const source = `browser.evaluate(\`window.saved=document.querySelector('#row')\`)
+      browser.evaluate(\`const owner=document.querySelector('main');owner.${property}=900\`)
+      browser.evaluate(\`window.saved.click()\`)`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'stale-element-handle'))
+      .toEqual([expect.objectContaining({ line: 3 })])
+  })
+
+  it('accepts a fresh query after scroll, including replacing the saved handle', () => {
+    const source = `browser.evaluate(\`window.saved=document.querySelector('#row')\`)
+      browser.evaluate(\`document.querySelector('main').scrollTop=900\`)
+      browser.evaluate(\`window.saved=document.querySelector('#row');window.saved.click()\`)
+      browser.waitForFunction(\`document.querySelector('#row').getAttribute('aria-expanded') === 'true'\`)`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'stale-element-handle')).toEqual([])
+  })
+
+  it('reports a new stale-handle site outside the shrink-only baseline', () => {
+    const source = `browser.evaluate(\`window.newHandle=document.querySelector('#new')\`)
+      browser.wheel(0, 100)
+      browser.evaluate(\`window.newHandle.click()\`)`
+    expect(compareToBaseline(tally(scanSource('new.e2e.ts', source)), readBaseline()).added)
+      .toEqual([expect.objectContaining({ file: 'new.e2e.ts', rule: 'stale-element-handle', count: 1 })])
   })
 })
 

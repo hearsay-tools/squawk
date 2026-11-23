@@ -66,7 +66,7 @@ function changedList(t, files) {
 
 test('59,999 ms passes while exactly 60,000 ms fails', async () => {
   const below = await completed(59_999);
-  assert.deepEqual(finish(below), { exitCode: 0, output: '', warnings: '', annotations: [] });
+  assert.equal(finish(below).exitCode, 0);
   const boundary = await completed(60_000);
   assertFailure(boundary, /^Vitest file duration cap failed:\nhooks\.test\.ts: 60000 ms \(60000 ms at shard slowdown x1\.00\); hard limit 60000 ms \(FILE_DURATION_LIMIT_MS in \.github\/scripts\/vitest-file-duration\.mjs\)$/);
 });
@@ -90,6 +90,26 @@ test('the step summary carries the cap line when Actions provides one', async t 
 
 test('without a changed-file list the soft limit is off', async () => {
   assert.deepEqual(finish(await completed(59_999)).exitCode, 0);
+});
+
+test('every shard warns at 80% of the hard cap without failing', async () => {
+  assert.deepEqual(finish(await completed(47_999)), { exitCode: 0, output: '', warnings: '', annotations: [] });
+  const warning = finish(await completed(48_000));
+  assert.equal(warning.exitCode, 0);
+  assert.equal(warning.output, '');
+  assert.match(warning.warnings, /hooks\.test\.ts: 48000 ms .*warning threshold 48000 ms \(80% of hard limit 60000 ms/);
+  assert.equal(warning.annotations.length, 1);
+  assert.match(warning.annotations[0], /^::warning file=hooks\.test\.ts,/);
+});
+
+test('the warning uses the shard-scaled duration', async () => {
+  const durations = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`f${index}.test.ts`, 1000]));
+  const shard = () => Array.from({ length: 10 }, (_, index) => moduleResult(2000, 'passed', `f${index}.test.ts`));
+  const below = finish(end(await reporter({ durations }), ...shard(), moduleResult(95_998)));
+  assert.equal(below.warnings, '');
+  const at = finish(end(await reporter({ durations }), ...shard(), moduleResult(96_000)));
+  assert.equal(at.exitCode, 0);
+  assert.match(at.warnings, /96000 ms \(48000 ms at shard slowdown x2\.00\).*warning threshold 48000 ms/);
 });
 
 test('the soft limit fails a file the PR changes and warns for any other file', async t => {

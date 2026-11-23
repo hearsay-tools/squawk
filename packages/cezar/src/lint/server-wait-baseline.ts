@@ -44,6 +44,7 @@ export const baselineTail =
   'Rules: AGENTS.md § Validation.';
 
 export const baselines: readonly Baseline[] = [
+
   {
     what: 'bare sleep or short wait bound',
     path: baselinePath,
@@ -55,5 +56,11 @@ export const baselines: readonly Baseline[] = [
     path: pollsBaselinePath,
     comment: `Poll loops the server unit tests carried when the deadline rule landed (hearsay-tools/cezarion#1203). ${baselineTail}`,
     rules: ['poll-deadline'],
+  },
+  {
+    what: 'one-shot read after a condition wait',
+    path: resolve(import.meta.dirname, 'server-one-shot-reads.baseline.json'),
+    comment: `Snapshots after a condition wait inherited at hearsay-tools/squawk#3765. ${baselineTail}`,
+    rules: ['one-shot-read'],
   },
 ];

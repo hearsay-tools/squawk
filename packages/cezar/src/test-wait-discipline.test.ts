@@ -235,7 +235,7 @@ describe('rule short-bound', () => {
     expect(lines(sites)).toEqual([1, 2, 3, 4]);
   });
 
-  it('flags a literal bound under 10 s in the number form and in an options object', () => {
+  it('flags a literal bound at or below 10 s in the number form and in an options object', () => {
     const sites = scan(
       'await vi.waitFor(() => ready(), 2_000);',
       'await vi.waitFor(() => ready(), { timeout: 5_000, interval: 20 });',
@@ -245,7 +245,7 @@ describe('rule short-bound', () => {
       'await vi.waitFor(() => ready(), 30_000);',
       'await expect.poll(() => count(), { timeout: 15_000 }).toBe(1);',
     );
-    expect(lines(sites)).toEqual([1, 2, 3, 4]);
+    expect(lines(sites)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("reads only the options object's own timeout, whatever its other properties hold", () => {
@@ -289,7 +289,7 @@ describe('rule short-bound', () => {
       'await waitFor(() => ready(), 1E+4);',
       'async function eventually(check: () => boolean, timeout = 1e4) {}',
     );
-    expect(lines(sites)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(lines(sites)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it('leaves a bound it cannot read alone', () => {
@@ -362,15 +362,15 @@ describe('rule short-bound', () => {
       'const until = (cb: () => boolean, timeout =',
       '  5000) => {};',
     );
-    expect(rules(sites)).toEqual(['short-bound', 'short-bound', 'short-bound', 'short-bound']);
-    expect(lines(sites)).toEqual([1, 4, 10, 12]);
+    expect(rules(sites)).toEqual(Array(7).fill('short-bound'));
+    expect(lines(sites)).toEqual([1, 2, 4, 5, 7, 10, 12]);
   });
 });
 
 describe('rule poll-deadline', () => {
   it('pins the same 10 s threshold as the short-bound rule', () => {
     expect(polls('const deadline = Date.now() + 9_999;', 'while (Date.now() < deadline) await sleep(10);')).toHaveLength(1);
-    expect(polls('const deadline = Date.now() + 10_000;', 'while (Date.now() < deadline) await sleep(10);')).toEqual([]);
+    expect(polls('const deadline = Date.now() + 10_000;', 'while (Date.now() < deadline) await sleep(10);')).toHaveLength(1);
   });
 
   it('flags a loop that sleeps without a clock read or an attempt count, keyed on its first line', () => {
@@ -403,7 +403,7 @@ describe('rule poll-deadline', () => {
     )).toEqual([]);
   });
 
-  it('leaves a loop with a readable deadline of 10 s or more alone', () => {
+  it('leaves a loop with a readable deadline above 10 s alone', () => {
     expect(polls(
       'const start = Date.now();',
       'while (!ready()) {',
@@ -412,7 +412,7 @@ describe('rule poll-deadline', () => {
       '}',
       'const deadline = Date.now() + 20_000;',
       'while (Date.now() < deadline) { if (ready()) break; await sleep(10); }',
-      'const end = performance.now() + 10_000;',
+      'const end = performance.now() + 10_001;',
       'while (!ready() && performance.now() < end) await sleep(10);',
       'for (const limit = Date.now() + 12_000; !ready();) { if (Date.now() > limit) break; await sleep(10); }',
       'while (Date.now() - start < 30_000) { await sleep(10); }',
@@ -498,7 +498,7 @@ describe('rule poll-deadline', () => {
       'for (let i = 0; i < 100; i++) { await sleep(100); }',
       'for (let i = 0; i <= 99; i++) await new Promise(r => setTimeout(r, 90));',
     );
-    expect(lines(sites)).toEqual([1, 8, 10]);
+    expect(lines(sites)).toEqual([1, 8, 9, 10]);
   });
 
   it('counts only the sleeps every pass reaches: a sleep a pass may skip is not part of the interval', () => {
@@ -947,7 +947,7 @@ describe('a bound the scan computes, and one it leaves to the caller', () => {
       'NaN', 'Infinity', '-Infinity', 'Number.POSITIVE_INFINITY', '2 ** 31', 'Math.min(500, 20_000)', 'Math.floor(9_999.9)', 'Math.max(100, 200) * 2',
     ];
     expect(lines(scan(...short.map(wait)))).toEqual(short.map((_, index) => index + 1));
-    const long = ['20_000 as number', '(20_000)', '+20_000', '-(-20_000)', '2 ** 14', 'Math.max(500, 20_000)', 'Math.ceil(9_999.1)', '5e4', '0x4E20', '10_000 + 1'];
+    const long = ['20_000 as number', '(20_000)', '+20_000', '-(-20_000)', '2 ** 14', 'Math.max(500, 20_000)', 'Math.ceil(10_000.1)', '5e4', '0x4E20', '10_000 + 1'];
     expect(scan(...long.map(wait))).toEqual([]);
     expect(lines(scan('await vi.waitFor(cb, -1);', 'await vi.waitFor(cb, NaN);', 'await waitFor(() => ready(), 0);', 'await vi.waitFor(cb, +20_000);'))).toEqual([1, 2, 3]);
   });
@@ -1219,7 +1219,7 @@ describe('the baseline', () => {
   });
 
   it('keeps the poll loops in a baseline of their own, apart from the sleeps and short bounds', () => {
-    expect(baselines.map((b) => b.rules)).toEqual([['sleep', 'short-bound'], ['poll-deadline']]);
+    expect(baselines.map((b) => b.rules)).toEqual([['sleep', 'short-bound'], ['poll-deadline'], ['one-shot-read']]);
     expect(new Set(baselines.map((b) => b.path)).size).toBe(baselines.length);
     expect(baselines.every((b) => b.path.endsWith('.baseline.json'))).toBe(true);
   });
