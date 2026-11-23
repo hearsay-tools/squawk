@@ -72,7 +72,7 @@ export function importLegacyIndex(db: RunDatabase, dataDir: string, parseRunReco
  * in the `live` column; open decodes these few and keeps the ones it actually repaired.
  */
 export const LEGACY_REFERENCE_HEAL_SQL = guardedJsonSql(
-  "(json_extract(summary, '$.markerRefs.pr') IS NOT NULL AND json_extract(summary, '$.referencedPullRequestUrl') IS NULL)" +
+  "(json_extract(summary, '$.markerRefs.pr') IS NOT NULL AND json_extract(summary, '$.referencedPullRequestUrl') IS NULL AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'pr-reference-heal:' || runs.id AND value = CAST(runs.revision AS TEXT)))" +
   " OR (NOT EXISTS (SELECT 1 FROM meta WHERE key = 'issue-attribution:' || runs.id AND value = CAST(runs.revision AS TEXT)) AND json_extract(summary, '$.markerRefs.issue') IS NOT NULL)", 1);
 
 /**
@@ -95,3 +95,17 @@ export const LOAD_REPAIR_SQL = `live = 1 OR ${LEGACY_REFERENCE_HEAL_SQL}`;
  */
 export const AUTOMATION_ORIGIN_HEAL_SQL = `instr(data, '"automation') > 0 AND ${guardedJsonSql("json_extract(summary, '$.automationId') IS NULL" +
   " AND (json_extract(data, '$.automation.automationId') IS NOT NULL OR json_extract(data, '$.automationTrigger.automationId') IS NOT NULL)", 0, ['summary', 'data'])}`;
+
+/** Completion is recorded only after an empty scan, never ahead of a pending repair. */
+export const AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY = 'automation-origin-heal-v1';
+
+/** Optional verification cache: a busy or read-only database must not fail boot. */
+export function saveHealMeta(db: RunDatabase, meta: Record<string, string>): void {
+  if (Object.keys(meta).length === 0) return;
+  try { db.transaction({ upserts: [], deletes: [], meta }); } catch { /* Retry verification on the next read. */ }
+}
+
+/** A repository identity and row revision both invalidate a scope verification. */
+export function repoScopeStamp(handle: { owner: string; name: string }, revision: number): string {
+  return `${handle.owner.toLowerCase()}/${handle.name.toLowerCase()}@${revision}`;
+}

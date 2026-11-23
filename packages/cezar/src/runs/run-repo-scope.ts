@@ -14,6 +14,7 @@ import type { RunDatabase, RunRow } from './run-database.ts';
 import type { RunPersistenceTopic } from './run-persistence.ts';
 import { namesForeignReference, rescopeRun } from './run-references.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
+import { repoScopeStamp, saveHealMeta } from './store-open.ts';
 import type { RepoHandle, RunRecord } from './store.ts';
 
 /** What the topic asks of the store; no import of `store.ts` values. */
@@ -51,11 +52,15 @@ export class RunRepoScopeTopic implements RunRepoHandle {
     // `touch` per healed run: the cockpit is already live when the handle lands, so a corrected
     // chip has to reach the open page over SSE, not just the next `runs.json` write.
     let healed = false;
-    const stored = this.db?.listWhere(guardedJsonSql(`${REFERENCED_RUN_RULE.sql} OR json_extract(summary, '$.pullRequests') IS NOT NULL`, 0)).filter((row) => {
-      if (this.held.has(row.id) || this.deleted.has(row.id)) return false;
+    const keys = this.db?.listKeysWhere(guardedJsonSql(`${REFERENCED_RUN_RULE.sql} OR json_extract(summary, '$.pullRequests') IS NOT NULL`, 0)) ?? [];
+    const summaries = this.db?.getSummaries(keys.filter(({ id }) => !this.held.has(id) && !this.deleted.has(id)).map(({ id }) => id)) ?? [];
+    const needDecode = summaries.filter((row) => {
       const summary = parseStoredSummary(row.summary);
-      return !summary || namesForeignReference(summary, handle);
-    }) ?? [];
+      return !summary || (namesForeignReference(summary, handle) &&
+        this.db!.getMeta(`repo-scope:${row.id}`) !== repoScopeStamp(handle, row.revision));
+    });
+    const stored = this.db?.getMany(needDecode.map(({ id }) => id)) ?? [];
+    const verified: Record<string, string> = {};
     for (const run of [...this.held.values()]) {
       const before = snapshotRun(run);
       if (rescopeRun(run, this.repoHandle)) {
@@ -70,13 +75,18 @@ export class RunRepoScopeTopic implements RunRepoHandle {
       let before: Readonly<RunRecord> | undefined;
       const run = this.decodeCold(row, (loaded) => { before = snapshotRun(loaded); });
       // `decodeCold` already scoped it with the handle just armed; write it when that changed it.
-      if (!run || !this.storedScopeDiffers(row, run)) continue;
+      if (!run) continue;
+      if (!this.storedScopeDiffers(row, run)) {
+        if (!this.db!.familyHasFallback(rowFamily(row))) verified[`repo-scope:${row.id}`] = repoScopeStamp(handle, row.revision);
+        continue;
+      }
       this.holdDecoded(run);
       this.persistence.touch(run, before ?? snapshotRun(run));
       healed = true;
     }
     // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
     // debounced save is unref'd, so it cannot keep the CLI alive once the lookup completes.
+    if (this.db) saveHealMeta(this.db, verified);
     if (healed) this.persistence.flush();
   }
 
