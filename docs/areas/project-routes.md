@@ -228,8 +228,13 @@ P4b3 (hearsay-tools/cezarion#3089) connects the fence and the engine, offline.
   notice names what blocks the move, and the next start tries again (one attempt per project
   per cockpit run; a caller that comes while it runs waits for it). The notice of a finished
   move lists the `git mv` commands for tracked files and the tasks that keep their files
-  in `.ai/cezar/` until they are archived. A marked project whose `.ai/cezar/` holds more than `cockpit.lock*` plans
-  again at each start and moves what no kept task owns now. Any failure before the journal exists
+  in `.ai/cezar/` until they are archived. A marked project plans again at a start only when
+  its `.ai/cezar/` holds an item that may move now (`legacyMoveWorkLeft`): an untracked item
+  other than `cockpit.lock*` that no task on the kept-task list owns, an item of a listed task
+  that can no longer resume (read by id, `keptAmong`), or an unreadable kept-task list. Tracked
+  files and a kept task's items alone cost no plan. With no other writer live, the plan runs once,
+  under the fence; with one live, it runs only to name a refusal before the live writer. A marked
+  project's blocked move logs its reason too. Any failure before the journal exists
   only delays the move; a failure after it leaves the journal, so admission refuses the
   project until recovery finishes it. Every cockpit
   path that touches a project before or without its context runs the same prepare step

@@ -7,7 +7,8 @@ import { CockpitOwnership, migrationFencePaths } from '../server/cockpit-ownersh
 import { ProjectMigrationRefusedError, resolveKeptRunIds } from './engine.ts';
 import { projectCockpits, projectForeignTasksOffline } from './live.ts';
 import { moveUnderFence } from './offline.ts';
-import { LEGACY_PROJECT_DIR, legacyStateLeft, MIGRATED_PROJECT_DIR, planProjectMigration, type ProjectMigrationPlan } from './plan.ts';
+import { LEGACY_PROJECT_DIR, planProjectMigration, type ProjectMigrationPlan } from './plan.ts';
+import { legacyMoveWorkLeft } from './pending.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import type { ArchiveOnMergeDeps } from '../server/archive-on-merge.ts';
 import { automationLeaseHeld } from '../automations/store.ts';
@@ -59,38 +60,48 @@ function refusal(plan: ProjectMigrationPlan): string {
   return [...plan.blockers, ...plan.conflicts.map(conflict => `${conflict.path}: ${conflict.reason}`)].join('; ');
 }
 
+const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+
 /**
- * 'nothing' when there is nothing to move, a reason when the move must wait, or undefined to go ahead.
- * As in the move itself, a plan refused anyway names its own refusal, not a failure to read the kept tasks.
+ * 'nothing' when there is nothing to move, a reason when the move must wait, or undefined to go
+ * ahead. With no other writer live, the plan runs once, in the move under the fence, which refuses
+ * a plan with a blocker or conflict before its journal exists. With one live, the move waits; the
+ * plan runs here only so that a refusal the operator must fix first is named instead.
  */
 async function precheck(root: string, homes: readonly Home[]): Promise<'nothing' | { reason: string } | undefined> {
+  // An unmarked project moves while its `.ai/cezar/` exists, even with nothing in it to carry: the move marks it.
+  if (!projectMoveMarked(root) && !pathPresent(join(root, ...LEGACY_PROJECT_DIR.split('/')))) return 'nothing';
+  const live = await blocker(root, homes).catch(errorText);
+  if (!live) return undefined;
   try {
     const plan = await planProjectMigration(root, { keep: await resolveKeptRunIds({ repoRoot: root }) });
     const refused = refusal(plan);
     if (refused) return { reason: refused };
-    // An unmarked project moves while its `.ai/cezar/` exists, even with nothing in it to carry: the move marks it.
-    if (plan.alreadyMoved || (!projectMoveMarked(root) && !pathPresent(plan.source))) return 'nothing';
-    const live = await blocker(root, homes);
-    return live ? { reason: live } : undefined;
+    if (plan.alreadyMoved) return 'nothing';
+    return { reason: live };
   } catch (error) {
+    // As in the move itself, a plan refused anyway names its own refusal, not a failure to read the kept tasks.
     if (error instanceof ProjectMigrationRefusedError) return { reason: refusal(error.plan) };
-    return { reason: error instanceof Error ? error.message : String(error) };
+    return { reason: errorText(error) };
   }
 }
 
 /**
  * The move under `ownership`'s fence. Any failure before the journal exists (a refusal, a race, a
  * file system error claiming the fence) is a reason to wait: nothing moved, the project is served
- * as before. Only a failure after the journal exists closes the project through recovery.
+ * as before. A refused plan names its own blockers and conflicts, not a failure to read the kept
+ * tasks. Only a failure after the journal exists closes the project through recovery.
  */
-async function move(root: string, ownership: CockpitOwnership, fault: MigrationFault | undefined): Promise<{ gitMv: string[]; leftovers: string[] } | { reason: string }> {
+async function move(root: string, ownership: CockpitOwnership, fault: MigrationFault | undefined): Promise<{ gitMv: string[]; leftovers: string[] } | { reason: string } | 'nothing'> {
   try {
     const answer = await moveUnderFence(root, ownership, fault);
+    if (answer.alreadyMoved) return 'nothing';
     return { gitMv: answer.gitMv, leftovers: answer.leftovers };
   } catch (error) {
     const journal = migrationFencePaths(projectPaths(root).write)!.journal;
     if (pathPresent(journal)) throw new ProjectMigrationRecoveryError(journal, root, error);
-    return { reason: error instanceof Error ? error.message : String(error) };
+    if (error instanceof ProjectMigrationRefusedError) return { reason: refusal(error.plan) };
+    return { reason: errorText(error) };
   }
 }
 
@@ -129,9 +140,10 @@ export function moveProjectWhenIdle(root: string, options: {
 async function attempt(root: string, options: Parameters<typeof moveProjectWhenIdle>[1]): Promise<AutomaticMove> {
   markFreshProject(root);
   // A completed move marked the project (hearsay-tools/cezarion#3150): `.ai/cezar/` is its fallback
-  // now, and holds nothing more to move once only the ownership claims are left in it. An unmarked
-  // project still needs the move that marks it, even when its `.ai/cezar/` is empty or tracked only.
-  if (projectMoveMarked(root) && !legacyStateLeft(join(root, ...LEGACY_PROJECT_DIR.split('/')), join(root, ...MIGRATED_PROJECT_DIR.split('/')))) return { status: 'nothing' };
+  // now, and holds nothing more to move once only items that never move or still stay are left in
+  // it (`pending.ts`). An unmarked project still needs the move that marks it, even when its
+  // `.ai/cezar/` is empty or tracked only.
+  if (projectMoveMarked(root) && !await legacyMoveWorkLeft(root)) return { status: 'nothing' };
   const log = options.log ?? ((line: string) => console.warn(line));
   const blocked = (reason: string): AutomaticMove => {
     noticeLegacyProject(root, { reason, warn: log });
@@ -143,6 +155,7 @@ async function attempt(root: string, options: Parameters<typeof moveProjectWhenI
   const ownership = options.ownership ?? new CockpitOwnership();
   try {
     const result = await move(root, ownership, options.fault);
+    if (result === 'nothing') return { status: 'nothing' };
     if ('reason' in result) return blocked(result.reason);
     log(`[${productIdentity().command}] ${movedNotice(root, result.leftovers)}${result.gitMv.length
       ? ` Tracked files stay; run these and commit:\n${result.gitMv.map(line => `  ${line}`).join('\n')}` : ''}`);

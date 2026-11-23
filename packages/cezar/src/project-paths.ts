@@ -157,13 +157,16 @@ export function movedProjectPath(path: string): string | undefined {
 }
 
 const noticedProjects = new Set<string>();
+/** A project still served from `.ai/cezar/`, once per process; with a `reason`, a move that waits,
+ *  each time: also for a moved project whose leftover items in `.ai/cezar/` could not move. */
 export function noticeLegacyProject(repoRoot: string, options: { reason?: string; warn?: (message: string) => void } = {}): void {
   const legacy = join(repoRoot, '.ai', 'cezar');
-  if ((noticedProjects.has(repoRoot) && !options.reason) || projectPaths(repoRoot).write !== legacy || !pathPresent(legacy)) return;
+  const moved = projectPaths(repoRoot).write !== legacy;
+  if (!pathPresent(legacy) || (!options.reason && (moved || noticedProjects.has(repoRoot)))) return;
   noticedProjects.add(repoRoot);
   const prefix = productIdentity().command;
-  const message = options.reason
-    ? `Project ${repoRoot} keeps its state in .ai/cezar/ for now: ${options.reason}. It is served from both folders; the move runs again at the next start.`
-    : `Legacy project directory ${legacy} is still in use; both project directories remain readable.`;
+  const message = !options.reason ? `Legacy project directory ${legacy} is still in use; both project directories remain readable.`
+    : moved ? `Project ${repoRoot} keeps items in .ai/cezar/ that did not move: ${options.reason}. They stay readable there; the move runs again at the next start.`
+      : `Project ${repoRoot} keeps its state in .ai/cezar/ for now: ${options.reason}. It is served from both folders; the move runs again at the next start.`;
   (options.warn ?? console.warn)(`[${prefix}] ${message}`);
 }

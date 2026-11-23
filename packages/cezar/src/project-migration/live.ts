@@ -5,7 +5,7 @@ import { readCockpitLeases } from '../home/leases.ts';
 import { pathPresent, projectPaths } from '../project-paths.ts';
 import { projectLiveTasks } from '../runs/live-tasks.ts';
 import { claimOwnerLive } from '../runs/run-claims.ts';
-import { RUNS_DB_FILE } from '../runs/run-database.ts';
+import { RUNS_DB_FILE, RunDatabase } from '../runs/run-database.ts';
 import { parseRunRecords, type RunRecord } from '../runs/store.ts';
 import type { LiveRunReads } from '../runs/ports.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
@@ -176,5 +176,51 @@ export function projectKeptRunIds(root: string): ReadonlySet<string> {
   }
   const kept = new Set(projectLiveTasks(view).map(task => task.id));
   for (const run of view.allRuns()) if (!run.archived) kept.add(run.id);
+  return kept;
+}
+
+/** What the run stores hold about one task, merged as `readLiveTaskView` merges them. */
+interface TaskFacts { run?: RunRecord | undefined; unparsed: boolean; live: boolean; foreign: boolean }
+
+function taskFacts(db: RunDatabase, id: string, facts: TaskFacts): void {
+  const row = db.get(id);
+  // The first store whose record parses wins; a row not archived that parses nowhere is unknown.
+  if (row && !facts.run) {
+    facts.run = record(parseJson(row.data));
+    if (!facts.run && !row.archived) facts.unparsed = true;
+  }
+  if (row?.live) facts.live = true;
+  const family = db.familyOf(id);
+  const claim = family === undefined ? undefined : db.getClaim(family);
+  if (claim && claimOwnerLive(claim)) facts.foreign = true;
+}
+
+/**
+ * Which of `ids` can still resume, by the rule of `projectKeptRunIds`, read by id instead of
+ * parsing every row of every store: the cockpit's check whether the items a moved project keeps
+ * in `.ai/cezar/` may move now. Each store is read in place, so SQLite may touch its shared-memory
+ * file; the cockpit that asks opens the store anyway. Undefined when the answer is unknown: a store
+ * or an index without a store cannot be read, or a task is not archived or is live but its record
+ * cannot be read. The full plan then decides, as before.
+ */
+export function keptAmong(root: string, ids: ReadonlySet<string>): ReadonlySet<string> | undefined {
+  const facts = new Map([...ids].map(id => [id, { unparsed: false, live: false, foreign: false } as TaskFacts]));
+  try {
+    for (const directory of projectPaths(root).reads) {
+      const database = join(directory, RUNS_DB_FILE);
+      if (!pathPresent(database)) {
+        if (pathPresent(join(directory, 'runs.json'))) return undefined;
+        continue;
+      }
+      const db = RunDatabase.openReadOnly(database);
+      if (!db) return undefined;
+      try { for (const [id, known] of facts) taskFacts(db, id, known); } finally { db.close(); }
+    }
+  } catch { return undefined; }
+  const kept = new Set<string>();
+  for (const [id, { run, unparsed, live, foreign }] of facts) {
+    if (!run && (unparsed || live || foreign)) return undefined;
+    if (run && (!run.archived || foreign || (live && isLiveRecord(run)))) kept.add(id);
+  }
   return kept;
 }
