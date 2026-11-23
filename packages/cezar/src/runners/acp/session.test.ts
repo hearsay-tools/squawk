@@ -205,6 +205,39 @@ async function heldResponse(match: string) {
   return { control, env: { CEZ_MOCK_DELIVERY_CONTROL: control.path } };
 }
 
+/** Wait until the child holds the prompt response AND the parent has read the expected wire frames,
+ * then verify state while held, release, and return the settled prompt result. Tracking `pending`
+ * upfront prevents an unhandled rejection if an assertion throws before release. */
+async function whileHeld<T>(
+  control: { held(): boolean; release(): void },
+  pending: Promise<T>,
+  ready: () => boolean,
+  assertHeld: () => void,
+): Promise<T> {
+  let settled: { ok: true; value: T } | { ok: false; error: unknown } | undefined;
+  const tracked = pending.then(
+    value => { settled = { ok: true, value }; },
+    error => { settled = { ok: false, error }; },
+  );
+  try {
+    await waitFor(() => {
+      if (settled) {
+        if (!settled.ok) throw settled.error;
+        throw new Error('ACP prompt resolved before its held response was released');
+      }
+      return control.held() && ready();
+    });
+    assertHeld();
+  } catch (error) {
+    control.release();
+    throw error;
+  }
+  control.release();
+  await tracked;
+  if (!settled!.ok) throw settled!.error;
+  return settled!.value;
+}
+
 describe('acknowledging a prompt that opens a turn', () => {
   it('acknowledges at the turn\'s first agent work, while its response is still held', async () => {
     const { control, env } = await heldResponse('first-work');
@@ -212,12 +245,16 @@ describe('acknowledging a prompt that opens a turn', () => {
     await session.initialize(); await session.open({ cwd: tmpdir() });
     let acknowledged = false;
     const response = session.prompt([{ type: 'text', text: 'Inspect first-work' }], () => { acknowledged = true; });
-    await waitFor(() => control.held());
-    expect(events).toContainEqual({ type: 'text', text: expect.stringContaining('Inspect first-work') });
-    expect(acknowledged).toBe(true);
-    expect(ui.filter(event => event.type === 'turn.completed')).toEqual([]);
-    control.release();
-    await expect(response).resolves.toMatchObject({ stopReason: 'end_turn' });
+    const result = await whileHeld(
+      control,
+      response,
+      () => events.some(event => event.type === 'text' && event.text.includes('Inspect first-work')),
+      () => {
+        expect(acknowledged).toBe(true);
+        expect(ui.filter(event => event.type === 'turn.completed')).toEqual([]);
+      },
+    );
+    expect(result).toMatchObject({ stopReason: 'end_turn' });
   });
 
   it('acknowledges a turn with no agent work only after its response ends the turn', async () => {
@@ -233,15 +270,21 @@ describe('acknowledging a prompt that opens a turn', () => {
     const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-quiet-')); dirs.push(dir);
     let acknowledged = false;
     let next: Promise<unknown> | undefined;
-    const { session } = start({ uiEvent: event => {
+    const { session, events, ui } = start({ uiEvent: event => {
       if (event.type === 'turn.completed' && !next) next = session.prompt([{ type: 'text', text: 'Inspect next-turn' }], () => { acknowledged = true; });
     } }, env);
     await session.initialize(); await session.open({ cwd: dir });
     await session.prompt([{ type: 'text', text: 'mock:acp-runtime-workspace' }], () => {});
-    await waitFor(() => control.held());
-    expect(acknowledged).toBe(true);
-    control.release();
-    await next;
+    expect(next).toBeDefined();
+    await whileHeld(
+      control,
+      next!,
+      () => events.some(event => event.type === 'text' && event.text.includes('Inspect next-turn')),
+      () => {
+        expect(acknowledged).toBe(true);
+        expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(1);
+      },
+    );
   });
 
   it('never acknowledges a prompt whose only work is a provider failure', async () => {
@@ -271,11 +314,12 @@ describe('acknowledging a prompt that opens a turn', () => {
     expect(session.agentWorking).toBe(true);
     let acknowledged = false;
     const response = session.prompt([{ type: 'text', text: 'mock:agent-echo joined' }], () => { acknowledged = true; });
-    await waitFor(() => control.held());
-    expect(events).toContainEqual({ type: 'text', text: expect.stringContaining('joined') });
-    expect(acknowledged).toBe(false);
-    control.release();
-    await response;
+    await whileHeld(
+      control,
+      response,
+      () => events.some(event => event.type === 'text' && event.text.includes('joined')),
+      () => { expect(acknowledged).toBe(false); },
+    );
     expect(acknowledged).toBe(true);
   });
 });
