@@ -526,7 +526,7 @@ export function legacyStateLeft(source: string, destination: string): boolean {
 
 /** The leftover tasks the moved directory `destination` names now, read from disk; undefined
  *  when the file is present but unreadable, so the move rewrites it from the run store. */
-function currentLeftovers(destination: string): string[] | undefined {
+export function currentLeftovers(destination: string): string[] | undefined {
   forgetLegacyRunIds(destination);
   try { return [...legacyRunIds(destination)].sort(); } catch (error) {
     if (error instanceof LegacyRunsUnreadableError) return undefined;

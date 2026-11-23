@@ -132,6 +132,12 @@ or delete it, and removes the folders under `.ai/cezar/` that this leaves empty.
 A finished move logs the `git mv` commands for tracked files and says "N task(s)
 keep their files in .ai/cezar/ until they are archived: <ids>".
 
+A start checks the items left in `.ai/cezar/` first, and plans the move only when
+one of them can move. When a leftover item would replace a path in `.ai/squawk/`
+(for example a `config.json` that an older binary wrote after the move), nothing
+moves and each start logs "keeps items in .ai/cezar/ that did not move" with the
+path. Merge what you still need into the `.ai/squawk/` copy and delete the old one.
+
 To move a project yourself, stop its cockpit and run:
 
 ```sh
