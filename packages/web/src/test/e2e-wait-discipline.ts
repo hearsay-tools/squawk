@@ -69,24 +69,27 @@ const ESCAPE_WINDOW = 12
 
 export function scanSource(file: string, source: string): Site[] {
   const lines = source.split('\n')
+  const lineOf = makeLineIndex(source)
+  const inPageCalls = callSpans(source, inPage)
+  const waitCalls = inPageCalls.filter(call => call.name !== 'evaluate')
   const sites: Site[] = []
   const at = (rule: Rule, index: number): Site => ({ rule, file, line: index + 1, site: lines[index]?.trim() ?? '' })
 
   // Rule 1 — a one-shot read within two lines after an action, with no wait between them.
   for (const j of oneShotReadIndices(lines)) sites.push(at('one-shot-read', j))
-  for (const index of oneShotInputIndices(source)) sites.push(at('one-shot-input', index))
-  for (const index of staleElementIndices(source)) sites.push(at('stale-element-handle', index))
+  for (const index of oneShotInputIndices(source, lineOf)) sites.push(at('one-shot-input', index))
+  for (const index of staleElementIndices(source, lineOf)) sites.push(at('stale-element-handle', index))
   // Rules 2 and 3 — what a wait's argument contains.
-  for (const site of waitPredicateSites(source)) sites.push(at(site.rule, site.line))
+  for (const site of waitPredicateSites(waitCalls, lineOf)) sites.push(at(site.rule, site.line))
   // Rule 4 — a sleep.
-  for (const site of sleepSites(source, file, lines)) sites.push(at(site.rule, site.line))
+  for (const site of sleepSites(source, file, lines, lineOf)) sites.push(at(site.rule, site.line))
   // Rule 7 — a keyboard step, or a read of where focus is, after an Escape nobody waited out.
-  for (const site of focusAfterBareEscapeSites(source, lines)) sites.push(at(site.rule, site.line))
+  for (const site of focusAfterBareEscapeSites(waitCalls, lines, lineOf)) sites.push(at(site.rule, site.line))
   // Rules 5 and 6 — what a spec does to the page it is measuring. Both only look inside in-page
   // code, so a node-side `rows[0]` on an array `evaluate` RETURNED is untouched: reading a result
   // by index is not addressing a row by index.
-  for (const call of callSpans(source, inPage)) {
-    for (const site of productDomSites(call, source)) sites.push(at(site.rule, site.line))
+  for (const call of inPageCalls) {
+    for (const site of productDomSites(call, source, lineOf)) sites.push(at(site.rule, site.line))
   }
 
   return sites.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule))
@@ -111,13 +114,16 @@ function oneShotReadIndices(lines: string[]): number[] {
  * a render can replace the input or restore its value. Submission and navigation effects are
  * excluded: retrying those actions can submit twice. A surrounding
  * retry call already repeats the action, so its inputs are accepted. */
-function oneShotInputIndices(source: string): number[] {
+function oneShotInputIndices(source: string, lineOf: LineLookup): number[] {
   const waits = callSpans(source, /\b(waitFor\w*|poll\w*|retry\w*)\(/g)
   const found = new Set<number>()
+  let nextWaitIdx = 0
   for (const input of callSpans(source, /\b\w+\.(click|press|fill)\(/g)) {
     const end = input.textStart + input.text.length
     if (waits.some(call => call.start < input.start && call.textStart + call.text.length > end)) continue
-    const next = waits.find(call => call.start > end && lineOf(source, call.start) - lineOf(source, end) <= 3)
+    while (nextWaitIdx < waits.length && (waits[nextWaitIdx]?.start ?? 0) <= end) nextWaitIdx += 1
+    const candidate = waits[nextWaitIdx]
+    const next = candidate && lineOf(candidate.start) - lineOf(end) <= 3 ? candidate : undefined
     if (!next || !/activeElement|\.(?:value|checked|selected|selectionStart)\b/.test(next.text)) continue
     // A click that clears a field may submit it. Enter/Space may submit too. Only repeat a
     // click when its wait names focus or selection state, never just a resulting value.
@@ -126,7 +132,7 @@ function oneShotInputIndices(source: string): number[] {
     // Another input or navigation starts a separate interaction.
     const between = source.slice(end + 1, next.start)
     if (/\b\w+\.(?:click|press|fill|goto)\(/.test(between)) continue
-    found.add(lineOf(source, input.start))
+    found.add(lineOf(input.start))
   }
   return [...found]
 }
@@ -134,7 +140,7 @@ function oneShotInputIndices(source: string): number[] {
 /** A DOM node kept on window or another holder survives a query, not a render. Read it again
  * from the page after scrolling, refresh or navigation. Reassignment to a fresh query resets
  * the handle's lifetime. This is a source heuristic like the other in-page rules. */
-function staleElementIndices(source: string): number[] {
+function staleElementIndices(source: string, lineOf: LineLookup): number[] {
   const held = new Map<string, { changed: boolean }>()
   const found = new Set<number>()
   for (const call of callSpans(source, /\b(evaluate|waitForFunction|waitForValue|waitForStable|waitForSettledSample|reload|refresh|goto|wheel)\(/g)) {
@@ -142,7 +148,10 @@ function staleElementIndices(source: string): number[] {
       for (const state of held.values()) state.changed = true
       continue
     }
-    const rooted = rootedNames(call.text, new Set())
+    if (held.size === 0 && !call.text.includes('=')) continue
+    const rootedPatterns = call.text.includes('querySelector')
+      ? [...rootedNames(call.text, new Set())].map(name => new RegExp(`\\b${name}\\b`))
+      : []
     const events = /([A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\s*=(?![=>])\s*([^;\n]+)|\b(?:scrollTop|scrollLeft)\s*(?:[-+]?=)|\.(?:scrollIntoView|scrollTo|scrollBy|reload|refresh)\s*\(|\b[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*/g
     for (const match of call.text.matchAll(events)) {
       if (match[1]) {
@@ -151,14 +160,14 @@ function staleElementIndices(source: string): number[] {
           continue
         }
         const rhs = match[2] ?? ''
-        if (/querySelector|getElementById/.test(rhs) || [...rooted].some(name => new RegExp(`\\b${name}\\b`).test(rhs))) held.set(match[1], { changed: false })
+        if (/querySelector|getElementById/.test(rhs) || rootedPatterns.some(pattern => pattern.test(rhs))) held.set(match[1], { changed: false })
         else held.delete(match[1])
         continue
       }
       if (/scroll|reload|refresh/.test(match[0])) {
         for (const state of held.values()) state.changed = true
       } else if (held.get(match[0])?.changed) {
-        found.add(lineOf(source, call.textStart + match.index))
+        found.add(lineOf(call.textStart + match.index))
       }
     }
   }
@@ -166,10 +175,10 @@ function staleElementIndices(source: string): number[] {
 }
 
 /** Rules 2 and 3 — what a wait's argument contains. */
-function waitPredicateSites(source: string): { rule: Rule; line: number }[] {
+function waitPredicateSites(waitCalls: CallSpan[], lineOf: LineLookup): { rule: Rule; line: number }[] {
   const found: { rule: Rule; line: number }[] = []
-  for (const call of callSpans(source, /\b(waitForFunction|waitForValue|waitForStable|waitForSettledSample)\(/g)) {
-    const line = lineOf(source, call.start)
+  for (const call of waitCalls) {
+    const line = lineOf(call.start)
     const hasClock = /(?:performance|Date)\.now\s*\(|\bnew\s+Date\s*\(\s*\)\s*\.\s*getTime\s*\(/.test(call.text)
     const hasState = /document\.|querySelector|activeElement|__cezIdle|__geometry|dataset\./.test(call.text)
     if (hasClock && !hasState) found.push({ rule: 'clock-only-wait', line })
@@ -183,10 +192,10 @@ function waitPredicateSites(source: string): { rule: Rule; line: number }[] {
  *  which is excluded from this scan and is the only place a spec-side poll sleeps (#416).
  *  The name-based exemption this replaces trusted any looping `waitFor…`/`poll…` function,
  *  so a helper could sleep for any reason at all under a good name. */
-function sleepSites(source: string, file: string, lines: string[]): { rule: Rule; line: number }[] {
+function sleepSites(source: string, file: string, lines: string[], lineOf: LineLookup): { rule: Rule; line: number }[] {
   const found: { rule: Rule; line: number }[] = []
   for (const call of callSpans(source, new RegExp(sleep.source, 'g'))) {
-    const i = lineOf(source, call.start)
+    const i = lineOf(call.start)
     if (lines[i]?.trim().startsWith('//')) continue
     // Node request/socket deadlines are methods, not global timer aliases.
     if (/\b(?:request|socket)\s*\.\s*$/.test(source.slice(0, call.start))) continue
@@ -214,12 +223,12 @@ function sleepSites(source: string, file: string, lines: string[]): { rule: Rule
  *  Waits are matched as spans, not lines: a predicate usually sits on the line after
  *  `waitForFunction(`, and a wait's own mention of `activeElement` is the settled wait, never
  *  a one-shot read of it. */
-function focusAfterBareEscapeSites(source: string, lines: string[]): { rule: Rule; line: number }[] {
+function focusAfterBareEscapeSites(waitCalls: CallSpan[], lines: string[], lineOf: LineLookup): { rule: Rule; line: number }[] {
   const found: { rule: Rule; line: number }[] = []
   const waitLines = new Map<number, 'settles' | 'other'>()
-  for (const call of callSpans(source, /\b(waitForFunction|waitForValue|waitForStable|waitForSettledSample)\(/g)) {
+  for (const call of waitCalls) {
     const kind = focusState.test(call.text) ? 'settles' : 'other'
-    for (let l = lineOf(source, call.start); l <= lineOf(source, call.textStart + call.text.length); l += 1) waitLines.set(l, kind)
+    for (let l = lineOf(call.start); l <= lineOf(call.textStart + call.text.length); l += 1) waitLines.set(l, kind)
   }
   lines.forEach((line, i) => {
     if (!bareEscape.test(line)) return
@@ -273,7 +282,7 @@ const receiverHead = /([A-Za-z_$][\w$]*)(?:\s*\??\.\s*[\w$]+|\s*\[[^\]]*\]|\s*\(
  * whatever it is called, and so is `document.documentElement`, which is where theme, density,
  * width and accent legitimately live.
  */
-function productDomSites(call: CallSpan, source: string): { rule: Rule; line: number }[] {
+function productDomSites(call: CallSpan, source: string, lineOf: LineLookup): { rule: Rule; line: number }[] {
   const found: { rule: Rule; line: number }[] = []
   const owned = new Set<string>()
   for (const match of call.text.matchAll(specOwned)) owned.add(match[1] as string)
@@ -290,11 +299,11 @@ function productDomSites(call: CallSpan, source: string): { rule: Rule; line: nu
   for (const match of call.text.matchAll(new RegExp(writeOp.source, 'g'))) {
     const lineStart = call.text.lastIndexOf('\n', match.index) + 1
     if (isRendered(call.text.slice(lineStart, match.index))) {
-      found.push({ rule: 'product-dom-write', line: lineOf(source, call.textStart + match.index) })
+      found.push({ rule: 'product-dom-write', line: lineOf(call.textStart + match.index) })
     }
   }
 
-  for (const site of positionalRowSites(call, source, rooted, owned)) found.push(site)
+  for (const site of positionalRowSites(call, source, rooted, owned, lineOf)) found.push(site)
 
   return found
 }
@@ -331,13 +340,13 @@ function rootBoundNames(line: string, rooted: Set<string>, owned: Set<string>): 
 /** A positional read of a live node list, when the file also addresses rows by `data-run-id`:
  *  mixing the two is the inconsistency worth catching, because the file has already said which
  *  row it means. */
-function positionalRowSites(call: CallSpan, source: string, rooted: Set<string>, owned: Set<string>): { rule: Rule; line: number }[] {
+function positionalRowSites(call: CallSpan, source: string, rooted: Set<string>, owned: Set<string>, lineOf: LineLookup): { rule: Rule; line: number }[] {
   const found: { rule: Rule; line: number }[] = []
   if (!source.includes('data-run-id')) return found
   for (const match of call.text.matchAll(positional)) {
     const name = /^[\w$]+/.exec(match[0])?.[0]
     if (match[0].includes('querySelectorAll') || (name !== undefined && rooted.has(name) && !owned.has(name))) {
-      found.push({ rule: 'positional-row-index', line: lineOf(source, call.textStart + match.index) })
+      found.push({ rule: 'positional-row-index', line: lineOf(call.textStart + match.index) })
     }
   }
   return found
@@ -453,10 +462,22 @@ function stepCode(ch: string, top: string | undefined, context: string[], depth:
   return depth
 }
 
-function lineOf(source: string, offset: number): number {
-  let line = 0
-  for (let i = 0; i < offset; i += 1) if (source[i] === '\n') line += 1
-  return line
+type LineLookup = (offset: number) => number
+
+/** Precompute line start offsets once per file so offset-to-line lookup is O(log lines) instead of O(chars). */
+function makeLineIndex(source: string): LineLookup {
+  const starts: number[] = [0]
+  for (let i = 0; i < source.length; i += 1) if (source.charCodeAt(i) === 10) starts.push(i + 1)
+  return (offset: number): number => {
+    let lo = 0
+    let hi = starts.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if ((starts[mid] ?? 0) <= offset) lo = mid
+      else hi = mid - 1
+    }
+    return lo
+  }
 }
 
 /** Every browser-driving `.ts` under `packages/web/e2e`, scanned. */
