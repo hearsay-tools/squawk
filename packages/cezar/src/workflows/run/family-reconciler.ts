@@ -217,7 +217,7 @@ export class FamilyReconciler {
     if (parent.stopping && parent.delegation?.role === 'root' && !recovering) this.host.closeRoutedQuestions(parent.id);
     if (['queued', 'running', 'waiting'].includes(parent.status)) return false;
     if (recovering) return true;
-    const stale = WAIT_KINDS.worker.select(parent.waits ?? []).filter(wait => wait.phase === 'open' || wait.phase === 'resolved').map(wait => wait.id);
+    const stale = (WAIT_KINDS.worker?.select(parent.waits ?? []) ?? []).filter(wait => wait.phase === 'open' || wait.phase === 'resolved').map(wait => wait.id);
     if (stale.length) this.host.waitEngine.cancel(parent.id, stale);
     this.host.closeRoutedQuestions(parent.id);
     for (const child of this.endedWith(parent)) this.host.cancel(child.id);
@@ -272,7 +272,7 @@ export class FamilyReconciler {
    * armed. Messages never resolve one.
    */
   private reconcileWorkerEntries(parent: RunRecord, observe: (now: string) => WorkerObservations): void {
-    const entries = WAIT_KINDS.worker.select(parent.waits ?? []);
+    const entries = WAIT_KINDS.worker?.select(parent.waits ?? []) ?? [];
     if (!entries.length) return;
     const now = new Date().toISOString();
     const { outcomes, deletedResults } = observe(now);
