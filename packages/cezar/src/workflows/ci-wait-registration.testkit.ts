@@ -101,7 +101,7 @@ export interface WaitRegistryFixture {
 
 /** A root run with an open session at its CI generation, its registry and engine, and the tool
  *  handlers over them. */
-export function waitRegistryFixture(): WaitRegistryFixture {
+export function waitRegistryFixture({ monitoringWakeIntervalMinutes = 5 }: { monitoringWakeIntervalMinutes?: number | null } = {}): WaitRegistryFixture {
   const root = mkdtempSync(join(tmpdir(), 'cez-wait-registry-'));
   let store = RunStore.open(join(root, '.ai/cezar'));
   const run = store.createRun({ title: 'registration', task: 'guard', workflow: 'quick-task', steps: [] });
@@ -114,7 +114,7 @@ export function waitRegistryFixture(): WaitRegistryFixture {
   state.waitIdentity.rotateCiTurn('turn');
   const active = new Map([[run.id, state]]);
   const github = githubByPr();
-  const semaphore = unused<WorkspaceSemaphore>('semaphore', { monitoringWakeIntervalMinutes: () => 5 });
+  const semaphore = unused<WorkspaceSemaphore>('semaphore', { monitoringWakeIntervalMinutes: () => monitoringWakeIntervalMinutes });
   let disposed = false;
   let current = modules(store, root, active, github.supervisor, semaphore, () => disposed);
   onTestFinished(() => { current.close(); store.close(); rmSync(root, { recursive: true, force: true }); });

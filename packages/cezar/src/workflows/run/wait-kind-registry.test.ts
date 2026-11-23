@@ -100,7 +100,7 @@ it('registers, repeats, resolves and cancels a custom wait through the tool and 
   expect(dispose).toHaveBeenCalledOnce();
 });
 
-async function pluginRuntime(overrides: Partial<import('./wait-kind-registry.ts').WaitKindRegistration> = {}) {
+async function pluginRuntime(overrides: Partial<import('./wait-kind-registry.ts').WaitKindRegistration> = {}, monitoringWakeIntervalMinutes: number | null = 5) {
   const registry = await fixture();
   const { registerBuiltInWaitKinds } = await import('../../built-in-wait-kinds.ts');
   registerBuiltInWaitKinds();
@@ -112,7 +112,7 @@ async function pluginRuntime(overrides: Partial<import('./wait-kind-registry.ts'
   });
   registry.sealWaitKinds();
   const { waitRegistryFixture } = await import('../ci-wait-registration.testkit.ts');
-  return waitRegistryFixture();
+  return waitRegistryFixture({ monitoringWakeIntervalMinutes });
 }
 
 it('deduplicates concurrent plugin handlers after each asynchronous registration finishes', async () => {
@@ -170,4 +170,12 @@ it.each([false, true])('uses the registered plugin slot policy when parking: kee
   expect(admission.parkOnWaits(f.run.id, f.state)).toBe(true);
   expect(line.joinPool).toHaveBeenCalledTimes(keepsSlot ? 1 : 0);
   expect(line.leavePool).toHaveBeenCalledTimes(keepsSlot ? 0 : 1);
+});
+
+it.each([true, false])('honors the plugin disabled-wake admission policy: timersDisabled=%s', async timersDisabled => {
+  const f = await pluginRuntime({ timersDisabled }, null);
+  const response = await f.tools().registerWait({ kind: 'fixture', target: 'disabled' }, WAIT_VIA.cezar_wait, new AbortController().signal);
+  expect(response.answer).toMatchObject(timersDisabled
+    ? { ok: false, effect: 'refused', code: 'timers_disabled' }
+    : { ok: true });
 });

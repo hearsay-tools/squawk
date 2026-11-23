@@ -265,6 +265,7 @@ export class WaitRegistry {
     const repeated = duplicate(run);
     if (repeated) return repeatRegistration(this.context.store, runId, repeated, undefined, registration) as Extract<RegisteredWait, { kind: 'plugin' }>;
     if (!this.host.waitEngine.hasRoom(run)) refuse('capacity');
+    if (row.timersDisabled && this.context.semaphore.monitoringWakeIntervalMinutes() === null) refuse('timers_disabled');
     if (row.refusesSpentBudget && this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) refuse('wake_budget_spent');
     const wait = pluginWaitEntrySchema.parse(await row.register(parsed, { runId, turnId, via, now: Date.now(), signal: capabilitySignal }));
     const { run: latest } = assertCanRegister();
