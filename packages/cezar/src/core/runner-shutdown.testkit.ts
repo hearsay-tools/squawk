@@ -305,12 +305,19 @@ function exitReaping(backend: string, it: typeof registerTest = registerTest): v
     it.skipIf(process.platform === 'win32')(`${backend} ${outsideKill.id} ${outsideKill.name}`, async () => {
       await withChild(backend, async (_session, child, _events, settled, cwd) => {
         const { group, session: setsid } = await leftovers(cwd);
-        child.kill('SIGKILL');
-        await settled;
-        // bound: the exit drain, the grace, then signal delivery and reaping by the subreaper.
-
-        await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        expect(alive(setsid)).toBe(true);
+        // A sibling of the leader is outside its tree and process group.
+        const sentinel = childProcess.spawn(process.execPath, ['-e', 'process.stdin.resume()'], { stdio: ['pipe', 'ignore', 'ignore'] });
+        try {
+          child.kill('SIGKILL');
+          await settled;
+          // bound: the exit drain, the grace, then signal delivery and reaping by the subreaper.
+          await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
+          expect(alive(sentinel.pid!)).toBe(true);
+          // Abrupt exit before capture makes no detached-child guarantee for observed-tree.
+          if (RUNNER_FACTS[backend]!.shutdownDescendants === 'process-group') expect(alive(setsid)).toBe(true);
+        } finally {
+          sentinel.kill('SIGKILL');
+        }
       }, 'no-progress-leftover');
     }, 40_000);
 }
