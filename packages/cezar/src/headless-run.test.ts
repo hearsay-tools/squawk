@@ -1,3 +1,4 @@
+import './built-in-wait-kinds.testkit.ts';
 import { productIdentity } from './home/identity.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { EventEmitter } from 'node:events';

@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun, writeInput } from '../active-run.ts';

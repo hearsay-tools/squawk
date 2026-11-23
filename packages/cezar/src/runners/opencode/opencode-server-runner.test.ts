@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';

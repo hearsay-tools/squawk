@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';

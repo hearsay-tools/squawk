@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { transitionTurnBoundary } from './run/turn-boundary.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
