@@ -1,3 +1,4 @@
+import '../../ci-wait/tools.testkit.ts';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';

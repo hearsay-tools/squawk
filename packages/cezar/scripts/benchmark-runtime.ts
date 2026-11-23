@@ -1,4 +1,5 @@
 import { registerBuiltInStepKinds, sealBuiltInStepKinds } from '../src/workflows/step-kind-registry.ts';
+import { registerBuiltInTools, sealBuiltInTools } from '../src/built-in-tools.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners, sealBuiltInRunners } from '../src/runners/built-in.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
@@ -13,4 +14,6 @@ export function prepareBenchmarkRuntime(): void {
   sealBuiltInRunSlots();
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();
+  registerBuiltInTools();
+  sealBuiltInTools();
 }

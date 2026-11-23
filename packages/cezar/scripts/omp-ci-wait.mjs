@@ -3,8 +3,8 @@
 // Resolve beside this installed script; no private workspace dependency or download.
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-const source = new URL('../src/ci-wait/tools.ts', import.meta.url);
-const built = new URL('../dist/ci-wait/tools.js', import.meta.url);
+const source = new URL('../src/ci-wait/client.ts', import.meta.url);
+const built = new URL('../dist/ci-wait/client.js', import.meta.url);
 // Unlike Pi's loader, OMP's cannot resolve the workspace contract package from a source checkout
 // (v18.4.11), so a failed source import falls back to the built output, but only when it exists:
 // otherwise the source error is the real cause and is rethrown, not hidden behind a missing dist.
@@ -13,11 +13,12 @@ const loadBuilt = (error) => {
   process.stderr.write('Squawk: loading built Squawk tools from dist/; rebuild after changing src/ci-wait\n');
   return import(built.href);
 };
-const { squawkTools } = await (existsSync(source) ? import(source.href).catch(loadBuilt) : import(built.href));
+const { remoteSquawkTools } = await (existsSync(source) ? import(source.href).catch(loadBuilt) : import(built.href));
 // #781: the shared Squawk tool list, read in OMP's own process, whose env carries the opt-in.
 // `ompTools` admits exactly these names to `--tools`: OMP exits 2 on a name nothing registered.
-export default function ciWaitExtension(pi) {
-  for (const tool of squawkTools(process.env)) {
+export default async function ciWaitExtension(pi) {
+  const { tools } = await remoteSquawkTools(process.env);
+  for (const tool of tools) {
     pi.registerTool({
       name: tool.definition.name,
       label: tool.label,

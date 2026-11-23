@@ -1,15 +1,17 @@
+import { productEnv } from '../core/product-env.ts';
 import { pathToFileURL } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { monitorCiOwner } from './client.ts';
+import { monitorCiOwner, remoteSquawkTools } from './client.ts';
 import { squawkServerInstructions, squawkTools } from './tools.ts';
 
 // #497: deferred-tool harnesses show a bare tool name until the agent loads its
 // schema, so the initialize instructions carry one trigger line per listed tool.
-export function createCiMcpServer(env: NodeJS.ProcessEnv = process.env): Server {
-  const tools = squawkTools(env);
-  const server = new Server({ name: 'cezar-ci', version: '1.0.0' }, { capabilities: { tools: {} }, instructions: squawkServerInstructions(env) });
+export async function createCiMcpServer(env: NodeJS.ProcessEnv = process.env): Promise<Server> {
+  const catalog = productEnv('TOOL_SOCKET', env) ? await remoteSquawkTools(env) : { tools: squawkTools(env), instructions: squawkServerInstructions(env) };
+  const tools = catalog.tools;
+  const server = new Server({ name: 'cezar-ci', version: '1.0.0' }, { capabilities: { tools: {} }, instructions: catalog.instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools.map(tool => tool.definition) }));
   server.setRequestHandler(CallToolRequestSchema, async request => {
     const tool = tools.find(candidate => candidate.definition.name === request.params.name);
@@ -18,7 +20,7 @@ export function createCiMcpServer(env: NodeJS.ProcessEnv = process.env): Server 
   return server;
 }
 export async function serveCiMcp(): Promise<void> {
-  const server = createCiMcpServer();
+  const server = await createCiMcpServer();
   const finish = () => { void server.close().finally(() => process.exit(0)); };
   const stop = monitorCiOwner(finish);
   process.stdin.once('end', finish);

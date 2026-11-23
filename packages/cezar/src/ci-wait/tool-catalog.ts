@@ -1,5 +1,6 @@
+import { agentToolMetadata, enabledAgentTools } from './tool-registry.ts';
 import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
-import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
+
 import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { previewStopRequestSchema, previewServeRequestSchema } from '@open-mercato/cezar-contract/preview';
@@ -147,11 +148,7 @@ export const automationToolDefinition = {
   inputSchema: flatAutomationInputSchema(),
 };
 
-/** Tool definitions in the same order every adapter advertises them. */
+/** Tool definitions in registration order, evaluated only after boot seals. */
 export function squawkToolDefinitions(env: NodeJS.ProcessEnv = process.env) {
-  return [
-    waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition,
-    ...(previewToolEnabled(env) ? [previewToolDefinition, previewStopToolDefinition] : []),
-    ...(automationsToolEnabled(env) ? [scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition] : []),
-  ];
+  return enabledAgentTools(env).map(agentToolMetadata);
 }

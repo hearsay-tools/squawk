@@ -1,7 +1,10 @@
+import { registerBuiltInTools, sealBuiltInTools } from '../dist/built-in-tools.js';
+registerBuiltInTools();
+sealBuiltInTools();
 // Evidence-only tool endpoint. Use the real tool definitions and stable unavailable
 // receipts, without starting a controller, registering waits or reaching GitHub.
 import { createCiMcpServer } from '../dist/ci-wait/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-const server = createCiMcpServer();
+const server = await createCiMcpServer({});
 await server.connect(new StdioServerTransport());
 process.stdin.once('end', () => { void server.close(); });

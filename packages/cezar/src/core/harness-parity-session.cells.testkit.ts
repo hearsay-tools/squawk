@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { registeredRunners, runnerDefinition } from './runner-registry.ts';
 import { allowProbePermissions } from './permission-policy.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';

@@ -81,8 +81,11 @@ import { createRunner } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'd
 import { registerBuiltInRunners, sealBuiltInRunners } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/runners/built-in.js')).href)};
 import piExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/pi-ci-wait.mjs')).href)};
 import ompExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/omp-ci-wait.mjs')).href)};
+import { registerBuiltInTools, sealBuiltInTools } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-tools.js')).href)};
 registerBuiltInRunners();
 sealBuiltInRunners();
+registerBuiltInTools();
+sealBuiltInTools();
 await probe({ Client, StdioClientTransport, CiToolController, createRunner, piExtension, ompExtension }, JSON.parse(process.argv[2]));
 `);
     const scenario: CiProbeScenario = { kind: WAIT_KIND.pr, phase: WAIT_PHASE.open, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait };

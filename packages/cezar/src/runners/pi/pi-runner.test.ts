@@ -1,3 +1,4 @@
+import '../../ci-wait/tools.testkit.ts';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

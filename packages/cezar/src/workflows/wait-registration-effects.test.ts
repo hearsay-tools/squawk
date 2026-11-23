@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

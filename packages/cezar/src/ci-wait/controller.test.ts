@@ -1,3 +1,4 @@
+import './tools.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stat, access, rm, mkdtemp, mkdir } from 'node:fs/promises';
@@ -35,9 +36,9 @@ afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(controllers.splice
 async function controller() { const value = await CiToolController.start(); controllers.push(value); return value; }
 // One connection per call, as client.ts does (hearsay-tools/cezarion#1484): the server closes a
 // connection after it refuses an oversized body, and a pooled keep-alive socket then resets the next call.
-function raw(env: Record<string,string>, body: string, token = env.CEZ_TOOL_TOKEN, route = 'wait') {
+function raw(env: Record<string,string>, body: string, token = env.CEZ_TOOL_TOKEN, route = 'cezar_wait') {
   return new Promise<{status:number;body:string}>((resolve, reject) => {
-    const req = request({ socketPath: env.CEZ_TOOL_SOCKET, agent: false, path: `/api/v1/tools/${route}`, method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } }, res => {
+    const req = request({ socketPath: env.CEZ_TOOL_SOCKET, agent: false, path: `/api/v1/tools/${route.startsWith('cezar_') ? route : `cezar_${route.replaceAll('-', '_')}`}`, method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } }, res => {
       let body = ''; res.on('data', chunk => body += chunk); res.on('end', () => resolve({ status: res.statusCode!, body }));
     }); req.on('error', reject); req.end(body);
   });

@@ -150,7 +150,7 @@ describe('native skills do not materialize Squawk copies', () => {
     // Closing a provider session is not step completion. Use the agent's done boundary.
     const spec = launches[0]!;
     const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
-      const call = request({ socketPath: spec.env!.CEZ_TOOL_SOCKET, path: '/api/v1/tools/done', method: 'POST',
+      const call = request({ socketPath: spec.env!.CEZ_TOOL_SOCKET, path: '/api/v1/tools/cezar_done', method: 'POST',
         headers: { authorization: `Bearer ${spec.env!.CEZ_TOOL_TOKEN}`, 'content-type': 'application/json' } }, resolve);
       call.on('error', reject);
       call.end('{}');

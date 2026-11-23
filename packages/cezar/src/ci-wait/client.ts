@@ -1,3 +1,5 @@
+import type { AgentToolResult } from './tool-registry.ts';
+import { agentToolCatalogSchema, agentToolResultSchema } from '@open-mercato/cezar-contract/agent-tools';
 import { automationToolAnswerSchema, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
 import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { productEnv } from '../core/product-env.ts';
@@ -17,11 +19,11 @@ const SCHEDULE_UNAVAILABLE = `Squawk could not reach its scheduler: the owning s
  * never throws.
  */
 export function callPreviewServe(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<PreviewServeResult> {
-  return callTool(input, env, 'preview-serve', previewServeResultSchema, previewRefusal('unavailable'));
+  return callTool(input, env, 'cezar_preview_serve', previewServeResultSchema, previewRefusal('unavailable'));
 }
 
 export function callPreviewStop(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<PreviewStopResult> {
-  return callTool(input, env, 'preview-stop', previewStopResultSchema, previewStopResult('unavailable'));
+  return callTool(input, env, 'cezar_preview_stop', previewStopResultSchema, previewStopResult('unavailable'));
 }
 
 /** hearsay-tools/cezarion#1233: unparsed like preview, so the server names the failing field. */
@@ -33,23 +35,23 @@ export async function callSquawkWait(input: unknown, env: NodeJS.ProcessEnv = pr
   const unknown: SquawkWaitAnswer = { ok: false, effect: 'unknown', code: 'outcome_unknown', ...(operationId ? { operation_id: operationId } : {}),
     message: 'Registration outcome is unknown. Retry the same operation_id and arguments to recover its receipt. Do not assume nothing was created, cancel a retained wait, or add a fallback timer.' };
   const deadline = Date.now() + 15_000;
-  const first = await callTool(identified, env, 'wait', squawkWaitAnswerSchema, unknown, 32_768, 7_500, true);
+  const first = await callTool(identified, env, 'cezar_wait', squawkWaitAnswerSchema, unknown, 32_768, 7_500, true);
   if (first.ok || first.code !== 'outcome_unknown' || !operationId || Date.now() >= deadline) return first;
-  return callTool(identified, env, 'wait', squawkWaitAnswerSchema, unknown, 32_768, Math.max(1, deadline - Date.now()), true);
+  return callTool(identified, env, 'cezar_wait', squawkWaitAnswerSchema, unknown, 32_768, Math.max(1, deadline - Date.now()), true);
 }
 
 export function callSquawkCancelWait(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<SquawkCancelWaitAnswer> {
-  return callTool(input, env, 'cancel-wait', squawkCancelWaitAnswerSchema, { cancelled: false, code: 'unavailable', message: UNAVAILABLE });
+  return callTool(input, env, 'cezar_cancel_wait', squawkCancelWaitAnswerSchema, { cancelled: false, code: 'unavailable', message: UNAVAILABLE });
 }
 
 /** hearsay-tools/cezarion#1234: unparsed too, so the server names an unknown field. */
 export function callSquawkDone(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<SquawkDoneAnswer> {
-  return callTool(input, env, 'done', squawkDoneAnswerSchema, { ok: false, code: 'unavailable', message: UNAVAILABLE });
+  return callTool(input, env, 'cezar_done', squawkDoneAnswerSchema, { ok: false, code: 'unavailable', message: UNAVAILABLE });
 }
 
 /** hearsay-tools/cezarion#1234: unparsed too, so the server names the failing question. */
 export function callSquawkAsk(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<SquawkAskAnswer> {
-  return callTool(input, env, 'ask', squawkAskAnswerSchema, { ok: false, code: 'unavailable', message: UNAVAILABLE });
+  return callTool(input, env, 'cezar_ask', squawkAskAnswerSchema, { ok: false, code: 'unavailable', message: UNAVAILABLE });
 }
 
 /**
@@ -57,18 +59,18 @@ export function callSquawkAsk(input: unknown, env: NodeJS.ProcessEnv = process.e
  * other answers fit in, so these two read up to the schedule answer cap.
  */
 export function callScheduleTask(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<ScheduleTaskAnswer> {
-  return callTool(input, env, 'schedule-task', scheduleTaskAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
+  return callTool(input, env, 'cezar_schedule_task', scheduleTaskAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
 }
 
 export function callScheduledTasks(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<ScheduledTasksAnswer> {
-  return callTool(input, env, 'scheduled-tasks', scheduledTasksAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
+  return callTool(input, env, 'cezar_scheduled_tasks', scheduledTasksAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
 }
 
 export function callAutomation(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<AutomationToolAnswer> {
-  return callTool(input, env, 'automation', automationToolAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes, AUTOMATION_TOOL_CLIENT_TIMEOUT_MS);
+  return callTool(input, env, 'cezar_automation', automationToolAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes, AUTOMATION_TOOL_CLIENT_TIMEOUT_MS);
 }
 
-function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, schema: { safeParse(input: unknown): { success: true; data: T } | { success: false } }, unavailable: T, maxAnswerBytes = 32_768, timeoutMs = 15_000, typedErrors = false): Promise<T> {
+export function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, schema: { safeParse(input: unknown): { success: true; data: T } | { success: false } }, unavailable: T, maxAnswerBytes = 32_768, timeoutMs = 15_000, typedErrors = false, method = 'POST', formatted = false): Promise<T> {
   const socketPath = productEnv('TOOL_SOCKET', env); const token = productEnv('TOOL_TOKEN', env);
   if (!socketPath || !token) return Promise.resolve(unavailable);
   return new Promise(resolve => {
@@ -76,7 +78,7 @@ function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, sche
     const finish = (answer: T) => { if (done) return; done = true; clearTimeout(timer); resolve(answer); };
     // One connection per call (hearsay-tools/cezarion#1465): Node 24.15 raised an uncaught EPIPE
     // from a pooled keep-alive socket after a large schedule call when the controller closed.
-    const req = request({ socketPath, agent: false, path: `/api/v1/tools/${route}`, method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } }, response => {
+    const req = request({ socketPath, agent: false, path: route ? `/api/v1/tools/${encodeURIComponent(route)}` : '/api/v1/tools', method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(formatted ? { accept: 'application/x-squawk-tool-result+json' } : {}) } }, response => {
       const chunks: Buffer[] = []; let bytes = 0;
       response.on('data', (chunk: Buffer) => { bytes += chunk.length; if (bytes > maxAnswerBytes) req.destroy(); else chunks.push(chunk); });
       response.on('error', () => finish(unavailable));
@@ -90,7 +92,7 @@ function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, sche
     // bound: total request duration, including a peer that keeps a socket active without an answer.
     const timer = setTimeout(() => { req.destroy(); finish(unavailable); }, timeoutMs);
     req.on('error', () => finish(unavailable));
-    req.end(JSON.stringify(input ?? null));
+    req.end(method === 'GET' ? undefined : JSON.stringify(input ?? null));
   });
 }
 
@@ -108,4 +110,25 @@ export function monitorCiOwner(onClose: () => void, env: NodeJS.ProcessEnv = pro
   });
   req.on('error', close); req.end();
   return () => { stopped = true; req.destroy(); };
+}
+
+/** External tool hosts discover the owning session's catalog, never their own feature flags. */
+export async function fetchToolCatalog(env: NodeJS.ProcessEnv = process.env) {
+  const catalog = await callTool(null, env, '', agentToolCatalogSchema, null, 4_194_304, 15_000, false, 'GET');
+  if (!catalog) throw new Error('Squawk tool catalog unavailable: the owning session is closed or the private IPC connection failed.');
+  return catalog;
+}
+export async function invokeRemoteTool(name: string, input: unknown, env: NodeJS.ProcessEnv = process.env, policy?: { timeoutMs: number; unavailable: AgentToolResult }) {
+  // Core wait calls recover a committed registration receipt after a lost IPC response.
+  if (name === 'cezar_wait') {
+    const { formatWaitTool } = await import('./tools.ts');
+    return formatWaitTool(await callSquawkWait(input, env));
+  }
+  const unavailable = policy?.unavailable ?? { content: [{ type: 'text' as const, text: UNAVAILABLE }], isError: true, details: null };
+  return callTool(input, env, name, agentToolResultSchema, unavailable, 4_194_304, policy?.timeoutMs ?? 15_000, false, 'POST', true);
+}
+export async function remoteSquawkTools(env: NodeJS.ProcessEnv = process.env) {
+  const catalog = await fetchToolCatalog(env);
+  return { instructions: catalog.instructions, tools: catalog.tools.map(tool => ({ definition: tool, label: tool.label, trigger: tool.trigger,
+    invoke: (input: unknown) => invokeRemoteTool(tool.name, input, env, tool) })) };
 }
