@@ -1,6 +1,7 @@
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -63,16 +64,27 @@ const QUALITY_PROBE = `(() => {
 })()`
 type QualityReading = { ring: number; contrast: number; label: string }
 
-function freePort(): Promise<number> {
-  return new Promise((done, fail) => {
-    const probe = createServer()
-    probe.once('error', fail)
-    probe.listen(0, '127.0.0.1', () => {
-      const bound = probe.address()
-      const port = typeof bound === 'object' && bound ? bound.port : 0
-      probe.close(() => done(port))
-    })
-  })
+/** Preview registration needs the port before Start. As in hearsay-tools/squawk#3648,
+ * choose below the OS ephemeral range; listen(0) cannot reserve this future listener. */
+async function declaredPreviewPort(): Promise<number> {
+  const first = process.platform === 'linux'
+    ? Number(readFileSync('/proc/sys/net/ipv4/ip_local_port_range', 'utf8').trim().split(/\s+/)[0])
+    : 49_152
+  if (!(first > 10_000)) throw new Error('No non-ephemeral preview port range')
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const port = 10_000 + Math.floor(Math.random() * (first - 10_000))
+    const server = createServer()
+    try {
+      server.listen(port, '127.0.0.1')
+      await once(server, 'listening')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') continue
+      throw error
+    }
+    await new Promise<void>(done => server.close(() => done()))
+    return port
+  }
+  throw new Error('No free declared preview port')
 }
 
 let browser: AgentBrowser
@@ -100,7 +112,7 @@ beforeAll(async () => {
   git('add', '.')
   git('commit', '-qm', 'init')
 
-  appPort = await freePort()
+  appPort = await declaredPreviewPort()
   // The cockpit's own browser is launched with --no-sandbox exactly where this machine needs it.
   // Whether the Chromium Squawk resolves can use its sandbox depends on the host: GitHub's Ubuntu
   // runners and this repo's dev boxes restrict unprivileged user namespaces (AppArmor), and the

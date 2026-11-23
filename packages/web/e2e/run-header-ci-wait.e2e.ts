@@ -1,23 +1,20 @@
 import { RUN_STATUS, WAIT_KIND, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { spawn, type ChildProcess } from 'node:child_process'
-import { once } from 'node:events'
+import { type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
-import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { waitForSettledSample } from './visual-ready'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { stopFixtureServer } from './fixture-server'
 import { AgentBrowser } from './agent-browser'
 import { pollFor } from './poll'
+import { spawnViteFixture, waitForViteFixture } from './vite-fixture'
 import { contrastSampleExpression, focusWithKeyboard, type ContrastSample } from './contrast'
 
 // Browser component coverage of the real wait details + production CSS. They moved from the run
 // header into the Session activity card's status row (hearsay-tools/cezarion#1333). The parent integration
 // suite owns server lifecycle/SSE evidence; this fixture deliberately needs no CI controller.
 const webRoot = resolve(import.meta.dirname, '..')
-const viteCli = resolve(dirname(createRequire(import.meta.url).resolve('vite/package.json')), 'bin/vite.js')
 // The fixture must sit under the Vite root to share its config and `./src` imports, but in a
 // gitignored directory: a tracked-tree file would be a new worktree revision on every run.
 const fixtureDir = resolve(webRoot, '.e2e-fixtures', `ci-header-${process.pid}`)
@@ -73,13 +70,9 @@ beforeAll(async () => {
     }
     createRoot(document.getElementById('root')).render(<Fixture />);
   `)
-  const probe = createServer()
-  probe.listen(0, '127.0.0.1')
-  await once(probe, 'listening')
-  const port = (probe.address() as { port: number }).port
-  await new Promise<void>(done => probe.close(() => done()))
-  url = `http://127.0.0.1:${port}/.e2e-fixtures/ci-header-${process.pid}/index.html`
-  server = spawn(process.execPath, [viteCli, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: webRoot, stdio: 'ignore' })
+  server = spawnViteFixture()
+  const origin = await waitForViteFixture(server)
+  url = `${origin}/.e2e-fixtures/ci-header-${process.pid}/index.html`
   await pollFor(async signal => (await fetch(url, { signal })).ok || undefined,
     () => 'CI header browser fixture did not start', { tries: 60 })
   browser = AgentBrowser.open(`ci-header-${process.pid}`)

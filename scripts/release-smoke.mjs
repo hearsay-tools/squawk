@@ -10,7 +10,6 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { get, request } from 'node:http';
-import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -161,16 +160,6 @@ function binary(prefix, name) {
   return join(dir, entry);
 }
 
-async function freePort() {
-  const server = createServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const { port } = server.address();
-  server.close();
-  await once(server, 'close');
-  return port;
-}
-
 // node:http, so an ambient HTTP proxy cannot intercept the loopback request.
 function localGet(url) {
   return new Promise((resolve, reject) => {
@@ -210,15 +199,28 @@ async function projectIds(base) {
 }
 
 async function boot({ bin, home, repo }) {
-  const port = await freePort();
-  const child = spawn(process.execPath, [bin, '--port', String(port), '--no-open', '--repo', repo],
-    { cwd: repo, env: bootEnv(process.env, home), stdio: ['ignore', 'inherit', 'inherit'] });
+  const child = spawn(process.execPath, [bin, '--port', '0', '--no-open', '--repo', repo],
+    { cwd: repo, env: bootEnv(process.env, home), stdio: ['ignore', 'pipe', 'inherit'] });
   const exited = once(child, 'exit');
-  const base = `http://127.0.0.1:${port}`;
+  let base, pending = '';
+  let spawnError;
+  child.once('error', error => { spawnError = error; });
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', chunk => {
+    process.stdout.write(chunk);
+    const lines = (pending + chunk).split('\n');
+    pending = (lines.pop() ?? '').slice(-1024);
+    for (const line of lines) {
+      const match = /^\s*cockpit → (http:\/\/127\.0\.0\.1:\d+)\s*$/.exec(line);
+      if (match) base = match[1];
+    }
+  });
   // bound: a cold first boot migrates the home and builds the project index.
   for (const deadline = Date.now() + 120_000; Date.now() < deadline;) {
-    if (child.exitCode !== null) throw new Error(`The server exited with ${child.exitCode} before it answered`);
+    if (spawnError) throw spawnError;
+    if (child.exitCode !== null || child.signalCode !== null) throw new Error(`The server exited with ${child.exitCode} before it answered`);
     try {
+      if (!base) throw new Error('Awaiting listener announcement');
       const response = await localGet(`${base}/api/v1/health`);
       if (response.status === 200) return { base, health: JSON.parse(response.body), stop: () => stop(child, exited) };
     } catch { /* not listening yet */ }

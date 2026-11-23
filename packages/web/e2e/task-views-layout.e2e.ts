@@ -1,6 +1,5 @@
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { createServer } from 'node:net'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
@@ -105,13 +104,13 @@ it('persists column choices, filters projects, and expands mobile resources thro
 it('renders loading, retryable error, and filtered-empty states in both themes and phone widths', async () => {
   const faultFile = join(root, 'http-fault.txt')
   writeFileSync(faultFile, 'none')
-  const port = await new Promise<number>((done) => { const probe = createServer(); probe.listen(0, '127.0.0.1', () => { const port = (probe.address() as { port: number }).port; probe.close(() => done(port)) }) })
+  const readyFile = join(root, 'proxy-ready.txt')
   // AgentBrowser uses synchronous CLI calls: the fault proxy must own another event loop.
   const proxy = spawn(process.execPath, ['--input-type=module', '-e', `
     import { createServer, request } from 'node:http';
-    import { readFileSync } from 'node:fs';
-    const [base, faultFile, port] = process.argv.slice(1);
-    createServer((incoming, outgoing) => {
+    import { readFileSync, writeFileSync } from 'node:fs';
+    const [base, faultFile, readyFile] = process.argv.slice(1);
+    const server = createServer((incoming, outgoing) => {
       const fault = readFileSync(faultFile, 'utf8');
       if (incoming.url.split('?')[0].endsWith('/run-summaries') && fault !== 'none') {
         const answer = () => { outgoing.writeHead(503, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'Fixture service unavailable' })); };
@@ -121,11 +120,16 @@ it('renders loading, retryable error, and filtered-empty states in both themes a
       }
       const upstream = request(new URL(incoming.url, base), { method: incoming.method, headers: incoming.headers }, (response) => { outgoing.writeHead(response.statusCode, response.headers); response.pipe(outgoing); });
       upstream.on('error', () => { outgoing.writeHead(502); outgoing.end(); }); incoming.pipe(upstream); outgoing.on('close', () => upstream.destroy());
-    }).listen(Number(port), '127.0.0.1');
-  `, base, faultFile, String(port)], { stdio: 'ignore' })
-  const origin = `http://localhost:${port}`
-  await waitForHealth(origin, 'the fault-injecting proxy', { tries: 40, intervalMs: 100 })
+    });
+    server.listen(0, '127.0.0.1', () => writeFileSync(readyFile, String(server.address().port)));
+  `, base, faultFile, readyFile], { stdio: 'ignore' })
   try {
+    const port = await pollFor(() => {
+      if (proxy.exitCode !== null || proxy.signalCode !== null) throw new Error('Fault proxy exited before readiness')
+      return existsSync(readyFile) ? Number(readFileSync(readyFile, 'utf8')) || undefined : undefined
+    }, () => 'Fault proxy did not announce its port')
+    const origin = `http://localhost:${port}`
+    await waitForHealth(origin, 'the fault-injecting proxy', { tries: 40, intervalMs: 100 })
     for (const width of [1440, 402, 360]) for (const theme of ['light', 'dark']) {
       writeFileSync(faultFile, 'loading')
       browser.goto(origin + scoped('/'))

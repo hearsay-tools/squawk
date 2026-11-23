@@ -1,21 +1,18 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { once } from 'node:events'
+import { type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { createServer } from 'node:net'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 
 import { AgentBrowser } from './agent-browser'
 import { focusWithKeyboard } from './contrast'
 import { stopFixtureServer } from './fixture-server'
 import { pollFor } from './poll'
+import { spawnViteFixture, waitForViteFixture } from './vite-fixture'
 import { waitForSettledSample } from './visual-ready'
 
 // Real production forms and CSS with a local API double. The parent integration tests cover
 // coordinator/CI behavior; these tests pin the browser's exact requests and available actions.
 const webRoot = resolve(import.meta.dirname, '..')
-const viteCli = resolve(dirname(createRequire(import.meta.url).resolve('vite/package.json')), 'bin/vite.js')
 const fixtureDir = resolve(webRoot, '.e2e-fixtures', `completion-${process.pid}`)
 const artifacts = resolve(webRoot, '../../.ai/qa/artifacts_e2e/completion-controls')
 let browser: AgentBrowser
@@ -88,13 +85,9 @@ beforeAll(async () => {
     }
     createRoot(document.getElementById('root')).render(<Fixture />);
   `)
-  const probe = createServer()
-  probe.listen(0, '127.0.0.1')
-  await once(probe, 'listening')
-  const port = (probe.address() as { port: number }).port
-  await new Promise<void>(done => probe.close(() => done()))
-  url = `http://127.0.0.1:${port}/.e2e-fixtures/completion-${process.pid}/index.html`
-  server = spawn(process.execPath, [viteCli, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: webRoot, stdio: 'ignore' })
+  server = spawnViteFixture()
+  const origin = await waitForViteFixture(server)
+  url = `${origin}/.e2e-fixtures/completion-${process.pid}/index.html`
   await pollFor(async signal => (await fetch(url, { signal })).ok || undefined, () => 'completion browser fixture did not start', { tries: 60 })
   browser = AgentBrowser.open(`completion-${process.pid}`)
 })

@@ -687,3 +687,14 @@ results or infer source types through nested structural paths of two or more mem
 accesses. The matrix keeps all 3456 documented-limit cells. It also keeps the generated
 invalid cells and unrelated controls. `lint/launch-read/cases.json` preserves every
 curated YAML case, and `ast-rules-launch-read.test.ts` runs them through RuleTester.
+
+## Probe-then-release ports
+
+`cez/probe-release-port` scans tracked and new JavaScript and TypeScript under
+`packages`, `scripts`, `.github/scripts` and `.ai/scripts`. It rejects helpers
+that listen on port 0, read the address, close the listener and return its port.
+The listening process must own its port and report it after binding. The guard
+recognizes local variable captures and common Promise resolvers; it does not
+track aliases across functions. A listener kept for requests and closed at
+teardown passes. Tests which need a declared port before starting a process
+use the non-ephemeral exact-port pattern from hearsay-tools/squawk#3648.
