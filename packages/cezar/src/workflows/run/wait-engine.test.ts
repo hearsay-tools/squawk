@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
 import type { ProcessWaitResult, Wait } from '@open-mercato/cezar-contract/waits';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeSubagentWait, makeTimerWait, makeWorkerWait, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
+import { makeHumanWait, makePluginWait, makePeerWait, makePrWait, makeProcessWait, makeSubagentWait, makeTimerWait, makeWorkerWait, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { RunStore } from '../../runs/store.ts';
 import { WaitCapacityError } from '../../runs/wait-capacity.ts';
 import { createActiveRun } from '../active-run.ts';
@@ -15,7 +15,7 @@ import { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 
 const DEADLINE_MS = 60_000;
-type Kind = Wait['kind'];
+type Kind = Exclude<Wait['kind'], 'plugin'>;
 type Fixture = ReturnType<typeof fixture>;
 
 /** A pending watch the test settles: the CI and process supervisors answer through these. */
@@ -91,7 +91,7 @@ afterEach(async () => {
   current = undefined;
 });
 
-it.each(Object.keys(WAIT_KINDS) as Kind[])('%s: opens, then its watch resolves it and queues the wake', async kind => {
+it.each(Object.keys(KINDS) as Kind[])('%s: opens, then its watch resolves it and queues the wake', async kind => {
   const f = current = fixture();
   const wait = KINDS[kind].entry(f);
   const opened = f.engine.open(f.run.id, undefined, wait, { withdraw: false, park: false });
@@ -102,7 +102,7 @@ it.each(Object.keys(WAIT_KINDS) as Kind[])('%s: opens, then its watch resolves i
   expect(f.host.queueWaitWake).toHaveBeenCalledWith(f.run.id);
 });
 
-it.each(Object.keys(WAIT_KINDS) as Kind[])('%s: a cancelled wait stays cancelled when its watch would have fired', async kind => {
+it.each(Object.keys(KINDS) as Kind[])('%s: a cancelled wait stays cancelled when its watch would have fired', async kind => {
   const f = current = fixture();
   const wait = KINDS[kind].entry(f);
   f.engine.open(f.run.id, undefined, wait, { withdraw: false, park: false });
@@ -237,4 +237,18 @@ it.each(['peer', 'process', 'worker'] as const)('%s: recovery of an empty deadli
   expect(stored(f, wait.id)?.phase).toBe(WAIT_PHASE.resolved);
   expect(f.host.queueWaitWake).toHaveBeenCalledWith(f.run.id);
   expect(f.host.wakeCapReached).not.toHaveBeenCalled();
+});
+
+it('retains an unregistered plugin wait on recovery without arming a built-in watch', async () => {
+  const f = current = fixture();
+  const wait = makePluginWait({ pluginKind: 'removed-extension', deadline: deadline() });
+  f.store.commitWait(f.run.id, wait);
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    f.engine.rearm(f.store.getRun(f.run.id)!);
+    await passDeadline();
+    expect(stored(f, wait.id)).toEqual(wait);
+    expect(f.host.queueWaitWake).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('no wait adapter registered for plugin kind removed-extension'));
+  } finally { warning.mockRestore(); }
 });

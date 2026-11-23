@@ -161,6 +161,7 @@ function parked(run: ActivityRun, wait: ActivityWait, ctx: NowContext): NowBox |
     case 'subagents': return { verb: 'Waiting for subagents', tone, icon: 'subagents', since: wait.since, main: plural(wait.detail.running, 'native subagent'), detail: `Deadline ${clockOf(wait.deadline)}` }
     case 'pr': return pullRequest(run, wait)
     case 'process': return { verb: 'Waiting for command', tone, icon: 'command', since: wait.since, main: wait.detail.note ?? `Process ${wait.detail.pid}`, detail: `Running ${counter(since(wait.since, ctx.now))} · deadline ${clockOf(wait.deadline)}` }
+    case 'plugin': return { verb: 'Waiting', tone, icon: 'timer', since: wait.since, main: wait.detail.summary, ...defined('detail', deadlineDetail(wait.deadline)) }
     case 'timer': return { verb: 'Waiting for timer', tone, icon: 'timer', since: wait.since, main: wait.detail.note ?? 'Timer', detail: `Wakes ${clockOf(wait.detail.wakeAt)} · in ${counter(-since(wait.detail.wakeAt, ctx.now))}` }
     case 'usage-limit': return paused(run, wait.detail.resumeAt, ctx)
     case 'human': return undefined

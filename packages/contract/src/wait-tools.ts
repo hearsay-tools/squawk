@@ -25,7 +25,7 @@ const waitTimeoutSeconds = z.number().int().min(1).max(PEER_WAIT_MAX_SECONDS).de
  *  as a `worker` entry with `requestIds`. */
 const registrationFields = { operation_id: z.uuid().optional() };
 
-export const squawkWaitRequestSchema = z.discriminatedUnion('kind', [
+export const builtInSquawkWaitRequestSchema = z.discriminatedUnion('kind', [
   ciWaitRequestSchema.extend({ kind: z.literal('pr'), ...registrationFields }).strict(),
   z.object({
     kind: z.literal('worker'), ...registrationFields,
@@ -57,6 +57,27 @@ export const squawkWaitRequestSchema = z.discriminatedUnion('kind', [
     note: z.string().max(NOTE_MAX).optional(),
   }).strict(),
 ]);
+export type BuiltInSquawkWaitRequest = z.infer<typeof builtInSquawkWaitRequestSchema>;
+export type BuiltInSquawkWaitRequestInput = z.input<typeof builtInSquawkWaitRequestSchema>;
+
+const builtInRequestKinds = new Set(['pr', 'worker', 'request', 'peer', 'timer', 'process']);
+const pluginWaitRequestSchema = z.object({
+  kind: z.string().min(1).max(64), ...registrationFields,
+}).catchall(z.unknown()).refine((request) => !builtInRequestKinds.has(request.kind), { path: ['kind'], message: 'built-in wait kinds require their built-in request shape' });
+
+const waitRequestInputSchema = z.union([builtInSquawkWaitRequestSchema, pluginWaitRequestSchema]);
+
+/** Dispatch before validation so a malformed built-in retains its original Zod issues. */
+export const squawkWaitRequestSchema = z.custom<z.input<typeof waitRequestInputSchema>>().transform((request, ctx) => {
+  const kind = request && typeof request === 'object' && 'kind' in request ? request.kind : undefined;
+  const schema = typeof kind === 'string' && builtInRequestKinds.has(kind) ? builtInSquawkWaitRequestSchema : pluginWaitRequestSchema;
+  const parsed = schema.safeParse(request);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) ctx.addIssue({ ...issue });
+    return z.NEVER;
+  }
+  return parsed.data;
+});
 export type SquawkWaitRequest = z.infer<typeof squawkWaitRequestSchema>;
 /** What a caller may send: the defaults (`until`, `wake_on_conflict`, `timeout_seconds`) still unset. */
 export type SquawkWaitRequestInput = z.input<typeof squawkWaitRequestSchema>;
@@ -76,10 +97,14 @@ export const squawkWaitAnswerSchema = z.discriminatedUnion('ok', [
     deduplicated: z.boolean().optional(), replayed: z.boolean().optional(), wait_phase: z.enum([...waitPhaseSchema.options, 'unavailable']).optional(),
     wait_id: z.uuid(),
     /** The kind the call asked for: a `request` wait is stored as a `worker` entry. */
-    kind: z.enum(['pr', 'timer', 'worker', 'request', 'process', 'peer']),
-    deadline: z.iso.datetime(),
+    kind: z.string().min(1).max(64),
+    deadline: z.iso.datetime().optional(),
     open_waits: z.array(openWaitSchema).max(WAIT_LIMIT),
-  }).strict(),
+  }).strict().superRefine((answer, ctx) => {
+    if (builtInRequestKinds.has(answer.kind) && answer.deadline === undefined) {
+      ctx.addIssue({ code: 'invalid_type', expected: 'string', path: ['deadline'], message: 'Invalid input: expected string, received undefined' });
+    }
+  }),
   z.object({
     ok: z.literal(false), ...registrationAnswerFields,
     effect: z.enum(['refused', 'unknown']).optional(),

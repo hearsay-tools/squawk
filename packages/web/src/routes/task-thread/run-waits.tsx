@@ -5,7 +5,7 @@ import type { TaskReference } from '@/lib/tasks-table'
 
 /**
  * The run's wait details (spec 2026-10-17-unified-waits): every open CI, timer, worker, process,
- * peer and subagent wait, then the last settled CI observation or the retained recovery error, and the last settled
+ * peer, subagent and plugin wait, then the last settled CI observation or the retained recovery error, and the last settled
  * process wait's outcome. Snapshot-only status: none
  * of it starts a browser watcher. Lived in the run header until hearsay-tools/cezarion#1333 moved
  * it into the Session activity card's first row.
@@ -16,17 +16,18 @@ type WorkerWait = Extract<Wait, { kind: 'worker' }>
 type ProcessWait = Extract<Wait, { kind: 'process' }>
 type PeerWait = Extract<Wait, { kind: 'peer' }>
 type SubagentWait = Extract<Wait, { kind: 'subagent' }>
-type ListedWait = CiWait | TimerWait | WorkerWait | ProcessWait | PeerWait | SubagentWait
+type PluginWait = Extract<Wait, { kind: 'plugin' }>
+type ListedWait = CiWait | TimerWait | WorkerWait | ProcessWait | PeerWait | SubagentWait | PluginWait
 
 /** Only these statuses can have a wait in flight; a finished run's leftovers are history. */
 const IN_FLIGHT_STATUSES: readonly ApiRun['status'][] = ['running', 'queued', 'waiting']
 
-/** The kinds listed here: CI, timer, worker, process, peer and subagent waits. Streamed records were
+/** The kinds listed here: CI, timer, worker, process, peer, subagent and plugin waits. Streamed records were
  *  only checked for `id`. A human wait shows as Needs you and its question card, through the pill, never
  *  in this list. */
 function renderableWaits(value: unknown): ListedWait[] {
   return Array.isArray(value)
-    ? value.filter((wait): wait is ListedWait => wait?.kind === 'pr' || wait?.kind === 'timer' || wait?.kind === 'worker' || wait?.kind === 'process' || wait?.kind === 'peer' || wait?.kind === 'subagent')
+    ? value.filter((wait): wait is ListedWait => wait?.kind === 'pr' || wait?.kind === 'timer' || wait?.kind === 'worker' || wait?.kind === 'process' || wait?.kind === 'peer' || wait?.kind === 'subagent' || wait?.kind === 'plugin')
     : []
 }
 
@@ -98,7 +99,9 @@ export function RunWaitDetails({ run }: { run: ApiRun }) {
               ? <PeerWaitStatus key={wait.id} wait={wait} />
               : wait.kind === 'subagent'
                 ? <SubagentWaitStatus key={wait.id} wait={wait} />
-                : <TimerWaitStatus key={wait.id} run={run} wait={wait} />)}
+                : wait.kind === 'plugin'
+                  ? <PluginWaitStatus key={wait.id} run={run} wait={wait} />
+                  : <TimerWaitStatus key={wait.id} run={run} wait={wait} />)}
       {error ? (
         <div data-slot="ci-wait-status" role="status" aria-live="polite" aria-atomic="true"
           className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
@@ -206,6 +209,18 @@ function SubagentWaitStatus({ wait }: { wait: SubagentWait }) {
       className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
       <p>Waiting for {count} {count === 1 ? 'subagent' : 'subagents'}</p>
       {dateLabel ? <p>Check by{' '}<time dateTime={wait.deadline}>{dateLabel}</time></p> : <p>Subagent wait deadline unavailable</p>}
+    </div>
+  )
+}
+
+/** A plugin supplies plain summary text; its details stay readable without plugin UI code. */
+function PluginWaitStatus({ run, wait }: { run: ApiRun; wait: PluginWait }) {
+  const dateLabel = wait.phase === 'open' ? formatInstant(wait.deadline) : undefined
+  return (
+    <div data-slot="plugin-wait-status" role="status" aria-live="polite" aria-atomic="true"
+      className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+      <p>{wait.phase === 'resolved' ? owedLabel(wait.summary, run) : wait.summary}</p>
+      {dateLabel ? <p>Deadline{' '}<time dateTime={wait.deadline}>{dateLabel}</time></p> : null}
     </div>
   )
 }

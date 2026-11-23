@@ -1,11 +1,11 @@
 import { expect } from 'vitest';
-import { squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
+import { builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 
 /** Check the advertised kinds against the tool's input contract, including missing kinds. */
 export function expectNoWaitNudgeKinds(text: string): void {
   const advertised = /cezar_wait \(([^)]+)\)/.exec(text);
   expect(advertised, 'the nudge must list cezar_wait kinds').not.toBeNull();
   const kinds = advertised![1]!.split(/,\s*|\s+or\s+/);
-  const accepted = squawkWaitRequestSchema.options.map(option => option.shape.kind.value);
+  const accepted = builtInSquawkWaitRequestSchema.options.map(option => option.shape.kind.value);
   expect(kinds.sort(), 'the nudge must advertise exactly the accepted wait kinds').toEqual(accepted.sort());
 }

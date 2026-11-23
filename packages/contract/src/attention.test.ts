@@ -10,6 +10,7 @@ import {
 } from './test-factories.testkit.ts';
 import {
   makePeerWait,
+  makePluginWait,
   makeSubagentWait,
   makeTimerWait,
   SUBAGENT_STATUS,
@@ -608,5 +609,24 @@ describe('needsYou (hearsay-tools/squawk#2275)', () => {
     expect(needsYou({ status: RUN_STATUS.review })).toBe(true);
     expect(needsYou({ status: RUN_STATUS.failed })).toBe(false);
     expect(needsYou({ status: RUN_STATUS.running })).toBe(false);
+  });
+});
+
+describe('plugin wait attention', () => {
+  it.each([undefined, '2026-11-23T12:00:00Z'])('monitors an unknown plugin with deadline %s without asking a person', (deadline) => {
+    const input = run({ status: RUN_STATUS.waiting, waits: [makePluginWait({ ...(deadline ? { deadline } : {}), summary: 'Checking remote job' })] });
+    expect(deriveAttention(input)).toMatchObject({ rung: 'monitoring', label: 'Checking remote job' });
+    expect(needsYou(input)).toBe(false);
+    expect(deriveWebhookState(input)).toBe('waiting-other');
+  });
+
+  it('uses waiting for an empty plugin summary', () => {
+    expect(deriveAttention(run({ status: RUN_STATUS.waiting, waits: [makePluginWait({ summary: '' })] })))
+      .toMatchObject({ rung: 'monitoring', label: 'waiting' });
+  });
+
+  it('keeps a resolved plugin result on the capacity rung until delivered', () => {
+    const input = run({ status: RUN_STATUS.waiting, waits: [makePluginWait({ phase: WAIT_PHASE.resolved, result: { complete: true } })] });
+    expect(deriveAttention(input).rung).toBe('waiting-for-capacity');
   });
 });

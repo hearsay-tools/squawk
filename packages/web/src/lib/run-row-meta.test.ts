@@ -97,6 +97,11 @@ describe('metaStateWord (#617: the states the dot alone cannot say)', () => {
       expect(metaStateWord(labelled('monitoring'), null, run({ waitingOn }), NOW)).toBe(word)
     })
 
+    it.each([undefined, ahead(60_000)])('uses the plugin summary without a timer label for deadline %s', (deadline) => {
+      const record = run({ status: RUN_STATUS.waiting, waitingOn: { kind: WAIT_KIND.plugin, pluginKind: 'deploy', waitId: '00000000-0000-4000-8000-0000000000d3', summary: 'Waiting for staging', ...(deadline ? { deadline } : {}) } })
+      expect(metaStateWord(deriveAttention(record), null, record, NOW)).toBe('Waiting for staging')
+    })
+
     it('names the timer only for the monitoring label', () => {
       expect(metaStateWord(labelled('running'), null, run({ waitingOn: timer(ahead(5 * 60_000)) }), NOW)).toBe('running')
     })

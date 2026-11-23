@@ -10,6 +10,7 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import {
   makeHumanWait,
+  makePluginWait,
   makePeerWait,
   makePrWait,
   makeProcessWait,
@@ -328,4 +329,13 @@ describe('the state table', () => {
       expect((computeWaitingOn(root) as { count: number }).count).toBe(2);
     });
   });
+});
+
+it('projects the selected plugin wait with an optional deadline into Activity', () => {
+  for (const deadline of [undefined, iso(60_000)]) {
+    const wait = makePluginWait({ summary: 'deployment readiness', deadline });
+    const root = makeRoot({ status: RUN_STATUS.waiting, waits: [wait] });
+    expect(card([root], root.id).wait).toEqual({ kind: WAIT_KIND.plugin, since: wait.registeredAt, deadline,
+      detail: { pluginKind: wait.pluginKind, summary: wait.summary } });
+  }
 });

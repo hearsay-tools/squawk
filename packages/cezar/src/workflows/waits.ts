@@ -66,9 +66,11 @@ export function chargesBudgetMessage(input: Pick<AgentInput, 'conversation'>): b
 /** The open waits as both tools list them back to the agent. A human wait has no deadline, and
  *  Squawk's own deadline-less worker wait is not the agent's to list (hearsay-tools/cezarion#1301). */
 export function openWaitList(waits: readonly Wait[]): OpenWait[] {
-  return waits.filter((wait) => wait.phase === 'open' && !isSquawkHumanWait(wait) && (WAIT_KINDS[wait.kind].deadline === 'none' || WAIT_KINDS[wait.kind].hasDeadline(wait))).map((wait): OpenWait => WAIT_KINDS[wait.kind].deadline === 'none'
+  return waits.filter((wait) => wait.phase === 'open' && !isSquawkHumanWait(wait) && (WAIT_KINDS[wait.kind].deadline === 'none' || WAIT_KINDS[wait.kind].hasDeadline(wait))).map((wait): OpenWait => WAIT_KINDS.plugin.is(wait)
+    ? { wait_id: wait.id, kind: 'plugin', pluginKind: wait.pluginKind, summary: wait.summary, ...(wait.deadline === undefined ? {} : { deadline: wait.deadline }) }
+    : WAIT_KINDS[wait.kind].deadline === 'none'
     ? { wait_id: wait.id, kind: wait.kind as 'human', summary: WAIT_KINDS[wait.kind].summary(wait) }
-    : { wait_id: wait.id, kind: wait.kind as Exclude<Wait['kind'], 'human'>, deadline: ('deadline' in wait ? wait.deadline : undefined)!, summary: WAIT_KINDS[wait.kind].summary(wait) });
+    : { wait_id: wait.id, kind: wait.kind as Exclude<Wait['kind'], 'human' | 'plugin'>, deadline: ('deadline' in wait ? wait.deadline : undefined)!, summary: WAIT_KINDS[wait.kind].summary(wait) });
 }
 
 export { identicalWait } from './run/wait-kinds.ts';

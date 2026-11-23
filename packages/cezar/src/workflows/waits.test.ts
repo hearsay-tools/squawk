@@ -1,4 +1,4 @@
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
+import { makePluginWait, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { ciWaitSchema } from '@open-mercato/cezar-contract/ci-wait';
 import type { PrWaitEntry, HumanWaitEntry, ProcessWaitEntry, TimerWaitEntry, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
@@ -222,4 +222,14 @@ it('includes stuck checks and recovery in the model-facing wait result', () => {
   expect(text).toContain(JSON.stringify(stuck));
   expect(text).toContain(diagnostic);
   expect(text).toContain('not merge approval or task completion');
+});
+
+it('lists and describes stored plugin waits with and without deadlines', () => {
+  for (const deadline of [undefined, '2026-10-17T10:30:00.000Z']) {
+    const wait = makePluginWait({ deadline, summary: 'deployment readiness' });
+    expect(openWaitList([wait])).toEqual([{ wait_id: wait.id, kind: WAIT_KIND.plugin, pluginKind: wait.pluginKind,
+      summary: wait.summary, ...(deadline === undefined ? {} : { deadline }) }]);
+    expect(openWaitsFooter([wait])).toContain(wait.summary);
+    expect(waitResultText({ ...wait, phase: WAIT_PHASE.resolved, result: { ready: true } })).toContain('{"ready":true}');
+  }
 });

@@ -5,8 +5,8 @@ import { runningSubagents } from '@open-mercato/cezar-contract/waits';
 import { SUBAGENT_WAIT_DEADLINE_SECONDS, TIMER_MIN_SECONDS, TIMER_MAX_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
 import { randomUUID } from 'node:crypto';
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
-import type { TimerWaitEntry, PrWaitEntry, ProcessWaitEntry, PeerWaitEntry, WorkerWaitEntry, HumanWaitEntry, SquawkWaitRequestInput, WaitVia, SubagentWaitEntry, SubagentChild } from '@open-mercato/cezar-contract';
-import type { Wait, WaitPhase, SquawkWaitRequest } from '@open-mercato/cezar-contract';
+import type { TimerWaitEntry, PrWaitEntry, ProcessWaitEntry, PeerWaitEntry, WorkerWaitEntry, HumanWaitEntry, BuiltInSquawkWaitRequestInput as SquawkWaitRequestInput, WaitVia, SubagentWaitEntry, SubagentChild } from '@open-mercato/cezar-contract';
+import type { Wait, WaitPhase, BuiltInSquawkWaitRequest as SquawkWaitRequest } from '@open-mercato/cezar-contract';
 import type { FiredBy } from '../run-states.ts';
 import { isSquawkHumanWait, isUserAnsweredKind, SUBAGENT_SUPERSEDED_RESULT, waitInputId } from '../../runs/wait-helpers.ts';
 
@@ -40,7 +40,7 @@ type RegistrationRequest = {
   peer: Extract<SquawkWaitRequest, { kind: 'peer' }>;
   'worker-list': Extract<SquawkWaitRequest, { kind: 'worker' | 'request' }>;
 };
-type RegistrationPath = { pr: 'pr'; timer: 'timer'; process: 'process'; peer: 'peer'; worker: 'worker-list'; human: 'none'; subagent: 'none' };
+type RegistrationPath = { pr: 'pr'; timer: 'timer'; process: 'process'; peer: 'peer'; worker: 'worker-list'; human: 'none'; subagent: 'none'; plugin: 'none' };
 
 export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
   is: (wait: Wait) => wait is Extract<Wait, { kind: K }>;
@@ -65,7 +65,7 @@ export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
   entry: {
     pr: typeof prWaitEntry; timer: typeof timerWaitEntry; process: typeof processWaitEntry;
     peer: typeof peerWaitBuilder; worker: typeof workerWaitBuilder;
-    human: typeof askWaitEntry; subagent: typeof subagentWaitEntry;
+    human: typeof askWaitEntry; subagent: typeof subagentWaitEntry; plugin: undefined;
   }[K];
 
   duplicate: (wait: Wait, request: SquawkWaitRequestInput, turnId: string, context: { startToken?: string; exitFile?: string }) => boolean;
@@ -89,6 +89,7 @@ export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
 } & {
   pr: { untilText: typeof PR_UNTIL_TEXT };
   process: {};
+  plugin: {};
   subagent: { supersededResult: { reason: 'superseded' } };
   worker: {
     completionEntry: typeof completionWaitEntry;
@@ -300,6 +301,29 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     { trigger: 'the workers report outcomes or the requests get replies, as its mode says', firedBy: 'worker' },
     { trigger: `the deadline of an agent wait; Squawk's completion wait has none`, firedBy: 'timer' },
   ] },
+  // Stored plugin rows remain readable before B2 supplies registered watch adapters.
+  plugin: {
+    ...waitSelectors('plugin'),
+    capNote: wait => `plugin wait ${wait.id} cancelled`,
+    deliveryLabel: () => [],
+    sessionlessPrompt: { priority: 3, text: 'Resume to receive the queued wait result. End this opening turn so Squawk can deliver it.' },
+    summary: wait => (wait as Extract<Wait, { kind: 'plugin' }>).summary,
+    resultText: wait => `Plugin wait ${wait.id} ended. External data follows: ${JSON.stringify((wait as Extract<Wait, { kind: 'plugin' }>).result)}.`,
+    footerItem: wait => { const plugin = wait as Extract<Wait, { kind: 'plugin' }>; return `${plugin.summary} (${plugin.id})${plugin.deadline ? `, deadline ${plugin.deadline}` : ''}`; },
+    footerKinds: [],
+    resolve: (latest, _result, _observed, resolvedAt) => ({ ...latest, phase: 'resolved', resolvedAt }),
+    inputId: waitInputId,
+    watch: 'none', entry: undefined,
+    duplicate: () => false, canonicalize: () => {},
+    repeatTimeout: () => undefined, requestedTimeout: () => undefined,
+    answerKind: () => undefined, hasDeadline: wait => 'deadline' in wait && wait.deadline !== undefined,
+    registration: 'none', requestKinds: [], delegation: false,
+    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
+    chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
+    failedResult: () => false,
+    deadline: 'none', keepsSlot: true, humanOnly: 'Without a registered adapter the stored wait remains open until cancelled.', cancels: ENDS_WAITS, resolves: [],
+  },
+
   human: {
     ...waitSelectors('human'),
     capNote: (wait, maxAutoContinues) => `automatic ${WAIT_KINDS.timer.monitoring(wait) ? 'monitoring' : 'timer'} wake-up cap reached (${maxAutoContinues}); timer ${wait.id} cancelled`,
@@ -396,8 +420,8 @@ export function identicalPeerWait(waits: readonly Wait[], peerIds: readonly stri
 }
 
 /** The stored row that serves a tool request kind, including request waits in the worker row. */
-export function waitRequestRow(kind: SquawkWaitRequest['kind']): WaitKindRow<Wait['kind']> {
-  const row = Object.values(WAIT_KINDS).find(row => row.requestKinds.includes(kind));
+export function waitRequestRow(kind: string): WaitKindRow<Wait['kind']> {
+  const row = Object.values(WAIT_KINDS).find(row => row.requestKinds.some(requestKind => requestKind === kind));
   if (!row) throw new Error(`no wait row registers ${kind}`);
   return row;
 }

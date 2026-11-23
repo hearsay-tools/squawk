@@ -14,7 +14,7 @@ import type { ActiveRun } from '../active-run.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { WorkerWaitRequest } from '@open-mercato/cezar-contract/delegation';
 import { type AskErrorCode, type WaitErrorCode, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type DeadlinedWorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
-import { squawkAskRequestSchema, squawkWaitRequestSchema, type SquawkAskRequest, type SquawkWaitRequest, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
+import { squawkAskRequestSchema, builtInSquawkWaitRequestSchema, type SquawkAskRequest, type SquawkWaitRequest, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
 
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';
@@ -216,7 +216,7 @@ export class WaitRegistry {
    * returns the open wait it repeats.
    */
   async registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry> {
-    const parsed = squawkWaitRequestSchema.parse(request);
+    const parsed = builtInSquawkWaitRequestSchema.parse(request);
     const registration = registrationIdentity(parsed);
     const replay = replayRegistration(this.context.store.getRun(runId), registration);
     if (replay) return replay as PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry;

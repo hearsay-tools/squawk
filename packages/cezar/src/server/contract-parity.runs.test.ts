@@ -1,4 +1,5 @@
 import type { reportsResponseSchema, reportsStateSchema } from '@open-mercato/cezar-contract/reports';
+import type { JSONParsed } from 'hono/utils/types';
 import type { InferResponseType } from 'hono/client';
 import { hc } from 'hono/client';
 import { describe, expect, it } from 'vitest';
@@ -53,6 +54,8 @@ describe('src/contract/runs.ts matches the runs routes exactly', () => {
   /** `true` only when the two types are assignable BOTH ways. */
   type Mutual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : 'route-is-wider') : 'schema-is-wider';
   type Exact<Schema, Route> = Mutual<Schema, Route>;
+  // Plugin payload/result bags admit unknown values; compare their JSON image on the wire.
+  type ExactWire<Schema, Route> = Mutual<JSONParsed<Schema>, Route>;
   type Assert<T extends true> = T;
 
   type Runs = typeof client.api.v1.runs;
@@ -95,30 +98,30 @@ describe('src/contract/runs.ts matches the runs routes exactly', () => {
     Assert<Exact<AgentInput[] | undefined, StoredRunRecord['agentInputs']>>,
     Assert<Exact<AgentInput[] | undefined, RunGet200['agentInputs']>>,
     // the record, in both of its two forms
-    Assert<Exact<z.infer<typeof apiRunSchema>[], RunsList200[number][]>>,
-    Assert<Exact<z.infer<typeof apiRunSchema>, RunGet200>>,
+    Assert<ExactWire<z.infer<typeof apiRunSchema>[], RunsList200[number][]>>,
+    Assert<ExactWire<z.infer<typeof apiRunSchema>, RunGet200>>,
     // the slim list (#817) — its own row shape, never the record
     Assert<Exact<z.infer<typeof runSummarySchema>[], RunSummaries200[number][]>>,
     // the archived roots past the list's window (#864), a page at a time
     Assert<Exact<z.infer<typeof archivedRunsResponseSchema>, ArchivedRuns200>>,
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunArchive200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunArchive200>>,
     // the pin (#935) answers the record too — pinned here is what stops it drifting into a
     // bespoke `{pinned: true}` payload the moment someone finds that shorter to write
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunPin200>>,
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunPatch200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunPin200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunPatch200>>,
     // the read receipt and its inverse (#unread-done-items, #775) — both answer the record, and
     // pinning them here is what stops either drifting into a bespoke payload
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunRead200>>,
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunUnread200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunRead200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunUnread200>>,
     // POST /runs answers 201, and its ×1 branch carries no `usage`
     Assert<
-      Exact<
+      ExactWire<
         z.infer<typeof createRunResponseSchema>,
         RunCreate201
       >
     >,
     // an idempotent retry (#504) answers 200 with the stored record the first request created
-    Assert<Exact<z.infer<typeof runRecordSchema>, RunCreate200>>,
+    Assert<ExactWire<z.infer<typeof runRecordSchema>, RunCreate200>>,
     // lifecycle
     Assert<Exact<z.infer<typeof archiveFinishedResponseSchema>, ArchiveFinished200>>,
     Assert<Exact<z.infer<typeof cancelResponseSchema>, Cancel200>>,

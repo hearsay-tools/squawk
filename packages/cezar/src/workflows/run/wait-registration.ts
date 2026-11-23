@@ -3,12 +3,13 @@ import { createHash } from 'node:crypto';
 import type { Wait, WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
 import type { SquawkWaitRequest } from '@open-mercato/cezar-contract/wait-tools';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
+import { builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { WAIT_KINDS, waitRequestRow } from './wait-kinds.ts';
 
 export type RegistrationIdentity = Pick<WaitRegistrationReceipt, 'operationId' | 'requestHash'>;
 export function registrationIdentity(request: SquawkWaitRequest): RegistrationIdentity | undefined {
   if (!request.operation_id) return undefined;
-  const { operation_id, ...fields } = request;
+  const { operation_id, ...fields } = builtInSquawkWaitRequestSchema.parse(request);
   const canonical = { ...fields };
   const row = waitRequestRow(canonical.kind);
   row.canonicalize(canonical);
@@ -16,7 +17,7 @@ export function registrationIdentity(request: SquawkWaitRequest): RegistrationId
     if (field in canonical) (canonical as Record<string, unknown>)[field] = [...(canonical as unknown as Record<string, string[]>)[field]!].sort();
   }
   const sorted = Object.fromEntries(Object.entries(canonical).sort(([a], [b]) => a.localeCompare(b)));
-  return { operationId: operation_id, requestHash: createHash('sha256').update(JSON.stringify(sorted)).digest('hex') };
+  return { operationId: request.operation_id, requestHash: createHash('sha256').update(JSON.stringify(sorted)).digest('hex') };
 }
 export function replayRegistration(run: RunRecord | undefined, identity: RegistrationIdentity | undefined): Wait | undefined {
   const receipt = identity && run?.waitRegistrations?.find(row => row.operationId === identity.operationId);

@@ -31,6 +31,7 @@ import {
   squawkCancelWaitRequestSchema,
   squawkWaitAnswerSchema,
   squawkWaitRequestSchema,
+  builtInSquawkWaitRequestSchema,
 } from './wait-tools.ts';
 import { asksQuestion, computeWaitingOn, resolveWaitingOn, requestsToPeers, withRootLedger } from './waiting-on.ts';
 import { peerWaitViewSchema, workerCompletionWaitSchema, workerInspectionSchema, workerWaitSchema } from './delegation.ts';
@@ -41,6 +42,11 @@ import {
 } from './test-factories.testkit.ts';
 import {
   makePeerWait,
+  makePluginWait,
+  makeHumanWait,
+  makePrWait,
+  makeProcessWait,
+  makeTimerWait,
   makeSubagentWait,
   WAIT_KIND,
   WAIT_PHASE,
@@ -1035,5 +1041,80 @@ describe('subagent waits', () => {
   it('lists back to the agent with its deadline', () => {
     expect(openWaitSchema.safeParse({ wait_id: makeSubagentWait().id, kind: WAIT_KIND.subagent, summary: 'subagent wait on 1 native subagent', deadline: '2026-10-26T00:05:00.000Z' }).success).toBe(true);
     expect(openWaitSchema.safeParse({ wait_id: makeSubagentWait().id, kind: WAIT_KIND.subagent, summary: 'no deadline' }).success).toBe(false);
+  });
+});
+
+describe('open plugin waits', () => {
+  it('preserves unknown plugin data and custom via strings after restart', () => {
+    const wait = makePluginWait({ payload: { nested: { value: 1 } }, result: { accepted: true } });
+    expect(waitSchema.parse(wait)).toEqual(wait);
+    expect(waitingOnSchema.parse({ kind: WAIT_KIND.plugin, pluginKind: wait.pluginKind, waitId: wait.id, summary: wait.summary }))
+      .toEqual({ kind: WAIT_KIND.plugin, pluginKind: wait.pluginKind, waitId: wait.id, summary: wait.summary });
+    expect(openWaitSchema.parse({ kind: WAIT_KIND.plugin, wait_id: wait.id, pluginKind: wait.pluginKind, summary: wait.summary }))
+      .toEqual({ kind: WAIT_KIND.plugin, wait_id: wait.id, pluginKind: wait.pluginKind, summary: wait.summary });
+    expect(waitSchema.safeParse(makeTimerWait({ via: wait.via as TimerWaitEntry['via'] })).success).toBe(false);
+  });
+
+  it.each([makeHumanWait, makePrWait, makeProcessWait])('keeps higher-priority built-in waits ahead of plugins', (makeWait) => {
+    const higher = makeWait();
+    const waitingOn = computeWaitingOn({ waits: [makePluginWait(), higher] });
+    expect(waitingOn?.kind).toBe(higher.kind);
+  });
+
+  it('ranks plugins before timers and returns the selected summary and deadline', () => {
+    const plugin = makePluginWait({ deadline: '2026-11-23T12:00:00Z' });
+    expect(computeWaitingOn({ waits: [makeTimerWait(), plugin] })).toEqual({
+      kind: WAIT_KIND.plugin, waitId: plugin.id, pluginKind: plugin.pluginKind, summary: plugin.summary, deadline: plugin.deadline,
+    });
+  });
+
+  it('orders plugins by deadline then registration time, with no deadline last', () => {
+    const noDeadline = makePluginWait({ registeredAt: '2026-11-23T09:00:00Z' });
+    const early = makePluginWait({ deadline: '2026-11-23T12:00:00Z', registeredAt: '2026-11-23T10:00:00Z' });
+    const tie = makePluginWait({ deadline: early.deadline, registeredAt: '2026-11-23T11:00:00Z' });
+    const late = makePluginWait({ deadline: '2026-11-23T13:00:00Z' });
+    expect(computeWaitingOn({ waits: [noDeadline, late, tie, early] })).toMatchObject({ waitId: early.id });
+    expect(computeWaitingOn({ waits: [makePluginWait({ registeredAt: '2026-11-23T11:00:00Z' }), noDeadline] }))
+      .toMatchObject({ waitId: noDeadline.id });
+  });
+
+  it('ignores resolved and delivered plugin waits when selecting the open wait', () => {
+    expect(computeWaitingOn({ waits: [makePluginWait({ phase: WAIT_PHASE.resolved })] })).toBeUndefined();
+    expect(computeWaitingOn({ waits: [makePluginWait({ phase: WAIT_PHASE.delivered })] })).toBeUndefined();
+  });
+
+  it.each([
+    { pluginKind: '' }, { pluginKind: 'x'.repeat(65) }, { via: '' }, { via: 'x'.repeat(65) },
+    { summary: 'x'.repeat(257) }, { deadline: 'tomorrow' }, { payload: [] }, { result: [] },
+  ])('rejects malformed plugin fields %j', (over) => {
+    expect(waitSchema.safeParse({ ...makePluginWait(), ...over }).success).toBe(false);
+  });
+
+  it('accepts custom request fields and deadline-less registration answers', () => {
+    const request = { kind: 'example.check', remoteId: 42, payload: { nested: true } };
+    expect(squawkWaitRequestSchema.parse(request)).toEqual(request);
+    expect(squawkWaitAnswerSchema.safeParse({ ok: true, kind: request.kind, wait_id: CI_ID, open_waits: [] }).success).toBe(true);
+  });
+
+  it.each([WAIT_KIND.pr, WAIT_KIND.worker, 'request', WAIT_KIND.peer, WAIT_KIND.timer, WAIT_KIND.process])('still requires a deadline on built-in %s answers', (kind) => {
+    const result = squawkWaitAnswerSchema.safeParse({ ok: true, kind, wait_id: CI_ID, open_waits: [] });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual([
+      { code: 'invalid_type', expected: 'string', path: ['deadline'], message: 'Invalid input: expected string, received undefined' },
+    ]);
+  });
+
+  it.each([
+    { kind: WAIT_KIND.pr, pr: 'bad' }, { kind: WAIT_KIND.worker, worker_ids: [] },
+    { kind: 'request', request_ids: [] }, { kind: WAIT_KIND.peer, peer_ids: [] },
+    { kind: WAIT_KIND.timer, seconds: 0 }, { kind: WAIT_KIND.process, pid: -1 },
+  ])('does not admit invalid built-in requests through the plugin arm: %j', (request) => {
+    const result = squawkWaitRequestSchema.safeParse(request);
+    const builtIn = builtInSquawkWaitRequestSchema.safeParse(request);
+    expect(result.success).toBe(false);
+    if (!result.success && !builtIn.success) {
+      expect(result.error.issues).toEqual(builtIn.error.issues);
+    }
+    expect(squawkWaitRequestSchema.safeParse({ ...request, extra: 'plugin field' }).success).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import {
 } from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
 import {
   makePeerWait,
+  makePluginWait,
   makeSubagentWait,
   SUBAGENT_STATUS,
   WAIT_PHASE,
@@ -76,6 +77,29 @@ describe('RunWaitDetails', () => {
   })
   const ciItems = () => [...document.querySelectorAll<HTMLElement>('[data-slot="ci-wait-status"]')]
   const timerItems = () => [...document.querySelectorAll<HTMLElement>('[data-slot="monitoring-schedule"]')]
+
+  it.each([undefined, '2026-09-22T12:30:00.000Z'])('lists an unknown plugin wait with deadline %s beside built-in waits', (deadline) => {
+    renderWaits(run(RUN_STATUS.waiting, { waits: [
+      ciEntry(), timerEntry(),
+      makePluginWait({ pluginKind: 'unregistered-deploy', summary: 'Waiting for staging deployment', ...(deadline ? { deadline } : {}) }),
+    ] }))
+    expect(hasWaitDetails(run(RUN_STATUS.waiting, { waits: [makePluginWait()] }))).toBe(true)
+    expect(screen.getByText('Waiting for staging deployment')).not.toBeNull()
+    const item = document.querySelector('[data-slot="plugin-wait-status"]')
+    expect(item?.querySelector('time')?.getAttribute('datetime')).toBe(deadline ?? undefined)
+    expect(item?.textContent?.includes('Deadline')).toBe(deadline !== undefined)
+    expect(screen.getByText('Waiting for CI')).not.toBeNull()
+    expect(timerItems()).toHaveLength(1)
+  })
+
+  it.each([
+    [RUN_STATUS.waiting, 'waiting for capacity'],
+    [RUN_STATUS.running, 'current turn still working'],
+    [RUN_STATUS.failed, 'not delivered; Continue delivers it, Stop discards it'],
+  ])('shows a resolved plugin result owed while %s', (status, owed) => {
+    renderWaits(run(status, { waits: [makePluginWait({ phase: WAIT_PHASE.resolved, summary: 'Deployment complete', result: { deployed: true } })] }))
+    expect(screen.getByText(`Deployment complete — ${owed}`)).not.toBeNull()
+  })
 
   it('lists every open wait: CI with its PR link and deadline, timer with its time and note', () => {
     renderWaits(run('waiting', { waits: [
