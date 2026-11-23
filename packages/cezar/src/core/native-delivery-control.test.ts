@@ -216,18 +216,23 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
     await seam(runner, holdAck.path, async (session, wire) => {
       const input = send(session, 'mock:agent-echo delay-owned-ack');
       await waitFor(holdAck.held);
-      // The turn's content and its end follow on the wire while the ACK is held, so the runner
-      // has read past the point where it could settle the input.
       if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
+        // The mock holds the response that ends the turn; the turn's first agent work already
+        // acknowledged the prompt.
         await waitFor(() => echoed(wire, 'delay-owned-ack'));
+        await input.done;
+        expect(input.state.rejected).toBe(false);
         expect(turnEnds(wire)).toBe(1);
+        holdAck.release();
       } else {
+        // The turn's content and its end follow on the wire while the ACK is held, so the runner
+        // has read past the point where it could settle the input.
         await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
+        expect(input.state.settled).toBe(false);
+        holdAck.release();
+        await input.done;
+        expect(input.state.rejected).toBe(false);
       }
-      expect(input.state.settled).toBe(false);
-      holdAck.release();
-      await input.done;
-      expect(input.state.rejected).toBe(false);
       await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
     });
     await seam(runner, holdAck.path, async (session, wire) => {
@@ -242,7 +247,7 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
     await seam(runner, holdResponse.path, async (session, wire) => {
       const input = send(session, 'mock:agent-echo hold-owned-response');
       await waitFor(holdResponse.held);
-      // ACP acknowledges an idle prompt only when its turn completes.
+      // ACP acknowledges an idle prompt at its turn's first agent work, which is held here.
       if (runnerDefinition(runner).mock.promptResponseEndsTurn) expect(input.state.settled).toBe(false);
       else {
         // The input is admitted while its content is held.

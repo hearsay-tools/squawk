@@ -70,9 +70,10 @@ export class AcpEvents {
     this.sink.event?.({ type: 'turn-end' });
   }
 
-  update(update: Record<string, unknown>): void {
+  /** True when the update was the agent's own work inside a turn. */
+  update(update: Record<string, unknown>): boolean {
     try {
-      if (this.closedTool(update)) return;
+      if (this.closedTool(update)) return false;
       const work = WORK_UPDATES.has(update.sessionUpdate as string);
       if (work && !this.turnId && this.hooks.agentWorkEnds) { this.begin(); this.agentStarted = true; }
       // A failure counts only as the whole message and the turn's last work: later work clears it.
@@ -81,7 +82,8 @@ export class AcpEvents {
       const previous = this.lastWork;
       if (work) this.lastWork = update.sessionUpdate as string;
       if (this.agentStarted && this.hooks.agentWorkEnds?.(update, previous)) this.finish('end_turn');
-    } catch { this.notice('ACP ignored malformed session/update'); }
+      return work;
+    } catch { this.notice('ACP ignored malformed session/update'); return false; }
   }
 
   /** A late update for a tool already closed (a failed call the agent reports after cancel). */

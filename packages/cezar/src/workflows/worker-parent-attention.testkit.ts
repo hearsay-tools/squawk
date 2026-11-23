@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { withHeldAck, withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
+import { withDelayedAck, withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
 import { attentionFields } from '../task-cli/projections.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
@@ -74,7 +74,8 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
             }
             const completesWithAck = runnerDefinition(backend).mock.promptResponseEndsTurn;
             if (transport === 'protocol' && completesWithAck) {
-              await until(() => store.eventLog.readEvents(p.id).some(event => event.type === 'text' && String(event.text).includes('delay-owned-ack')));
+              // The turn's first agent work acknowledges the message, so its turn holds no content yet.
+              await until(responseHeld!);
               expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end')).toHaveLength(boundaries);
               expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
               expect(semaphore.busy()).toBe(1);
@@ -95,7 +96,7 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
             expect(monitoringWakeOf(store.getRun(p.id))).toBeDefined();
           } finally { release(); close(); }
         };
-        if (transport === 'protocol' && backend !== 'claude') await withHeldAck(backend, exercise);
+        if (transport === 'protocol' && backend !== 'claude') await withDelayedAck(backend, exercise);
         else if (transport === 'pipe-write' && backend === 'claude') await withHeldResponse(backend, exercise);
         else await exercise(() => {});
       });

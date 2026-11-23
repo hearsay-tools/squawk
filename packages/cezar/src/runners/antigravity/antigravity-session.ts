@@ -224,8 +224,6 @@ export class AntigravitySession implements AgentSession {
       await this.acp.open({ cwd: this.spec.cwd, mcpServers });
     }
   }
-  /** `onAcknowledged` runs when the CLI takes the input: a steer when the running prompt answers
-   *  for it, any prompt at its own response. */
   /** A resumed session carries spec.systemPrompt in its opening turn, as the other in-thread
    *  runners do: the CLI keeps the session/new prompt, and a resent _meta prompt would be appended. */
   private opening(): ContentBlock[] {
@@ -236,14 +234,17 @@ export class AntigravitySession implements AgentSession {
     if (last?.type !== 'text') return content;
     return [...content.slice(0, -1), { ...last, text: prependSystemPrompt(this.spec.systemPrompt, last.text) }];
   }
+  /** `onAcknowledged` runs when the CLI takes the input: a steer when the running prompt answers
+   *  for it, a prompt that opens a turn at that turn's first agent work, and either at its own
+   *  response at the latest. */
   private submit(content: ContentBlock[], onAcknowledged?: () => void): Promise<void> {
     this.clearAutoEnd();
     // The ACP prompt state decides, not `busy`: a turn's response closes the prompt before the
     // submission that carried it settles here, and input sent at that turn end opens a new one.
     const steered = this.acp.promptOpen;
     this.inflight++;
-    const operation = steered ? this.acp.steer(contentBlocks(content), onAcknowledged) : this.acp.prompt(contentBlocks(content));
-    return operation.then(() => { onAcknowledged?.(); }).finally(() => {
+    const operation = steered ? this.acp.steer(contentBlocks(content), onAcknowledged) : this.acp.prompt(contentBlocks(content), onAcknowledged);
+    return operation.then(() => undefined).finally(() => {
       this.inflight--;
       if (this.busy) return;
       if (this.interrupted) this.closeInput();
@@ -293,8 +294,8 @@ export class AntigravitySession implements AgentSession {
   }
   respondPermission(id: string, option: string): boolean { return this.acp.respondPermission(id, option); }
   discardQueuedMessages(): void { this.queue.length = 0; this.humanHolds.clear(); }
-  // A prompt is held from sendMessage until the turn it opens starts, or until its response: a
-  // steered prompt's response ends the turn that read it. ACP has no consumption signal.
+  // A prompt is held from sendMessage until the first agent work of the turn it opens, or until its
+  // response: a steered prompt's response ends the turn that read it. ACP has no consumption signal.
   // Rejection, close and discard also release.
   holdsHumanInput(): boolean { return this.heldHumanInputCount() > 0; }
   heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size; }

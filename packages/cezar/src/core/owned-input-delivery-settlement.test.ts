@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { expect, it, vi } from 'vitest';
 import { runnersWhere } from './runner-facts.ts';
-import { withHeldAck } from './owned-input-delivery.testkit.ts';
+import { inFlightWithHeldAck, withDelayedAck } from './owned-input-delivery.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 
@@ -15,7 +15,7 @@ import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it(`${backend} a completed turn with a delayed ACK holds auto-end and resumes it after acceptance`, async () => {
-    await withHeldAck(backend, async release => {
+    await withDelayedAck(backend, async (release, held) => {
       const autoEnd = autoEndObservationClock();
       try {
         await driveSeam(backend, 'hold', {
@@ -28,7 +28,8 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
             if (!ack) throw new Error('expected reserved submission');
             void ack.then(() => { accepted = true; }, () => {});
             if (runnerDefinition(backend).mock.promptResponseEndsTurn) {
-              await waitFor(() => v1.some(event => event.type === 'text' && event.text.includes('delay-owned-ack')));
+              // The turn's first agent work acknowledges the input, so its held turn has not run yet.
+              await waitFor(held);
               expect(v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
             } else {
               await waitFor(() => v1.filter(event => event.type === 'turn-end').length === 2);
@@ -52,7 +53,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
   }, 60_000);
 
   it.each(['finish', 'cancel', 'dispose'] as const)(`${backend} pending ACK settles without a delivery receipt or reopened lifecycle after %s`, async stop => {
-    await withHeldAck(backend, async release => {
+    await withDelayedAck(backend, async (release, held) => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
         manager.enqueueOwnedRun(runId);
         await waitFor(() => store.getRun(runId)?.status === 'waiting');
@@ -68,7 +69,7 @@ for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement 
           return result;
         });
         expect(manager.steerWorker(runId, input)).toBe('queued');
-        await waitFor(() => store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('stopped')));
+        await waitFor(() => inFlightWithHeldAck(backend, held, store.eventLog.readEvents(runId).flatMap(event => event.type === 'text' ? [String(event.text)] : []), 'stopped'));
         expect(accepted).toBeInstanceOf(Promise);
         try {
           if (stop === 'dispose') manager.dispose();

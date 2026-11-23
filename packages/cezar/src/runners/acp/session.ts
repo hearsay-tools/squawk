@@ -44,6 +44,8 @@ export class AcpSession {
   private turnCancelled = false;
   private turnUsage: TokenUsage | undefined;
   private readonly acknowledgements = new Map<symbol, () => void>();
+  /** The prompt that opened the running turn, until the turn's first agent work acknowledges it. */
+  private turnOpener: symbol | undefined;
 
   constructor(streams: { input: Writable; output: Readable }, private readonly options: AcpSessionOptions) {
     this.hooks = options.hooks ?? {};
@@ -105,9 +107,14 @@ export class AcpSession {
     throw new Error('ACP agent does not support session/resume; session/load requires explicit opt-in');
   }
 
-  async prompt(content: readonly Record<string, unknown>[]): Promise<z.infer<typeof promptResultSchema>> {
+  /** ACP sends no turn-start frame, and a prompt's response ends its turn. The agent's first work
+   * update in the turn this prompt opened is the agent taking it: `onAcknowledged` runs then, or at
+   * the response when no work came first. Work that reports a provider failure acknowledges nothing;
+   * later work in the turn clears that failure and acknowledges it. A prompt that joins an
+   * agent-started turn is acknowledged only by its response. */
+  async prompt(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<z.infer<typeof promptResultSchema>> {
     if (this.promptActive) throw new Error('ACP prompt already active');
-    return this.requestPrompt(content);
+    return this.requestPrompt(content, onAcknowledged);
   }
 
   /** Steering adds input to the running turn. The turn is one logical turn: if the running prompt
@@ -137,12 +144,18 @@ export class AcpSession {
       if (failure) throw new Error(failure);
     } catch (error) {
       this.acknowledgements.delete(token);
+      if (this.turnOpener === token) this.turnOpener = undefined;
       this.finishPrompt(token, this.turnCancelled ? 'cancelled' : 'error');
       throw error;
     }
-    this.acknowledge(token);
+    // A turn opener no work acknowledged is acknowledged after its turn ends, as its response ends it.
+    // Clear it before the turn end: a turn-end listener may open the next turn at once.
+    const unacknowledgedOpener = this.turnOpener === token;
+    if (unacknowledgedOpener) this.turnOpener = undefined;
+    else this.acknowledge(token);
     const reason: StopReason = result.stopReason === 'max_turn_requests' ? 'max_tokens' : result.stopReason;
     this.finishPrompt(token, reason, this.hooks.normalizeUsage?.(result.usage));
+    if (unacknowledgedOpener) this.acknowledge(token);
     return result;
   }
 
@@ -156,8 +169,15 @@ export class AcpSession {
     this.promptOwner = token;
     this.turnCancelled = false;
     this.turnUsage = undefined;
-    if (this.events.agentTurn) this.events.adopt();
-    else this.events.begin();
+    if (this.events.agentTurn) { this.events.adopt(); this.turnOpener = undefined; }
+    else { this.events.begin(); this.turnOpener = token; }
+  }
+
+  private acknowledgeOnWork(): void {
+    const token = this.turnOpener;
+    if (!token || token !== this.promptOwner || this.events.turnFailure) return;
+    this.turnOpener = undefined;
+    this.acknowledge(token);
   }
 
   private finishPrompt(token: symbol, reason: StopReason, usage?: TokenUsage): void {
@@ -226,7 +246,7 @@ export class AcpSession {
     if (method !== 'session/update') return;
     const update = updateSchema.parse(params);
     if (this.opening) this.earlyUpdates.push(update);
-    else if (update.sessionId === this.sessionId && this.hooks.filterUpdate?.(update.update) !== false) this.events.update(update.update);
+    else if (update.sessionId === this.sessionId && this.hooks.filterUpdate?.(update.update) !== false && this.events.update(update.update)) this.acknowledgeOnWork();
   }
 
   private request(method: string, params: unknown): unknown | Promise<unknown> {

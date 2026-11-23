@@ -13,7 +13,7 @@ import { timed } from './waits.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { hasPendingAsk, muteLockedDatabaseLogs, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
-import { withHeldAck, withHeldResponse, withRejectedInput } from '../core/owned-input-delivery.testkit.ts';
+import { withDelayedAck, withHeldAck, withRejectedInput, withTurnOpenAfterAck } from '../core/owned-input-delivery.testkit.ts';
 import { persistentWakeFailure, TIMER_WAKE_OPENING, toolCall, gatedProviderFailure } from './waits-parity.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
@@ -112,7 +112,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         // An acknowledgement after the wake turn ended still leaves the run in the question's park.
         await answerQuestion(run.id, askSeq);
       };
-      await withHeldAck(runner, exercise);
+      await withDelayedAck(runner, exercise);
     });
 
     // hearsay-tools/squawk#1239: the acknowledgement of a wake whose turn already ended
@@ -126,13 +126,17 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         const ends = turnEnds(run.id);
         fireTimer(timer.id);
-        const completesWithAck = runnerDefinition(runner).mock.promptResponseEndsTurn;
-        if (completesWithAck) {
-          await until(() => store.eventLog.readEvents(run.id).some(event => event.type === 'text' && String(event.text).includes(`Timer ${timer.id} fired`)));
+        if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
+          // The wake's first agent work acknowledges it, before the response that ends its turn:
+          // no acknowledgement follows that turn end.
+          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
           expect(turnEnds(run.id)).toBe(ends);
-        } else {
-          await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
+          release();
+          await until(() => turnEnds(run.id) > ends && pendingQuestion(run.id));
+          await answerQuestion(run.id, askSeq);
+          return;
         }
+        await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
         expect(settled(run.id, timer.id)).toBeUndefined();
         expect(store.getRun(run.id)?.status).toBe('waiting');
         const statuses = publishedStatuses(run.id);
@@ -150,25 +154,19 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      // The response is held after the acknowledgement: the turn is still running when it lands.
-      await withHeldResponse(runner, async (release, held) => {
+      // The turn is held open after the acknowledgement: the turn is still running when it lands.
+      await withTurnOpenAfterAck(runner, async (release, held) => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo hold-wake-response');
         const ends = turnEnds(run.id);
         const statuses = publishedStatuses(run.id);
         fireTimer(timer.id);
         await until(held);
-        if (runnerDefinition(runner).mock.promptResponseEndsTurn) {
-          expect(settled(run.id, timer.id)).toBeUndefined();
-          expect(turnEnds(run.id)).toBe(ends);
-        } else {
-          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
-          expect(turnEnds(run.id)).toBe(ends);
-          expect(store.getRun(run.id)?.status).toBe('running');
-        }
+        await until(() => settled(run.id, timer.id)?.phase === 'delivered');
+        expect(turnEnds(run.id)).toBe(ends);
+        expect(store.getRun(run.id)?.status).toBe('running');
         release();
-        await until(() => settled(run.id, timer.id)?.phase === 'delivered' && turnEnds(run.id) > ends);
-        if (!runnerDefinition(runner).mock.promptResponseEndsTurn) expect(statuses).toContain('running');
-        else expect(settled(run.id, timer.id)?.phase).toBe('delivered');
+        await until(() => turnEnds(run.id) > ends);
+        expect(statuses).toContain('running');
         await answerQuestion(run.id, askSeq);
       }, 'hold-wake-response');
     });
@@ -178,7 +176,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner, async release => {
+      await withDelayedAck(runner, async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES - 1 });
         fireTimer(timer.id);

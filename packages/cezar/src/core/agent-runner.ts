@@ -294,8 +294,8 @@ interface InputDeliveryFacts {
   /**
    * What resolves `sendAgentMessage`'s Promise (hearsay-tools/cezarion#2991). `write`: the local
    * pipe write, so the provider can neither delay nor reject it (Claude's stdin). `response`: a
-   * native response to the submission, apart from the turn's frames (an RPC result, an HTTP
-   * acknowledgement, a prompt response id).
+   * native signal the provider can delay or reject (an RPC result, an HTTP acknowledgement, a
+   * prompt response id, or the first agent update in the ACP turn a prompt opens).
    */
   readonly acknowledgement: 'write' | 'response';
   /** The native mechanism. Documentation only: no code branches on it. */
