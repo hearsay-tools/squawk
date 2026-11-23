@@ -192,6 +192,10 @@ export class WaitEngine {
    *  (restart) resolves at once. */
   private armWait(runId: string, wait: Wait): void {
     if (this.context.disposed() || wait.phase !== 'open') return;
+    if (wait.kind === 'plugin') {
+      console.warn(`[hsq] no wait adapter registered for plugin kind ${wait.pluginKind}; retaining wait ${wait.id}`);
+      return;
+    }
     this.watches[WAIT_KINDS[wait.kind].watch](runId, wait);
   }
 
@@ -210,7 +214,7 @@ export class WaitEngine {
       if (interrupted()) this.host.interruptSubagentWait(runId, wait.id);
       else this.settleWait(runId, wait.id);
     };
-    const deadline = (wait as Exclude<Wait, { kind: 'human' | 'worker' }>).deadline;
+    const deadline = (wait as Exclude<Wait, { kind: 'human' | 'worker' | 'plugin' }>).deadline;
     const due = Date.parse(deadline) - Date.now();
     if (due <= 0) { fire(); return; }
     const timer = watchDeadline({ deadline, delay: due }, deadlineSignal, () => {

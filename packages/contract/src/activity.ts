@@ -112,6 +112,7 @@ export const activityWaitSchema = z.discriminatedUnion('kind', [
     }).strict(),
   }).strict(),
   z.object({ kind: z.literal('process'), since: iso, deadline: iso, detail: z.object({ pid: z.number().int(), note: z.string().optional() }).strict() }).strict(),
+  z.object({ kind: z.literal('plugin'), since: iso, deadline: iso.optional(), detail: z.object({ pluginKind: z.string().min(1).max(64), summary: z.string().max(256) }).strict() }).strict(),
   z.object({ kind: z.literal('timer'), since: iso, deadline: iso, detail: z.object({ wakeAt: iso, note: z.string().optional() }).strict() }).strict(),
 ]);
 export type ActivityWait = z.infer<typeof activityWaitSchema>;

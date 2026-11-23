@@ -2,7 +2,7 @@ import type { ConversationMessage } from './conversations.ts';
 import type { DelegationState, RunDelegationSummary } from './delegation.ts';
 import type { RunRecord } from './runs.ts';
 import { isUsageLimitHold } from './usage-limit-hold.ts';
-import type { PeerWaitEntry, PrWaitEntry, ProcessWaitEntry, SubagentWaitEntry, TimerWaitEntry, Wait, WaitingOn, WorkerWaitEntry } from './waits.ts';
+import type { PeerWaitEntry, PluginWaitEntry, PrWaitEntry, ProcessWaitEntry, SubagentWaitEntry, TimerWaitEntry, Wait, WaitingOn, WorkerWaitEntry } from './waits.ts';
 
 /**
  * What a run waits on, read from its wait list in `waits.ts`. The attention ladder, the run
@@ -98,6 +98,13 @@ export function computeWaitingOn(run: WaitingOnInput): WaitingOn | undefined {
   }
   const process = earliest(open.filter((wait): wait is ProcessWaitEntry => wait.kind === 'process'));
   if (process) return { kind: 'process', waitId: process.id, pid: process.pid, deadline: process.deadline, ...(process.note === undefined ? {} : { note: process.note }) };
+  const plugins = open.filter((wait): wait is PluginWaitEntry => wait.kind === 'plugin');
+  plugins.sort((a, b) => {
+    const deadlineOrder = (a.deadline ? Date.parse(a.deadline) : Infinity) - (b.deadline ? Date.parse(b.deadline) : Infinity);
+    return deadlineOrder || Date.parse(a.registeredAt) - Date.parse(b.registeredAt);
+  });
+  const plugin = plugins[0];
+  if (plugin) return { kind: 'plugin', pluginKind: plugin.pluginKind, waitId: plugin.id, summary: plugin.summary, ...(plugin.deadline === undefined ? {} : { deadline: plugin.deadline }) };
   const timer = earliest(open.filter((wait): wait is TimerWaitEntry => wait.kind === 'timer'));
   if (timer) return { kind: 'timer', waitId: timer.id, at: timer.deadline, ...(timer.note === undefined ? {} : { note: timer.note }) };
   return undefined;

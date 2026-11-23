@@ -53,7 +53,7 @@ afterEach(() => { clock?.restore(); clock = undefined; restoreDateNow?.(); resto
 export function observeWaitTimers(manager: RunManager, store: RunStore): void {
   const register = manager.registerWait.bind(manager);
   vi.spyOn(manager, 'registerWait').mockImplementation(async (...args) => {
-    if (args[1].kind !== 'timer') return register(...args);
+    if (args[1].kind !== 'timer' || typeof args[1].seconds !== 'number') return register(...args);
     registrationClock();
     const capture: TimerCapture = { active: true, now: Date.now(), delay: args[1].seconds * 1000, indices: [] };
     const wait = await registering.run([capture], () => register(...args)).finally(() => { capture.active = false; });

@@ -204,6 +204,7 @@ function parkedRung(run: AttentionInput, waitingOn: WaitingOn | undefined): Atte
     case 'subagents': return 'waiting-on-subagents';
     case 'pr': return waitingOn.until === 'checks' ? 'waiting-for-ci' : 'waiting-for-merge';
     case 'process': return 'waiting-for-command';
+    case 'plugin': return 'monitoring';
     case 'timer': return 'monitoring';
   }
   // A resolved CI or timer wait owes a wake, never a human gate.
@@ -249,6 +250,7 @@ export function deriveAttention(run: AttentionInput): Attention {
   if (rung === 'waiting-on-workers' && waitingOn?.kind === 'workers') return workerAttention(run, waitingOn);
   if (rung === 'waiting-on-workers' && waitingOn?.kind === 'peers') return peerAttention(waitingOn);
   if (rung === 'waiting-on-subagents' && waitingOn?.kind === 'subagents') return subagentAttention(waitingOn);
+  if (rung === 'monitoring' && waitingOn?.kind === 'plugin') return { ...attentionOfRung('monitoring'), label: waitingOn.summary || 'waiting' };
   return attentionOfRung(rung);
 }
 
@@ -327,6 +329,7 @@ const WEBHOOK_STATE_OF_RUNG: Record<AttentionRung, WebhookTrigger | undefined> =
  */
 export function deriveWebhookState(run: AttentionInput): WebhookTrigger | undefined {
   const { rung } = deriveAttention(run);
+  if (rung === 'monitoring' && run.status === 'waiting' && resolveWaitingOn(run)?.kind === 'plugin') return 'waiting-other';
   // A peer wait shares the workers rung but has no option of its own (hearsay-tools/cezarion#1995).
   if (rung === 'waiting-on-workers' && run.status === 'waiting' && resolveWaitingOn(run)?.kind === 'peers') return 'waiting-other';
   if (rung === 'needs-you' && run.status === 'waiting') {

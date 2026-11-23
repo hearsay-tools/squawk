@@ -1,6 +1,6 @@
 import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
 import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
-import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
+import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { previewStopRequestSchema, previewServeRequestSchema } from '@open-mercato/cezar-contract/preview';
 import { scheduleTaskRequestSchema, scheduledTasksRequestSchema } from '@open-mercato/cezar-contract/scheduled-tasks';
@@ -15,14 +15,14 @@ function flatWaitInputSchema() {
   const properties: Record<string, unknown> = {};
   // `timeout_seconds` is in the pr, worker, request, peer and process kinds: the pr schema's bounds
   // (1–7200, default 1800) are the advertised ones, and the others ride in the description.
-  for (const option of [...squawkWaitRequestSchema.options].reverse()) {
+  for (const option of [...builtInSquawkWaitRequestSchema.options].reverse()) {
     Object.assign(properties, z.toJSONSchema(option, { io: 'input' }).properties);
   }
   const field = (key: string, description: string) => ({ ...(properties[key] as object), description });
   return {
     type: 'object' as const,
     properties: {
-      kind: { type: 'string', enum: squawkWaitRequestSchema.options.map(option => option.shape.kind.value), description: '"pr" waits for a GitHub pull request: its checks or its merge (see `until`); "worker" waits for workers you own; "request" waits for replies to requests you sent; "peer" waits for named peer tasks to message you or settle; "timer" wakes you after `seconds`; "process" wakes you when a background command ends.' },
+      kind: { type: 'string', enum: builtInSquawkWaitRequestSchema.options.map(option => option.shape.kind.value), description: '"pr" waits for a GitHub pull request: its checks or its merge (see `until`); "worker" waits for workers you own; "request" waits for replies to requests you sent; "peer" waits for named peer tasks to message you or settle; "timer" wakes you after `seconds`; "process" wakes you when a background command ends.' },
       operation_id: field('operation_id', 'Optional retry identity. Reuse it with exactly the same arguments after an unknown outcome; never use it for a different registration.'),
       pr: field('pr', 'kind "pr": the HTTPS GitHub pull request URL.'),
       until: field('until', 'kind "pr": "checks" (default) watches checks; "merge" waits for merge or closure and ignores queue removal. After requesting a merge, use "merge_or_blocked": wakes on merge, closure, conflict, or neither queue membership nor enabled auto-merge remaining. Pending checks or a queue slot alone do not end it. All targets retain their deadline and query-error exits. Only "merged" confirms success; "blocked" requires inspection and grants no permission to retry or merge.'),

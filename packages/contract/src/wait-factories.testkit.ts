@@ -1,6 +1,7 @@
 import { NOW, next } from './test-factories.testkit.ts';
 import {
   humanWaitEntrySchema,
+  pluginWaitEntrySchema,
   peerWaitEntrySchema,
   prWaitEntrySchema,
   processWaitEntrySchema,
@@ -11,7 +12,7 @@ import {
   waitViaSchema,
   workerWaitEntrySchema,
 } from './waits.ts';
-import type { HumanWaitEntry, PeerWaitEntry, PrWaitEntry, ProcessWaitEntry, SubagentWaitEntry, TimerWaitEntry, WorkerWaitEntry } from './waits.ts';
+import type { HumanWaitEntry, PluginWaitEntry, PeerWaitEntry, PrWaitEntry, ProcessWaitEntry, SubagentWaitEntry, TimerWaitEntry, WorkerWaitEntry } from './waits.ts';
 
 /**
  * Typed test data for waits (hearsay-tools/squawk#4143): the wait enum constants and the `make*Wait`
@@ -32,6 +33,7 @@ export const WAIT_PHASE = waitPhaseSchema.enum;
 export const WAIT_VIA = waitViaSchema.enum;
 export const WAIT_SOURCE = timerWaitEntrySchema.shape.source.enum;
 export const WAIT_KIND = {
+  plugin: pluginWaitEntrySchema.shape.kind.value,
   pr: prWaitEntrySchema.shape.kind.value,
   timer: timerWaitEntrySchema.shape.kind.value,
   human: humanWaitEntrySchema.shape.kind.value,
@@ -166,5 +168,13 @@ export function makeSubagentWait(over: Partial<SubagentWaitEntry> = {}): Subagen
     deadline: LATER,
     children: [{ id: 'toolu_bg_01', status: SUBAGENT_STATUS.running }],
     ...over,
+  };
+}
+
+/** A plugin wait that remains readable without its plugin. */
+export function makePluginWait(over: Partial<PluginWaitEntry> = {}): PluginWaitEntry {
+  return {
+    ...waitBase(), kind: WAIT_KIND.plugin, via: 'example-plugin',
+    pluginKind: 'example.check', summary: 'Waiting for example check', payload: {}, ...over,
   };
 }

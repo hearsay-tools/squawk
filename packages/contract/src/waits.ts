@@ -295,7 +295,20 @@ export function runningSubagents(wait: Pick<SubagentWaitEntry, 'children'>): num
   return wait.children.filter((child) => child.status === 'running').length;
 }
 
-export const waitSchema = z.discriminatedUnion('kind', [prWaitEntrySchema, timerWaitEntrySchema, humanWaitEntrySchema, workerWaitEntrySchema, processWaitEntrySchema, peerWaitEntrySchema, subagentWaitEntrySchema]);
+/** An open plugin-owned wait; its data remains readable without the plugin installed. */
+export const pluginWaitEntrySchema = z.object({
+  ...waitBaseShape,
+  via: z.string().min(1).max(64),
+  kind: z.literal('plugin'),
+  pluginKind: z.string().min(1).max(64),
+  deadline: z.iso.datetime().optional(),
+  summary: z.string().max(256),
+  payload: z.record(z.string(), z.unknown()),
+  result: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+export type PluginWaitEntry = z.infer<typeof pluginWaitEntrySchema>;
+
+export const waitSchema = z.discriminatedUnion('kind', [prWaitEntrySchema, timerWaitEntrySchema, humanWaitEntrySchema, workerWaitEntrySchema, processWaitEntrySchema, peerWaitEntrySchema, subagentWaitEntrySchema, pluginWaitEntrySchema]);
 export type Wait = z.infer<typeof waitSchema>;
 
 // ---- what the tool answers share ----------------------------------------------------------
@@ -306,6 +319,7 @@ const openWaitFields = { wait_id: z.uuid(), summary: z.string().max(256) };
 export const openWaitSchema = z.discriminatedUnion('kind', [
   z.object({ ...openWaitFields, kind: z.enum(['pr', 'timer', 'worker', 'process', 'peer', 'subagent']), deadline: z.iso.datetime() }).strict(),
   z.object({ ...openWaitFields, kind: z.literal('human') }).strict(),
+  z.object({ ...openWaitFields, kind: z.literal('plugin'), pluginKind: z.string().min(1).max(64), deadline: z.iso.datetime().optional() }).strict(),
 ]);
 export type OpenWait = z.infer<typeof openWaitSchema>;
 
@@ -359,7 +373,7 @@ export type DoneOwedInput = z.infer<typeof doneOwedInputSchema>;
 
 /**
  * The run's top open wait, by the spec's order: human > usage limit > workers > peers > subagents >
- * PR > process > timer. A summary field: lists and `deriveAttention` read it instead of the wait list.
+ * PR > process > plugin > timer. A summary field: lists and `deriveAttention` read it instead of the wait list.
  */
 const waitingOnUnionSchema = z.discriminatedUnion('kind', [
   /** `shown` once the user sees the question (its `askSeq`): attention reads that as Needs you at
@@ -387,6 +401,7 @@ const waitingOnUnionSchema = z.discriminatedUnion('kind', [
   }),
   /** A background command (hearsay-tools/cezarion#1446). */
   z.object({ kind: z.literal('process'), waitId: z.uuid(), pid: pidSchema, deadline: z.iso.datetime(), note: z.string().max(NOTE_MAX).optional() }),
+  z.object({ kind: z.literal('plugin'), pluginKind: z.string().min(1).max(64), waitId: z.uuid(), summary: z.string().max(256), deadline: z.iso.datetime().optional() }),
   z.object({ kind: z.literal('timer'), waitId: z.uuid(), at: z.iso.datetime(), note: z.string().max(NOTE_MAX).optional() }),
 ]);
 /** Stored summaries written before hearsay-tools/cezarion#1425 carry `{ kind: 'ci' }`: a checks wait. */

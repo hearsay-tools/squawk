@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { CiToolController } from '../ci-wait/controller.ts';
 import { callSquawkWait } from '../ci-wait/client.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi, onTestFinished } from 'vitest';
@@ -13,6 +14,20 @@ import { GENERATION, waitRegistryFixture } from './ci-wait-registration.testkit.
 const pr = 'https://github.com/acme/repo/pull/12';
 
 describe('wait registration effects', () => {
+  it('refuses an unsupported custom kind over IPC without a receipt or automatic retry', async () => {
+    const f = waitRegistryFixture();
+    const controller = await CiToolController.start();
+    onTestFinished(() => controller.close());
+    const tools = f.tools();
+    const register = vi.fn(tools.registerWait);
+    const session = controller.provision({ ...tools, registerWait: register });
+    const answer = await callSquawkWait({ kind: 'deploy', operation_id: randomUUID() }, session.env);
+    expect(answer).toMatchObject({ ok: false, effect: 'refused', code: 'invalid_request' });
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(f.store.getRun(f.run.id)?.waitRegistrations ?? []).toEqual([]);
+    expect(f.store.getRun(f.run.id)?.waits ?? []).toEqual([]);
+  });
+
   it('reports duplicate registration and refuses deadline changes without cancelling the original', async () => {
     const f = waitRegistryFixture(); const { store, run } = f;
     const tools = f.tools();

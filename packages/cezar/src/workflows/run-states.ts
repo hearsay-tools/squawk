@@ -26,7 +26,7 @@ export const AUTOMATIC: ReadonlySet<FiredBy> = new Set(['runner', 'timer', 'sche
 /** What a `waiting` run waits on: `computeWaitingOn`'s kinds (its `peers` is `peer` here), plus
  *  three cases it leaves out. `subagents` is the native subagents a turn left running
  *  (hearsay-tools/cezarion#2431). */
-export type Park = 'permission' | 'human' | 'usage-limit' | 'workers' | 'peer' | 'subagents' | 'pr' | 'process' | 'timer'
+export type Park = 'permission' | 'human' | 'usage-limit' | 'workers' | 'peer' | 'subagents' | 'pr' | 'process' | 'plugin' | 'timer'
   | 'capacity' | 'plain';
 export type RunState = Exclude<RunStatus, 'waiting'> | `waiting:${Park}`;
 
@@ -54,6 +54,7 @@ export const RUN_STATES: { readonly [S in RunState]: RunStateSpec } = {
   'waiting:peer': { final: false, note: 'Named peer root tasks (hearsay-tools/cezarion#1995). No slot; the idle timer is armed. The deadline (1 to 7,200 s) is its automatic exit.' },
   'waiting:subagents': { final: false, note: 'Native subagents the turn left running (hearsay-tools/cezarion#2431). Keeps its session, which holds the children, and a slot in the monitoring pool, so the idle close never applies. The 30-minute deadline after the last child event is its automatic exit when no child signal comes.' },
   'waiting:pr': { final: false, note: 'Keeps a slot in the monitoring pool.' },
+  'waiting:plugin': { final: false, humanOnly: 'Without a registered adapter the stored plugin wait remains open until cancelled.', note: 'Keeps a slot while the plugin wait remains open.' },
   'waiting:process': { final: false, note: 'Keeps a slot in the monitoring pool.' },
   'waiting:timer': { final: false, note: 'Keeps a slot in the monitoring pool.' },
   'waiting:capacity': { final: false, note: 'A resolved wait or a message is owed, and no slot is free yet.' },
@@ -99,9 +100,9 @@ export type TriggerRow = {
 };
 
 const PARKS = ['waiting:permission', 'waiting:human', 'waiting:usage-limit', 'waiting:workers', 'waiting:peer', 'waiting:subagents', 'waiting:pr',
-  'waiting:process', 'waiting:timer', 'waiting:capacity', 'waiting:plain'] as const satisfies readonly RunState[];
+  'waiting:process', 'waiting:plugin', 'waiting:timer', 'waiting:capacity', 'waiting:plain'] as const satisfies readonly RunState[];
 const parksBut = (...left: RunState[]): RunState[] => PARKS.filter((park) => !left.includes(park));
-const MONITORING = ['waiting:pr', 'waiting:process', 'waiting:timer'] as const satisfies readonly RunState[];
+const MONITORING = ['waiting:pr', 'waiting:process', 'waiting:plugin', 'waiting:timer'] as const satisfies readonly RunState[];
 const ENGINE_OWNED = ['queued', 'running', ...parksBut('waiting:usage-limit')] as const satisfies readonly RunState[];
 const CONTINUABLE = [...parksBut('waiting:usage-limit'), 'review', 'done', 'failed', 'cancelled'] as const satisfies readonly RunState[];
 

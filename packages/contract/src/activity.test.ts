@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIVITY_TOOL_KINDS, activityQuerySchema, activityRunSchema } from './activity.ts';
+import { ACTIVITY_TOOL_KINDS, activityWaitSchema, activityQuerySchema, activityRunSchema } from './activity.ts';
+import { WAIT_KIND } from './wait-factories.testkit.ts';
 import { RUN_STATUS } from './test-factories.testkit.ts';
 import type { ToolKind } from './tool-display.ts';
 
@@ -20,4 +21,13 @@ describe('the activity contract', () => {
     expect(activityRunSchema.safeParse(run).success).toBe(true);
     expect(activityRunSchema.safeParse({ ...run, rate: [0] }).success).toBe(false);
   });
+});
+
+it.each([undefined, '2026-11-23T12:00:00Z'])('parses generic plugin activity with deadline %s', (deadline) => {
+  const wait = {
+    kind: WAIT_KIND.plugin, since: '2026-11-23T11:00:00Z', ...(deadline ? { deadline } : {}),
+    detail: { pluginKind: 'uninstalled.check', summary: 'Checking remote job' },
+  };
+  expect(activityWaitSchema.parse(wait)).toEqual(wait);
+  expect(activityWaitSchema.safeParse({ ...wait, detail: { ...wait.detail, extra: true } }).success).toBe(false);
 });

@@ -220,7 +220,7 @@ function stubHandlers(calls: Frame[]): SquawkToolHandlers {
   const message = 'The approval probe answers cezar_wait timers only.';
   const registerWait: SquawkToolHandlers['registerWait'] = async (request, via) => {
     calls.push({ tool: via, request });
-    if (request.kind !== 'timer') return { answer: { ok: false, code: 'unavailable', message } } satisfies WaitRegistration;
+    if (request.kind !== 'timer' || typeof request.seconds !== 'number') return { answer: { ok: false, code: 'unavailable', message } } satisfies WaitRegistration;
     const now = new Date();
     const deadline = new Date(now.getTime() + request.seconds * 1000).toISOString();
     const wait: Wait = { id: randomUUID(), source: 'agent', via, registeredAt: now.toISOString(), phase: 'open',

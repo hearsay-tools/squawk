@@ -50,6 +50,11 @@ export function activityWait(run: RunRecord, ledger: ConversationState | undefin
       return { kind: 'process', since: entry.registeredAt, deadline: waitingOn.deadline,
         detail: { pid: waitingOn.pid, ...(waitingOn.note === undefined ? {} : { note: waitingOn.note }) } };
     }
+    case 'plugin': {
+      const entry = openOf(run, 'plugin').find((wait) => wait.id === waitingOn.waitId)!;
+      return { kind: 'plugin', since: entry.registeredAt, deadline: waitingOn.deadline,
+        detail: { pluginKind: waitingOn.pluginKind, summary: waitingOn.summary } };
+    }
     case 'timer': {
       const entry = openOf(run, 'timer').find((wait) => wait.id === waitingOn.waitId)!;
       return { kind: 'timer', since: entry.registeredAt, deadline: entry.deadline,
