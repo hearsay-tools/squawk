@@ -57,7 +57,7 @@ export class AgentCdpLink {
    * the agent may drive it but not close it. Rejects when the browser refuses the session.
    */
   static async open(connection: CdpConnection, client: AgentClient, opts: { protectedTargetId?: string | undefined; onClose?: () => void; onTarget?: (targetId: string) => void } = {}): Promise<AgentCdpLink> {
-    const reply = await connection.call('Target.attachToBrowserTarget', {}, undefined);
+    const reply = await connection.call('Target.attachToBrowserTarget', {}, undefined, 15_000);
     const sessionId = (reply.result as { sessionId?: unknown } | undefined)?.sessionId;
     if (reply.error || typeof sessionId !== 'string') throw new Error(`Target.attachToBrowserTarget: ${reply.error?.message ?? 'no session'}`);
     return new AgentCdpLink(connection, client, sessionId, opts.protectedTargetId, opts.onClose ?? (() => {}), opts.onTarget ?? (() => {}));

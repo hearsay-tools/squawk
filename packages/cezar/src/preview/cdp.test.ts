@@ -142,6 +142,66 @@ describe('cdpOverPipe (hearsay-tools/cezarion#784)', () => {
     return { connection: cdpOverPipe(toBrowser, fromBrowser), commands, write: (text: string) => fromBrowser.write(text), end: () => fromBrowser.end() };
   }
 
+  it('leaves readiness calls to the progress-aware launch watchdog', async () => {
+    vi.useFakeTimers();
+    const pipe = fakePipe();
+    try {
+      const settled = vi.fn();
+      const ready = pipe.connection.call('Browser.getVersion', {}, undefined);
+      void ready.then(settled, settled);
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(settled).not.toHaveBeenCalled();
+      pipe.write('{"id":1,"result":{"product":"Chromium"}}\0');
+      await expect(ready).resolves.toMatchObject({ result: { product: 'Chromium' } });
+    } finally {
+      pipe.connection.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out an unanswered call, removes its pending entry and ignores a late reply', async () => {
+    vi.useFakeTimers();
+    const set = vi.spyOn(Map.prototype, 'set');
+    const pipe = fakePipe();
+    try {
+      const call = pipe.connection.call('Page.enable', {}, undefined, 100);
+      const pending = set.mock.contexts.at(-1) as Map<number, unknown>;
+      const rejected = expect(call).rejects.toThrow('Page.enable: CDP command timed out after 100 ms');
+      await vi.advanceTimersByTimeAsync(100);
+      await rejected;
+      expect(pending.size).toBe(0);
+      pipe.write('{"id":1,"result":{"sessionId":"late"}}\0');
+      const next = pipe.connection.call('Page.enable', {}, undefined, 100);
+      pipe.write('{"id":2,"result":{}}\0');
+      expect(await next).toMatchObject({ result: {} });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      pipe.connection.close();
+      set.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['Target.attachToTarget', 'Target.attachToBrowserTarget'])('detaches the session in a late successful %s reply', async method => {
+    vi.useFakeTimers();
+    const pipe = fakePipe();
+    try {
+      const rejected = expect(pipe.connection.call(method, {}, 'PARENT', 100)).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(100);
+      await rejected;
+      pipe.write('{"id":1,"result":{"sessionId":"late"}}\0');
+      expect(pipe.commands).toEqual([
+        { id: 1, method, params: {}, sessionId: 'PARENT' },
+        { id: 2, method: 'Target.detachFromTarget', params: { sessionId: 'late' }, sessionId: 'PARENT' },
+      ]);
+      pipe.write('{"id":2,"result":{}}\0');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      pipe.connection.close();
+      vi.useRealTimers();
+    }
+  });
+
   it('ends every command with a NUL byte and names its session only when it has one', async () => {
     const pipe = fakePipe();
     // Never answered: closing the pipe below fails them, which is not what this case checks.

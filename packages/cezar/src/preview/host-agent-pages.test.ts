@@ -54,6 +54,23 @@ describe('PreviewHost agent pages', () => {
     expect(navigations(browser)).toEqual(['http://localhost:5173/']);
   });
 
+  it('closes an initialized page session when its target info lookup times out', async () => {
+    const { browser, conn, activate } = await preview();
+    const call = browser.connection.call.bind(browser.connection);
+    let infoCalls = 0;
+    vi.spyOn(browser.connection, 'call').mockImplementation((method, params, sessionId, timeoutMs) => {
+      if (method === 'Target.getTargetInfo' && ++infoCalls === 2) {
+        return Promise.reject(new Error('Target.getTargetInfo: CDP command timed out after 15000 ms'));
+      }
+      return call(method, params, sessionId, timeoutMs);
+    });
+    await activate('A');
+    expect(infoCalls).toBe(2);
+    expect(conn.pages.get('S1')!.sent('Page.addScriptToEvaluateOnNewDocument')).toHaveLength(1);
+    expect(conn.pages.get('S1')!.cdp.close).toHaveBeenCalledTimes(1);
+    expect(conn.pages.get('S1')!.sent('Page.startScreencast')).toEqual([]);
+  });
+
   it.each([undefined, {}, { targetInfo: {} }, { targetInfo: { url: 42 } }, { targetInfo: { url: '' } }])('does not send a URL when page URL metadata is absent or invalid: %j', async result => {
     const { browser, viewer, activate } = await preview();
     const call = browser.connection.call.bind(browser.connection);

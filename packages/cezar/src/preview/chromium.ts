@@ -532,6 +532,10 @@ async function launchOnce(bin: string, profileDir: string, env: NodeJS.ProcessEn
     ready = !reply.error;
     pipeClosed = !ready;
     wake();
+  }, error => {
+    exit ??= `Chromium readiness probe failed: ${error instanceof Error ? error.message : String(error)}`;
+    pipeClosed = true;
+    wake();
   });
   const expired = await Promise.race([changed, watch.expired]);
   watch.stop();

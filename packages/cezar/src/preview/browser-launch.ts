@@ -41,6 +41,10 @@ export async function launchBrowser(profileDir: string, env: NodeJS.ProcessEnv, 
   proc.stderr?.on('data', (chunk: Buffer) => {
     tail = (tail + chunk.toString('utf8')).slice(-STDERR_TAIL_CHARS);
   });
+  connection.setTimeoutContext?.(() => {
+    const state = proc.exitCode === null && proc.signalCode === null ? 'running' : `exit=${proc.exitCode}, signal=${proc.signalCode}`;
+    return `Chromium ${state}; stderr tail: ${tail || '(empty)'}`;
+  });
   // Helpers still write the profile for a moment after the main process exits: end them first.
   const exited = new Promise<BrowserExit>(resolve =>
     proc.once('exit', (code, signal) => {
@@ -64,7 +68,7 @@ export async function launchBrowser(profileDir: string, env: NodeJS.ProcessEnv, 
     return { cdp, connection, pageTargetId: page.targetId, exited, close };
   } catch (error) {
     connection.close();
-    void stopChromium(proc);
+    await stopChromium(proc);
     throw error;
   }
 }

@@ -536,7 +536,7 @@ export class PreviewHost implements PreviewHostLike {
   private async agentTargeted(entry: RunEntry, targetId: string): Promise<void> {
     const browser = entry.browser;
     if (!browser) return;
-    const reply = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined);
+    const reply = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined, 15_000);
     const type = (reply.result as { targetInfo?: { type?: unknown } } | undefined)?.targetInfo?.type;
     if (type !== 'page' || entry.browser !== browser) return;
     entry.agentTarget = targetId;
@@ -583,7 +583,7 @@ export class PreviewHost implements PreviewHostLike {
 
   /** A session of Squawk's own on `targetId`, carrying the page's current URL. */
   private async openPageSession(entry: RunEntry, browser: BrowserHandle, targetId: string): Promise<{ session: PreviewSession; sessionId: string } | undefined> {
-    const attached = await browser.connection.call('Target.attachToTarget', { targetId, flatten: true }, undefined);
+    const attached = await browser.connection.call('Target.attachToTarget', { targetId, flatten: true }, undefined, 15_000);
     const sessionId = attachedSchema.safeParse(attached.result).data?.sessionId;
     if (!sessionId) return undefined;
     let session: PreviewSession;
@@ -596,10 +596,15 @@ export class PreviewHost implements PreviewHostLike {
       browser.connection.request('Target.detachFromTarget', { sessionId }, undefined, () => {});
       return undefined;
     }
-    const info = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined);
-    const url = (info.result as { targetInfo?: { url?: unknown } } | undefined)?.targetInfo?.url;
-    if (typeof url === 'string' && url) session.url ??= url;
-    return { session, sessionId };
+    try {
+      const info = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined, 15_000);
+      const url = (info.result as { targetInfo?: { url?: unknown } } | undefined)?.targetInfo?.url;
+      if (typeof url === 'string' && url) session.url ??= url;
+      return { session, sessionId };
+    } catch (error) {
+      session.close();
+      throw error;
+    }
   }
 
   /** The agent closed the page the pane followed: the pane shows Squawk's own page again. */

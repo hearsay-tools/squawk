@@ -29,11 +29,13 @@ export type CdpMessage = {
 export interface CdpConnection {
   /** A page or browser session's client. Undefined is the root session. */
   session(sessionId: string | undefined): Cdp;
-  /** Sends one command and settles with its raw reply, error included: the proxy forwards it as it came. */
-  call(method: string, params: unknown, sessionId: string | undefined): Promise<CdpMessage>;
+  /** Sends one command and settles with its raw reply, error included. Rejects only when an explicit timeout expires. */
+  call(method: string, params: unknown, sessionId: string | undefined, timeoutMs?: number): Promise<CdpMessage>;
   /** `call` with a callback run in wire order, before any message read after the reply: a proxy
    *  that forwards replies and events keeps the order the browser sent them in. */
   request(method: string, params: unknown, sessionId: string | undefined, onReply: (msg: CdpMessage) => void): void;
+  /** Adds live browser diagnostics to timeout errors when the transport supports them. */
+  setTimeoutContext?(describe: () => string): void;
   /** Every event on every session, as it came; returns the unsubscribe. */
   onEvent(fn: (msg: CdpMessage) => void): () => void;
   close(): void;
@@ -51,9 +53,13 @@ type Transport = {
 type Pending = { resolve: (msg: CdpMessage) => void; method: string };
 
 function createConnection(transport: Transport): CdpConnection {
+  let timeoutContext: (() => string) | undefined;
   let nextId = 0;
   let isClosed = false;
   const pending = new Map<number, Pending>();
+  // Keep late attachment ownership until its reply or connection close. Bound silent peers too.
+  const lateAttachments = new Map<number, string | undefined>();
+  const maxLateAttachments = 256;
   const eventFns = new Set<(msg: CdpMessage) => void>();
   let markClosed!: () => void;
   const closed = new Promise<void>(resolve => (markClosed = resolve));
@@ -69,6 +75,14 @@ function createConnection(transport: Transport): CdpConnection {
       const entry = pending.get(msg.id);
       pending.delete(msg.id);
       entry?.resolve(msg);
+      if (lateAttachments.has(msg.id)) {
+        const parentSession = lateAttachments.get(msg.id);
+        lateAttachments.delete(msg.id);
+        const attached = (msg.result as { sessionId?: unknown } | undefined)?.sessionId;
+        if (!msg.error && typeof attached === 'string') {
+          void call('Target.detachFromTarget', { sessionId: attached }, parentSession, 15_000).catch(() => {});
+        }
+      }
     } else if (msg.method) {
       for (const fn of [...eventFns]) fn(msg);
     }
@@ -78,12 +92,13 @@ function createConnection(transport: Transport): CdpConnection {
     isClosed = true;
     for (const [id, entry] of pending) entry.resolve({ id, error: { message: 'CDP connection closed' } });
     pending.clear();
+    lateAttachments.clear();
     eventFns.clear();
     markClosed();
   });
 
-  const request = (method: string, params: unknown, sessionId: string | undefined, resolve: (msg: CdpMessage) => void): void => {
-    if (isClosed) return resolve({ error: { message: 'CDP connection closed' } });
+  const request = (method: string, params: unknown, sessionId: string | undefined, resolve: (msg: CdpMessage) => void): number | undefined => {
+    if (isClosed) { resolve({ error: { message: 'CDP connection closed' } }); return; }
     const id = ++nextId;
     pending.set(id, { resolve, method });
     try {
@@ -92,9 +107,30 @@ function createConnection(transport: Transport): CdpConnection {
       pending.delete(id);
       resolve({ id, error: { message: error instanceof Error ? error.message : String(error) } });
     }
+    return id;
   };
-  const call = (method: string, params: unknown, sessionId: string | undefined): Promise<CdpMessage> =>
-    new Promise(resolve => request(method, params, sessionId, resolve));
+  // Readiness uses the launch watchdog; only callers past readiness set a command timeout.
+  const call = (method: string, params: unknown, sessionId: string | undefined, timeoutMs?: number): Promise<CdpMessage> =>
+    new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      const id = request(method, params, sessionId, reply => {
+        settled = true;
+        clearTimeout(timer);
+        resolve(reply);
+      });
+      if (settled || id === undefined || timeoutMs === undefined) return;
+      timer = setTimeout(() => {
+        pending.delete(id);
+        if (method === 'Target.attachToTarget' || method === 'Target.attachToBrowserTarget') {
+          lateAttachments.set(id, sessionId);
+          // Closing releases all sessions rather than forgetting ownership when the peer never replies.
+          if (lateAttachments.size > maxLateAttachments) transport.close();
+        }
+        reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms${timeoutContext ? `; ${timeoutContext()}` : ''}`));
+      }, timeoutMs);
+      timer.unref?.();
+    });
 
   const onEvent = (fn: (msg: CdpMessage) => void) => {
     eventFns.add(fn);
@@ -105,6 +141,7 @@ function createConnection(transport: Transport): CdpConnection {
 
   return {
     call,
+    setTimeoutContext: describe => { timeoutContext = describe; },
     request,
     onEvent,
     close,
@@ -117,7 +154,7 @@ function createConnection(transport: Transport): CdpConnection {
       return {
         send: async <T>(method: string, params: Record<string, unknown> = {}) => {
           if (detached) throw new Error(`${method}: CDP session detached`);
-          const reply = await call(method, params, sessionId);
+          const reply = await call(method, params, sessionId, 15_000);
           if (reply.error) throw new Error(`${method}: ${reply.error.message ?? 'CDP error'}`);
           return reply.result as T;
         },
