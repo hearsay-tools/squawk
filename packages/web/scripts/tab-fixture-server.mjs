@@ -26,8 +26,9 @@ const { registerBuiltInRunners } = await load('runners/built-in.js')
 // This fixture is a process entry like index.ts: the server reads every registered runner, and
 // a deletion or a reclaim asks the removal slots.
 registerBuiltInRunners()
-const { registerBuiltInRunSlots } = await load('built-in-run-slots.js')
+const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js')
 registerBuiltInRunSlots()
+sealBuiltInRunSlots()
 const { ProjectContexts } = await load('server/project-context.js')
 const { resolveHome } = await load('home/resolve.js')
 const home = resolveHome({ purpose: 'cli' })

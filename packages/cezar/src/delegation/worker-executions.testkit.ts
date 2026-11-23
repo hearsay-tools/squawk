@@ -1,4 +1,4 @@
-import { registerWorkerExecutions } from '../runs/worker-executions-registry.ts';
+import { registerWorkerExecutions, sealWorkerExecutions } from '../runs/worker-executions-registry.ts';
 import { createWorkerExecutions } from './worker-executions.ts';
 
 // Importing this module registers the shipped worker executions for this test file, as
@@ -6,3 +6,4 @@ import { createWorkerExecutions } from './worker-executions.ts';
 // each test file its own module registry, so the registration lasts for the file. A shared testkit
 // that builds stores or a RunManager imports it; a test file imports it only where no testkit applies.
 registerWorkerExecutions(createWorkerExecutions);
+sealWorkerExecutions();

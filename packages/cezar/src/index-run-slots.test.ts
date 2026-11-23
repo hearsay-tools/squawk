@@ -19,6 +19,7 @@ it.each(commands)('%s %j initializes process services before its handler', async
   const check = () => {
     expect(slots.runSlotsSealed()).toBe(true);
     expect(executions.workerExecutionsRegistered()).toBe(true);
+    expect(executions.workerExecutionsSealed()).toBe(true);
     expect(runners.registeredRunners().map(runner => runner.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
   };
   if (['migrate', 'server-migrate', 'migrate-project', 'discover', 'task', 'worker', 'backup', 'remote-settings'].includes(command)) {
@@ -62,4 +63,19 @@ it.each([
     expect(await runSubcommand([command!, flag!], {}, () => { throw new Error('Unexpected Home preparation'); })).toBe(0);
     expect(knownRunnerIds()).toEqual([]);
   } finally { log.mockRestore(); }
+});
+
+it('built-in registration leaves sealing to the boot boundary', async () => {
+  vi.resetModules();
+  const builtIn = await import('./built-in-run-slots.ts');
+  const slots = await import('./runs/removal-slots.ts');
+  const executions = await import('./runs/worker-executions-registry.ts');
+  builtIn.registerBuiltInRunSlots();
+  expect(slots.runSlotsSealed()).toBe(false);
+  expect(executions.workerExecutionsSealed()).toBe(false);
+  builtIn.sealBuiltInRunSlots();
+  builtIn.registerBuiltInRunSlots();
+  builtIn.sealBuiltInRunSlots();
+  expect(slots.runSlotsSealed()).toBe(true);
+  expect(executions.workerExecutionsSealed()).toBe(true);
 });

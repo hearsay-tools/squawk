@@ -67,8 +67,9 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
     'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
   const { registerBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
-  const { registerBuiltInRunSlots } = await import('./built-in-run-slots.ts');
+  const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   registerBuiltInRunSlots();
+  sealBuiltInRunSlots();
 }
 
 /** Help must skip both runtime registration and the migrating operator Home factory. */

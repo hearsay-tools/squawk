@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DelegationState } from '@open-mercato/cezar-contract';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { sealTestRunSlots } from './removal-slots.testkit.ts';
@@ -62,4 +62,27 @@ describe('a process that registered no worker-executions factory (hearsay-tools/
     expect(() => cleanupSafety(dataDir, store, run)).toThrow(MISSING);
     expect(store.getRun(child.id)).toBeDefined();
   });
+});
+
+it('requires a seal even with a registered factory, and rejects a sealed empty registry', async () => {
+  vi.resetModules();
+  const registry = await import('./worker-executions-registry.ts');
+  const { createWorkerExecutions } = await import('../delegation/worker-executions.ts');
+  registry.registerWorkerExecutions(createWorkerExecutions);
+  expect(registry.workerExecutionsSealed()).toBe(false);
+  expect(registry.workerExecutionsRegistered()).toBe(false);
+  expect(registry.workerExecutionsFactory).toThrow(/worker-executions.*registerBuiltInRunSlots/);
+  registry.sealWorkerExecutions();
+  expect(registry.workerExecutionsSealed()).toBe(true);
+  expect(registry.workerExecutionsRegistered()).toBe(true);
+  expect(registry.workerExecutionsFactory()).toBe(createWorkerExecutions);
+  registry.registerWorkerExecutions(createWorkerExecutions);
+  expect(() => registry.registerWorkerExecutions(() => { throw new Error('unused'); })).toThrow(/different value/);
+
+  vi.resetModules();
+  const empty = await import('./worker-executions-registry.ts');
+  empty.sealWorkerExecutions();
+  expect(empty.workerExecutionsRegistered()).toBe(false);
+  expect(empty.workerExecutionsFactory).toThrow(/worker-executions.*registerBuiltInRunSlots/);
+  expect(() => empty.registerWorkerExecutions(createWorkerExecutions)).toThrow(/sealed/);
 });

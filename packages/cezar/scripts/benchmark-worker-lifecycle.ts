@@ -30,12 +30,13 @@ import { randomUUID } from 'node:crypto';
 import { ClaudeCliRunner } from '../src/runners/claude/claude-cli-runner.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from '../src/runners/built-in.ts';
-import { registerBuiltInRunSlots } from '../src/built-in-run-slots.ts';
+import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 import { workerExecutionsOf } from '../src/delegation/worker-executions.ts';
 
 installWindowsIdentityStore();
 registerBuiltInRunners();
 registerBuiltInRunSlots();
+sealBuiltInRunSlots();
 const ownHome = prepareBenchmarkEnv();
 process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0'; process.env.CEZ_MOCK_NUDGE_REPLY = 'plain'; process.env.CEZ_MOCK_NOTES = '0';
 

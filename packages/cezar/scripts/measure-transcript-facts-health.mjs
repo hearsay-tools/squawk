@@ -34,8 +34,9 @@ try {
   // This measurement is a process entry like index.ts: the server reads every registered runner,
   // and a reclaim or a deletion asks the removal slots.
   registerBuiltInRunners();
-  const { registerBuiltInRunSlots } = await import(new URL('built-in-run-slots.js', runtime.url));
+  const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import(new URL('built-in-run-slots.js', runtime.url));
   registerBuiltInRunSlots();
+  sealBuiltInRunSlots();
   const { RunManager } = await import(new URL('workflows/run.js', runtime.url));
   const { acquireCiResources } = await import(new URL('ci-wait/resources.js', runtime.url));
   const { resolveHome } = await import(new URL('home/resolve.js', runtime.url));

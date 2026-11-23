@@ -26,6 +26,7 @@ const ENTRIES: ReadonlyArray<{ entry: string; call: RegExp }> = [
 
 it.each(ENTRIES)('$entry seals the built-in removal slots at its startup', ({ entry, call }) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/registerBuiltInRunSlots \} = await (?:import\(new URL\(|load\()'built-in-run-slots\.js'|^const \{ registerBuiltInRunSlots \} = await load\('built-in-run-slots\.js'\)$|^import \{ registerBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
+  expect(source).toMatch(/registerBuiltInRunSlots, sealBuiltInRunSlots \} = await (?:import\(new URL\(|load\()'built-in-run-slots\.js'|^const \{ registerBuiltInRunSlots, sealBuiltInRunSlots \} = await load\('built-in-run-slots\.js'\)$|^import \{ registerBuiltInRunSlots, sealBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
   expect(source).toMatch(call);
+  expect(source).toMatch(/^(\s*)registerBuiltInRunSlots\(\);?\n\1sealBuiltInRunSlots\(\);?$/m);
 });
