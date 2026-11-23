@@ -131,9 +131,12 @@ tools. Read each fact from its owner:
 
 - `packages/contract/src/waits.ts`, `ci-wait.ts` and `ask-schema.ts`: the stored wait shapes, and
   each tool's request, answer, limits and error codes.
-- `WAIT_KINDS` in `packages/cezar/src/workflows/run/wait-kinds.ts`: one typed row for each wait
-  kind, with its deadline, slot, wake budget, resolvers, cancel paths and texts. A new kind is a
-  new row ([ADR 0061](docs/adr/0061-one-wait-engine-executes-wait-kind-rows.md)).
+- `WAIT_KINDS` in `packages/cezar/src/workflows/run/wait-kinds.ts`: the typed view of the
+  wait-kind registry, one row for each wait kind, with its deadline, slot, wake budget, resolvers,
+  cancel paths, texts and watch lifecycle. The core rows (`human`, `timer`, `process`, `subagent`)
+  live there; `pr` lives in `ci-wait/pr-wait-kind.ts` and `worker` and `peer` in
+  `delegation/wait-kinds.ts`. `built-in-wait-kinds.ts` registers them all. A new kind is a new
+  registered row ([ADR 0061](docs/adr/0061-one-wait-engine-executes-wait-kind-rows.md)).
 - `squawkTools` in `packages/cezar/src/ci-wait/tools.ts`: the one list of Squawk tools, with the
   descriptions that the agent reads. Every runner's adapter, extension and allow-list read
   it, and `squawkToolEnvNames` lists the environment names a harness forwards. A new tool is

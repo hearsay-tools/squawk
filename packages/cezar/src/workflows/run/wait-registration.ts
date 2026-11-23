@@ -8,6 +8,8 @@ import { builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wai
 import { waitPolicyForWait, waitRequestRow } from './wait-kinds.ts';
 
 export type RegistrationIdentity = Pick<WaitRegistrationReceipt, 'operationId' | 'requestHash'>;
+/** An agent or CLI registration: withdraw Squawk's human waits, commit with its receipt, park at a boundary. */
+export const openRegistered = (receipt: RegistrationIdentity | undefined) => ({ withdraw: true, receipt, onCommitFailure: 'persistence' as const, park: true });
 export function registrationIdentity(request: SquawkWaitRequest): RegistrationIdentity | undefined {
   if (!request.operation_id) return undefined;
   const row = waitRequestRow(request.kind);

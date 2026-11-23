@@ -73,7 +73,7 @@ export function openWaitList(waits: readonly Wait[]): OpenWait[] {
     : { wait_id: wait.id, kind: wait.kind as Exclude<Wait['kind'], 'human' | 'plugin'>, deadline: ('deadline' in wait ? wait.deadline : undefined)!, summary: waitPolicyForWait(wait).summary(wait) });
 }
 
-export { identicalWait, identicalWorkerWait, identicalPeerWait, timerWaitEntry, prWaitEntry, processWaitEntry } from './run/wait-kinds.ts';
+export { identicalWait, identicalWorkerWait, identicalPeerWait, timerWaitEntry, processWaitEntry } from './run/wait-kinds.ts';
 
 
 
@@ -101,4 +101,4 @@ export function settledWaitEntry(latest: Wait, result: WaitResult | undefined, o
 }
 
 export { isSquawkHumanWait };
-export { normalizePrUrl, isMonitoringTimer, MONITORING_WAKE_NUDGE, waitResultText, subagentWaitResultText, describeWait, openWaitsFooter } from './run/wait-kinds.ts';
+export { isMonitoringTimer, MONITORING_WAKE_NUDGE, waitResultText, subagentWaitResultText, describeWait, openWaitsFooter } from './run/wait-kinds.ts';

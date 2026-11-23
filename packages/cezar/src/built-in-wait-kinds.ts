@@ -1,9 +1,14 @@
-import { registerCoreWaitKinds, registerBuiltInWaitKind } from './workflows/run/wait-kinds.ts';
+import { registerPrWaitKind } from './ci-wait/pr-wait-kind.ts';
+import { registerPeerWaitKind, registerWorkerWaitKind } from './delegation/wait-kinds.ts';
+import { registerCoreWaitKinds, registerSubagentWaitKind } from './workflows/run/wait-kinds.ts';
 
-/** Shell composition until the forge and delegation modules own these registrations. */
+/** Shell composition: the forge, delegation, the runner's subagent wait and the core kinds, in the
+ *  historical row order that policy lists keep. It only registers; the boot boundary seals. */
 export function registerBuiltInWaitKinds(): void {
-  // Preserve the historical row order for policy lists.
-  for (const kind of ['pr', 'worker', 'peer', 'subagent'] as const) registerBuiltInWaitKind(kind);
+  registerPrWaitKind();
+  registerWorkerWaitKind();
+  registerPeerWaitKind();
+  registerSubagentWaitKind();
   registerCoreWaitKinds();
 }
 export { sealWaitKinds as sealBuiltInWaitKinds } from './workflows/run/wait-kind-registry.ts';

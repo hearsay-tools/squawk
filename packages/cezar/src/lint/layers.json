@@ -83,6 +83,7 @@
       "server/forge/",
       "ci-wait/github.ts",
       "ci-wait/merge-progress.ts",
+      "ci-wait/pr-wait-kind.ts",
       "ci-wait/progress.ts",
       "ci-wait/resource-pool.ts",
       "ci-wait/resources.ts",
