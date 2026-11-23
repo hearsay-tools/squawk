@@ -15,7 +15,7 @@ import { copyFallbackFamily, fallbackRunDeleteError } from './project-run-source
 import { claimOwnerLive, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { RUNS_DB_FILE, type RunDatabase, type RunRow } from './run-database.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
-import { AUTOMATION_ORIGIN_HEAL_SQL, LEGACY_REFERENCE_HEAL_SQL } from './store-open.ts';
+import { AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY, AUTOMATION_ORIGIN_HEAL_SQL, LEGACY_REFERENCE_HEAL_SQL, saveHealMeta } from './store-open.ts';
 import type { DecodedRun, RunRecord } from './store.ts';
 
 /**
@@ -111,6 +111,7 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
       const decoded = decode(row);
       if (decoded) this.adoptLoadedRun(decoded, { keepLive: this.keepLive }, row);
     }
+    const verified: Record<string, string> = {};
     const heal = this.db!.listWhere(LEGACY_REFERENCE_HEAL_SQL).filter((row) => !this.state.held.has(row.id));
     const healable = this.claimFamilies(heal.map(rowFamily));
     for (const row of heal) {
@@ -123,11 +124,16 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
           this.db!.getMeta(`issue-attribution:${row.id}`) !== String(row.revision);
         this.adoptLoadedRun(decoded, { keepLive: this.keepLive, onlyIfChanged: !needsIssueCheck }, row);
         if (needsIssueCheck) this.state.dirty.add(row.id);
+        if (!this.state.held.has(row.id) && !this.db!.familyHasFallback(rowFamily(row))) {
+          verified[`pr-reference-heal:${row.id}`] = String(row.revision);
+        }
       }
     }
-    const stale = this.db!.listWhere(AUTOMATION_ORIGIN_HEAL_SQL).filter((row) => !this.state.held.has(row.id));
+    const stale = this.automationHealRows(verified);
+    if (!projectWriteRefused(this.dataDir)) saveHealMeta(this.db!, verified);
     const restamp = this.claimFamilies(stale.map(rowFamily));
     for (const row of stale) {
+      if (this.state.held.has(row.id)) continue;
       if (!restamp.has(rowFamily(row))) continue;
       const decoded = decode(row);
       // Nothing in the record changes, only its summary: held dirty, the next save rewrites it.
@@ -139,6 +145,16 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
     for (const rootId of this.state.anchoredFamilies()) this.holdFamily(rootId, decode);
     this.releaseUnheldClaims();
     if (unreadable > 0) console.warn(`[hsq] ${unreadable} run(s) in ${RUNS_DB_FILE} could not be read; they are left in the database untouched.`);
+  }
+
+  /** Complete only after a scan finds no stale row, including rows already held for saving. */
+  private automationHealRows(meta: Record<string, string>): RunRow[] {
+    if (this.db!.getMeta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY) === '1') return [];
+    const stale = this.db!.listWhere(AUTOMATION_ORIGIN_HEAL_SQL);
+    if (stale.length === 0 && !this.db!.listKeysWhere('1').some(({ id }) => this.db!.hasFallback(id))) {
+      meta[AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY] = '1';
+    }
+    return stale;
   }
 
   /** Normalize a record just read from `row` (see `reconcileLoadedRun`) and hold it. Marks the row
