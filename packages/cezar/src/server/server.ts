@@ -3041,7 +3041,7 @@ export function createApp(deps: ServerDeps) {
       // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
       // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
       if (run.status !== 'queued') {
-        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))], { repoRoot: c.get('project').root, run });
+        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))], { repoRoot: c.get('project').root, run, live: true });
         if (blocked) return c.json({ error: blocked }, 409);
       }
       const content: PastedContent[] = [
@@ -3183,7 +3183,7 @@ export function createApp(deps: ServerDeps) {
       const required = untouched
         ? providersRequiredByWorkflow(run.workflowDef!, provider)
         : [provider];
-      const blocked = await providerActionError(required, { repoRoot, run });
+      const blocked = await providerActionError(required, { repoRoot, run, runners: { original: originalProvider, target: provider } });
       if (blocked) return c.json({ error: blocked }, 409);
       const result = manager.continueRun(id, {
         text: parsed.data.text,

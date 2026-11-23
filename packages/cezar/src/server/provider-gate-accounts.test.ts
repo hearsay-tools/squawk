@@ -143,16 +143,15 @@ describe('the start gate checks the account the task runs on', () => {
     expect(startRun).not.toHaveBeenCalled();
   });
 
-  it('re-probes a named account while a runtime incident stands, instead of trusting its cache', async () => {
+  it('keeps a runtime incident authoritative for a named account that still probes connected', async () => {
     const app = setup(true);
-    expect((await start(app, 'work')).status).toBe(201); // caches `work` as connected
-    state.workSignedIn = false;
+    expect((await start(app, 'work')).status).toBe(201);
     providerAuth.reportRuntimeAuthFailure('claude');
 
     const response = await start(app, 'work');
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
+      error: 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     });
   });
 

@@ -112,7 +112,9 @@ describe('the account a run continues on (hearsay-tools/squawk#4116)', () => {
     expect(runAccountId(mixed, 'claude', { claude: 'old' })).toBe('work')
     // The run account differs from the codex session's: a switch to codex starts fresh on the selection.
     expect(runAccountId(mixed, 'codex', { codex: 'sel' })).toBe('sel')
-    expect(runAccountId({ ...mixed, agentProfile: undefined }, 'codex', undefined)).toBe('default')
+    expect(runAccountId({ ...mixed, agentProfile: undefined }, 'codex', undefined, { original: 'claude', target: 'codex' })).toBe('default')
+    // A switch clears the run account: the old runner's steps run on the project's selection.
+    expect(runAccountId(mixed, 'claude', { claude: 'sel' }, { original: 'claude', target: 'codex' })).toBe('sel')
     expect(runAccountId(mixed, 'opencode', { opencode: 'x' })).toBe('x')
   })
 

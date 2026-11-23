@@ -42,9 +42,11 @@ export function unavailableProviderMessage(
     // A named account answers for itself: the provider row speaks for the default account only, so
     // a signed-out default must not refuse a start on another, connected account
     // (hearsay-tools/squawk#4116).
-    const status = accounts.get(provider)?.status ?? row?.status;
+    // A standing runtime incident is authoritative for the whole provider, as before named accounts
+    // were checked: it ends only through a retry or a matching native verification.
+    const account = row?.authFailureId === undefined ? accounts.get(provider) : undefined;
+    const status = account?.status ?? row?.status;
     if (status === 'connected') continue;
-    const account = accounts.get(provider);
     if (account && status === 'disconnected') {
       return `${name()} account "${account.label}" is not signed in. Sign in in ${controlLocation('providers')}.`;
     }

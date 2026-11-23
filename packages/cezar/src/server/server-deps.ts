@@ -93,11 +93,10 @@ export function createProviderStatus(services: Pick<HostServices, 'modelCatalog'
       ? new Map<ProviderId, ResolvedAgentProfile>()
       : await scopeRunAccounts(home, required, scope);
     const check = async (refresh: boolean) => {
-      const known = await providerStatus(refresh ? { refresh: true } : undefined);
-      // A standing runtime incident may belong to the named account: re-probe it rather than trust
-      // an answer cached before the rejection.
-      const incident = new Set(known.providers.filter((row) => row.authFailureId !== undefined).map((row) => row.provider));
-      const statuses = await probeNamedAccounts(providerAuth, named, (provider) => refresh || incident.has(provider));
+      const [known, statuses] = await Promise.all([
+        providerStatus(refresh ? { refresh: true } : undefined),
+        probeNamedAccounts(providerAuth, named, refresh),
+      ]);
       return { known, message: unavailableProviderMessage(required, known, statuses) };
     };
     const { known, message } = await check(false);

@@ -15,23 +15,58 @@ export function providerForExistingRun(run: ApiRun): Runner {
   return run.runner ?? 'claude'
 }
 
+/** A continuation's runners: the run's own (`original`) and the one it continues on (`target`). */
+export interface ContinueRunners {
+  original: Runner
+  target: Runner
+}
+
 /**
- * The account id a run's next turn on `provider` uses, mirroring the server's `runAccountFor`: it
- * resumes the latest session's account when that session ran on `provider` and the run's own account,
- * if any, matches it; otherwise a fresh turn uses the run's account on the run's runner and the
- * project's selection on any other runner. `undefined` means the default account.
+ * The account id a continuation's turn on `provider` uses, mirroring the server's `runAccountFor`:
+ * the target runner resumes the latest session's account when that session ran on it and the run's
+ * own account, if any, matches; otherwise it starts fresh on the run's account, which a runner switch
+ * clears. Every other runner, and a cleared account, uses the project's selection. `undefined`
+ * means the default account.
  */
 export function runAccountId(
   run: ApiRun,
   provider: Runner,
   repoAccount: Partial<Record<Runner, string>> | undefined,
+  runners?: ContinueRunners,
 ): string | undefined {
+  const original = runners?.original ?? run.runner ?? 'claude'
+  const target = runners?.target ?? original
+  if (provider !== target) return repoAccount?.[provider]
   const session = latestSession(run)
   const sessionAccount = session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
-  const resumes = session.sessionId !== undefined && session.backend === provider
+  const resumes = session.sessionId !== undefined && session.backend === target
     && (run.agentProfile ?? sessionAccount) === sessionAccount
   if (resumes) return sessionAccount
-  return (provider === (run.runner ?? 'claude') ? run.agentProfile : undefined) ?? repoAccount?.[provider]
+  return (target === original ? run.agentProfile : undefined) ?? repoAccount?.[provider]
+}
+
+/** The account id a message to a live run's session on `provider` reaches, mirroring the server's
+ *  `liveAccountFor`: the latest session's account, else the project's selection. */
+export function liveAccountId(
+  run: ApiRun,
+  provider: Runner,
+  repoAccount: Partial<Record<Runner, string>> | undefined,
+): string | undefined {
+  const session = latestSession(run)
+  const live = session.sessionId === undefined
+    ? { runner: run.runner ?? 'claude', account: run.agentProfile }
+    : { runner: session.backend, account: session.profileId ?? run.agentProfile }
+  return (live.runner === provider ? live.account : undefined) ?? repoAccount?.[provider]
+}
+
+/** The named account `id` names for `provider`; `undefined` for the default account. */
+function namedAccount(
+  accounts: readonly RunnerAccountChoice[],
+  provider: Runner,
+  id: string | undefined,
+): RunnerAccountChoice | undefined {
+  const account = accounts.find((choice) => choice.provider === provider && choice.id === id)
+  return account?.isDefault ? undefined : account
 }
 
 /** The named account {@link runAccountId} names; `undefined` for the default account. */
@@ -41,9 +76,7 @@ export function runAccountChoice(
   accounts: readonly RunnerAccountChoice[],
   repoAccount: Partial<Record<Runner, string>> | undefined,
 ): RunnerAccountChoice | undefined {
-  const id = runAccountId(run, provider, repoAccount)
-  const account = accounts.find((choice) => choice.provider === provider && choice.id === id)
-  return account?.isDefault ? undefined : account
+  return namedAccount(accounts, provider, runAccountId(run, provider, repoAccount))
 }
 
 type Availability = { provider: Runner; usable: boolean; reason?: string | undefined }
@@ -64,7 +97,7 @@ function providerAvailability(
   }
   // A named account answers for itself: the provider row describes the default account only
   // (hearsay-tools/squawk#4116). One not probed yet is left to the server's gate.
-  if (account) {
+  if (account && row?.authFailureId === undefined) {
     if (account.status === undefined || account.status === 'connected') return { provider, usable: true }
     return {
       provider,
@@ -106,7 +139,7 @@ export function useActiveProviderAvailability(run: ApiRun) {
   const runners = useRunners().data
   const provider = providerForActiveRun(run)
   const { accounts, repoAccount } = useAgentAccounts()
-  const account = runAccountChoice(run, provider, accounts, repoAccount)
+  const account = namedAccount(accounts, provider, liveAccountId(run, provider, repoAccount))
   // Do not strand an existing task while the availability query or the runners list is loading
   // or retrying; the server remains the boundary for a stale client. Once a complete response
   // arrives, mirror its fixed action gate exactly.

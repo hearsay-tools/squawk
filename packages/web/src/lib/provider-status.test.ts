@@ -458,6 +458,15 @@ describe('runner availability with agent accounts (hearsay-tools/squawk#4116)', 
       .toEqual(['codex'])
   })
 
+  it('lets a standing runtime incident block every account of the provider, as the server does', () => {
+    const incident: ProviderStatusResponse = {
+      providers: [{ provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'incident-1' }],
+    }
+    expect(usableRunners(incident, RUNNERS_RESPONSE, [defaultClaude, work])).toEqual([])
+    expect(signedOutRunners(incident, RUNNERS_RESPONSE, [defaultClaude, work])).toEqual(['claude'])
+    expect(runnersOnAccount(incident, RUNNERS_RESPONSE, [defaultClaude, work], () => 'work').runners).toEqual([])
+  })
+
   it('sends no account when no account of the runner is connected', () => {
     expect(runnableAccount(DEFAULT_SIGNED_OUT, [defaultClaude, old], 'claude', null, undefined)).toBeNull()
   })

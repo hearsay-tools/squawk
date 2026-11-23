@@ -62,12 +62,16 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   // A continuation sends no account: each runner counts when the account the server will continue
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
   const availability = useRunnerAvailability()
-  const { runners, signedOut } = availability.runnersOn((candidate) => runAccountId(run, candidate, availability.repoAccount))
   const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
+  // Each candidate counts on the account the server would continue it on, after the runner switch
+  // clears the run's account (hearsay-tools/squawk#4116).
+  const accountOn = (provider: Runner, target: Runner) =>
+    runAccountId(run, provider, availability.repoAccount, { original: currentRunner, target })
+  const { runners, signedOut } = availability.runnersOn((candidate) => accountOn(candidate, candidate))
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
   const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner, runnerIds(registered.data)) : [runner]
-  const missing = required.filter(provider => !runners.includes(provider))
+  const missing = required.filter(provider => !availability.readyOn(provider, accountOn(provider, runner)))
   const canContinue = providersReady && (!needsConfig || config.isSuccess) && missing.length === 0
   const reason = continuationReason({
     needsConfig,

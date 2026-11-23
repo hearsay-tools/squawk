@@ -30,8 +30,8 @@ describe('runAccountFor', () => {
     expect(runAccountFor(mixed, 'claude')).toBe('work');
     // The run account differs from the codex session's (`default`): a switch to codex starts fresh.
     expect(runAccountFor(mixed, 'codex')).toBeUndefined();
-    // Without a run account the session's provider resumes on the session's account.
-    expect(runAccountFor({ ...mixed, agentProfile: undefined }, 'codex')).toBe('default');
+    // Without a run account a switch to the session's runner resumes on the session's account.
+    expect(runAccountFor({ ...mixed, agentProfile: undefined }, 'codex', { original: 'claude', target: 'codex' })).toBe('default');
   });
 
   it('resumes the session account, and the run account when it differs', () => {
@@ -48,8 +48,19 @@ describe('runAccountFor', () => {
       agentProfile: 'work',
       steps: [{ id: 'b', name: 'B', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 0, tokensUsed: 0, backend: 'codex', sessionId: 's-codex', profileId: 'x', startedAt: '2026-11-23T00:01:00.000Z' }],
     });
-    expect(runAccountFor(switched, 'codex')).toBeUndefined();
-    expect(runAccountFor({ ...switched, agentProfile: undefined }, 'codex')).toBe('x');
+    const toCodex = { original: 'claude', target: 'codex' };
+    expect(runAccountFor(switched, 'codex', toCodex)).toBeUndefined();
+    expect(runAccountFor({ ...switched, agentProfile: undefined }, 'codex', toCodex)).toBe('x');
+  });
+
+  it('applies the runner switch before resolving an untouched workflow\'s steps', () => {
+    // The switch clears the run account, so an explicit claude step runs on the project's selection.
+    const untouched = run({ runner: 'claude', agentProfile: 'work' });
+    const toCodex = { original: 'claude', target: 'codex' };
+    expect(runAccountFor(untouched, 'claude', toCodex)).toBeUndefined();
+    expect(runAccountFor(untouched, 'codex', toCodex)).toBeUndefined();
+    // Without a switch the run's runner keeps the run account.
+    expect(runAccountFor(untouched, 'claude', { original: 'claude', target: 'claude' })).toBe('work');
   });
 
   it('leaves any other provider to the project selection', () => {

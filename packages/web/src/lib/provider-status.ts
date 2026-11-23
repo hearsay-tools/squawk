@@ -187,7 +187,8 @@ function namedAccountConnected(accounts: readonly AccountSignIn[], provider: Run
 /** Installed, and at least one account (the default or a named one) is connected. */
 export function runnerSignedIn(row: ProviderStatus, accounts: readonly AccountSignIn[]): boolean {
   if (row.status === 'not-installed') return false
-  return row.status === 'connected' || namedAccountConnected(accounts, row.provider)
+  // A standing runtime incident is authoritative for every account of the provider, as on the server.
+  return row.status === 'connected' || (row.authFailureId === undefined && namedAccountConnected(accounts, row.provider))
 }
 
 /** Enabled, installed, and at least one account is connected. */
@@ -260,8 +261,9 @@ function accountReady(
   accountId: string | undefined,
 ): boolean {
   const account = accounts.find((candidate) => candidate.provider === runner && candidate.id === accountId)
-  if (account === undefined || account.isDefault) return providerStatusFor(status, runner)?.status === 'connected'
-  return !accountSignedOut(status, account)
+  const row = providerStatusFor(status, runner)
+  if (account === undefined || account.isDefault) return row?.status === 'connected'
+  return row?.authFailureId === undefined && !accountSignedOut(status, account)
 }
 
 /**
@@ -269,6 +271,16 @@ function accountReady(
  * names per runner (a run's own account, or the project's selection). Usable runners are enabled,
  * installed and ready on that account; the others that are enabled and installed are signed out.
  */
+export function runnerReadyOn(
+  status: ProviderStatusResponse | undefined,
+  accounts: readonly AccountSignIn[],
+  runner: Runner,
+  accountId: string | undefined,
+): boolean {
+  const row = providerStatusFor(status, runner)
+  return row?.enabled === true && row.status !== 'not-installed' && accountReady(status, accounts, runner, accountId)
+}
+
 export function runnersOnAccount(
   status: ProviderStatusResponse | undefined,
   runners: RunnersResponse | undefined,
