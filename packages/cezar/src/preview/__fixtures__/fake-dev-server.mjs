@@ -4,6 +4,7 @@
 //   [--leader-exits] (with --fork: the leader exits once the holder listens) [--ignore-term] (the holder ignores SIGTERM)
 //   [--lifetime MS] (the process ends itself after MS, default 5 min: a test run killed before its teardown strands it otherwise)
 //   [--owner TOKEN] (ignored; it tags argv, so a test can find what it left behind: see fixtureProcessGuard, hearsay-tools/cezarion#1880)
+import { writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -28,11 +29,18 @@ if (flag('stdin-eof')) {
   process.stdin.on('end', () => { console.log('stdin-eof'); process.exit(0); });
 } else if (flag('fork') && !flag('holder')) {
   // Same process group as this process: a supervisor that kills only our pid leaves the holder up.
-  const holder = spawn(process.execPath, [fileURLToPath(import.meta.url), '--holder', '--port', String(port), '--delay', String(delay), '--host', host, '--lifetime', String(lifetime), ...(flag('owner') ? ['--owner', value('owner')] : []), ...(flag('ignore-term') ? ['--ignore-term'] : [])], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const holder = spawn(process.execPath, [fileURLToPath(import.meta.url), '--holder', '--port', String(port), '--delay', String(delay), '--host', host, '--lifetime', String(lifetime), ...(flag('ready-file') ? ['--ready-file', value('ready-file')] : []), ...(flag('owner') ? ['--owner', value('owner')] : []), ...(flag('ignore-term') ? ['--ignore-term'] : [])], { stdio: ['ignore', 'pipe', 'ignore'] });
   if (flag('leader-exits')) holder.stdout.once('data', () => process.exit(3));
   setInterval(() => {}, 1 << 30);
 } else {
   if (flag('ignore-term')) process.on('SIGTERM', () => {}); // stubborn-child: --lifetime ends it, 5 min by default
-  setTimeout(() => createServer(socket => socket.end()).listen(port, host, () => console.log(`listening on ${host}:${port}`)), delay);
+  setTimeout(() => {
+    const server = createServer(socket => socket.end());
+    server.listen(port, host, () => {
+      const bound = server.address().port;
+      if (flag('ready-file')) writeFileSync(value('ready-file'), String(bound));
+      console.log(`listening on ${host}:${bound}`);
+    });
+  }, delay);
   setInterval(() => {}, 1 << 30);
 }

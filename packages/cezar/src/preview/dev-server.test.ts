@@ -1,7 +1,7 @@
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,7 @@ import { processStartToken } from '../core/process-stat.ts';
 import { DevServer, probePort, sweepPreviewLeftovers, trimLog } from './dev-server.ts';
 import { forgetLegacyRunIds, LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fixtureProcessGuard } from './preview.testkit.ts';
+import { shellQuote } from '../core/shell-env.ts';
 import { allowLaunches } from '../test-launch-guard.testkit.ts';
 
 // This file supervises real dev servers, the fake-dev-server fixture, on purpose (hearsay-tools/squawk#2369).
@@ -48,22 +49,37 @@ afterEach(async () => {
   await guard.assertNoneLeft();
 });
 
-async function freePort(): Promise<number> {
-  const probe = createServer();
-  await new Promise<void>(resolve => probe.listen(0, '127.0.0.1', resolve));
-  const { port } = probe.address() as { port: number };
-  await new Promise(resolve => probe.close(resolve));
-  return port;
+const readyFiles = new WeakMap<DevServer, string>();
+const registrations = new WeakMap<DevServer, PreviewServer>();
+
+function fixturePort(supervisor: DevServer): number {
+  return Number(readFileSync(readyFiles.get(supervisor)!, 'utf8'));
 }
 
 function fixtureCommand(args: string[]): string {
-  return [process.execPath, FIXTURE, ...args, ...guard.args].map(part => JSON.stringify(part)).join(' ');
+  return [process.execPath, FIXTURE, ...args, ...guard.args].map(shellQuote).join(' ');
 }
 
 function supervise(port: number, fixtureArgs: string[], opts: { probeMs?: number; waitMs?: number } = {}): DevServer {
-  const server: PreviewServer = { port, command: fixtureCommand(['--port', String(port), ...fixtureArgs]), label: 'fake', registeredAt: '2026-10-02T10:00:00.000Z', answeredAtRegistration: false };
+  const readyFile = join(root, `fixture-${supervisors.length}.port`);
+  const server: PreviewServer = { port, command: fixtureCommand(['--port', '0', '--ready-file', readyFile, ...fixtureArgs]), label: 'fake', registeredAt: '2026-10-02T10:00:00.000Z', answeredAtRegistration: false };
   const supervisor = new DevServer({ server, worktreePath: root, dir: join(root, 'preview'), ...opts });
   supervisors.push(supervisor);
+  readyFiles.set(supervisor, readyFile);
+  registrations.set(supervisor, server);
+  // Production previews register a known port. This test adapter supplies the port that
+  // the fixture itself bound, before each probe, without widening that production API.
+  supervisor.on('attempt', () => {
+    if (!existsSync(readyFile) || server.port !== 0) return;
+    const bound = fixturePort(supervisor);
+    if (!bound) return;
+    // DevServer keys its files by the registration port. Move the existing files with
+    // the test registration; the child's open log fd continues writing the same inode.
+    for (const suffix of ['log', 'pid.json']) {
+      renameSync(join(root, 'preview', `0.${suffix}`), join(root, 'preview', `${bound}.${suffix}`));
+    }
+    server.port = bound;
+  });
   return supervisor;
 }
 
@@ -84,12 +100,12 @@ async function until(check: () => boolean, timeoutMs = 15_000): Promise<void> {
 
 describe('probePort', () => {
   it('is true for a listener on 127.0.0.1 and false for a closed port', async () => {
-    const port = await freePort();
-    expect(await probePort(port)).toBe(false);
-    const listener = createServer().listen(port, '127.0.0.1');
+    const listener = createServer().listen(0, '127.0.0.1');
     await new Promise(resolve => listener.once('listening', resolve));
+    const { port } = listener.address() as { port: number };
     expect(await probePort(port)).toBe(true);
     await new Promise(resolve => listener.close(resolve));
+    expect(await probePort(port)).toBe(false);
   });
 
   it('counts a listener on ::1 only (Vite resolving localhost to IPv6)', async () => {
@@ -103,7 +119,7 @@ describe('probePort', () => {
 
 describe('DevServer', () => {
   it('goes starting -> up when the fixture listens after 300 ms', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--delay', '300'], { probeMs: 50 });
     const seen = stateChanges(supervisor);
     supervisor.start();
@@ -114,7 +130,7 @@ describe('DevServer', () => {
   });
 
   it('emits attempt on every probe', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--delay', '60000'], { probeMs: 30 });
     const attempts: number[] = [];
     supervisor.on('attempt', attempt => attempts.push(attempt));
@@ -124,7 +140,7 @@ describe('DevServer', () => {
   });
 
   it('counts a fixture listening on ::1 only as up', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--host', '::1'], { probeMs: 50 });
     supervisor.start();
     await until(() => supervisor.state === 'up');
@@ -132,7 +148,7 @@ describe('DevServer', () => {
 
   it('goes starting -> stalled after waitMs, and keepWaiting returns to starting with a fresh window', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--delay', '600000'], { probeMs: 2_000, waitMs: 10_000 });
     const seen = stateChanges(supervisor);
     supervisor.start();
@@ -151,7 +167,7 @@ describe('DevServer', () => {
   });
 
   it('keepWaiting is a no-op outside stalled', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--delay', '60000']);
     supervisor.start();
     supervisor.keepWaiting();
@@ -159,7 +175,7 @@ describe('DevServer', () => {
   });
 
   it('goes to exited with the exit code, and logTail returns the last lines', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--lines', '7', '--exit-code', '1'], { probeMs: 50 });
     supervisor.start();
     await until(() => supervisor.state === 'exited');
@@ -169,7 +185,7 @@ describe('DevServer', () => {
   });
 
   it('reports a failed spawn as exited with the reason in the log', async () => {
-    const port = await freePort();
+    const port = 0;
     const server: PreviewServer = { port, command: 'true', cwd: 'missing', label: 'fake', registeredAt: '2026-10-02T10:00:00.000Z', answeredAtRegistration: false };
     const supervisor = new DevServer({ server, worktreePath: root, dir: join(root, 'preview') });
     supervisors.push(supervisor);
@@ -179,7 +195,7 @@ describe('DevServer', () => {
   });
 
   it('closes stdin: a fixture that reads it gets EOF and exits', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--stdin-eof'], { probeMs: 50 });
     supervisor.start();
     await until(() => supervisor.state === 'exited');
@@ -188,11 +204,11 @@ describe('DevServer', () => {
   });
 
   it('runs in its own process group and writes a pid record that stop removes', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, [], { probeMs: 50 });
     supervisor.start();
     await until(() => supervisor.state === 'up');
-    const recordPath = join(root, 'preview', `${port}.pid.json`);
+    const recordPath = join(root, 'preview', `${registrations.get(supervisor)!.port}.pid.json`);
     const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { pid: number; pgid: number; startToken?: string };
     expect(record.pgid).toBe(record.pid);
     expect(record.startToken).toBe(processStartToken(record.pid));
@@ -202,19 +218,19 @@ describe('DevServer', () => {
   });
 
   it('stop("user") on a command that forks a port-holding child frees the port', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--fork'], { probeMs: 50 });
     const seen = stateChanges(supervisor);
     supervisor.start();
     await until(() => supervisor.state === 'up');
-    expect(await probePort(port)).toBe(true);
+    expect(await probePort(fixturePort(supervisor))).toBe(true);
     await supervisor.stop('user');
     expect(supervisor.state).toBe('stopped');
     expect(seen).toEqual(['up', 'stopped']);
     // stop() resolves once no member of the group runs, so the first probe already finds the
     // port free; the loop only absorbs the kernel's teardown lag, and the bound ends a hang.
     const deadline = Date.now() + 10_000;
-    while (await probePort(port)) {
+    while (await probePort(fixturePort(supervisor))) {
       if (Date.now() > deadline) throw new Error('port still held after stop');
       await new Promise(resolve => setTimeout(resolve, 50));
     }
@@ -227,7 +243,7 @@ describe('DevServer', () => {
     vi.stubEnv('CEZ_ENV_PASSTHROUGH', 'MY_DEV_FLAG');
     vi.stubEnv('MY_DEV_FLAG', 'kept');
     try {
-      const port = await freePort();
+      const port = 0;
       const command = 'echo "gh=${GITHUB_TOKEN:-unset} ant=${ANTHROPIC_API_KEY:-unset} tool=${CEZ_TOOL_TOKEN:-unset} flag=${MY_DEV_FLAG:-unset} path=${PATH:+set}"';
       const server: PreviewServer = { port, command, label: 'fake', registeredAt: '2026-10-02T10:00:00.000Z', answeredAtRegistration: false };
       const supervisor = new DevServer({ server, worktreePath: root, dir: join(root, 'preview') });
@@ -245,7 +261,7 @@ describe('DevServer', () => {
     vi.stubEnv('CEZ_AGENT_ENV_FULL', full);
     vi.stubEnv('CEZ_ENV_PASSTHROUGH', 'CEZ_HOME');
     try {
-      const port = await freePort();
+      const port = 0;
       const server: PreviewServer = { port, command: 'echo "home=${CEZ_HOME-unset}"', label: 'home test', registeredAt: '2026-11-06T10:00:00Z', answeredAtRegistration: false };
       const supervisor = new DevServer({ server, worktreePath: root, dir: join(root, 'preview') });
       supervisors.push(supervisor);
@@ -256,20 +272,20 @@ describe('DevServer', () => {
   });
 
   it('a leader that exits on its own takes its SIGTERM-ignoring holder with it, and keeps the pid record until the group is gone', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--fork', '--leader-exits', '--ignore-term'], { probeMs: 50 });
     supervisor.start();
-    const recordPath = join(root, 'preview', `${port}.pid.json`);
     await until(() => supervisor.state === 'exited');
+    const recordPath = join(root, 'preview', `${registrations.get(supervisor)!.port}.pid.json`);
     expect(supervisor.exitCode).toBe(3);
     expect(existsSync(recordPath)).toBe(true);
     await supervisor.stop('user');
     expect(existsSync(recordPath)).toBe(false);
-    expect(await probePort(port)).toBe(false);
+    expect(await probePort(fixturePort(supervisor))).toBe(false);
   });
 
   it('Start again shows only the new run in the log tail', async () => {
-    const port = await freePort();
+    const port = 0;
     const first = supervise(port, ['--lines', '3', '--exit-code', '1'], { probeMs: 50 });
     first.start();
     await until(() => first.state === 'exited');
@@ -280,7 +296,7 @@ describe('DevServer', () => {
   });
 
   it('stop is idempotent and safe after the process exited by itself', async () => {
-    const port = await freePort();
+    const port = 0;
     const supervisor = supervise(port, ['--exit-code', '2'], { probeMs: 50 });
     supervisor.start();
     await until(() => supervisor.state === 'exited');

@@ -235,7 +235,7 @@ const saved = !pkg.forget && existsSync(store) ? JSON.parse(readFileSync(store, 
 const projects = [...new Set([basename(arg('--repo')), ...saved])];
 const save = () => writeFileSync(store, JSON.stringify(projects));
 save();
-createServer((req, res) => {
+const server = createServer((req, res) => {
   const json = body => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body)); };
   if (req.url === '/api/v1/health') return json({ version: pkg.version, projects: projects.map(id => ({ id, name: id })) });
   if (req.url === '/api/v1/projects' && req.method === 'POST') {
@@ -246,7 +246,8 @@ createServer((req, res) => {
   if (req.url === '/') return res.end('<script type="module" src="/assets/app.js"></script>');
   if (req.url === '/assets/app.js') { res.setHeader('content-type', 'text/javascript'); return res.end(''); }
   res.statusCode = 404; res.end();
-}).listen(Number(arg('--port')), '127.0.0.1');
+});
+server.listen(Number(arg('--port')), '127.0.0.1', () => console.log('cockpit → http://127.0.0.1:' + server.address().port));
 `;
 
 function fakeInstall({ forget = [] } = {}) {

@@ -687,3 +687,20 @@ results or infer source types through nested structural paths of two or more mem
 accesses. The matrix keeps all 3456 documented-limit cells. It also keeps the generated
 invalid cells and unrelated controls. `lint/launch-read/cases.json` preserves every
 curated YAML case, and `ast-rules-launch-read.test.ts` runs them through RuleTester.
+
+## Probe-then-release ports
+
+Static scope: `cez/probe-release-port` checks local listener names in JavaScript
+and TypeScript under `packages`, `scripts`, `.github/scripts` and `.ai/scripts`.
+It rejects helpers which call `listen(0)`, capture `address()` or its `port`,
+close that listener and return or resolve the captured port. Promise and socket
+callbacks belong to the enclosing helper. Other functions stay separate.
+Oxlint supplies the syntax tree; the rule follows no imports, dynamic property
+names or values across helpers. The script-root regression test runs the rule through the oxlint CLI,
+including its reasoned suppression handling, outside the normal package scan.
+
+The listening process must bind port 0 and report its bound port. A listener
+kept for requests and closed at teardown passes. Tests which need a declared
+port before starting a process use the non-ephemeral exact-port pattern from
+hearsay-tools/squawk#3648. A deliberate exception uses
+`// oxlint-disable-next-line cez/probe-release-port -- <reason>`. No baseline.
