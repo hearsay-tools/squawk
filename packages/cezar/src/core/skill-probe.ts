@@ -41,7 +41,6 @@ export async function skillProbe<T>(
   const env = buildChildEnv({ backend: runner, extraEnv: { ...profileEnv(runner, options.accountHome), ...extra.extraEnv } });
   const launch = options.spawn ?? ((bin, argv, cwd, env) => spawnSessionLeader(bin, argv, { cwd, env }));
   const child = launch(extra.executable ?? skillExecutable(runner, options.bin), args, options.cwd, env);
-  if (child.pid !== undefined) extra.onSpawn?.(child.pid);
   const group = child.pid === undefined ? undefined : sessionGroupOf(child.pid);
   const exited = probeExit(child);
   const signal = AbortSignal.any([options.signal ?? new AbortController().signal, AbortSignal.timeout(options.timeoutMs ?? 15_000)]);
@@ -59,7 +58,11 @@ export async function skillProbe<T>(
     signal.addEventListener('abort', onAbort, { once: true });
     if (signal.aborted) onAbort();
   });
+  // If onSpawn throws before Promise.race attaches handlers, killing the child in finally rejects failed.
+  failed.catch(() => {});
+  aborted.catch(() => {});
   try {
+    if (child.pid !== undefined) extra.onSpawn?.(child.pid);
     return await Promise.race([read(child, signal, env), failed, aborted]);
   } finally {
     signal.removeEventListener('abort', onAbort);

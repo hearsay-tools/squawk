@@ -2,15 +2,19 @@ import { lstatSync, mkdirSync, symlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { agentHomeDir } from '../../paths.ts';
 
-const SHARED_ENTRIES = [
-  'AGENTS.md',
-  'GEMINI.md',
+export const ANTIGRAVITY_SHARED_SKILL_ENTRIES = [
   'config/skills',
   'config/skills.json',
   'config/plugins',
   'config/plugins.json',
   'antigravity-cli/skills',
   'skills',
+] as const;
+
+const SHARED_ENTRIES = [
+  'AGENTS.md',
+  'GEMINI.md',
+  ...ANTIGRAVITY_SHARED_SKILL_ENTRIES,
 ] as const;
 
 /** Native instructions, skills and plugins are shared; settings, conversations and OAuth secrets are not. */

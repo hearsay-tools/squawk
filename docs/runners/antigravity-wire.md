@@ -224,8 +224,10 @@ built-in skill natively without a model turn through:
 It emits a `command_result` event (`command.name: "skills"`, `command.data.skills[]` with `name`,
 `description`, `path`, optional `plugin`, `builtin`, and `model_invocable`), recorded in
 `__fixtures__/skill-list.json`. `--print` ignores `--gemini-dir` and `GEMINI_HOME` and reads
-`$HOME/.gemini`, so Squawk stages a disposable `HOME` linking the selected account's read-only
-customization entries and copying `config/config.json`.
+`$HOME/.gemini`, so Squawk stages a disposable `HOME` linking the real session `HOME`'s top-level
+entries (preserving `~/` manifest resolution), linking the selected account's read-only
+customization entries (inheriting absent shared entries from the default Gemini home without
+creating or mutating the account folder), and copying `config/config.json`.
 
 When `--print=/skills` namespaces a plugin skill as `<plugin>:<skill>`, `antigravity acp` still
 expands only `/<skill>` (not `/<plugin>:<skill>`), so Squawk strips the `<plugin>:` prefix for the

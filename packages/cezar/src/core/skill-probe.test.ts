@@ -79,4 +79,19 @@ describe.runIf(process.platform !== 'win32')('leader-first probe cleanup on ever
     else await expect(probe).rejects.toThrow(outcome === 'abort' ? 'cancelled' : 'read failed');
     expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
   }, 5000); // bound: two mock processes start, then the probe waits at most 750ms for group disappearance.
+
+  it('reaps the live child process group when onSpawn throws', async () => {
+    let child!: ChildProcessWithoutNullStreams;
+    const probe = skillProbe('claude', [], {
+      cwd: tmpdir(),
+      spawn: (_bin, _args, cwd, env) => {
+        child = spawnSessionLeader(process.execPath, ['-e', `${ignoreTermSource()} setInterval(() => {}, 1000)`], { cwd, env });
+        return child;
+      },
+    }, async () => 'metadata', {
+      onSpawn: () => { throw new Error('lease bind failed'); },
+    });
+    await expect(probe).rejects.toThrow('lease bind failed');
+    expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+  }, 5000); // bound: child starts, onSpawn throws, and cleanup kills and reaps the group.
 });

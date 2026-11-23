@@ -38,8 +38,10 @@ describe('antigravity native skill metadata', () => {
     expect(result.problems).toEqual([]);
   });
 
-  it('rewrites temporary probe paths back to accountHome and keeps external plugin paths intact', () => {
-    const probeGeminiDir = '/tmp/squawk-antigravity-skills-123/.gemini';
+  it('rewrites temporary probe paths back to accountHome and sessionHome, keeping external plugin paths intact', () => {
+    const probeHome = '/tmp/squawk-antigravity-skills-123/home';
+    const probeGeminiDir = `${probeHome}/.gemini`;
+    const sessionHome = '/home/probe';
     const result = parseAntigravitySkills({
       event: 'command_result',
       command: {
@@ -47,14 +49,16 @@ describe('antigravity native skill metadata', () => {
         data: {
           skills: [
             { name: 'squeal:squeal', path: `${probeGeminiDir}/config/plugins/squeal/skills/squeal/SKILL.md`, plugin: 'squeal', builtin: false },
+            { name: 'personal-demo', path: `${probeHome}/personal-skills/personal-demo/SKILL.md`, builtin: false },
             { name: 'apptension-sdlc:dev-flow', path: '/ext/toolkit/plugins/apptension-sdlc/skills/dev-flow/SKILL.md', plugin: 'apptension-sdlc', builtin: false },
             { name: 'unprefixed', path: '/ext/plugins/custom/skills/unprefixed/SKILL.md', plugin: 'custom', builtin: false },
           ],
         },
       },
-    }, cwd, accountHome, probeGeminiDir);
+    }, cwd, accountHome, { home: probeHome, geminiDir: probeGeminiDir, sessionHome });
     expect(result.skills).toEqual([
       { id: 'squeal', name: 'squeal', path: `${accountHome}/config/plugins/squeal/skills/squeal/SKILL.md`, scope: 'user', plugin: 'squeal' },
+      { id: 'personal-demo', name: 'personal-demo', path: `${sessionHome}/personal-skills/personal-demo/SKILL.md`, scope: 'other' },
       { id: 'dev-flow', name: 'dev-flow', path: '/ext/toolkit/plugins/apptension-sdlc/skills/dev-flow/SKILL.md', scope: 'other', plugin: 'apptension-sdlc' },
       { id: 'unprefixed', name: 'unprefixed', path: '/ext/plugins/custom/skills/unprefixed/SKILL.md', scope: 'other', plugin: 'custom' },
     ]);
@@ -69,15 +73,15 @@ describe('antigravity native skill metadata', () => {
 describe('antigravity skill probe staging', () => {
   it('stages read-only links and a copied config.json in a disposable HOME, then cleans it up', async () => {
     const root = await workspace();
+    const repo = join(root, 'repo');
     const acct = join(root, 'account');
+    await mkdir(repo, { recursive: true });
     await mkdir(join(acct, 'config', 'plugins'), { recursive: true });
     await writeFile(join(acct, 'config', 'plugins.json'), '{"entries":[]}');
     await writeFile(join(acct, 'config', 'config.json'), '{"plugins":{}}');
     let observedHome = '';
-    let linkedPlugins = '';
-    let copiedConfig = '';
     const result = await discoverAntigravitySkills({
-      cwd: root,
+      cwd: repo,
       accountHome: acct,
       spawn: (_bin, args, spawnCwd, env) => {
         observedHome = env.HOME ?? '';
@@ -103,10 +107,8 @@ describe('antigravity skill probe staging', () => {
         return spawnSessionLeader(process.execPath, ['-e', script], { cwd: spawnCwd, env });
       },
     });
-    linkedPlugins = await readFile(join(root, 'seen-link'), 'utf8');
-    copiedConfig = await readFile(join(acct, 'config', 'config.json'), 'utf8');
-    expect(linkedPlugins).toBe(join(acct, 'config', 'plugins.json'));
-    expect(copiedConfig).toBe('{"plugins":{}}');
+    expect(await readFile(join(root, 'seen-link'), 'utf8')).toBe(join(acct, 'config', 'plugins.json'));
+    expect(await readFile(join(acct, 'config', 'config.json'), 'utf8')).toBe('{"plugins":{}}');
     expect(result.skills).toEqual([
       { id: 'demo', name: 'demo', path: join(acct, 'config/plugins/plug/skills/demo/SKILL.md'), scope: 'user', plugin: 'plug' },
     ]);
@@ -115,10 +117,12 @@ describe('antigravity skill probe staging', () => {
 
   it('does not create a missing accountHome during discovery and removes the disposable HOME on failure', async () => {
     const root = await workspace();
+    const repo = join(root, 'repo');
     const missing = join(root, 'missing-account');
+    await mkdir(repo, { recursive: true });
     let observedHome = '';
     await expect(discoverAntigravitySkills({
-      cwd: root,
+      cwd: repo,
       accountHome: missing,
       spawn: (_bin, _args, spawnCwd, env) => {
         observedHome = env.HOME ?? '';
@@ -131,14 +135,89 @@ describe('antigravity skill probe staging', () => {
 
   it('preserves existing named-account links when accountHome exists', async () => {
     const root = await workspace();
+    const repo = join(root, 'repo');
     const acct = join(root, 'named');
+    await mkdir(repo, { recursive: true });
     await mkdir(join(acct, 'config'), { recursive: true });
     await writeFile(join(acct, 'config', 'plugins.json'), '{"entries":[]}');
     const mockBin = join(import.meta.dirname, '../../../scripts/mock-acp.mjs');
-    const result = await discoverAntigravitySkills({ cwd: root, accountHome: acct, bin: mockBin });
+    const result = await discoverAntigravitySkills({ cwd: repo, accountHome: acct, bin: mockBin });
     expect(result.skills.some(skill => skill.id === 'probe-project' && skill.scope === 'repo')).toBe(true);
     expect(result.skills.some(skill => skill.id === 'code-review' && skill.plugin === 'apptension-review')).toBe(true);
     expect(await readFile(join(acct, 'config', 'plugins.json'), 'utf8')).toBe('{"entries":[]}');
     await expect(readlink(join(acct, 'config', 'plugins.json'))).rejects.toThrow();
+  });
+
+  async function withTempHome<T>(fakeHome: string, run: () => Promise<T>): Promise<T> {
+    const prevHome = process.env.HOME;
+    const prevGemini = process.env.GEMINI_HOME;
+    process.env.HOME = fakeHome;
+    delete process.env.GEMINI_HOME;
+    try { return await run(); } finally {
+      if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+      if (prevGemini === undefined) delete process.env.GEMINI_HOME; else process.env.GEMINI_HOME = prevGemini;
+    }
+  }
+
+  it('links sessionHome entries so ~/ manifest paths resolve natively and rewrites reported paths back', async () => {
+    const root = await workspace();
+    const repo = join(root, 'repo');
+    const fakeHome = join(root, 'user-home');
+    await mkdir(repo, { recursive: true });
+    await mkdir(join(fakeHome, 'personal-skills', 'demo'), { recursive: true });
+    await mkdir(join(fakeHome, '.gemini', 'config'), { recursive: true });
+    await writeFile(join(fakeHome, '.gemini', 'config', 'skills.json'), '{"entries":[{"path":"~/personal-skills"}]}');
+    await withTempHome(fakeHome, async () => {
+      const result = await discoverAntigravitySkills({
+        cwd: repo,
+        spawn: (_bin, _args, spawnCwd, env) => {
+          const observedHome = env.HOME ?? '';
+          const payload = JSON.stringify({
+            event: 'command_result',
+            command: { name: 'skills', data: { skills: [{ name: 'demo', path: `${observedHome}/personal-skills/demo/SKILL.md`, builtin: false }] } },
+          });
+          const script = `const fs = require('node:fs');
+            fs.writeFileSync(${JSON.stringify(join(root, 'home-link'))}, fs.readlinkSync(${JSON.stringify(join(observedHome, 'personal-skills'))}));
+            console.log(${JSON.stringify(payload)});`;
+          return spawnSessionLeader(process.execPath, ['-e', script], { cwd: spawnCwd, env });
+        },
+      });
+      expect(await readFile(join(root, 'home-link'), 'utf8')).toBe(join(fakeHome, 'personal-skills'));
+      expect(result.skills).toEqual([
+        { id: 'demo', name: 'demo', path: join(fakeHome, 'personal-skills', 'demo', 'SKILL.md'), scope: 'other' },
+      ]);
+    });
+  });
+
+  it('inherits shared default-home entries for a missing named account without creating its directory', async () => {
+    const root = await workspace();
+    const repo = join(root, 'repo');
+    const fakeHome = join(root, 'user-home');
+    const missingAccount = join(root, 'named-not-created');
+    await mkdir(repo, { recursive: true });
+    await mkdir(join(fakeHome, '.gemini', 'config', 'plugins'), { recursive: true });
+    await writeFile(join(fakeHome, '.gemini', 'config', 'plugins.json'), '{"entries":[]}');
+    await withTempHome(fakeHome, async () => {
+      const result = await discoverAntigravitySkills({
+        cwd: repo,
+        accountHome: missingAccount,
+        spawn: (_bin, _args, spawnCwd, env) => {
+          const observedHome = env.HOME ?? '';
+          const payload = JSON.stringify({
+            event: 'command_result',
+            command: { name: 'skills', data: { skills: [{ name: 'shared:tool', path: `${observedHome}/.gemini/config/plugins/shared/skills/tool/SKILL.md`, plugin: 'shared', builtin: false }] } },
+          });
+          const script = `const fs = require('node:fs');
+            fs.writeFileSync(${JSON.stringify(join(root, 'shared-link'))}, fs.readlinkSync(${JSON.stringify(join(observedHome, '.gemini/config/plugins.json'))}));
+            console.log(${JSON.stringify(payload)});`;
+          return spawnSessionLeader(process.execPath, ['-e', script], { cwd: spawnCwd, env });
+        },
+      });
+      expect(await readFile(join(root, 'shared-link'), 'utf8')).toBe(join(fakeHome, '.gemini', 'config', 'plugins.json'));
+      await expect(access(missingAccount)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(result.skills).toEqual([
+        { id: 'tool', name: 'tool', path: join(missingAccount, 'config/plugins/shared/skills/tool/SKILL.md'), scope: 'user', plugin: 'shared' },
+      ]);
+    });
   });
 });
