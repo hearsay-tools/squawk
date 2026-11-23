@@ -227,4 +227,21 @@ describe('the Antigravity CLI transcript as the source of tool results', () => {
       { kind: 'hook', id: 'hook_step_2', event: 'Stop', status: 'completed', entries: [{ kind: 'context', text: 'Final stop hook' }] },
     ]);
   });
+
+  it('flush drains multiple read chunks so a hook spanning or following the first chunk is emitted before close', async () => {
+    const path = await transcriptFile();
+    const hooks: UiHookItem[] = [];
+    // 80-byte chunk bound forces both rows and the final Stop hook across multiple reads.
+    const outputs = new AntigravityToolOutputs(() => {}, Date.now, hook => hooks.push(hook), 80);
+    outputs.open(path);
+    await writeFile(path, rows(
+      { step_index: 1, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE', content: 'x'.repeat(140) },
+      { step_index: 2, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE', content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a Stop hook:\nFinal chunked stop hook\n</SYSTEM_MESSAGE>' },
+    ));
+    await outputs.flush();
+    outputs.close();
+    expect(hooks).toEqual([
+      { kind: 'hook', id: 'hook_step_2', event: 'Stop', status: 'completed', entries: [{ kind: 'context', text: 'Final chunked stop hook' }] },
+    ]);
+  });
 });

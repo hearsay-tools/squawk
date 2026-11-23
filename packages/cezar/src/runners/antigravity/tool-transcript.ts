@@ -16,6 +16,7 @@ import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
  */
 export const TRANSCRIPT_OUTPUT_CHARS = 64 * 1024;
 const READ_BYTES = 4 * 1024 * 1024;
+const MAX_FLUSH_CHUNKS = 8;
 const LINE_BYTES = 8 * 1024 * 1024;
 const POLL_MS = 250;
 /** How long after a tool completes the runner looks for its row. */
@@ -206,6 +207,7 @@ export class AntigravityToolOutputs {
   private skippingLine = false;
   private broken = false;
   private closed = false;
+  private hasMore = false;
   private timer: NodeJS.Timeout | undefined;
   private reading: Promise<void> | undefined;
   private readonly transcript = new AntigravityTranscript();
@@ -215,6 +217,7 @@ export class AntigravityToolOutputs {
     private readonly amend: (item: UiToolItem) => void,
     private readonly now: () => number = Date.now,
     private readonly onHook?: (item: UiHookItem) => void,
+    private readonly readBytes = READ_BYTES,
   ) {}
 
   /** The session is open: read its transcript from its current end. */
@@ -253,12 +256,15 @@ export class AntigravityToolOutputs {
     return this.reading;
   }
 
-  /** Wait for any in-flight read, then perform one fresh read for rows appended before exit. */
+  /** Wait for any in-flight read, then drain unread exit bytes in bounded chunks. */
   async flush(): Promise<void> {
     clearTimeout(this.timer);
     this.timer = undefined;
     while (this.reading) await this.reading;
-    await this.poll();
+    for (let chunk = 0; chunk < MAX_FLUSH_CHUNKS && !this.closed && !this.broken && this.path; chunk++) {
+      await this.poll();
+      if (!this.hasMore) break;
+    }
   }
 
   private schedule(delay: number): void {
@@ -293,14 +299,15 @@ export class AntigravityToolOutputs {
 
   private async readAppended(path: string): Promise<void> {
     let file;
-    try { file = await open(path, 'r'); } catch { return; }
+    try { file = await open(path, 'r'); } catch { this.hasMore = false; return; }
     try {
       const { size } = await file.stat();
-      if (size <= this.offset) return;
-      const length = Math.min(size - this.offset, READ_BYTES);
+      if (size <= this.offset) { this.hasMore = false; return; }
+      const length = Math.min(size - this.offset, this.readBytes);
       const buffer = Buffer.alloc(length);
       const { bytesRead } = await file.read(buffer, 0, length, this.offset);
       this.offset += bytesRead;
+      this.hasMore = bytesRead > 0 && this.offset < size;
       this.lines(this.decoder.write(buffer.subarray(0, bytesRead)));
     } finally { await file.close(); }
   }
