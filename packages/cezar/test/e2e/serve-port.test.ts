@@ -1,3 +1,4 @@
+import '../../src/cli-boot.testkit.ts';
 import { projectPaths } from '../../src/project-paths.ts';
 import { prepareOperatorHome } from '../../src/home/entry.ts';
 import { Home } from '../../src/home/home.ts';
