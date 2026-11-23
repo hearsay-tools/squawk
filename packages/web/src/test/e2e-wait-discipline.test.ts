@@ -95,6 +95,11 @@ describe('an input whose effect can be lost to a render', () => {
     expect(scanSource('x.e2e.ts', `browser.click('#submit')\nbrowser.waitForFunction('document.querySelector("#saved") !== null')`)).toEqual([])
   })
 
+  it.each([`click('[aria-label="Send"]')`, `click('#submit')`, `press('Enter')`, `press('Control+Enter')`, `press('Space')`])('does not recommend retrying submission %s after an input-clear wait', input => {
+    const source = `browser.${input}\nbrowser.waitForFunction('document.querySelector("textarea").value === ""')`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'one-shot-input')).toEqual([])
+  })
+
   it('accepts an action retried inside the wait, including a multiline action', () => {
     const source = `await waitForCondition(() => {
       browser.fill('#name', 'new')
@@ -113,6 +118,14 @@ describe('a DOM handle kept across a page change', () => {
       browser.evaluate(\`${holder}.click()\`)`
     const sites = scanSource('x.e2e.ts', source).filter(site => site.rule === 'stale-element-handle')
     expect(lines(sites)).toEqual([3, 5])
+  })
+
+  it.each(['scrollTop', 'scrollLeft'])('invalidates a saved handle after a named owner %s assignment', property => {
+    const source = `browser.evaluate(\`window.saved=document.querySelector('#row')\`)
+      browser.evaluate(\`const owner=document.querySelector('main');owner.${property}=900\`)
+      browser.evaluate(\`window.saved.click()\`)`
+    expect(scanSource('x.e2e.ts', source).filter(site => site.rule === 'stale-element-handle'))
+      .toEqual([expect.objectContaining({ line: 3 })])
   })
 
   it('accepts a fresh query after scroll, including replacing the saved handle', () => {

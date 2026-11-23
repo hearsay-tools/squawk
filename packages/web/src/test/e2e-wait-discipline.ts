@@ -119,6 +119,10 @@ function oneShotInputIndices(source: string): number[] {
     if (waits.some(call => call.start < input.start && call.textStart + call.text.length > end)) continue
     const next = waits.find(call => call.start > end && lineOf(source, call.start) - lineOf(source, end) <= 3)
     if (!next || !/activeElement|\.(?:value|checked|selected|selectionStart)\b/.test(next.text)) continue
+    // A click that clears a field may submit it. Enter/Space may submit too. Only repeat a
+    // click when its wait names focus or selection state, never just a resulting value.
+    if (input.name === 'click' && !/activeElement|\.(?:checked|selected|selectionStart)\b/.test(next.text)) continue
+    if (input.name === 'press' && /['"`](?:(?:Control|Ctrl|Meta|Shift)\+)*(?:Enter|Space| )['"`]/.test(input.text)) continue
     // Another input or navigation starts a separate interaction.
     const between = source.slice(end + 1, next.start)
     if (/\b\w+\.(?:click|press|fill|goto)\(/.test(between)) continue
@@ -142,6 +146,10 @@ function staleElementIndices(source: string): number[] {
     const events = /([A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\s*=(?![=>])\s*([^;\n]+)|\b(?:scrollTop|scrollLeft)\s*(?:[-+]?=)|\.(?:scrollIntoView|scrollTo|scrollBy|reload|refresh)\s*\(|\b[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*/g
     for (const match of call.text.matchAll(events)) {
       if (match[1]) {
+        if (/\.(?:scrollTop|scrollLeft)$/.test(match[1])) {
+          for (const state of held.values()) state.changed = true
+          continue
+        }
         const rhs = match[2] ?? ''
         if (/querySelector|getElementById/.test(rhs) || [...rooted].some(name => new RegExp(`\\b${name}\\b`).test(rhs))) held.set(match[1], { changed: false })
         else held.delete(match[1])
