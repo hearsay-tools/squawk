@@ -18,7 +18,7 @@ const MESSAGE =
 
 export const TEST_ENUM_VALUES: Record<string, readonly string[]> = {
   status: ['queued', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled', 'pending', 'skipped'],
-  kind: ['pr', 'timer', 'human', 'worker', 'process', 'peer', 'subagent', 'agent', 'check'],
+  kind: ['pr', 'timer', 'human', 'worker', 'process', 'peer', 'subagent', 'plugin', 'agent', 'check'],
   phase: ['open', 'resolved', 'delivered', 'cancelled'],
   via: ['cezar_wait', 'cezar_wait_for_ci', 'cezar_ask', 'monitoring-line', 'schedule-wakeup', 'ask-line', 'native-ask', 'no-wait', 'budget', 'cez-worker-wait', 'completion', 'cez-message-wait', 'native-subagents'],
   source: ['agent', 'cezar'],
