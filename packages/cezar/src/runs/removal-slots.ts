@@ -84,7 +84,7 @@ export function runSlotsSealed(): boolean {
 /** Throws unless the registry is sealed. A removal path calls it before its first side effect. */
 export function assertRunSlotsSealed(): void {
   if (!runSlotsSealed()) {
-    throw new Error('No removal slot is registered: call registerBuiltInRunSlots() from built-in-run-slots.ts at the process entry, '
+    throw new Error('No removal slot is registered: call registerBuiltInRunSlots() then sealBuiltInRunSlots() from built-in-run-slots.ts at the process entry, '
       + 'or seal the slots this test uses with sealTestRunSlots() from runs/removal-slots.testkit.ts.');
   }
 }
