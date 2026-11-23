@@ -30,7 +30,7 @@ async function probeExtensionTool(backend, wire, name, args) {
   if (existsSync(new URL('../src/ci-wait/mcp.ts', import.meta.url))) { const { register } = await import('tsx/esm/api'); register(); }
   const { default: extension } = await import(pathToFileURL(path));
   const tools = [];
-  extension({ registerTool(tool) { tools.push(tool); } });
+  await extension({ registerTool(tool) { tools.push(tool); } });
   const tool = tools.find(tool => tool.name === name);
   if (!tool) throw new Error(`${name} not registered`);
   // A registered tool pi's tool selection hides answers the model the way pi 1.0.4 does.

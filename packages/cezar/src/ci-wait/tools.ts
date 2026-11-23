@@ -1,4 +1,4 @@
-import { agentToolInstructions, agentToolMetadata, enabledAgentTools } from './tool-registry.ts';
+import { agentToolInstructions, agentToolMetadata, enabledAgentTools, type AgentToolResult } from './tool-registry.ts';
 import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
@@ -11,7 +11,7 @@ import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, ca
  * The one list of Squawk tools (#781). The MCP adapter lists it, Pi's extension registers it, and
  * every allow-list or admission site reads its names, so adding a tool is one edit here.
  */
-type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean; details: unknown };
+type ToolResult = AgentToolResult;
 export type SquawkTool = {
   definition: { name: string; description: string; inputSchema: { type: 'object'; properties?: Record<string, unknown>; [key: string]: unknown } };
   /** #497: deferred-tool harnesses show a bare name, so the server instructions carry this line. */
