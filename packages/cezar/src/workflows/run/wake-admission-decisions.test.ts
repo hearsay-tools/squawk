@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RUN_STATUS, makeRunRecord, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';

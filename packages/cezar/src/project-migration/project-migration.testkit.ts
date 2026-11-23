@@ -4,7 +4,8 @@ import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkS
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { makeProcessWait, makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeProcessWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { artifactDirectory, publishArtifact } from '../artifacts/store.ts';
 import { retainAutosaveCleanup } from '../autosave-cleanup.ts';

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { makeHumanWait, makeRunRecord, makeTimerWait, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makeTimerWait, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { owedWakeInputIds, owesWake } from './wake-ledger.ts';
 

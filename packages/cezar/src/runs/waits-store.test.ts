@@ -14,12 +14,14 @@ import {
   RUN_STATUS,
   STEP_KIND,
   STEP_STATUS,
+  WORKER_OUTCOME_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { RunDatabase, RunDatabaseUnsupportedSchemaError, RUN_DATABASE_SCHEMA_VERSION, RUNS_DB_FILE } from './run-database.ts';
 import { readRunIndexFromDisk } from './run-index.ts';

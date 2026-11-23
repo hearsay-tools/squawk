@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import * as fc from 'fast-check';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CiWaitResult, ProcessWaitResult } from '@open-mercato/cezar-contract';
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import '../core/created-runners.testkit.ts';

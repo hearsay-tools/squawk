@@ -5,9 +5,11 @@ import {
   RUN_STATUS,
   STEP_KIND,
   STEP_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { TrackedWork } from './run/tracked-work.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';

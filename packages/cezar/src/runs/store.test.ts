@@ -29,11 +29,13 @@ import {
   STEP_KIND,
   RUN_STATUS,
   STEP_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import type { RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';

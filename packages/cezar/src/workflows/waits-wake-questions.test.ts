@@ -1,5 +1,6 @@
 import '../core/created-runners.testkit.ts';
-import { WAIT_KIND, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';

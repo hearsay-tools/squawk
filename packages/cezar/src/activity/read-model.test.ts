@@ -5,9 +5,23 @@ import { activitySnapshotSchema, activityToolSchema } from '@open-mercato/cezar-
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import {
-  makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait,
-  RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, WORKER_OUTCOME_STATUS,
+  RUN_STATUS,
+  WORKER_OUTCOME_STATUS,
 } from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
+  makeHumanWait,
+  makePeerWait,
+  makePrWait,
+  makeProcessWait,
+  makeSubagentWait,
+  makeTimerWait,
+  makeWorkerRequestWait,
+  makeWorkerWait,
+  WAIT_KIND,
+  WAIT_PHASE,
+  WAIT_SOURCE,
+  WAIT_VIA,
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
 import type { RunRecord } from '../runs/store.ts';
 import { addRequest, CountedLifecycle, fakeStore, iso, makeRoot, makeWorker, NOW, rootOf, type FakeStoreOptions } from './activity.testkit.ts';

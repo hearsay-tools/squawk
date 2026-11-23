@@ -3,7 +3,8 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-api-client/contract/runs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { seedRuns } from './seed-runs'

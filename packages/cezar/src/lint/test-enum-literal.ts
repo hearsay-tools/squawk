@@ -7,8 +7,9 @@ const MESSAGE =
   "Name a contract enum value in a test through its constant, and build run records, waits and " +
   "events with the typed factories: RUN_STATUS, STEP_STATUS, STEP_KIND, WAIT_KIND, WAIT_PHASE, " +
   "WAIT_VIA, WAIT_SOURCE and makeRunRecord, makeTimerWait and the rest, from " +
-  "packages/contract/src/test-factories.testkit.ts " +
-  "(@open-mercato/cezar-api-client/contract/test-factories.testkit in the cockpit). A renamed field " +
+  "packages/contract/src/test-factories.testkit.ts, and the wait constants and factories from " +
+  "packages/contract/src/wait-factories.testkit.ts " +
+  "(@open-mercato/cezar-api-client/contract/test-factories.testkit and .../wait-factories.testkit in the cockpit). A renamed field " +
   "or value then stops compiling in every test that uses it, where a literal still compiles and " +
   "asserts the old value (hearsay-tools/cezarion#1300, hearsay-tools/cezarion#1504, " +
   "hearsay-tools/cezarion#1812). An object that only shares the word, such as a GitHub status, " +

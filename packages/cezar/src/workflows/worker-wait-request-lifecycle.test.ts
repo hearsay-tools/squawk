@@ -1,4 +1,4 @@
-import { WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { checkpoint, manager, restart, semaphore, store, until, useWorkerWaitFixture, waitOf, lastWaitOf, workerEntryOf, worker } from './worker-wait-claude.testkit.ts';

@@ -4,7 +4,8 @@ import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, MAX_AUTO_CONTINUES,
 import { join } from 'node:path';
 import { expect, onTestFinished, it as registerTest } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_KIND, STEP_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
 
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';

@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RUN_STATUS, WAIT_PHASE, makeHumanWait, makePeerWait, makeSubagentWait, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, makeHumanWait, makePeerWait, makeSubagentWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { blank } from '../lint/blank.ts';
 import { RUN_EXITS } from '../runs/run-exits.ts';
 import {

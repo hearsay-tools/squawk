@@ -5,7 +5,7 @@ import type { CiToolController as Controller } from '../../src/ci-wait/controlle
 import type { createRunner as RunnerFactory } from '../../src/core/runner-registry.ts';
 import type { AgentEvent } from '../../src/core/agent-runner.ts';
 import type { SquawkTool } from '../../src/ci-wait/tools.ts';
-import type { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import type { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 export type CiProbeScenario = {
   kind: typeof WAIT_KIND.pr;

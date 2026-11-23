@@ -1,4 +1,4 @@
-import { WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { expectNoWaitNudgeKinds } from './turn-end.testkit.ts';
 import { AUTONOMOUS_NUDGE, decideTurnEnd, NO_WAIT_NUDGE, STEP_NUDGE_SUFFIX, type TurnEndDecision, type TurnEndFacts } from './turn-end.ts';

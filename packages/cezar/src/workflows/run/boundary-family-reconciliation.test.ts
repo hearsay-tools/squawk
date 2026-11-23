@@ -1,7 +1,7 @@
 import { WaitEngine } from './wait-engine.ts';
 import { seedWaits } from '../../runs/run-store.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
-import { makeWorkerWait, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeWorkerWait, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { unused } from '../unused.testkit.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';
 import { FamilyReconciler } from './family-reconciler.ts';

@@ -6,6 +6,11 @@ import {
   RUN_STATUS,
   STEP_KIND,
   STEP_STATUS,
+  makeRunEvent,
+  makeRunRecord,
+  makeStepState,
+} from './test-factories.testkit.ts';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
@@ -13,13 +18,10 @@ import {
   makeHumanWait,
   makePrWait,
   makeProcessWait,
-  makeRunEvent,
-  makeRunRecord,
-  makeStepState,
   makeTimerWait,
   makeWorkerRequestWait,
   makeWorkerWait,
-} from './test-factories.testkit.ts';
+} from './wait-factories.testkit.ts';
 
 /**
  * The typed test factories (hearsay-tools/cezarion#1812). A fixture built here is valid by the

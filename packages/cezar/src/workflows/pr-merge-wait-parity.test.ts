@@ -2,7 +2,7 @@ import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { WaitEngine } from './run/wait-engine.ts';
 import type { CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
-import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

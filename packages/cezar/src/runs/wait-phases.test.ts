@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
-import { WAIT_PHASE, makeHumanWait, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, makeHumanWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { seedWaits } from './run-store.testkit.ts';
 import { openTestRunStore } from './run-store-open.testkit.ts';
 import { strictRunExits, takeRunExitViolations } from './run-exits.ts';

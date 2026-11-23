@@ -1,4 +1,4 @@
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';

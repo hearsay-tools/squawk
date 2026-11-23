@@ -1,5 +1,5 @@
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { workerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';

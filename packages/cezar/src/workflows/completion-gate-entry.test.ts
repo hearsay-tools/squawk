@@ -7,11 +7,13 @@ import {
   RUN_STATUS,
   STEP_KIND,
   STEP_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { RunFinish } from './run/run-finish.ts';
 import { TurnSettler } from './run/turn-settler.ts';
 import { TrackedWork } from './run/tracked-work.ts';

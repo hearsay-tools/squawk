@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

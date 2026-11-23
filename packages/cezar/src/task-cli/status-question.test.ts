@@ -1,11 +1,13 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunStore } from '../runs/store.ts';

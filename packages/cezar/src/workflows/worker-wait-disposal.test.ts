@@ -6,7 +6,7 @@ import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
 import { unused } from './unused.testkit.ts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { currentUsage } from '../core/process-usage.ts';
 import { bookkeeping, executions, manager, parent, register, reopenRuntime, root, semaphore, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait-core.testkit.ts';

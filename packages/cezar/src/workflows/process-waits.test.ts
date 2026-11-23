@@ -1,4 +1,4 @@
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';

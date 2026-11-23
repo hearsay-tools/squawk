@@ -1,4 +1,5 @@
-import { RUN_STATUS, WAIT_KIND, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'

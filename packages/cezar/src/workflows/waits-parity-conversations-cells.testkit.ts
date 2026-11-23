@@ -3,7 +3,8 @@ import { MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_PHASE, RUN_STATUS, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { manager, until, store, fixtureUpdateRun, semaphore } from './worker-wait-core.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';

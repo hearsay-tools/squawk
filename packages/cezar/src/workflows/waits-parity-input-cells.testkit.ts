@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it as registerTest, expect, onTestFinished } from 'vitest';
-import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { manager, until, store, semaphore, root, checkpoint, timeline, terminal } from './worker-wait-core.testkit.ts';

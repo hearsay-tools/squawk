@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { makeRunRecord, RUN_STATUS, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { AgentInput, ConversationState } from '@open-mercato/cezar-contract';
 import {
   redactText, stageArchiveFields, stageCommit, stageConversation,

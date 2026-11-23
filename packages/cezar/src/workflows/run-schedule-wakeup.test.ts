@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
 describe('RunManager schedule wakeup', () => {
   const fixture = setupMonitoringFixture();

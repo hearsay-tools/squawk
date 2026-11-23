@@ -1,4 +1,5 @@
-import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '@open-mercato/cezar-api-client'
 import { deriveAttention, type Attention, type AttentionRung } from '@/lib/attention'

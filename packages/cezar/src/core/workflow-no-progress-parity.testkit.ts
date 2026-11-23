@@ -1,6 +1,6 @@
 import { runnerDefinition } from './runner-registry.ts';
 import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
-import { WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { workflowNoProgressParity } from './workflow-no-progress-rows.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { readPid, requirePid } from '../pid-file.testkit.ts';

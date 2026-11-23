@@ -1,6 +1,7 @@
 import type { RunQueriesTopic } from '../runs/run-queries.ts';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { makeRunRecord, makeTimerWait, RUN_STATUS, WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeTimerWait, WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import { unused } from './unused.testkit.ts';

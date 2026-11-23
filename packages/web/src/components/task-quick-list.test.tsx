@@ -16,11 +16,13 @@ import { resetSwipeStore } from '@/components/use-swipe-to-archive'
 import { groupRuns } from '@/lib/task-groups'
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { timerWait, workerWait } from '@/test/wait-fixtures'
 
 const NOW = Date.parse('2026-07-14T12:00:00.000Z')

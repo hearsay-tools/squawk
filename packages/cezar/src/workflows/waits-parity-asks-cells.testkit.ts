@@ -4,7 +4,8 @@ import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NOTE, MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { expect, it as registerTest } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { Wait } from '@open-mercato/cezar-contract';
 

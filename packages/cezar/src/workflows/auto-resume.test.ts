@@ -1,11 +1,13 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled, fixtureWork } from './fixture-claude.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

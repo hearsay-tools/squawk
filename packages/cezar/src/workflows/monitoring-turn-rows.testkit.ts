@@ -1,7 +1,8 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { MONITORING_PARTITIONS, type MonitoringPartitionName } from './monitoring-turn-partitions.testkit.ts';
-import { RUN_STATUS, WAIT_KIND, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from './run.ts';
 import { execFileSync } from 'node:child_process';

@@ -1,11 +1,13 @@
 import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { summaryOf } from '@/test/run-summary-fixture'
 import { openHumanWait } from '@/test/run-summary-fixture'
 import { QueryClientProvider } from '@tanstack/react-query'

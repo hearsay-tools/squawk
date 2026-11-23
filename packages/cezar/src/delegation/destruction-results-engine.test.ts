@@ -10,12 +10,14 @@ import { fixture } from './service-engine.testkit.ts';
 import { completedWorker, DISCARD, interruptParentDeletion } from './destruction-results.testkit.ts';
 import {
   RUN_STATUS,
+  WORKER_OUTCOME_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { workerCleanups } from './worker-cleanup.ts';

@@ -2,7 +2,7 @@ import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type Har
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { agentInputEventSchema } from '@open-mercato/cezar-contract/events';
-import { WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

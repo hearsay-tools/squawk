@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RUN_STATUS, STEP_STATUS, STEP_KIND, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS, STEP_STATUS, STEP_KIND } from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-api-client/contract/runs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seedRuns } from './seed-runs'

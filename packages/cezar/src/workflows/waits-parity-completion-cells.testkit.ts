@@ -1,7 +1,8 @@
 import { waitPartDescribers, blockedDone, blockingWorker, liveRefusal, replyBlockedAgain, repliesDoneAgain, nativeWire, ignoreRefusal, workerWaits, parkNotices, delivered, parkedOn, messenger, workerParent, listed, inputsFor, expectPoolCapacity, settled, prompted, workerWake, turnEnds, waitOfKind, fireTimer } from './waits-parity-fixture.testkit.ts';
 import { join } from 'node:path';
 import { expect, it as registerTest, vi } from 'vitest';
-import { WAIT_PHASE, WAIT_KIND, WAIT_SOURCE, WAIT_VIA, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, WAIT_KIND, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

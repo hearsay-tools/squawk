@@ -1,4 +1,4 @@
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { ciWaitRequestSchema, ciWaitSchema, ciWaitResultSchema, ciWaitReceiptSchema } from '@open-mercato/cezar-contract/ci-wait';

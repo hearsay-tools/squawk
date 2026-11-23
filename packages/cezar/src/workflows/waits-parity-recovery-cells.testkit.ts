@@ -5,7 +5,8 @@ import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { it as registerTest, expect, vi } from 'vitest';
-import { WAIT_KIND, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { WorkerWaitEntry } from '@open-mercato/cezar-contract';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

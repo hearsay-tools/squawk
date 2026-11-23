@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { onTestFinished, it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

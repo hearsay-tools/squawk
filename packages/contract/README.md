@@ -36,7 +36,8 @@ Three consumers, one definition:
    the `cez/contract-root-import` lint rule (`npm run lint`) refuses any other root import. A pure
    helper that has no schema to import goes in a module with no runtime import, as
    `run-labels.ts` and the `*-limits.ts` modules do, so its users load no schema.
-5. **Test data through `src/test-factories.testkit.ts`.** It builds run records, waits and events
-   typed from these schemas and exports a constant per enum value (`RUN_STATUS`, `WAIT_KIND`, …),
-   so a renamed field or value stops compiling in every test that uses it. It imports no Node
-   module, and both tsconfigs keep `*.testkit.ts` out of a build. The `cez/test-enum-literal` oxlint AST rule refuses a new enum literal in a test (hearsay-tools/cezarion#1812).
+5. **Test data through `src/test-factories.testkit.ts` and `src/wait-factories.testkit.ts`.** They
+   build run records, waits and events typed from these schemas and export a constant per enum value
+   (`RUN_STATUS` in the first, `WAIT_KIND` in the second, …), so a renamed field or value stops
+   compiling in every test that uses it. The wait kit is apart so a test that builds no wait does not
+   load `waits.ts`. They import no Node module, and both tsconfigs keep `*.testkit.ts` out of a build. The `cez/test-enum-literal` oxlint AST rule refuses a new enum literal in a test (hearsay-tools/cezarion#1812).

@@ -1,10 +1,12 @@
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { summaryOf } from '@/test/run-summary-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

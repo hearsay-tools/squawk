@@ -9,11 +9,13 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import {
   RUN_STATUS,
   STEP_KIND,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { clearIdleTimer } from './run/input-timers.ts';
 import { TurnNudges } from './run/turn-nudges.ts';
 import { InputDelivery } from './run/input-delivery.ts';

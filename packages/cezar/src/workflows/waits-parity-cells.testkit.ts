@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { it as registerTest, expect } from 'vitest';
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { familyCells } from '../core/parity-classes.testkit.ts';
