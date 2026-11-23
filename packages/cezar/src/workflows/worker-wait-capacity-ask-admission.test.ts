@@ -79,7 +79,7 @@ for (const role of ['root', 'worker'] as const) {
       expect(store.getRun(target.id)?.continuationMessage?.origin).toBe('human');
       await until(() => manager.isActive(target.id) && store.getRun(target.id)?.steps.some(step => !!step.sessionId) === true);
       // The real wire received the accepted input but cannot reply until released.
-      await until(() => wire.received() === 1);
+      await until(() => wire.received() === 1, () => `${wire.received()} human answers reached the wire; wire processes:\n${wire.inputs()}\n${timeline(target.id)}`);
       manager.cancel(target.id);
       await until(() => !manager.isActive(target.id));
       expect(store.eventLog.readEvents(target.id).filter(event => event.type === 'human-input-delivered')).toEqual([]);
