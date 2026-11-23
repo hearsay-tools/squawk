@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -196,5 +197,34 @@ describe('the Antigravity CLI transcript as the source of tool results', () => {
       entries: [{ kind: 'context', text: 'SQUEAL · updated' }],
     }]);
     outputs.close();
+  });
+
+  it('flush waits for an in-flight read and performs a fresh read for rows appended before exit', async () => {
+    const path = await transcriptFile();
+    const hooks: UiHookItem[] = [];
+    let flushed: Promise<void> | undefined;
+    const outputs = new AntigravityToolOutputs(() => {}, Date.now, hook => {
+      hooks.push(hook);
+      if (hook.id === 'hook_step_1') {
+        // The first poll is still in flight here; append the final Stop row and flush as settle() does.
+        appendFileSync(path, rows({
+          step_index: 2, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+          content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a Stop hook:\nFinal stop hook\n</SYSTEM_MESSAGE>',
+        }));
+        flushed = outputs.flush();
+      }
+    });
+    outputs.open(path);
+    await writeFile(path, rows({
+      step_index: 1, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a SessionStart hook:\nFirst hook\n</SYSTEM_MESSAGE>',
+    }));
+    await outputs.poll();
+    await flushed;
+    outputs.close();
+    expect(hooks).toEqual([
+      { kind: 'hook', id: 'hook_step_1', event: 'SessionStart', status: 'completed', entries: [{ kind: 'context', text: 'First hook' }] },
+      { kind: 'hook', id: 'hook_step_2', event: 'Stop', status: 'completed', entries: [{ kind: 'context', text: 'Final stop hook' }] },
+    ]);
   });
 });

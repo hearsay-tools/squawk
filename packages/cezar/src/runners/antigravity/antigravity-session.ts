@@ -363,7 +363,7 @@ export class AntigravitySession implements AgentSession {
   }
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
-    await this.toolOutputs.poll();
+    await this.toolOutputs.flush();
     this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }

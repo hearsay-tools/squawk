@@ -253,6 +253,14 @@ export class AntigravityToolOutputs {
     return this.reading;
   }
 
+  /** Wait for any in-flight read, then perform one fresh read for rows appended before exit. */
+  async flush(): Promise<void> {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    while (this.reading) await this.reading;
+    await this.poll();
+  }
+
   private schedule(delay: number): void {
     if (this.closed || this.timer) return;
     this.timer = setTimeout(() => { this.timer = undefined; void this.poll().then(() => this.next()); }, delay);
