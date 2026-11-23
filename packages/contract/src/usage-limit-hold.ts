@@ -16,3 +16,16 @@ export function isUsageLimitHold<T extends Partial<Pick<RunRecord, 'status' | 'a
 ): run is T & { autoResumeAt: string } {
   return run.status === 'waiting' && run.autoResumeAt !== undefined;
 }
+
+/** Structured hold details when a run is on a usage-limit or provider-error hold; undefined otherwise. */
+export function usageLimitHoldOf(
+  run: Partial<Pick<RunRecord, 'status' | 'autoResumeAt' | 'autoResumeReason' | 'autoResumeAttempts' | 'error'>>,
+): { reason: 'usage-limit' | 'provider-error'; resumeAt: string; attempts?: number; error?: string } | undefined {
+  if (!isUsageLimitHold(run)) return undefined;
+  return {
+    reason: run.autoResumeReason ?? 'usage-limit',
+    resumeAt: run.autoResumeAt,
+    ...(run.autoResumeAttempts === undefined ? {} : { attempts: run.autoResumeAttempts }),
+    ...(run.error === undefined ? {} : { error: run.error.slice(0, 2_000) }),
+  };
+}

@@ -1,11 +1,39 @@
 import { useConfig, useProviderStatus } from '@/api/queries'
 import { runnerIds, useRunners } from '@/api/runners'
+import { workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { useRunnerAvailability } from '@/api/agent-accounts'
 import { runAccountId } from './active-provider'
 import { resolveRunner } from '@/routes/new-task-form'
 import { isStoppedBeforeStarting } from './run-actions'
+
+function continuationCurrentRunner(run: ApiRun, untouched: boolean, removed: boolean, defaultRunner: Runner | undefined): Runner {
+  const workerStep = workerContinuationStep(run, untouched)
+  return workerStep?.runner ?? run.runner ?? (untouched || removed ? defaultRunner : undefined) ?? 'claude'
+}
+
+function workerMissingProviders(
+  run: ApiRun,
+  fallback: Runner,
+  availability: ReturnType<typeof useRunnerAvailability>,
+): Runner[] {
+  const missing = new Set<Runner>()
+  for (const step of run.workflowDef?.steps ?? []) {
+    if (step.command !== undefined || step.kind === 'plugin') continue
+    const provider = step.runner ?? fallback
+    const account = step.agentProfile
+      ?? (provider === (run.runner ?? fallback) ? run.agentProfile : undefined)
+      ?? availability.repoAccount?.[provider]
+    if (!availability.readyOn(provider, account)) missing.add(provider)
+  }
+  return [...missing]
+}
+
+function continuationOverride(isWorker: boolean, pickedRunner: Runner | null, currentRunnerConnected: boolean, removed: boolean, runner: Runner): Runner | undefined {
+  if (isWorker) return undefined
+  return pickedRunner !== null || !currentRunnerConnected || removed ? runner : undefined
+}
 
 /** Every question the reason chain asks, in the priority order it asks them. */
 interface ContinuationReasonInput {
@@ -62,16 +90,20 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   // A continuation sends no account: each runner counts when the account the server will continue
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
   const availability = useRunnerAvailability()
-  const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
+  const isWorker = run.delegation?.role === 'worker'
+  const currentRunner = continuationCurrentRunner(run, untouched, removed, config.data?.defaultRunner)
   // Each candidate counts on the account the server would continue it on, after the runner switch
   // clears the run's account (hearsay-tools/squawk#4116).
   const accountOn = (provider: Runner, target: Runner) =>
-    runAccountId(run, provider, availability.repoAccount, { original: currentRunner, target })
+    runAccountId(run, provider, availability.repoAccount, { original: currentRunner, target }, untouched)
   const { runners, signedOut } = availability.runnersOn((candidate) => accountOn(candidate, candidate))
-  const runner = resolveRunner(pickedRunner, runners, currentRunner)
+  // Owned workers keep their accepted runner and account; only model and effort can change.
+  const runner = isWorker ? currentRunner : resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
   const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner, runnerIds(registered.data)) : [runner]
-  const missing = required.filter(provider => !availability.readyOn(provider, accountOn(provider, runner)))
+  const missing = untouched && isWorker && run.workflowDef
+    ? workerMissingProviders(run, runner, availability)
+    : required.filter(provider => !availability.readyOn(provider, accountOn(provider, runner)))
   const canContinue = providersReady && (!needsConfig || config.isSuccess) && missing.length === 0
   const reason = continuationReason({
     needsConfig,
@@ -94,9 +126,6 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
     providerPending: providersPending || (needsConfig && config.isPending),
     providerError: providersError,
     reason,
-    runnerOverride:
-      pickedRunner !== null || !currentRunnerConnected || removed
-        ? runner
-        : undefined,
+    runnerOverride: continuationOverride(isWorker, pickedRunner, currentRunnerConnected, removed, runner),
   }
 }

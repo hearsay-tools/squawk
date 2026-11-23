@@ -115,5 +115,23 @@ describe('task message command family', () => {
     expect(session.instructions).toContain('message request');
     expect(session.instructions).toContain('message tasks');
     expect(session.instructions).toContain('worker resume');
+    expect(session.instructions).toContain('--model');
+  });
+  it('forwards --model and --effort on worker resume and refuses them on message commands', async () => {
+    expect(await runWorkerCommand(['resume', '--help'], {})).toBe(0);
+    expect(output.mock.calls.at(-1)?.[0]).toContain('--model');
+    expect(output.mock.calls.at(-1)?.[0]).toContain('--effort');
+    const workerId = randomUUID();
+    const id = randomUUID();
+    const send = vi.spyOn(f.service, 'send').mockResolvedValue({
+      message: { id, senderRunId: f.parent.id, recipientRunId: workerId, kind: 'request', text: 'Retry on sonnet', createdAt: new Date().toISOString(), requestHash: '0'.repeat(64), state: 'accepted', resumed: true },
+      delivery: 'queued', effect: 'applied',
+    });
+    expect(await runWorkerCommand(['resume', workerId, 'Retry on sonnet', '--id', id, '--model', 'sonnet', '--effort', 'medium'], env)).toBe(0);
+    expect(send).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      id, recipientRunId: workerId, kind: 'request', resume: true, text: 'Retry on sonnet', model: 'sonnet', effort: 'medium',
+    }));
+    expect(await message(['request', workerId, 'hi', '--id', randomUUID(), '--model', 'sonnet'])).toBe(64);
+    expect(json().error).toContain('worker resume');
   });
 });

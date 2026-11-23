@@ -1,4 +1,4 @@
-import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { latestSessionStep, sessionRunner, workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { runAddress } from '@/api/run-address'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
@@ -20,7 +20,7 @@ import {
   resolveModel,
 } from '@/routes/new-task-form'
 import { useContinuationProvider } from './continuation-provider'
-import { runActionFlags } from './run-actions'
+import { isStoppedBeforeStarting, runActionFlags } from './run-actions'
 
 /** What the thread needs to offer Continue from its composer. */
 export interface ContinueAction {
@@ -57,17 +57,20 @@ function resolveContinueModel(
   config: ContinueConfig, catalog: ContinueCatalog, registered: ContinueRunners,
   pickedModel: string | null, pickedEffort: string | null,
 ) {
+  const workerStep = workerContinuationStep(run, isStoppedBeforeStarting(run))
+  const currentModel = workerStep ? workerStep.model : run.model
+  const currentEffort = workerStep ? workerStep.effort : run.effort
   // While the runner is unchanged, the model pill starts on the run's own pin; switching the
   // runner invalidates that pin and falls back to the new backend's configured default / auto.
   const modelDefaults =
-    !modelsLocked && !runnerChanged && run.model
-      ? { ...config?.defaultModels, [runner]: run.model }
+    !modelsLocked && !runnerChanged && currentModel
+      ? { ...config?.defaultModels, [runner]: currentModel }
       : config?.defaultModels
   const effectivePickedModel = modelsLocked ? null : pickedModel
   const models = modelsForRunner(runner, registered, catalog, [effectivePickedModel, modelDefaults?.[runner]])
   const model = resolveModel(effectivePickedModel, runner, registered, modelDefaults, catalog)
   const effortOptions = effortOptionsForModel(model, catalog)
-  const rawEffort = modelsLocked ? '' : (pickedEffort ?? run.effort ?? '')
+  const rawEffort = modelsLocked ? '' : (pickedEffort ?? currentEffort ?? '')
   const effort = resolveEffort(rawEffort, effortOptions)
   const mustClearStoredEffort =
     !modelsLocked && pickedEffort === null && rawEffort !== '' && effort === ''
@@ -81,8 +84,9 @@ function resolveContinueModel(
  */
 function resolveContinueAccount(run: ApiRun, runner: Runner, runnerChanged: boolean, repoAccount: ContinueAccounts['repoAccount']) {
   const sessionStep = latestSessionStep(run.steps)
-  const runAccount = run.agentProfile ?? sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
-  return { sessionStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
+  const workerStep = workerContinuationStep(run, isStoppedBeforeStarting(run))
+  const runAccount = workerStep?.agentProfile ?? run.agentProfile ?? sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+  return { sessionStep, workerStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
 }
 
 type ContinueModel = ReturnType<typeof resolveContinueModel>
@@ -122,11 +126,12 @@ function continueRequestBody(
 
 function continueStartsNewConversation(
   run: ApiRun, sessionStep: ReturnType<typeof resolveContinueAccount>['sessionStep'],
+  workerStep: ReturnType<typeof resolveContinueAccount>['workerStep'],
   runner: Runner,
 ) {
   return !!sessionStep && (
     runner !== sessionRunner(sessionStep, run) ||
-    (run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
+    (workerStep?.agentProfile ?? run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
       (sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID)
   )
 }
@@ -157,12 +162,12 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const [pickedRunner, setPickedRunner] = useState<Runner | null>(null)
   const [pickedModel, setPickedModel] = useState<string | null>(null)
   const [pickedEffort, setPickedEffort] = useState<string | null>(null)
-  // The task route reuses this view across parameter changes, so a pick from run A must not
-  // stick when the user opens cached run B. Reset every pill on `run.id` — effort, model
-  // and runner all leak the same way.
-  const [pickedRunId, setPickedRunId] = useState(run.id)
-  if (pickedRunId !== run.id) {
-    setPickedRunId(run.id)
+  // The task route reuses this view across parameter changes, and an owned worker can advance to
+  // another workflow step under the same run id, so reset every pill when either changes.
+  const pickScope = `${run.id}:${workerContinuationStep(run, isStoppedBeforeStarting(run))?.id ?? ''}`
+  const [pickedScope, setPickedScope] = useState(pickScope)
+  if (pickedScope !== pickScope) {
+    setPickedScope(pickScope)
     setPickedRunner(null)
     setPickedModel(null)
     setPickedEffort(null)
@@ -174,7 +179,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   // runner pill re-reads that backend's own models. Only a run that can actually be continued
   // fetches at all — every other thread (running, queued, closed with no session) would be
   // fetching it to render nothing.
-  const { sessionStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
+  const { sessionStep, workerStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
   const health = useHealth()
   const localHandoff = health.data?.capabilities?.localHandoff !== false
   const catalog = useRunnerModels(runner, available && !health.isPending, localHandoff ? account : null)
@@ -207,20 +212,21 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     },
   })
 
+  const isWorker = run.delegation?.role === 'worker'
   return {
     skillRunner: runner,
     skillAccount: account,
     available,
     canContinue,
-    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner),
+    startsNewConversation: continueStartsNewConversation(run, sessionStep, workerStep, runner),
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (
       <div data-slot="follow-up-engine" className="session-engine-controls">
 <PickerPillGroup>
         {/* Shown when there is a choice to make, or a signed-out runner to point at its Settings card
-            (hearsay-tools/squawk#4116). A host with one ready runner and nothing to sign in to sees no pill. */}
-        {runners.length > 1 || continuation.signedOut.length > 0 ? (
+            (hearsay-tools/squawk#4116). Owned workers keep their accepted runner and account. */}
+        {!isWorker && (runners.length > 1 || continuation.signedOut.length > 0) ? (
           <RunnerPill
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
@@ -240,6 +246,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
             readOnly
+            disabledHint={isWorker ? 'Owned workers keep their runner; change model or effort instead.' : undefined}
             slot="session-runner-value"
             ariaLabel="Runner"
             label={runner}

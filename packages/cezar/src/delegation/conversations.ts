@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, DelegationState, RequestOutcome } from '@open-mercato/cezar-contract';
+import { usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { deliveryReceipts } from '../runs/outcome-commit.ts';
 import { ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import type { RunRecord } from '../runs/run-decode.ts';
@@ -146,6 +147,11 @@ export function notDeliveredInstruction(pair: ResolvedPair): string {
     return 'Not delivered: this worker was stopped or is being destroyed. Spawn a new worker for further work.';
   }
   if (pair.relationship === 'peer') return `Not delivered: task is ${recipient.stopping ? 'stopping' : finishing(recipient) ? 'finishing' : recipient.status}. Only its human can continue it.`;
+  const hold = pair.relationship === 'family' && pair.relation === 'supervised' ? usageLimitHoldOf(recipient) : undefined;
+  if (hold) {
+    const reason = hold.reason === 'provider-error' ? 'provider-error hold' : 'usage-limit hold';
+    return `Not delivered: worker is on a ${reason} (resumes at ${hold.resumeAt}). To resume it now with a new instruction, run worker resume ${recipient.id} "<instruction>" --id <new-message-UUID> [--model <model>] [--effort <level>]; use a new message ID. Retrying this rejected ID will not deliver it.`;
+  }
   return pair.relation === 'supervised'
     ? `Not delivered: worker is ${recipient.status}. To resume it with a new instruction, run worker resume ${recipient.id} "<instruction>" --id <new-message-UUID>; use a new message ID. Retrying this rejected ID will not deliver it.`
     : `Not delivered: parent is ${recipient.status}. A worker cannot resume its parent; the parent must be continued by its owner.`;

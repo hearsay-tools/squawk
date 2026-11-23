@@ -3,7 +3,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
+import { openTestRunStore, runPersistence } from '../runs/run-store-open.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { provisionWorkflowFixture, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
-import { readWorkerIdentity } from './execution-identity.ts';
+import { patchWorkerIdentity, readWorkerIdentity, type AcceptedWorkerIdentity } from './execution-identity.ts';
 
 sealTestRunners(claudeRunner, codexRunner);
 
@@ -318,5 +318,151 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     }
     expect(sessions.at(-1)!.spec).toMatchObject({ model: 'haiku', effort: 'high' });
     expect(sessions.at(-1)!.spec.env?.CLAUDE_CONFIG_DIR).toBe(a.home);
+  });
+  it('allows same-runner model and effort overrides on worker Continue while keeping runner, account and grants fixed', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: ['git status'] });
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'worker-sess', resumed: false });
+    sessions[1]!.finish('done');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    // Cross-runner override and foreign model preset stay refused without changing persisted identity.
+    expect(f.manager.continueRun(a.child.workerId, { text: 'switch runner', runner: 'codex' })).toMatchObject({ ok: false, error: expect.stringContaining('identity') });
+    expect(f.manager.continueRun(a.child.workerId, { text: 'foreign model', model: 'gpt-5.1-codex' })).toMatchObject({ ok: false, error: expect.stringContaining('not a claude model') });
+    expect(f.manager.continueRun(a.child.workerId, { text: 'bad effort', effort: 'turbo' })).toMatchObject({ ok: false, error: 'Invalid effort' });
+    // Same-runner model and effort override succeeds, persists to identity + record, and resumes the session.
+    expect(f.manager.continueRun(a.child.workerId, { text: 'use sonnet', model: 'sonnet', effort: 'medium' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({
+      resume: true, sessionId: 'worker-sess', model: 'sonnet', effort: 'medium',
+      toolGrant: { kind: 'inherited', tools: ['Read'], bashAllowlist: ['git status'] },
+    });
+    expect(sessions[2]!.spec.env?.CLAUDE_CONFIG_DIR).toBe(a.home);
+    expect(f.store.getRun(a.child.workerId)).toMatchObject({ runner: 'claude', model: 'sonnet', effort: 'medium' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({
+      model: 'sonnet', effort: 'medium', account: { provider: 'claude', homePath: a.home },
+      grants: { allowedTools: ['Read'], bashAllowlist: ['git status'] },
+    });
+    // Clearing effort (`''`) removes the pin on the next Continue.
+    sessions[2]!.finish('done again');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(a.child.workerId, { text: 'auto effort', effort: '' })).toEqual({ ok: true });
+    await until(() => sessions.length === 4);
+    expect(sessions[3]!.spec.model).toBe('sonnet');
+    expect(sessions[3]!.spec.effort).toBeUndefined();
+    expect(f.store.getRun(a.child.workerId)?.effort).toBeUndefined();
+  });
+
+  it('keeps untouched worker identity and run record consistent when execution checkpoint refuses an override', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: [] });
+    // Cancel before any step has started so Continue takes the untouched-worker path.
+    expect(f.manager.cancel(a.child.workerId)).toBe(true);
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    await f.releaseAdmission();
+    const spy = vi.spyOn(f.store.workerExecutions, 'commitWorkerExecutionStart').mockImplementationOnce(() => {
+      throw new Error('simulated checkpoint refusal');
+    });
+    const refused = f.manager.continueRun(a.child.workerId, { text: 'retry', model: 'sonnet', effort: 'low' });
+    spy.mockRestore();
+    expect(refused).toMatchObject({ ok: false });
+    // Both public run record and private identity keep the original settings so a retry succeeds.
+    expect(f.store.getRun(a.child.workerId)).toMatchObject({ model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({ model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+
+    expect(f.manager.continueRun(a.child.workerId, { text: 'retry', model: 'sonnet', effort: 'low' })).toEqual({ ok: true });
+    await until(() => sessions.length === 2);
+    expect(sessions[1]!.spec).toMatchObject({ model: 'sonnet', effort: 'low' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({ model: 'sonnet', effort: 'low' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+  });
+
+  it('does not finalize untouched worker identity when runs.db fails to persist, and recovers after restart', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: [] });
+    expect(f.manager.cancel(a.child.workerId)).toBe(true);
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    await f.releaseAdmission();
+
+    const failPersist = vi.spyOn(runPersistence(f.store), 'persist').mockImplementationOnce(() => {
+      throw new Error('disk failure');
+    });
+    const refused = f.manager.continueRun(a.child.workerId, { text: 'retry', model: 'sonnet', effort: 'low' });
+    failPersist.mockRestore();
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('disk failure') });
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+
+    // Simulate a controller restart after the failed DB write.
+    f.manager.dispose();
+    sessions[0]!.finish();
+    setRunStatus(f.store, a.parent.id, RUN_STATUS.waiting);
+    f.store.close();
+    const restartedStore = openTestRunStore(join(f.root, '.ai/cezar'), { keepLive: true });
+    const restartedManager = createFixtureManager(restartedStore, f.root);
+    recoveredStores.push(restartedStore);
+    recoveredManagers.push(restartedManager);
+    await restartedManager.recover();
+
+    expect(restartedStore.getRun(a.child.workerId)).toMatchObject({ status: RUN_STATUS.cancelled, model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(restartedStore.workerExecutions, a.child.workerId)).toMatchObject({ model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(restartedStore.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+    expect(restartedManager.continueRun(a.child.workerId, { text: 'retry after restart', model: 'sonnet', effort: 'low' })).toEqual({ ok: true });
+    await until(() => sessions.some(entry => entry.spec.env?.CEZ_TASK_ID === a.child.workerId));
+    const launched = sessions.find(entry => entry.spec.env?.CEZ_TASK_ID === a.child.workerId)!;
+    expect(launched.spec).toMatchObject({ model: 'sonnet', effort: 'low' });
+  });
+
+  it('targets the first agent step when overriding an untouched cancelled multi-step worker', async () => {
+    const codexHome = join(f.root, 'codex-untouched'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
+    writeFileSync(join(codexHome, 'config.toml'), 'model = "gpt-5.1-codex"');
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'mixed-untouched.yaml'), ['name: mixed-untouched', 'steps:',
+      '  - id: implement', '    prompt: "Implement: {{task}}"', '    runner: codex',
+      '  - id: review', '    prompt: "Review: {{task}}"', '    runner: claude', '    model: opus'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'mixed-untouched' });
+    expect(f.manager.cancel(a.child.workerId)).toBe(true);
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    await f.releaseAdmission();
+
+    // First step is codex (`implement`); overriding with a codex model/effort updates step 1 and leaves step 2 (`review`) on claude/opus.
+    expect(f.manager.continueRun(a.child.workerId, { text: 'start lighter', model: 'gpt-5.1-codex-mini', effort: 'medium' })).toEqual({ ok: true });
+    await until(() => sessions.length === 2);
+    expect(sessions[1]!.spec).toMatchObject({ model: 'gpt-5.1-codex-mini', effort: 'medium' });
+    expect(sessions[1]!.spec.env?.CODEX_HOME).toBe(codexHome);
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({
+      model: 'gpt-5.1-codex-mini',
+      effort: 'medium',
+      steps: [
+        { stepId: 'implement', account: { provider: 'codex' }, model: 'gpt-5.1-codex-mini', effort: 'medium' },
+        { stepId: 'review', account: { provider: 'claude' }, model: 'opus' },
+      ],
+    });
+  });
+
+  it('recovers a worker Continue after a simulated crash on either side of the DB commit', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: [] });
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'worker-sess', resumed: false });
+    sessions[1]!.finish('done');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+
+    // 1. Crash after staging pending identity, BEFORE runs.db commits.
+    const before = readWorkerIdentity(f.store.workerExecutions, a.child.workerId) as AcceptedWorkerIdentity;
+    const stagedPatch = patchWorkerIdentity(f.store.getRun(a.child.workerId)!, before, undefined, { model: 'sonnet', effort: 'low' })!;
+    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...before, pending: stagedPatch.pending });
+    expect(f.manager.continueRun(a.child.workerId, { text: 'recover before commit', model: 'sonnet', effort: 'medium' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({ model: 'sonnet', effort: 'medium' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+
+    // 2. Crash after runs.db commits, BEFORE finalizing the pending identity.
+    sessions[2]!.finish('done 2');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    const current = readWorkerIdentity(f.store.workerExecutions, a.child.workerId) as AcceptedWorkerIdentity;
+    const afterPatch = patchWorkerIdentity(f.store.getRun(a.child.workerId)!, current, undefined, { model: 'opus', effort: 'low' })!;
+    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...current, pending: afterPatch.pending });
+    f.store.updateRun(a.child.workerId, afterPatch.runPatch);
+    f.store.persistence.flush();
+    expect(f.manager.continueRun(a.child.workerId, { text: 'recover after commit' })).toEqual({ ok: true });
+    await until(() => sessions.length === 4);
+    expect(sessions[3]!.spec).toMatchObject({ model: 'opus', effort: 'low' });
   });
 });

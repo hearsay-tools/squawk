@@ -2,6 +2,7 @@ import { commandText } from '../home/command.ts';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import { MAX_CONVERSATION_REQUEST_SECONDS } from '@open-mercato/cezar-contract/conversations';
 import { messagingAllowed } from '@open-mercato/cezar-contract/task-options';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunRecord } from '../runs/store.ts';
 import type { DelegationProject } from './service.ts';
 import { finishing } from '../runs/task-rights.ts';
@@ -28,19 +29,29 @@ export function assertReplyDirection(state: ConversationState, request: Conversa
   if (original) throw new DelegationPolicyError('incompatible_state',
     commandText(`Cannot reply to your own request. Use cez message follow-up ${recipient.id} "<text>" --id <new-message-UUID> --request-id ${original.id}; for a new request, use cez message request ${recipient.id} "<text>" --id <new-message-UUID>.`));
 }
-export function sendAdmission(pair: ConversationPair, request: ConversationSendRequest) {
+function recipientNeedsResume(pair: ConversationPair, request: ConversationSendRequest): { closed: boolean; resumable: boolean } {
   const { recipient, relationship } = pair;
   const peer = relationship === 'peer';
-  const destroyed = recipient.delegation?.role === 'worker' && recipient.delegation.destroy?.phase === 'complete';
   // A peer whose Finish is pending takes nothing more: Finish would settle it unread (spec § 5).
   // A peer that turned task messaging off takes no new message; a reply to its own request still lands (hearsay-tools/cezarion#2784).
   const closed = peer && request.kind !== 'reply' && !messagingAllowed(recipient);
-  const resumable = closed || !['queued', 'running', 'waiting'].includes(recipient.status) || !!recipient.stopping || (recipient.delegation?.role === 'worker' && !!recipient.delegation.destroy) || (peer && finishing(recipient));
+  const held = relationship === 'family' && pair.relation === 'supervised' && isUsageLimitHold(recipient);
+  const workerDestroying = recipient.delegation?.role === 'worker' && !!recipient.delegation.destroy;
+  const resumable = closed || !['queued', 'running', 'waiting'].includes(recipient.status) || held || !!recipient.stopping || workerDestroying || (peer && finishing(recipient));
+  return { closed, resumable };
+}
+export function sendAdmission(pair: ConversationPair, request: ConversationSendRequest) {
+  const { recipient } = pair;
+  const destroyed = recipient.delegation?.role === 'worker' && recipient.delegation.destroy?.phase === 'complete';
+  const { closed, resumable } = recipientNeedsResume(pair, request);
   const resume = !!request.resume && resumable;
   // The extended bound belongs to a new continuation, not merely the flag.
   // Exact retries have already returned above, even if that continuation is now active.
   if (request.timeoutSeconds > MAX_CONVERSATION_REQUEST_SECONDS && !resume) {
-    throw new DelegationPolicyError('incompatible_state', 'Extended request deadlines require resuming a settled worker; active workers accept 1–7200 seconds');
+    throw new DelegationPolicyError('incompatible_state', 'Extended request deadlines require resuming a settled or held worker; active workers accept 1–7200 seconds');
+  }
+  if ((request.model !== undefined || request.effort !== undefined) && !resume) {
+    throw new DelegationPolicyError('incompatible_state', 'Model and effort overrides require resuming a settled or held worker; stop the active worker first');
   }
   assertSendResume(recipient, resume, destroyed);
   const instruction = destroyed ? 'Not delivered: this worker was destroyed. Spawn a new worker for further work.'

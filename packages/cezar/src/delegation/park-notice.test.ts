@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationMessage, Wait } from '@open-mercato/cezar-contract';
 import { conversationMessageSchema } from '@open-mercato/cezar-contract/conversations';
 import type { RunEvent } from '../runs/store.ts';
-import { PARK_NOTICE_EXCERPT_MAX, formatParkNoticeText, messagedParentSince, parkNoticeExcerpt, parkNoticeId, parkNoticeMessage, parkNoticeWait, parkingTurn } from './park-notice.ts';
+import { PARK_NOTICE_EXCERPT_MAX, formatHoldNoticeText, formatParkNoticeText, holdNoticeId, holdNoticeMessage, messagedParentSince, parkNoticeExcerpt, parkNoticeId, parkNoticeMessage, parkNoticeWait, parkingTurn } from './park-notice.ts';
 
 const worker = randomUUID();
 const parent = randomUUID();
@@ -97,5 +97,25 @@ describe('park notices (hearsay-tools/cezarion#1327)', () => {
     expect(message.text).toContain('token [redacted] here');
     expect(message).not.toHaveProperty('deadline');
     expect(message).not.toHaveProperty('question');
+  });
+
+  it('formats a distinct hold notice naming hold reason, resume time, settings and worker resume with model/effort', () => {
+    expect(holdNoticeId(worker, wait)).not.toBe(parkNoticeId(worker, wait));
+    const text = formatHoldNoticeText({
+      workerRunId: worker, waitId: wait, reason: 'usage-limit', resumeAt: '2026-10-20T15:00:00.000Z',
+      error: 'Claude AI usage limit reached|1792508400', runner: 'claude', model: 'opus', effort: 'high',
+    });
+    expect(text).toContain(`Squawk notice: your worker ${worker} hit a usage limit and is on hold until 2026-10-20T15:00:00.000Z`);
+    expect(text).toContain('Current settings: runner: claude, model: opus, effort: high.');
+    expect(text).toContain(`hsq worker inspect ${worker}`);
+    expect(text).toContain(`hsq worker resume ${worker} '<instruction>' --id <new-message-UUID> [--model <model>] [--effort <level>]`);
+    const message = holdNoticeMessage({
+      workerRunId: worker, parentRunId: parent, waitId: wait, reason: 'provider-error', resumeAt: '2026-10-20T13:00:00.000Z',
+      error: 'rate limit SECRET', now: '2026-10-20T12:13:00.000Z', redact: value => value.replaceAll('SECRET', '[redacted]'),
+    });
+    expect(conversationMessageSchema.parse(message)).toEqual(message);
+    expect(message).toMatchObject({ id: holdNoticeId(worker, wait), senderRunId: worker, recipientRunId: parent, kind: 'progress', state: 'accepted' });
+    expect(message.text).toContain('hit a provider error');
+    expect(message.text).toContain('rate limit [redacted]');
   });
 });

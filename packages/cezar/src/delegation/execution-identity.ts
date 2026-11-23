@@ -14,6 +14,7 @@ import type { RunLookup, WorkerExecutionRecords } from '../runs/ports.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
+import { writePrivateRecord } from './private-record-file.ts';
 
 const absolutePathSchema = z.string().min(1).max(4096).refine(isAbsolute).refine(path => !/[\u0000-\u001f\u007f]/.test(path));
 
@@ -50,7 +51,7 @@ const workerStepIdentityFieldsSchema = z.object({
 });
 export type WorkerStepIdentity = z.infer<typeof workerStepIdentityFieldsSchema>;
 
-export const acceptedWorkerIdentitySchema = workerStepIdentityFieldsSchema.extend({
+const acceptedWorkerIdentityCoreSchema = workerStepIdentityFieldsSchema.extend({
   kind: z.literal('accepted'),
   /** Binds new input recipes; absence retains compatibility with pre-context identities. */
   contextHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
@@ -64,7 +65,23 @@ export const acceptedWorkerIdentitySchema = workerStepIdentityFieldsSchema.exten
    */
   steps: z.array(workerStepIdentityFieldsSchema.extend({ stepId: z.string().min(1) }).strict()).min(1).optional(),
 }).strict();
+
+const workerPendingOverrideSchema = z.object({
+  stepId: z.string().min(1).optional(),
+  /** `string` sets the model; `null` clears it; omitted keeps the base value. */
+  model: z.string().min(1).max(512).nullable().optional(),
+  /** `string` sets the effort; `null` clears it; omitted keeps the base value. */
+  effort: z.string().min(1).max(128).nullable().optional(),
+  workflowHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+}).strict();
+export type WorkerPendingOverride = z.infer<typeof workerPendingOverrideSchema>;
+
+export const acceptedWorkerIdentitySchema = acceptedWorkerIdentityCoreSchema.extend({
+  /** Compact crash-recovery staging for an in-flight same-runner model/effort override before runs.db commits. */
+  pending: workerPendingOverrideSchema.optional(),
+}).strict();
 export type AcceptedWorkerIdentity = z.infer<typeof acceptedWorkerIdentitySchema>;
+const WORKER_IDENTITY_MAX_BYTES = 65536;
 
 /** The identity one agent step runs under. Explicit entries are authority; a legacy identity answers with its run-level view. */
 export function workerStepIdentity(identity: AcceptedWorkerIdentity, stepId: string): WorkerStepIdentity {
@@ -91,8 +108,8 @@ export function readWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'ide
     const fd = openSync(executions.identityPath(id), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const info = fstatSync(fd);
-      if (!info.isFile() || info.size > 16384 || (info.mode & 0o077)) return undefined;
-      const buffer = Buffer.alloc(16385); const count = readSync(fd, buffer, 0, buffer.length, 0);
+      if (!info.isFile() || info.size > WORKER_IDENTITY_MAX_BYTES || (info.mode & 0o077)) return undefined;
+      const buffer = Buffer.alloc(WORKER_IDENTITY_MAX_BYTES + 1); const count = readSync(fd, buffer, 0, buffer.length, 0);
       return workerExecutionIdentitySchema.parse(JSON.parse(buffer.subarray(0, count).toString('utf8')));
     } finally { closeSync(fd); }
   } catch { return undefined; }
@@ -102,6 +119,100 @@ export function writeWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'id
   // Immutable acceptance evidence. An orphan from failed index publication cannot be adopted.
   const fd = openSync(executions.identityPath(id, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try { writeFileSync(fd, JSON.stringify(identity)); fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+/** Atomically replace an existing worker identity after a same-runner model/effort override. */
+export function updateWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'identityPath'>, id: string, identity: WorkerExecutionIdentity): void {
+  const parsed = workerExecutionIdentitySchema.parse(identity);
+  if (Buffer.byteLength(JSON.stringify(parsed), 'utf8') > WORKER_IDENTITY_MAX_BYTES) {
+    throw new WorkerIdentityError('Worker execution identity exceeds maximum size');
+  }
+  writePrivateRecord(executions.identityPath(id, true), parsed);
+}
+
+export interface WorkerModelEffortPatch {
+  /** `undefined` keeps the pin; `''` clears it; non-empty sets it. */
+  model?: string | undefined;
+  /** `undefined` keeps the pin; `''` clears it; canonical effort sets it. */
+  effort?: string | undefined;
+}
+
+function applyStepModelEffort<T extends { model?: string | undefined; effort?: string | undefined }>(entry: T, patch: WorkerModelEffortPatch): T {
+  const { model: prevModel, effort: prevEffort, ...rest } = entry;
+  const nextModel = patch.model === undefined ? prevModel : patch.model === '' ? undefined : patch.model;
+  const nextEffort = patch.effort === undefined ? prevEffort : patch.effort === '' ? undefined : patch.effort;
+  return {
+    ...rest,
+    ...(nextModel === undefined ? {} : { model: nextModel }),
+    ...(nextEffort === undefined ? {} : { effort: nextEffort }),
+  } as unknown as T;
+}
+
+function patchBoundWorkflow(workflow: WorkflowDef | undefined, targetStepId: string | undefined, patch: WorkerModelEffortPatch): WorkflowDef | undefined {
+  if (!workflow || targetStepId === undefined) return undefined;
+  let changed = false;
+  const steps = workflow.steps.map(step => {
+    if (step.id !== targetStepId) return step;
+    const next = applyStepModelEffort(step, patch);
+    if (next.model !== step.model || next.effort !== step.effort) changed = true;
+    return next;
+  });
+  return changed ? { ...workflow, steps } : undefined;
+}
+
+/**
+ * Update a worker's same-runner model and/or effort on the targeted step while keeping its pinned
+ * account, tool grants, and context hash fixed. Returns the replacement private identity and the
+ * matching public run patch, or `undefined` when nothing changes.
+ */
+export function patchWorkerIdentity(
+  run: RunRecord,
+  rawIdentity: AcceptedWorkerIdentity,
+  stepId: string | undefined,
+  patch: WorkerModelEffortPatch,
+): { identity: AcceptedWorkerIdentity; pending: WorkerPendingOverride; runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } } | undefined {
+  if (patch.model === undefined && patch.effort === undefined) return undefined;
+  const identity = resolveWorkerIdentity(run, rawIdentity);
+  const runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } = {};
+  let nextIdentity: AcceptedWorkerIdentity;
+  let targetStepId = stepId;
+  if (identity.steps === undefined) {
+    nextIdentity = applyStepModelEffort(identity, patch);
+    runPatch.model = nextIdentity.model;
+    runPatch.effort = nextIdentity.effort;
+    runPatch.modelIdentity = undefined;
+  } else {
+    const index = stepId === undefined ? 0 : identity.steps.findIndex(step => step.stepId === stepId);
+    if (index < 0) throw new WorkerIdentityError(`Accepted worker step identity is unavailable for "${stepId}"`);
+    const updatedStep = applyStepModelEffort(identity.steps[index]!, patch);
+    targetStepId = updatedStep.stepId;
+    const steps = identity.steps.map((step, i) => i === index ? updatedStep : step);
+    const updatedRunLevel = index === 0 ? applyStepModelEffort(identity, patch) : identity;
+    nextIdentity = { ...updatedRunLevel, steps };
+    if (index === 0) {
+      runPatch.model = nextIdentity.model;
+      runPatch.effort = nextIdentity.effort;
+    }
+    runPatch.modelIdentity = undefined;
+  }
+  const nextWorkflow = patchBoundWorkflow(run.workflowDef, targetStepId, patch);
+  let nextWorkflowHash: string | undefined;
+  if (nextWorkflow) {
+    runPatch.workflowDef = nextWorkflow;
+    if (nextIdentity.workflowHash !== undefined) {
+      nextWorkflowHash = workerWorkflowHash(nextWorkflow);
+      nextIdentity = { ...nextIdentity, workflowHash: nextWorkflowHash };
+    }
+  }
+  const validated = acceptedWorkerIdentitySchema.parse(nextIdentity);
+  if (JSON.stringify(validated) === JSON.stringify(identity) && runPatch.workflowDef === undefined) return undefined;
+  const pending = workerPendingOverrideSchema.parse({
+    ...(identity.steps === undefined || targetStepId === undefined ? {} : { stepId: targetStepId }),
+    ...(patch.model === undefined ? {} : { model: patch.model === '' ? null : patch.model }),
+    ...(patch.effort === undefined ? {} : { effort: patch.effort === '' ? null : patch.effort }),
+    ...(nextWorkflowHash === undefined ? {} : { workflowHash: nextWorkflowHash }),
+  });
+  return { identity: validated, pending, runPatch };
 }
 
 export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.ProcessEnv = process.env): WorkerAccountBinding | undefined {
@@ -160,12 +271,63 @@ export function workerWorkflowHash(workflow: WorkflowDef): string {
  * `stepId`, the step's own pinned entry is checked too (#452): its account must still be
  * available and its model/effort must clear the lock, exactly as the run-level fields must.
  */
+function stripPendingIdentity(identity: AcceptedWorkerIdentity): AcceptedWorkerIdentity {
+  if (identity.pending === undefined) return identity;
+  const { pending: _pending, ...base } = identity;
+  return base;
+}
+
+function matchesRunIdentity(run: RunRecord, identity: AcceptedWorkerIdentity): boolean {
+  if (run.runner !== identity.account.provider || run.agentProfile !== identity.account.profileId ||
+      run.model !== identity.model || run.effort !== identity.effort) {
+    return false;
+  }
+  if (identity.workflowHash !== undefined) {
+    if (!run.workflowDef || workerWorkflowHash(run.workflowDef) !== identity.workflowHash) return false;
+  }
+  return true;
+}
+
+function applyPendingOverride(base: AcceptedWorkerIdentity, pending: WorkerPendingOverride): AcceptedWorkerIdentity {
+  const patch: WorkerModelEffortPatch = {
+    ...(pending.model === undefined ? {} : { model: pending.model ?? '' }),
+    ...(pending.effort === undefined ? {} : { effort: pending.effort ?? '' }),
+  };
+  let next: AcceptedWorkerIdentity;
+  if (base.steps === undefined) {
+    next = applyStepModelEffort(base, patch);
+  } else {
+    const index = pending.stepId === undefined ? 0 : base.steps.findIndex(step => step.stepId === pending.stepId);
+    if (index < 0) return base;
+    const updatedStep = applyStepModelEffort(base.steps[index]!, patch);
+    const steps = base.steps.map((step, i) => i === index ? updatedStep : step);
+    const runLevel = index === 0 ? applyStepModelEffort(base, patch) : base;
+    next = { ...runLevel, steps };
+  }
+  return pending.workflowHash === undefined ? next : { ...next, workflowHash: pending.workflowHash };
+}
+
+/**
+ * Reconcile a crash-recovery `pending` same-runner override against the persisted `RunRecord`.
+ * If `runs.db` committed the override (`pending` matches `run`), `pending` is active; otherwise
+ * the pre-override base identity stays active so a crash on either side of the DB commit recovers.
+ */
+export function resolveWorkerIdentity(run: RunRecord, identity: AcceptedWorkerIdentity): AcceptedWorkerIdentity {
+  const base = stripPendingIdentity(identity);
+  if (identity.pending === undefined) return base;
+  if (matchesRunIdentity(run, base)) return base;
+  const candidate = applyPendingOverride(base, identity.pending);
+  if (matchesRunIdentity(run, candidate)) return candidate;
+  return base;
+}
+
 export function workerIdentity(store: RunLookup & { readonly workerExecutions: Pick<WorkerExecutionRecords, 'identityPath'> }, repoRoot: string, runId: string, stepId: string | undefined, home: Home) {
   const run = store.getRun(runId);
   if (run?.delegation?.role !== 'worker') return undefined;
-  const identity = readWorkerIdentity(store.workerExecutions, runId);
-  if (!identity) throw new WorkerIdentityError('Worker execution identity evidence is unavailable');
-  if (identity.kind === 'internal') return undefined;
+  const raw = readWorkerIdentity(store.workerExecutions, runId);
+  if (!raw) throw new WorkerIdentityError('Worker execution identity evidence is unavailable');
+  if (raw.kind === 'internal') return undefined;
+  const identity = resolveWorkerIdentity(run, raw);
   validateWorkerIdentity(repoRoot, run, identity, run.delegation.context, home);
   // Availability is checked for the account about to be USED: the selected step's entry when
   // there is one, and the single run-level account only for a legacy identity that has no
@@ -218,9 +380,10 @@ export function continuationDefSteps(store: RunStore, record: RunRecord | undefi
  * (hearsay-tools/cezarion#2991). Shared by `continueRun` (which identity to hold the override
  * against) and `runContinuation` (which tools, model, effort and account the turn gets).
  */
-export function continuationDefStep(store: RunStore, record: RunRecord | undefined, sessionId: string | undefined): WorkflowStepDef | undefined {
+export function continuationDefStep(store: RunStore, record: RunRecord | undefined, sessionId: string | undefined, untouched = false): WorkflowStepDef | undefined {
   const defSteps = continuationDefSteps(store, record);
   if (defSteps === undefined) return undefined;
+  if (untouched) return defSteps.find((s) => stepKind(s) === 'agent');
   if (sessionId !== undefined && !record?.steps.some((s) => s.sessionId === sessionId)) return undefined;
   return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }
@@ -255,8 +418,9 @@ export function continuedDefStep(defSteps: readonly WorkflowStepDef[], record: R
  * definition refuses execution instead of quietly running quick-task or the edit.
  */
 export function ownedWorkflow(run: RunRecord, identity: WorkerExecutionIdentity | undefined): WorkflowDef | undefined {
-  if (identity?.workflowHash === undefined) return undefined;
-  if (!run.workflowDef || workerWorkflowHash(run.workflowDef) !== identity.workflowHash) {
+  const resolved = identity?.kind === 'accepted' ? resolveWorkerIdentity(run, identity) : identity;
+  if (resolved?.workflowHash === undefined) return undefined;
+  if (!run.workflowDef || workerWorkflowHash(run.workflowDef) !== resolved.workflowHash) {
     throw new WorkerIdentityError('Accepted worker workflow definition is unavailable or changed');
   }
   return run.workflowDef;

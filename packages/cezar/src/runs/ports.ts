@@ -155,6 +155,8 @@ export interface WorkerExecutions {
 export interface WorkerExecutionRecords {
   /** `identity` is checked against the worker identity schema before it is written. */
   writeWorkerIdentity(id: string, identity: unknown): void;
+  /** Atomically update an existing worker identity (same-runner model/effort override). */
+  updateWorkerIdentity(id: string, identity: unknown): void;
   writeWorkerExecution(id: string, proof: WorkerExecution, fresh?: boolean): void;
   /** A deleted child's receipt replaces the private proof only after the deletion checkpoint. */
   workerDeletionEvidence(id: string): boolean;

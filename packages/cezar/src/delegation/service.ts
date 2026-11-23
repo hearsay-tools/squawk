@@ -1,6 +1,7 @@
 import { spawnCapacityRefusal } from './capacity.ts';
 import { commandText } from '../home/command.ts';
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
+import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { projectPaths } from '../project-paths.ts';
 import type { Home } from '../home/home.ts';
 import { assertReplyDirection, sendRequestContext, sendAdmission, sendMessage, sendInput, type ConversationPair } from './conversation-send.ts';
@@ -12,7 +13,14 @@ export { rootDelegation } from './conversations.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
 import { workerContextTask } from './context.ts';
 import { workerExecutionsOf } from './worker-executions.ts';
-import { acceptedWorkerIdentitySchema, workerContextHash, workerWorkflowHash } from './execution-identity.ts';
+import { acceptedWorkerIdentitySchema, boundWorkerAccountEnv, continuationDefStep, workerContextHash, workerIdentity, workerStepIdentity, workerWorkflowHash } from './execution-identity.ts';
+import { latestSessionStep, workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
+import { isUsageLimitHold, usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
+import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
+import { buildChildEnv } from '../core/agent-env.ts';
+import { readAgentModelSettings } from '../agent-config/models.ts';
+import { formatModelIdentity, normalizeModelForBackend } from '../core/model-identity.ts';
+import { modelConflictsWithRunner } from '../core/model-presets.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   discoveryRequestSchema,
@@ -277,6 +285,15 @@ export class DelegationService {
     if (!this.discovery) throw new DelegationPolicyError('unavailable_transport', 'Host discovery is unavailable');
     return request.kind === 'models' ? this.discovery.models.get(registeredRunnerId(request.runner)) : discoveredRunners(await this.discovery.providers());
   }
+  private async assertCatalogModel(runner: string, model: string, backendModel: string | undefined, modelIdentity: string | undefined): Promise<void> {
+    if (!this.discovery) return;
+    const choices = await missingModelChoices(this.discovery, runner, model, backendModel, modelIdentity);
+    if (!choices) return;
+    const alternatives = choices.otherRunners.join(', ') || 'none';
+    const available = choices.availableModels.map(row => `${row.id}${row.effortLevels ? ` (effort: ${row.effortLevels.join(', ') || 'none advertised'})` : ''}`).join('; ');
+    // Full choices remain structured even when the human-readable error reaches its bound.
+    throw new DelegationPolicyError('invalid_input', `Model "${model}" is not in the ${runner} catalog. Available models: ${available.slice(0, 1200)}. Other runners listing "${model}": ${alternatives}. ${commandText(`Use cez discover models --runner=${runner}.`)}`, choices);
+  }
   private async validateModels(request: WorkerSpawnRequest, resolved: Pick<ResolvedSpawnStep, 'step' | 'settings'>[]): Promise<void> {
     if (!this.discovery) return;
     const checked = new Set<string>();
@@ -289,12 +306,7 @@ export class DelegationService {
       const key = JSON.stringify([runner, model]);
       if (checked.has(key)) continue;
       checked.add(key);
-      const choices = await missingModelChoices(this.discovery, runner, model, settings.model, settings.modelIdentity);
-      if (!choices) continue;
-      const alternatives = choices.otherRunners.join(', ') || 'none';
-      const available = choices.availableModels.map(row => `${row.id}${row.effortLevels ? ` (effort: ${row.effortLevels.join(', ') || 'none advertised'})` : ''}`).join('; ');
-      // Full choices remain structured even when the human-readable error reaches its bound.
-      throw new DelegationPolicyError('invalid_input', `Model "${model}" is not in the ${runner} catalog. Available models: ${available.slice(0, 1200)}. Other runners listing "${model}": ${alternatives}. ${commandText(`Use cez discover models --runner=${runner}.`)}`, choices);
+      await this.assertCatalogModel(runner, model, settings.model, settings.modelIdentity);
     }
   }
   private projects = new Map<string, DelegationProject>();
@@ -387,7 +399,8 @@ export class DelegationService {
     const initial = this.conversationPair(caller, request.recipientRunId, true);
     return this.serialized(`conversation:${initial.project.id}:${this.ledgerFor(initial, request).id}`, async () => {
       if (request.resume) await this.assertResumableWorkspace(caller, request);
-      return this.sendLocked(caller, request);
+      const resumeOverrides = request.resume ? await this.resolveResumeOverrides(caller, request) : undefined;
+      return this.sendLocked(caller, request, resumeOverrides);
     });
   }
   /** A cancelled or session-less worker restarts from its worktree and branch (hearsay-tools/squawk#3337),
@@ -398,15 +411,62 @@ export class DelegationService {
     // An exact retry returns its stored receipt, whatever became of the workspace since.
     if (this.currentConversation(project, this.ledgerFor(pair, request)).messages.some(message => message.id === request.id)) return;
     if (recipient.delegation?.role !== 'worker' || recipient.delegation.destroy || !freshWorkerSession(recipient) && recipient.status !== 'cancelled') return;
-    if (['queued', 'running', 'waiting'].includes(recipient.status)) return;
+    if (['queued', 'running', 'waiting'].includes(recipient.status) && !isUsageLimitHold(recipient)) return;
     try {
       await workspaceKindOf(recipient).assertResumable(project.root, recipient);
     } catch (error) {
       throw new DelegationPolicyError('incompatible_state', `Worker worktree or branch is gone (${error instanceof Error ? error.message : String(error)}); --resume cannot restart it. Spawn a new worker with the follow-up instruction`);
     }
   }
+  /** Validate and normalize same-runner `--model` / `--effort` overrides on `worker resume`. */
+  private async resolveResumeOverrides(caller: Caller, request: ConversationSendRequest): Promise<{ model?: string; effort?: string } | undefined> {
+    if (request.model === undefined && request.effort === undefined) return undefined;
+    const pair = this.conversationPair(caller, request.recipientRunId, true);
+    const { project, recipient } = pair;
+    const root = this.ledgerFor(pair, request);
+    if (this.currentConversation(project, root).messages.some(message => message.id === request.id)) return undefined;
+    this.assertSendScope(pair, request);
+    sendAdmission(pair, request);
+    const effortPin = parseDelegationEffort(request.effort);
+    if (agentModelsLocked(project.root, process.env, project.home) && (request.model !== undefined || effortPin !== undefined)) {
+      throw new DelegationPolicyError('invalid_input', AGENT_MODELS_LOCKED_ERROR);
+    }
+    const model = request.model === undefined ? undefined : await this.validateResumeModel(project, recipient, request.model);
+    return { ...(model === undefined ? {} : { model }), ...(request.effort === undefined ? {} : { effort: effortPin ?? '' }) };
+  }
+  private resumeStepTarget(project: DelegationProject, recipient: RunRecord) {
+    const untouched = isUntouchedCancelledRun(recipient);
+    const sessionId = latestSessionStep(recipient.steps)?.sessionId;
+    const stepId = continuationDefStep(project.store, recipient, sessionId, untouched)?.id;
+    try {
+      const identity = workerIdentity(project.store, project.root, recipient.id, stepId, project.home);
+      const stepIdentity = identity ? (stepId === undefined ? identity : workerStepIdentity(identity, stepId)) : undefined;
+      const runner = stepIdentity?.account.provider ?? recipient.runner;
+      if (!runner) throw new DelegationPolicyError('incompatible_state', 'Worker runner identity is unavailable');
+      const baseEnv = buildChildEnv({ backend: runner });
+      const env = stepIdentity ? { ...baseEnv, ...boundWorkerAccountEnv(stepIdentity.account, baseEnv) } : baseEnv;
+      return { runner, profileId: stepIdentity?.account.profileId ?? recipient.agentProfile ?? 'default', env };
+    } catch (error) {
+      if (error instanceof DelegationPolicyError) throw error;
+      throw new DelegationPolicyError('incompatible_state', error instanceof Error ? error.message : 'Worker execution identity is unavailable');
+    }
+  }
+  private async validateResumeModel(project: DelegationProject, recipient: RunRecord, requested: string): Promise<string> {
+    const { runner, profileId, env } = this.resumeStepTarget(project, recipient);
+    const native = await readAgentModelSettings(runner, project.root, env);
+    let normalized;
+    try { normalized = normalizeModelForBackend(runner, requested, { configuredProvider: native.provider }); }
+    catch (error) { throw new DelegationPolicyError('invalid_input', error instanceof Error ? error.message : 'Invalid model'); }
+    if (profileId === 'default') {
+      await this.assertCatalogModel(runner, requested, normalized?.backendModel, normalized ? formatModelIdentity(normalized.identity) : undefined);
+    }
+    if (modelConflictsWithRunner(requested, runner)) {
+      throw new DelegationPolicyError('invalid_input', `Model "${requested}" is incompatible with ${runner}`);
+    }
+    return normalized?.backendModel ?? requested;
+  }
   /** Runs entirely under the ledger lock; mutable records are read at the queue head. */
-  private sendLocked(caller: Caller, request: ConversationSendRequest): ConversationSendResult {
+  private sendLocked(caller: Caller, request: ConversationSendRequest, resumeOverrides?: { model?: string; effort?: string }): ConversationSendResult {
     const pair = this.conversationPair(caller, request.recipientRunId, true);
     const { project, sender, recipient } = pair;
     const root = this.ledgerFor(pair, request);
@@ -436,7 +496,7 @@ export class DelegationService {
     const outcomes = replyOutcomes(state, request, settled, now);
     const input = sendInput(pair, root, message, requestHash, now);
     const next = { messages: [...state.messages, message], outcomes };
-    this.commitSend(pair, root, next, input, resume, enqueue);
+    this.commitSend(pair, root, next, input, resume, enqueue, resumeOverrides);
     try {
       projectConversationEvents(project.store, project.store.getRun(root.id)!);
       project.manager.reconcileWorkerWaits();
@@ -465,7 +525,7 @@ export class DelegationService {
     }
     return { ...this.conversationReceipt(project, root.id, existing), effect: conversationSendEffectSchema.enum.unchanged };
   }
-  private commitSend(pair: ConversationPair, root: RunRecord, next: ConversationState, input: AgentInput, resume: boolean, enqueue: boolean): void {
+  private commitSend(pair: ConversationPair, root: RunRecord, next: ConversationState, input: AgentInput, resume: boolean, enqueue: boolean, resumeOverrides?: { model?: string; effort?: string }): void {
     const { project, recipient, relationship } = pair;
     const peer = relationship === 'peer';
     if (resume) {
@@ -474,6 +534,8 @@ export class DelegationService {
       const fresh = freshWorkerSession(recipient) ? `${FRESH_SESSION_NOTICE}\n` : '';
       const result = project.manager.continueRun(recipient.id, {
         text: `Your parent resumed this worker with a new instruction.\n${fresh}Agent conversation ${JSON.stringify({ id: input.id, ...input.conversation })}\n${input.text}`,
+        ...(resumeOverrides?.model === undefined ? {} : { model: resumeOverrides.model }),
+        ...(resumeOverrides?.effort === undefined ? {} : { effort: resumeOverrides.effort }),
       }, true, { rootId: root.id, state: next, input });
       if (!result.ok) throw new DelegationPolicyError('incompatible_state', `Worker was not resumed: ${result.error}. No message was accepted; ${result.next ?? 'resolve this condition and retry the same command'}`);
     } else commitAccepted(project.store, root.id, next, enqueue ? input : undefined, peer && !recipient.delegation);
@@ -704,6 +766,7 @@ export class DelegationService {
       workers.push({ workerId: inspection.workerId, parentRunId: inspection.parentRunId,
         ...(inspection.supervisorRunId === undefined ? {} : { supervisorRunId: inspection.supervisorRunId }),
         status: inspection.status, workspace: inspection.workspace,
+        ...(inspection.hold ? { hold: inspection.hold } : {}),
         ...(inspection.destroy ? { destroy: inspection.destroy } : {}), revision: workerRevision(worker),
         settled: inspection.settled,
         destroyed: worker.delegation.destroy?.phase === 'complete' });
@@ -718,11 +781,17 @@ export class DelegationService {
     const wait = this.inspectedWait(parent, worker.id);
     const completion = completionWaitEntry(parent.waits, worker.id);
     const completionWait = completion ? workerCompletionWaitProjection(completion, parent) : undefined;
+    const hold = usageLimitHoldOf(worker);
+    const activeStep = workerContinuationStep(worker, isUntouchedCancelledRun(worker));
+    const backend = activeStep?.runner ?? worker.runner;
+    const model = activeStep ? activeStep.model : worker.model;
+    const effort = activeStep ? activeStep.effort : worker.effort;
     return { workerId: worker.id, parentRunId: worker.delegation.parentRunId,
       ...(worker.delegation.supervisorRunId === undefined ? {} : { supervisorRunId: worker.delegation.supervisorRunId }),
       status: worker.status, workspace: worker.delegation.workspace,
       settled: workerObservation(worker, project.store.workerExecutions.readWorkerExecution(worker.id)).settled,
-      ...(worker.runner === undefined ? {} : { backend: worker.runner }), ...(worker.model === undefined ? {} : { model: worker.model }),
+      ...(backend === undefined ? {} : { backend }), ...(model === undefined ? {} : { model }),
+      ...(effort === undefined ? {} : { effort }), ...(hold ? { hold } : {}),
       ...(worker.delegation.context === undefined ? {} : { inputs: worker.delegation.context.inputs }),
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
       ...(wait ? { wait } : {}), ...(completionWait ? { completionWait } : {}), ...(worker.delegation.destroy ? { destroy: workerDestroyView(worker) } : {}), ...(outcome ? { outcome } : {}),

@@ -1,4 +1,6 @@
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -14,7 +16,7 @@ import { fixture } from './service-engine.testkit.ts';
 import { FRESH_SESSION_NOTICE } from './service.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 
-sealTestRunners();
+sealTestRunners(claudeRunner, codexRunner);
 
 // Continue admission (every resume) and cancelling an open wait need the run engine.
 describe('durable conversations', () => {
@@ -200,5 +202,58 @@ describe('durable conversations', () => {
     await expect(f.service.send(f.caller, { ...request, resume: true })).rejects.toMatchObject({ code: 'invalid_input' });
     await f.service.send(f.caller, { ...request, id: randomUUID(), resume: true });
     expect(await f.service.send(f.caller, request)).toEqual({ ...rejected, effect: 'unchanged' });
+  });
+  it('inspects a usage-limit held worker, rejects plain messages, and resumes it with same-runner model and effort overrides', async () => {
+    const w = await completedWorker();
+    const resumeAt = new Date(Date.now() + 3_600_000).toISOString();
+    setRunStatus(f.store, w.id, RUN_STATUS.waiting, { autoResumeAt: resumeAt, autoResumeReason: 'usage-limit', autoResumeAttempts: 1, error: 'Claude AI usage limit reached|1893456000' });
+    const inspected = await f.service.inspect(f.caller, { workerId: w.id });
+    expect(inspected.hold).toEqual({ reason: 'usage-limit', resumeAt, attempts: 1, error: 'Claude AI usage limit reached|1893456000' });
+    expect((await f.service.list(f.caller)).workers.find(entry => entry.workerId === w.id)?.hold).toEqual(inspected.hold);
+
+    // Ordinary send without --resume tells the supervisor the worker is on a usage-limit hold and how to resume it.
+    const plain = await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'Continue on sonnet', timeoutSeconds: 600 });
+    expect(plain).toMatchObject({ delivery: 'not-delivered', effect: 'refused', message: { state: 'continuation-required', instruction: expect.stringContaining('usage-limit hold') } });
+    expect(plain.message.instruction).toContain('[--model <model>] [--effort <level>]');
+
+    // Foreign model preset is refused without accepting the message or clearing the hold.
+    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'Switch', timeoutSeconds: 600, resume: true, model: 'gpt-5.1-codex' }))
+      .rejects.toMatchObject({ code: 'invalid_input' });
+    expect(f.store.getRun(w.id)?.autoResumeAt).toBe(resumeAt);
+
+    // Same-runner model + effort resume clears the hold and updates the worker's model and effort.
+    const resumeId = randomUUID();
+    const resumed = await f.service.send(f.caller, { id: resumeId, recipientRunId: w.id, kind: 'request', text: 'Continue on sonnet', timeoutSeconds: 7200, resume: true, model: 'sonnet', effort: 'medium' });
+    expect(resumed).toMatchObject({ effect: 'applied', message: { id: resumeId, resumed: true, state: 'accepted' } });
+    expect(f.store.getRun(w.id)).toMatchObject({ model: 'sonnet', effort: 'medium', autoResumeAt: undefined, autoResumeReason: undefined });
+    expect((await f.service.inspect(f.caller, { workerId: w.id })).hold).toBeUndefined();
+    // Exact retry returns the stored receipt; same id with a different model conflicts.
+    expect(await f.service.send(f.caller, { id: resumeId, recipientRunId: w.id, kind: 'request', text: 'Continue on sonnet', timeoutSeconds: 7200, resume: true, model: 'sonnet', effort: 'medium' }))
+      .toMatchObject({ effect: 'unchanged', message: { id: resumeId } });
+    await expect(f.service.send(f.caller, { id: resumeId, recipientRunId: w.id, kind: 'request', text: 'Continue on sonnet', timeoutSeconds: 7200, resume: true, model: 'haiku', effort: 'medium' }))
+      .rejects.toMatchObject({ code: 'invalid_input', message: 'Message ID payload conflict' });
+  });
+  it('refuses model/effort overrides on an active worker and validates against the host catalog when present', async () => {
+    const w = await completedWorker();
+    setRunStatus(f.store, w.id, RUN_STATUS.running);
+    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'Switch', timeoutSeconds: 600, resume: true, model: 'sonnet' }))
+      .rejects.toMatchObject({ code: 'incompatible_state', message: expect.stringContaining('Model and effort overrides require resuming') });
+
+    setRunStatus(f.store, w.id, RUN_STATUS.done);
+    f.service.setDiscovery({
+      providers: async () => ({ providers: [] }),
+      models: {
+        get: async runner => runner === 'claude'
+          ? { runner: 'claude', source: 'live', stale: false, models: [{ id: 'sonnet', label: 'Sonnet', description: '', effortLevels: ['low', 'medium'] }] }
+          : { runner, source: 'unavailable', stale: false, models: [] },
+      },
+    });
+    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'Switch', timeoutSeconds: 600, resume: true, model: 'nonexistent-model' }))
+      .rejects.toMatchObject({ code: 'invalid_input', modelChoices: expect.objectContaining({ runner: 'claude' }) });
+    // Clearing effort with `auto` works with a valid catalog model.
+    const ok = await f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'request', text: 'Use sonnet', timeoutSeconds: 600, resume: true, model: 'sonnet', effort: 'auto' });
+    expect(ok).toMatchObject({ effect: 'applied' });
+    expect(f.store.getRun(w.id)?.model).toBe('sonnet');
+    expect(f.store.getRun(w.id)?.effort).toBeUndefined();
   });
 });

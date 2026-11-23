@@ -12,6 +12,7 @@ import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
 
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
+import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { savedRunnerId } from '../core/runner-registry.ts';
 import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
@@ -54,8 +55,8 @@ export function modelLockRefusal(repoRoot: string, opts: ContinueRunOptions, hom
 
 export function parentMessageRefusal(run: RunRecord, defer: boolean, conversation: ContinuationConversation): ContinuationRefusal | undefined {
   if (conversation && (!defer || run.delegation?.role !== 'worker' || run.delegation.parentRunId !== conversation.rootId ||
-    !['done', 'review', 'failed', 'cancelled'].includes(run.status))) {
-    return { ok: false, error: 'Only a settled owned worker can be resumed by its parent message' };
+    (!['done', 'review', 'failed', 'cancelled'].includes(run.status) && !isUsageLimitHold(run)))) {
+    return { ok: false, error: 'Only a settled or held owned worker can be resumed by its parent message' };
   }
 }
 
@@ -76,11 +77,17 @@ export function stoppingRefusal(run: RunRecord): ContinuationRefusal | undefined
 }
 
 export function identityRefusal(identity: WorkerStepIdentity | undefined, opts: ContinueRunOptions): ContinuationRefusal | undefined {
-  if (identity && ((opts.runner !== undefined && opts.runner !== identity.account.provider) ||
-    (opts.model !== undefined && opts.model !== identity.model) ||
-    (opts.effort !== undefined && opts.effort !== identity.effort))) {
+  if (identity && opts.runner !== undefined && opts.runner !== identity.account.provider) {
     return { ok: false, error: 'Accepted worker execution identity cannot change' };
   }
+}
+
+export function normalizeWorkerOverrideEffort(effort: string | undefined): { ok: true; value: string | undefined } | ContinuationRefusal {
+  if (effort === undefined) return { ok: true, value: undefined };
+  const trimmed = effort.trim().toLowerCase();
+  if (!trimmed || trimmed === 'auto') return { ok: true, value: '' };
+  const parsed = parseEffort(trimmed);
+  return parsed ? { ok: true, value: parsed } : { ok: false, error: 'Invalid effort' };
 }
 
 export function workerRefusal(run: RunRecord): ContinuationRefusal | undefined {
@@ -195,6 +202,8 @@ export interface AdmissionReads {
   historyDeletionPending(): boolean;
   parentStatus(parentId: string): RunRecord['status'] | undefined;
   identity(run: RunRecord, session: string | undefined): WorkerStepIdentity | undefined;
+  /** The workflow step id whose worker identity `identity()` returned. */
+  identityStepId(run: RunRecord, session: string | undefined): string | undefined;
   /** The workflow step the run's latest session continues, when the run names one. */
   continuedStep(run: RunRecord, session: string | undefined): string | undefined;
   beforeFinalStep(run: RunRecord): boolean;
@@ -224,7 +233,7 @@ export class ContinuationChecks {
     if (ownership) return ownership;
     const identity = this.checkIdentity(run);
     if (!identity.ok) return identity;
-    const { continuedStep } = identity;
+    const { continuedStep, identityStepId } = identity;
     const workflow = this.workflowRefusal(run);
     if (workflow) return workflow;
     // Treat a fallback as gone, but close it only after the continuation commits.
@@ -236,7 +245,7 @@ export class ContinuationChecks {
     if (status) return status;
     const session = this.checkSession(run, identity.value);
     if (!session.ok) return session;
-    return { ok: true as const, run, supersedes, identity: identity.value, continuedStep, ...session.value };
+    return { ok: true as const, run, supersedes, identity: identity.value, identityStepId, continuedStep, ...session.value };
   }
 
   private availabilityRefusal(): ContinuationRefusal | undefined {
@@ -287,7 +296,12 @@ export class ContinuationChecks {
     try {
       const session = latestSessionStep(run.steps)?.sessionId;
       const value = this.reads.identity(run, session);
-      return identityRefusal(value, this.opts) ?? { ok: true as const, value, continuedStep: this.reads.continuedStep(run, session) };
+      return identityRefusal(value, this.opts) ?? {
+        ok: true as const,
+        value,
+        identityStepId: this.reads.identityStepId(run, session),
+        continuedStep: this.reads.continuedStep(run, session),
+      };
     } catch (error) {
       if (error instanceof WorkerIdentityError) return { ok: false as const, error: error.message };
       throw error;

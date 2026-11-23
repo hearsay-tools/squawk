@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { askRequestSchema } from './ask-schema.ts';
+import { effortFieldSchema } from './effort.ts';
 
 /** Who may talk: a root and its owned worker (`family`), or two root tasks of one project (`peer`,
  *  spec 2026-10-27-task-communication-protocol § 2). Squawk writes it on peer messages only; an
@@ -68,9 +69,12 @@ export const conversationSendRequestSchema = z.object({
   id: z.uuid(), recipientRunId: z.uuid(), kind: conversationAttributionSchema.shape.kind,
   requestId: z.uuid().optional(), text: z.string().min(1).max(100_000).refine(text => text.trim().length > 0), timeoutSeconds: z.number().int().min(1).max(MAX_RESUME_REQUEST_SECONDS).default(DEFAULT_CONVERSATION_REQUEST_SECONDS),
   resume: z.boolean().optional(),
+  model: z.string().trim().min(1).max(512).optional(),
+  effort: effortFieldSchema,
 }).strict().refine(value => value.timeoutSeconds <= MAX_CONVERSATION_REQUEST_SECONDS || (value.resume === true && value.kind === 'request'), { path: ['timeoutSeconds'], message: 'Only --resume requests accept deadlines above 7200 seconds (maximum 86400)' })
   .refine(value => (value.kind === 'reply' || value.kind === 'follow-up') === (value.requestId !== undefined), { message: 'Replies and follow-ups require a request ID; new messages must omit it' })
-  .refine(value => !value.resume || value.kind === 'request' || value.kind === 'progress', { message: '--resume requires a new request or progress instruction' });
+  .refine(value => !value.resume || value.kind === 'request' || value.kind === 'progress', { message: '--resume requires a new request or progress instruction' })
+  .refine(value => value.resume === true || (value.model === undefined && value.effort === undefined), { message: '--model and --effort require --resume' });
 export type ConversationSendRequest = z.infer<typeof conversationSendRequestSchema>;
 /** Effect of this call, independent of the stored delivery receipt and request outcome.
  * Missing on older servers; callers must treat absence as unknown. */

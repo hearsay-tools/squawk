@@ -268,10 +268,7 @@ import { openInTerminal } from './open-in-terminal.ts';
 import { freshCliHandoff, openRunApp, openRunCli, openRunDefaultApp } from './open-in-targets.ts';
 import { agentCliRunner, detectOpenTargets, openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
-import {
-  providerForExistingRun,
-  providersRequiredByWorkflow,
-} from './provider-action-gate.ts';
+import { continueRunProviders } from './provider-action-gate.ts';
 import {
   attachProjectWebhooks,
   createBootContext,
@@ -3179,14 +3176,10 @@ export function createApp(deps: ServerDeps) {
         return c.json({ error: removedRunnerMessage(run.removedRunner) }, 409);
       }
       const untouched = isUntouchedCancelledRun(run);
-      const originalProvider = untouched
-        ? run.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : resolveRunnerId(run.runner)
-        : providerForExistingRun(run);
-      const provider = parsed.data.runner === undefined ? originalProvider : registeredRunnerId(parsed.data.runner);
-      const required = untouched
-        ? providersRequiredByWorkflow(run.workflowDef!, provider)
-        : [provider];
-      const blocked = await providerActionError(required, { repoRoot, run, runners: { original: originalProvider, target: provider } });
+      const { original: originalProvider, target: provider, required } = await continueRunProviders(
+        run, parsed.data.runner, untouched, async () => (await loadConfig(repoRoot, deps.home)).defaultRunner,
+      );
+      const blocked = await providerActionError(required, { repoRoot, run, untouched, runners: { original: originalProvider, target: provider } });
       if (blocked) return c.json({ error: blocked }, 409);
       const result = manager.continueRun(id, {
         text: parsed.data.text,
