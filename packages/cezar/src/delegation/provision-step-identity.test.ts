@@ -413,7 +413,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     // 1. Crash after staging pending identity, BEFORE runs.db commits.
     const before = readWorkerIdentity(f.store.workerExecutions, a.child.workerId) as AcceptedWorkerIdentity;
     const stagedPatch = patchWorkerIdentity(f.store.getRun(a.child.workerId)!, before, undefined, { model: 'sonnet', effort: 'low' })!;
-    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...before, pending: stagedPatch.identity });
+    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...before, pending: stagedPatch.pending });
     expect(f.manager.continueRun(a.child.workerId, { text: 'recover before commit', model: 'sonnet', effort: 'medium' })).toEqual({ ok: true });
     await until(() => sessions.length === 3);
     expect(sessions[2]!.spec).toMatchObject({ model: 'sonnet', effort: 'medium' });
@@ -424,7 +424,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
     const current = readWorkerIdentity(f.store.workerExecutions, a.child.workerId) as AcceptedWorkerIdentity;
     const afterPatch = patchWorkerIdentity(f.store.getRun(a.child.workerId)!, current, undefined, { model: 'opus', effort: 'low' })!;
-    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...current, pending: afterPatch.identity });
+    f.store.workerExecutions.updateWorkerIdentity(a.child.workerId, { ...current, pending: afterPatch.pending });
     f.store.updateRun(a.child.workerId, afterPatch.runPatch);
     f.store.persistence.flush();
     expect(f.manager.continueRun(a.child.workerId, { text: 'recover after commit' })).toEqual({ ok: true });

@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   acceptedWorkerIdentitySchema, boundWorkerAccountEnv, captureWorkerAccount, ownedWorkflow, patchWorkerIdentity,
-  resolveWorkerIdentity, workerAccountBindingSchema,
+  readWorkerIdentity, resolveWorkerIdentity, updateWorkerIdentity, workerAccountBindingSchema,
   workerExecutionIdentitySchema, workerStepIdentity, workerWorkflowHash, WorkerIdentityError,
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
@@ -113,7 +113,7 @@ describe('per-step worker identity (#452)', () => {
     });
     const beforeRun = { id: 'r-crash', runner: 'codex', agentProfile: 'work', model: 'gpt-5.1-codex', workflowDef } as unknown as RunRecord;
     const patched = patchWorkerIdentity(beforeRun, previous, 'review', { model: 'sonnet', effort: 'low' })!;
-    const staged = acceptedWorkerIdentitySchema.parse({ ...previous, pending: patched.identity });
+    const staged = acceptedWorkerIdentitySchema.parse({ ...previous, pending: patched.pending });
     const afterRun = { ...beforeRun, ...patched.runPatch } as unknown as RunRecord;
 
     // Crash BEFORE runs.db commit: base identity still matches and stays active.
@@ -128,6 +128,22 @@ describe('per-step worker identity (#452)', () => {
     const nextPatch = patchWorkerIdentity(afterRun, staged, 'review', { model: 'haiku' })!;
     expect(nextPatch.identity).not.toHaveProperty('pending');
     expect(nextPatch.identity.steps![1]?.model).toBe('haiku');
+
+    // Compact pending stays tiny even on a large 16.5 KiB identity and round-trips through disk.
+    const bigTools = Array.from({ length: 81 }, (_, i) => `mcp__very_long_server_namespace_${i}__tool_action_name_${'x'.repeat(140)}`);
+    const large = acceptedWorkerIdentitySchema.parse({ ...previous, grants: { allowedTools: bigTools }, steps: [
+      { stepId: 'implement', account: codex, grants: { allowedTools: bigTools }, model: 'gpt-5.1-codex' },
+      { stepId: 'review', account: claude, grants: { allowedTools: ['Read'] }, model: 'opus', effort: 'high' },
+    ] });
+    const largePatch = patchWorkerIdentity(beforeRun, large, 'review', { model: 'sonnet', effort: 'low' })!;
+    const largeStaged = acceptedWorkerIdentitySchema.parse({ ...large, pending: largePatch.pending });
+    expect(Buffer.byteLength(JSON.stringify(largeStaged), 'utf8') - Buffer.byteLength(JSON.stringify(large), 'utf8')).toBeLessThan(256);
+    const dir = mkdtempSync(join(tmpdir(), 'cez-large-identity-'));
+    try {
+      const execs = { identityPath: (id: string) => join(dir, `${id}.identity.json`) };
+      updateWorkerIdentity(execs, 'large-worker', largeStaged);
+      expect(readWorkerIdentity(execs, 'large-worker')).toEqual(largeStaged);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
 
     // Tampered runs.db matching neither base nor pending is still rejected.
     const tampered = { ...beforeRun, model: 'unauthorized-model' } as unknown as RunRecord;

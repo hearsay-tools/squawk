@@ -66,12 +66,22 @@ const acceptedWorkerIdentityCoreSchema = workerStepIdentityFieldsSchema.extend({
   steps: z.array(workerStepIdentityFieldsSchema.extend({ stepId: z.string().min(1) }).strict()).min(1).optional(),
 }).strict();
 
+const workerPendingOverrideSchema = z.object({
+  stepId: z.string().min(1).optional(),
+  /** `string` sets the model; `null` clears it; omitted keeps the base value. */
+  model: z.string().min(1).max(512).nullable().optional(),
+  /** `string` sets the effort; `null` clears it; omitted keeps the base value. */
+  effort: z.string().min(1).max(128).nullable().optional(),
+  workflowHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+}).strict();
+export type WorkerPendingOverride = z.infer<typeof workerPendingOverrideSchema>;
+
 export const acceptedWorkerIdentitySchema = acceptedWorkerIdentityCoreSchema.extend({
-  /** Crash-recovery staging for an in-flight same-runner model/effort override before runs.db commits. */
-  pending: acceptedWorkerIdentityCoreSchema.optional(),
+  /** Compact crash-recovery staging for an in-flight same-runner model/effort override before runs.db commits. */
+  pending: workerPendingOverrideSchema.optional(),
 }).strict();
 export type AcceptedWorkerIdentity = z.infer<typeof acceptedWorkerIdentitySchema>;
-const WORKER_IDENTITY_MAX_BYTES = 32768;
+const WORKER_IDENTITY_MAX_BYTES = 65536;
 
 /** The identity one agent step runs under. Explicit entries are authority; a legacy identity answers with its run-level view. */
 export function workerStepIdentity(identity: AcceptedWorkerIdentity, stepId: string): WorkerStepIdentity {
@@ -113,7 +123,11 @@ export function writeWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'id
 
 /** Atomically replace an existing worker identity after a same-runner model/effort override. */
 export function updateWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'identityPath'>, id: string, identity: WorkerExecutionIdentity): void {
-  writePrivateRecord(executions.identityPath(id, true), workerExecutionIdentitySchema.parse(identity));
+  const parsed = workerExecutionIdentitySchema.parse(identity);
+  if (Buffer.byteLength(JSON.stringify(parsed), 'utf8') > WORKER_IDENTITY_MAX_BYTES) {
+    throw new WorkerIdentityError('Worker execution identity exceeds maximum size');
+  }
+  writePrivateRecord(executions.identityPath(id, true), parsed);
 }
 
 export interface WorkerModelEffortPatch {
@@ -156,7 +170,7 @@ export function patchWorkerIdentity(
   rawIdentity: AcceptedWorkerIdentity,
   stepId: string | undefined,
   patch: WorkerModelEffortPatch,
-): { identity: AcceptedWorkerIdentity; runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } } | undefined {
+): { identity: AcceptedWorkerIdentity; pending: WorkerPendingOverride; runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } } | undefined {
   if (patch.model === undefined && patch.effort === undefined) return undefined;
   const identity = resolveWorkerIdentity(run, rawIdentity);
   const runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } = {};
@@ -182,15 +196,23 @@ export function patchWorkerIdentity(
     runPatch.modelIdentity = undefined;
   }
   const nextWorkflow = patchBoundWorkflow(run.workflowDef, targetStepId, patch);
+  let nextWorkflowHash: string | undefined;
   if (nextWorkflow) {
     runPatch.workflowDef = nextWorkflow;
     if (nextIdentity.workflowHash !== undefined) {
-      nextIdentity = { ...nextIdentity, workflowHash: workerWorkflowHash(nextWorkflow) };
+      nextWorkflowHash = workerWorkflowHash(nextWorkflow);
+      nextIdentity = { ...nextIdentity, workflowHash: nextWorkflowHash };
     }
   }
   const validated = acceptedWorkerIdentitySchema.parse(nextIdentity);
   if (JSON.stringify(validated) === JSON.stringify(identity) && runPatch.workflowDef === undefined) return undefined;
-  return { identity: validated, runPatch };
+  const pending = workerPendingOverrideSchema.parse({
+    ...(identity.steps === undefined || targetStepId === undefined ? {} : { stepId: targetStepId }),
+    ...(patch.model === undefined ? {} : { model: patch.model === '' ? null : patch.model }),
+    ...(patch.effort === undefined ? {} : { effort: patch.effort === '' ? null : patch.effort }),
+    ...(nextWorkflowHash === undefined ? {} : { workflowHash: nextWorkflowHash }),
+  });
+  return { identity: validated, pending, runPatch };
 }
 
 export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.ProcessEnv = process.env): WorkerAccountBinding | undefined {
@@ -266,6 +288,25 @@ function matchesRunIdentity(run: RunRecord, identity: AcceptedWorkerIdentity): b
   return true;
 }
 
+function applyPendingOverride(base: AcceptedWorkerIdentity, pending: WorkerPendingOverride): AcceptedWorkerIdentity {
+  const patch: WorkerModelEffortPatch = {
+    ...(pending.model === undefined ? {} : { model: pending.model ?? '' }),
+    ...(pending.effort === undefined ? {} : { effort: pending.effort ?? '' }),
+  };
+  let next: AcceptedWorkerIdentity;
+  if (base.steps === undefined) {
+    next = applyStepModelEffort(base, patch);
+  } else {
+    const index = pending.stepId === undefined ? 0 : base.steps.findIndex(step => step.stepId === pending.stepId);
+    if (index < 0) return base;
+    const updatedStep = applyStepModelEffort(base.steps[index]!, patch);
+    const steps = base.steps.map((step, i) => i === index ? updatedStep : step);
+    const runLevel = index === 0 ? applyStepModelEffort(base, patch) : base;
+    next = { ...runLevel, steps };
+  }
+  return pending.workflowHash === undefined ? next : { ...next, workflowHash: pending.workflowHash };
+}
+
 /**
  * Reconcile a crash-recovery `pending` same-runner override against the persisted `RunRecord`.
  * If `runs.db` committed the override (`pending` matches `run`), `pending` is active; otherwise
@@ -275,7 +316,8 @@ export function resolveWorkerIdentity(run: RunRecord, identity: AcceptedWorkerId
   const base = stripPendingIdentity(identity);
   if (identity.pending === undefined) return base;
   if (matchesRunIdentity(run, base)) return base;
-  if (matchesRunIdentity(run, identity.pending)) return identity.pending;
+  const candidate = applyPendingOverride(base, identity.pending);
+  if (matchesRunIdentity(run, candidate)) return candidate;
   return base;
 }
 

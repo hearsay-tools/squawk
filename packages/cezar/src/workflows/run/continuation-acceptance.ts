@@ -1,7 +1,7 @@
 import { withCutOff } from './cut-off-work.ts';
 import { atContinue, atTaskHead } from './launch-read-resolver.ts';
 
-import { patchWorkerIdentity, readWorkerIdentity, resolveWorkerIdentity, type AcceptedWorkerIdentity, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
+import { patchWorkerIdentity, readWorkerIdentity, resolveWorkerIdentity, type AcceptedWorkerIdentity, type WorkerPendingOverride, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunRecord, StepState } from '../../runs/store.ts';
@@ -28,6 +28,7 @@ import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 interface WorkerIdentityOverride {
   previous: AcceptedWorkerIdentity;
   next: AcceptedWorkerIdentity;
+  pending: WorkerPendingOverride;
   runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef };
 }
 
@@ -128,7 +129,7 @@ export class ContinuationAcceptance {
     const previous = resolveWorkerIdentity(admitted.run, raw);
     const model = opts.model === undefined ? undefined : opts.model.trim();
     const patched = patchWorkerIdentity(admitted.run, previous, admitted.identityStepId, { model, effort: effort.value });
-    return patched ? { previous, next: patched.identity, runPatch: patched.runPatch } : undefined;
+    return patched ? { previous, next: patched.identity, pending: patched.pending, runPatch: patched.runPatch } : undefined;
   }
 
   private acceptUntouchedContinuation(runId: string, opts: ContinueRunOptions, supersedes: boolean, workerOverride?: WorkerIdentityOverride): continuation.ContinuationResult {
@@ -137,7 +138,7 @@ export class ContinuationAcceptance {
     let identityStaged = false;
     try {
       if (workerOverride) {
-        this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.next });
+        this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.pending });
         identityStaged = true;
       }
       // Build the job from a detached projection so a checkpoint refusal leaves the held RunRecord untouched.
@@ -222,7 +223,7 @@ export class ContinuationAcceptance {
       let identityStaged = false;
       try {
         if (workerOverride) {
-          this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.next });
+          this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.pending });
           identityStaged = true;
         }
         this.context.store.commitWorkerContinuation(runId, exit, acceptedPatch, continuationStep, conversation);

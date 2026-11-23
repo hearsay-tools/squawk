@@ -4,7 +4,7 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationMessage } from '@open-mercato/cezar-contract';
-import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { holdNoticeId, parkNoticeId } from '../delegation/park-notice.ts';
@@ -97,6 +97,35 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     await restart(false, undefined, eventCheckpoint());
     expect(store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
     expect(notices(p.id, w.id)).toHaveLength(1);
+  });
+
+  it('reports the held step runner, model and effort in a multi-step worker hold notice', async () => {
+    const { p } = await family();
+    const w = await worker(p.id, 'multi-step');
+    fixtureUpdateRun(w.id, {
+      status: RUN_STATUS.waiting,
+      runner: 'codex',
+      model: 'gpt-5.1-codex',
+      effort: 'low',
+      autoResumeAt: '2030-01-15T12:00:00.000Z',
+      autoResumeReason: 'usage-limit',
+      workflowDef: {
+        name: 'mixed',
+        source: 'file',
+        steps: [
+          { id: 'implement', prompt: 'impl', runner: 'codex', model: 'gpt-5.1-codex', effort: 'low' },
+          { id: 'review', prompt: 'rev', runner: 'claude', model: 'opus', effort: 'high' },
+        ],
+      },
+      workflowCursor: { mode: 'resume', stepId: 'review' },
+    });
+    store.addStep(w.id, { id: 'review', name: 'Review', kind: STEP_KIND.agent });
+    store.updateStep(w.id, 'review', { status: STEP_STATUS.failed, backend: 'claude' });
+    const wait = register(p.id, [w.id]);
+    const [notice] = notices(p.id, w.id);
+    expect(notice).toMatchObject({ id: holdNoticeId(w.id, wait.id) });
+    expect(notice!.text).toContain('Current settings: runner: claude, model: opus, effort: high.');
+    expect(notice!.text).not.toContain('gpt-5.1-codex');
   });
 
   it('sends no notice when the turn that parked already messaged the parent', async () => {

@@ -14,7 +14,7 @@ import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision }
 import { workerContextTask } from './context.ts';
 import { workerExecutionsOf } from './worker-executions.ts';
 import { acceptedWorkerIdentitySchema, boundWorkerAccountEnv, continuationDefStep, workerContextHash, workerIdentity, workerStepIdentity, workerWorkflowHash } from './execution-identity.ts';
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
 import { isUsageLimitHold, usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
@@ -782,12 +782,16 @@ export class DelegationService {
     const completion = completionWaitEntry(parent.waits, worker.id);
     const completionWait = completion ? workerCompletionWaitProjection(completion, parent) : undefined;
     const hold = usageLimitHoldOf(worker);
+    const activeStep = workerContinuationStep(worker, isUntouchedCancelledRun(worker));
+    const backend = activeStep?.runner ?? worker.runner;
+    const model = activeStep ? activeStep.model : worker.model;
+    const effort = activeStep ? activeStep.effort : worker.effort;
     return { workerId: worker.id, parentRunId: worker.delegation.parentRunId,
       ...(worker.delegation.supervisorRunId === undefined ? {} : { supervisorRunId: worker.delegation.supervisorRunId }),
       status: worker.status, workspace: worker.delegation.workspace,
       settled: workerObservation(worker, project.store.workerExecutions.readWorkerExecution(worker.id)).settled,
-      ...(worker.runner === undefined ? {} : { backend: worker.runner }), ...(worker.model === undefined ? {} : { model: worker.model }),
-      ...(worker.effort === undefined ? {} : { effort: worker.effort }), ...(hold ? { hold } : {}),
+      ...(backend === undefined ? {} : { backend }), ...(model === undefined ? {} : { model }),
+      ...(effort === undefined ? {} : { effort }), ...(hold ? { hold } : {}),
       ...(worker.delegation.context === undefined ? {} : { inputs: worker.delegation.context.inputs }),
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
       ...(wait ? { wait } : {}), ...(completionWait ? { completionWait } : {}), ...(worker.delegation.destroy ? { destroy: workerDestroyView(worker) } : {}), ...(outcome ? { outcome } : {}),

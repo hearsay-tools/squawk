@@ -1,5 +1,5 @@
 /** Owns launch source selection. Call each narrow operation at its original phase boundary. */
-import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, sessionRunner, workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../../home/home.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { isImageAttachmentName } from '@open-mercato/cezar-contract/attachments';
@@ -470,10 +470,14 @@ async function agentEnvForStep(
 }
 
 function workerHoldSettings(run: RunRecord) {
+  const step = workerContinuationStep(run);
+  const runner = step?.runner ?? run.runner;
+  const model = step ? step.model : run.model;
+  const effort = step ? step.effort : run.effort;
   return {
-    ...(run.runner === undefined ? {} : { runner: run.runner }),
-    ...(run.model === undefined ? {} : { model: run.model }),
-    ...(run.effort === undefined ? {} : { effort: run.effort }),
+    ...(runner === undefined ? {} : { runner }),
+    ...(model === undefined ? {} : { model }),
+    ...(effort === undefined ? {} : { effort }),
   };
 }
 
