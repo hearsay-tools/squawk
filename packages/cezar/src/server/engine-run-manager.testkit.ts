@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import type { RunManagerFactory } from './project-context.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';

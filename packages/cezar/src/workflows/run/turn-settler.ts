@@ -1,5 +1,5 @@
 import type { WaitEngine } from './wait-engine.ts';
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait } from './wait-kinds.ts';
 import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects, type DoneRequest } from './turn-boundary.ts';
 import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import type { HumanWaitEntry, WaitVia } from '@open-mercato/cezar-contract/waits';
@@ -506,7 +506,7 @@ export class TurnSettler {
     const open = openWaits(run);
     // The live-workers timer is a fallback, not another poll beside a wait that already supplies
     // its wake (hearsay-tools/cezarion#1268). Keep explicit ScheduleWakeup requests and existing timers.
-    if (open.some(wait => via === 'monitoring-line' && !WAIT_KINDS[wait.kind].userAnswers)) return;
+    if (open.some(wait => via === 'monitoring-line' && !waitPolicyForWait(wait).userAnswers)) return;
     if (WAIT_KINDS.timer.duplicateMonitoring(open, via)) return;
     const minutes = this.context.semaphore.monitoringWakeIntervalMinutes();
     if (minutes === null) {

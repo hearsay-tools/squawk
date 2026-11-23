@@ -1,5 +1,5 @@
 import type { WaitEngine } from './wait-engine.ts';
-import { WAIT_KINDS, waitDeliveryLabel } from './wait-kinds.ts';
+import { waitDeliveryLabel, waitPolicyForWait } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { nudgeAwaitsAcknowledgement, nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
@@ -906,7 +906,7 @@ export class InputDelivery {
     const bundle = answeringAskSeq !== undefined && state.boundary.atTurnBoundary === state.liveSession.session
       ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id))) : undefined;
     // Human input answers all human waits. Agent input gets its footer in submitAgentInput.
-    const footer = openWaitsFooter((this.context.store.getRun(runId)?.waits ?? []).filter(wait => !WAIT_KINDS[wait.kind].userAnswers));
+    const footer = openWaitsFooter((this.context.store.getRun(runId)?.waits ?? []).filter(wait => !waitPolicyForWait(wait).userAnswers));
     const deliverable = [...attached, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : []),
       ...(footer ? [{ type: 'text' as const, text: `\n\n${footer}` }] : [])];
     return { blocks, expanded, deliverable, answeringAskSeq, bundle };

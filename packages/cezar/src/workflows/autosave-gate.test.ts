@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { clearAutosaveTimer } from './run/input-timers.ts';
 import { createActiveRun } from './active-run.ts';

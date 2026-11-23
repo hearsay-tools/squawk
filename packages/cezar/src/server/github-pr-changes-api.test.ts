@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { resolveForgeRoot } from './forge/index.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { onTestFinished, expect, it, vi } from 'vitest';

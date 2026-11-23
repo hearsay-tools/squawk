@@ -1,4 +1,7 @@
+import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from '../../built-in-wait-kinds.ts';
 import { registerBuiltInTools, sealBuiltInTools } from '../../built-in-tools.ts';
+registerBuiltInWaitKinds();
+sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
 import { CiToolController } from '../controller.ts';

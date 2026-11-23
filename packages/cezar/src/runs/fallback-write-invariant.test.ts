@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';

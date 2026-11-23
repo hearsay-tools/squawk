@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

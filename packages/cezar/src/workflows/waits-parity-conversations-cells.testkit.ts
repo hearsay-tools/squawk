@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { waitPartDescribers, conversingParent, askPrompt, pendingQuestion, asks, turnEnds, delivered, prompted, answered, humanOpen, listed, settled } from './waits-parity-fixture.testkit.ts';
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';

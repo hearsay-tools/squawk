@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { expect, it } from 'vitest';
 import { createActiveRun } from '../active-run.ts';
 import { createWaitGroup } from './wait-registry.ts';

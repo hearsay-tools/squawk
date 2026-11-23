@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

@@ -1,10 +1,10 @@
 import { agentToolMetadata, enabledAgentTools } from './tool-registry.ts';
 import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
-
-import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, builtInSquawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
+import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { previewStopRequestSchema, previewServeRequestSchema } from '@open-mercato/cezar-contract/preview';
 import { scheduleTaskRequestSchema, scheduledTasksRequestSchema } from '@open-mercato/cezar-contract/scheduled-tasks';
+import { registeredWaitKinds } from '../workflows/run/wait-kind-registry.ts';
 import { z } from 'zod';
 
 /**
@@ -12,36 +12,15 @@ import { z } from 'zod';
  * one flat object: every kind's fields side by side, with `kind` as an enum. Each field's bounds
  * come from its kind's own schema; the discriminated union validates on the server.
  */
-function flatWaitInputSchema() {
+export function flatWaitInputSchema() {
+  const inputs = registeredWaitKinds().flatMap(row => row.inputs ?? []).sort((a, b) => a.order - b.order);
   const properties: Record<string, unknown> = {};
-  // `timeout_seconds` is in the pr, worker, request, peer and process kinds: the pr schema's bounds
-  // (1–7200, default 1800) are the advertised ones, and the others ride in the description.
-  for (const option of [...builtInSquawkWaitRequestSchema.options].reverse()) {
-    Object.assign(properties, z.toJSONSchema(option, { io: 'input' }).properties);
+  for (const input of [...inputs].reverse()) Object.assign(properties, input.properties);
+  for (const input of inputs) for (const [key, description] of Object.entries(input.descriptions ?? {})) {
+    if (key in properties) properties[key] = { ...(properties[key] as object), description };
   }
-  const field = (key: string, description: string) => ({ ...(properties[key] as object), description });
-  return {
-    type: 'object' as const,
-    properties: {
-      kind: { type: 'string', enum: builtInSquawkWaitRequestSchema.options.map(option => option.shape.kind.value), description: '"pr" waits for a GitHub pull request: its checks or its merge (see `until`); "worker" waits for workers you own; "request" waits for replies to requests you sent; "peer" waits for named peer tasks to message you or settle; "timer" wakes you after `seconds`; "process" wakes you when a background command ends.' },
-      operation_id: field('operation_id', 'Optional retry identity. Reuse it with exactly the same arguments after an unknown outcome; never use it for a different registration.'),
-      pr: field('pr', 'kind "pr": the HTTPS GitHub pull request URL.'),
-      until: field('until', 'kind "pr": "checks" (default) watches checks; "merge" waits for merge or closure and ignores queue removal. After requesting a merge, use "merge_or_blocked": wakes on merge, closure, conflict, or neither queue membership nor enabled auto-merge remaining. Pending checks or a queue slot alone do not end it. All targets retain their deadline and query-error exits. Only "merged" confirms success; "blocked" requires inspection and grants no permission to retry or merge.'),
-      wake_on_conflict: field('wake_on_conflict', 'kind "pr": Default true for "checks" and "merge". Set false when your work depends on another PR merging and you want to ignore its conflicts. "merge_or_blocked" always reports conflicts, regardless of this setting. With "checks", a conflicting PR may have no checks, ending as no_checks or deadline.'),
-      head_sha: field('head_sha', 'kind "pr": optional. Right after you push, pass the pushed commit (`git rev-parse HEAD`): the wait watches it while GitHub still shows the previous head, for up to 60 seconds.'),
-      worker_ids: field('worker_ids', 'kind "worker": the workers you own to wait for (1–32 unique ids).'),
-      request_ids: field('request_ids', 'kind "request": the requests you sent, to a worker, your parent or a peer task, to wait for a reply to (1–32 unique ids).'),
-      peer_ids: field('peer_ids', 'kind "peer": the peer root tasks of this project to wait for (1–32 unique task ids; find them with `hsq message tasks`). A message from one of them, or one of them settling, ends the wait; other messages wake you and keep it open.'),
-      mode: field('mode', 'kind "worker" or "request": "any" wakes you when one selected id settles (default), "all" when every one has, "one" takes exactly one id.'),
-      timeout_seconds: field('timeout_seconds', 'The deadline in seconds. kind "pr": 1–7200, default 1800. kind "worker", "request" or "peer": 1–7200, default 600 (the default shown is the pr one). kind "process": 1–7200, default 1800.'),
-      seconds: field('seconds', 'kind "timer": seconds until the wake (60–7200).'),
-      pid: field('pid', 'kind "process": the PID of the background command: the `pid` the job start command printed.'),
-      exit_file: field('exit_file', 'kind "process": optional. The `exitFile` that `hsq job start` printed for this `pid`, in any `--dir`, or a file that your own wrapper writes the exit code to, in $TMPDIR or the worktree, with a new name for each command. Leave it out for a command that is already running or that writes its status file somewhere else.'),
-      note: field('note', 'kind "timer" or "process": what to re-check, handed back to you at the wake.'),
-    },
-    required: ['kind'],
-    additionalProperties: false,
-  };
+  properties.kind = { type: 'string', enum: inputs.map(input => input.kind), description: inputs.map(input => input.description).join('; ') };
+  return { type: 'object' as const, properties, required: ['kind'], additionalProperties: false };
 }
 
 export const waitToolDefinition = {
@@ -62,7 +41,7 @@ export const waitToolDefinition = {
     'The wake then reports `exited` without a code: read the command\'s own log or status file after it. ' +
     'Never start a watcher or helper process to copy a file into $TMPDIR. ' +
     'An unchanged repeat names the retained wait. A changed timeout is refused and keeps that wait active; do not cancel it as a duplicate. On an unknown outcome retry the same operation_id and arguments, without a fallback timer.',
-  inputSchema: flatWaitInputSchema(),
+  get inputSchema() { return flatWaitInputSchema(); },
 };
 /**
  * hearsay-tools/cezarion#1234: the user's answer gets its own tool, so its card is required and

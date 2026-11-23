@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { waitPartDescribers, github, nativeWire, turnEnds, pr, stepStatus, prompted, ASK_CONTEXT, questions, pendingQuestion, humanOpen, sessionOf, settled, gated, parentTurn, blockedDone } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, MAX_AUTO_CONTINUES, NO_WAIT_NOTE } from './run.ts';
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';

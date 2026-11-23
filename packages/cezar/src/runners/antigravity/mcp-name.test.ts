@@ -1,4 +1,5 @@
 import '../../ci-wait/tools.testkit.ts';
+import '../../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

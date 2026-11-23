@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // These tests register Codex alone: the agent-config listing reads only the registered runners.
 import { codexRunner } from '../runners/codex/definition.ts';

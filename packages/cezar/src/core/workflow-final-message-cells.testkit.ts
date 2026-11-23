@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { assertPromptResponseCompletion } from './owned-input-delivery.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { testHome } from '../home/test-home.testkit.ts';

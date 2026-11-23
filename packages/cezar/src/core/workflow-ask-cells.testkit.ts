@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { autoEndObservationClock, observationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';

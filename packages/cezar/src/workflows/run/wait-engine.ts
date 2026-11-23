@@ -1,3 +1,4 @@
+import { waitKindForWait, registeredWaitKinds, type WaitWatchContext } from './wait-kind-registry.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import { ciWaitResultSchema, type CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
 import type { Wait, WaitErrorCode, AskErrorCode, WorkerWaitEntry, PrWaitEntry, ProcessWaitEntry, ProcessWaitResult, PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
@@ -14,7 +15,7 @@ import { agentTmpDirEnabled, resolveAgentTmpDir } from '../../runs/agent-tmpdir.
 import { peerWaitResult } from '../wait-scope.ts';
 import { chargesBudget, openWaits, waitInputId, waitResultText, settledWaitEntry, ciWatchRequest, type WaitResult } from '../waits.ts';
 import { familyOf } from './run-guards.ts';
-import { WAIT_KINDS, type WaitKindRow } from './wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait, type WaitKindRow } from './wait-kinds.ts';
 import { registrationReceipt, type RegistrationIdentity } from './wait-registration.ts';
 import { watchDeadline } from './wait-watches.ts';
 
@@ -27,7 +28,7 @@ const deadlineSignal = new AbortController().signal;
 
 /** What the engine asks the rest of the run manager (ADR 0053): wake admission, the run line,
  *  the family reconcile, human waits and the subagent session. */
-interface WaitEngineHost {
+export interface WaitEngineHost {
   active(id: string): ActiveRun | undefined;
   canProceedWithRun(id: string, run: RunRecord | undefined): run is RunRecord;
   ciSupervisor(): Pick<CiWatcherSupervisor, 'resolve' | 'watch' | 'close'>;
@@ -78,6 +79,7 @@ export class WaitEngine {
   private readonly ciRetries = new Map<string, { runId: string; timer: NodeJS.Timeout }>();
   /** Process waits' watches (hearsay-tools/cezarion#1446), by wait id. */
   private readonly processWatches = new Map<string, { runId: string; abort: AbortController }>();
+  private readonly customWatches = new Map<string, { context: WaitWatchContext; abort: AbortController }>();
   private readonly workerResolveRetries = new Set<string>();
   /** One timer per open timer wait, keyed by wait id. */
   private readonly waitTimers = new Map<string, { runId: string; timer: NodeJS.Timeout }>();
@@ -114,6 +116,10 @@ export class WaitEngine {
     if (!this.commitOpened(runId, wait, options.onCommitFailure, options.receipt)) return { status: 'refused' };
     const settled = 'result' in options;
     if (!settled) this.armOpened(runId, wait);
+    const hooks = waitKindForWait(wait)?.lifecycle;
+    if (hooks?.postOpen && this.context.store.getRun(runId)?.waits?.some(entry => entry.id === wait.id && entry.phase === 'open')) {
+      hooks.postOpen(this.customWatchContext(runId, wait));
+    }
     if (options.park) this.park(runId, state, wait);
     // The answer is the wait as opened, even when the result resolves it at once.
     const opened = this.openedEntry(runId, wait);
@@ -122,7 +128,7 @@ export class WaitEngine {
   }
 
   private armOpened(runId: string, wait: Wait): void {
-    if (WAIT_KINDS[wait.kind].watch !== 'worker') { this.armWait(runId, wait); return; }
+    if (waitPolicyForWait(wait).watch !== 'worker') { this.armWait(runId, wait); return; }
     const run = this.context.store.getRun(runId)!;
     // Outcomes already in resolve it now (or, with every worker destroyed, cancel it); the rest arm it.
     this.host.reconcileWorkerWaits(familyOf(run));
@@ -167,7 +173,7 @@ export class WaitEngine {
   /** A worker wait the family reconcile already resolved is no longer listed, and parks nothing. */
   private park(runId: string, state: ActiveRun | undefined, wait: Wait): void {
     if (!state) return;
-    if (WAIT_KINDS[wait.kind].watch === 'worker' && !this.context.store.getRun(runId)?.waits?.some(entry => entry.id === wait.id)) return;
+    if (waitPolicyForWait(wait).watch === 'worker' && !this.context.store.getRun(runId)?.waits?.some(entry => entry.id === wait.id)) return;
     if (state.boundary.atTurnBoundary === state.liveSession.session || this.host.isParked(runId)) this.host.parkOnWaits(runId, state);
   }
 
@@ -175,7 +181,9 @@ export class WaitEngine {
    *  have moved since. A worker wait with a deadline may already be settled by the reconcile. */
   private openedEntry<W extends Wait>(runId: string, wait: W): W {
     const latest = this.context.store.getRun(runId);
-    if (WAIT_KINDS[wait.kind].watch === 'worker') {
+    const lookup = waitKindForWait(wait)?.lifecycle?.openedEntry;
+    if (lookup) return lookup(wait, [...latest?.waits ?? [], ...latest?.lastWaits ?? []]) as W;
+    if (waitPolicyForWait(wait).watch === 'worker') {
       return (WAIT_KINDS.worker.select([...latest?.waits ?? [], ...latest?.lastWaits ?? []])
         .find(entry => entry.id === wait.id && WAIT_KINDS.worker.hasDeadline(entry)) as W | undefined) ?? wait;
     }
@@ -192,11 +200,29 @@ export class WaitEngine {
    *  (restart) resolves at once. */
   private armWait(runId: string, wait: Wait): void {
     if (this.context.disposed() || wait.phase !== 'open') return;
-    if (wait.kind === 'plugin') {
+    const row = waitKindForWait(wait);
+    if (!row && wait.kind === 'plugin') {
       console.warn(`[hsq] no wait adapter registered for plugin kind ${wait.pluginKind}; retaining wait ${wait.id}`);
       return;
     }
-    this.watches[WAIT_KINDS[wait.kind].watch](runId, wait);
+    if (row?.lifecycle?.arm) {
+      if (this.customWatches.has(wait.id)) return;
+      row.lifecycle.arm(this.customWatchContext(runId, wait));
+      return;
+    }
+    this.watches[waitPolicyForWait(wait).watch](runId, wait);
+  }
+
+  private customWatchContext(runId: string, wait: Wait): WaitWatchContext {
+    const current = this.customWatches.get(wait.id);
+    if (current) return current.context;
+    const abort = new AbortController();
+    const context: WaitWatchContext = { runId, store: this.context.store, host: this.host, wait, signal: abort.signal, resolve: result => {
+      if (abort.signal.aborted || this.context.disposed() || this.customWatches.get(wait.id)?.context !== context) return;
+      this.settleWait(runId, wait.id, result);
+    } };
+    this.customWatches.set(wait.id, { context, abort });
+    return context;
   }
 
   /** A timer, peer or subagent deadline. Native subagents live only in their session: with none,
@@ -256,6 +282,12 @@ export class WaitEngine {
 
   /** Stop everything that could still resolve this wait. */
   private disarmWait(waitId: string): void {
+    const custom = this.customWatches.get(waitId);
+    if (custom) {
+      custom.abort.abort();
+      this.customWatches.delete(waitId);
+      waitKindForWait(custom.context.wait)?.lifecycle?.disarm?.(custom.context);
+    }
     this.ciWatches.get(waitId)?.abort.abort(); this.ciWatches.delete(waitId);
     const timer = this.waitTimers.get(waitId); if (timer) clearTimeout(timer.timer); this.waitTimers.delete(waitId);
     const retry = this.ciRetries.get(waitId); if (retry) clearTimeout(retry.timer); this.ciRetries.delete(waitId);
@@ -320,6 +352,7 @@ export class WaitEngine {
   }
 
   private disarmRun(runId: string): void {
+    for (const [id, watch] of this.customWatches) if (watch.context.runId === runId) this.disarmWait(id);
     for (const [id, watch] of this.ciWatches) if (watch.runId === runId) this.disarmWait(id);
     for (const [id, entry] of this.waitTimers) if (entry.runId === runId) this.disarmWait(id);
     for (const [id, retry] of this.ciRetries) if (retry.runId === runId) this.disarmWait(id);
@@ -333,6 +366,8 @@ export class WaitEngine {
   }
 
   disposeWatches(): void {
+    for (const id of this.customWatches.keys()) this.disarmWait(id);
+    for (const row of registeredWaitKinds()) row.lifecycle?.dispose?.();
     for (const task of this.ciWatches.values()) task.abort.abort();
     this.processSupervisor.close();
     this.ciWatches.clear();
@@ -380,6 +415,7 @@ export class WaitEngine {
     const input: AgentInput = { id: waitInputId(settled), parentRunId: runId, source: 'lifecycle', createdAt: resolvedAt,
       text: waitResultText(settled, { workerStatus: this.workerStatus }) };
     this.context.store.commitWait(runId, settled, input);
+    if (this.customWatches.has(waitId)) this.disarmWait(waitId);
     try { this.host.queueWaitWake(runId); }
     catch { this.host.retryWaitAdmission(runId); }
   }

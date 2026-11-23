@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { randomUUID } from 'node:crypto';
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

@@ -37,6 +37,9 @@ describe('agent tool registry lifecycle', () => {
 
 it('discovers and invokes a custom capability over authenticated IPC and MCP', async () => {
   const registry = await import('./tool-registry.ts');
+  const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('../built-in-wait-kinds.ts');
+  registerBuiltInWaitKinds();
+  sealBuiltInWaitKinds();
   const { registerBuiltInTools } = await import('../built-in-tools.ts');
   registerBuiltInTools();
   expect(registry.agentToolsSealed()).toBe(false);

@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { resolveHome } from '../../home/resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 import { useTestHome } from '../../home/test-home.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';

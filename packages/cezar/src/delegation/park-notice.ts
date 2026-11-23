@@ -1,5 +1,5 @@
 import { commandText } from '../home/command.ts';
-import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait } from '../workflows/run/wait-kinds.ts';
 import { createHash } from 'node:crypto';
 import type { ConversationMessage, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
@@ -68,7 +68,7 @@ export function parkNoticeExcerpt(text: string): string | undefined {
 /** What the parent reads: who parked, what it waits on, what it last said, and what to do next. */
 export function formatParkNoticeText(input: { workerRunId: string; waitId: string; waits: readonly Wait[]; lastText?: string }): string {
   // A worker parked on a question gets no notice; its question reaches the parent instead.
-  const open = input.waits.filter(wait => wait.phase === 'open' && !WAIT_KINDS[wait.kind].userAnswers && !isSquawkHumanWait(wait));
+  const open = input.waits.filter(wait => wait.phase === 'open' && !waitPolicyForWait(wait).userAnswers && !isSquawkHumanWait(wait));
   const excerpt = input.lastText === undefined ? undefined : parkNoticeExcerpt(input.lastText);
   return [
     `Squawk notice: your worker ${input.workerRunId} parked before finishing. Your wait ${input.waitId} stays open; this message closes no wait.`,

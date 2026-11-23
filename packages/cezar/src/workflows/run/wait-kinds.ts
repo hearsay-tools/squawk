@@ -1,3 +1,5 @@
+import { waitKindRow, registeredWaitKinds, registerWaitKind, waitKindForWait } from './wait-kind-registry.ts';
+import { builtInWaitInputs } from './wait-input-descriptors.ts';
 import { commandText } from '../../home/command.ts';
 import type { WaitResult, resolvedWaits } from '../waits.ts';
 import type { CiWaitResult, ProcessWaitResult, PeerWaitResult, SubagentWaitResult } from '@open-mercato/cezar-contract';
@@ -42,7 +44,7 @@ type RegistrationRequest = {
 };
 type RegistrationPath = { pr: 'pr'; timer: 'timer'; process: 'process'; peer: 'peer'; worker: 'worker-list'; human: 'none'; subagent: 'none'; plugin: 'none' };
 
-export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
+export type BuiltInWaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
   is: (wait: Wait) => wait is Extract<Wait, { kind: K }>;
   select: (waits: readonly Wait[]) => Extract<Wait, { kind: K }>[];
   selectOpen: (waits: readonly Wait[]) => Extract<Wait, { kind: K }>[];
@@ -120,7 +122,7 @@ function waitSelectors<K extends Wait['kind']>(kind: K) {
   return { is, select, selectOpen };
 }
 
-export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
+export const BUILT_IN_WAIT_ROWS: { readonly [K in Wait['kind']]: BuiltInWaitKindRow<K> } = {
   pr: {
     ...waitSelectors('pr'),
     capNote: (wait, maxAutoContinues) => `automatic ${WAIT_KINDS.timer.monitoring(wait) ? 'monitoring' : 'timer'} wake-up cap reached (${maxAutoContinues}); timer ${wait.id} cancelled`,
@@ -311,7 +313,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     resultText: wait => `Plugin wait ${wait.id} ended. External data follows: ${JSON.stringify((wait as Extract<Wait, { kind: 'plugin' }>).result)}.`,
     footerItem: wait => { const plugin = wait as Extract<Wait, { kind: 'plugin' }>; return `${plugin.summary} (${plugin.id})${plugin.deadline ? `, deadline ${plugin.deadline}` : ''}`; },
     footerKinds: [],
-    resolve: (latest, _result, _observed, resolvedAt) => ({ ...latest, phase: 'resolved', resolvedAt }),
+    resolve: (latest, result, _observed, resolvedAt) => ({ ...latest as Extract<Wait, { kind: 'plugin' }>, phase: 'resolved', resolvedAt, ...(result === undefined ? {} : { result: result as Record<string, unknown> }) }),
     inputId: waitInputId,
     watch: 'none', entry: undefined,
     duplicate: () => false, canonicalize: () => {},
@@ -420,8 +422,8 @@ export function identicalPeerWait(waits: readonly Wait[], peerIds: readonly stri
 }
 
 /** The stored row that serves a tool request kind, including request waits in the worker row. */
-export function waitRequestRow(kind: string): WaitKindRow<Wait['kind']> {
-  const row = Object.values(WAIT_KINDS).find(row => row.requestKinds.some(requestKind => requestKind === kind));
+export function waitRequestRow(kind: string) {
+  const row = registeredWaitKinds().find(row => row.requestKinds.some(requestKind => requestKind === kind));
   if (!row) throw Object.assign(new Error(`no wait row registers ${kind}`), { code: 'invalid_request' });
   return row;
 }
@@ -501,7 +503,7 @@ function subagentPhrase(wait: SubagentWaitEntry): string {
 /** The lifecycle input a resolved wait delivers. Its id is the wait's, so duplicates keep it.
  *  `workerStatus` names a worker's current status for a worker wait's text. */
 export function waitResultText(wait: Wait, { workerStatus = () => 'unavailable' }: { workerStatus?: (workerId: string) => string } = {}): string {
-  return WAIT_KINDS[wait.kind].resultText(wait, workerStatus);
+  return waitPolicyForWait(wait).resultText(wait, workerStatus);
 }
 
 /**
@@ -582,7 +584,7 @@ function workerTargetPhrase(wait: WorkerWaitEntry): string {
 /** One wait as the footer names it. A worker's park notice names its waits the same way
  *  (hearsay-tools/cezarion#1327). */
 export function describeWait(wait: Wait): string {
-  return WAIT_KINDS[wait.kind].footerItem(wait);
+  return waitPolicyForWait(wait).footerItem(wait);
 }
 
 /** The footer a delivered turn ends with: every wait still open, or undefined when none is. The
@@ -592,8 +594,8 @@ export function openWaitsFooter(waits: readonly Wait[]): string | undefined {
   const open = waits.filter((wait) => wait.phase === 'open' && !isSquawkHumanWait(wait));
   if (!open.length) return undefined;
   const items = open.map(describeWait);
-  const asked = open.some((wait) => WAIT_KINDS[wait.kind].userAnswers);
-  const cancellable = open.some((wait) => !WAIT_KINDS[wait.kind].userAnswers);
+  const asked = open.some((wait) => waitPolicyForWait(wait).userAnswers);
+  const cancellable = open.some((wait) => !waitPolicyForWait(wait).userAnswers);
   const kinds = Object.values(WAIT_KINDS).flatMap(row => row.footerKinds).sort((a, b) => a.order - b.order).map(kind => kind.text);
   const kindList = `${kinds.slice(0, -2).join(', ')} or ${kinds.at(-2)} wait or ${kinds.at(-1)}`;
   const close = !asked ? 'Call cezar_cancel_wait for any you no longer need.'
@@ -604,14 +606,14 @@ export function openWaitsFooter(waits: readonly Wait[]): string | undefined {
 
 /** Fixed opening turn; the queued results themselves are delivered after its turn end. */
 export function sessionlessWakePrompt(resolved: ReturnType<typeof resolvedWaits>): string {
-  const prompts = resolved.map(wait => WAIT_KINDS[wait.kind].sessionlessPrompt);
+  const prompts = resolved.map(wait => waitPolicyForWait(wait).sessionlessPrompt);
   return prompts.sort((a, b) => a.priority - b.priority)[0]?.text
     ?? `Resume to receive queued messages. End this opening turn so Squawk can deliver them.`;
 }
 
 /** The first budgeted wait label, with monitoring timers ahead of ordinary timers, processes and peers. */
 export function waitDeliveryLabel(waits: readonly Wait[]): string | undefined {
-  return waits.flatMap(wait => WAIT_KINDS[wait.kind].deliveryLabel(wait)).sort((a, b) => a.priority - b.priority)[0]?.text;
+  return waits.flatMap(wait => waitPolicyForWait(wait).deliveryLabel(wait)).sort((a, b) => a.priority - b.priority)[0]?.text;
 }
 
 /** The handler of each registration path. A new path fails typecheck until every router names it. */
@@ -621,5 +623,37 @@ export type RegistrationRoutes<R> = { readonly [P in keyof RegistrationRequest]:
 export function routeRegistration<R>(request: SquawkWaitRequest, routes: RegistrationRoutes<R>): R {
   const path = waitRequestRow(request.kind).registration;
   if (path === 'none') throw new Error('Unsupported wait registration');
-  return (routes[path] as (request: SquawkWaitRequest) => R)(request);
+  return (routes[path as keyof RegistrationRequest] as (request: SquawkWaitRequest) => R)(request);
+}
+
+/** Typed built-in view. Every read still checks the registry's boot seal. */
+export const WAIT_KINDS = new Proxy({} as typeof BUILT_IN_WAIT_ROWS, {
+  get(_target, key: string) {
+    if (key === 'plugin') { registeredWaitKinds(); return BUILT_IN_WAIT_ROWS.plugin; }
+    return waitKindRow(key);
+  },
+  ownKeys: () => [...registeredWaitKinds().map(row => row.kind), 'plugin'],
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
+
+export type WaitKindRow<K extends Wait['kind']> = BuiltInWaitKindRow<K>;
+
+/** Unknown persisted plugin kinds keep their generic display and cancellation policy. */
+export function waitPolicyForWait(wait: Wait) {
+  return waitKindForWait(wait) ?? BUILT_IN_WAIT_ROWS.plugin;
+}
+
+const coreRows = ['human', 'timer', 'process'] as const;
+const registrations = new Map<string, ReturnType<typeof builtInWaitRegistration>>();
+export function builtInWaitRegistration(kind: Exclude<Wait['kind'], 'plugin'>) {
+  return { ...BUILT_IN_WAIT_ROWS[kind], kind, inputs: builtInWaitInputs(kind) };
+}
+/** Stable references let repeated boot calls register the same built-ins idempotently. */
+export function registerBuiltInWaitKind(kind: Exclude<Wait['kind'], 'plugin'>): void {
+  let row = registrations.get(kind);
+  if (!row) { row = builtInWaitRegistration(kind); registrations.set(kind, row); }
+  registerWaitKind(row);
+}
+export function registerCoreWaitKinds(): void {
+  for (const kind of coreRows) registerBuiltInWaitKind(kind);
 }

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { vi } from 'vitest';
 import type { RunStore } from '../runs/store.ts';
 import { RunRecovery } from './run/run-recovery.ts';

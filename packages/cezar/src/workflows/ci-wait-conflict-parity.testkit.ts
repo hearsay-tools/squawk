@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { WaitEngine } from './run/wait-engine.ts';
 import type { CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';

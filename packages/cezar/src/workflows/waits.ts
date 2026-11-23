@@ -1,5 +1,5 @@
 import { isSquawkHumanWait, waitInputId } from '../runs/wait-helpers.ts';
-import { WAIT_KINDS } from './run/wait-kinds.ts';
+import { WAIT_KINDS, waitPolicyForWait } from './run/wait-kinds.ts';
 import type { ProcessWaitResult, SubagentWaitResult } from '@open-mercato/cezar-contract/waits';
 import type { PeerWaitResult } from '@open-mercato/cezar-contract/delegation';
 import type { CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
@@ -29,8 +29,8 @@ export function waitNamedInputIds(run: RunRecord): Set<string> {
 
 /** The kind a `cezar_wait` answer names: the kind the call asked for. A request wait is stored as a
  *  `worker` entry with `requestIds` (hearsay-tools/cezarion#1995). */
-export function waitAnswerKind(wait: Wait): Exclude<Wait['kind'], 'human' | 'subagent'> | 'request' {
-  const kind = WAIT_KINDS[wait.kind].answerKind(wait);
+export function waitAnswerKind(wait: Wait): string {
+  const kind = waitPolicyForWait(wait).answerKind(wait);
   if (kind === undefined) throw new Error(`a ${wait.kind} wait is not a cezar_wait answer`);
   return kind;
 }
@@ -50,7 +50,7 @@ export function resolvedWaits(run: Pick<RunRecord, 'waits'>): Wait[] {
 /** The kind row decides charging from the durable result. Empty dependency deadlines are
  * free; explicit timers, safety deadlines and substantive outcomes keep their own policy. */
 export function chargesBudget(wait: Wait): boolean {
-  const charge = WAIT_KINDS[wait.kind].chargesWake;
+  const charge = waitPolicyForWait(wait).chargesWake;
   return typeof charge === 'function' ? charge(wait) : charge;
 }
 
@@ -66,16 +66,16 @@ export function chargesBudgetMessage(input: Pick<AgentInput, 'conversation'>): b
 /** The open waits as both tools list them back to the agent. A human wait has no deadline, and
  *  Squawk's own deadline-less worker wait is not the agent's to list (hearsay-tools/cezarion#1301). */
 export function openWaitList(waits: readonly Wait[]): OpenWait[] {
-  return waits.filter((wait) => wait.phase === 'open' && !isSquawkHumanWait(wait) && (WAIT_KINDS[wait.kind].deadline === 'none' || WAIT_KINDS[wait.kind].hasDeadline(wait))).map((wait): OpenWait => WAIT_KINDS.plugin.is(wait)
+  return waits.filter((wait) => wait.phase === 'open' && !isSquawkHumanWait(wait) && (waitPolicyForWait(wait).deadline === 'none' || waitPolicyForWait(wait).hasDeadline(wait))).map((wait): OpenWait => WAIT_KINDS.plugin.is(wait)
     ? { wait_id: wait.id, kind: 'plugin', pluginKind: wait.pluginKind, summary: wait.summary, ...(wait.deadline === undefined ? {} : { deadline: wait.deadline }) }
-    : WAIT_KINDS[wait.kind].deadline === 'none'
-    ? { wait_id: wait.id, kind: wait.kind as 'human', summary: WAIT_KINDS[wait.kind].summary(wait) }
-    : { wait_id: wait.id, kind: wait.kind as Exclude<Wait['kind'], 'human' | 'plugin'>, deadline: ('deadline' in wait ? wait.deadline : undefined)!, summary: WAIT_KINDS[wait.kind].summary(wait) });
+    : waitPolicyForWait(wait).deadline === 'none'
+    ? { wait_id: wait.id, kind: wait.kind as 'human', summary: waitPolicyForWait(wait).summary(wait) }
+    : { wait_id: wait.id, kind: wait.kind as Exclude<Wait['kind'], 'human' | 'plugin'>, deadline: ('deadline' in wait ? wait.deadline : undefined)!, summary: waitPolicyForWait(wait).summary(wait) });
 }
 
-export { identicalWait } from './run/wait-kinds.ts';
-export const identicalWorkerWait = WAIT_KINDS.worker.duplicateWorker;
-export const identicalPeerWait = WAIT_KINDS.peer.duplicatePeer;
+export { identicalWait, identicalWorkerWait, identicalPeerWait, timerWaitEntry, prWaitEntry, processWaitEntry } from './run/wait-kinds.ts';
+
+
 
 export { waitInputId };
 
@@ -87,17 +87,17 @@ export function ciWatchRequest(wait: PrWaitEntry): CiWait {
 
 /** An open or resolved PR wait: it holds conversation input for its own wake (#476). */
 export function hasPrWait(run: Pick<RunRecord, 'waits'>): boolean {
-  return (run.waits ?? []).some((wait) => WAIT_KINDS[wait.kind].holdsConversationInput && (wait.phase === 'open' || wait.phase === 'resolved'));
+  return (run.waits ?? []).some((wait) => waitPolicyForWait(wait).holdsConversationInput && (wait.phase === 'open' || wait.phase === 'resolved'));
 }
 
-export const timerWaitEntry = WAIT_KINDS.timer.entry;
-export const prWaitEntry = WAIT_KINDS.pr.entry;
-export const processWaitEntry = WAIT_KINDS.process.entry;
 
-export type WaitResult = CiWaitResult | ProcessWaitResult | PeerWaitResult | SubagentWaitResult;
+
+
+
+export type WaitResult = CiWaitResult | ProcessWaitResult | PeerWaitResult | SubagentWaitResult | Record<string, unknown>;
 
 export function settledWaitEntry(latest: Wait, result: WaitResult | undefined, observed: WorkerWaitEntry | undefined, resolvedAt: string): Wait {
-  return WAIT_KINDS[latest.kind].resolve(latest, result, observed, resolvedAt);
+  return waitPolicyForWait(latest).resolve(latest, result, observed, resolvedAt);
 }
 
 export { isSquawkHumanWait };

@@ -1,3 +1,4 @@
+import './built-in-wait-kinds.testkit.ts';
 import { testHome } from './home/test-home.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WORKTREE_RETENTION } from './config.ts';

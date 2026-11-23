@@ -45,6 +45,7 @@
       "built-in-cli-commands.ts",
       "built-in-tools.ts",
       "built-in-tool-definitions.ts",
+      "built-in-wait-kinds.ts",
       "cez.ts",
       "cezarion.ts",
       "cli-dispatch.ts",

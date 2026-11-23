@@ -3,7 +3,7 @@ import type { DoneOwedInput } from '@open-mercato/cezar-contract/waits';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { resolvedWaits, waitInputId } from '../waits.ts';
-import { WAIT_KINDS } from './wait-kinds.ts';
+import { waitPolicyForWait } from './wait-kinds.ts';
 import { acceptedDoneHolds } from './turn-settler.ts';
 
 /**
@@ -27,7 +27,7 @@ function instruction(input: AgentInput): string | undefined {
  *  a failed wait result or a new instruction. */
 export function reconsideredBy(run: RunRecord, inputIds: readonly string[]): string | undefined {
   const ids = new Set(inputIds);
-  const failed = resolvedWaits(run).find(wait => ids.has(waitInputId(wait)) && WAIT_KINDS[wait.kind].failedResult(wait));
+  const failed = resolvedWaits(run).find(wait => ids.has(waitInputId(wait)) && waitPolicyForWait(wait).failedResult(wait));
   if (failed) return `a failed ${failed.kind} wait result`;
   for (const input of run.agentInputs ?? []) {
     const reason = ids.has(input.id) ? instruction(input) : undefined;
@@ -112,7 +112,7 @@ function liveAndSettledWaits(run: RunRecord) {
 
 /** A wait result that failed and was not settled when the done was accepted. */
 export function failedResultAfter(run: RunRecord, done: DoneAccepted): string | undefined {
-  const failed = liveAndSettledWaits(run).find(wait => wait.phase !== 'open' && !done.settledWaits.includes(wait.id) && WAIT_KINDS[wait.kind].failedResult(wait));
+  const failed = liveAndSettledWaits(run).find(wait => wait.phase !== 'open' && !done.settledWaits.includes(wait.id) && waitPolicyForWait(wait).failedResult(wait));
   return failed && `a failed ${failed.kind} wait result`;
 }
 
@@ -123,7 +123,7 @@ export function registeredAfter(run: RunRecord, done: DoneAccepted): string | un
   const known = new Set([...done.openWaits, ...done.settledWaits]);
   const wait = liveAndSettledWaits(run).find(entry => !known.has(entry.id) && entry.source === 'agent' && entry.via !== 'monitoring-line');
   if (!wait) return undefined;
-  return WAIT_KINDS[wait.kind].userAnswers ? 'the agent asked the user' : 'the agent registered a wait';
+  return waitPolicyForWait(wait).userAnswers ? 'the agent asked the user' : 'the agent registered a wait';
 }
 
 /** A human message recorded after the done: its `user-message` event. */

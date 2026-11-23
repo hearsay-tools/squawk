@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { WorkerSpawnResult } from '@open-mercato/cezar-contract';

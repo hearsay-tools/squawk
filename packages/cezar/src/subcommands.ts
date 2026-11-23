@@ -32,4 +32,7 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
   registerBuiltInTools();
   sealBuiltInTools();
+  const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
+  registerBuiltInWaitKinds();
+  sealBuiltInWaitKinds();
 }

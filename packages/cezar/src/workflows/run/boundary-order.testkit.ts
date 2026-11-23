@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { WaitEngine } from './wait-engine.ts';
 import type { RunLine } from './run-line.ts';
 import { mkdtempSync, rmSync } from 'node:fs';

@@ -1,5 +1,7 @@
+import { waitKindRow, parsePluginWaitRequest } from './wait-kind-registry.ts';
+import { pluginWaitEntrySchema } from '@open-mercato/cezar-contract/waits';
 import { warnRegistrationRefused, type WaitEngine } from './wait-engine.ts';
-import { WAIT_KINDS, routeRegistration } from './wait-kinds.ts';
+import { WAIT_KINDS, routeRegistration, waitPolicyForWait } from './wait-kinds.ts';
 import { registrationIdentity, replayRegistration, repeatRegistration, type RegistrationIdentity } from './wait-registration.ts';
 import { workerWaitRequestSchema, type WorkerWait } from '@open-mercato/cezar-contract/delegation';
 import { requestWaitRequestSchema, type RequestWaitRequest } from '@open-mercato/cezar-contract/conversations';
@@ -38,7 +40,7 @@ export class WaitGroup {
 }
 
 Object.freeze(WaitGroup.prototype);
-type RegisteredWait = PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry;
+type RegisteredWait = Extract<import('@open-mercato/cezar-contract/waits').Wait, { kind: 'plugin' }> | PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry;
 /** An agent or CLI registration: withdraw Squawk's human waits, commit with its receipt, park at a boundary. */
 const OPEN_REGISTERED = (receipt: RegistrationIdentity | undefined) => ({ withdraw: true, receipt, onCommitFailure: 'persistence' as const, park: true });
 Object.freeze(WaitGroup);
@@ -215,7 +217,9 @@ export class WaitRegistry {
    * `{ code }`. An identical registration (same PR; or same seconds and note in the same turn)
    * returns the open wait it repeats.
    */
-  async registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry> {
+  async registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<RegisteredWait> {
+    const plugin = waitKindRow(request.kind);
+    if (plugin?.isPlugin) return this.registerPluginWait(runId, request, via, generation, capabilitySignal);
     const parsed = builtInSquawkWaitRequestSchema.parse(request);
     const registration = registrationIdentity(parsed);
     const replay = replayRegistration(this.context.store.getRun(runId), registration);
@@ -244,6 +248,33 @@ export class WaitRegistry {
           ?? this.registerPrWait(runId, active, request, via, generation, turnId, registration, assertCanRegister, refuse, capabilitySignal);
       },
     });
+  }
+
+  private async registerPluginWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal) {
+    const row = waitKindRow(request.kind)!;
+    if (!row.inputSchema || !row.register) throw Object.assign(new Error('Plugin wait has no registration handler'), { code: 'invalid_request' });
+    const parsed = parsePluginWaitRequest(row, request);
+    row.canonicalizePlugin?.(parsed);
+    const { refuse, assertCanRegister } = this.registrationGate(runId, generation, capabilitySignal);
+    const { state, run } = assertCanRegister();
+    const turnId = state.waitIdentity.ensureCiTurn();
+    const registration = registrationIdentity(parsed);
+    const replay = replayRegistration(run, registration);
+    if (replay) return replay as Extract<RegisteredWait, { kind: 'plugin' }>;
+    const duplicate = (current: RunRecord) => current.waits?.find(wait => wait.kind === 'plugin' && wait.pluginKind === row.kind && wait.phase === 'open' && row.duplicatePlugin?.(wait, parsed, turnId));
+    const repeated = duplicate(run);
+    if (repeated) return repeatRegistration(this.context.store, runId, repeated, undefined, registration) as Extract<RegisteredWait, { kind: 'plugin' }>;
+    if (!this.host.waitEngine.hasRoom(run)) refuse('capacity');
+    if (row.timersDisabled && this.context.semaphore.monitoringWakeIntervalMinutes() === null) refuse('timers_disabled');
+    if (row.refusesSpentBudget && this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) refuse('wake_budget_spent');
+    const wait = pluginWaitEntrySchema.parse(await row.register(parsed, { runId, turnId, via, now: Date.now(), signal: capabilitySignal }));
+    const { run: latest } = assertCanRegister();
+    if (state.waitIdentity.ciTurnId !== turnId) refuse('turn_changed');
+    // Another operation may have committed the same wait while this handler yielded.
+    const concurrent = duplicate(latest);
+    if (concurrent) return repeatRegistration(this.context.store, runId, concurrent, undefined, registration) as Extract<RegisteredWait, { kind: 'plugin' }>;
+    if (wait.pluginKind !== row.kind || wait.phase !== 'open') refuse('invalid_request');
+    return this.host.waitEngine.open(runId, state, wait, OPEN_REGISTERED(registration)).wait!;
   }
 
   /** A timer or PR registration that repeats an open wait returns it; otherwise a full list refuses
@@ -353,7 +384,7 @@ export class WaitRegistry {
     const wait = this.context.store.getRun(runId)?.waits?.find(entry => entry.id === waitId);
     if (!wait) return { cancelled: false, code: 'not_found' };
     if (wait.phase !== 'open') return { cancelled: false, code: 'already_resolved' };
-    if (WAIT_KINDS[wait.kind].cancellable === 'unshown' && 'askSeq' in wait && wait.askSeq !== undefined) return { cancelled: false, code: 'human_question' };
+    if (waitPolicyForWait(wait).cancellable === 'unshown' && 'askSeq' in wait && wait.askSeq !== undefined) return { cancelled: false, code: 'human_question' };
     this.host.waitEngine.cancel(runId, [waitId]);
     return { cancelled: true };
   }

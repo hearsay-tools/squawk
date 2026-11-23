@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import { execFile } from 'node:child_process';

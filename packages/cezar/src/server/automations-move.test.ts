@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';

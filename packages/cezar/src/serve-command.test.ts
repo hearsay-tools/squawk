@@ -1,3 +1,4 @@
+import './built-in-wait-kinds.testkit.ts';
 import { projectPaths } from './project-paths.ts';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';

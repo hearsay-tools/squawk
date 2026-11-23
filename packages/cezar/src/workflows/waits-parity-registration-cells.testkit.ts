@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { waitPartDescribers, parentWithWorker, parentTurn, nativeWire, retryAtOnce, toolResources, prompted, sessionOf, fireTimer, settled, inputsFor, timerText, github, pr, parkedOn, waitOfKind, agentWaits, turnEnds, flushMicrotasks, expectPoolCapacity, timerWaits, humanOpen } from './waits-parity-fixture.testkit.ts';
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';

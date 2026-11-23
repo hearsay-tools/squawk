@@ -1,4 +1,7 @@
+import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from '../dist/built-in-wait-kinds.js';
 import { registerBuiltInTools, sealBuiltInTools } from '../dist/built-in-tools.js';
+registerBuiltInWaitKinds();
+sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
 // Evidence-only tool endpoint. Use the real tool definitions and stable unavailable

@@ -242,7 +242,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "wait-kind-literal-outside-engine": {
     "name": "wait-kind-literal-outside-engine",
-    "message": "Branch on a wait's kind only in the wait engine, the wait-kind table, the watch adapters, the read-time upgrade and the boundary views (ADR 0061, hearsay-tools/cezarion#3079). Elsewhere read the row (WAIT_KINDS[wait.kind].<fact>), select one kind's waits with its row's selector (WAIT_KINDS.<kind>.select, .selectOpen, .is), or ask the engine.",
+    "message": "Branch on a wait's kind only in the wait engine, the wait-kind table, the watch adapters, the read-time upgrade and the boundary views (ADR 0061, hearsay-tools/cezarion#3079). Elsewhere read the row (waitPolicyForWait(wait).<fact>), select one kind's waits with its row's selector (WAIT_KINDS.<kind>.select, .selectOpen, .is), or ask the engine.",
     "files": [
       "packages/cezar/src/**/*.ts"
     ],

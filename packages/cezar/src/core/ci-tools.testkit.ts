@@ -1,4 +1,5 @@
 import '../ci-wait/tools.testkit.ts';
+import '../built-in-wait-kinds.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';

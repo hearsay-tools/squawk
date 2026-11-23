@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { waitPartDescribers, repliesDoneAgain, workerParent, ignoreRefusal, gated, uncollectedRefusal, humanOpen, workerWaits, asks, nativeWire, blockedDone, blockingWorker, prompted, liveRefusal, replyBlockedAgain, parentWithWorker, sessionOf, silenceRefusals, noReplyNotes, nudgeNotes } from './waits-parity-fixture.testkit.ts';
 import { MAX_AUTO_CONTINUES, COMPLETION_NUDGE_NOTE, COMPLETION_WILL_WAIT } from './run.ts';
 import { join } from 'node:path';

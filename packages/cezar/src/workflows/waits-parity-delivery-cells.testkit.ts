@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { waitPartDescribers, inputsFor, retryClock, nativeWire, askPrompt, pendingQuestion, asks, answered, expectAdmissionRetryCleared, settled, prompted, fireTimer, flushMicrotasks, humanOpen, answerOf, retryAtOnce, observeAdmissionRetries, timerWaits, sessionOf, agentWaits, turnEnds, parkedOn, waitOfKind, blockedDone, liveRefusal, expectPoolCapacity, github, pr } from './waits-parity-fixture.testkit.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, MAX_AUTO_CONTINUES, WAKE_SESSION_CLOSED_ERROR, WAITS_DISCARDED_NOTE, COMPLETION_NUDGE_NOTE } from './run.ts';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 /**
  * The run tier of the harness parity matrix: fixtures that drive each backend's offline mock
  * through a real `RunManager`, owned workers and skill parents.

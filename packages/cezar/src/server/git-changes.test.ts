@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';

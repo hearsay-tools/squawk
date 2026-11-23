@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { setTimeout as nativeTimeout, clearTimeout as clearNativeTimeout } from 'node:timers';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';

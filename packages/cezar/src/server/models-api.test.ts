@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';

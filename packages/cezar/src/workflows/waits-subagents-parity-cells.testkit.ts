@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';

@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { spawnCapacityRefusal } from './capacity.ts';
 import { projectPaths } from '../project-paths.ts';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
