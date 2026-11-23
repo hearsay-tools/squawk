@@ -1,5 +1,6 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import fs, { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -64,6 +65,30 @@ describe('one-time writes after a crash-left reservation', () => {
     const task = runs.createRun({ title: 't', workflow: 'quick-task', task: 'Go', steps: [], automationTrigger: { automationId: id, automationRevision: 1, receiptId: 'claimed', trigger: 'manual', occurrenceAt: '2026-10-29T09:00:00.000Z' } });
     return { service, project, id, task, launch, automationStore };
   }
+
+  it('lists definitions once and reuses unchanged parsed logs across list calls', async () => {
+    const { service, project, automationStore, id } = await fixture();
+    const { id: _id, revision: _revision, createdAt: _created, updatedAt: _updated, ...definition } = once;
+    automationStore.create({ ...definition, name: 'Second' }, 'second');
+    await automationStore.appendLog({ automationId: id, revision: 1, result: 'launched' });
+    await automationStore.appendLog({ automationId: 'second', revision: 1, result: 'error' });
+    const list = vi.spyOn(automationStore, 'list');
+    const read = vi.spyOn(fs, 'readFileSync');
+    syncBuiltinESMExports();
+    try {
+      const first = await service.list(project, { archived: 'include' });
+      expect(list).toHaveBeenCalledTimes(1);
+      expect(await service.list(project, { archived: 'include' })).toEqual(first);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(read.mock.calls.filter(([path]) => String(path).endsWith('automation-log.ndjson'))).toHaveLength(1);
+      expect(first.automations).toHaveLength(2);
+      expect(first.automations.find(row => row.id === 'second')?.counts.errors).toBe(1);
+    } finally {
+      list.mockRestore();
+      read.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
 
   it('cancel archives as launched with the existing task and is refused', async () => {
     const { service, project, id, task, automationStore } = await fixture();

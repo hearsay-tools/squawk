@@ -97,6 +97,11 @@ export class AutomationStore {
   private warned = new Set<string>();
   /** What `definitions`/`stateFile` were read from: see `reloadIfChanged`. */
   private seen = '';
+  private logCache: {
+    signature: string;
+    rows: AutomationLogRecord[];
+    byAutomation: Map<string, AutomationLogRecord[]>;
+  } | undefined;
   private readonly now: () => Date;
   private readonly secrets = collectSecretValues();
 
@@ -281,6 +286,7 @@ export class AutomationStore {
    * unreadable file keeps this process's last good view, as `setState` does.
    */
   reload(): void {
+    this.logCache = undefined;
     // Stat before reading: a write landing in between leaves a signature older than the content,
     // which costs one extra reload later, never a missed change.
     this.seen = this.signature();
@@ -433,14 +439,40 @@ export class AutomationStore {
 
   logs(options: { automationId?: string | undefined; result?: AutomationLogRecord['result'] | undefined; event?: AutomationLogRecord['event']; since?: string | undefined; cursor?: number | undefined; limit?: number | undefined } = {}): AutomationLogRecord[] {
     const limit = Math.min(Math.max(options.limit ?? 100, 1), 100);
-    return this.readNdjson(LOG, automationLogRecordSchema, true)
-      .filter((row) => !options.automationId || row.automationId === options.automationId)
+    const cache = this.cachedLogs();
+    const rows = options.automationId ? cache.byAutomation.get(options.automationId) ?? [] : cache.rows;
+    return rows
       .filter((row) => !options.result || row.result === options.result)
       .filter((row) => !options.event || row.event === options.event)
       .filter((row) => !options.since || row.ts >= options.since)
       .filter((row) => !options.cursor || row.seq < options.cursor)
       .slice(-limit)
-      .reverse();
+      .reverse()
+      .map((row) => structuredClone(row));
+  }
+
+  private cachedLogs() {
+    const directories = dataReadDirs(this.dataDir);
+    // Stat before reading: a concurrent write can cause an extra refresh, never a stale signature.
+    const signature = JSON.stringify(directories.map((directory) => {
+      const path = join(directory, LOG);
+      try {
+        const { dev, ino, size, mtimeMs, ctimeMs } = statSync(path);
+        return [path, dev, ino, size, mtimeMs, ctimeMs];
+      } catch {
+        return [path, null];
+      }
+    }));
+    if (this.logCache?.signature === signature) return this.logCache;
+    const rows = mergeProjectAutomationLog(LOG,
+      directories.map(directory => this.readNdjsonAt(directory, LOG, automationLogRecordSchema)), true);
+    const byAutomation = new Map<string, AutomationLogRecord[]>();
+    for (const row of rows) {
+      const bucket = byAutomation.get(row.automationId) ?? [];
+      bucket.push(row);
+      byAutomation.set(row.automationId, bucket);
+    }
+    return this.logCache = { signature, rows, byAutomation };
   }
 
   async compact(): Promise<void> {
@@ -780,6 +812,7 @@ export class AutomationStore {
   }
 
   private appendNdjson(filename: string, value: unknown): void {
+    if (filename === LOG) this.logCache = undefined;
     if (projectWriteRefused(this.dataDir)) return;
     mkdirSync(this.dataDir, { recursive: true });
     const path = join(this.dataDir, filename);
@@ -792,6 +825,7 @@ export class AutomationStore {
   }
 
   private rewriteNdjson(filename: string, rows: unknown[]): void {
+    if (filename === LOG) this.logCache = undefined;
     if (projectWriteRefused(this.dataDir)) return;
     const path = join(this.dataDir, filename);
     const temporary = `${path}.tmp`;
