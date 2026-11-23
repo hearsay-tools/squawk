@@ -5,51 +5,52 @@
     "root": "packages/web/e2e",
     "runs": [
       {
-        "id": 45022486575,
-        "headSha": "83342c2e0b92ede74e770a9aff53e4650e192974",
+        "id": 45196904726,
+        "headSha": "ceb1dc63ed77a2be0551395a24e2d484b47f84bf",
         "jobs": [
-          137208316954,
-          137208316958,
-          137208316964,
-          137208316969,
-          137208316985,
-          137208316995,
-          137208317004,
-          137208317030
+          137769866601,
+          137769866698,
+          137769866708,
+          137769866763,
+          137769866780,
+          137769866841,
+          137769866863,
+          137769866927
         ]
       },
       {
-        "id": 45016793717,
-        "headSha": "8ff2e7b13e73afcee45f6f88361e7bd4eb4e353d",
+        "id": 45195372257,
+        "headSha": "7c4959072a3f5d1ca3964863aaacd746e9ef8e9e",
         "jobs": [
-          137190809229,
-          137190809240,
-          137190809252,
-          137190809267,
-          137190809295,
-          137190809310,
-          137190809314,
-          137190809323
+          137764542382,
+          137764542406,
+          137764542423,
+          137764542454,
+          137764542479,
+          137764542481,
+          137764542586,
+          137764542627
         ]
       },
       {
-        "id": 45010591910,
-        "headSha": "3a64a4e258cf3d4154efa962af6804a33a7a701a",
+        "id": 45195368268,
+        "headSha": "99b8febea7235cc893d3ba2bd3598a58355da767",
         "jobs": [
-          137171885631,
-          137171885632,
-          137171885639,
-          137171885644,
-          137171885652,
-          137171885681,
-          137171885700,
-          137171885766
+          137764490408,
+          137764490470,
+          137764490511,
+          137764490538,
+          137764490544,
+          137764490585,
+          137764490715,
+          137764490921
         ]
       }
     ],
     "estimatedFiles": [],
-    "baselineCommit": "83342c2e0b92ede74e770a9aff53e4650e192974",
+    "baselineCommit": "ceb1dc63ed77a2be0551395a24e2d484b47f84bf",
     "updatedFiles": [
+      "agents-settings-mobile.e2e.ts",
       "task-list-virtualization.e2e.ts"
     ],
     "remainingChanges": 0
@@ -137,7 +138,7 @@
     "task-files.e2e.ts": 13596,
     "task-github-items.e2e.ts": 13607,
     "task-handoff.e2e.ts": 12886,
-    "task-list-virtualization.e2e.ts": 157490,
+    "task-list-virtualization.e2e.ts": 115919,
     "task-list-workload.e2e.ts": 28812,
     "task-pr-collection.e2e.ts": 24058,
     "task-status-groups.e2e.ts": 11763,
@@ -151,6 +152,7 @@
     "worker-conversation.e2e.ts": 26993,
     "worker-relationships.e2e.ts": 42347,
     "workflows.e2e.ts": 18056,
-    "worktree-setup.e2e.ts": 5612
+    "worktree-setup.e2e.ts": 5612,
+    "agents-settings-mobile.e2e.ts": 5596
   }
 }
