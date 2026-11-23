@@ -14,6 +14,7 @@ import { waitForRelease } from './mock-lifecycle.mjs';
 import { answerNudge } from './mock-nudge.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
 import { knownSession, saveSession } from './mock-acp-sessions.mjs';
+import { slashTrigger, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 
 // The Antigravity CLI's identity: a bare version and a help text that lists its acp command.
 if (process.argv.includes('--version')) { console.log('1.5.14'); process.exit(0); }
@@ -22,6 +23,12 @@ const flag = name => { const index = process.argv.indexOf(name); return index < 
 if (process.argv.includes('--login')) {
   const { mockLogin } = await import('./mock-acp-login.mjs');
   process.exit(await mockLogin(flag('--gemini-dir')));
+}
+if (process.argv.includes('--print=/skills')) {
+  const { mockSkillList } = await import('./mock-skill-list.mjs');
+  console.log(JSON.stringify(mockSkillList('antigravity')));
+  console.log(JSON.stringify({ event: 'result', result: { conversation_id: '', status: 'SUCCESS', response: '' } }));
+  process.exit(0);
 }
 let antigravity = false;
 const { failureControl, delivery } = await loadControls({ failure: ['provider', 'unread'], delivery: ['reject', 'hold-ack', 'hold-response'] });
@@ -140,7 +147,10 @@ function authenticate(frame) {
 }
 function echoSteers(turn) {
   if (turn.cancelled) return;
-  for (const text of steers.splice(0)) content('agent_message_chunk', text.startsWith('/probe-') ? `TRIGGER-FIXTURE ${text}` : `saw: ${text}`);
+  for (const text of steers.splice(0)) {
+    const trigger = slashTrigger(text, '/');
+    content('agent_message_chunk', trigger && knownSkill('antigravity', trigger) ? `${SKILL_TOKEN} ${text}` : `saw: ${text}`);
+  }
 }
 async function runtimeProbe(text, turn) {
   if (text === 'mock:acp-mcp-name-limit') {
@@ -197,7 +207,8 @@ async function runPrompt(text, turn) {
     content('agent_message_chunk', `Answer received: ${text.trim()}${await context.lifecycle(['cezar_done', {}])}`); return;
   }
   if (/mock:(?:acp-permission|acp-ask|approval|permission-default)/.test(text)) return permissionPrompt(text, turn);
-  if (text.startsWith('/probe-')) { content('agent_message_chunk', `TRIGGER-FIXTURE ${text}`); return; }
+  const trigger = slashTrigger(text, '/');
+  if (trigger && knownSkill('antigravity', trigger)) { content('agent_message_chunk', `${SKILL_TOKEN} ${text}`); return; }
   if (process.env.CEZ_MOCK_CI_PR) await probeCiTool('acp', sessionParams);
   const scenario = scenarioFor(text, context);
   const wire = encoder(turn);

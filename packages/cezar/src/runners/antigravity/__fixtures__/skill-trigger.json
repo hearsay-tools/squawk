@@ -1,0 +1,77 @@
+[
+  {
+    "from": "agent",
+    "frame": {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "89c39b17-7545-4378-80be-0b3b92ead252",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_598714134544840670",
+          "name": "read_file",
+          "args": {
+            "Path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+          },
+          "status": "in_progress",
+          "kind": "read",
+          "title": "File .agents/skills/probe-project/SKILL.md",
+          "locations": [
+            {
+              "path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+            }
+          ],
+          "rawInput": {
+            "Path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+          }
+        }
+      }
+    }
+  },
+  {
+    "from": "agent",
+    "frame": {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "89c39b17-7545-4378-80be-0b3b92ead252",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_598714134544840670",
+          "name": "read_file",
+          "args": {
+            "Path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+          },
+          "status": "completed",
+          "kind": "read",
+          "title": "File .agents/skills/probe-project/SKILL.md",
+          "locations": [
+            {
+              "path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+            }
+          ],
+          "rawInput": {
+            "Path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+          }
+        }
+      }
+    }
+  },
+  {
+    "from": "agent",
+    "frame": {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "89c39b17-7545-4378-80be-0b3b92ead252",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "TRIGGER-FIXTURE"
+          }
+        }
+      }
+    }
+  }
+]

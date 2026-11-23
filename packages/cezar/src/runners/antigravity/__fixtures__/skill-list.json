@@ -1,0 +1,39 @@
+{
+  "event": "command_result",
+  "command": {
+    "name": "skills",
+    "data": {
+      "skills": [
+        {
+          "name": "agy-customizations",
+          "description": "Comprehensive guide and reference for the Antigravity Customization System. Use to explain how customizations work, their loading priority, discovery mechanisms, and to guide the creation of skills, rules, plugins, hooks, and MCP servers.",
+          "path": "/home/probe/.gemini/antigravity-cli/builtin/skills/agy-customizations/SKILL.md",
+          "builtin": true,
+          "model_invocable": true
+        },
+        {
+          "name": "apptension-review:code-review",
+          "description": "Methodical code review of a changeset.",
+          "path": "/home/probe/.gemini/config/plugins/apptension-review/skills/code-review/SKILL.md",
+          "plugin": "apptension-review",
+          "builtin": false,
+          "model_invocable": true
+        },
+        {
+          "name": "probe-project",
+          "description": "Project probe skill.",
+          "path": "/tmp/skill-list-probe/repo/.agents/skills/probe-project/SKILL.md",
+          "builtin": false,
+          "model_invocable": true
+        },
+        {
+          "name": "probe-user",
+          "description": "User probe skill.",
+          "path": "/home/probe/.gemini/config/skills/probe-user/SKILL.md",
+          "builtin": false,
+          "model_invocable": true
+        }
+      ]
+    }
+  }
+}

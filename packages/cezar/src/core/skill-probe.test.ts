@@ -18,13 +18,20 @@ const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSour
   { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 member.once('message', () => process.exit(1));`;
 
-for (const runner of BUILT_IN_RUNNER_IDS.filter(id => runnerDefinition(id).skillCatalog?.source !== 'filesystem')) describe(`${runner} skill probe process cleanup`, () => {
+for (const runner of BUILT_IN_RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
   // Windows uses taskkill trees; leaderless POSIX process groups do not exist there.
   for (const failure of ['hung', 'crashed', 'leader-first'] as const) it.runIf(failure !== 'leader-first' || process.platform !== 'win32')(`${failure}: unavailable with a reason and no child left`, async () => {
     let child!: ChildProcessWithoutNullStreams;
     let exit!: Promise<unknown>;
     const launch: SkillDiscoveryOptions['spawn'] = (_bin, args, cwd, env) => {
-      expect(env).toMatchObject(profileEnv(runner, '/profiles/probe'));
+      if (runner === 'antigravity') {
+        expect(env.GEMINI_HOME).toBe('/profiles/probe');
+        expect(env.GOOGLE_GEMINI_BASE_URL).toBe('http://127.0.0.1:1');
+        expect(args).toContain('--print=/skills');
+        expect(args).toContain('stream-json');
+      } else {
+        expect(env).toMatchObject(profileEnv(runner, '/profiles/probe'));
+      }
       if (runner === 'claude') {
         expect(args).toContain('--no-session-persistence');
         expect(args[args.indexOf('--settings') + 1]).toBe('{"disableAllHooks":true}');

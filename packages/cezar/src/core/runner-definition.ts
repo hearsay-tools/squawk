@@ -41,8 +41,6 @@ export interface RunnerDefinition {
   /** Runners whose native build/auth controls the list can invalidate before the ordinary TTL. */
   loadModelCatalogKey?(): Promise<(options: ModelDiscoveryContext) => Promise<string>>;
   /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
-  /** A filesystem catalog exposes only sources confirmed in the native harness. */
-  readonly skillCatalog?: { readonly source: 'filesystem'; readonly projectRoots: readonly string[]; readonly userRoots: readonly string[]; readonly plugins: false; readonly evidence: string };
   loadSkillCatalog(): Promise<(options: SkillDiscoveryOptions) => Promise<SkillCatalog>>;
   /** The native config files that Settings → Agent config shows, and the runner's pane there. */
   readonly configFiles: RunnerConfigFiles;

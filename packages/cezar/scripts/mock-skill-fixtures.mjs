@@ -36,6 +36,16 @@ export function skillListFixtures(skills, problems = []) {
   }));
   replies.omp.warnings = problems.map(problem => ({ message: problem.message,
     ...(problem.path ? { skillPath: problem.path } : {}) }));
+  replies.antigravity.command.data.skills = skills.map(skill => ({
+    name: skill.id ?? skill.name,
+    description: skill.description ?? '',
+    path: skill.path ?? (skill.scope === 'user'
+      ? `/home/probe/.gemini/config/skills/${skill.id ?? skill.name}/SKILL.md`
+      : fixturePath(skill)),
+    ...(skill.plugin ? { plugin: skill.plugin } : {}),
+    builtin: skill.scope === 'system',
+    model_invocable: true,
+  }));
   return replies;
 }
 

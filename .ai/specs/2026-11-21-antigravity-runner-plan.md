@@ -52,8 +52,7 @@ Existing runners keep interactive CLI handoff by default. A definition with `cli
 has no terminal target, resume command, or terminal action. Direct handoff requests fail clearly.
 The API derives `cliHandoff=false`; stored records are unchanged.
 
-Skill-list parity retains native-wire assertions by default. A declared filesystem catalog lists
-only confirmed project/user roots and asserts no invented plugin metadata. Tool-grant parity
+Skill-list parity retains native-wire assertions for every runner, including Antigravity via the CLI's native `--print=/skills` stream-json command (ADR 0066). Tool-grant parity
 retains argv assertions by default; permission-policy runners instead pin recorded native replies.
 The scratch-runner simulation appends to the current roster, without naming its last runner.
 

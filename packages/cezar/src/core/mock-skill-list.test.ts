@@ -12,6 +12,7 @@ it('replaces the recorded skill lists in each native reply shape', () => {
   expect(replies.opencode).toEqual([{ name: 'only-check', description: '', location: '/p/SKILL.md' }]);
   expect(replies.pi).toMatchObject({ data: { commands: [{ name: 'skill:only-check', sourceInfo: { path: '/p/SKILL.md' } }] } });
   expect(replies.omp).toMatchObject({ skills: [{ name: 'only-check', filePath: '/p/SKILL.md', baseDir: '/p' }] });
+  expect(replies.antigravity).toMatchObject({ command: { data: { skills: [{ name: 'only-check', path: '/p/SKILL.md' }] } } });
   expect(JSON.stringify(replies)).not.toContain('probe-project');
 });
 

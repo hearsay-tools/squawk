@@ -1,11 +1,10 @@
 import { registerRunner } from '../../core/runner-registry.ts';
 import { antigravityRunner } from './definition.ts';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { antigravityEnv } from './runtime-env.ts';
-import { discoverAntigravitySkills } from './antigravity-skill-catalog.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { ProviderAuthService } from '../../core/provider-auth.ts';
 registerRunner(antigravityRunner);
@@ -27,22 +26,6 @@ it('passes the account by flag, drops GEMINI_HOME and keeps one token file per a
   expect(runtime.env).not.toHaveProperty('GEMINI_HOME');
   expect(runtime.env).not.toHaveProperty('GOOGLE_CLOUD_PROJECT');
   expect(runtime.env).toMatchObject({ GEMINI_API_KEY: 'fixture-key', SSH_CONNECTION: '127.0.0.1 0 127.0.0.1 0', AGY_CLI_DISABLE_AUTO_UPDATE: '1', TMPDIR: runtime.temp });
-});
-
-it('lists the five skill roots the CLI reads and sees later additions', async () => {
-  const cwd = await workspace(); const accountHome = join(cwd, 'account');
-  const roots = [join(accountHome, 'config/skills'), join(accountHome, 'antigravity-cli/skills'), join(accountHome, 'skills'), join(cwd, '.agents/skills'), join(cwd, '.agent/skills')];
-  const ignored = join(cwd, '.gemini/skills/not-read'); await mkdir(ignored, { recursive: true }); await writeFile(join(ignored, 'SKILL.md'), 'The CLI no longer reads .gemini/skills');
-  for (const [index, root] of roots.entries()) {
-    const folder = join(root, `probe-${index}`); await mkdir(folder, { recursive: true });
-    await writeFile(join(folder, 'SKILL.md'), `---\nname: probe-${index}\ndescription: Recorded root\n---\nRun the probe.`);
-  }
-  const first = await discoverAntigravitySkills({ cwd, accountHome });
-  expect(first.skills.map(skill => [skill.id, skill.scope])).toEqual([
-    ['probe-0', 'user'], ['probe-1', 'user'], ['probe-2', 'user'], ['probe-3', 'repo'], ['probe-4', 'repo'],
-  ]);
-  const late = join(roots[3]!, 'probe-late'); await mkdir(late); await writeFile(join(late, 'SKILL.md'), 'Late skill');
-  expect((await discoverAntigravitySkills({ cwd, accountHome })).skills.map(skill => skill.id)).toContain('probe-late');
 });
 
 it('enforces Read admission before client file access and honors line slices', async () => {
