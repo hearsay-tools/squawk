@@ -1,3 +1,4 @@
+import type { JSONParsed } from 'hono/utils/types';
 import type { InferRequestType, InferResponseType } from 'hono/client';
 import { hc } from 'hono/client';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,8 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
   /** `true` only when the two types are assignable BOTH ways. */
   type Mutual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : 'route-is-wider') : 'schema-is-wider';
   type Exact<Schema, Route> = Mutual<Schema, Route>;
+  // Plugin config is an open unknown bag. Compare its JSON image, as the route sends it.
+  type ExactWire<Schema, Route> = Mutual<JSONParsed<Schema>, Route>;
   type Assert<T extends true> = T;
 
   // ---- workflows -------------------------------------------------------------------------
@@ -51,11 +54,11 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
   type AgentConfigPut200 = InferResponseType<(typeof client.api.v1)['agent-config'][':id']['$put'], 200>;
 
   type _Checks = [
-    Assert<Exact<z.infer<typeof workflowsResponseSchema>, Workflows200>>,
+    Assert<ExactWire<z.infer<typeof workflowsResponseSchema>, Workflows200>>,
     Assert<Exact<z.infer<typeof saveWorkflowResponseSchema>, SaveWorkflow201>>,
     Assert<Exact<z.infer<typeof deleteWorkflowResponseSchema>, DeleteWorkflow200>>,
-    Assert<Exact<z.infer<typeof parsedWorkflowSchema>, ParseWorkflow200>>,
-    Assert<Exact<z.infer<typeof planResponseSchema>, Plan200>>,
+    Assert<ExactWire<z.infer<typeof parsedWorkflowSchema>, ParseWorkflow200>>,
+    Assert<ExactWire<z.infer<typeof planResponseSchema>, Plan200>>,
     Assert<Exact<z.input<typeof runnerSkillsQuerySchema>, NativeSkillsQuery>>,
     Assert<Exact<z.infer<typeof runnerSkillListSchema>, NativeSkills200>>,
     Assert<Exact<z.infer<typeof agentConfigListingSchema>, AgentConfig200>>,

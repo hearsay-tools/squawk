@@ -156,7 +156,7 @@ async function resolveSpawnSteps(manager: DelegationManager, parentId: string, r
   const cache = new Map<string, Promise<DelegationExecutionSettings>>();
   const resolved: ResolvedSpawnStep[] = [];
   for (const step of workflow.steps) {
-    if (stepKind(step) === 'check') continue;
+    if (stepKind(step) !== 'agent') continue;
     const selection = {
       ...(step.runner ?? request.backend) === undefined ? {} : { backend: registeredRunnerId((step.runner ?? request.backend)!) },
       ...(step.model ?? request.model) === undefined ? {} : { model: step.model ?? request.model },
@@ -241,7 +241,7 @@ async function acceptSpawnedWorker(args: {
       runner: settings.runner, model: settings.model, effort: settings.effort, agentProfile: identity.account.profileId,
       systemPrompt: settings.systemPrompt, workflowDef,
       autonomous: parent.autonomous,
-      steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step) })),
+      steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step), ...(step.kind === 'plugin' ? { pluginKind: step.pluginKind } : {}) })),
     }, family.id, request.requestId, { role: 'worker', permissions: [...DEFAULT_GRANTS.worker.operate], ...(spawnGrant ? { spawnGrant } : {}),
       parentRunId: family.id, ...(parent.id === family.id ? {} : { supervisorRunId: parent.id }), workspace, ...(context ? { context } : {}) }, requestHash, spawnCapacityRefusal, {
       ...identity, ...(context ? { contextHash: workerContextHash(context) } : {}),

@@ -36,12 +36,13 @@ export function checkStepOutcome(workflow: WorkflowDef, index: number, record: S
   // Retry consumption is distinct from executions: another check may loop
   // back through this step after it already passed. Persist only the times
   // this check itself invoked onFail so max remains bounded across restarts.
+  const label = step.kind === 'plugin' ? `plugin ${step.pluginKind}` : 'check';
   const used = record?.retriesUsed ?? 0;
   if (step.onFail && used < step.onFail.max) {
     const retryIndex = atStepOpen.retryIndex(workflow, step);
     return { kind: 'retry', retryIndex, used,
-      note: `check failed — retrying from "${step.onFail.retry}" (attempt ${used + 1}/${step.onFail.max})` };
+      note: `${label} failed — retrying from "${step.onFail.retry}" (attempt ${used + 1}/${step.onFail.max})` };
   }
-  return { kind: 'failed', error: `\`${step.command}\` exited non-zero`,
-    runError: `check "${step.id}" failed${step.onFail ? ` after ${used + 1} attempts` : ''}` };
+  return { kind: 'failed', error: step.kind === 'plugin' ? `${label} failed` : `\`${step.command}\` exited non-zero`,
+    runError: `${label} "${step.id}" failed${step.onFail ? ` after ${used + 1} attempts` : ''}` };
 }

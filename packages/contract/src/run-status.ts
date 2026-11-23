@@ -28,5 +28,5 @@ export const stepStatusSchema = z.enum([
 ]);
 export type StepStatus = z.infer<typeof stepStatusSchema>;
 
-export const stepKindSchema = z.enum(['agent', 'check']);
+export const stepKindSchema = z.enum(['agent', 'check', 'plugin']);
 export type StepKind = z.infer<typeof stepKindSchema>;

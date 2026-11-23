@@ -58,6 +58,9 @@ export async function crashAfterContinue(repoRoot: string, dataDir: string, runI
     import { registerBuiltInRunners, sealBuiltInRunners } from ${JSON.stringify(new URL('../runners/built-in.ts', import.meta.url).href)};
     import { WorkspaceSemaphore } from ${JSON.stringify(new URL('../workspace/semaphore.ts', import.meta.url).href)};
     import { Home } from ${JSON.stringify(new URL('../home/home.ts', import.meta.url).href)};
+    import { registerBuiltInStepKinds, sealBuiltInStepKinds } from ${JSON.stringify(new URL('./step-kind-registry.ts', import.meta.url).href)};
+    registerBuiltInStepKinds();
+    sealBuiltInStepKinds();
     registerBuiltInRunners();
 sealBuiltInRunners();
     const home = Home.sandbox(process.env.CEZ_HOME);

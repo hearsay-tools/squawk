@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { STEP_KIND } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -122,6 +123,13 @@ describe('WB_MAX_STEPS', () => {
 // ---- YAML preview / export ----------------------------------------------------------------------
 
 describe('workflowYaml', () => {
+  it('round-trips plugin fields, nested config, and retries in exported YAML', () => {
+    const plugin: WorkflowStepDef = { id: 'deploy', kind: STEP_KIND.plugin, pluginKind: 'deploy',
+      config: { target: 'dev', nested: { flags: [true, 3, 'a: b'] } }, onFail: { retry: 'prepare', max: 2 } }
+    const prepare: WorkflowStepDef = { id: 'prepare', command: 'true' }
+    expect(parse(workflowYaml('example', '', [prepare, plugin]))).toEqual({ name: 'example', steps: [prepare, plugin] })
+  })
+
   it('a pure stack round-trips through YAML in the portable compact form', () => {
     const steps = [stackStep('test-conventions'), stackStep('commit-style')]
     const text = workflowYaml('My Flow', 'Checks then commit style.', steps)

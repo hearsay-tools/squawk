@@ -25,6 +25,7 @@ import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { StepState } from '../../runs/store.ts';
 import type { WorkflowStepDef } from '../types.ts';
 import { stepKind } from '../types.ts';
+import { stepKindDefinition } from '../step-kind-registry.ts';
 import type { PersistedAttachment } from '../pasted-content.ts';
 import { openWaits } from '../waits.ts';
 import { runGroupedCommand } from '../grouped-command.ts';
@@ -331,6 +332,7 @@ export class StepLoop {
 
       this.host.move(runId, 'start', { currentStepId: step.id }, { stepId: step.id });
       this.context.store.updateStep(runId, step.id, {
+        ...(step.kind === 'plugin' ? { pluginKind: step.pluginKind } : {}),
         status: 'running',
         iterations: iteration,
         startedAt: new Date().toISOString(),
@@ -338,38 +340,47 @@ export class StepLoop {
       });
       emit({ type: 'step-start', stepId: step.id, name: step.name ?? step.id, kind, iteration });
 
-      if (kind === 'agent') {
-        // Every agent step's session stays open after its turn until a done, finish, idle or cancel
-        // closes it. Only a done completes a step that is not the last (hearsay-tools/cezarion#1620).
-        const nextStep = atStepOpen.workflowStep(workflow, i + 1);
-        const attemptStartedAt = Date.now();
-        const failure = await this.stepSession.runAgentStep(
-          runId,
-          state,
-          step,
-          input,
-          loop.checkFailure,
-          nextStep,
-          emit,
-          startImages,
-          launch.taskBackend,
-          launch.extraSystemPrompt,
-          atStepOpen.workflowChainNote(workflow, i),
-          startAttachments,
-          startSetupNote,
-        );
-        startImages = undefined;
-        startAttachments = [];
-        startSetupNote = undefined;
-        loop.checkFailure = null;
-        const after = this.nextAfterAgentStep(execution, launch, loop, atStepOpen.afterStepPayload(i, step, nextStep, { failure, startedAt: attemptStartedAt }));
-        if (after === 'handed-off') return undefined;
-        if (after === 'settle') break;
-        i++;
-        continue;
-      }
-
-      const { ok, output } = await this.runCheckStep(runId, state, step, emit);
+      const definition = stepKindDefinition(step.kind === 'plugin' ? step.pluginKind! : kind);
+      definition.validate?.(step);
+      const executionContext = atStepOpen.sessionPayload(step, {
+        runId, cwd: state.liveSession.cwd, emit,
+        isCancelled: () => state.liveSession.cancelled,
+        setInterrupt: (stop: () => void) => { state.liveSession.installInterrupt(stop); },
+        runCheck: () => this.runCheckStep(runId, state, step, emit),
+        runAgent: async () => {
+          // Every agent step's session stays open after its turn until a done, finish, idle or cancel
+          // closes it. Only a done completes a step that is not the last (hearsay-tools/cezarion#1620).
+          const nextStep = atStepOpen.workflowStep(workflow, i + 1);
+          const attemptStartedAt = Date.now();
+          const failure = await this.stepSession.runAgentStep(
+            runId,
+            state,
+            step,
+            input,
+            loop.checkFailure,
+            nextStep,
+            emit,
+            startImages,
+            launch.taskBackend,
+            launch.extraSystemPrompt,
+            atStepOpen.workflowChainNote(workflow, i),
+            startAttachments,
+            startSetupNote,
+          );
+          startImages = undefined;
+          startAttachments = [];
+          startSetupNote = undefined;
+          loop.checkFailure = null;
+          const after = this.nextAfterAgentStep(execution, launch, loop, atStepOpen.afterStepPayload(i, step, nextStep, { failure, startedAt: attemptStartedAt }));
+          return { kind: after };
+        },
+      });
+      const outcome = await definition.execute(executionContext);
+      if (outcome.kind === 'handed-off') return undefined;
+      if (outcome.kind === 'settle') break;
+      if (outcome.kind === 'next') { i++; continue; }
+      if (outcome.kind !== 'result') throw new Error('Invalid workflow step outcome');
+      const { ok, output } = outcome;
       if (state.liveSession.cancelled || preserveRunAfterDisposal(this.context.store, this.context.disposed, runId, state)) break;
       const nextIndex = this.settleCheckStep(execution, i, record, { ok, output }, loop);
       if (nextIndex === undefined) break;
