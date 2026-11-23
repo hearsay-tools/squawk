@@ -3186,7 +3186,7 @@ export function createApp(deps: ServerDeps) {
       const required = untouched
         ? providersRequiredByWorkflow(run.workflowDef!, provider)
         : [provider];
-      const blocked = await providerActionError(required, { repoRoot, run, runners: { original: originalProvider, target: provider } });
+      const blocked = await providerActionError(required, { repoRoot, run, untouched, runners: { original: originalProvider, target: provider } });
       if (blocked) return c.json({ error: blocked }, 409);
       const result = manager.continueRun(id, {
         text: parsed.data.text,

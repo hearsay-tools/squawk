@@ -858,4 +858,82 @@ describe('owned worker Continue engine controls', () => {
     expect(await screen.findByText('Connect an agent provider to continue.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /continue/i })).toBeNull()
   })
+
+  it('uses the continued worker step account for availability and discovery on a mixed-account chain', async () => {
+    const accounts: AgentProfilesResponse = {
+      editable: true,
+      profileCapableProviders: ['claude', 'codex'],
+      selections: {},
+      profiles: [
+        {
+          id: 'default',
+          provider: 'claude',
+          label: 'Default',
+          configDir: '/home/u/.claude',
+          path: '/home/u/.claude',
+          exists: true,
+          looksValid: false,
+          isDefault: true,
+          status: { provider: 'claude', status: 'disconnected' },
+        },
+        {
+          id: 'work',
+          provider: 'claude',
+          label: 'Work',
+          configDir: '~/.claude-work',
+          path: '/home/u/.claude-work',
+          exists: true,
+          looksValid: true,
+          isDefault: false,
+          status: { provider: 'claude', status: 'connected' },
+        },
+      ],
+    }
+    serve(
+      HEALTH_MULTI,
+      {},
+      {
+        providers: [
+          { provider: 'claude', status: 'disconnected', enabled: true },
+          { provider: 'codex', status: 'connected', enabled: true },
+          { provider: 'opencode', status: 'not-installed', enabled: true },
+        ],
+      },
+      200,
+      false,
+      accounts,
+    )
+    renderAction(workerRun({
+      runner: 'codex',
+      agentProfile: 'default',
+      model: 'gpt-5.1-codex',
+      effort: 'low',
+      workflowDef: {
+        name: 'mixed',
+        source: 'file',
+        steps: [
+          { id: 'implement', prompt: 'impl', runner: 'codex', agentProfile: 'default', model: 'gpt-5.1-codex' },
+          { id: 'review', prompt: 'rev', runner: 'claude', agentProfile: 'work', model: 'opus', effort: 'high' },
+        ],
+      },
+      workflowCursor: { mode: 'resume', stepId: 'review' },
+      steps: [
+        step({ id: 'implement', status: STEP_STATUS.done, backend: 'codex', profileId: 'default', sessionId: 'sess-codex', startedAt: '2026-11-23T00:01:00.000Z' }),
+        step({ id: 'review', status: STEP_STATUS.failed, backend: 'claude', profileId: 'work', sessionId: 'sess-claude', startedAt: '2026-11-23T00:02:00.000Z' }),
+      ],
+    }))
+    // Claude's default account is disconnected, but the continued review step is pinned to connected `work`.
+    expect(await screen.findByLabelText(/^Runner · claude/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('opus')
+    expect(screen.getByRole('button', { name: /^Effort · / }).textContent).toContain('high')
+    expect(screen.queryByText('Starts a new agent conversation.')).toBeNull()
+    await waitFor(() => expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/work'))
+    expect(requests.some(request => request.url === '/api/v1/models?runner=claude&profileId=work')).toBe(true)
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Model · / }))
+    const options = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(options.find((o) => o.textContent?.includes('sonnet')) as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toEqual({ model: 'sonnet' }))
+  })
 })

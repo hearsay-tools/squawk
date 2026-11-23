@@ -1,4 +1,4 @@
-import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { latestSessionStep, sessionRunner, workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { runAddress } from '@/api/run-address'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
@@ -19,8 +19,8 @@ import {
   resolveEffort,
   resolveModel,
 } from '@/routes/new-task-form'
-import { useContinuationProvider, workerContinuationStep } from './continuation-provider'
-import { runActionFlags } from './run-actions'
+import { useContinuationProvider } from './continuation-provider'
+import { isStoppedBeforeStarting, runActionFlags } from './run-actions'
 
 /** What the thread needs to offer Continue from its composer. */
 export interface ContinueAction {
@@ -57,7 +57,7 @@ function resolveContinueModel(
   config: ContinueConfig, catalog: ContinueCatalog, registered: ContinueRunners,
   pickedModel: string | null, pickedEffort: string | null,
 ) {
-  const workerStep = workerContinuationStep(run)
+  const workerStep = workerContinuationStep(run, isStoppedBeforeStarting(run))
   const currentModel = workerStep ? workerStep.model : run.model
   const currentEffort = workerStep ? workerStep.effort : run.effort
   // While the runner is unchanged, the model pill starts on the run's own pin; switching the
@@ -84,8 +84,9 @@ function resolveContinueModel(
  */
 function resolveContinueAccount(run: ApiRun, runner: Runner, runnerChanged: boolean, repoAccount: ContinueAccounts['repoAccount']) {
   const sessionStep = latestSessionStep(run.steps)
-  const runAccount = run.agentProfile ?? sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
-  return { sessionStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
+  const workerStep = workerContinuationStep(run, isStoppedBeforeStarting(run))
+  const runAccount = workerStep?.agentProfile ?? run.agentProfile ?? sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+  return { sessionStep, workerStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
 }
 
 type ContinueModel = ReturnType<typeof resolveContinueModel>
@@ -125,11 +126,12 @@ function continueRequestBody(
 
 function continueStartsNewConversation(
   run: ApiRun, sessionStep: ReturnType<typeof resolveContinueAccount>['sessionStep'],
+  workerStep: ReturnType<typeof resolveContinueAccount>['workerStep'],
   runner: Runner,
 ) {
   return !!sessionStep && (
     runner !== sessionRunner(sessionStep, run) ||
-    (run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
+    (workerStep?.agentProfile ?? run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
       (sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID)
   )
 }
@@ -177,7 +179,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   // runner pill re-reads that backend's own models. Only a run that can actually be continued
   // fetches at all — every other thread (running, queued, closed with no session) would be
   // fetching it to render nothing.
-  const { sessionStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
+  const { sessionStep, workerStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
   const health = useHealth()
   const localHandoff = health.data?.capabilities?.localHandoff !== false
   const catalog = useRunnerModels(runner, available && !health.isPending, localHandoff ? account : null)
@@ -216,7 +218,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     skillAccount: account,
     available,
     canContinue,
-    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner),
+    startsNewConversation: continueStartsNewConversation(run, sessionStep, workerStep, runner),
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (

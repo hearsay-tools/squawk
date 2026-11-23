@@ -6,7 +6,7 @@ import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
 import type { PeerWaitView, WorkerCompletionWait, WorkerWait } from './delegation.ts';
 import { requestOutcomeSchema } from './conversations.ts';
 import type { RunRecord } from './runs.ts';
-import { isUsageLimitHold } from './usage-limit-hold.ts';
+import { isUsageLimitHold, usageLimitHoldOf } from './usage-limit-hold.ts';
 import {
   WAIT_LIMIT,
   LAST_WAITS_LIMIT,
@@ -40,6 +40,7 @@ export {
 } from './waiting-on.ts';
 export {
   isUsageLimitHold,
+  usageLimitHoldOf,
   WAIT_LIMIT,
   LAST_WAITS_LIMIT,
   TIMER_MIN_SECONDS,

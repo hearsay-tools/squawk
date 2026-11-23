@@ -2,7 +2,7 @@ import { controlLocation } from '@open-mercato/cezar-api-client/contract/control
 import { providerForActiveRun } from '@open-mercato/cezar-api-client/contract/active-provider'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import type { ApiRun, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
-import { latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { latestSession, workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { useProviderStatus } from '@/api/queries'
@@ -12,13 +12,30 @@ import { providerStatusFor } from '@/lib/provider-status'
 
 /** Mirrors the server's providerForExistingRun for an override-free POST /continue. */
 export function providerForExistingRun(run: ApiRun): Runner {
-  return run.runner ?? 'claude'
+  return workerContinuationStep(run)?.runner ?? run.runner ?? 'claude'
 }
 
 /** A continuation's runners: the run's own (`original`) and the one it continues on (`target`). */
 export interface ContinueRunners {
   original: Runner
   target: Runner
+}
+
+function workerAccountId(
+  run: ApiRun,
+  provider: Runner,
+  original: Runner,
+  target: Runner,
+  repoAccount: Partial<Record<Runner, string>> | undefined,
+  untouched: boolean,
+): string | undefined {
+  if (untouched) {
+    const match = run.workflowDef?.steps.find(step =>
+      step.command === undefined && step.kind !== 'plugin' && (step.runner ?? run.runner ?? 'claude') === provider)
+    return match?.agentProfile ?? (provider === original ? run.agentProfile : undefined) ?? repoAccount?.[provider]
+  }
+  if (provider !== target) return repoAccount?.[provider]
+  return workerContinuationStep(run)?.agentProfile
 }
 
 /**
@@ -33,9 +50,14 @@ export function runAccountId(
   provider: Runner,
   repoAccount: Partial<Record<Runner, string>> | undefined,
   runners?: ContinueRunners,
+  untouched = false,
 ): string | undefined {
-  const original = runners?.original ?? run.runner ?? 'claude'
+  const original = runners?.original ?? providerForExistingRun(run)
   const target = runners?.target ?? original
+  if (run.delegation?.role === 'worker') {
+    const pinned = workerAccountId(run, provider, original, target, repoAccount, untouched)
+    if (pinned !== undefined || untouched) return pinned
+  }
   if (provider !== target) return repoAccount?.[provider]
   const session = latestSession(run)
   const sessionAccount = session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID

@@ -1,7 +1,7 @@
 import { withCutOff } from './cut-off-work.ts';
 import { atContinue, atTaskHead } from './launch-read-resolver.ts';
 
-import { patchWorkerIdentity, readWorkerIdentity, type AcceptedWorkerIdentity, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
+import { patchWorkerIdentity, readWorkerIdentity, resolveWorkerIdentity, type AcceptedWorkerIdentity, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunRecord, StepState } from '../../runs/store.ts';
@@ -82,8 +82,8 @@ export class ContinuationAcceptance {
       run: () => this.context.store.getRun(runId),
       historyDeletionPending: () => historyDeletionPending(this.context.store, runId),
       parentStatus: parentId => this.context.store.getRun(parentId)?.status,
-      identity: (run, session) => this.host.workerStep(runId, atContinue.definitionId(atContinue.definitionStep(this.context.store, run, session))),
-      identityStepId: (run, session) => atContinue.definitionId(atContinue.definitionStep(this.context.store, run, session)),
+      identity: (run, session) => this.host.workerStep(runId, atContinue.definitionId(atContinue.definitionStep(this.context.store, run, session, this.host.isUntouchedCancelledRun(run)))),
+      identityStepId: (run, session) => atContinue.definitionId(atContinue.definitionStep(this.context.store, run, session, this.host.isUntouchedCancelledRun(run))),
       continuedStep: (run, session) => atContinue.continuedStep(this.context.store, run, session),
       beforeFinalStep: run => workflowPosition.waitingBeforeFinalWorkflowStep(run, (record, step) => this.host.isSyntheticContinuation(record, step), record => this.waitingWorkflowStepIndex(record)),
       waitingStepIndex: run => this.waitingWorkflowStepIndex(run),
@@ -123,8 +123,9 @@ export class ContinuationAcceptance {
     if (modelError) return modelError;
     const effort = continuation.normalizeWorkerOverrideEffort(opts.effort);
     if (!effort.ok) return effort;
-    const previous = readWorkerIdentity(this.context.store.workerExecutions, runId);
-    if (previous?.kind !== 'accepted') return undefined;
+    const raw = readWorkerIdentity(this.context.store.workerExecutions, runId);
+    if (raw?.kind !== 'accepted') return undefined;
+    const previous = resolveWorkerIdentity(admitted.run, raw);
     const model = opts.model === undefined ? undefined : opts.model.trim();
     const patched = patchWorkerIdentity(admitted.run, previous, admitted.identityStepId, { model, effort: effort.value });
     return patched ? { previous, next: patched.identity, runPatch: patched.runPatch } : undefined;
@@ -133,19 +134,20 @@ export class ContinuationAcceptance {
   private acceptUntouchedContinuation(runId: string, opts: ContinueRunOptions, supersedes: boolean, workerOverride?: WorkerIdentityOverride): continuation.ContinuationResult {
     const current = this.context.store.getRun(runId)!;
     let job: { workflow: WorkflowDef; input: StartRunInput };
-    if (workerOverride) {
-      this.context.store.workerExecutions.updateWorkerIdentity(runId, workerOverride.next);
-      this.context.store.updateRun(runId, workerOverride.runPatch);
-    }
+    let identityStaged = false;
     try {
-      const latest = this.context.store.getRun(runId)!;
-      job = latest.delegation?.role === 'worker'
-        // A projection of the job the line will start, not a status write.
-        ? this.host.ownedJob({ ...latest, status: 'queued' })
-        : { workflow: atContinue.storedWorkflow(latest)!, input: atTaskHead.recoveryInput(latest) };
+      if (workerOverride) {
+        this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.next });
+        identityStaged = true;
+      }
+      // Build the job from a detached projection so a checkpoint refusal leaves the held RunRecord untouched.
+      const projected = workerOverride ? { ...current, ...workerOverride.runPatch, status: 'queued' as const } : { ...current, status: 'queued' as const };
+      job = current.delegation?.role === 'worker'
+        ? this.host.ownedJob(projected)
+        : { workflow: atContinue.storedWorkflow(current)!, input: atTaskHead.recoveryInput(current) };
       this.workerExecutions.beginWorkerExecution(runId, false);
     } catch (error) {
-      if (workerOverride) this.rollbackWorkerOverride(runId, current, workerOverride.previous);
+      if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
       return admissionRefusal(error, 'original execution checkpoint unavailable');
     }
     if (supersedes) this.workerQuestions.supersedeWorkerFallback(runId);
@@ -153,19 +155,22 @@ export class ContinuationAcceptance {
     const message = content.length ? this.queuedInput.toQueuedMessage(runId, content) : undefined;
     this.autoResumeScheduler.clearAutoResume(runId);
     this.context.store.archive.setArchived(runId, false);
-    this.host.move(runId, 'continue-line', { stopping: undefined,
-      ...(message ? { queuedMessages: [...(current.queuedMessages ?? []), message] } : {}) });
+    this.host.move(runId, 'continue-line', {
+      ...(workerOverride ? workerOverride.runPatch : {}),
+      stopping: undefined,
+      ...(message ? { queuedMessages: [...(current.queuedMessages ?? []), message] } : {}),
+    });
     this.context.store.persistence.flush();
+    if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
     this.line.enqueueJob(runId, job);
     void this.host.pump();
     return { ok: true };
   }
 
-  private rollbackWorkerOverride(runId: string, previousRun: RunRecord, previousIdentity: AcceptedWorkerIdentity): void {
+  private finalizeWorkerIdentity(runId: string, identity: AcceptedWorkerIdentity): void {
     try {
-      this.context.store.workerExecutions.updateWorkerIdentity(runId, previousIdentity);
-      this.context.store.updateRun(runId, atContinue.workerRollbackPatch(previousRun));
-    } catch { /* best-effort rollback */ }
+      this.context.store.workerExecutions.updateWorkerIdentity(runId, identity);
+    } catch { /* best-effort; crash-recovery pending reconciles against runs.db on read */ }
   }
 
   private acceptResumedContinuation(runId: string, opts: ContinueRunOptions, deferForCapacity: boolean,
@@ -214,24 +219,23 @@ export class ContinuationAcceptance {
     conversation: continuation.ContinuationConversation,
     workerOverride?: WorkerIdentityOverride): continuation.ContinuationRefusal | undefined {
     if (run.delegation?.role === 'worker') {
-      let identityUpdated = false;
+      let identityStaged = false;
       try {
         if (workerOverride) {
-          this.context.store.workerExecutions.updateWorkerIdentity(runId, workerOverride.next);
-          identityUpdated = true;
+          this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.next });
+          identityStaged = true;
         }
         this.context.store.commitWorkerContinuation(runId, exit, acceptedPatch, continuationStep, conversation);
       }
       catch (error) {
-        if (identityUpdated && workerOverride) {
-          try { this.context.store.workerExecutions.updateWorkerIdentity(runId, workerOverride.previous); } catch { /* best-effort rollback */ }
-        }
+        if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
         // No session exists yet. Release the private reservation through execution finalization.
         void this.host.finishWorkerExecution(runId);
         const cause = error instanceof Error && error.message ? error.message : String(error);
         console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
         return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
       }
+      if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
     } else this.context.store.move(runId, exit, acceptedPatch);
   }
 

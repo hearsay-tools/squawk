@@ -4,11 +4,11 @@ import { resolveRunnerId } from '../core/runner-registry.ts';
 import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { executionAccount } from '../workflows/execution-account.ts';
-import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSession, workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import { loadAgentAccounts } from '../workspace/agent-accounts.ts';
 import { selectProfile, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-import type { GateAccount } from './provider-action-gate.ts';
+import { providerForExistingRun, type GateAccount } from './provider-action-gate.ts';
 
 /**
  * The NAMED (non-default) account each provider of a start will run on (hearsay-tools/squawk#4116).
@@ -45,6 +45,7 @@ export interface AccountScope {
   repoRoot: string;
   run?: RunRecord | undefined;
   live?: boolean | undefined;
+  untouched?: boolean | undefined;
   runners?: ContinueRunners | undefined;
   picks?: Partial<Record<ProviderId, string | undefined>> | undefined;
 }
@@ -53,10 +54,10 @@ export interface AccountScope {
 export function scopeRunAccounts(
   home: Home,
   required: readonly ProviderId[],
-  { repoRoot, run, live, runners, picks = {} }: AccountScope,
+  { repoRoot, run, live, untouched, runners, picks = {} }: AccountScope,
 ): Promise<Map<ProviderId, ResolvedAgentProfile>> {
   const fromRun = (provider: ProviderId) => run === undefined ? undefined
-    : live ? liveAccountFor(run, provider) : runAccountFor(run, provider, runners);
+    : live ? liveAccountFor(run, provider) : runAccountFor(run, provider, runners, untouched);
   const chosen = Object.fromEntries(required.map((provider) => [provider, picks[provider] ?? fromRun(provider)]));
   return namedRunAccounts(home, repoRoot, required, chosen);
 }
@@ -73,6 +74,16 @@ export interface ContinueRunners {
   target: ProviderId;
 }
 
+function workerAccountFor(run: RunRecord, provider: ProviderId, original: ProviderId, target: ProviderId, untouched: boolean): string | undefined {
+  if (untouched) {
+    const match = run.workflowDef?.steps.find(step =>
+      step.command === undefined && step.kind !== 'plugin' && resolveRunnerId(step.runner ?? run.runner) === provider);
+    return match?.agentProfile ?? (provider === original ? run.agentProfile : undefined);
+  }
+  if (provider !== target) return undefined;
+  return workerContinuationStep(run)?.agentProfile;
+}
+
 /**
  * The account a continuation's turn on `provider` uses, as the engine picks it (`sessionAffinity`,
  * `overridePatch`, `agentEnvForStep`). The target runner resumes the latest session when that session
@@ -80,9 +91,13 @@ export interface ContinueRunners {
  * recorded). Otherwise the target runner starts fresh on the run's account, which a runner switch
  * clears first; every other runner uses the project's selection (absent).
  */
-export function runAccountFor(run: RunRecord, provider: ProviderId, runners?: ContinueRunners): string | undefined {
-  const original = runners?.original ?? resolveRunnerId(run.runner ?? DEFAULT_RUNNER_ID);
+export function runAccountFor(run: RunRecord, provider: ProviderId, runners?: ContinueRunners, untouched = false): string | undefined {
+  const original = runners?.original ?? providerForExistingRun(run);
   const target = runners?.target ?? original;
+  if (run.delegation?.role === 'worker') {
+    const pinned = workerAccountFor(run, provider, original, target, untouched);
+    if (pinned !== undefined || untouched) return pinned;
+  }
   if (provider !== target) return undefined;
   const session = latestSession(run);
   const sessionAccount = session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;

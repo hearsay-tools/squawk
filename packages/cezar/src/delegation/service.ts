@@ -1,6 +1,7 @@
 import { spawnCapacityRefusal } from './capacity.ts';
 import { commandText } from '../home/command.ts';
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
+import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { projectPaths } from '../project-paths.ts';
 import type { Home } from '../home/home.ts';
 import { assertReplyDirection, sendRequestContext, sendAdmission, sendMessage, sendInput, type ConversationPair } from './conversation-send.ts';
@@ -434,8 +435,9 @@ export class DelegationService {
     return { ...(model === undefined ? {} : { model }), ...(request.effort === undefined ? {} : { effort: effortPin ?? '' }) };
   }
   private resumeStepTarget(project: DelegationProject, recipient: RunRecord) {
+    const untouched = isUntouchedCancelledRun(recipient);
     const sessionId = latestSessionStep(recipient.steps)?.sessionId;
-    const stepId = continuationDefStep(project.store, recipient, sessionId)?.id;
+    const stepId = continuationDefStep(project.store, recipient, sessionId, untouched)?.id;
     try {
       const identity = workerIdentity(project.store, project.root, recipient.id, stepId, project.home);
       const stepIdentity = identity ? (stepId === undefined ? identity : workerStepIdentity(identity, stepId)) : undefined;

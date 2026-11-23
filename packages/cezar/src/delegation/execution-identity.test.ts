@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  acceptedWorkerIdentitySchema, boundWorkerAccountEnv, captureWorkerAccount, patchWorkerIdentity, workerAccountBindingSchema,
+  acceptedWorkerIdentitySchema, boundWorkerAccountEnv, captureWorkerAccount, ownedWorkflow, patchWorkerIdentity,
+  resolveWorkerIdentity, workerAccountBindingSchema,
   workerExecutionIdentitySchema, workerStepIdentity, workerWorkflowHash, WorkerIdentityError,
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
@@ -88,6 +89,51 @@ describe('per-step worker identity (#452)', () => {
     expect(step1.identity.effort).toBe('medium');
     expect(step1.runPatch).toMatchObject({ model: 'gpt-5.1-codex-mini', effort: 'medium' });
     expect(step1.identity.workflowHash).toBe(workerWorkflowHash(step1.runPatch.workflowDef!));
+  });
+
+  it('recovers crash-staged pending overrides against either pre-commit or post-commit runs.db state', () => {
+    const workflowDef = {
+      name: 'mixed',
+      source: 'file' as const,
+      steps: [
+        { id: 'implement', prompt: 'impl', runner: 'codex', agentProfile: 'work', model: 'gpt-5.1-codex', allowedTools: [] },
+        { id: 'review', prompt: 'rev', runner: 'claude', agentProfile: 'default', model: 'opus', effort: 'high', allowedTools: ['Read'] },
+      ],
+    };
+    const previous = acceptedWorkerIdentitySchema.parse({
+      kind: 'accepted',
+      account: codex,
+      grants: { allowedTools: [] },
+      model: 'gpt-5.1-codex',
+      workflowHash: workerWorkflowHash(workflowDef),
+      steps: [
+        { stepId: 'implement', account: codex, grants: { allowedTools: [] }, model: 'gpt-5.1-codex' },
+        { stepId: 'review', account: claude, grants: { allowedTools: ['Read'] }, model: 'opus', effort: 'high' },
+      ],
+    });
+    const beforeRun = { id: 'r-crash', runner: 'codex', agentProfile: 'work', model: 'gpt-5.1-codex', workflowDef } as unknown as RunRecord;
+    const patched = patchWorkerIdentity(beforeRun, previous, 'review', { model: 'sonnet', effort: 'low' })!;
+    const staged = acceptedWorkerIdentitySchema.parse({ ...previous, pending: patched.identity });
+    const afterRun = { ...beforeRun, ...patched.runPatch } as unknown as RunRecord;
+
+    // Crash BEFORE runs.db commit: base identity still matches and stays active.
+    expect(resolveWorkerIdentity(beforeRun, staged)).toEqual(previous);
+    expect(ownedWorkflow(beforeRun, staged)).toEqual(workflowDef);
+
+    // Crash AFTER runs.db commit, BEFORE finalize: pending identity matches and becomes active.
+    expect(resolveWorkerIdentity(afterRun, staged)).toEqual(patched.identity);
+    expect(ownedWorkflow(afterRun, staged)).toEqual(patched.runPatch.workflowDef);
+
+    // Subsequent override from a staged record strips `pending` rather than nesting it.
+    const nextPatch = patchWorkerIdentity(afterRun, staged, 'review', { model: 'haiku' })!;
+    expect(nextPatch.identity).not.toHaveProperty('pending');
+    expect(nextPatch.identity.steps![1]?.model).toBe('haiku');
+
+    // Tampered runs.db matching neither base nor pending is still rejected.
+    const tampered = { ...beforeRun, model: 'unauthorized-model' } as unknown as RunRecord;
+    expect(resolveWorkerIdentity(tampered, staged)).toEqual(previous);
+    const tamperedWorkflow = { ...beforeRun, workflowDef: { ...workflowDef, steps: [workflowDef.steps[0]!] } } as unknown as RunRecord;
+    expect(() => ownedWorkflow(tamperedWorkflow, staged)).toThrow(WorkerIdentityError);
   });
 });
 

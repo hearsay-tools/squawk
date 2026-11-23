@@ -52,6 +52,41 @@ export function latestSession(run: { steps: readonly Pick<StepState, 'id' | 'ses
   return { sessionId: step?.sessionId, backend: sessionRunner(step, run), profileId: step?.profileId };
 }
 
+type WorkerContinuationRun = Partial<Pick<RunRecord, 'delegation' | 'workflowDef' | 'workflowCursor'>> & {
+  steps: readonly Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'continuesStepId' | 'synthetic' | 'status'>[];
+};
+type WorkflowStepEntry = NonNullable<RunRecord['workflowDef']>['steps'][number];
+
+function isAgentWorkflowStep(step: WorkflowStepEntry): boolean {
+  return step.command === undefined && step.kind !== 'plugin';
+}
+
+function workerContinuationStepId(run: WorkerContinuationRun): string | undefined {
+  const cursorId = run.workflowCursor?.mode === 'resume' ? run.workflowCursor.stepId : undefined;
+  if (cursorId && run.steps.find(step => step.id === cursorId)?.status !== 'done') return cursorId;
+  const session = latestSessionStep(run.steps);
+  if (!session) return undefined;
+  if (session.synthetic === 'continuation' && session.continuesStepId !== undefined) return session.continuesStepId;
+  return run.steps.find(step => step.sessionId === session.sessionId)?.id ?? session.id;
+}
+
+/**
+ * The workflow agent step an owned worker's Continue extends: the first agent step when untouched,
+ * else the resumed cursor step, else the step owning the latest session, else the last agent step.
+ */
+export function workerContinuationStep(
+  run: WorkerContinuationRun,
+  untouched = false,
+): WorkflowStepEntry | undefined {
+  if (run.delegation?.role !== 'worker') return undefined;
+  const steps = run.workflowDef?.steps;
+  if (!steps?.length) return undefined;
+  if (untouched) return steps.find(isAgentWorkflowStep);
+  const targetId = workerContinuationStepId(run);
+  const targeted = targetId ? steps.find(step => step.id === targetId && isAgentWorkflowStep(step)) : undefined;
+  return targeted ?? [...steps].reverse().find(isAgentWorkflowStep);
+}
+
 const LIVE_STATUSES: ReadonlySet<string> = new Set(['queued', 'running', 'waiting']);
 
 /** Status-only live predicate: queued, running or waiting. */

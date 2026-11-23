@@ -4,6 +4,7 @@ import type { ProviderStatusResponse } from '@open-mercato/cezar-contract/worksp
 import type { RunRecord } from '../runs/store.ts';
 import { registeredRunners, runnerDefinition, resolveRunnerId } from '../core/runner-registry.ts';
 import { providersRequiredByWorkflow as requiredByWorkflow } from '@open-mercato/cezar-contract/workflows';
+import { workerContinuationStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { WorkflowDef } from '@open-mercato/cezar-contract/workflows';
 
 /** The registered runners an original workflow executes, in registration order. */
@@ -16,7 +17,7 @@ export function providerForExistingRun(
   override?: ProviderId,
 ): ProviderId {
   if (override) return override;
-  return resolveRunnerId(run.runner);
+  return resolveRunnerId(workerContinuationStep(run)?.runner ?? run.runner);
 }
 
 /**

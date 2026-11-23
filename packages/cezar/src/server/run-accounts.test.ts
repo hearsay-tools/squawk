@@ -4,6 +4,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { runAccountFor } from './run-accounts.ts';
+import { providerForExistingRun } from './provider-action-gate.ts';
 
 registerBuiltInRunners();
 sealTestRunners();
@@ -67,5 +68,42 @@ describe('runAccountFor', () => {
 
   it('leaves any other provider to the project selection', () => {
     expect(runAccountFor(run({ runner: 'claude', agentProfile: 'work' }), 'codex')).toBeUndefined();
+  });
+
+  it('uses the continued worker step runner and account on a mixed-account worker chain', () => {
+    const worker = run({
+      runner: 'codex',
+      agentProfile: 'default',
+      delegation: {
+        role: 'worker',
+        parentRunId: '11111111-2222-4333-8444-555555555555',
+        permissions: ['inspect'],
+        workspace: {
+          kind: 'owned-isolated',
+          ownerRunId: 'run-1',
+          resourceId: 'res-1',
+          path: '/repo/.worktrees/run-1',
+          branch: 'cez/run-1',
+          baselineSha: '0123456789abcdef0123456789abcdef01234567',
+        },
+      },
+      workflowDef: {
+        name: 'mixed',
+        source: 'file',
+        steps: [
+          { id: 'implement', prompt: 'impl', runner: 'codex', agentProfile: 'default' },
+          { id: 'review', prompt: 'rev', runner: 'claude', agentProfile: 'work', model: 'opus' },
+        ],
+      },
+      workflowCursor: { mode: 'resume', stepId: 'review' },
+      steps: [
+        { id: 'implement', name: 'Implement', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, backend: 'codex', profileId: 'default', sessionId: 's-codex', startedAt: '2026-11-23T00:01:00.000Z' },
+        { id: 'review', name: 'Review', kind: STEP_KIND.agent, status: STEP_STATUS.failed, iterations: 1, tokensUsed: 0, backend: 'claude', profileId: 'work', startedAt: '2026-11-23T00:02:00.000Z' },
+      ],
+    });
+    expect(providerForExistingRun(worker)).toBe('claude');
+    expect(runAccountFor(worker, 'claude')).toBe('work');
+    expect(runAccountFor(worker, 'claude', { original: 'codex', target: 'claude' }, true)).toBe('work');
+    expect(runAccountFor(worker, 'codex', { original: 'codex', target: 'codex' }, true)).toBe('default');
   });
 });
