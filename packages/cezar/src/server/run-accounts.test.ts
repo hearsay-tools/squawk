@@ -28,14 +28,28 @@ describe('runAccountFor', () => {
       steps: [{ id: 'b', name: 'B', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 0, tokensUsed: 0, backend: 'codex', sessionId: 's-codex', startedAt: '2026-11-23T00:01:00.000Z' }],
    });
     expect(runAccountFor(mixed, 'claude')).toBe('work');
-    // The session's own provider resumes on the session's account, `default` when none was recorded.
-    expect(runAccountFor(mixed, 'codex')).toBe('default');
+    // The run account differs from the codex session's (`default`): a switch to codex starts fresh.
+    expect(runAccountFor(mixed, 'codex')).toBeUndefined();
+    // Without a run account the session's provider resumes on the session's account.
+    expect(runAccountFor({ ...mixed, agentProfile: undefined }, 'codex')).toBe('default');
   });
 
   it('resumes the session account, and the run account when it differs', () => {
     const steps = [{ id: 'a', name: 'A', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 0, tokensUsed: 0, backend: 'claude', sessionId: 's1', profileId: 'old', startedAt: '2026-11-23T00:01:00.000Z' }];
     expect(runAccountFor(run({ runner: 'claude', steps}), 'claude')).toBe('old');
     expect(runAccountFor(run({ runner: 'claude', agentProfile: 'work', steps}), 'claude')).toBe('work');
+  });
+
+  it('uses the project selection when a runner switch starts a fresh session', () => {
+    // The run account differs from the codex session's account: the engine starts fresh and a runner
+    // switch clears the run account, so codex runs on the project's selection.
+    const switched = run({
+      runner: 'claude',
+      agentProfile: 'work',
+      steps: [{ id: 'b', name: 'B', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 0, tokensUsed: 0, backend: 'codex', sessionId: 's-codex', profileId: 'x', startedAt: '2026-11-23T00:01:00.000Z' }],
+    });
+    expect(runAccountFor(switched, 'codex')).toBeUndefined();
+    expect(runAccountFor({ ...switched, agentProfile: undefined }, 'codex')).toBe('x');
   });
 
   it('leaves any other provider to the project selection', () => {

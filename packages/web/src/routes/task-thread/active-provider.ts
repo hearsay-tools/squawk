@@ -16,20 +16,22 @@ export function providerForExistingRun(run: ApiRun): Runner {
 }
 
 /**
- * The account id a run's next turn on `provider` uses, mirroring the server's `runAccountFor`: a turn
- * resuming the latest session uses its account (`default` when none was recorded) unless the run's
- * own account differs; a fresh turn on the run's runner uses the run's account; any other provider
- * the project's selection. `undefined` means the default account.
+ * The account id a run's next turn on `provider` uses, mirroring the server's `runAccountFor`: it
+ * resumes the latest session's account when that session ran on `provider` and the run's own account,
+ * if any, matches it; otherwise a fresh turn uses the run's account on the run's runner and the
+ * project's selection on any other runner. `undefined` means the default account.
  */
 export function runAccountId(
   run: ApiRun,
   provider: Runner,
   repoAccount: Partial<Record<Runner, string>> | undefined,
 ): string | undefined {
-  const runAccount = provider === (run.runner ?? 'claude') ? run.agentProfile : undefined
   const session = latestSession(run)
-  if (session.sessionId === undefined || session.backend !== provider) return runAccount ?? repoAccount?.[provider]
-  return runAccount ?? session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+  const sessionAccount = session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+  const resumes = session.sessionId !== undefined && session.backend === provider
+    && (run.agentProfile ?? sessionAccount) === sessionAccount
+  if (resumes) return sessionAccount
+  return (provider === (run.runner ?? 'claude') ? run.agentProfile : undefined) ?? repoAccount?.[provider]
 }
 
 /** The named account {@link runAccountId} names; `undefined` for the default account. */

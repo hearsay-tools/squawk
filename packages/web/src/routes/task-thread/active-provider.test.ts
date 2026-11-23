@@ -110,7 +110,9 @@ describe('the account a run continues on (hearsay-tools/squawk#4116)', () => {
 
   it('mirrors the engine: run account on its runner, session account on the session runner, else the selection', () => {
     expect(runAccountId(mixed, 'claude', { claude: 'old' })).toBe('work')
-    expect(runAccountId(mixed, 'codex', undefined)).toBe('default')
+    // The run account differs from the codex session's: a switch to codex starts fresh on the selection.
+    expect(runAccountId(mixed, 'codex', { codex: 'sel' })).toBe('sel')
+    expect(runAccountId({ ...mixed, agentProfile: undefined }, 'codex', undefined)).toBe('default')
     expect(runAccountId(mixed, 'opencode', { opencode: 'x' })).toBe('x')
   })
 

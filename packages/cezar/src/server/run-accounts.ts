@@ -58,17 +58,19 @@ export function scopeRunAccounts(
 
 /**
  * The account an existing run's next turn on `provider` uses, as the engine picks it
- * (`sessionAffinity`, `agentEnvForStep`). A turn that resumes the latest session uses that
- * session's account (`default` when none was recorded), unless the run's own account differs, which
- * starts a fresh session on the run's account. A fresh turn on the run's runner uses the run's
- * account. Absent means the project's selection, the engine's fallback for any other provider.
+ * (`sessionAffinity`, `overridePatch`, `agentEnvForStep`). The turn resumes the latest session when
+ * that session ran on `provider` and the run's own account, if any, is the session's account; it then
+ * uses the session's account (`default` when none was recorded). Otherwise it starts fresh: on the
+ * run's runner with the run's account, and on any other runner with the project's selection
+ * (absent), because a runner switch clears the run's account.
  */
 export function runAccountFor(run: RunRecord, provider: ProviderId): string | undefined {
-  const runRunner = resolveRunnerId(run.runner ?? DEFAULT_RUNNER_ID);
-  const runAccount = provider === runRunner ? run.agentProfile : undefined;
   const session = latestSession(run);
-  if (session.sessionId === undefined || resolveRunnerId(session.backend) !== provider) return runAccount;
-  return runAccount ?? session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
+  const sessionAccount = session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
+  const resumes = session.sessionId !== undefined && resolveRunnerId(session.backend) === provider
+    && (run.agentProfile ?? sessionAccount) === sessionAccount;
+  if (resumes) return sessionAccount;
+  return provider === resolveRunnerId(run.runner ?? DEFAULT_RUNNER_ID) ? run.agentProfile : undefined;
 }
 
 /** The probed sign-in state of each named account in `accounts`. `refresh` drops the cached answer
