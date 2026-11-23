@@ -3222,14 +3222,14 @@ export function createApp(deps: ServerDeps) {
       const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
-      const blocked = await providerActionError([backend], { repoRoot: project.root, picks: { [backend]: profileId } });
+      const resume = checkout.resumeAllowed ? resumeCommand(backend, sessionId) : undefined;
+      // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
+      if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
+      const blocked = await providerActionError([backend], { repoRoot: project.root, picks: { [backend]: resume ? profileId ?? DEFAULT_AGENT_ACCOUNT_ID : undefined } });
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();
       const refusal = fallbackProjectWriteError(cwd);
       if (refusal) return c.json({ error: refusal }, 409);
-      const resume = checkout.resumeAllowed ? resumeCommand(backend, sessionId) : undefined;
-      // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
-      if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
       const account = resume
         ? { command: resume, ...await handoffEnv(backend, profileId) }
         : await freshCliHandoff(backend, project.root, deps.home);

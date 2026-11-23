@@ -8,6 +8,7 @@ import type { RunnerAccountChoice } from '@/components/picker-pill'
 import {
   runnableAccount,
   runnableAccounts,
+  runnersOnAccount,
   signedOutRunners,
   uninstalledRunners,
   usableRunners,
@@ -117,6 +118,8 @@ export interface RunnerAvailability extends AgentAccountChoices {
   accounts: readonly RunnerAccountChoice[]
   /** The `agentProfile` a start on `runner` sends; `null` follows the project's selection. */
   accountFor: (runner: Runner, picked: string | null | undefined) => string | null
+  /** For a surface that cannot send an account: the runners ready on the account it will use. */
+  runnersOn: (accountOf: (runner: Runner) => string | undefined) => { runners: Runner[]; signedOut: Runner[] }
 }
 
 export function useRunnerAvailability(): RunnerAvailability {
@@ -130,5 +133,6 @@ export function useRunnerAvailability(): RunnerAvailability {
     accounts: runnableAccounts(providers.data, accounts),
     repoAccount,
     accountFor: (runner, picked) => runnableAccount(providers.data, accounts, runner, picked, repoAccount),
+    runnersOn: (accountOf) => runnersOnAccount(providers.data, registered.data, accounts, accountOf),
   }
 }

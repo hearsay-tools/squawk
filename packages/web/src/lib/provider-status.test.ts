@@ -11,6 +11,7 @@ import {
   providerStatusFor,
   runnableAccount,
   runnableAccounts,
+  runnersOnAccount,
   signedOutRunners,
   uninstalledRunners,
   usableRunners,
@@ -443,6 +444,18 @@ describe('runner availability with agent accounts (hearsay-tools/squawk#4116)', 
     expect(runnableAccount(connected, [defaultClaude, old], 'claude', null, { claude: 'old' })).toBe('default')
     // A pick that belongs to another runner is dropped.
     expect(runnableAccount(connected, [defaultClaude, work], 'codex', 'work', undefined)).toBeNull()
+  })
+
+  it('binds a surface that sends no account to the account it runs on', () => {
+    const accounts = [defaultClaude, work, old]
+    // The project's selection is the signed-out default: claude is a sign-in link, not a choice.
+    expect(runnersOnAccount(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, accounts, () => undefined))
+      .toEqual({ runners: ['codex'], signedOut: ['claude'] })
+    // The run continues on the connected named account: claude is a choice.
+    expect(runnersOnAccount(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, accounts, (runner) => runner === 'claude' ? 'work' : undefined))
+      .toEqual({ runners: ['claude', 'codex'], signedOut: [] })
+    expect(runnersOnAccount(DEFAULT_SIGNED_OUT, RUNNERS_RESPONSE, accounts, (runner) => runner === 'claude' ? 'old' : undefined).runners)
+      .toEqual(['codex'])
   })
 
   it('sends no account when no account of the runner is connected', () => {

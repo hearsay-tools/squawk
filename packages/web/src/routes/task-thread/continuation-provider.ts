@@ -3,6 +3,7 @@ import { runnerIds, useRunners } from '@/api/runners'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { useRunnerAvailability } from '@/api/agent-accounts'
+import { runAccountId } from './active-provider'
 import { resolveRunner } from '@/routes/new-task-form'
 import { isStoppedBeforeStarting } from './run-actions'
 
@@ -58,9 +59,10 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
   const removed = run.removedRunner !== undefined
   const needsConfig = (untouched && !run.runner) || removed
-  // A runner counts when ANY of its accounts is signed in, not only the default one
-  // (hearsay-tools/squawk#4116); the server refuses a continuation on a signed-out account.
-  const { runners, signedOut } = useRunnerAvailability()
+  // A continuation sends no account: each runner counts when the account the server will continue
+  // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
+  const availability = useRunnerAvailability()
+  const { runners, signedOut } = availability.runnersOn((candidate) => runAccountId(run, candidate, availability.repoAccount))
   const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)

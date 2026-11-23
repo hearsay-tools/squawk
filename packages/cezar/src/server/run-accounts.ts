@@ -3,7 +3,8 @@ import type { ProviderAuthService, ProviderId } from '../core/provider-auth.ts';
 import { resolveRunnerId } from '../core/runner-registry.ts';
 import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
 import type { RunRecord } from '../runs/store.ts';
-import { executionAccount } from '../workflows/execution-account.ts';
+import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import { loadAgentAccounts } from '../workspace/agent-accounts.ts';
 import { selectProfile, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import type { GateAccount } from './provider-action-gate.ts';
@@ -56,13 +57,18 @@ export function scopeRunAccounts(
 }
 
 /**
- * The account an existing run resumes `provider` on: the account of its next turn
- * (`executionAccount`) when that turn runs on `provider`. Absent means the project's selection,
- * which is what the engine falls back to for any other provider.
+ * The account an existing run's next turn on `provider` uses, as the engine picks it
+ * (`sessionAffinity`, `agentEnvForStep`). A turn that resumes the latest session uses that
+ * session's account (`default` when none was recorded), unless the run's own account differs, which
+ * starts a fresh session on the run's account. A fresh turn on the run's runner uses the run's
+ * account. Absent means the project's selection, the engine's fallback for any other provider.
  */
 export function runAccountFor(run: RunRecord, provider: ProviderId): string | undefined {
-  const next = executionAccount(run);
-  return resolveRunnerId(next.runner ?? DEFAULT_RUNNER_ID) === provider ? next.agentProfile : undefined;
+  const runRunner = resolveRunnerId(run.runner ?? DEFAULT_RUNNER_ID);
+  const runAccount = provider === runRunner ? run.agentProfile : undefined;
+  const session = latestSession(run);
+  if (session.sessionId === undefined || resolveRunnerId(session.backend) !== provider) return runAccount;
+  return runAccount ?? session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
 }
 
 /** The probed sign-in state of each named account in `accounts`. `refresh` drops the cached answer

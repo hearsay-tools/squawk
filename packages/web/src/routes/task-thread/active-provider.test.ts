@@ -10,6 +10,8 @@ import {
   activeProviderAvailability,
   existingProviderAvailability,
   providerForExistingRun,
+  runAccountChoice,
+  runAccountId,
 } from './active-provider'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
@@ -96,5 +98,30 @@ describe('active task provider availability', () => {
       usable: false,
       reason: 'Claude Code credentials are unavailable. Authorize it in Settings → Agent defaults → Providers.',
     })
+  })
+})
+
+describe('the account a run continues on (hearsay-tools/squawk#4116)', () => {
+  const mixed = run({
+    runner: 'claude',
+    agentProfile: 'work',
+    steps: [{ id: 'b', name: 'B', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 0, tokensUsed: 0, backend: 'codex', sessionId: 's-codex', startedAt: '2026-11-23T00:01:00.000Z' }],
+  })
+
+  it('mirrors the engine: run account on its runner, session account on the session runner, else the selection', () => {
+    expect(runAccountId(mixed, 'claude', { claude: 'old' })).toBe('work')
+    expect(runAccountId(mixed, 'codex', undefined)).toBe('default')
+    expect(runAccountId(mixed, 'opencode', { opencode: 'x' })).toBe('x')
+  })
+
+  it('lets a run on a connected named account continue while the default account is signed out', () => {
+    const work = { provider: 'claude', id: 'work', label: 'Work', configDir: '~/.claude-work', isDefault: false, status: 'connected' } as const
+    const status = providers({ providers: [{ provider: 'claude', status: 'disconnected', enabled: true }] })
+    const account = runAccountChoice(run({ runner: 'claude', agentProfile: 'work' }), 'claude', [work], undefined)
+    expect(existingProviderAvailability(run({ runner: 'claude', agentProfile: 'work' }), status, RUNNERS_RESPONSE, account))
+      .toEqual({ provider: 'claude', usable: true })
+    const signedOut = { ...work, status: 'disconnected' } as const
+    expect(existingProviderAvailability(run({ runner: 'claude', agentProfile: 'work' }), status, RUNNERS_RESPONSE, signedOut).reason)
+      .toBe('Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.')
   })
 })

@@ -3,6 +3,7 @@ import { providerForActiveRun } from '@open-mercato/cezar-api-client/contract/ac
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import type { ApiRun, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
 import { latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { useProviderStatus } from '@/api/queries'
 import { runnerDisplayName, useRunners } from '@/api/runners'
@@ -15,21 +16,30 @@ export function providerForExistingRun(run: ApiRun): Runner {
 }
 
 /**
- * The named account a run's next turn on `provider` uses, mirroring the server's `runAccountFor`:
- * the latest session's account when that session ran on `provider`, else the run's own account when
- * `provider` is its runner, else the project's selection. `undefined` means the default account.
+ * The account id a run's next turn on `provider` uses, mirroring the server's `runAccountFor`: a turn
+ * resuming the latest session uses its account (`default` when none was recorded) unless the run's
+ * own account differs; a fresh turn on the run's runner uses the run's account; any other provider
+ * the project's selection. `undefined` means the default account.
  */
+export function runAccountId(
+  run: ApiRun,
+  provider: Runner,
+  repoAccount: Partial<Record<Runner, string>> | undefined,
+): string | undefined {
+  const runAccount = provider === (run.runner ?? 'claude') ? run.agentProfile : undefined
+  const session = latestSession(run)
+  if (session.sessionId === undefined || session.backend !== provider) return runAccount ?? repoAccount?.[provider]
+  return runAccount ?? session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+}
+
+/** The named account {@link runAccountId} names; `undefined` for the default account. */
 export function runAccountChoice(
   run: ApiRun,
   provider: Runner,
   accounts: readonly RunnerAccountChoice[],
   repoAccount: Partial<Record<Runner, string>> | undefined,
 ): RunnerAccountChoice | undefined {
-  const session = latestSession(run)
-  const recorded = session.sessionId !== undefined && session.backend === provider
-    ? session.profileId ?? run.agentProfile
-    : provider === (run.runner ?? 'claude') ? run.agentProfile : undefined
-  const id = recorded ?? repoAccount?.[provider]
+  const id = runAccountId(run, provider, repoAccount)
   const account = accounts.find((choice) => choice.provider === provider && choice.id === id)
   return account?.isDefault ? undefined : account
 }

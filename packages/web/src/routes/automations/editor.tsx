@@ -295,7 +295,9 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
  *  "whatever the project defaults to when the run starts", so the options start with that. */
 function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: Partial<AutomationDraft>) => void }) {
   const workflows = useWorkflows()
-  const usable = useRunnerAvailability().runners
+  // A scheduled run sends no account: it runs on the project's selection (hearsay-tools/squawk#4116).
+  const availability = useRunnerAvailability()
+  const usable = availability.runnersOn((runner) => availability.repoAccount?.[runner]).runners
   const config = useConfig()
   const registered = useRunners()
   const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'

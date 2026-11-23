@@ -1,4 +1,5 @@
 import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import type { Home } from '../home/home.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { join } from 'node:path';
@@ -97,7 +98,7 @@ export async function openRunCli(
   // exactly like a run that never recorded a session.
   const resume = sessionId && cliRunner === session?.backend ? resumeCommand(cliRunner, sessionId) : null;
   // The gate checks the account the terminal opens on (hearsay-tools/squawk#4116).
-  const blocked = await providerActionError([cliRunner], { repoRoot, picks: { [cliRunner]: resume ? session?.profileId : undefined } });
+  const blocked = await providerActionError([cliRunner], { repoRoot, picks: { [cliRunner]: resume ? session?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID : undefined } });
   if (blocked) return c.json({ error: blocked }, 409);
   // A resume uses the session account; a fresh CLI uses the project's account.
   const account = resume

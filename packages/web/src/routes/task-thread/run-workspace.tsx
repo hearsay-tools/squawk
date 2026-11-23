@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
 import { useRunnerAvailability } from '@/api/agent-accounts'
+import { latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { runTitle } from '@/lib/task-groups'
 import {
   isOwnRepoReference,
@@ -90,7 +92,13 @@ function useOpenInChoices(run: ApiRun, canResume: boolean) {
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  const availableRunners = useRunnerAvailability().runners
+  // A terminal opens on the session's account when it resumes, else on the project's selection;
+  // the action sends no account, so each runner counts on that account (hearsay-tools/squawk#4116).
+  const availability = useRunnerAvailability()
+  const session = latestSession(run)
+  const availableRunners = availability.runnersOn((runner) => canResume && session.sessionId !== undefined && runner === session.backend
+    ? session.profileId ?? DEFAULT_AGENT_ACCOUNT_ID
+    : availability.repoAccount?.[runner]).runners
   // The action routes remain authoritative for a stale browser. Once the complete status and the
   // runners list have arrived, hide only unavailable *agent* handoffs; editors, Finder, and file
   // tools stay available because they do not launch a provider.

@@ -250,6 +250,39 @@ function accountConnected(status: ProviderStatusResponse | undefined, account: A
   return account.status === 'connected'
 }
 
+/** True when `runner` can run on the account `accountId` names (absent, `default` or an id that no
+ *  longer exists = the default account): the default reads the provider row; a named account is
+ *  ready unless it is known to be signed out (the server's gate probes one not probed yet). */
+function accountReady(
+  status: ProviderStatusResponse | undefined,
+  accounts: readonly AccountSignIn[],
+  runner: Runner,
+  accountId: string | undefined,
+): boolean {
+  const account = accounts.find((candidate) => candidate.provider === runner && candidate.id === accountId)
+  if (account === undefined || account.isDefault) return providerStatusFor(status, runner)?.status === 'connected'
+  return !accountSignedOut(status, account)
+}
+
+/**
+ * The runners a surface offers when it cannot send an account: it runs on the account `accountOf`
+ * names per runner (a run's own account, or the project's selection). Usable runners are enabled,
+ * installed and ready on that account; the others that are enabled and installed are signed out.
+ */
+export function runnersOnAccount(
+  status: ProviderStatusResponse | undefined,
+  runners: RunnersResponse | undefined,
+  accounts: readonly AccountSignIn[],
+  accountOf: (runner: Runner) => string | undefined,
+): { runners: Runner[]; signedOut: Runner[] } {
+  const installed = (row: ProviderStatus) => row.enabled === true && row.status !== 'not-installed'
+  const ready = (row: ProviderStatus) => accountReady(status, accounts, row.provider, accountOf(row.provider))
+  return {
+    runners: registeredWhere(status, runners, (row) => installed(row) && ready(row)),
+    signedOut: registeredWhere(status, runners, (row) => installed(row) && !ready(row)),
+  }
+}
+
 /** The accounts a picker may offer: every account not known to be signed out. A signed-out
  *  account is never a row, so a task cannot be started on it from the picker. */
 export function runnableAccounts<T extends AccountSignIn>(
