@@ -596,10 +596,15 @@ export class PreviewHost implements PreviewHostLike {
       browser.connection.request('Target.detachFromTarget', { sessionId }, undefined, () => {});
       return undefined;
     }
-    const info = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined, 15_000);
-    const url = (info.result as { targetInfo?: { url?: unknown } } | undefined)?.targetInfo?.url;
-    if (typeof url === 'string' && url) session.url ??= url;
-    return { session, sessionId };
+    try {
+      const info = await browser.connection.call('Target.getTargetInfo', { targetId }, undefined, 15_000);
+      const url = (info.result as { targetInfo?: { url?: unknown } } | undefined)?.targetInfo?.url;
+      if (typeof url === 'string' && url) session.url ??= url;
+      return { session, sessionId };
+    } catch (error) {
+      session.close();
+      throw error;
+    }
   }
 
   /** The agent closed the page the pane followed: the pane shows Squawk's own page again. */
