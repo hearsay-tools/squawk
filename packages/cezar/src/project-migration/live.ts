@@ -6,7 +6,7 @@ import { pathPresent, projectPaths } from '../project-paths.ts';
 import { projectLiveTasks } from '../runs/live-tasks.ts';
 import { claimOwnerLive } from '../runs/run-claims.ts';
 import { RUNS_DB_FILE, RunDatabase } from '../runs/run-database.ts';
-import { parseRunRecords, type RunRecord } from '../runs/store.ts';
+import { parseRunRecords, type RunRecord } from '../runs/run-decode.ts';
 import type { LiveRunReads } from '../runs/ports.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import { anotherCockpitOwner, type LiveProjectTask } from '../server/cockpit-ownership.ts';

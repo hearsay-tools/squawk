@@ -162,7 +162,9 @@ import {
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
-import { ARCHIVED_WINDOW, type RepoHandle, type RunRecord, type RunStatus, type RunStore } from '../runs/store.ts';
+import { ARCHIVED_WINDOW } from '../runs/archived-window.ts';
+import type { RunRecord } from '../runs/run-decode.ts';
+import type { RepoHandle, RunStatus, RunStore } from '../runs/store.ts';
 import {
   HistoryCursorError,
   deriveRunContextEvents,
