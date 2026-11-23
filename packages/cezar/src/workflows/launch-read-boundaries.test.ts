@@ -215,7 +215,7 @@ it('P6-04 P6-12 P6-20 P6-24 P6-28 P6-32 P6-36 live input keeps the open session 
 async function completeStep(index: number): Promise<void> {
   const env = opened[index]!.env!;
   const answer = await new Promise<{ ok: boolean }>((resolve, reject) => {
-    const call = request({ socketPath: env.CEZ_TOOL_SOCKET, path: '/api/v1/tools/done', method: 'POST',
+    const call = request({ socketPath: env.CEZ_TOOL_SOCKET, path: '/api/v1/tools/cezar_done', method: 'POST',
       headers: { authorization: `Bearer ${env.CEZ_TOOL_TOKEN}`, 'content-type': 'application/json' } }, response => {
       let body = '';
       response.setEncoding('utf8');

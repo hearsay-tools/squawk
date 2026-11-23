@@ -1,5 +1,5 @@
+import './tools.testkit.ts';
 import type { ExtractSchema } from 'hono/types';
-import type { PreviewStopRequest, PreviewStopResult } from '@open-mercato/cezar-contract';
 import type { SquawkToolHandlers, CiToolApp } from './controller.ts';
 import { request } from 'node:http';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
@@ -19,16 +19,15 @@ async function session(stop?: SquawkToolHandlers['stopPreview']) {
 // One connection per call, as client.ts does: see raw() in controller.test.ts (hearsay-tools/cezarion#1484).
 function post(env: Record<string, string>, body: string, token = env.CEZ_TOOL_TOKEN!) {
   return new Promise<{ status: number; body: string }>((resolve, reject) => {
-    const req = request({ socketPath: env.CEZ_TOOL_SOCKET, agent: false, path: '/api/v1/tools/preview-stop', method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } }, res => {
+    const req = request({ socketPath: env.CEZ_TOOL_SOCKET, agent: false, path: '/api/v1/tools/cezar_preview_stop', method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } }, res => {
       let body = ''; res.on('data', chunk => body += chunk); res.on('end', () => resolve({ status: res.statusCode!, body }));
     }); req.on('error', reject); req.end(body);
   });
 }
 describe('preview stop private capability', () => {
-  it('retains the exact request and response in the chained private route type', () => {
-    type Route = ExtractSchema<CiToolApp>['/api/v1/tools/preview-stop']['$post'];
-    expectTypeOf<Route['input']>().toEqualTypeOf<{ json: PreviewStopRequest }>();
-    expectTypeOf<Extract<Route['output'], { ok: boolean }>>().toEqualTypeOf<PreviewStopResult>();
+  it('exposes the open dispatch route in the chained private route type', () => {
+    type Route = ExtractSchema<CiToolApp>['/api/v1/tools/:name']['$post'];
+    expectTypeOf<Route['input']>().toMatchTypeOf<{ json: unknown }>();
   });
 
   it('validates port/restart, rejects model authority and requires complete typed answers', () => {
@@ -42,13 +41,14 @@ describe('preview stop private capability', () => {
 
   it('authenticates before validation, gates exact opt-in, and gives repair hints', async () => {
     const stop = vi.fn(async () => stopped);
-    const { env } = await session(stop);
-    expect((await post(env, '{}', 'wrong')).status).toBe(401);
+    expect((await post((await session(stop)).env, '{}', 'wrong')).status).toBe(401);
     for (const flag of ['', '0', 'true']) {
       vi.stubEnv('CEZ_PREVIEW', flag);
+      const { env } = await session(stop);
       expect(await callPreviewStop({ port: 5173 }, env)).toMatchObject({ code: 'preview_disabled' });
     }
     vi.stubEnv('CEZ_PREVIEW', '1');
+    const { env } = await session(stop);
     for (const body of ['{', '{}', '{"port":5173,"restart":"true"}', '{"port":5173,"runId":"other"}', JSON.stringify({ port: 5173, extra: 'x'.repeat(17000) })]) {
       const response = await post(env, body);
       expect(response.status).toBe(200);

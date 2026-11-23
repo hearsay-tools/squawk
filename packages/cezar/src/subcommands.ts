@@ -29,4 +29,7 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();
+  const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
+  registerBuiltInTools();
+  sealBuiltInTools();
 }

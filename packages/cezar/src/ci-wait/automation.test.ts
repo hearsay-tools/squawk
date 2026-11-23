@@ -1,3 +1,4 @@
+import './tools.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { callAutomation } from './client.ts';
 import { CiToolController } from './controller.ts';

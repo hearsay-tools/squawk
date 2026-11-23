@@ -1,3 +1,4 @@
+import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src/built-in-tools.ts';
 import { spawnCapacityRefusal } from '../../packages/cezar/src/delegation/capacity.ts';
 import { resolveHome } from '../../packages/cezar/src/home/resolve.ts';
 import { setRunStatus } from '../../packages/cezar/src/runs/run-store.testkit.ts';
@@ -32,6 +33,8 @@ registerBuiltInRunners();
 sealBuiltInRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
+registerBuiltInTools();
+sealBuiltInTools();
 
 const home = resolveHome({ purpose: 'cli' });
 const [backend, model] = process.argv.slice(2) as [string, string | undefined];

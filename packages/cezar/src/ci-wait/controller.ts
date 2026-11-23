@@ -1,4 +1,6 @@
-import { automationToolRequestSchema, automationToolAnswerSchema, type AutomationToolRequest, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
+import { squawkToolEnvNames } from './tool-names.ts';
+import { agentTool, registeredAgentTools, type AgentToolDefinition, formatAgentToolAnswer, agentToolTransport, enabledAgentTools, agentToolMetadata, agentToolInstructions } from './tool-registry.ts';
+import { type AutomationToolRequest, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
 import { productEnvEntries } from '../core/product-env.ts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
@@ -8,18 +10,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
-import { Hono, type Context } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createMiddleware } from 'hono/factory';
-import { previewStopResult } from '../preview/registration.ts';
-import { askErrorMessage, askInvalidInput, ciErrorMessage, ToolsUnavailableError, doneErrorMessage, doneInvalidInput, previewInvalidInput, previewOversized, previewRefusal, scheduleInvalidInput, scheduleRefusal, waitInvalidInput } from './errors.ts';
+
+import { ciErrorMessage, ToolsUnavailableError } from './errors.ts';
 export { ToolsUnavailableError } from './errors.ts';
 import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
-import { SCHEDULED_TASK_LIMITS, scheduleTaskAnswerSchema, scheduleTaskRequestSchema, scheduledTasksAnswerSchema, scheduledTasksRequestSchema, type ScheduleTaskAnswer, type ScheduleTaskRequest, type ScheduledTasksAnswer, type ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
+import { type ScheduleTaskAnswer, type ScheduleTaskRequest, type ScheduledTasksAnswer, type ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { type Wait, type WaitVia } from '@open-mercato/cezar-contract/waits';
-import { squawkAskAnswerSchema, squawkAskRequestSchema, squawkCancelWaitAnswerSchema, squawkCancelWaitRequestSchema, squawkDoneAnswerSchema, squawkDoneRequestSchema, squawkWaitAnswerSchema, squawkWaitRequestSchema, type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
-import { ciWaitErrorCodeSchema } from '@open-mercato/cezar-contract/ci-wait';
-import { previewStopRequestSchema, previewStopResultSchema, type PreviewStopRequest, type PreviewStopResult, previewServeRequestSchema, previewServeResultSchema, type PreviewServeRequest, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
+import { type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
+
+import { type PreviewStopRequest, type PreviewStopResult, type PreviewServeRequest, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
 import { jsonZodValidator } from '../server/validators.ts';
 import type { AgentRunSpec } from '../core/agent-runner.ts';
 
@@ -35,6 +37,7 @@ type PreviewRegistration = (request: PreviewServeRequest, signal: AbortSignal) =
 type PreviewStop = (request: PreviewStopRequest, signal: AbortSignal) => Promise<PreviewStopResult>;
 /** The session's trusted callbacks: run identity comes from here, never from the model's arguments. */
 export type SquawkToolHandlers = {
+  tools?: Record<string, (input: unknown, signal: AbortSignal) => Promise<unknown>>;
   /** `via` names the tool that opened the wait. */
   registerWait: (request: SquawkWaitRequestInput, via: WaitVia, signal: AbortSignal) => Promise<WaitRegistration>;
   /** `cezar_ask` (hearsay-tools/cezarion#1234): opens the run's human wait with its card. */
@@ -50,12 +53,8 @@ export type SquawkToolHandlers = {
   automation?: (request: AutomationToolRequest, signal: AbortSignal) => Promise<AutomationToolAnswer>;
   scheduledTasks?: (request: ScheduledTasksRequest, signal: AbortSignal) => Promise<ScheduledTasksAnswer>;
 };
-type Capability = SquawkToolHandlers & { lifetime: AbortController };
+type Capability = SquawkToolHandlers & { lifetime: AbortController; env: NodeJS.ProcessEnv };
 export type CiToolSession = { descriptor: NonNullable<AgentRunSpec['squawkTools']>; env: Record<string, string>; revoke(): void };
-/** `cezar_ask` carries up to 20,000 characters of context (hearsay-tools/cezarion#1458). JSON can
- *  escape a character to six bytes, so the largest valid card (context, four questions with four
- *  options, every field at its limit) is about 166 KB; 256 KiB admits it with room to spare. */
-const ASK_BODY_LIMIT = 262_144;
 
 function temporaryRootFor(): string {
   return Buffer.byteLength(tmpdir()) > 64 ? '/tmp' : tmpdir();
@@ -80,6 +79,7 @@ export class CiToolController {
   private constructor(private readonly server: Server, private readonly address: string, private readonly directory?: string) {}
 
   static async start(): Promise<CiToolController> {
+    registeredAgentTools();
     let directory: string | undefined;
     let server: Server | undefined;
     try {
@@ -112,7 +112,7 @@ export class CiToolController {
   provision(handlers: SquawkToolHandlers): CiToolSession {
     if (this.closed) throw new ToolsUnavailableError('the tool controller was closed', socketRoot());
     const token = randomBytes(32).toString('hex');
-    const capability: Capability = { ...handlers, lifetime: new AbortController() };
+    const capability: Capability = { ...handlers, lifetime: new AbortController(), env: { ...process.env } };
     this.capabilities.set(token, capability);
     const entry = fileURLToPath(new URL('./mcp.js', import.meta.url));
     // Source execution uses tsx already installed by the developer; installed artifacts use plain Node.
@@ -121,7 +121,7 @@ export class CiToolController {
       descriptor: { name: `cezar_ci_${randomUUID().replaceAll('-', '')}`, command: process.execPath, args: source ? ['--import', fileURLToPath(import.meta.resolve('tsx')), entry.replace(/\.js$/, '.ts')] : [entry] },
       // #781: the session carries the preview opt-in, so its runner admits and forwards exactly
       // the tools this session's adapter lists.
-      env: { ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...(previewToolEnabled() ? productEnvEntries('PREVIEW', '1') : {}), ...productEnvEntries('AUTOMATIONS', automationsToolEnabled() ? '1' : '0') },
+      env: { ...Object.fromEntries(Object.entries(capability.env).filter((entry): entry is [string, string] => entry[1] !== undefined && squawkToolEnvNames(capability.env).includes(entry[0]))), ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...(previewToolEnabled() ? productEnvEntries('PREVIEW', '1') : {}), ...productEnvEntries('AUTOMATIONS', automationsToolEnabled() ? '1' : '0') },
       revoke: () => { this.capabilities.delete(token); capability.lifetime.abort(); },
     };
   }
@@ -138,49 +138,31 @@ export class CiToolController {
   }
 }
 
-/** A refusal's code when it is a fixed CI code, so its message is ours and never the thrower's. */
-function ciRefusalCode(code: unknown) {
-  const parsed = ciWaitErrorCodeSchema.safeParse(code);
-  return parsed.success ? parsed.data : undefined;
-}
-const thrownCode = (error: unknown) => error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-
-/**
- * Typed private route inventory: GET ci-wait holds adapter lifetime (the path is historical; its POST
- * went with `cezar_wait_for_ci` in hearsay-tools/cezarion#1236); POST wait opens a CI, worker or
- * timer wait and POST cancel-wait closes one (hearsay-tools/cezarion#1233); POST ask opens the human
- * wait and POST done finishes the task at the turn's end (hearsay-tools/cezarion#1234); POST
- * preview-serve registers a dev server (#781); preview-stop controls its approved process (#803);
- * POST schedule-task and scheduled-tasks create and manage one-time schedules (hearsay-tools/cezarion#1465).
- */
+/** The private IPC catalog and registered dispatch share the capability boundary. */
 export function ciToolRoutes(capabilities: Map<string, Capability>) {
-  const authorized = (authorization: string | undefined) => {
+  const requireCapability = createMiddleware<{ Variables: { capability: Capability; tool: AgentToolDefinition } }>(async (c, next) => {
+    const authorization = c.req.header('authorization');
     const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
     const capability = token ? capabilities.get(token) : undefined;
-    return capability && !capability.lifetime.signal.aborted ? capability : undefined;
-  };
-  const unauthorized = { code: 'unauthorized' as const, message: ciErrorMessage('unauthorized') };
-  const requireCapability = createMiddleware<{ Variables: { capability: Capability } }>(async (c, next) => {
-    const capability = authorized(c.req.header('authorization'));
-    if (!capability) return c.json(unauthorized, 401);
+    if (!capability || capability.lifetime.signal.aborted) return c.json({ code: 'unauthorized', message: ciErrorMessage('unauthorized') }, 401);
     c.set('capability', capability);
     await next();
   });
-  const capabilityRevoked = <T extends Response>(c: Context<{ Variables: { capability: Capability } }>, capability: Capability, fallback: () => T) => {
-    if (capability.lifetime.signal.aborted) return c.json({ code: 'capability_revoked' as const, message: ciErrorMessage('capability_revoked') }, 401);
-    return fallback();
-  };
-  const capabilityAnswer = async <T, R extends Response, F extends Response>(c: Context<{ Variables: { capability: Capability } }>, capability: Capability, answer: () => Promise<T>, respond: (answer: T) => R, fallback: () => F) => {
-    try {
-      const result = await answer();
-      capability.lifetime.signal.throwIfAborted();
-      return respond(result);
-    } catch {
-      return capabilityRevoked(c, capability, fallback);
-    }
-  };
-  return new Hono<{ Variables: { capability: Capability } }>()
-    .use('/api/v1/tools/ci-wait', requireCapability)
+  const app = new Hono<{ Variables: { capability: Capability; tool: AgentToolDefinition } }>()
+    .use('/api/v1/tools', requireCapability)
+    .use('/api/v1/tools/*', requireCapability)
+    .use('/api/v1/tools/*', async (c, next) => {
+      await next();
+      if (c.req.header('accept') !== 'application/x-squawk-tool-result+json' || c.res.status !== 200) return;
+      const tool = agentTool(c.req.path.split('/').at(-1)!);
+      if (!tool) return;
+      const answer: unknown = await c.res.json();
+      c.res = c.json(formatAgentToolAnswer(tool, answer));
+    })
+    .get('/api/v1/tools', c => {
+      const tools = enabledAgentTools(c.get('capability').env).map(tool => ({ ...agentToolMetadata(tool), ...agentToolTransport(tool) }));
+      return c.json({ tools, instructions: agentToolInstructions(tools) });
+    })
     .get('/api/v1/tools/ci-wait', c => {
       const signal = c.get('capability').lifetime.signal;
       let release = () => {};
@@ -190,120 +172,42 @@ export function ciToolRoutes(capabilities: Map<string, Capability>) {
         signal.addEventListener('abort', close, { once: true });
         release = () => signal.removeEventListener('abort', close);
       }, cancel() { release(); } }), { headers: { 'content-type': 'text/plain', 'cache-control': 'no-store' } });
-    })
-    .use('/api/v1/tools/wait', requireCapability)
-    // The agent fixes a bad call from the message, so refusals answer 200 with a typed result.
-    .post('/api/v1/tools/wait', bodyLimit({ maxSize: 16_384, onError: c => c.json({ ok: false as const, effect: 'refused' as const, code: 'invalid_request' as const, message: 'The arguments exceed 16 KiB. Nothing was created.' }) }), jsonZodValidator(squawkWaitRequestSchema, { invalid: (c, error) => c.json({ ok: false as const, effect: 'refused' as const, code: 'invalid_request' as const, message: waitInvalidInput(error) }) }), async c => {
+    });
+  const validate: MiddlewareHandler<{ Variables: { capability: Capability; tool: AgentToolDefinition } }, string, { in: { json: unknown }; out: { json: unknown } }> = (c, next) => {
+    const tool = c.get('tool');
+    return jsonZodValidator<typeof tool.schema, { Variables: { capability: Capability; tool: AgentToolDefinition } }>(tool.schema, { invalid: (c, error, input) => c.json(tool.invalid(error, input)), ...(tool.runnerFields ? { runners: tool.runnerFields } : {}) })(c, next);
+  };
+  return app.post('/api/v1/tools/:name',
+    async (c, next) => {
+      const tool = agentTool(c.req.param('name'));
+      if (!tool) return c.json({ code: 'unknown_tool', message: 'Unknown tool' }, 404);
+      c.set('tool', tool);
+      await next();
+    },
+    (c, next) => {
+      const tool = c.get('tool');
+      return bodyLimit({ maxSize: tool.maxBodyBytes ?? 16_384, onError: c => c.json(tool.oversized()) })(c, next);
+    },
+    async (c, next) => {
+      const tool = c.get('tool');
+      if (tool.enabled && !tool.enabled(c.get('capability').env)) return c.json(tool.disabled?.() ?? { code: 'disabled' });
+      await next();
+    }, validate,
+    async c => {
       const capability = c.get('capability');
+      const tool = c.get('tool');
+      const input = c.req.valid('json');
       try {
-        const { answer } = await capability.registerWait(c.req.valid('json'), 'cezar_wait', capability.lifetime.signal);
-        // A registration receipt already committed remains true after capability revocation.
-        return c.json(squawkWaitAnswerSchema.parse(answer));
+        const handler = capability.tools?.[tool.name];
+        const result = handler ? await handler(input, capability.lifetime.signal) : await tool.handle(capability, input, capability.lifetime.signal);
+        if (!tool.committedReceipt) capability.lifetime.signal.throwIfAborted();
+        return c.json(result);
       } catch (error) {
-        return capabilityRevoked(c, capability, () => {
-          const code = ciRefusalCode(thrownCode(error));
-          const operation_id = c.req.valid('json').operation_id;
-          return c.json(code ? { ok: false as const, effect: 'refused' as const, code, message: ciErrorMessage(code), operation_id }
-            : { ok: false as const, effect: 'unknown' as const, code: 'outcome_unknown' as const, message: 'Registration outcome is unknown. Retry the same operation_id and arguments; do not add a fallback wait.', operation_id });
-        });
+        return capability.lifetime.signal.aborted
+          ? c.json({ code: 'capability_revoked', message: ciErrorMessage('capability_revoked') }, 401)
+          : c.json(tool.unavailable(error, input));
       }
-    })
-    .use('/api/v1/tools/ask', requireCapability)
-    .post('/api/v1/tools/ask', bodyLimit({ maxSize: ASK_BODY_LIMIT, onError: c => c.json({ ok: false as const, code: 'invalid_request' as const, message: 'The arguments exceed 256 KiB.' }) }), jsonZodValidator(squawkAskRequestSchema, { invalid: (c, error) => c.json({ ok: false as const, code: 'invalid_request' as const, message: askInvalidInput(error) }) }), async c => {
-      const capability = c.get('capability');
-      try {
-        const answer = squawkAskAnswerSchema.parse(await capability.ask(c.req.valid('json'), capability.lifetime.signal));
-        capability.lifetime.signal.throwIfAborted();
-        return c.json(answer);
-      } catch {
-        return capabilityRevoked(c, capability, () => c.json({ ok: false as const, code: 'unavailable' as const, message: askErrorMessage('unavailable') }));
-      }
-    })
-    .use('/api/v1/tools/cancel-wait', requireCapability)
-    .post('/api/v1/tools/cancel-wait', bodyLimit({ maxSize: 16_384, onError: c => c.json({ cancelled: false as const, code: 'invalid_request' as const, message: 'The arguments exceed 16 KiB.' }) }), jsonZodValidator(squawkCancelWaitRequestSchema, { invalid: (c, error) => c.json({ cancelled: false as const, code: 'invalid_request' as const, message: waitInvalidInput(error) }) }), async c => {
-      const capability = c.get('capability');
-      try {
-        const answer = squawkCancelWaitAnswerSchema.parse(await capability.cancelWait(c.req.valid('json'), capability.lifetime.signal));
-        capability.lifetime.signal.throwIfAborted();
-        return c.json(answer);
-      } catch {
-        return capabilityRevoked(c, capability, () => c.json({ cancelled: false as const, code: 'unavailable' as const, message: ciErrorMessage('unavailable') }));
-      }
-    })
-    .use('/api/v1/tools/done', requireCapability)
-    .post('/api/v1/tools/done', bodyLimit({ maxSize: 16_384, onError: c => c.json({ ok: false as const, code: 'invalid_request' as const, message: 'The arguments exceed 16 KiB.' }) }), jsonZodValidator(squawkDoneRequestSchema, { invalid: (c, error) => c.json({ ok: false as const, code: 'invalid_request' as const, message: doneInvalidInput(error) }) }), async c => {
-      const capability = c.get('capability');
-      try {
-        const answer = squawkDoneAnswerSchema.parse(await capability.finishTurn(c.req.valid('json'), capability.lifetime.signal));
-        capability.lifetime.signal.throwIfAborted();
-        return c.json(answer);
-      } catch {
-        return capabilityRevoked(c, capability, () => c.json({ ok: false as const, code: 'unavailable' as const, message: doneErrorMessage('unavailable') }));
-      }
-    })
-    .use('/api/v1/tools/preview-stop', requireCapability)
-    .post('/api/v1/tools/preview-stop', bodyLimit({ maxSize: 16_384, onError: c => c.json(previewStopResult('invalid_input')) }), async (c, next) => {
-      if (!previewToolEnabled()) return c.json(previewStopResult('preview_disabled'));
-      await next();
-    }, jsonZodValidator(previewStopRequestSchema, { invalid: c => c.json(previewStopResult('invalid_input')) }), async c => {
-      const capability = c.get('capability');
-      if (!capability.stopPreview) return c.json(previewStopResult('headless'));
-      try {
-        const result = previewStopResultSchema.parse(await capability.stopPreview(c.req.valid('json'), capability.lifetime.signal));
-        capability.lifetime.signal.throwIfAborted();
-        return c.json(result);
-      } catch {
-        return capabilityRevoked(c, capability, () => c.json(previewStopResult('unavailable')));
-      }
-    })
-    .use('/api/v1/tools/preview-serve', requireCapability)
-    // The agent fixes a bad call from the hint, so refusals answer 200 with a typed result. The
-    // flag gate runs before validation: off means off, whatever the body.
-    .post('/api/v1/tools/preview-serve', bodyLimit({ maxSize: 16_384, onError: c => c.json(previewOversized()) }), async (c, next) => {
-      if (!previewToolEnabled()) return c.json(previewRefusal('preview_disabled'));
-      await next();
-    }, jsonZodValidator(previewServeRequestSchema, { invalid: (c, error, input) => c.json(previewInvalidInput(error, input)) }), async c => {
-      const capability = c.get('capability');
-      if (!capability.registerPreview) return c.json(previewRefusal('headless'));
-      try {
-        const result = previewServeResultSchema.parse(await capability.registerPreview(c.req.valid('json'), capability.lifetime.signal));
-        capability.lifetime.signal.throwIfAborted();
-        return c.json(result);
-      } catch {
-        return capabilityRevoked(c, capability, () => c.json(previewRefusal('unavailable')));
-      }
-    })
-    .use('/api/v1/tools/automation', requireCapability)
-    .post('/api/v1/tools/automation', bodyLimit({ maxSize: SCHEDULED_TASK_LIMITS.wireBytes, onError: c => c.json(scheduleRefusal('invalid_request', 'The arguments exceed 1 MiB.')) }), async (c, next) => {
-      if (!automationsToolEnabled()) return c.json(scheduleRefusal('automations_off'));
-      await next();
-    }, jsonZodValidator(automationToolRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))), runners: { ids: ['definition.task.runner', 'definition.task.steps.*.runner'] } }), async c => {
-      const capability = c.get('capability');
-      const automation = capability.automation;
-      if (!automation) return c.json(scheduleRefusal('unavailable'));
-      return capabilityAnswer(c, capability, async () => automationToolAnswerSchema.parse(await automation.call(capability, c.req.valid('json'), capability.lifetime.signal)), answer => c.json(answer), () => c.json(scheduleRefusal('unavailable')));
-    })
-    .use('/api/v1/tools/schedule-task', requireCapability)
-    // A prompt takes up to 100 000 characters, so these bodies get their own limit. The flag gate
-    // runs before validation: off means off, whatever the body.
-    .post('/api/v1/tools/schedule-task', bodyLimit({ maxSize: SCHEDULED_TASK_LIMITS.wireBytes, onError: c => c.json(scheduleRefusal('invalid_request', 'The arguments exceed 1 MiB.')) }), async (c, next) => {
-      if (!automationsToolEnabled()) return c.json(scheduleRefusal('automations_off'));
-      await next();
-    }, jsonZodValidator(scheduleTaskRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))) }), async c => {
-      const capability = c.get('capability');
-      const scheduleTask = capability.scheduleTask;
-      if (!scheduleTask) return c.json(scheduleRefusal('unavailable'));
-      return capabilityAnswer(c, capability, async () => scheduleTaskAnswerSchema.parse(await scheduleTask.call(capability, c.req.valid('json'), capability.lifetime.signal)), answer => c.json(answer), () => c.json(scheduleRefusal('unavailable')));
-    })
-    .use('/api/v1/tools/scheduled-tasks', requireCapability)
-    .post('/api/v1/tools/scheduled-tasks', bodyLimit({ maxSize: SCHEDULED_TASK_LIMITS.wireBytes, onError: c => c.json(scheduleRefusal('invalid_request', 'The arguments exceed 1 MiB.')) }), async (c, next) => {
-      if (!automationsToolEnabled()) return c.json(scheduleRefusal('automations_off'));
-      await next();
-    }, jsonZodValidator(scheduledTasksRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))) }), async c => {
-      const capability = c.get('capability');
-      const scheduledTasks = capability.scheduledTasks;
-      if (!scheduledTasks) return c.json(scheduleRefusal('unavailable'));
-      return capabilityAnswer(c, capability, async () => scheduledTasksAnswerSchema.parse(await scheduledTasks.call(capability, c.req.valid('json'), capability.lifetime.signal)), answer => c.json(answer), () => c.json(scheduleRefusal('unavailable')));
     });
 }
+
 export type CiToolApp = ReturnType<typeof ciToolRoutes>;

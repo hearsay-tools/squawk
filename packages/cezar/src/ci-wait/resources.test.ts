@@ -1,3 +1,4 @@
+import './tools.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CiToolController, ToolsUnavailableError } from './controller.ts';
 import { acquireCiResources } from './resources.ts';

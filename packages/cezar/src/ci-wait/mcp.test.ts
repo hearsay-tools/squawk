@@ -1,3 +1,4 @@
+import './tools.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -5,7 +6,7 @@ import { createCiMcpServer } from './mcp.ts';
 import { squawkTools } from './tools.ts';
 
 async function connect(env: NodeJS.ProcessEnv) {
-  const server = createCiMcpServer(env);
+  const server = await createCiMcpServer(env);
   const client = new Client({ name: 'instructions-test', version: '1' });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);

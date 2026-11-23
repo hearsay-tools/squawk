@@ -20,7 +20,7 @@ type RegisteredTool = {
   name: string;
   execute(callId: string, params: Parameters<SquawkTool['invoke']>[0]): ReturnType<SquawkTool['invoke']>;
 };
-type Extension = (api: { registerTool(tool: RegisteredTool): void }) => void;
+type Extension = (api: { registerTool(tool: RegisteredTool): void }) => Promise<void>;
 
 // Application types resolve from src at compile time. The bootstrap supplies only
 // installed runtime modules; this probe has no application value imports.
@@ -36,16 +36,19 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
   assert.equal(process.env.NODE_OPTIONS, '');
   // Live preview is opt-in: the flag-off assertions below must not depend on the caller's environment.
   delete process.env.CEZ_PREVIEW;
+  delete process.env.HSQ_PREVIEW;
   delete process.env.CEZ_AUTOMATIONS;
+  delete process.env.HSQ_AUTOMATIONS;
   const controller = await CiToolController.start();
   let count = 0;
   const wait = { id:'11111111-1111-4111-8111-111111111111', generation:'generation', turnId:'turn', timeoutSeconds:1800, prUrl:'https://github.com/owner/repo/pull/1', repository:'owner/repo', prNumber:1, headSha:'a'.repeat(40), registeredAt:'2026-09-22T00:00:00.000Z', deadline:'2026-09-22T00:30:00.000Z', until:'checks' as const, wakeOnConflict:true, phase:'registered' as const };
-  const session = controller.provision({
+  const handlers: Parameters<Controller['provision']>[0] = {
     registerWait: async () => { count++; return { answer: { ok:true, wait_id:wait.id, kind:scenario.kind, deadline:wait.deadline, open_waits:[] }, wait: { ...wait, ...scenario } }; },
     cancelWait: async () => ({ cancelled:true, wait_id:wait.id, open_waits:[] }),
     ask: async () => { throw new Error('Unexpected ask in installed CI smoke'); },
     finishTurn: async () => { throw new Error('Unexpected finish in installed CI smoke'); },
-  });
+  };
+  const session = controller.provision(handlers);
   assert.equal(session.descriptor.args.length, 1);
   assert.match(session.descriptor.args[0]!, /mcp\.js$/);
   const client = new Client({ name:'installed-ci-smoke', version:'1' });
@@ -59,7 +62,10 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    assert.deepEqual(tools.tools.map(tool => tool.name), defaultTools);
    const optedOutClient = new Client({ name:'installed-opt-out-smoke', version:'1' });
    try {
-     await optedOutClient.connect(new StdioClientTransport({ ...session.descriptor, env:{ ...session.env, CEZ_AUTOMATIONS:'0', HSQ_AUTOMATIONS:'0' }, stderr:'pipe' }));
+     process.env.HSQ_AUTOMATIONS = '0';
+     const optedOut = controller.provision(handlers);
+     delete process.env.HSQ_AUTOMATIONS;
+     await optedOutClient.connect(new StdioClientTransport({ ...optedOut.descriptor, env:optedOut.env, stderr:'pipe' }));
      assert.deepEqual((await optedOutClient.listTools()).tools.map(tool => tool.name), defaultTools.slice(0, 4));
    } finally { await optedOutClient.close(); }
    // Flag unset: neither preview tool appears in the listing or in the instructions.
@@ -71,7 +77,10 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    // Flag set: the installed adapter lists both preview tools with their trigger lines.
    const previewClient = new Client({ name:'installed-preview-smoke', version:'1' });
    try {
-     await previewClient.connect(new StdioClientTransport({ ...session.descriptor, env:{ ...session.env, CEZ_PREVIEW:'1' }, stderr:'pipe' }));
+     process.env.HSQ_PREVIEW = '1';
+     const preview = controller.provision(handlers);
+     delete process.env.HSQ_PREVIEW;
+     await previewClient.connect(new StdioClientTransport({ ...preview.descriptor, env:preview.env, stderr:'pipe' }));
      assert.deepEqual((await previewClient.listTools()).tools.map(tool => tool.name), [...defaultTools.slice(0, 4), 'cezar_preview_serve', 'cezar_preview_stop', ...defaultTools.slice(4)]);
      assert.match(previewClient.getInstructions() ?? '', /^- cezar_preview_serve: load when you have started, or are about to start, a web server the user should click through\.$/m);
      assert.match(previewClient.getInstructions() ?? '', /^- cezar_preview_stop: load when your (Cezar|Squawk)-started preview server needs stopping or restarting\.$/m);
@@ -85,13 +94,13 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    assert.equal(count, 1);
    Object.assign(process.env, session.env);
    const registered: RegisteredTool[] = [];
-   piExtension({ registerTool(tool) { registered.push(tool); } });
+   await piExtension({ registerTool(tool) { registered.push(tool); } });
    assert.deepEqual(registered.map(tool => tool.name), defaultTools);
    const piResult = await registered[0]!.execute('pi-call', {kind:scenario.kind, pr:wait.prUrl});
    assert.notEqual(piResult.isError, true);
    assert.equal(count, 2);
    const ompRegistered: RegisteredTool[] = [];
-   ompExtension({ registerTool(tool) { ompRegistered.push(tool); } });
+   await ompExtension({ registerTool(tool) { ompRegistered.push(tool); } });
    assert.deepEqual(ompRegistered.map(tool => tool.name), defaultTools);
    const ompResult = await ompRegistered[0]!.execute('omp-call', {kind:scenario.kind, pr:wait.prUrl});
    assert.notEqual(ompResult.isError, true);

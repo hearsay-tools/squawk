@@ -1,3 +1,6 @@
+import { registerBuiltInTools, sealBuiltInTools } from '../../built-in-tools.ts';
+registerBuiltInTools();
+sealBuiltInTools();
 import { CiToolController } from '../controller.ts';
 const controller = await CiToolController.start();
 const refuse = async () => { throw new Error('No registration in lifetime fixture'); };

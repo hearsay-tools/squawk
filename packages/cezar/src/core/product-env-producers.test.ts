@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { sealTestRunners } from './runner-registry.testkit.ts';
 import { scrubProbeSessionEnv } from '../../scripts/probe-session-env.ts';
 import { resolveCapabilities } from '../server/capabilities.ts';

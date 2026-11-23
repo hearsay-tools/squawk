@@ -8,12 +8,6 @@
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
-      "file": "packages/cezar/src/ci-wait/controller.ts",
-      "target": "packages/cezar/src/preview/registration.ts",
-      "count": 1,
-      "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
       "file": "packages/cezar/src/ci-wait/errors.ts",
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,

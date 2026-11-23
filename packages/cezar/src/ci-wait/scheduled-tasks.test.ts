@@ -1,3 +1,4 @@
+import './tools.testkit.ts';
 import { scheduledTaskSchema } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
@@ -74,8 +75,8 @@ describe('schedule-task route', () => {
   it('answers automations_off only for the explicit opt-out', async () => {
     const scheduleTask = vi.fn(async () => created);
     const scheduledTasks = vi.fn(async () => listed);
-    const { env } = await session({ scheduleTask, scheduledTasks });
     vi.stubEnv('CEZ_AUTOMATIONS', '0');
+    const { env } = await session({ scheduleTask, scheduledTasks });
     await expect(callScheduleTask(valid, env)).resolves.toMatchObject({ ok: false, code: 'automations_off' });
     await expect(callScheduledTasks({ action: 'list' }, env)).resolves.toMatchObject({ ok: false, code: 'automations_off' });
     expect(scheduleTask).not.toHaveBeenCalled();

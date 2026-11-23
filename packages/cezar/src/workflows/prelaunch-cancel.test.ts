@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { staleContinuationDisposition } from './run/continuation-session.ts';

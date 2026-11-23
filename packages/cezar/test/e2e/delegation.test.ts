@@ -128,6 +128,9 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await load('workflows/step-kind-registry.js') as typeof import('../../src/workflows/step-kind-registry.ts');
     registerBuiltInStepKinds();
     sealBuiltInStepKinds();
+    const { registerBuiltInTools, sealBuiltInTools } = await load('built-in-tools.js') as typeof import('../../src/built-in-tools.ts');
+    registerBuiltInTools();
+    sealBuiltInTools();
     const { DelegationController, bundledWorkerInvocation } = await load('delegation/provision.js') as typeof import('../../src/delegation/provision.ts');
     const { workerCleanups } = await load('delegation/worker-cleanup.js') as typeof import('../../src/delegation/worker-cleanup.ts');
     const { WorkspaceSemaphore } = await load('workspace/semaphore.js') as typeof import('../../src/workspace/semaphore.ts');
