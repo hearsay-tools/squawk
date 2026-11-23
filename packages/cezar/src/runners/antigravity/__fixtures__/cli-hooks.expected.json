@@ -1,0 +1,32 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "hook",
+      "id": "hook_step_1",
+      "event": "SessionStart",
+      "status": "completed",
+      "entries": [
+        {
+          "kind": "context",
+          "text": "SQUEAL · registered at revision 0\nKnown failures: 0"
+        }
+      ]
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "hook",
+      "id": "hook_step_3",
+      "event": "PreInvocation",
+      "status": "completed",
+      "entries": [
+        {
+          "kind": "context",
+          "text": "SQUEAL · first results in this worktree\nKnown failures: 0"
+        }
+      ]
+    }
+  }
+]

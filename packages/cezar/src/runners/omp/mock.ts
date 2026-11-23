@@ -46,5 +46,14 @@ export const OMP_MOCK = {
       kind: 'capability-absent',
       reason: 'OMP 18.13.1 get_state.dumpTools default set holds no messaging tool; vibe_* and irc are opt-in in the user\'s own config.',
     },
+    // R77 & UI2 (hearsay-tools/cezarion#961), wire survey 2026-10-15.
+    R77: {
+      kind: 'scenario-unconstructible',
+      reason: 'OMP 18.8.0 shares Pi\'s RPC wire: extensions run in-process and report only extension_error, so no hook item can arrive after a park (wire survey 2026-10-15).',
+    },
+    UI2: {
+      kind: 'capability-absent',
+      reason: 'OMP 18.8.0 shares Pi\'s RPC wire: extensions run in-process and report only extension_error, with no hook event (wire survey 2026-10-15).',
+    },
   },
 } as const satisfies RunnerMock;

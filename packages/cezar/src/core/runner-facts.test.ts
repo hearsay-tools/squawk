@@ -78,4 +78,8 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     expect(BUILT_IN_RUNNER_IDS.filter(runner => exemptionFor('U27', runner) !== undefined))
       .toEqual(BUILT_IN_RUNNER_IDS.filter(exempt));
   });
+  it.each(['R77', 'UI2'] as const)('requires %s to be explicitly declared in mock.ts exactly where hookEvents is none', criterion => {
+    expect(BUILT_IN_RUNNER_IDS.filter(runner => runnerDefinition(runner).mock.parityExemptions?.[criterion] !== undefined))
+      .toEqual(BUILT_IN_RUNNER_IDS.filter(runner => RUNNER_FACTS[runner]!.hookEvents === 'none'));
+  });
 });

@@ -6,7 +6,9 @@ Each line is `{"t": <seconds since the agent started>, "from": "client" | "agent
 Host paths are replaced with `/work/...`.
 
 Each `<name>.expected.json` holds the events the mapper makes of `<name>.ndjson`
-(hearsay-tools/squawk#4060).
+(hearsay-tools/squawk#4060). `cli-hooks.expected.json` holds the `UiHookItem` events
+the transcript reader makes of `cli-hooks.transcript.jsonl` (live CLI 1.5.14
+`SYSTEM_SDK` `SYSTEM_MESSAGE` rows).
 
 [`docs/runners/antigravity-wire.md`](../../../../../../docs/runners/antigravity-wire.md) says how
 they were recorded, what each file shows and which runner facts they prove.

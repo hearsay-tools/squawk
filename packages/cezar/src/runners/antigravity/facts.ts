@@ -9,6 +9,8 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 // nativePermission: a background command or timer wakes the idle session, which then asks.
 // nativeSubagents: a subagent's permission requests never reach the ACP client, so a PreToolUse hook
 // denies the subagent tools (subagent-guard.ts, hearsay-tools/squawk#4098).
+// hookEvents: the CLI writes injected hook output as SYSTEM_SDK SYSTEM_MESSAGE rows in
+// transcript_full.jsonl (tool-transcript.ts); the ACP wire itself carries no hook frame.
 export const ANTIGRAVITY_FACTS = {
   shutdownDescendants: 'observed-tree',
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'live',
@@ -16,6 +18,6 @@ export const ANTIGRAVITY_FACTS = {
   inputDelivery: { mode: 'steer', consumption: 'unobservable', acknowledgement: 'response',
     humanInputAtTurnEnd: 'never-held', via: 'second session/prompt while busy' },
   nativePermission: 'after-turn', nativeAsk: 'answerable', nativeSubagents: 'none',
-  childWork: 'none', hookEvents: 'none', humanPromptHold: 'acknowledgement',
+  childWork: 'none', hookEvents: 'reported', humanPromptHold: 'acknowledgement',
   nativeTimerTool: 'schedule', costReport: 'per-turn', claudeModelAliases: false, turnStart: 'on-write',
 } as const satisfies RunnerFacts;

@@ -73,8 +73,12 @@ export class AntigravitySession implements AgentSession {
   private kill: NodeJS.Timeout | undefined;
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
-  /** Reads read, MCP and subagent results from the CLI transcript; the wire carries none. */
-  private readonly toolOutputs = new AntigravityToolOutputs(item => this.options.onUiEvent?.({ type: 'item.updated', item, late: true }));
+  /** Reads read, MCP and subagent results plus injected hook messages from the CLI transcript; the wire carries none. */
+  private readonly toolOutputs = new AntigravityToolOutputs(
+    item => this.options.onUiEvent?.({ type: 'item.updated', item, late: true }),
+    Date.now,
+    hook => this.options.onUiEvent?.({ type: 'item.completed', item: hook }),
+  );
   /** The native subagent guard could not be written; boot says so. */
   private guardMissing = false;
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
@@ -148,8 +152,9 @@ export class AntigravitySession implements AgentSession {
     this.options.onUiEvent?.({ type: 'session.error', message, fatal: false });
   }
   private uiEvent(event: UiEvent): void {
-    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); }
+    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); void this.toolOutputs.poll(); }
     if (event.type === 'turn.completed') {
+      void this.toolOutputs.poll();
       // The response that ends a turn carries every prompt sent into it: none is held after it.
       this.humanHolds.clear();
       if (event.stopReason === 'error' && !this.quiet && this.failedTurnEnded(event)) return;
@@ -358,6 +363,7 @@ export class AntigravitySession implements AgentSession {
   }
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
+    await this.toolOutputs.poll();
     this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }

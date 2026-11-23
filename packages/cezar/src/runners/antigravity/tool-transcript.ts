@@ -3,14 +3,16 @@ import { open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import type { UiToolItem } from '../../core/ui-events.ts';
+import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
+import type { HookStatus, UiHookItem, UiToolItem } from '../../core/ui-events.ts';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
 
 /**
- * The CLI 1.5.14 ACP wire sends no result for a read, an MCP call or a subagent tool: the completed
- * update has no `content`, `rawOutput` or `_meta` (hearsay-tools/squawk#4099). The CLI's own
- * transcript keeps what the agent received. It is a private format: every read is bounded, and a
- * missing file or a changed format leaves the tool with no output (docs/runners/antigravity-wire.md).
+ * The CLI 1.5.14 ACP wire sends no result for a read, an MCP call or a subagent tool (the completed
+ * update has no `content`, `rawOutput` or `_meta`, hearsay-tools/squawk#4099) and carries no hook
+ * lifecycle frame. The CLI's own transcript keeps both tool results and injected hook messages
+ * (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`). It is a private format: every read is
+ * bounded, and a missing file or a changed format leaves no output (docs/runners/antigravity-wire.md).
  */
 export const TRANSCRIPT_OUTPUT_CHARS = 64 * 1024;
 const READ_BYTES = 4 * 1024 * 1024;
@@ -21,10 +23,12 @@ export const TRANSCRIPT_WAIT_MS = 10_000;
 /** Rows that never hold a tool's result. */
 const NOT_RESULTS: ReadonlySet<string> = new Set(['PLANNER_RESPONSE', 'USER_INPUT', 'SYSTEM_MESSAGE', 'CHECKPOINT']);
 const HEADER = /^(?:Created|Completed) At: .*$/;
+const SYSTEM_BLOCK = /(?:^|\n)<SYSTEM_MESSAGE>\r?\n([\s\S]*)\r?\n<\/SYSTEM_MESSAGE>\s*$/;
+const HOOK_HEADER = /^The following system message was injected by an? ([A-Za-z][A-Za-z0-9_-]*) hook:\r?\n?([\s\S]*)$/;
 
 const rowSchema = z.object({
-  step_index: z.number().int().nonnegative(), type: z.string(), status: z.string().optional(),
-  content: z.string().optional(), error: z.string().optional(),
+  step_index: z.number().int().nonnegative(), type: z.string(), source: z.string().optional(),
+  status: z.string().optional(), content: z.string().optional(), error: z.string().optional(),
   tool_calls: z.array(z.object({ name: z.string(), args: z.unknown().optional() })).optional(),
 });
 
@@ -41,13 +45,33 @@ function canonical(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
+function boundOutput(text: string): string {
+  return text.length > TRANSCRIPT_OUTPUT_CHARS ? `${text.slice(0, TRANSCRIPT_OUTPUT_CHARS)}\n… (output truncated by Squawk)` : text;
+}
+
 /** The text the agent received, without the CLI's `Created At:`/`Completed At:` lines, bounded. */
 export function transcriptResultText(row: z.infer<typeof rowSchema>): string {
   const lines = (row.content ?? '').split('\n');
   let first = 0;
   while (first < lines.length && HEADER.test(lines[first]!)) first++;
   const text = lines.slice(first).join('\n') || (row.error ?? '');
-  return text.length > TRANSCRIPT_OUTPUT_CHARS ? `${text.slice(0, TRANSCRIPT_OUTPUT_CHARS)}\n… (output truncated by Squawk)` : text;
+  return boundOutput(text);
+}
+
+/** A `SYSTEM_SDK` `SYSTEM_MESSAGE` row injected by a native Antigravity hook, mapped to a hook item. */
+export function transcriptHookItem(row: z.infer<typeof rowSchema>): UiHookItem | undefined {
+  if (row.type !== 'SYSTEM_MESSAGE' || row.source !== 'SYSTEM_SDK') return undefined;
+  const content = row.content ?? '';
+  const body = (SYSTEM_BLOCK.exec(content)?.[1] ?? content).trim();
+  const header = HOOK_HEADER.exec(body);
+  if (!header) return undefined;
+  const status: HookStatus = row.status === 'ERROR' ? 'failed' : 'completed';
+  const text = header[2]!.trim();
+  const entries: UiHookItem['entries'] = text
+    ? [{ kind: status === 'failed' ? 'error' : 'context', text: boundOutput(text) }]
+    : row.error?.trim() ? [{ kind: 'error', text: boundOutput(row.error.trim()) }] : [];
+  const item: UiHookItem = { kind: 'hook', id: `hook_step_${row.step_index}`, event: hookEventName(header[1]!), status, entries };
+  return isVisibleHookItem(item) ? item : undefined;
 }
 
 export interface TranscriptCall { id: string; name: string; args: unknown }
@@ -56,11 +80,12 @@ export interface TranscriptCall { id: string; name: string; args: unknown }
 const HELD_RESULTS = 64;
 
 /**
- * Matches tool calls to their result rows. A planner row lists the step's calls with the same
- * `name` and `args` the wire sends, and the k-th call's result is the row `step_index + 1 + k`.
- * Each call takes its slot when it starts, so the n-th started call with a name and arguments gets
- * the n-th planned one: neither the order calls complete in nor a call that stopped waiting moves
- * another call's result. Only results a waiting call can still take are held.
+ * Matches tool calls to their result rows, and extracts injected hook `SYSTEM_MESSAGE` rows.
+ * A planner row lists the step's calls with the same `name` and `args` the wire sends, and the k-th
+ * call's result is the row `step_index + 1 + k`. Each call takes its slot when it starts, so the
+ * n-th started call with a name and arguments gets the n-th planned one: neither the order calls
+ * complete in nor a call that stopped waiting moves another call's result. Only results a waiting
+ * call can still take are held.
  */
 export class AntigravityTranscript {
   /** Per call key: planned result steps, and started calls, that have no partner yet. */
@@ -69,6 +94,8 @@ export class AntigravityTranscript {
   private readonly steps = new Map<string, number>();
   private readonly dropped = new Set<string>();
   private readonly results = new Map<number, string>();
+  private readonly hooks: UiHookItem[] = [];
+  private readonly seenHooks = new Set<number>();
 
   /** A call started on the wire: it takes the next planned slot of its name and arguments. */
   start(call: TranscriptCall): void {
@@ -96,7 +123,15 @@ export class AntigravityTranscript {
         this.planned.set(key, [...this.planned.get(key) ?? [], step + 1 + index]);
         this.pair(key);
       });
+    } else if (type === 'SYSTEM_MESSAGE') {
+      const hook = transcriptHookItem(row.data);
+      if (hook && !this.seenHooks.has(step)) { this.seenHooks.add(step); this.hooks.push(hook); }
     } else if (!NOT_RESULTS.has(type) && this.wanted(step)) this.hold(step, transcriptResultText(row.data));
+  }
+
+  /** Injected hook items read since the last drain. */
+  drainHooks(): UiHookItem[] {
+    return this.hooks.splice(0);
   }
 
   /** The call's result text once its row is read; reading it consumes it. */
@@ -176,12 +211,17 @@ export class AntigravityToolOutputs {
   private readonly transcript = new AntigravityTranscript();
   private readonly pending = new Map<string, Pending>();
   private readonly seen = new Set<string>();
-  constructor(private readonly amend: (item: UiToolItem) => void, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly amend: (item: UiToolItem) => void,
+    private readonly now: () => number = Date.now,
+    private readonly onHook?: (item: UiHookItem) => void,
+  ) {}
 
   /** The session is open: read its transcript from its current end. */
   open(path: string): void {
     this.path = path;
     try { this.offset = statSync(path).size; } catch { this.offset = 0; }
+    if (this.onHook) this.schedule(POLL_MS);
   }
 
   /** A wire update. A call takes its transcript slot when it first appears; a terminal update with
@@ -221,7 +261,7 @@ export class AntigravityToolOutputs {
 
   private next(): void {
     this.expire();
-    if ([...this.pending.values()].some(pending => pending.item)) this.schedule(POLL_MS);
+    if (this.onHook || [...this.pending.values()].some(pending => pending.item)) this.schedule(POLL_MS);
   }
 
   private expire(): void {
@@ -233,6 +273,7 @@ export class AntigravityToolOutputs {
     if (this.closed || this.broken || !this.path) return;
     this.expire();
     await this.readAppended(this.path);
+    for (const hook of this.transcript.drainHooks()) if (!this.closed) this.onHook?.(hook);
     for (const [id, pending] of this.pending) {
       if (!pending.item) continue;
       const output = this.transcript.output(id);

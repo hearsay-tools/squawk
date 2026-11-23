@@ -41,5 +41,14 @@ export const PI_MOCK = {
       kind: 'capability-absent',
       reason: 'pi 1.4.0 has no built-in messaging tool; an extension may add one, and its name cannot be discovered as messaging.',
     },
+    // R77 & UI2 (hearsay-tools/cezarion#961), wire survey 2026-10-15.
+    R77: {
+      kind: 'scenario-unconstructible',
+      reason: 'Pi 1.0.4 runs extensions in-process; its RPC wire reports only extension_error and carries no hook lifecycle frame, so no hook item can arrive after a park (wire survey 2026-10-15).',
+    },
+    UI2: {
+      kind: 'capability-absent',
+      reason: 'Pi 1.0.4 runs extensions in-process; its RPC wire reports only extension_error and carries no hook event (wire survey 2026-10-15).',
+    },
   },
 } as const satisfies RunnerMock;

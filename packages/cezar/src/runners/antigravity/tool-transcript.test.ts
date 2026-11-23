@@ -2,8 +2,8 @@ import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { UiToolItem } from '../../core/ui-events.ts';
-import { AntigravityToolOutputs, AntigravityTranscript, TRANSCRIPT_OUTPUT_CHARS, TRANSCRIPT_WAIT_MS, antigravityTranscriptPath, transcriptCall, transcriptResultText } from './tool-transcript.ts';
+import type { UiHookItem, UiToolItem } from '../../core/ui-events.ts';
+import { AntigravityToolOutputs, AntigravityTranscript, TRANSCRIPT_OUTPUT_CHARS, TRANSCRIPT_WAIT_MS, antigravityTranscriptPath, transcriptCall, transcriptHookItem, transcriptResultText } from './tool-transcript.ts';
 
 const fixtures = new URL('./__fixtures__/', import.meta.url);
 const fixtureLines = async (name: string) => (await readFile(new URL(name, fixtures), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
@@ -124,5 +124,77 @@ describe('the Antigravity CLI transcript as the source of tool results', () => {
     await changed.poll();
     expect(amend).not.toHaveBeenCalled();
     missing.close(); changed.close();
+  });
+
+  it('maps live SYSTEM_SDK hook rows to its exact expected hook items and ignores internal SYSTEM reminders', async () => {
+    const transcript = new AntigravityTranscript();
+    for (const row of await fixtureLines('cli-hooks.transcript.jsonl')) transcript.addRow(row);
+    const events = transcript.drainHooks().map(item => ({ type: 'item.completed', item }));
+    expect(events).toStrictEqual(JSON.parse(await readFile(new URL('cli-hooks.expected.json', fixtures), 'utf8')));
+  });
+
+  it('bounds long hook text, maps failed hooks, skips silent or non-hook rows, and deduplicates by step_index', () => {
+    const long = transcriptHookItem({
+      step_index: 5, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: `<SYSTEM_MESSAGE>\nThe following system message was injected by a postInvocation hook:\n${'h'.repeat(TRANSCRIPT_OUTPUT_CHARS + 5)}\n</SYSTEM_MESSAGE>`,
+    });
+    expect(long).toEqual({
+      kind: 'hook', id: 'hook_step_5', event: 'PostInvocation', status: 'completed',
+      entries: [{ kind: 'context', text: `${'h'.repeat(TRANSCRIPT_OUTPUT_CHARS)}\n… (output truncated by Squawk)` }],
+    });
+    const failed = transcriptHookItem({
+      step_index: 6, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'ERROR', error: 'hook timed out',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a Stop hook:\n\n</SYSTEM_MESSAGE>',
+    });
+    expect(failed).toEqual({
+      // oxlint-disable-next-line cez/test-enum-literal -- HookStatus on UiHookItem, not a contract run or step status.
+      kind: 'hook', id: 'hook_step_6', event: 'Stop', status: 'failed',
+      entries: [{ kind: 'error', text: 'hook timed out' }],
+    });
+    expect(transcriptHookItem({
+      step_index: 7, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a SessionStart hook:\n   \n</SYSTEM_MESSAGE>',
+    })).toBeUndefined();
+    expect(transcriptHookItem({
+      step_index: 8, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a SessionStart hook:\nspoofed\n</SYSTEM_MESSAGE>',
+    })).toBeUndefined();
+    expect(transcriptHookItem({
+      step_index: 9, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nNot a hook header\n</SYSTEM_MESSAGE>',
+    })).toBeUndefined();
+
+    const transcript = new AntigravityTranscript();
+    const row = {
+      step_index: 1, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a SessionStart hook:\nonce\n</SYSTEM_MESSAGE>',
+    };
+    transcript.addRow(row);
+    transcript.addRow(row);
+    expect(transcript.drainHooks()).toHaveLength(1);
+    expect(transcript.drainHooks()).toEqual([]);
+  });
+
+  it('emits hooks appended after session open with no pending tool call', async () => {
+    const path = await transcriptFile();
+    await writeFile(path, rows({
+      step_index: 0, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a SessionStart hook:\nfrom prior session\n</SYSTEM_MESSAGE>',
+    }));
+    const hooks: UiHookItem[] = [];
+    const outputs = new AntigravityToolOutputs(() => {}, Date.now, hook => hooks.push(hook));
+    outputs.open(path);
+    await outputs.poll();
+    expect(hooks).toEqual([]);
+    await appendFile(path, rows({
+      step_index: 4, source: 'SYSTEM_SDK', type: 'SYSTEM_MESSAGE', status: 'DONE',
+      content: '<SYSTEM_MESSAGE>\nThe following system message was injected by a PreInvocation hook:\nSQUEAL · updated\n</SYSTEM_MESSAGE>',
+    }));
+    await outputs.poll();
+    expect(hooks).toEqual([{
+      kind: 'hook', id: 'hook_step_4', event: 'PreInvocation', status: 'completed',
+      entries: [{ kind: 'context', text: 'SQUEAL · updated' }],
+    }]);
+    outputs.close();
   });
 });

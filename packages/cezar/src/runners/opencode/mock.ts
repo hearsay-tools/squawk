@@ -53,5 +53,14 @@ export const OPENCODE_MOCK = {
       kind: 'capability-absent',
       reason: 'OpenCode 1.19.4 has no messaging tool and no inbound channel. Its task tool resumes any session by task_id with no parent check, and the task permission pattern matches only subagent_type, so no session rule blocks a foreign task_id while subagents keep working. Only the shell finds another session\'s ID, and the shell reaches that session directly (opencode run --session); the same-user shell is outside hard isolation.',
     },
+    // R77 & UI2 (hearsay-tools/cezarion#961), wire survey 2026-10-15.
+    R77: {
+      kind: 'scenario-unconstructible',
+      reason: 'OpenCode 1.18.35 runs plugin hooks in-process; its SSE wire carries no hook lifecycle frame, so no hook item can arrive after a park (wire survey 2026-10-15).',
+    },
+    UI2: {
+      kind: 'capability-absent',
+      reason: 'OpenCode 1.18.35 runs plugin hooks in-process; its SSE wire carries no hook event (wire survey 2026-10-15).',
+    },
   },
 } as const satisfies RunnerMock;
