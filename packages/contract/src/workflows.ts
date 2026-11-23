@@ -13,7 +13,7 @@ import { runnerSchema, type Runner } from './runner.ts';
 // ---- workflows (`GET/POST /workflows`, `DELETE /workflows/:name`, `POST /workflows/parse`) ----
 
 /**
- * One step of a chain: either an agent step (`prompt`/`skill`) or a check step (`command`).
+ * One step of a chain: an agent (`prompt`/`skill`), check (`command`), or plugin step.
  *
  * `onFail.max` carries a `.default(2)`, exactly as `src/workflows/types.ts` declares it, so the
  * OUTPUT shape the routes serve has `max` present whenever `onFail` is.
@@ -36,6 +36,9 @@ export const workflowStepDefSchema = z
     agentProfile: z.string().min(1).max(64).optional(),
     allowedTools: z.array(z.string()).optional(),
     bashAllowlist: z.array(z.string()).optional(),
+    kind: z.literal('plugin').optional(),
+    pluginKind: z.string().min(1).max(64).optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
     // check step
     command: z.string().optional(),
     onFail: z
@@ -45,12 +48,27 @@ export const workflowStepDefSchema = z
       })
       .optional(),
   })
-  .refine((s) => Boolean(s.command) !== Boolean(s.prompt ?? s.skill), {
-    message: 'a step is either an agent step (prompt/skill) or a check step (command), not both',
-  })
-  .refine((s) => !s.command || s.timeoutMs === undefined, {
-    message: 'timeoutMs applies only to agent steps',
-    path: ['timeoutMs'],
+  .superRefine((s, ctx) => {
+    const agent = Boolean(s.prompt ?? s.skill);
+    const check = Boolean(s.command);
+    const plugin = s.kind === 'plugin';
+    if (Number(agent) + Number(check) + Number(plugin) !== 1) {
+      ctx.addIssue({ code: 'custom', message: 'a step is either an agent step (prompt/skill), a check step (command), or a plugin step, not more than one' });
+    }
+    if (plugin && [s.prompt, s.skill, s.command].some(value => value !== undefined)) {
+      ctx.addIssue({ code: 'custom', message: 'plugin steps cannot carry prompt, skill, or command' });
+    }
+    if (plugin && !s.pluginKind) {
+      ctx.addIssue({ code: 'custom', path: ['pluginKind'], message: 'plugin steps require pluginKind' });
+    }
+    if (!plugin && (s.pluginKind !== undefined || s.config !== undefined)) {
+      ctx.addIssue({ code: 'custom', message: 'pluginKind and config apply only to plugin steps' });
+    }
+    if (!agent || plugin || check) {
+      for (const key of ['timeoutMs', 'model', 'effort', 'runner', 'agentProfile', 'allowedTools', 'bashAllowlist'] as const) {
+        if (s[key] !== undefined) ctx.addIssue({ code: 'custom', path: [key], message: `${key} applies only to agent steps` });
+      }
+    }
   });
 export type WorkflowStepDef = z.infer<typeof workflowStepDefSchema>;
 
@@ -70,7 +88,7 @@ export type WorkflowDef = z.infer<typeof workflowDefSchema>;
 export function providersRequiredByWorkflow(workflow: WorkflowDef, fallback: Runner, runners: readonly Runner[]): Runner[] {
   const required = new Set<Runner>();
   for (const step of workflow.steps) {
-    if (!step.command) required.add(step.runner ?? fallback);
+    if (!step.command && step.kind !== 'plugin') required.add(step.runner ?? fallback);
   }
   return runners.filter(provider => required.has(provider));
 }

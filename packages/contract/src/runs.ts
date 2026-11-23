@@ -65,6 +65,7 @@ export const stepStateSchema = z.object({
   id: z.string(),
   name: z.string(),
   kind: stepKindSchema,
+  pluginKind: z.string().min(1).max(64).optional(),
   status: stepStatusSchema,
   iterations: z.number(),
   /** Durable count of onFail retry loops consumed by this check. */

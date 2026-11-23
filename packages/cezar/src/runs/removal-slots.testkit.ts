@@ -1,3 +1,4 @@
+import { registerBuiltInStepKinds, sealBuiltInStepKinds } from '../workflows/step-kind-registry.ts';
 import { registerRunSlots, sealRunSlots, type RunSlots } from './removal-slots.ts';
 
 /**
@@ -9,4 +10,6 @@ import { registerRunSlots, sealRunSlots, type RunSlots } from './removal-slots.t
 export function sealTestRunSlots(slots: RunSlots = {}): void {
   registerRunSlots(slots);
   sealRunSlots();
+  registerBuiltInStepKinds();
+  sealBuiltInStepKinds();
 }

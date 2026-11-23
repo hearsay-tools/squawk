@@ -52,8 +52,8 @@ export function skillStackOf(steps: WorkflowStepDef[]): string[] | null {
   return skills.length ? skills : null;
 }
 
-export function stepKind(step: WorkflowStepDef): 'agent' | 'check' {
-  return step.command ? 'check' : 'agent';
+export function stepKind(step: { kind?: 'agent' | 'check' | 'plugin' | undefined; command?: string | undefined }): 'agent' | 'check' | 'plugin' {
+  return step.kind === 'plugin' ? 'plugin' : step.kind === 'check' || step.command ? 'check' : 'agent';
 }
 
 /**

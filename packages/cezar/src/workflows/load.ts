@@ -10,6 +10,7 @@ import {
   type WorkflowDef,
 } from './types.ts';
 import { runnerFieldIssues } from '../core/runner-fields.ts';
+import { knownStepKinds, stepKindDefinition } from './step-kind-registry.ts';
 import { knownRunnerIds } from '../core/runner-registry.ts';
 
 export const WORKFLOWS_DIR = '.ai/cezar/workflows';
@@ -68,6 +69,11 @@ async function loadWorkflowDirs(dirs: readonly string[]): Promise<{ workflows: W
         }
         // `skills:` shorthand files become plain agent steps here (spec 012).
         const normalized = normalizeWorkflowDoc(parsed.data);
+        if (knownStepKinds() !== undefined) {
+          for (const step of normalized.steps) {
+            if (step.kind === 'plugin') stepKindDefinition(step.pluginKind!).validate?.(step);
+          }
+        }
         // Steps referenced by onFail.retry must exist and come earlier; ids unique.
         const issue = stepsIssue(normalized.steps);
         if (issue) {

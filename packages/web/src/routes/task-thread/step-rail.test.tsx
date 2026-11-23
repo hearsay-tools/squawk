@@ -50,6 +50,15 @@ describe('railProgress — (terminal + 0.5·active) / total', () => {
 })
 
 describe('StepRail', () => {
+  it('shows a plugin kind and falls back to the stored kind', () => {
+    render(<StepRail steps={[
+      step('deploy', 'done', { kind: STEP_KIND.plugin, pluginKind: 'deploy' }),
+      step('unknown', 'pending', { kind: STEP_KIND.plugin }),
+    ]} />)
+    expect(screen.getByText('deploy · step 1 of 2')).toBeTruthy()
+    expect(screen.getByText('plugin · step 2 of 2')).toBeTruthy()
+  })
+
   it('renders nothing without steps (worktree-less oddities stay honest)', () => {
     render(<StepRail steps={[]} />)
     expect(document.querySelector('[data-slot="step-rail"]')).toBeNull()

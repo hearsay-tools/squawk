@@ -146,7 +146,7 @@ export function requeueInterruptedRun(context: RunModuleContext, host: QueuedRev
     host.enqueueJob(run.id, { workflow: atTaskHead.storedWorkflow(run)!, startAt: 0, input: atTaskHead.recoveryInput(run) });
     return true;
   }
-  if (atTaskHead.storedWorkflow(run) && interruptedDef && stepKind(interruptedDef) === 'check') {
+  if (atTaskHead.storedWorkflow(run) && interruptedDef && stepKind(interruptedDef) !== 'agent') {
     context.store.updateStep(run.id, interruptedDef.id, { status: 'pending', error: undefined, finishedAt: undefined });
     host.move(run.id, 'requeue', { error: undefined, finishedAt: undefined });
     context.store.persistence.flush();

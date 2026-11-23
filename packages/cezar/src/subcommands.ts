@@ -71,6 +71,9 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();
+  const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
+  registerBuiltInStepKinds();
+  sealBuiltInStepKinds();
 }
 
 /** Help must skip both runtime registration and the migrating operator Home factory. */

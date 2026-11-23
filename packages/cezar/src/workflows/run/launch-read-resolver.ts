@@ -546,7 +546,7 @@ function acceptedRunFields(input: StartRunInput, workflow: WorkflowDef, effectiv
       clientRequestHash: clientRequest?.hash,
       automation: input.automation,
       automationTrigger: input.automationTrigger,
-      steps: workflow.steps.map((s) => ({ id: s.id, name: s.name ?? s.id, kind: stepKind(s), ...(input.skillPaths?.[s.id] ? { skillPath: input.skillPaths[s.id] } : {}) })),
+      steps: workflow.steps.map((s) => ({ id: s.id, name: s.name ?? s.id, kind: stepKind(s), ...(s.kind === 'plugin' ? { pluginKind: s.pluginKind } : {}), ...(input.skillPaths?.[s.id] ? { skillPath: input.skillPaths[s.id] } : {}) })),
     };
 }
 

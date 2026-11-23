@@ -38,6 +38,9 @@ try {
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import(new URL('built-in-run-slots.js', runtime.url));
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();
+  const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import(new URL('workflows/step-kind-registry.js', runtime.url));
+  registerBuiltInStepKinds();
+  sealBuiltInStepKinds();
   const { RunManager } = await import(new URL('workflows/run.js', runtime.url));
   const { acquireCiResources } = await import(new URL('ci-wait/resources.js', runtime.url));
   const { resolveHome } = await import(new URL('home/resolve.js', runtime.url));
