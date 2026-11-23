@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { modelDiscoveryRunnerSchema } from './workspace.ts';
+import { modelDiscoveryRunnerSchema } from './model-choices.ts';
 
 /**
  * Query schemas for the READ routes — deliberately permissive.

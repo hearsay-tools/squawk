@@ -4,7 +4,7 @@ import { effortFieldSchema } from './effort.ts';
 import { runStatusSchema } from './run-status.ts';
 import { runnerSchema } from './runner.ts';
 import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
-import { modelChoicesSchema } from './workspace.ts';
+import { modelChoicesSchema } from './model-choices.ts';
 
 export { agentInputSchema, inboxClaimSchema, type AgentInput, type InboxClaim } from './agent-input.ts';
 export { workerOutcomeSchema, workerWaitModeSchema, type WorkerOutcome } from './worker-outcome.ts';

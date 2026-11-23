@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { referenceStatusSchema } from './reference-status.ts';
 
 /**
  * The GitHub family of `/api/v1` — the GitHub tab's list, the lazy checks glyphs, the comment
@@ -218,25 +219,6 @@ export const githubSearchDataSchema = z.object({
   labelColors: z.record(z.string(), z.string()).optional(),
 });
 export type GithubSearchData = z.infer<typeof githubSearchDataSchema>;
-
-/**
- * Shared reference-status vocabulary for PRs and issues. Closed PR and completed issue remain
- * distinct outcomes. Server ranking describes the next action; merge conflict is independent.
- */
-export const referenceStatusSchema = z.enum([
-  'draft',
-  'review-required',
-  'changes-requested',
-  'checks-pending',
-  'checks-failing',
-  'ready',
-  'merged',
-  'closed',
-  'open',
-  'completed',
-  'not-planned',
-]);
-export type ReferenceStatus = z.infer<typeof referenceStatusSchema>;
 
 /**
  * When the client should ask again — milliseconds, or `null` for "nothing in this answer can

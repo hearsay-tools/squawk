@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { runStatusSchema } from './run-status.ts';
 import { runnerSchema } from './runner.ts';
-import { modelDiscoveryRunnerSchema, providerStatusSchema, runnerModelCatalogResponseSchema } from './workspace.ts';
+import { modelDiscoveryRunnerSchema } from './model-choices.ts';
+import { providerStatusSchema, runnerModelCatalogResponseSchema } from './workspace.ts';
 
 /** Host default-account discovery; delegation credentials select the controller, not an account. */
 export const hostDiscoveryRequestSchema = z.discriminatedUnion('kind', [
@@ -31,5 +32,3 @@ export const discoveredTasksSchema = z.object({
 export type DiscoveredTasks = z.infer<typeof discoveredTasksSchema>;
 export const discoveryResponseSchema = z.union([discoveredRunnersSchema, runnerModelCatalogResponseSchema, discoveredTasksSchema]);
 export type DiscoveryResponse = z.infer<typeof discoveryResponseSchema>;
-
-export { modelChoicesSchema, type ModelChoices } from './workspace.ts';

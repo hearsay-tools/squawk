@@ -68,7 +68,7 @@ describe('wait writes use the shared violation sink', () => {
     store.commitWait(id, wait);
     expect(store.getRun(id)?.waits).toEqual([wait]);
     expect(takeRunExitViolations()).toEqual([
-      `undeclared wait transition: timer wait ${wait.id} from ${from} to ${wait.phase} (declare it in workflows/run-states.ts WAIT_PHASES)`,
+      `undeclared wait transition: timer wait ${wait.id} from ${from} to ${wait.phase} (declare it in runs/wait-phases.ts WAIT_PHASES)`,
     ]);
   });
 
@@ -79,7 +79,7 @@ describe('wait writes use the shared violation sink', () => {
     for (const wait of waits) store.commitWait(id, wait);
     expect(store.getRun(id)?.waits).toEqual(waits);
     expect(warn.mock.calls).toEqual(waits.map(wait => [
-      `undeclared wait transition: timer wait ${wait.id} from new to resolved (declare it in workflows/run-states.ts WAIT_PHASES)`,
+      `undeclared wait transition: timer wait ${wait.id} from new to resolved (declare it in runs/wait-phases.ts WAIT_PHASES)`,
     ]));
     expect(takeRunExitViolations()).toEqual([]);
   });
