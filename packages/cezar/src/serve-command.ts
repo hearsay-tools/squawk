@@ -10,7 +10,7 @@ import { ProviderAuthService } from './core/provider-auth.ts';
 import { detectEnvironment } from './core/backend-detect.ts';
 import { getRepoInfo } from './server/git.ts';
 import { SWEEP_MIN_INTERVAL_MS, sweepMergedBranches } from './server/repo-branch-sweep.ts';
-import { previewToolEnabled } from './ci-wait/tool-env.ts';
+import { previewToolEnabled } from './preview/tool-env.ts';
 import { PreviewHost } from './preview/host.ts';
 import { ToolActivityTracker } from './activity/tool-activity.ts';
 import { TaskWebhooks } from './runs/webhook.ts';

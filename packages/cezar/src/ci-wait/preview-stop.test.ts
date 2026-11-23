@@ -5,8 +5,8 @@ import { request } from 'node:http';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { previewStopRequestSchema, previewStopResultSchema } from '@open-mercato/cezar-contract/preview';
 import { CiToolController } from './controller.ts';
-import { callPreviewStop } from './client.ts';
-import { invokePreviewStopTool } from './tools.ts';
+import { callPreviewStop } from '../preview/tool-client.ts';
+import { invokePreviewStopTool } from '../preview/tools.ts';
 
 const stopped = { ok: true, code: 'stopped' as const, message: 'Stopped.', hint: 'Continue.' };
 const controllers: CiToolController[] = [];

@@ -16,7 +16,6 @@ import { createMiddleware } from 'hono/factory';
 
 import { ciErrorMessage, ToolsUnavailableError } from './errors.ts';
 export { ToolsUnavailableError } from './errors.ts';
-import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
 import { type ScheduleTaskAnswer, type ScheduleTaskRequest, type ScheduledTasksAnswer, type ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { type Wait, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import { type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
@@ -121,7 +120,7 @@ export class CiToolController {
       descriptor: { name: `cezar_ci_${randomUUID().replaceAll('-', '')}`, command: process.execPath, args: source ? ['--import', fileURLToPath(import.meta.resolve('tsx')), entry.replace(/\.js$/, '.ts')] : [entry] },
       // #781: the session carries the preview opt-in, so its runner admits and forwards exactly
       // the tools this session's adapter lists.
-      env: { ...Object.fromEntries(Object.entries(capability.env).filter((entry): entry is [string, string] => entry[1] !== undefined && squawkToolEnvNames(capability.env).includes(entry[0]))), ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...(previewToolEnabled() ? productEnvEntries('PREVIEW', '1') : {}), ...productEnvEntries('AUTOMATIONS', automationsToolEnabled() ? '1' : '0') },
+      env: { ...Object.fromEntries(Object.entries(capability.env).filter((entry): entry is [string, string] => entry[1] !== undefined && squawkToolEnvNames(capability.env).includes(entry[0]))), ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...Object.assign({}, ...registeredAgentTools().map(tool => tool.sessionEnv?.(capability.env) ?? {})) },
       revoke: () => { this.capabilities.delete(token); capability.lifetime.abort(); },
     };
   }

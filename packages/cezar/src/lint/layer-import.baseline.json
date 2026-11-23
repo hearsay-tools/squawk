@@ -2,22 +2,10 @@
   "$comment": "Imports from a core file into a feature or runner file that exist today, each with its count in that file and a reason (cez/layer-import, ADR 0065). The list only shrinks: npm run lint refuses a stale entry and CI refuses a new one.",
   "entries": [
     {
-      "file": "packages/cezar/src/ci-wait/client.ts",
-      "target": "packages/cezar/src/preview/registration.ts",
-      "count": 1,
-      "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
       "file": "packages/cezar/src/ci-wait/errors.ts",
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/ci-wait/tool-env.ts",
-      "target": "packages/cezar/src/automations/enabled.ts",
-      "count": 1,
-      "reason": "feature:automations: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/core/agent-runner.ts",
@@ -438,18 +426,6 @@
       "target": "packages/cezar/src/jobs/command.ts",
       "count": 1,
       "reason": "feature:jobs: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/squawk-tools.ts",
-      "target": "packages/cezar/src/ci-wait/resource-pool.ts",
-      "count": 1,
-      "reason": "feature:forge: the core reads the PR watcher or GitHub state directly. The pr wait kind and its watcher move to the forge feature"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/squawk-tools.ts",
-      "target": "packages/cezar/src/preview/registration.ts",
-      "count": 1,
-      "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/workflows/run/step-loop.ts",

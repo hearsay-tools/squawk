@@ -1,11 +1,11 @@
 import './tools.testkit.ts';
 import '../built-in-wait-kinds.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callAutomation } from './client.ts';
+import { callAutomation } from '../automations/tool-client.ts';
 import { CiToolController } from './controller.ts';
 import type { AutomationToolAnswer, AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
 import { GITHUB_COMMAND_TIMEOUT_MS } from '../core/github-request-limits.ts';
-import { automationToolDefinition } from './tool-catalog.ts';
+import { automationToolDefinition } from '../automations/tool-catalog.ts';
 import { squawkToolNames } from './tool-names.ts';
 
 const controllers: CiToolController[] = [];

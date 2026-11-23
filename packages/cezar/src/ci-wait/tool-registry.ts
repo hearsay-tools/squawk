@@ -12,6 +12,8 @@ export interface AgentToolDefinition {
   trigger: string;
   label: string;
   enabled?(env: NodeJS.ProcessEnv): boolean;
+  sessionHandlers?(runId: string, host: import('../workflows/run/squawk-tools.ts').ToolHost): Partial<SquawkToolHandlers>;
+  sessionEnv?(env: NodeJS.ProcessEnv): Record<string, string>;
   envNames?(env: NodeJS.ProcessEnv): string[];
   maxBodyBytes?: number;
   timeoutMs?: number;

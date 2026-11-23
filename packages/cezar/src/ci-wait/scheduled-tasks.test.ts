@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { CiToolController, type SquawkToolHandlers } from './controller.ts';
-import { callScheduleTask, callScheduledTasks } from './client.ts';
+import { callScheduleTask, callScheduledTasks } from '../automations/tool-client.ts';
 
 // hearsay-tools/cezarion#1465: `cezar_schedule_task` and `cezar_scheduled_tasks` on the session's
 // private tool socket. The run and project come from the capability, never from the arguments.

@@ -34,7 +34,7 @@ import { InboxClaims } from './inbox-claims.ts';
 import { WorkerExecutions } from './worker-executions.ts';
 import { TurnBookkeeper } from './turn-bookkeeping.ts';
 import { AutomationToolsSlot, provisionCiSession, type ToolHost, type CiSessionHost } from './squawk-tools.ts';
-import { registerPreviewServer, stopPreviewServer } from '../../preview/run-tools.ts';
+import { decoratePreviewSession, registerPreviewServer, stopPreviewServer } from '../../preview/run-tools.ts';
 import { AttachmentWriter } from './attachment-writer.ts';
 import { QueuedInput } from './queued-input.ts';
 import { RepoRootLease } from './repo-root-lease.ts';
@@ -207,7 +207,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.ciSessionHost = {
     active: host.active, ciResources: () => host.ciResources, squawkToolHandlers: (...args) => host.squawkToolHandlers(...args),
-    preview: () => host.preview, cockpit: () => host.cockpit,
+    decorateSession: (session, runId) => decoratePreviewSession(session, context.store, context.dataDir, runId, host.preview, host.cockpit?.origin),
   };
   modules.launchSettingsHost = {
     active: host.active, setCockpit: address => { host.cockpit = address; },
