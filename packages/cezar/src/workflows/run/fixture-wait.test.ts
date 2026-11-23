@@ -111,3 +111,62 @@ it('arms a plugin wait on rearm even when an open hook already created its watch
   f.engine.rearm(run);
   expect(arm).toHaveBeenCalledOnce();
 });
+
+it('preserves lifecycle receiver on arm, clears timers before a throwing disarm, and ignores retired watch timers', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const reconcile = vi.fn(() => false);
+    const lifecycle: WaitLifecycle = {
+      reconcile,
+      arm(context) {
+        this.reconcile?.(context);
+        context.armTimer(10_000, vi.fn());
+        watches.push(context);
+      },
+      disarm() { throw new Error('plugin cleanup failed'); },
+    };
+    const watches: WaitWatchContext[] = [];
+    const { f } = await deployRuntime(lifecycle);
+    const opened = await f.tools().registerWait({ kind: 'deploy', environment: 'staging' }, WAIT_VIA.cezar_wait, new AbortController().signal);
+    if (!('wait' in opened)) throw new Error(JSON.stringify(opened.answer));
+    expect(reconcile).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(1);
+
+    expect(() => f.engine.cancel(f.run.id, [opened.wait.id])).not.toThrow();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(warn).toHaveBeenCalledWith('[hsq] wait disarm hook failed: plugin cleanup failed');
+
+    // A retired watch cannot arm a timer after disarm.
+    const late = vi.fn();
+    watches[0]!.armTimer(1_000, late);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(late).not.toHaveBeenCalled();
+  } finally {
+    warn.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+it('keeps the first accepted result ahead of a later settlement while a checkpoint retry is pending', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const { f, watches } = await deployRuntime();
+    const opened = await f.tools().registerWait({ kind: 'deploy', environment: 'staging' }, WAIT_VIA.cezar_wait, new AbortController().signal);
+    if (!('wait' in opened)) throw new Error(JSON.stringify(opened.answer));
+    vi.spyOn(f.store, 'commitWait').mockImplementationOnce(() => { throw new Error('disk busy'); });
+
+    watches[0]!.resolve({ status: 'finished' });
+    // Store is available again, but the pending retry for `finished` must win over a later `timeout`.
+    watches[0]!.resolve({ status: 'timeout' });
+    expect(f.waitById(opened.wait.id)?.phase).toBe(WAIT_PHASE.open);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(f.waitById(opened.wait.id)).toMatchObject({ phase: WAIT_PHASE.resolved, result: { status: 'finished' } });
+  } finally {
+    warn.mockRestore();
+    vi.useRealTimers();
+  }
+});

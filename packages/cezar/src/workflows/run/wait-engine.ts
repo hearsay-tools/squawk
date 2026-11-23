@@ -179,11 +179,10 @@ export class WaitEngine {
       return;
     }
     // Only the user's answer, or a cancel, ends a wait without an arm hook: nothing to arm.
-    const arm = row?.lifecycle?.arm;
-    if (!arm || (row.isPlugin && this.armedWatches.get(wait.id)?.armed)) return;
+    if (!row?.lifecycle?.arm || (row.isPlugin && this.armedWatches.get(wait.id)?.armed)) return;
     const context = this.watchContext(runId, wait);
     this.armedWatches.get(wait.id)!.armed = true;
-    arm(context);
+    row.lifecycle.arm(context);
   }
 
   /** The wait's watch context: the armed one, now reading this entry, or a new one. */
@@ -191,16 +190,14 @@ export class WaitEngine {
     const current = this.armedWatches.get(wait.id);
     if (current) { current.context.wait = wait; return current.context; }
     const abort = new AbortController();
+    const isCurrent = () => !abort.signal.aborted && !this.context.disposed() && this.armedWatches.get(wait.id)?.context === context;
     const context: WaitWatchContext = {
       runId, store: this.context.store, host: this.host, wait, signal: abort.signal,
-      resolve: result => {
-        if (abort.signal.aborted || this.context.disposed() || this.armedWatches.get(wait.id)?.context !== context) return;
-        this.settleWait(runId, wait.id, result);
-      },
+      resolve: result => { if (isCurrent()) this.settleWait(runId, wait.id, result); },
       disposed: () => this.context.disposed(),
       deadlineArmed: () => this.waitTimers.has(wait.id),
-      armTimer: (delay, due) => this.armTimer(runId, context.wait, delay, due),
-      armDeadline: (due = () => context.resolve()) => this.armDeadline(runId, context.wait, due),
+      armTimer: (delay, due) => { if (isCurrent()) this.armTimer(runId, context.wait, delay, () => { if (isCurrent()) due(); }); },
+      armDeadline: (due = () => context.resolve()) => { if (isCurrent()) this.armDeadline(runId, context.wait, () => { if (isCurrent()) due(); }); },
       processes: this.processSupervisor,
       exitFileRoots: () => this.exitFileRoots(runId),
     };
@@ -241,20 +238,22 @@ export class WaitEngine {
     if (watch) {
       watch.abort.abort();
       this.armedWatches.delete(waitId);
-      waitKindForWait(watch.context.wait)?.lifecycle?.disarm?.(watch.context);
     }
     const timer = this.waitTimers.get(waitId); if (timer) clearTimeout(timer.timer); this.waitTimers.delete(waitId);
     const retry = this.settleRetries.get(waitId); if (retry) clearTimeout(retry.timer); this.settleRetries.delete(waitId);
     this.workerResolveRetries.delete(waitId);
+    if (watch) {
+      try { waitKindForWait(watch.context.wait)?.lifecycle?.disarm?.(watch.context); }
+      catch (error) { console.warn(`[hsq] wait disarm hook failed: ${error instanceof Error ? error.message : String(error)}`); }
+    }
   }
 
   /** `resolveWait`, retried while its durable checkpoint is unavailable: a failed write may not
    *  drop the accepted intent or publish a false result. */
   settleWait(runId: string, waitId: string, result?: WaitResult): void {
-    if (this.context.disposed()) return;
+    if (this.context.disposed() || this.settleRetries.has(waitId)) return;
     try { this.resolveWait(runId, waitId, result); }
     catch {
-      if (this.settleRetries.has(waitId)) return;
       console.warn(`[hsq] wait checkpoint unavailable; retaining result for retry.`);
       const timer = setTimeout(() => { this.settleRetries.delete(waitId); this.settleWait(runId, waitId, result); }, 1000);
       timer.unref(); this.settleRetries.set(waitId, { runId, timer });
