@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { perRunnerOptionalStrings } from './per-runner-optional-strings.ts';
-import { effortLevelSchema } from './effort.ts';
+import { runnerModelOptionSchema } from './model-choices.ts';
 import { type Runner, runnerSchema } from './runner.ts';
 
 /**
@@ -472,21 +472,6 @@ export type ProviderSignIn = z.infer<typeof providerSignInSchema>;
 
 // ---- host model catalog (`GET /api/v1/models`) -----------------------------------------------
 
-/**
- * A runner whose model list is discovered from the host: every registered runner has a model
- * catalog (its definition's `loadModelCatalog`). The route's query validator and the picker use it.
- */
-export const modelDiscoveryRunnerSchema = runnerSchema;
-export type ModelDiscoveryRunner = z.infer<typeof modelDiscoveryRunnerSchema>;
-
-export const runnerModelOptionSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string(),
-  effortLevels: z.array(effortLevelSchema).optional(),
-});
-export type RunnerModelOption = z.infer<typeof runnerModelOptionSchema>;
-
 /** `GET /api/v1/models?runner=codex|opencode|pi` — the models discovered from that runner's own
  *  host installation, plus how fresh the answer is. Never an error: an unavailable CLI degrades
  *  to `source: 'unavailable'` with a `reason`. Claude has no host-local catalog and is rejected. */
@@ -498,17 +483,6 @@ export const runnerModelCatalogResponseSchema = z.object({
   reason: z.string().optional(),
 });
 export type RunnerModelCatalogResponse = z.infer<typeof runnerModelCatalogResponseSchema>;
-
-/** The models a spawn could pin instead of an unknown one, in a delegation error. It lives here,
- *  beside its parts, so `delegation.ts` does not load `discovery.ts` (hearsay-tools/cezarion#3241);
- *  `discovery.ts` re-exports it. */
-export const modelChoicesSchema = z.object({
-  runner: modelDiscoveryRunnerSchema,
-  requestedModel: z.string(),
-  availableModels: z.array(runnerModelOptionSchema),
-  otherRunners: z.array(modelDiscoveryRunnerSchema),
-});
-export type ModelChoices = z.infer<typeof modelChoicesSchema>;
 
 // ---- "Open in…" targets (`GET /api/v1/open-targets`) -----------------------------------------
 

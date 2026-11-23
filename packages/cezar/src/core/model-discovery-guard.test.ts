@@ -12,7 +12,7 @@ import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { modelDiscoveryRunnerSchema } from '@open-mercato/cezar-contract/workspace';
+import { modelDiscoveryRunnerSchema } from '@open-mercato/cezar-contract/model-choices';
 import { describe, expect, it } from 'vitest';
 import { exemptionReasonProblem } from './exemption-reason.testkit.ts';
 import { hostModelCatalogAdapters } from './host-model-catalog.ts';

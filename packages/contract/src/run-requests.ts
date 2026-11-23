@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { attachmentInputSchema } from './runs.ts';
+import { attachmentInputSchema } from './create-run-input.ts';
 import { runnerSchema } from './runner.ts';
 
 // PATCH semantics are load-bearing here: an omitted field keeps its current value.

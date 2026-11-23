@@ -9,7 +9,7 @@
  * its path. Many rows end in one exit (`settleSuccess` serves `cezar_done`, Finish and an
  * idle-closed worker).
  */
-import type { RunRecord, RunStatus, Wait, WaitPhase } from '@open-mercato/cezar-contract';
+import type { RunRecord, RunStatus, Wait } from '@open-mercato/cezar-contract';
 import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
 import { WAIT_KINDS as WAIT_KIND_ROWS, type WaitKindSpec } from './run/wait-kinds.ts';
 import type { RunExitId } from '../runs/run-exits.ts';
@@ -269,23 +269,6 @@ export const RUN_TRIGGERS: readonly TriggerRow[] = [
   { id: 'failed.restart', states: ['failed'], trigger: 'Restart after an interrupted run', firedBy: 'recovery', behavior: 'queued again, or continued (continue.now)', exit: 'requeue', to: ['queued'], via: ['requeueInterruptedRun', 'recoverInterruptedRun'] },
   { id: 'failed.legacy-hold', states: ['failed'], trigger: `A row a schema-7 Squawk stored: failed with autoResumeAt`, firedBy: 'recovery', behavior: 'waiting on the hold', exit: 'hold', to: ['waiting:usage-limit'], via: ['store:reconcileLoadedRun', 'store:restoreLoadedUsageLimitHold', 'exits:applyExit'] },
 ];
-
-/** The phases a wait entry moves through. Their writes go through RunStore.commitOutcome (hearsay-tools/cezarion#1805). */
-export const WAIT_PHASES: { readonly [P in WaitPhase]: readonly { to: WaitPhase; firedBy: readonly FiredBy[] }[] } = {
-  open: [
-    { to: 'open', firedBy: ['agent', 'human', 'engine', 'runner', 'worker'] },
-    { to: 'delivered', firedBy: ['human'] },
-    { to: 'resolved', firedBy: ['watcher', 'timer', 'worker', 'peer', 'human', 'parent', 'runner', 'recovery'] },
-    { to: 'cancelled', firedBy: ['agent', 'human', 'engine', 'runner'] },
-  ],
-  resolved: [
-    { to: 'resolved', firedBy: ['recovery'] },
-    { to: 'delivered', firedBy: ['runner'] },
-    { to: 'cancelled', firedBy: ['human', 'engine'] },
-  ],
-  delivered: [],
-  cancelled: [],
-};
 
 export type StateInput = Partial<Pick<RunRecord, 'status' | 'waits' | 'autoResumeAt' | 'hasPendingPermission' | 'agentInputs' | 'delegation'>>
   & Pick<RunRecord, 'status'>;

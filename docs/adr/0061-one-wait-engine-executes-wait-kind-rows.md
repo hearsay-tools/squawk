@@ -31,7 +31,7 @@ trigger catalogue. The engine is a module behind `RunManager` under ADR 0053: it
 `run.ts`, it calls back through a host, and the facade keeps the methods that tests spy on. Wake
 admission and the wake-budget ledger stay outside the engine and call it.
 
-The run store checks wait-phase transitions with the ADR 0056 rule. `WAIT_PHASES` is the
+The run store checks wait-phase transitions with the ADR 0056 rule. `WAIT_PHASES` in `runs/wait-phases.ts` is the
 declared set. An undeclared transition is written and recorded as a violation: production logs
 a warning, and the test setup fails the test. Nothing throws in the write path.
 
@@ -51,6 +51,7 @@ ADR 0021 still holds: waits are durable, an outcome commits with what it depends
 Implementation: [2026-11-09-wait-kind-table-and-engine.md](../../.ai/specs/2026-11-09-wait-kind-table-and-engine.md),
 `packages/cezar/src/workflows/run/wait-kinds.ts` and `packages/cezar/src/workflows/run/wait-engine.ts`
 (created by the spec's slices; hearsay-tools/cezarion#3153 merged the resolve and cancel classes into the engine), [run-states.ts](../../packages/cezar/src/workflows/run-states.ts),
+[wait-phases.ts](../../packages/cezar/src/runs/wait-phases.ts),
 [wait-registration-write.ts](../../packages/cezar/src/runs/wait-registration-write.ts).
 
 Coverage: [run-states.test.ts](../../packages/cezar/src/workflows/run-states.test.ts),

@@ -2,7 +2,7 @@ import { z } from 'zod';
 // An automation launches an ORDINARY Squawk task, so the task it carries is the composer's own
 // run-creation input minus the keys an automation supplies itself. Consumed rather than
 // redeclared — the same one-way direction `./runs.ts` takes towards `./workflows.ts`.
-import { createRunInputBaseSchema } from './runs.ts';
+import { createRunInputBaseSchema } from './create-run-input.ts';
 import { automationScheduleSchema, onceStatusSchema } from './automation-schedule.ts';
 
 export { onceStatusSchema, type OnceStatus } from './automation-schedule.ts';
