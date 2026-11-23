@@ -122,8 +122,11 @@
       "packages/web/vitest.setup.ts"
     ],
     "packages/cezar/src/lint/probe-release-port.test.ts": [
+      "scripts",
       "scripts/**",
+      ".github/scripts",
       ".github/scripts/**",
+      ".ai/scripts",
       ".ai/scripts/**"
     ],
     "packages/cezar/src/lint/stubborn-test-child.test.ts": [
