@@ -4,18 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 
 import {
-  makePeerWait,
-  makeSubagentWait,
   RUN_STATUS,
-  SUBAGENT_STATUS,
-  WAIT_PHASE,
   STEP_KIND,
   STEP_STATUS,
+  WORKER_OUTCOME_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
+  makePeerWait,
+  makeSubagentWait,
+  SUBAGENT_STATUS,
+  WAIT_PHASE,
   WAIT_KIND,
   WAIT_SOURCE,
   WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { RunWaitDetails, hasWaitDetails } from './run-waits'
 
 /** The run's wait details, which moved from the run header into the Session activity card's

@@ -1,10 +1,12 @@
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 // @vitest-environment node
 import { expect, it } from 'vitest'
 import { openHumanWait, summaryOf } from '@/test/run-summary-fixture'

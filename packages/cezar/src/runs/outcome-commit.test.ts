@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInput, TimerWaitEntry, Wait } from '@open-mercato/cezar-contract';
-import { RUN_STATUS, STEP_KIND, STEP_STATUS, WAIT_PHASE, WAIT_VIA, makeHumanWait, makeRunRecord, makeStepState, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { applyOutcomes, deliveryReceipts } from './outcome-commit.ts';
 import { blockRunWrites, crashStore, muteLockedDatabaseLogs, readPersistedRuns } from './run-store.testkit.ts';

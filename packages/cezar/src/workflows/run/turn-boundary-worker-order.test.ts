@@ -1,7 +1,8 @@
 import { seedWaits } from '../../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
-import { makeHumanWait, makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { unused } from '../unused.testkit.ts';

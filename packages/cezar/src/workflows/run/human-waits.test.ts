@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { makeHumanWait, makeTimerWait, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makeTimerWait, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { unused } from '../unused.testkit.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';

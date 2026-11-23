@@ -1,5 +1,5 @@
 import { afterEach, expect, vi } from 'vitest';
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';

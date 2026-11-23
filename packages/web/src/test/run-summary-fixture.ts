@@ -3,7 +3,7 @@ import {
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { runDelegationSummarySchema } from '@open-mercato/cezar-api-client/contract/delegation'
 import { runWorkflowLabel } from '@open-mercato/cezar-api-client/contract/run-labels'
 import type { HumanWaitEntry, RunRecord, RunSummary } from '@open-mercato/cezar-api-client'

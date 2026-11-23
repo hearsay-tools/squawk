@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it as registerTest, vi, expect } from 'vitest';
-import { RUN_STATUS, WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_SOURCE, WAIT_VIA, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract';
 
 import { exemptionFor, HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

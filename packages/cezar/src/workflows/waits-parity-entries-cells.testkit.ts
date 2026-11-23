@@ -3,7 +3,8 @@ import { assertPromptResponseCompletion } from '../core/owned-input-delivery.tes
 import { waitPartDescribers, runnerBoundary, sessionOf, flushMicrotasks, prompted, nudgeNotes, idleClock, turnEnds, nativeWire, gated, humanOpen, repliesDoneAgain, workerParent, ignoreRefusal, workerWaits, blockedDone, blockingWorker, liveRefusal, replyBlockedAgain, parkedOn, viaOf, expectPoolCapacity, parentWithWorker, uncollectedRefusal } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, COMPLETION_WILL_WAIT } from './run.ts';
 import { onTestFinished, expect, vi, it as registerTest } from 'vitest';
-import { WAIT_PHASE, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, WAIT_VIA, WAIT_SOURCE, WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
 
 import { exemptionFor, HARNESS_ADAPTERS, humanPromptReadReleases } from '../core/harness-parity-core.testkit.ts';

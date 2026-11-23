@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActivitySnapshot } from '@open-mercato/cezar-contract';
 import { ACTIVITY_RATE_SECONDS, activityToolSchema } from '@open-mercato/cezar-contract/activity';
-import { makePrWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makePrWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { fakeStore, makeRoot, NOW } from '../activity/activity.testkit.ts';
 import { ActivityDemand } from '../activity/demand.ts';
 import { ACTIVITY_COALESCE_MS } from '../activity/publisher.ts';

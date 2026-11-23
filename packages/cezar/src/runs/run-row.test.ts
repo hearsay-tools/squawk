@@ -1,4 +1,5 @@
-import { RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
 
 import { branchFor } from '../git-worktree.ts';

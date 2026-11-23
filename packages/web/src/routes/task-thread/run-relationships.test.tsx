@@ -8,13 +8,15 @@ import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { createQueryClient } from '@/api/query-client'
 import type { ApiRun, WorkerInspection } from '@open-mercato/cezar-api-client'
 import {
-  makeWorkerWait,
   RUN_STATUS,
+} from '@open-mercato/cezar-api-client/contract/test-factories.testkit';
+import {
+  makeWorkerWait,
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { WorkerActivitySection, WorkerWaitDetails, hasWorkerWaitDetails, useWorkersVerdict } from './run-relationships'
 
 const parentId = '10000000-0000-4000-8000-000000000001'

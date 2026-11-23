@@ -2,7 +2,7 @@ import { agentEnvForStep } from './run/launch-context.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { RunStore } from '../runs/store.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';

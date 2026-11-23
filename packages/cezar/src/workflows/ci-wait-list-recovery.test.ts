@@ -1,6 +1,7 @@
 // Register the external CI mock before loading RunManager.
 import { success, registerPr, registerTimer, waitById, settledById, inputsFor, fireTimer, flushMicrotasks, githubByPr, waitingParent, expectNoWaitHumanWait, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
-import { WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,11 +1,13 @@
 import { seedWaits, setRunStatus } from '../runs/run-store.testkit.ts';
 import {
   RUN_STATUS,
+} from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-contract/test-factories.testkit';
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runTaskCommand, type TaskIo } from './cli.ts';
 import { pollHitDeadline, abortedPoll, TIMEOUT_GRACE_MS } from './watch.ts';

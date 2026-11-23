@@ -1,4 +1,5 @@
-import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runPersistence } from '../runs/run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';

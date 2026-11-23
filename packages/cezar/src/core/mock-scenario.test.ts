@@ -1,4 +1,4 @@
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
 import { play, scenarioFor, type Encoder, type ScenarioContext, type Step } from '../../scripts/mock-scenario.mjs';
 

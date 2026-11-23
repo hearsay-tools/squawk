@@ -1,7 +1,8 @@
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from './test-factories.testkit.ts';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from './wait-factories.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { ASK_LIMITS, askRequestSchema } from './ask-schema.ts';
-import { squawkAskRequestSchema, humanWaitEntrySchema } from './waits.ts';
+import { humanWaitEntrySchema } from './waits.ts';
+import { squawkAskRequestSchema } from './wait-tools.ts';
 
 const questions = [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner' }] }];
 

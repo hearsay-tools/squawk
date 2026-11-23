@@ -3,7 +3,8 @@ import { observationClock } from '../core/observation-clock.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { spawn } from 'node:child_process';
 import { onTestFinished, it as registerTest, expect } from 'vitest';
-import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { SquawkWaitRequestInput, Wait } from '@open-mercato/cezar-contract';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

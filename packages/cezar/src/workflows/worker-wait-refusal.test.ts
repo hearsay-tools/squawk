@@ -3,7 +3,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './run.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { randomUUID } from 'node:crypto';

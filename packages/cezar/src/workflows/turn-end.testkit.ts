@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { squawkWaitRequestSchema } from '@open-mercato/cezar-contract/waits';
+import { squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 
 /** Check the advertised kinds against the tool's input contract, including missing kinds. */
 export function expectNoWaitNudgeKinds(text: string): void {

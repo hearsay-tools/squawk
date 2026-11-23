@@ -6,7 +6,8 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it as registerTest, vi, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { STEP_STATUS, WAIT_KIND, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { STEP_STATUS, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { ToolsUnavailableError, CiToolController } from '../ci-wait/controller.ts';

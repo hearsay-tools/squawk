@@ -1,4 +1,4 @@
-import { makeHumanWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock } from '../core/agent-runner.ts';

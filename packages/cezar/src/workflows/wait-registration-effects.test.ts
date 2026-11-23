@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { callSquawkWait } from '../ci-wait/client.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi, onTestFinished } from 'vitest';
-import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { GENERATION, waitRegistryFixture } from './ci-wait-registration.testkit.ts';
 
 // Registration receipts: the `cezar_wait` tool handler over `WaitRegistry` and the store's

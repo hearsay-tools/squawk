@@ -13,7 +13,8 @@ import type { RunModuleContext } from './types.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { WorkerWaitRequest } from '@open-mercato/cezar-contract/delegation';
-import { squawkAskRequestSchema, squawkWaitRequestSchema, type AskErrorCode, type SquawkAskRequest, type SquawkWaitRequest, type SquawkWaitRequestInput, type WaitErrorCode, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type DeadlinedWorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { type AskErrorCode, type WaitErrorCode, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type DeadlinedWorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { squawkAskRequestSchema, squawkWaitRequestSchema, type SquawkAskRequest, type SquawkWaitRequest, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
 
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';

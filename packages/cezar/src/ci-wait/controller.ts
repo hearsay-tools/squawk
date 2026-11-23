@@ -16,7 +16,8 @@ import { askErrorMessage, askInvalidInput, ciErrorMessage, ToolsUnavailableError
 export { ToolsUnavailableError } from './errors.ts';
 import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
 import { SCHEDULED_TASK_LIMITS, scheduleTaskAnswerSchema, scheduleTaskRequestSchema, scheduledTasksAnswerSchema, scheduledTasksRequestSchema, type ScheduleTaskAnswer, type ScheduleTaskRequest, type ScheduledTasksAnswer, type ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { squawkAskAnswerSchema, squawkAskRequestSchema, squawkCancelWaitAnswerSchema, squawkCancelWaitRequestSchema, squawkDoneAnswerSchema, squawkDoneRequestSchema, squawkWaitAnswerSchema, squawkWaitRequestSchema, type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput, type Wait, type WaitVia } from '@open-mercato/cezar-contract/waits';
+import { type Wait, type WaitVia } from '@open-mercato/cezar-contract/waits';
+import { squawkAskAnswerSchema, squawkAskRequestSchema, squawkCancelWaitAnswerSchema, squawkCancelWaitRequestSchema, squawkDoneAnswerSchema, squawkDoneRequestSchema, squawkWaitAnswerSchema, squawkWaitRequestSchema, type SquawkAskAnswer, type SquawkAskRequest, type SquawkCancelWaitAnswer, type SquawkCancelWaitRequest, type SquawkDoneAnswer, type SquawkDoneRequest, type SquawkWaitAnswer, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
 import { ciWaitErrorCodeSchema } from '@open-mercato/cezar-contract/ci-wait';
 import { previewStopRequestSchema, previewStopResultSchema, type PreviewStopRequest, type PreviewStopResult, previewServeRequestSchema, previewServeResultSchema, type PreviewServeRequest, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
 import { jsonZodValidator } from '../server/validators.ts';

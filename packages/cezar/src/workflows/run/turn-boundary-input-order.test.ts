@@ -1,4 +1,4 @@
-import { WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { observationClock } from '../../core/observation-clock.testkit.ts';

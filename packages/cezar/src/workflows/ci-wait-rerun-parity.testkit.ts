@@ -1,4 +1,4 @@
-import { WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

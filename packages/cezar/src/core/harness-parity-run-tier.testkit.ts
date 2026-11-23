@@ -1,4 +1,5 @@
-import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { TimerWaitEntry } from '@open-mercato/cezar-contract';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { expect } from 'vitest';

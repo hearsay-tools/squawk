@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { RunRecord } from '../../runs/store.ts';
 import { cancelLivenessTimer } from './liveness-timers.ts';
 import { RunMemory, runMemoryReleases } from './run-memory.ts';

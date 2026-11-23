@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { AgentRunSpec, AgentEvent, AgentRunResult, AgentSession, SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';

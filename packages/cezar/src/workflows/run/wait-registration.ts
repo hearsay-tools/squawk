@@ -1,6 +1,7 @@
 import { WaitDeadlineConflict } from '../../ci-wait/errors.ts';
 import { createHash } from 'node:crypto';
-import type { SquawkWaitRequest, Wait, WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
+import type { Wait, WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
+import type { SquawkWaitRequest } from '@open-mercato/cezar-contract/wait-tools';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import { WAIT_KINDS, waitRequestRow } from './wait-kinds.ts';
 

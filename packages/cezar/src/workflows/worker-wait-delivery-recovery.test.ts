@@ -6,7 +6,8 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { type RunRecord } from '../runs/store.ts';
 import { fixtureUpdateRun, manager, parent, register, restart, root, store, terminal, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-claude.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

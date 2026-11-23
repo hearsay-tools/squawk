@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { vi, expect, onTestFinished, describe, beforeEach, afterEach, it as registerTest } from 'vitest';
-import { WAIT_PHASE, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE, WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { CiWaitResult, ProcessWaitResult, Wait, HumanWaitEntry, WorkerWaitEntry, ConversationMessage, RunRecord } from '@open-mercato/cezar-contract';
 import type { RunnerFactory } from '../core/agent-runner.ts';
 import { useRunners, runnersUnderTest } from '../core/runners-under-test.testkit.ts';

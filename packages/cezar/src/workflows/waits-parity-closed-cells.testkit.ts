@@ -6,7 +6,7 @@ import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_SESSION_CLOSED_ERROR, WAKE_DELIVERY_CA
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { it as registerTest, expect, onTestFinished } from 'vitest';
-import { WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 
 import { exemptionFor, HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';

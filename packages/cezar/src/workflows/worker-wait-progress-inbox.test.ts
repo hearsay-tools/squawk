@@ -1,4 +1,4 @@
-import { WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { parkNoticeId } from '../delegation/park-notice.ts';

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { makePeerWait, makeRunRecord, makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makePeerWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { parseRunRecords } from './run-decode.ts';
 import { stateOf } from '../workflows/run-states.ts';
 

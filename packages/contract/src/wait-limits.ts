@@ -21,3 +21,6 @@ export const SUBAGENT_WAIT_GRACE_SECONDS = 15;
 export const SUBAGENT_WAIT_CHILD_LIMIT = 32;
 /** The bound on every wait and done refusal's `message`; the run manager fits its own to it. */
 export const WAIT_MESSAGE_MAX = 4096;
+/** The bound on a timer or process wait's `note`, and the lowest PID a process wait accepts. */
+export const NOTE_MAX = 512;
+export const PID_MIN = 2;

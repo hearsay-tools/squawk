@@ -3,7 +3,7 @@ import {
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-} from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+} from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest'
 import { openHumanWait } from '@/test/run-summary-fixture'
 

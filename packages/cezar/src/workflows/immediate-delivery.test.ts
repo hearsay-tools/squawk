@@ -10,7 +10,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
-import { WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { wakeRetryClock } from './waits-wake.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import '../core/created-runners.testkit.ts';

@@ -5,16 +5,18 @@ import {
   RUN_STATUS,
   STEP_KIND,
   STEP_STATUS,
+  WORKER_OUTCOME_STATUS,
+  makeRunRecord,
+  makeStepState,
+} from './test-factories.testkit.ts';
+import {
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
-  WORKER_OUTCOME_STATUS,
   makeHumanWait,
   makePrWait,
-  makeRunRecord,
-  makeStepState,
   makeTimerWait,
-} from './test-factories.testkit.ts';
+} from './wait-factories.testkit.ts';
 
 /**
  * The slim list row (#817). `toRunSummary` is the ONE projection the list route, the workspace

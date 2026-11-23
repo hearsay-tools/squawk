@@ -2,10 +2,12 @@ import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import {
   RUN_STATUS,
-  WAIT_KIND,
-  WAIT_PHASE,
   WORKER_OUTCOME_STATUS,
 } from '@open-mercato/cezar-contract/test-factories.testkit';
+import {
+  WAIT_KIND,
+  WAIT_PHASE,
+} from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { workerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';

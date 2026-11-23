@@ -1,6 +1,7 @@
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
-import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer, type DoneErrorCode, type DoneOwedInput } from '@open-mercato/cezar-contract/waits';
+import { type DoneErrorCode, type DoneOwedInput } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import type { RunRecord } from '../../runs/store.ts';
 import type { RunPatchInput } from '../../runs/ports.ts';
 import type { RunLookup, RunWrites, TranscriptFactsPort } from '../../runs/ports.ts';

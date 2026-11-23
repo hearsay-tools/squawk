@@ -1,6 +1,7 @@
 import { workspaceReadyEventSchema, workspaceRunDeletedEventSchema, workspaceRunSummaryEventSchema } from '@open-mercato/cezar-contract/workspace-events';
 import { toRunSummary, type ProcessUsage, type RunSummary } from '@open-mercato/cezar-contract/runs';
-import { makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { publishRunWrite, RunLifecycle, snapshotRun } from '../runs/lifecycle.ts';
 import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';

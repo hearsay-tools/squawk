@@ -13,7 +13,8 @@ import { MAX_AUTO_CONTINUES } from '../workflows/run.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { RUN_EXITS } from '../runs/run-exits.ts';
 import { askErrorMessage } from '../ci-wait/errors.ts';
-import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // The settle budget for the row cells below. OpenCode's A5, A11 and A12 cells run

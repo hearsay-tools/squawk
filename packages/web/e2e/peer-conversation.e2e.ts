@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { WAIT_SOURCE } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { WAIT_SOURCE } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import type { RunRecord } from '@open-mercato/cezar-api-client/contract/runs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seedRuns, recordedRun } from './seed-runs'

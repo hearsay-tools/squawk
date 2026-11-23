@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunRecord } from './runs.ts';
 import {
-  squawkAskAnswerSchema,
-  squawkAskRequestSchema,
-  squawkCancelWaitAnswerSchema,
-  squawkDoneAnswerSchema,
-  squawkDoneRequestSchema,
-  squawkCancelWaitRequestSchema,
-  squawkWaitAnswerSchema,
-  squawkWaitRequestSchema,
   processWaitEntrySchema,
   hasWorkerDeadline,
   runningSubagents,
@@ -30,19 +22,31 @@ import {
   type TimerWaitEntry,
   type WorkerWaitEntry,
 } from './waits.ts';
+import {
+  squawkAskAnswerSchema,
+  squawkAskRequestSchema,
+  squawkCancelWaitAnswerSchema,
+  squawkDoneAnswerSchema,
+  squawkDoneRequestSchema,
+  squawkCancelWaitRequestSchema,
+  squawkWaitAnswerSchema,
+  squawkWaitRequestSchema,
+} from './wait-tools.ts';
 import { asksQuestion, computeWaitingOn, resolveWaitingOn, requestsToPeers, withRootLedger } from './waiting-on.ts';
 import { peerWaitViewSchema, workerCompletionWaitSchema, workerInspectionSchema, workerWaitSchema } from './delegation.ts';
 import {
-  makePeerWait,
   makeRunRecord,
-  makeSubagentWait,
   RUN_STATUS,
+  WORKER_OUTCOME_STATUS,
+} from './test-factories.testkit.ts';
+import {
+  makePeerWait,
+  makeSubagentWait,
   WAIT_KIND,
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from './test-factories.testkit.ts';
+} from './wait-factories.testkit.ts';
 import { toRunSummary } from './runs.ts';
 import { deriveAttention } from './attention.ts';
 

@@ -42,7 +42,8 @@ import {
 } from './delegation.ts';
 import { agentInputSchema, inboxClaimSchema } from './agent-input.ts';
 import { runStatusSchema } from './run-status.ts';
-import { RUN_STATUS, WAIT_PHASE, WAIT_VIA, WORKER_OUTCOME_STATUS } from './test-factories.testkit.ts';
+import { RUN_STATUS, WORKER_OUTCOME_STATUS } from './test-factories.testkit.ts';
+import { WAIT_PHASE, WAIT_VIA } from './wait-factories.testkit.ts';
 
 describe('parent-file context reference', () => {
   const context = (...paths: string[]) => ({ artifacts: paths.map(path => ({ kind: 'parent-file' as const, path })) });

@@ -1,6 +1,7 @@
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { randomUUID } from 'node:crypto';
-import { squawkWaitRequestSchema, waitErrorCodeSchema, type SquawkWaitRequestInput, type Wait, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
+import { waitErrorCodeSchema, type Wait, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
+import { squawkWaitRequestSchema, type SquawkWaitRequestInput } from '@open-mercato/cezar-contract/wait-tools';
 import type { SquawkToolHandlers, WaitRegistration } from '../../ci-wait/controller.ts';
 import { waitErrorMessage } from '../../ci-wait/errors.ts';
 import { openWaitList, waitAnswerKind } from '../waits.ts';

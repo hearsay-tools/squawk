@@ -1,6 +1,7 @@
 import { waitPartDescribers, github, parentWithWorker, pr, parentTurn, waitOfKind, workerWaits, turnEnds, settled, prompted, workerWake, parkedOn, agentWaits, inputsFor, fireTimer, timerText, conversingParent, delivered, parentOn, parkNotices, conversationOf } from './waits-parity-fixture.testkit.ts';
 import { it as registerTest, expect } from 'vitest';
-import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA, WAIT_SOURCE, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 
 import { parkNoticeId } from '../delegation/park-notice.ts';
 import { fixtureUpdateRun, until, store, manager, worker, timeline, spendWorkerBudget, root, terminal } from './worker-wait-core.testkit.ts';

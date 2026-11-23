@@ -3,7 +3,7 @@ import { setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 describe('RunManager monitoring reply', () => {
   const fixture = setupMonitoringFixture();

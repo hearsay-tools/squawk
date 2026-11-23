@@ -5,17 +5,19 @@ import { ATTENTION_RANK, ATTENTION_RUNGS, attentionOfRung, deriveAttention, deri
 import { runStatusSchema } from './run-status.ts';
 import type { RunStatus } from './runs.ts';
 import {
+  RUN_STATUS,
+  WORKER_OUTCOME_STATUS,
+} from './test-factories.testkit.ts';
+import {
   makePeerWait,
   makeSubagentWait,
   makeTimerWait,
-  RUN_STATUS,
   SUBAGENT_STATUS,
   WAIT_PHASE,
   WAIT_KIND,
   WAIT_SOURCE,
   WAIT_VIA,
-  WORKER_OUTCOME_STATUS,
-} from './test-factories.testkit.ts';
+} from './wait-factories.testkit.ts';
 
 /**
  * The attention ladder, pinned where it now lives (#553/#609). The cockpit's
