@@ -10,12 +10,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { timingSnapshot, timingDelta, blockingBudget } from './transcript-facts-timing.mjs';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const runtime = { url: process.argv[2] ? pathToFileURL(process.argv[2] + '/') : new URL('../src/', import.meta.url), ext: process.argv[3] ?? (process.argv[2] ? 'js' : 'ts') };
 const { RunStore } = await import(new URL('runs/store.' + runtime.ext, runtime.url));
 const dir = mkdtempSync(join(tmpdir(), 'cez-facts-lag-'));
+const timedOpen = await prepareOpenTiming(runtime);
+let openTiming;
 let store;
 let timer;
 try {
@@ -34,13 +36,20 @@ try {
   // Establish a real interval before starting; retain the first tick after completion too.
   await delay(periodMs * 2);
   const start = performance.now();
-  store = RunStore.open(dir);
+  ({ store, timing: openTiming } = timedOpen(RunStore, dir));
   await store.transcriptFacts.factsWarmIdle();
   const end = performance.now();
   while (!ticks.some(tick => tick.at > end)) await delay(periodMs);
   clearInterval(timer);
   const overlapping = ticks.filter(tick => tick.at >= start && tick.at <= end);
-  const result = { kind: 'transcript-facts-lag', runtime: runtime.url.href, periodMs,
+  // Keep first-open and repeated-open costs separate. Reopening must not rescan clean history.
+  const reopenTimings = Array.from({ length: 3 }, () => {
+    const reopened = timedOpen(RunStore, dir);
+    const closeStart = timingSnapshot();
+    reopened.store.close();
+    return { ...reopened.timing, closeTiming: timingDelta(closeStart, timingSnapshot()) };
+  });
+  const result = { kind: 'transcript-facts-lag', openTiming, reopenTimings, runtime: runtime.url.href, periodMs,
     ...verifyFacts(dir, fixtures, store), durationMs: end - start, ticks: ticks.length,
     beforeTicks: ticks.filter(tick => tick.at < start).length,
     trailingTicks: ticks.filter(tick => tick.at > end).length,

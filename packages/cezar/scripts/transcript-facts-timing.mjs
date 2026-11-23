@@ -40,3 +40,35 @@ export function blockingBudget(sample, periodMs = 0) {
     : Math.max(0, sample.elapsedMs - periodMs - sample.queueWaitMs);
   return { mode, blockingMs: Math.max(0, periodMs > 0 ? Math.max(sample.mainThreadCpuMs, blockingMs) : blockingMs) };
 }
+
+/** Instrument only the synchronous open call. Imports and hook setup are outside its budget.
+ * These diagnostic wrappers restore every method even when open throws. */
+export async function prepareOpenTiming(runtime) {
+  const [{ RunDatabase }, { RunClaimsTopic }, { RunTranscriptFacts }, { ExitEvents }] = await Promise.all([
+    import(new URL('runs/run-database.' + runtime.ext, runtime.url)),
+    import(new URL('runs/run-claims-topic.' + runtime.ext, runtime.url)),
+    import(new URL('runs/transcript-facts-topic.' + runtime.ext, runtime.url)),
+    import(new URL('runs/exit-events.' + runtime.ext, runtime.url)),
+  ]);
+  return (RunStore, dataDir) => {
+    const phases = [];
+    const hooks = [[RunDatabase, 'open'], [RunDatabase.prototype, 'listWhere'],
+      [RunClaimsTopic.prototype, 'loadHeldRows'], [RunTranscriptFacts.prototype, 'warmTranscriptFacts'],
+      [ExitEvents.prototype, 'writeLoaded']];
+    const restore = hooks.map(([target, name]) => {
+      const original = target[name];
+      target[name] = function (...args) {
+        const start = timingSnapshot();
+        try { return original.apply(this, args); }
+        finally { phases.push({ phase: name, ...(name === 'listWhere' ? { sql: args[0] } : {}),
+          ...timingDelta(start, timingSnapshot()) }); }
+      };
+      return () => { target[name] = original; };
+    });
+    const start = timingSnapshot();
+    try {
+      const store = RunStore.open(dataDir);
+      return { store, timing: { ...timingDelta(start, timingSnapshot()), phases } };
+    } finally { for (const undo of restore) undo(); }
+  };
+}

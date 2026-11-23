@@ -8,7 +8,7 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { timingSnapshot, timingDelta, blockingBudget } from './transcript-facts-timing.mjs';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cez-facts-health-'));
@@ -17,6 +17,8 @@ for (const key of Object.keys(process.env)) if (/^(CEZ|HSQ)_/.test(key)) delete 
 process.env.HSQ_HOME = process.env.CEZ_HOME = join(root, 'home');
 process.env.HSQ_DRY_RUN = process.env.CEZ_DRY_RUN = '1';
 const runtime = { url: new URL('../dist/', import.meta.url), ext: 'js' };
+const timedOpen = await prepareOpenTiming(runtime);
+let openTiming;
 let dataDir;
 let store;
 let bootStore;
@@ -75,7 +77,7 @@ try {
     const pendingResponse = fetch(endpoint, { signal: AbortSignal.timeout(2_000) });
     // The first request includes synchronous project-open work too.
     if (!store) {
-      store = RunStore.open(dataDir);
+      ({ store, timing: openTiming } = timedOpen(RunStore, dataDir));
       warming = store.transcriptFacts.factsWarmIdle().then(() => { end = performance.now(); });
     }
     const response = await pendingResponse;
@@ -93,7 +95,14 @@ try {
   await warming;
   assert.ok(samples.length > 0, 'health requests must overlap cold warming');
   assert.ok(samples.every(sample => sample.fromMs < end - start && sample.endMs > 0));
-  const result = { kind: 'transcript-facts-http-health', runtime: runtime.url.href,
+  // Keep first-open and repeated-open costs separate. Reopening must not rescan clean history.
+  const reopenTimings = Array.from({ length: 3 }, () => {
+    const reopened = timedOpen(RunStore, dataDir);
+    const closeStart = timingSnapshot();
+    reopened.store.close();
+    return { ...reopened.timing, closeTiming: timingDelta(closeStart, timingSnapshot()) };
+  });
+  const result = { kind: 'transcript-facts-http-health', openTiming, reopenTimings, runtime: runtime.url.href,
     endpoint: '/api/v1/health', scenario: 'already-listening server during cold project open', primingLatencyMs,
     ...verifyFacts(dataDir, fixtures, store), durationMs: end - start,
     maxBlockingMs: Math.max(...samples.map(sample => sample.blockingMs)),
