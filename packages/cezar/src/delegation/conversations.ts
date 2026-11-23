@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, DelegationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import { deliveryReceipts } from '../runs/outcome-commit.ts';
-import { ConversationIdInUseError, type RunRecord, type RunStore } from '../runs/store.ts';
+import { ConversationIdInUseError } from '../runs/conversation-identity.ts';
+import type { RunRecord } from '../runs/run-decode.ts';
+import type { RunStore } from '../runs/store.ts';
 import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import type { RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';

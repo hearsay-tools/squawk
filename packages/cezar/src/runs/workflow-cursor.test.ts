@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunStatus, WorkflowCursor } from '@open-mercato/cezar-contract';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { applyExit, type ExitRead } from './run-exits.ts';
-import { decodeRunRow } from './store.ts';
+import { decodeRunRow } from './run-decode.ts';
 
 // ADR 0064, hearsay-tools/squawk#1621: the run exits are the only writers of the workflow cursor.
 const start: WorkflowCursor = { stepId: 'review', mode: 'start' };

@@ -2,7 +2,7 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { WorkerDestroy } from '@open-mercato/cezar-contract';
-import { runRecordSchema, type RunRecord } from '../runs/store.ts';
+import { runRecordSchema, type RunRecord } from '../runs/run-decode.ts';
 import { DEFAULT_GRANTS } from '../runs/task-rights.ts';
 import { capacityError, NO_SPAWN_GRANT, OUTSTANDING_REFUSAL, ownLimitRefusal, spawnCapacityRefusal, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
 

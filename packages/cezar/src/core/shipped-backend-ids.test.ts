@@ -15,7 +15,7 @@ import { ompRunner } from '../runners/omp/definition.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
-import { runRecordSchema } from '../runs/store.ts';
+import { runRecordSchema } from '../runs/run-decode.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
 
 import { createRunner } from './runner-registry.ts';

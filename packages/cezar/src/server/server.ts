@@ -162,14 +162,14 @@ import {
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
-import { ARCHIVED_WINDOW, type RepoHandle, type RunRecord, type RunStatus, type RunStore } from '../runs/store.ts';
+import type { RepoHandle, RunRecord, RunStatus, RunStore } from '../runs/store.ts';
 import {
   HistoryCursorError,
   deriveRunContextEvents,
   readRunHistoryPage,
   validateLiveCursor,
 } from '../runs/event-history.ts';
-import { readRunIndexFromDisk, searchRunIndexFromDisk } from '../runs/run-index.ts';
+import { ARCHIVED_WINDOW, readRunIndexFromDisk, searchRunIndexFromDisk } from '../runs/run-index.ts';
 import { searchTokens } from '@open-mercato/cezar-contract/run-search';
 import { ownPullRequestNumbers } from '../runs/pull-requests.ts';
 import { ColdRepoHandles } from './cold-repo-handles.ts';

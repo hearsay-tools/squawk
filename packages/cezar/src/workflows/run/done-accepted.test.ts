@@ -6,7 +6,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
-import { decodeRunRow } from '../../runs/store.ts';
+import { decodeRunRow } from '../../runs/run-decode.ts';
 import { acceptedDoneDelivery, factsAtDone, owedAtDone, reconsideredBy } from './done-accepted.ts';
 import { acceptedDoneHolds } from './turn-settler.ts';
 import { InputFlight } from './input-delivery.ts';

@@ -1,7 +1,7 @@
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it } from 'vitest';
 import { workerOperationSchema, type SpawnGrant } from '@open-mercato/cezar-contract/delegation';
-import { runRecordSchema, type RunRecord } from './store.ts';
+import { runRecordSchema, type RunRecord } from './run-decode.ts';
 import {
   childSpawnGrant, DEFAULT_GRANTS, defaultSpawnKind, familyRecordIdOf, familyRecordOf, grantsOf, hasSpawnRoom, inspectableReceipts, mayOperate, maySpawn,
   messageRelation, relationOf, supervisedByFamilyRecord, supervisedReceipts, supervisorIdOf,

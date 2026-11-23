@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { makeRunRecord, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { decodeRunRow, parseRunRecords } from './store.ts';
+import { decodeRunRow, parseRunRecords } from './run-decode.ts';
 
 // Model the schemas before hearsay-tools/cezarion#1990, as peer-wait-downgrade.test.ts
 // does for waits. Keep the real store path: bad ledger data quarantines delegation;
