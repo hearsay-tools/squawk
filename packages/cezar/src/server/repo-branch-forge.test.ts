@@ -69,12 +69,14 @@ describe('per-head PR lookup (hearsay-tools/cezarion#2268)', () => {
 
   it('starts four batches together and shares overlapping in-flight heads', async () => {
     vi.stubEnv('CEZ_DRY_RUN', '');
-    const started = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
+    let start!: () => void;
+    const started = new Promise<void>((resolve) => { start = resolve; });
+    let unblock!: () => void;
+    const release = new Promise<void>((resolve) => { unblock = resolve; });
     let calls = 0;
     const forge = createGithubBranchForge({ handle: async () => ({ owner: 'o', name: 'n' }), graphql: () => async (_q, vars) => {
-      if (++calls === 4) started.resolve();
-      await release.promise;
+      if (++calls === 4) start();
+      await release;
       const entries = Object.entries(vars).filter(([key]) => /^h\d+$/.test(key));
       if (vars.h0 === 'h50') throw new Error('offline');
       return JSON.stringify({ data: { repository: Object.fromEntries(entries.map(([key, head]) => [key,
@@ -82,9 +84,9 @@ describe('per-head PR lookup (hearsay-tools/cezarion#2268)', () => {
     } });
     const heads = Array.from({ length: 201 }, (_, i) => `h${i}`);
     const first = forge.prsForHeads('/parallel', heads);
-    await started.promise;
+    await started;
     const overlap = forge.prsForHeads('/parallel', ['h0']);
-    release.resolve();
+    unblock();
     const [result, shared] = await Promise.all([first, overlap]);
     expect(calls).toBe(5);
     expect(result.available).toBe(false);

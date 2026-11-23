@@ -14,22 +14,24 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); clearWorktreeSizeCac
 
 it('coalesces size reads, bounds du concurrency, expires and invalidates entries', async () => {
   vi.useFakeTimers();
-  const started = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
+  let start!: () => void;
+    const started = new Promise<void>((resolve) => { start = resolve; });
+  let unblock!: () => void;
+    const release = new Promise<void>((resolve) => { unblock = resolve; });
   let active = 0;
   let peak = 0;
   vi.mocked(worktreeSizeBytes).mockImplementation(async () => {
     peak = Math.max(peak, ++active);
-    if (active === 6) started.resolve();
-    await release.promise;
+    if (active === 6) start();
+    await release;
     active--;
     return 42;
   });
   const reads = Array.from({ length: 10 }, (_, i) => cachedWorktreeSizeBytes(`p${i}`));
   const duplicate = cachedWorktreeSizeBytes('p0');
-  await started.promise;
+  await started;
   expect(worktreeSizeBytes).toHaveBeenCalledTimes(6);
-  release.resolve();
+  unblock();
   expect(await Promise.all([...reads, duplicate])).toEqual(Array(11).fill(42));
   expect(peak).toBe(6);
   await cachedWorktreeSizeBytes('p0');

@@ -58,10 +58,11 @@ describe('the branch classifier (issue 08 §A)', () => {
     await taskBranch(root, 'cez/unowned1', 1);
     await git(root, 'branch', 'cez/empty001');
     await git(root, 'branch', 'cez/active01');
-    const started = Promise.withResolvers<void>();
-    const recorded = vi.fn(async () => { await started.promise; return { available: true, states: { 7: 'open' as const } }; });
+    let start!: () => void;
+    const started = new Promise<void>((resolve) => { start = resolve; });
+    const recorded = vi.fn(async () => { await started; return { available: true, states: { 7: 'open' as const } }; });
     const heads = vi.fn(async (_root: string, names: readonly string[]) => {
-      started.resolve();
+      start();
       expect(names).toContain('cez/unowned1');
       expect(names).not.toContain('cez/empty001');
       expect(names).not.toContain('cez/active01');

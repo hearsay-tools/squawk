@@ -480,7 +480,8 @@ async function mergedPrBranches(root: string, prBase: string | null, baseSha: st
 /** PR state for the rows ancestry left open (`pending`) and for the non-task branches that may be
  *  a run's PR branch (`named`). Every head is asked on its own, so evidence never falls off the end
  *  of a list; `incomplete` names each head GitHub did not answer in full. */
-async function branchPrState(input: ClassifyInput, drafts: Draft[], pending: Draft[], named: Draft[], prBase: string | null, baseSha: string | null, displayPrs = true) {
+async function branchPrState(input: ClassifyInput, drafts: Draft[], pending: Draft[], named: Draft[], prBase: string | null, baseSha: string | null, options?: ClassifyOptions) {
+  const displayPrs = options?.diffStats !== false;
   const empty = { prByBranch: new Map<string, RepoBranchEntry['pr']>(), mergedByPr: new Map<string, ForgePr[]>(), incomplete: new Set<string>() as ReadonlySet<string> };
   if (pending.length === 0 && named.length === 0) return { ...empty, prStateKnown: true };
   if (!input.hasRemote) return { ...empty, prStateKnown: false };
@@ -576,7 +577,7 @@ export async function classifyBranches(input: ClassifyInput, options?: ClassifyO
   const byPrUrl = new Map<string, BranchOwner>();
   for (const run of input.runs) if (run.pullRequestUrl) byPrUrl.set(prKey(run.pullRequestUrl), run);
   const named = byPrUrl.size > 0 ? drafts.filter((d) => d.cls === 'other' && !d.head.symbolic) : [];
-  const { prByBranch, mergedByPr, incomplete, prStateKnown } = await branchPrState(input, drafts, pending, named, prBase, baseSha, options?.diffStats !== false);
+  const { prByBranch, mergedByPr, incomplete, prStateKnown } = await branchPrState(input, drafts, pending, named, prBase, baseSha, options);
   for (const d of pending) {
     if (mergedByPr.has(d.head.name)) d.cls = 'merged';
     else d.cls = d.run ? 'not-landed' : 'orphan';

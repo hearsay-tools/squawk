@@ -26,7 +26,7 @@ async function refStamp(root: string): Promise<string | undefined> {
   const dir = join(common, 'refs');
   try {
     const paths = (await readdir(dir, { recursive: true })).sort().map((path) => join(dir, path));
-    return stamp.key + await configFilesKey([...paths, join(common, 'packed-refs'), join(common, 'FETCH_HEAD'), ...stamp.configs]);
+    return await configFilesKey([join(dirname(stamp.configs[1]!), 'HEAD'), ...paths, join(common, 'packed-refs'), join(common, 'FETCH_HEAD'), ...stamp.configs]);
   } catch { return undefined; }
 }
 
@@ -35,7 +35,7 @@ export async function readRepo(root: string, home: Home, queries: Pick<RunQuerie
   if (!info) return { info: null, status: [], log: [], branches: [], baseBranch: null, tracking: null };
   const [status, config, stamp] = await Promise.all([getStatus(info.root), loadConfig(root, home), refStamp(info.root)]);
   const owners = queries.listBranchOwners();
-  const key = createHash('sha256').update(JSON.stringify([root, stamp, config.baseBranch, owners])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([root, info, stamp, config.baseBranch, owners])).digest('hex');
   const load = async () => {
     const [rawLog, branches, tracking] = await Promise.all([
       getLogWithParents(info.root), getBranches(info.root), getTracking(info.root, config.baseBranch ?? info.branch),
