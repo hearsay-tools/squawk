@@ -50,6 +50,10 @@ export type ToolHost = {
 export function squawkToolHandlers(runId: string, generation: string, host: ToolHost): SquawkToolHandlers {
   const listOpen = () => openWaitList(host.store.getRun(runId)?.waits ?? []);
   const thrownCode = (error: unknown) => error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  const featureHandlers = registeredAgentTools().reduce<Partial<SquawkToolHandlers>>((handlers, tool) => {
+    const feature = tool.sessionHandlers?.(runId, host);
+    return { ...handlers, ...feature, tools: { ...handlers.tools, ...feature?.tools } };
+  }, {});
   return {
     registerWait: registrationToolHandler(runId, generation, host),
     ask: async (request, signal): Promise<SquawkAskAnswer> => {
@@ -70,7 +74,7 @@ export function squawkToolHandlers(runId: string, generation: string, host: Tool
       return { cancelled: false, code: outcome.code, message: CANCEL_MESSAGES[outcome.code], open_waits: listOpen() } satisfies SquawkCancelWaitAnswer;
     },
     finishTurn: async (request, signal) => host.acceptDone(runId, generation, request, signal),
-    ...Object.assign({}, ...registeredAgentTools().map(tool => tool.sessionHandlers?.(runId, host) ?? {})),
+    ...featureHandlers,
   };
 }
 

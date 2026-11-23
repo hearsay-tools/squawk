@@ -1,4 +1,5 @@
 import '../built-in-wait-kinds.testkit.ts';
+import '../ci-wait/tools.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
