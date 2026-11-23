@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gitSync } from '../git-command.ts';
-import { checkRule, ruleCases } from './ast-rule.testkit.ts';
+import { ruleCases } from './ast-rule.testkit.ts';
 import { repoRoot } from './source-rule.ts';
+import { oxlintBin } from './run.ts';
 import { probeReleasePort } from './probe-release-port.ts';
 
 ruleCases(probeReleasePort, {
@@ -54,11 +58,23 @@ ruleCases(probeReleasePort, {
   ],
 });
 
-// Oxlint's normal package scan does not include these script roots. Use the same
-// visitors here so new script helpers get the same regression guard.
+// Run script roots through the real CLI so reasoned oxlint suppressions work here too.
 describe('script port ownership', () => {
-  const files = gitSync(['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'scripts', '.github/scripts', '.ai/scripts'], { cwd: repoRoot }).split('\0').filter(file => /\.[cm]?[jt]sx?$/.test(file));
-  it.each([...new Set(files)])('%s keeps its listener', file => {
-    expect(checkRule(probeReleasePort, file, readFileSync(join(repoRoot, file), 'utf8'))).toEqual([]);
+  it('keeps script listeners and honors oxlint suppressions', async () => {
+    const files = gitSync(['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'scripts', '.github/scripts', '.ai/scripts'], { cwd: repoRoot }).split('\0').filter(file => /\.[cm]?[jt]sx?$/.test(file));
+    const dir = mkdtempSync(join(tmpdir(), 'squawk-port-lint-'));
+    try {
+      const config = JSON.parse(readFileSync(join(repoRoot, '.oxlintrc.json'), 'utf8'));
+      const path = join(dir, 'oxlint.json');
+      writeFileSync(path, JSON.stringify({ ...config, plugins: [], overrides: [],
+        jsPlugins: [join(repoRoot, 'packages/cezar/src/lint/plugin.ts')],
+        rules: { 'cez/probe-release-port': 'error' },
+      }));
+      // bound: one oxlint startup over the repository's script roots; a timeout only ends a hang.
+      const result = await promisify(execFile)(process.execPath, [oxlintBin(), '-c', path, ...new Set(files)], {
+        cwd: repoRoot, encoding: 'utf8', timeout: 120_000, maxBuffer: 16 << 20,
+      });
+      expect(result.stderr).toBe('');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

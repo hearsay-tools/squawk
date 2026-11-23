@@ -122,6 +122,7 @@
       "packages/web/vitest.setup.ts"
     ],
     "packages/cezar/src/lint/probe-release-port.test.ts": [
+      ".oxlintrc.json",
       "scripts",
       "scripts/**",
       ".github/scripts",

@@ -696,8 +696,8 @@ It rejects helpers which call `listen(0)`, capture `address()` or its `port`,
 close that listener and return or resolve the captured port. Promise and socket
 callbacks belong to the enclosing helper. Other functions stay separate.
 Oxlint supplies the syntax tree; the rule follows no imports, dynamic property
-names or values across helpers. The script-root regression test runs the same
-visitors outside the normal package scan.
+names or values across helpers. The script-root regression test runs the rule through the oxlint CLI,
+including its reasoned suppression handling, outside the normal package scan.
 
 The listening process must bind port 0 and report its bound port. A listener
 kept for requests and closed at teardown passes. Tests which need a declared
