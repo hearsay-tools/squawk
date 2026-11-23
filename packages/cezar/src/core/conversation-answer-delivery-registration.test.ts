@@ -1,3 +1,4 @@
+import './register-all-runners.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { registrationCollector, registrationCalls } from './split-registration.testkit.ts';
 import { expect, it } from 'vitest';

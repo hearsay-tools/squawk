@@ -18,7 +18,7 @@ import { stateOf } from './run-states.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
-import { SUBAGENT_CRITERIA, SUBAGENT_EXEMPTIONS, type SubagentCriterion } from './waits-subagents-rows.testkit.ts';
+import { SUBAGENT_CRITERIA, subagentExemptionFor, subagentExemptionsFor, type SubagentCriterion } from './waits-subagents-rows.testkit.ts';
 
 /**
  * Squawk's wait on native subagents (hearsay-tools/cezarion#2431) on each runner's own native mock
@@ -28,12 +28,10 @@ import { SUBAGENT_CRITERIA, SUBAGENT_EXEMPTIONS, type SubagentCriterion } from '
  * exemption fails and the row has to go live.
  */
 
-export { SUBAGENT_CRITERIA, SUBAGENT_EXEMPTIONS };
+export { SUBAGENT_CRITERIA };
 
 /** The prompt each runner's mock answers with backgrounded children (Worker A's scenarios). */
 const SCENARIO: Partial<Record<string, string>> = { claude: 'mock:subagent-background', codex: 'mock:subagent-background' };
-
-const exemptionOf = (criterion: SubagentCriterion, runner: string) => SUBAGENT_EXEMPTIONS.find(entry => entry.criterion === criterion && entry.runner === runner);
 
 function nativeWire(runner: string) {
   process.env.CEZ_DRY_RUN = '0';
@@ -68,12 +66,13 @@ async function parkedOnSubagents(runner: string, tokens = '') {
 /** The cells of `SUBAGENT_CRITERIA` for each runner in `runners`. */
 export function subagentCells(runners: readonly RunnerDefinition[]): void {
   if (!runners.length) return;
-  for (const { id: runner } of runners) {
+  for (const definition of runners) {
+    const { id: runner, facts } = definition;
     describe(`native subagents on the ${runner} wire (hearsay-tools/cezarion#2431)`, { timeout: 60_000 }, () => {
       useWorkerWaitFixture({ subagentGraceMs: 200 });
       const cell = (criterion: SubagentCriterion, body: () => Promise<void>) => {
         const row = SUBAGENT_CRITERIA.find(entry => entry.id === criterion)!;
-        const exempt = exemptionOf(criterion, runner);
+        const exempt = subagentExemptionFor(criterion, runner, facts);
         if (exempt) it(`${runner} is exempt from ${criterion} — ${exempt.reason}`, () => { expect(exempt.reason.trim()).not.toBe(''); });
         else it(`${runner} ${criterion} ${row.name}`, body);
       };
@@ -147,7 +146,7 @@ export function subagentCells(runners: readonly RunnerDefinition[]): void {
 
     describe(`the native subagent deadline on the ${runner} wire (hearsay-tools/cezarion#2431)`, { timeout: 60_000 }, () => {
       useWorkerWaitFixture({ subagentGraceMs: 200, subagentDeadlineMs: 1_500 });
-      const exempt = exemptionOf('U36', runner);
+      const exempt = subagentExemptionFor('U36', runner, facts);
       if (exempt) { it(`${runner} is exempt from U36 — ${exempt.reason}`, () => { expect(exempt.reason.trim()).not.toBe(''); }); return; }
       it(`${runner} U36 ${SUBAGENT_CRITERIA.find(entry => entry.id === 'U36')!.name}`, async () => {
         const { id, wait } = await parkedOnSubagents(runner);
@@ -165,18 +164,20 @@ export function subagentCells(runners: readonly RunnerDefinition[]): void {
 export function subagentGuard(file: (runner: string) => string): void {
   describe('native subagent cells (hearsay-tools/cezarion#2431)', () => {
     it('runs the subagent cells of each runner with a live row from its own file', () => {
-      for (const runner of registeredRunners().map(({ id }) => id)) {
-        const live = !SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
-        expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(live);
+      for (const definition of registeredRunners()) {
+        const live = !SUBAGENT_CRITERIA.every(({ id }) => subagentExemptionFor(id, definition.id, definition.facts));
+        expect(existsSync(new URL(`../runners/${definition.id}/${file(definition.id)}`, import.meta.url)), file(definition.id)).toBe(live);
       }
     });
     it('exempts a runner from every row exactly when its wire reports no subagents to wait on', () => {
-      for (const runner of registeredRunners().map(({ id }) => id)) {
-        const exemptAll = SUBAGENT_CRITERIA.every(({ id }) => exemptionOf(id, runner));
-        expect({ runner, scenario: SCENARIO[runner] !== undefined, reports: reportsNativeSubagents(runner) })
-          .toEqual({ runner, scenario: !exemptAll, reports: !exemptAll });
+      for (const definition of registeredRunners()) {
+        const exemptAll = SUBAGENT_CRITERIA.every(({ id }) => subagentExemptionFor(id, definition.id, definition.facts));
+        expect({ runner: definition.id, scenario: SCENARIO[definition.id] !== undefined, reports: reportsNativeSubagents(definition.id) })
+          .toEqual({ runner: definition.id, scenario: !exemptAll, reports: !exemptAll });
+        for (const entry of subagentExemptionsFor(definition.id, definition.facts)) {
+          expect(exemptionReasonProblem(entry.reason), `${entry.criterion}/${entry.runner}`).toBeUndefined();
+        }
       }
-      for (const entry of SUBAGENT_EXEMPTIONS) expect(exemptionReasonProblem(entry.reason), `${entry.criterion}/${entry.runner}`).toBeUndefined();
     });
   });
 }

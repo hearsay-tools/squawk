@@ -1,6 +1,6 @@
 import type { RunnerFacts } from './runner-facts.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.testkit.ts';
+import { exemptionFor, humanPromptReadReleases } from './parity-exemptions.testkit.ts';
 import { factRows } from './runner-fact-rows.testkit.ts';
 import { mockRows } from './runner-mock-rows.testkit.ts';
 
