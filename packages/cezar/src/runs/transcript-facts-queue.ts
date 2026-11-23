@@ -11,6 +11,9 @@ interface Job<T> {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
   attempts: number;
+  queued: boolean;
+  prev?: Job<T> | undefined;
+  next?: Job<T> | undefined;
   value?: T | undefined;
   error?: Error | undefined;
   port?: MessagePort | undefined;
@@ -21,7 +24,8 @@ interface Job<T> {
 /** One owner per run, one active worker load. Both receive paths settle the same job. */
 export class TranscriptFactsQueue<T> {
   private readonly jobs = new Map<string, Job<T>>();
-  private pending: Job<T>[] = [];
+  private pendingHead?: Job<T> | undefined;
+  private pendingTail?: Job<T> | undefined;
   private active?: Job<T> | undefined;
   private worker?: Worker | undefined;
   private workerLifecycle?: Int32Array | undefined;
@@ -43,14 +47,14 @@ export class TranscriptFactsQueue<T> {
       let resolve!: (value: T) => void;
       let reject!: (error: Error) => void;
       const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
-      job = { runId, promise, resolve, reject, attempts: 0 };
+      job = { runId, promise, resolve, reject, attempts: 0, queued: false };
       // Synchronous callers may take ownership without ever observing this promise.
       void promise.catch(() => undefined);
       this.jobs.set(runId, job);
-      this.pending.push(job);
+      this.enqueueBack(job);
     }
     if (demand && job !== this.active) {
-      this.pending = [job, ...this.pending.filter((item) => item !== job)];
+      this.enqueueFront(job);
     }
     this.schedule();
     return job.promise;
@@ -62,7 +66,7 @@ export class TranscriptFactsQueue<T> {
     void this.request(runId);
     const job = this.jobs.get(runId)!;
     if (job !== this.active) {
-      this.pending = this.pending.filter((item) => item !== job);
+      this.removePending(job);
       this.complete(job, { result: loadTranscriptFacts(this.dataDir, runId) });
     }
     const deadline = Date.now() + JOB_TIMEOUT_MS;
@@ -98,13 +102,44 @@ export class TranscriptFactsQueue<T> {
     this.fail(new Error('Transcript facts queue stopped'));
   }
 
+  private enqueueBack(job: Job<T>): void {
+    if (job.queued) return;
+    job.prev = this.pendingTail;
+    job.next = undefined;
+    if (this.pendingTail) this.pendingTail.next = job;
+    else this.pendingHead = job;
+    this.pendingTail = job;
+    job.queued = true;
+  }
+
+  private enqueueFront(job: Job<T>): void {
+    this.removePending(job);
+    job.prev = undefined;
+    job.next = this.pendingHead;
+    if (this.pendingHead) this.pendingHead.prev = job;
+    else this.pendingTail = job;
+    this.pendingHead = job;
+    job.queued = true;
+  }
+
+  private removePending(job: Job<T>): void {
+    if (!job.queued) return;
+    if (job.prev) job.prev.next = job.next;
+    else this.pendingHead = job.next;
+    if (job.next) job.next.prev = job.prev;
+    else this.pendingTail = job.prev;
+    job.prev = undefined;
+    job.next = undefined;
+    job.queued = false;
+  }
+
   private schedule(): void {
     if (this.stopped || this.dispatch) return;
     // Yield even for cached sidecars, and let synchronous callers take pending ownership.
     this.dispatch = setImmediate(() => {
       this.dispatch = undefined;
       if (this.active) return;
-      const next = this.pending[0];
+      const next = this.pendingHead;
       if (next) this.start(next);
       else this.disposeWorker();
     });
@@ -129,7 +164,7 @@ export class TranscriptFactsQueue<T> {
   }
 
   private start(job: Job<T>): void {
-    this.pending = this.pending.filter((item) => item !== job);
+    this.removePending(job);
     this.active = job;
     job.attempts++;
     try {
@@ -156,7 +191,7 @@ export class TranscriptFactsQueue<T> {
         if (job.attempts >= MAX_ATTEMPTS) {
           this.settle(job, new Error(`Transcript keeps changing for ${job.runId}`));
         } else {
-          this.pending.unshift(job);
+          this.enqueueFront(job);
           this.schedule();
         }
       } else this.settle(job, undefined, value);
@@ -174,7 +209,7 @@ export class TranscriptFactsQueue<T> {
   private settle(job: Job<T>, error?: Error, value?: T): void {
     this.release(job);
     this.jobs.delete(job.runId);
-    this.pending = this.pending.filter((item) => item !== job);
+    this.removePending(job);
     job.error = error;
     job.value = value;
     if (error) job.reject(error); else job.resolve(value as T);

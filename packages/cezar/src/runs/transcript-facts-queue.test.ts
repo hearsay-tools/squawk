@@ -380,3 +380,97 @@ it('keeps per-run sidecar cleanup failures conservative for synchronous callers'
   expect(index().get('a')).toBeUndefined();
   expect(existsSync(historyPaths(dir, 'a').facts)).toBe(false);
 });
+
+// These guard the array queue's ordering contract while its representation changes.
+it('keeps background FIFO and repeated demand promotions in exact order', async () => {
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, () => '', (id) => { order.push(id); return id; });
+  try {
+    const pending = ['a', 'b', 'c', 'd'].map((id) => queue.request(id, false));
+    expect(queue.request('b', false)).toBe(pending[1]);
+    queue.request('c'); queue.request('b'); queue.request('b'); queue.request('d');
+    expect(order).toEqual([]); // Cached jobs still yield before dispatch.
+    await Promise.all(pending);
+    expect(order).toEqual(['d', 'b', 'c', 'a']);
+  } finally { queue.stop(); }
+});
+
+it('retries a changed result at the front before background jobs', async () => {
+  seed('a'); seed('b'); seed('c');
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, (id) => {
+    order.push(id);
+    return order.length === 1 ? REFRESH_FACTS : id;
+  });
+  try {
+    await Promise.all(['a', 'b', 'c'].map((id) => queue.request(id, false)));
+    expect(order).toEqual(['a', 'a', 'b', 'c']);
+  } finally { queue.stop(); }
+});
+
+it('joins a middle pending job and leaves its neighbors in FIFO order', async () => {
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, (id) => { order.push(id); return id; }, (id) => {
+    order.push(id); return id;
+  });
+  try {
+    const pending = ['a', 'b', 'c'].map((id) => queue.request(id, false));
+    expect(queue.join('b')).toBe('b');
+    await Promise.all(pending);
+    expect(order).toEqual(['b', 'a', 'c']);
+  } finally { queue.stop(); }
+});
+
+it('forgets the head, middle and tail, then can append to an empty deque', async () => {
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, () => '', (id) => { order.push(id); return id; });
+  try {
+    const pending = ['a', 'b', 'c', 'd', 'e'].map((id) => queue.request(id, false));
+    const outcomes = Promise.allSettled(pending);
+    queue.forget('a'); queue.forget('c'); queue.forget('e');
+    expect((await outcomes).map((value) => value.status)).toEqual([
+      'rejected', 'fulfilled', 'rejected', 'fulfilled', 'rejected',
+    ]);
+    expect(order).toEqual(['b', 'd']);
+    expect(await queue.request('f', false)).toBe('f');
+    expect(order).toEqual(['b', 'd', 'f']);
+  } finally { queue.stop(); }
+});
+
+it.each(['stop', 'fail'] as const)('%s drains pending jobs and clears deque links', async (action) => {
+  let broken = action === 'fail';
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, () => '', (id) => {
+    if (broken) throw new Error('cache failed');
+    order.push(id); return id;
+  });
+  try {
+    const ids = ['a', 'b', 'c'];
+    const outcomes = Promise.allSettled(ids.map((id) => queue.request(id, false)));
+    if (action === 'stop') queue.stop();
+    expect((await outcomes).map((value) => value.status)).toEqual(Array(3).fill('rejected'));
+    expect(ids.map((id) => queue.has(id))).toEqual([false, false, false]);
+    broken = false;
+    if (action === 'fail') {
+      expect(await queue.request('d', false)).toBe('d');
+      expect(order).toEqual(['d']);
+    } else await expect(queue.request('d')).rejects.toThrow(/stopped/);
+  } finally { queue.stop(); }
+});
+
+it('preserves deque ordering across 5,000 background jobs and removals', async () => {
+  const order: string[] = [];
+  const queue = new TranscriptFactsQueue(dir, () => '', (id) => { order.push(id); return id; });
+  try {
+    const ids = Array.from({ length: 5_000 }, (_, i) => String(i));
+    const outcomes = Promise.allSettled(ids.map((id) => queue.request(id, false)));
+    queue.forget('0'); queue.forget('2500'); queue.forget('4999');
+    queue.request('3000'); queue.request('1000'); queue.request('3000');
+    queue.request('2000', false);
+    const results = await outcomes;
+    expect(results.filter((value) => value.status === 'rejected')).toHaveLength(3);
+    expect(order).toEqual(['3000', '1000', ...ids.filter((id) =>
+      !['0', '2500', '4999', '3000', '1000'].includes(id))]);
+    expect(ids.some((id) => queue.has(id))).toBe(false);
+  } finally { queue.stop(); }
+});
