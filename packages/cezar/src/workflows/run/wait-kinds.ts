@@ -8,6 +8,7 @@ import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import type { TimerWaitEntry, PrWaitEntry, ProcessWaitEntry, PeerWaitEntry, WorkerWaitEntry, HumanWaitEntry, SquawkWaitRequestInput, WaitVia, SubagentWaitEntry, SubagentChild } from '@open-mercato/cezar-contract';
 import type { Wait, WaitPhase, SquawkWaitRequest } from '@open-mercato/cezar-contract';
 import type { FiredBy } from '../run-states.ts';
+import { isSquawkHumanWait, isUserAnsweredKind, SUBAGENT_SUPERSEDED_RESULT, waitInputId } from '../../runs/wait-helpers.ts';
 
 /** Each wait kind: its deadline, whether it keeps a slot while it is the top wait, who resolves it. */
 export type WaitKindSpec = {
@@ -130,7 +131,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => { const pr = wait as PrWaitEntry; return `${WAIT_KINDS.pr.untilText[pr.until].footer} wait ${pr.id} for ${pr.repository}#${pr.prNumber}, deadline ${pr.deadline}`; },
     footerKinds: [{ order: 0, text: 'CI' }],
     resolve: (latest, result, _observed, resolvedAt) => ({ ...latest as PrWaitEntry, phase: 'resolved', resolvedAt, result: (result as CiWaitResult | undefined) ?? { outcome: 'deadline', headSha: (latest as PrWaitEntry).headSha, observedAt: resolvedAt, checks: [], totalChecks: 0, truncated: false } }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'ci', entry: prWaitEntry,
     duplicate: (wait, request) => request.kind === 'pr' && wait.kind === 'pr' && normalizePrUrl(wait.prUrl) === normalizePrUrl(request.pr) && wait.until === (request.until ?? 'checks') && wait.wakeOnConflict === (request.wake_on_conflict ?? true)
       && (request.head_sha === undefined || request.head_sha.toLowerCase() === wait.headSha.toLowerCase()),
@@ -141,7 +142,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => true,
     registration: 'pr', requestKinds: ['pr'],
     delegation: false,
-    userAnswers: false, holdsConversationInput: true, runnerResumeCancels: [],
+    userAnswers: isUserAnsweredKind('pr'), holdsConversationInput: true, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
     failedResult: wait => !PR_SUCCESS.has((wait as PrWaitEntry).result?.outcome ?? 'deadline'),
     deadline: 'required', keepsSlot: true, cancels: ENDS_WAITS, resolves: [
@@ -165,7 +166,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => { const timer = wait as TimerWaitEntry; return `timer ${timer.id} at ${timer.deadline}${timer.note === undefined ? '' : ` (${timer.note})`}`; },
     footerKinds: [{ order: 6, text: 'timer' }],
     resolve: (latest, _result, _observed, resolvedAt) => ({ ...latest, phase: 'resolved', resolvedAt }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'timer', entry: timerWaitEntry,
     monitoringEntry: monitoringTimerEntry,
     duplicate: (wait, request, turnId) => request.kind === 'timer' && wait.kind === 'timer' && wait.seconds === request.seconds && wait.note === request.note && wait.turnId === turnId,
@@ -177,7 +178,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => true,
     registration: 'timer', requestKinds: ['timer'],
     delegation: false,
-    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: ['open'],
+    userAnswers: isUserAnsweredKind('timer'), holdsConversationInput: false, runnerResumeCancels: ['open'],
     chargesWake: true, refusesSpentBudget: true, holdsSession: false, cancellable: true, timersDisabled: true,
     failedResult: () => false,
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the wake budget is spent at its deadline'], resolves: [
@@ -193,7 +194,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => { const process = wait as ProcessWaitEntry; return `process wait ${process.id} on PID ${process.pid}${process.note === undefined ? '' : ` (${process.note})`}, deadline ${process.deadline}`; },
     footerKinds: [{ order: 4, text: 'process' }],
     resolve: (latest, result, _observed, resolvedAt) => ({ ...latest as ProcessWaitEntry, phase: 'resolved', resolvedAt, result: (result as ProcessWaitResult | undefined) ?? { outcome: 'deadline', observedAt: resolvedAt } }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'process', entry: processWaitEntry,
     duplicate: (wait, request, _turnId, context) => request.kind === 'process' && wait.kind === 'process' && wait.pid === request.pid && wait.startToken === context.startToken && wait.exitFile === context.exitFile,
     canonicalize: () => {},
@@ -203,7 +204,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => true,
     registration: 'process', requestKinds: ['process'],
     delegation: false,
-    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
+    userAnswers: isUserAnsweredKind('process'), holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: wait => (wait as ProcessWaitEntry).result?.outcome !== 'deadline', refusesSpentBudget: true, holdsSession: false, cancellable: true, timersDisabled: true,
     failedResult: wait => { const result = (wait as ProcessWaitEntry).result; return result === undefined || result.outcome === 'deadline' || result.outcome === 'error' || (result.exitCode ?? 0) !== 0; },
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the process is not signalled'], resolves: [
@@ -218,9 +219,9 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     resultText: wait => subagentWaitResultText(wait as SubagentWaitEntry),
     footerItem: wait => { const subagent = wait as SubagentWaitEntry; return `subagent wait ${subagent.id} on ${subagentPhrase(subagent)}, deadline ${subagent.deadline}`; },
     footerKinds: [{ order: 5, text: 'subagent' }],
-    supersededResult: { reason: 'superseded' },
+    supersededResult: SUBAGENT_SUPERSEDED_RESULT,
     resolve: (latest, result, _observed, resolvedAt) => ({ ...latest as SubagentWaitEntry, phase: 'resolved', resolvedAt, result: (result as SubagentWaitResult | undefined) ?? { reason: 'timeout' } }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'subagent', entry: subagentWaitEntry,
     duplicate: () => false,
     canonicalize: () => {},
@@ -230,7 +231,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => true,
     registration: 'none', requestKinds: [],
     delegation: false,
-    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: ['open', 'resolved'],
+    userAnswers: isUserAnsweredKind('subagent'), holdsConversationInput: false, runnerResumeCancels: ['open', 'resolved'],
     chargesWake: wait => (wait as SubagentWaitEntry).result?.reason === 'timeout', refusesSpentBudget: false, holdsSession: true, cancellable: true, timersDisabled: false,
     failedResult: wait => ['timeout', 'interrupted'].includes((wait as SubagentWaitEntry).result?.reason ?? ''),
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the runner starts a parent turn itself', 'every child already ended at the turn end', 'the deadline with the wake budget spent'], resolves: [
@@ -248,7 +249,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => { const peer = wait as PeerWaitEntry; return `peer wait ${peer.id} on ${peerTargetPhrase(peer)}, deadline ${peer.deadline}`; },
     footerKinds: [{ order: 3, text: 'peer' }],
     resolve: (latest, result, _observed, resolvedAt) => ({ ...latest as PeerWaitEntry, phase: 'resolved', resolvedAt, result: (result as PeerWaitResult | undefined) ?? { reason: 'timeout' } }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'peer', entry: peerWaitBuilder,
     duplicate: () => false,
     canonicalize: () => {},
@@ -259,7 +260,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => true,
     registration: 'peer', requestKinds: ['peer'],
     delegation: true,
-    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
+    userAnswers: isUserAnsweredKind('peer'), holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: wait => (wait as PeerWaitEntry).result?.reason !== 'timeout', refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
     failedResult: wait => (wait as PeerWaitEntry).result?.reason === 'timeout',
     deadline: 'required', keepsSlot: false, cancels: [...ENDS_WAITS, 'the wake budget is spent at its resolution'], resolves: [
@@ -278,7 +279,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => { const worker = wait as WorkerWaitEntry; return `${worker.requestIds ? 'request' : 'worker'} wait ${worker.id} on ${workerTargetPhrase(worker)}, ${worker.deadline === undefined ? 'no deadline' : `deadline ${worker.deadline}`}`; },
     footerKinds: [{ order: 1, text: 'worker' }, { order: 2, text: 'request' }],
     resolve: (latest, _result, observed, resolvedAt) => ({ ...observed ?? latest as WorkerWaitEntry, phase: 'resolved', resolvedAt, result: observed?.result ?? { reason: 'timeout' } }),
-    inputId: wait => { return (wait as WorkerWaitEntry).wakeInputId ?? wait.id; },
+    inputId: waitInputId,
     watch: 'worker', entry: workerWaitBuilder,
     completionEntry: completionWaitEntry,
     duplicate: () => false,
@@ -291,7 +292,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     registration: 'worker-list', requestKinds: ['worker', 'request'],
     delegation: true,
     workerListTarget: request => ({ ...(request.kind === 'worker' ? { workerIds: request.worker_ids } : { requestIds: request.request_ids }), ...(request.mode === undefined ? {} : { mode: request.mode }), timeoutSeconds: request.timeout_seconds }),
-    userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
+    userAnswers: isUserAnsweredKind('worker'), holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
     failedResult: wait => { const worker = wait as WorkerWaitEntry; return worker.result?.reason === 'timeout' || (worker.outcomes ?? []).some(outcome => outcome.status === 'failed' || outcome.status === 'cancelled') ||
       (worker.requestOutcomes ?? []).some(outcome => outcome.status !== 'replied' && outcome.status !== 'replied-late'); },
@@ -310,7 +311,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     footerItem: wait => `your question ${wait.id} to the user`,
     footerKinds: [],
     resolve: (latest, _result, _observed, resolvedAt) => ({ ...latest, phase: 'resolved', resolvedAt }),
-    inputId: wait => wait.id,
+    inputId: waitInputId,
     watch: 'none', entry: askWaitEntry,
     aliasEntry: humanAliasEntry,
     recoveredEntry: recoveredAskEntry,
@@ -323,7 +324,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     hasDeadline: () => false,
     registration: 'none', requestKinds: [],
     delegation: false,
-    userAnswers: true, holdsConversationInput: false, runnerResumeCancels: [],
+    userAnswers: isUserAnsweredKind('human'), holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: 'unshown', timersDisabled: false,
     // The user's answer is a human message: its own event withdraws a done (acceptedDoneHolds).
     failedResult: () => false,
@@ -461,12 +462,7 @@ export function isMonitoringTimer(wait: Wait): boolean {
   return WAIT_KINDS.timer.monitoring(wait);
 }
 
-/** Squawk's own human wait (`no-wait`, `budget`): it stands in for a wait the agent never registered
- *  and is replaced by the agent's own (hearsay-tools/cezarion#1234), so the agent is never told of
- *  it as one of its waits. */
-export function isSquawkHumanWait(wait: Wait): boolean {
-  return WAIT_KINDS.human.is(wait) && wait.source === 'cezar';
-}
+export { isSquawkHumanWait };
 
 function clip(text: string, max = SUMMARY_MAX): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
