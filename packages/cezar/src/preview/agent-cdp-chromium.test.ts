@@ -47,6 +47,7 @@ async function listen(server: Server): Promise<number> {
 function agentClient(url: string) {
   const ws = new WebSocket(url);
   let nextId = 0;
+  let phase = 'connect';
   type Reply = { result?: unknown; error?: { message: string } };
   const replies = new Map<number, { resolve(msg: Reply): void; reject(error: Error): void }>();
   const waiters = new Set<{ method: string; sessionId: string; resolve(): void; reject(error: Error): void }>();
@@ -98,12 +99,25 @@ function agentClient(url: string) {
       const error = unavailable();
       if (error) return reject(error);
       const id = ++nextId;
-      replies.set(id, { reject, resolve: msg => msg.error ? reject(new Error(`${method}: ${msg.error.message}`)) : resolve(msg.result as T) });
+      const commandPhase = phase;
+      // bound: the proxy can keep its socket open while Chromium stops answering a command.
+      const timer = setTimeout(() => {
+        replies.delete(id);
+        reject(new Error(`${commandPhase}: ${method} timed out after ${BUDGET_MS} ms; socket state ${ws.readyState}`));
+      }, BUDGET_MS);
+      replies.set(id, {
+        reject: error => { clearTimeout(timer); reject(error); },
+        resolve: msg => {
+          clearTimeout(timer);
+          if (msg.error) reject(new Error(`${commandPhase}: ${method}: ${msg.error.message}`));
+          else resolve(msg.result as T);
+        },
+      });
       ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }), error => {
         if (error) fail(error);
       });
     });
-  return { ws, opened, send, next };
+  return { ws, opened, send, next, phase: (name: string) => { phase = name; } };
 }
 
 it('rejects pending and later commands and events when the agent socket closes', async () => {
@@ -121,6 +135,26 @@ it('rejects pending and later commands and events when the agent socket closes',
   await Promise.all([command, event]);
   await expect(client.send('Page.enable')).rejects.toThrow('1011 renderer stalled');
   await expect(client.next('Page.loadEventFired', 'S1')).rejects.toThrow('1011 renderer stalled');
+});
+
+it('reports the phase and method when an open socket never answers a command', async () => {
+  const server = createServer();
+  const sockets = new WebSocketServer({ server });
+  cleanups.push(() => { for (const socket of sockets.clients) socket.terminate(); sockets.close(); });
+  const client = agentClient(`ws://127.0.0.1:${await listen(server)}`);
+  cleanups.push(() => client.ws.terminate());
+  await client.opened;
+  vi.useFakeTimers();
+  try {
+    client.phase('list page');
+    const rejected = expect(client.send('Target.getTargets')).rejects.toThrow('list page: Target.getTargets timed out after 30000 ms');
+    await vi.advanceTimersByTimeAsync(BUDGET_MS);
+    await rejected;
+    expect(client.ws.readyState).toBe(WebSocket.OPEN);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)', () => {
@@ -150,6 +184,7 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     cleanups.push(() => { agent.ws.terminate(); });
     await agent.opened;
 
+    agent.phase('list and attach page');
     // What agent-browser does on connect: list the pages, attach to the live one.
     const { targetInfos } = await agent.send<{ targetInfos: Array<{ type: string; targetId: string }> }>('Target.getTargets');
     const pages = targetInfos.filter(target => target.type === 'page');
@@ -161,14 +196,17 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     // The owner opens the agent's page, and watches the agent navigate it.
     const viewer = fakeViewer();
     await host.handle(ctx, viewer, { t: 'open', target: { agent: true } });
+    agent.phase('navigate and stream');
     const loaded = agent.next('Page.loadEventFired', sessionId);
     await Promise.all([loaded, agent.send('Page.navigate', { url: `http://127.0.0.1:${appPort}/` }, sessionId)]);
     await vi.waitFor(() => expect(viewer.messages).toContainEqual({ t: 'url', url: `http://127.0.0.1:${appPort}/` }), { timeout: BUDGET_MS, interval: 50 });
     await vi.waitFor(() => expect(viewer.frames.length).toBeGreaterThan(0), { timeout: BUDGET_MS, interval: 50 });
+    agent.phase('read document title');
     const { result } = await agent.send<{ result: { value: string } }>('Runtime.evaluate', { expression: 'document.title', returnByValue: true }, sessionId);
     expect(result.value).toBe('agent app');
 
     // The owner's browser outlives the agent's attempt to close it.
+    agent.phase('reject browser close');
     await expect(agent.send('Browser.close')).rejects.toThrow(`Squawk refuses Browser.close`);
     expect(host.ownsBrowser('run-1')).toBe(true);
 

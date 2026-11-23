@@ -142,6 +142,23 @@ describe('cdpOverPipe (hearsay-tools/cezarion#784)', () => {
     return { connection: cdpOverPipe(toBrowser, fromBrowser), commands, write: (text: string) => fromBrowser.write(text), end: () => fromBrowser.end() };
   }
 
+  it('leaves readiness calls to the progress-aware launch watchdog', async () => {
+    vi.useFakeTimers();
+    const pipe = fakePipe();
+    try {
+      const settled = vi.fn();
+      const ready = pipe.connection.call('Browser.getVersion', {}, undefined);
+      void ready.then(settled, settled);
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(settled).not.toHaveBeenCalled();
+      pipe.write('{"id":1,"result":{"product":"Chromium"}}\0');
+      await expect(ready).resolves.toMatchObject({ result: { product: 'Chromium' } });
+    } finally {
+      pipe.connection.close();
+      vi.useRealTimers();
+    }
+  });
+
   it('times out an unanswered call, removes its pending entry and ignores a late reply', async () => {
     vi.useFakeTimers();
     const set = vi.spyOn(Map.prototype, 'set');

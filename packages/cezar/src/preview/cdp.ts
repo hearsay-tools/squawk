@@ -29,7 +29,7 @@ export type CdpMessage = {
 export interface CdpConnection {
   /** A page or browser session's client. Undefined is the root session. */
   session(sessionId: string | undefined): Cdp;
-  /** Sends one command and settles with its raw reply, error included. Rejects after 15 s by default. */
+  /** Sends one command and settles with its raw reply, error included. Rejects only when an explicit timeout expires. */
   call(method: string, params: unknown, sessionId: string | undefined, timeoutMs?: number): Promise<CdpMessage>;
   /** `call` with a callback run in wire order, before any message read after the reply: a proxy
    *  that forwards replies and events keeps the order the browser sent them in. */
@@ -97,9 +97,8 @@ function createConnection(transport: Transport): CdpConnection {
     }
     return id;
   };
-  // Internal calls must settle even when Chromium keeps its pipe open but stops answering.
-  // The proxy's wire-ordered request() remains unbounded for agent commands such as evaluations.
-  const call = (method: string, params: unknown, sessionId: string | undefined, timeoutMs = 15_000): Promise<CdpMessage> =>
+  // Readiness uses the launch watchdog; only callers past readiness set a command timeout.
+  const call = (method: string, params: unknown, sessionId: string | undefined, timeoutMs?: number): Promise<CdpMessage> =>
     new Promise((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let settled = false;
@@ -108,7 +107,7 @@ function createConnection(transport: Transport): CdpConnection {
         clearTimeout(timer);
         resolve(reply);
       });
-      if (settled || id === undefined) return;
+      if (settled || id === undefined || timeoutMs === undefined) return;
       timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms${timeoutContext ? `; ${timeoutContext()}` : ''}`));
@@ -138,7 +137,7 @@ function createConnection(transport: Transport): CdpConnection {
       return {
         send: async <T>(method: string, params: Record<string, unknown> = {}) => {
           if (detached) throw new Error(`${method}: CDP session detached`);
-          const reply = await call(method, params, sessionId);
+          const reply = await call(method, params, sessionId, 15_000);
           if (reply.error) throw new Error(`${method}: ${reply.error.message ?? 'CDP error'}`);
           return reply.result as T;
         },
