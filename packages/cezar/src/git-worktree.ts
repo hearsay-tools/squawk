@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
 import { git } from './git-command.ts';
 import { ownedWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
-import { existsSync, realpathSync, type Dirent } from 'node:fs';
+import { existsSync, realpathSync, type Dirent, type Stats } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { resolveTaskDiffBase } from './git-diff-base.ts';
@@ -330,14 +330,25 @@ export function worktreeSizeBytes(path: string): Promise<number | null> {
 
 type OwnedCleanupSets = { paths: Set<string>; branches: Set<string> };
 
+const ownedReceiptCache = new Map<string, { key: string; path: string; branch: string }>();
+function ownedReceiptKey(info: Stats): string {
+  return [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs].join(':');
+}
+
 async function collectOwnedReceipts(receipts: string, sets: OwnedCleanupSets): Promise<boolean> {
   const entries = await readdir(receipts).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return []; throw error;
   });
+  const present = new Set(entries.map(entry => join(receipts, entry)));
+  for (const path of ownedReceiptCache.keys()) if (dirname(path) === receipts && !present.has(path)) ownedReceiptCache.delete(path);
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
     const path = join(receipts, entry); const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 16_384) return true;
+    const key = ownedReceiptKey(info);
+    const cached = ownedReceiptCache.get(path);
+    if (cached?.key === key) { sets.paths.add(cached.path); sets.branches.add(cached.branch); continue; }
+    ownedReceiptCache.delete(path);
     const receipt: unknown = JSON.parse(await readFile(path, 'utf8'));
     if (!receipt || typeof receipt !== 'object' || !('workspace' in receipt)) return true;
     const parsed = ownedWorkspaceSchema.safeParse(receipt.workspace);
@@ -346,6 +357,10 @@ async function collectOwnedReceipts(receipts: string, sets: OwnedCleanupSets): P
     if (workspace.branch !== branchFor(workspace.ownerRunId) ||
         !['cezar', 'squawk'].some(name => workspace.path.endsWith(join('.ai', name, 'worktrees', workspace.ownerRunId))) ||
         entry.replace(/(?:\.cleanup)?\.json$/, '') !== workspace.resourceId) return true;
+    if (key === ownedReceiptKey(await lstat(path))) {
+      if (ownedReceiptCache.size >= 20_000) ownedReceiptCache.delete(ownedReceiptCache.keys().next().value!);
+      ownedReceiptCache.set(path, { key, path: workspace.path, branch: workspace.branch });
+    }
     sets.paths.add(workspace.path); sets.branches.add(workspace.branch);
   }
   return false;

@@ -390,7 +390,7 @@ export class RunStore {
       retention: this.retention, decodeRunRow, peek: (id) => this.rows.peek(id), isAnchor: (id, run) => this.rows.isAnchor(id, run),
       evictSettled: () => this.rows.evictSettled(),
     });
-    this.queries = new RunQueriesTopic({ db: () => this.db, held: this.held, pins: this.pins, deleted: this.deleted, unreadable: this.rows.unreadable,
+    this.queries = new RunQueriesTopic({ dataDir, db: () => this.db, held: this.held, pins: this.pins, deleted: this.deleted, unreadable: this.rows.unreadable,
       base: this.base, coldReads: this.rows.coldReads, rows: this.rows, getRun: (id) => this.getRun(id) });
     this.repoScope = new RunRepoScopeTopic({ db: () => this.db, held: this.held, deleted: this.deleted, claims: this.claims, persistence: this.persistence, rows: this.rows });
   }

@@ -1,9 +1,11 @@
 /** The owned-workspace record: receipt and cleanup checkpoint schemas, identity files and the intent check, on top of the Git layer. */
 import { projectPaths } from '../project-paths.ts';
+import { ReceiptCache } from './receipt-cache.ts';
+import { posixIdentityFileStore } from './posix-workspace-identity.ts';
 import { identityFileStore } from './identity-file-store.ts';
 import { entryExists as exists } from './entry-exists.ts';
 import { createHash } from 'node:crypto';
-import { readdir, realpath } from 'node:fs/promises';
+import { lstat, readdir, realpath } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { ownedWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
@@ -64,22 +66,43 @@ export async function ownedWorkspaceRecordFiles(repoRoot: string): Promise<strin
   if (!await exists(dir)) return [];
   return (await readdir(dir)).filter(name => name.endsWith('.json')).sort().map(name => join(dir, name));
 }
-/** Each readable receipt's workspace, and whether its cleanup checkpoint says the removal completed.
- *  An unreadable record is skipped: only an explicit destroy acts on it. */
+const receiptCache = new ReceiptCache<Receipt | Cleanup>();
+
+async function cachedRecord<T extends Receipt | Cleanup>(path: string, schema: z.ZodType<T>): Promise<T> {
+  const info = await lstat(path);
+  // Native Windows ACL checks cannot be represented by POSIX stat fields. Keep its checked read.
+  const cacheable = identityFileStore() === posixIdentityFileStore && info.isFile() &&
+    !info.isSymbolicLink() && info.size <= RECEIPT_CAP && (info.mode & 0o077) === 0;
+  const cached = cacheable ? receiptCache.get(path, info) : undefined;
+  if (cached) return cached as T;
+  const value = schema.parse(JSON.parse(await readIdentityFile(path, RECEIPT_CAP)));
+  // A replacement during the checked read must not associate different bytes with the old stat.
+  const after = await lstat(path);
+  if (cacheable && receiptCache.key(info) === receiptCache.key(after)) receiptCache.set(path, info, value);
+  return value;
+}
+
+/** Each readable receipt's workspace and cleanup state. Unreadable records are skipped. */
 export async function ownedWorkspaceReceipts(repoRoot: string): Promise<Array<{ workspace: OwnedWorkerWorkspace; cleaned: boolean }>> {
-  const receipts: Array<{ workspace: OwnedWorkerWorkspace; cleaned: boolean }> = [];
-  for (const path of await ownedWorkspaceRecordFiles(repoRoot)) {
-    if (path.endsWith('.cleanup.json')) continue;
-    try {
-      const receipt = await readReceipt(path);
-      if (!receipt) continue;
-      const checkpoint = path.replace(/\.json$/, '.cleanup.json');
-      const cleaned = await exists(checkpoint) &&
-        cleanupSchema.parse(JSON.parse(await readIdentityFile(checkpoint, RECEIPT_CAP))).phase === 'complete';
-      receipts.push({ workspace: receipt.workspace, cleaned });
-    } catch { /* unreadable */ }
-  }
-  return receipts;
+  const dir = await receiptDirectory(repoRoot, false);
+  const files = await exists(dir) ? (await readdir(dir)).filter(name => name.endsWith('.json')).sort().map(name => join(dir, name)) : [];
+  receiptCache.prune(dir, new Set(files));
+  const receipts = new Map<string, { workspace: OwnedWorkerWorkspace; cleaned: boolean }>();
+  // Bound open handles on cold reads while allowing independent stat calls to overlap on warm reads.
+  let next = 0;
+  await Promise.all(Array.from({ length: 32 }, async () => {
+    while (next < files.length) {
+      const path = files[next++]!;
+      if (path.endsWith('.cleanup.json')) continue;
+      try {
+        const receipt = await cachedRecord(path, receiptSchema);
+        const checkpoint = path.replace(/\.json$/, '.cleanup.json');
+        const cleaned = await exists(checkpoint) && (await cachedRecord(checkpoint, cleanupSchema)).phase === 'complete';
+        receipts.set(path, { workspace: receipt.workspace, cleaned });
+      } catch { /* unreadable */ }
+    }
+  }));
+  return files.flatMap(path => { const receipt = receipts.get(path); return receipt ? [receipt] : []; });
 }
 /** One receipt or cleanup checkpoint, read with the identity-file checks. */
 export function readOwnedWorkspaceRecord(path: string): Promise<string> {

@@ -4,6 +4,8 @@
  * the indexed finds. Each query lays the held records over the rows it read. `RunStore` keeps one
  * of these as `store.queries`.
  */
+import { z } from 'zod';
+import { projectWriteRefused } from '../project-fence.ts';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-contract';
 import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@open-mercato/cezar-contract/run-search';
@@ -48,6 +50,7 @@ export function sortNewestFirst<T>(entries: Iterable<readonly [T, ListOrder]>): 
 
 /** What the topic asks of the store; no import of `store.ts` values. */
 export interface QueriesState {
+  readonly dataDir: string;
   /** The open database; null for an unavailable or closed store. */
   db(): RunDatabase | null;
   readonly held: Map<string, RunRecord>;
@@ -62,7 +65,43 @@ export interface QueriesState {
 }
 
 export class RunQueriesTopic implements RunQueries, RunFamilyReads {
+  private verifiedDestroys = new Map<string, number>();
   constructor(private readonly state: QueriesState) {}
+
+  /** A complete checkpoint is not enough: stamp only a checked destroy at its unchanged revision.
+   * Missing stamps always read the record, including recovery after cleanup but before commit. */
+  verifiedWorkerReleases(): { skip(id: string): boolean; flush(): void } {
+    const db = this.db;
+    const revisions = new Map(db?.listRevisions().map(row => [row.id, row.revision]));
+    const key = 'worker-destroy-verified-v1';
+    try {
+      const saved = z.record(z.string(), z.number().int().nonnegative()).parse(JSON.parse(db?.getMeta(key) ?? '{}'));
+      for (const [id, revision] of Object.entries(saved)) {
+        if (revisions.get(id) === revision) this.verifiedDestroys.set(id, revision);
+      }
+    } catch { /* A missing or damaged optimization never proves a destroy. */ }
+    for (const [id, revision] of this.verifiedDestroys) if (revisions.get(id) !== revision) this.verifiedDestroys.delete(id);
+    let dirty = false;
+    return {
+      skip: id => {
+        if (!db || this.held.has(id)) return false;
+        const revision = revisions.get(id);
+        if (revision === undefined || this.deleted.has(id)) return true;
+        if (this.verifiedDestroys.get(id) === revision) return true;
+        const run = this.getRun(id);
+        if (!run || this.held.has(id) || db.revisionOf(id) !== revision) return false;
+        if (run.delegation?.role === 'worker' && !run.delegation.destroy) return false;
+        this.verifiedDestroys.set(id, revision);
+        dirty = true;
+        return true;
+      },
+      flush: () => {
+        if (!dirty || !db || projectWriteRefused(this.state.dataDir)) return;
+        try { db.transaction({ upserts: [], deletes: [], meta: { [key]: JSON.stringify(Object.fromEntries(this.verifiedDestroys)) } }); }
+        catch { /* Busy/read-only stores keep the in-memory optimization. */ }
+      },
+    };
+  }
   private get db(): RunDatabase | null { return this.state.db(); }
   private get held(): Map<string, RunRecord> { return this.state.held; }
   private get pins(): Map<string, Set<RunPinHolder>> { return this.state.pins; }

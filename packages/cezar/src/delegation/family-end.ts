@@ -16,12 +16,12 @@ import { cleanupSafety, workerFamilyEnded } from '../runs/retention.ts';
 import { assertRunSlotsSealed } from '../runs/removal-slots.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunAccess, RunFamilyReads, RunLookup, RunWrites, StoreHandle, WorkerExecutions } from '../runs/ports.ts';
+import type { RunAccess, RunFamilyReads, RunLookup, RunQueries, RunWrites, StoreHandle, WorkerExecutions } from '../runs/ports.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 
-export type FamilyEndStore = RunLookup & { readonly queries: Pick<RunFamilyReads, 'listWorkersOf'> } & Pick<RunWrites, 'commitDelegation'> &
+export type FamilyEndStore = RunLookup & { readonly queries: Pick<RunFamilyReads, 'listWorkersOf'> & Partial<Pick<RunQueries, 'verifiedWorkerReleases'>> } & Pick<RunWrites, 'commitDelegation'> &
   { readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution' | 'workerResourcesSafe'> } & Pick<StoreHandle, 'unavailable'> & { readonly claims: Pick<RunAccess, 'sourceDataDir'> };
 
 const SETTLED: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled', 'review']);
@@ -44,14 +44,17 @@ export async function releaseEndedWorkerBranches(repoRoot: string, store: Family
   // Without its runs every receipt would look orphaned.
   if (store.unavailable) return [];
   const released: string[] = [];
+  const verified = store.queries.verifiedWorkerReleases?.();
   for (const { workspace, cleaned } of await ownedWorkspaceReceipts(repoRoot).catch(() => [])) {
     if (signal?.aborted) break;
+    if (cleaned && verified?.skip(workspace.ownerRunId)) continue;
     const run = store.getRun(workspace.ownerRunId);
     const due = run
       ? endedWorkerBranch(run, store) && JSON.stringify(run.delegation?.role === 'worker' && run.delegation.workspace) === JSON.stringify(workspace)
       : !cleaned && inProject(repoRoot, workspace) && await reclaimOrphanDirectory(repoRoot, store, workspace);
     if (due && await releaseBranch(repoRoot, store, workspace, run, claim)) released.push(workspace.ownerRunId);
   }
+  verified?.flush();
   return released;
 }
 
