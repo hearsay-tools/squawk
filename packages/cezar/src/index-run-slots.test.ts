@@ -1,3 +1,4 @@
+import './cli-boot.testkit.ts';
 import { expect, it, vi } from 'vitest';
 
 // Runner definitions and removal/worker registries must be ready before command code executes.
@@ -12,6 +13,7 @@ const commands: Array<[string, string[]]> = [
 ];
 it.each(commands)('%s %j initializes process services before its handler', async (command, args) => {
   vi.resetModules();
+  await import('./cli-boot.testkit.ts');
   const slots = await import('./runs/removal-slots.ts');
   const executions = await import('./runs/worker-executions-registry.ts');
   const runners = await import('./core/runner-registry.ts');
@@ -56,6 +58,7 @@ it.each([
   ['remote-settings', '--help'], ['remote-settings', '-h'], ['remote-settings', 'help'],
 ])('%s %s skips operator Home preparation and runner registration', async (command, flag) => {
   vi.resetModules();
+  await import('./cli-boot.testkit.ts');
   const { runSubcommand } = await import('./subcommands.ts');
   const { knownRunnerIds } = await import('./core/runner-registry.ts');
   const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -67,6 +70,7 @@ it.each([
 
 it('built-in registration leaves sealing to the boot boundary', async () => {
   vi.resetModules();
+  await import('./cli-boot.testkit.ts');
   const builtIn = await import('./built-in-run-slots.ts');
   const slots = await import('./runs/removal-slots.ts');
   const executions = await import('./runs/worker-executions-registry.ts');

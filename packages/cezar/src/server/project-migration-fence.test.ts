@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';

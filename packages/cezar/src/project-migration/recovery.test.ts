@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';

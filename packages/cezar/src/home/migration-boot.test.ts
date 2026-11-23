@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import { chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerBuiltInCliCommands, sealBuiltInCliCommands } from './built-in-cli-commands.ts';
 import { commandText } from './home/command.ts';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -110,6 +111,9 @@ function readOwnVersion(): string {
     return '0.0.0';
   }
 }
+
+registerBuiltInCliCommands();
+sealBuiltInCliCommands();
 
 main({
   ...defaultCliDeps, resolveCliHome: () => resolveHome({ purpose: 'cli' }), readOwnVersion, runCommand,

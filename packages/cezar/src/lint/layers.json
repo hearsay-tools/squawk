@@ -42,6 +42,7 @@
     "shell": [
       "server/",
       "built-in-run-slots.ts",
+      "built-in-cli-commands.ts",
       "cez.ts",
       "cezarion.ts",
       "cli-dispatch.ts",
