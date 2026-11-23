@@ -1,3 +1,4 @@
+import { readQueue } from './bounded-read-cache.ts';
 import { productEnv } from '../core/product-env.ts';
 /**
  * What branch classification asks GitHub: the states of the PRs runs created, and every PR whose
@@ -143,6 +144,8 @@ function defaultGraphql(repoRoot: string): GraphqlRunner {
   };
 }
 
+const headQueue = readQueue(4);
+const headFlights = new Map<string, Promise<Awaited<ReturnType<typeof fetchHeadBatch>>>>();
 const headCache = new Map<string, { at: number; prs: ForgePr[] }>();
 
 /** The default forge: the ref-status cache for created PRs, and per-head GraphQL lookups with a
@@ -153,8 +156,9 @@ export function createGithubBranchForge(deps: GithubBranchForgeDeps = {}): Branc
   return {
     async prStates(repoRoot, numbers) {
       const states: Record<number, BranchPrState> = {};
-      for (let i = 0; i < numbers.length; i += GH_REF_STATUS_MAX) {
-        const data = await resolveForgeRoot(repoRoot, deps.forgeFactory).refStatus({ prs: numbers.slice(i, i + GH_REF_STATUS_MAX) });
+      const batches = await Promise.all(Array.from({ length: Math.ceil(numbers.length / GH_REF_STATUS_MAX) }, (_, i) =>
+        headQueue(() => resolveForgeRoot(repoRoot, deps.forgeFactory).refStatus({ prs: numbers.slice(i * GH_REF_STATUS_MAX, (i + 1) * GH_REF_STATUS_MAX) }))));
+      for (const data of batches) {
         if (!data.available) return { available: false, states };
         for (const [n, status] of Object.entries(data.prs)) states[Number(n)] = prStateOf(status);
       }
@@ -177,12 +181,26 @@ export function createGithubBranchForge(deps: GithubBranchForgeDeps = {}): Branc
       const run = graphql(repoRoot);
       const incomplete = new Set<string>();
       let failed = false;
-      for (let i = 0; i < misses.length; i += HEADS_PER_QUERY) {
-        const batch = await fetchHeadBatch(run, handle.owner, handle.name, misses.slice(i, i + HEADS_PER_QUERY));
+      const batches = new Set<Promise<Awaited<ReturnType<typeof fetchHeadBatch>>>>();
+      const fresh = misses.filter((head) => {
+        const flight = headFlights.get(`${repoRoot}\0${head}`);
+        if (flight) batches.add(flight);
+        return !flight;
+      });
+      for (let i = 0; i < fresh.length; i += HEADS_PER_QUERY) {
+        const chunk = fresh.slice(i, i + HEADS_PER_QUERY);
+        const flight = headQueue(() => fetchHeadBatch(run, handle.owner, handle.name, chunk));
+        for (const head of chunk) headFlights.set(`${repoRoot}\0${head}`, flight);
+        batches.add(flight);
+        void flight.finally(() => {
+          for (const head of chunk) if (headFlights.get(`${repoRoot}\0${head}`) === flight) headFlights.delete(`${repoRoot}\0${head}`);
+        });
+      }
+      for (const batch of await Promise.all(batches)) {
         failed ||= batch.failed;
-        for (const head of batch.incomplete) incomplete.add(head);
+        for (const head of batch.incomplete) if (wanted.includes(head)) incomplete.add(head);
         for (const [head, found] of batch.complete) {
-          prs.push(...found);
+          if (wanted.includes(head)) prs.push(...found);
           headCache.delete(`${repoRoot}\0${head}`);
           headCache.set(`${repoRoot}\0${head}`, { at: Date.now(), prs: found });
         }
@@ -198,4 +216,5 @@ export const githubBranchForge: BranchForge = createGithubBranchForge();
 /** Test-only: forget cached per-head answers. */
 export function __clearPrListCacheForTests(): void {
   headCache.clear();
+  headFlights.clear();
 }

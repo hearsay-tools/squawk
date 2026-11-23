@@ -53,6 +53,30 @@ describe('the branch classifier (issue 08 §A)', () => {
     return { payload, cls: Object.fromEntries(payload.branches.map((b) => [b.name, b.class])) as Record<string, BranchClass> };
   };
 
+  it('counts skip display-only heads and start recorded and named lookups together', async () => {
+    await taskBranch(root, 'cez/pending1', 1);
+    await taskBranch(root, 'cez/unowned1', 1);
+    await git(root, 'branch', 'cez/empty001');
+    await git(root, 'branch', 'cez/active01');
+    const started = Promise.withResolvers<void>();
+    const recorded = vi.fn(async () => { await started.promise; return { available: true, states: { 7: 'open' as const } }; });
+    const heads = vi.fn(async (_root: string, names: readonly string[]) => {
+      started.resolve();
+      expect(names).toContain('cez/unowned1');
+      expect(names).not.toContain('cez/empty001');
+      expect(names).not.toContain('cez/active01');
+      return { available: true, prs: [], incomplete: new Set<string>() };
+    });
+    const result = await classifyBranches(input({ runs: [
+      { ...runRecord('pending1-1', 'done'), pullRequestUrl: 'https://github.com/o/r/pull/7' },
+      runRecord('active01-1', 'running'),
+    ], forge: { prStates: recorded, prsForHeads: heads } }), { diffStats: false });
+    expect(recorded).toHaveBeenCalledOnce();
+    expect(heads).toHaveBeenCalledOnce();
+    expect(result.payload.prStateKnown).toBe(true);
+    expect(result.payload.branches.find((b) => b.name === 'cez/pending1')?.class).toBe('not-landed');
+  });
+
   it('classifies not-landed, orphan, merged by ancestry, merged by PR state, and empty', async () => {
     const ids = { notLanded: 'aaaaaaaa-1', ancestry: 'cccccccc-1', squash: 'dddddddd-1', emptySha: 'eeeeeeee-1', emptyRef: 'ffffffff-1' };
     const forkSha = await git(root, 'rev-parse', 'HEAD');

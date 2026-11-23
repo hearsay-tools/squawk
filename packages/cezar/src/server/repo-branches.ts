@@ -188,15 +188,15 @@ type ReleasedBranch = { orphan: boolean; witnesses: Array<{ ref: string; sha: st
  * leaves the branch protected.
  */
 async function releasedReceiptBranches(root: string, protection: { branches: ReadonlySet<string> },
-  runs: readonly BranchOwner[], heads: readonly HeadRow[]): Promise<Map<string, ReleasedBranch>> {
+  runsByBranch: ReadonlyMap<string, BranchOwner[]>, heads: readonly HeadRow[]): Promise<Map<string, ReleasedBranch>> {
   const released = new Map<string, ReleasedBranch>();
-  for (const head of heads) {
-    if (head.symbolic || !protection.branches.has(head.name)) continue;
-    const owners = runs.filter((run) => runBranch(run) === head.name);
-    if (!owners.every((run) => run.endedWorker)) continue;
+  await Promise.all(heads.map(async (head) => {
+    if (head.symbolic || !protection.branches.has(head.name)) return;
+    const owners = runsByBranch.get(head.name) ?? [];
+    if (!owners.every((run) => run.endedWorker)) return;
     const proof = await reflogWitnesses(root, head.name, head.sha);
     if (proof) released.set(head.name, { orphan: owners.length === 0, ...proof });
-  }
+  }));
   return released;
 }
 
@@ -466,30 +466,38 @@ async function mergedPrBranches(root: string, prBase: string | null, baseSha: st
   const merged = new Map<string, ForgePr[]>();
   const onBase = async (sha: string | null) =>
     !!sha && !!baseSha && FULL_SHA.test(sha) && (await git(root, ['merge-base', '--is-ancestor', sha, baseSha])).ok;
-  for (const d of rows) {
+  const checks = new Map<string | null, Promise<boolean>>();
+  await Promise.all(rows.map(async (d) => {
     for (const pr of byHead.get(d.head.name) ?? []) {
       if (pr.state !== 'merged' || pr.baseRefName !== prBase || pr.headRefOid !== d.head.sha) continue;
-      if (await onBase(pr.mergeCommitOid)) merged.set(d.head.name, [...(merged.get(d.head.name) ?? []), pr]);
+      if (!checks.has(pr.mergeCommitOid)) checks.set(pr.mergeCommitOid, onBase(pr.mergeCommitOid));
+      if (await checks.get(pr.mergeCommitOid)) merged.set(d.head.name, [...(merged.get(d.head.name) ?? []), pr]);
     }
-  }
+  }));
   return merged;
 }
 
 /** PR state for the rows ancestry left open (`pending`) and for the non-task branches that may be
  *  a run's PR branch (`named`). Every head is asked on its own, so evidence never falls off the end
  *  of a list; `incomplete` names each head GitHub did not answer in full. */
-async function branchPrState(input: ClassifyInput, drafts: Draft[], pending: Draft[], named: Draft[], prBase: string | null, baseSha: string | null) {
+async function branchPrState(input: ClassifyInput, drafts: Draft[], pending: Draft[], named: Draft[], prBase: string | null, baseSha: string | null, displayPrs = true) {
   const empty = { prByBranch: new Map<string, RepoBranchEntry['pr']>(), mergedByPr: new Map<string, ForgePr[]>(), incomplete: new Set<string>() as ReadonlySet<string> };
   if (pending.length === 0 && named.length === 0) return { ...empty, prStateKnown: true };
   if (!input.hasRemote) return { ...empty, prStateKnown: false };
-  const taskRows = drafts.filter((d) => d.head.name.startsWith(TASK_PREFIX));
-  const { created, needList, prByBranch, available } = await recordedPrs(input, taskRows);
+  const taskRows = displayPrs ? drafts.filter((d) => d.head.name.startsWith(TASK_PREFIX)) : pending;
+  const needHeads = taskRows.filter((d) => !d.run?.pullRequestUrl || refNumberFromUrl(d.run.pullRequestUrl) === null);
+  const [recorded, initial] = await Promise.all([
+    recordedPrs(input, taskRows),
+    input.forge.prsForHeads(input.root, [...needHeads, ...named].map((d) => d.head.name)),
+  ]);
+  const { created, needList, prByBranch, available } = recorded;
   // Settled recorded PRs need the lookup for both the merge verdict and replacement display.
   const recordedSettled = pending.filter((d) => created.size > 0 && settled(prByBranch.get(d.head.name)?.state));
-  const asked = [...needList, ...recordedSettled, ...named].map((d) => d.head.name);
-  const list = asked.length > 0
+  const asked = recordedSettled.map((d) => d.head.name);
+  const extra = asked.length > 0
     ? await input.forge.prsForHeads(input.root, asked)
     : { available: true, prs: [] as ForgePr[], incomplete: new Set<string>() };
+  const list = { available: initial.available && extra.available, prs: [...initial.prs, ...extra.prs], incomplete: new Set([...initial.incomplete, ...extra.incomplete]) };
   const byHead = new Map<string, ForgePr[]>();
   for (const pr of list.prs) byHead.set(pr.headRefName, [...(byHead.get(pr.headRefName) ?? []), pr]);
   selectDisplayedPrs([...needList, ...recordedSettled], byHead, prByBranch);
@@ -520,15 +528,14 @@ export async function classifyBranches(input: ClassifyInput, options?: ClassifyO
     ownedCleanupProtection(root),
   ]);
   const ahead = await aheadCounts(root, heads, baseSha);
-  const released = await releasedReceiptBranches(root, protection, input.runs, heads);
-  const receiptHeld = new Set([...protection.branches].filter((name) => !released.has(name)));
-
   const runsByBranch = new Map<string, BranchOwner[]>();
   for (const run of input.runs) {
     const branch = runBranch(run);
     if (!branch) continue;
     runsByBranch.set(branch, [...(runsByBranch.get(branch) ?? []), run]);
   }
+  const released = await releasedReceiptBranches(root, protection, runsByBranch, heads);
+  const receiptHeld = new Set([...protection.branches].filter((name) => !released.has(name)));
   const liveRun = (run: BranchOwner) => input.isActive(run.id) || !isFinished(run);
   const representative = (runs: BranchOwner[] | undefined): BranchOwner | undefined =>
     runs?.find(liveRun) ?? runs?.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
@@ -569,7 +576,7 @@ export async function classifyBranches(input: ClassifyInput, options?: ClassifyO
   const byPrUrl = new Map<string, BranchOwner>();
   for (const run of input.runs) if (run.pullRequestUrl) byPrUrl.set(prKey(run.pullRequestUrl), run);
   const named = byPrUrl.size > 0 ? drafts.filter((d) => d.cls === 'other' && !d.head.symbolic) : [];
-  const { prByBranch, mergedByPr, incomplete, prStateKnown } = await branchPrState(input, drafts, pending, named, prBase, baseSha);
+  const { prByBranch, mergedByPr, incomplete, prStateKnown } = await branchPrState(input, drafts, pending, named, prBase, baseSha, options?.diffStats !== false);
   for (const d of pending) {
     if (mergedByPr.has(d.head.name)) d.cls = 'merged';
     else d.cls = d.run ? 'not-landed' : 'orphan';
