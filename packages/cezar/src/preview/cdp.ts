@@ -34,6 +34,8 @@ export interface CdpConnection {
   /** `call` with a callback run in wire order, before any message read after the reply: a proxy
    *  that forwards replies and events keeps the order the browser sent them in. */
   request(method: string, params: unknown, sessionId: string | undefined, onReply: (msg: CdpMessage) => void): void;
+  /** Adds live browser diagnostics to timeout errors when the transport supports them. */
+  setTimeoutContext?(describe: () => string): void;
   /** Every event on every session, as it came; returns the unsubscribe. */
   onEvent(fn: (msg: CdpMessage) => void): () => void;
   close(): void;
@@ -51,6 +53,7 @@ type Transport = {
 type Pending = { resolve: (msg: CdpMessage) => void; method: string };
 
 function createConnection(transport: Transport): CdpConnection {
+  let timeoutContext: (() => string) | undefined;
   let nextId = 0;
   let isClosed = false;
   const pending = new Map<number, Pending>();
@@ -108,7 +111,7 @@ function createConnection(transport: Transport): CdpConnection {
       if (settled || id === undefined) return;
       timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms`));
+        reject(new Error(`${method}: CDP command timed out after ${timeoutMs} ms${timeoutContext ? `; ${timeoutContext()}` : ''}`));
       }, timeoutMs);
       timer.unref?.();
     });
@@ -122,6 +125,7 @@ function createConnection(transport: Transport): CdpConnection {
 
   return {
     call,
+    setTimeoutContext: describe => { timeoutContext = describe; },
     request,
     onEvent,
     close,
