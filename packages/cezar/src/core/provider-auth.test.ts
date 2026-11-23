@@ -1386,6 +1386,19 @@ describe('ProviderAuthService', () => {
     expect(createAuthFailureId).not.toHaveBeenCalled();
   });
 
+  it('reads every named account connected under CEZ_AGENT_MODELS_LOCKED=1, as status() does', async () => {
+    const runCommand = runner();
+    const service = new ProviderAuthService({ runCommand });
+    process.env.CEZ_AGENT_MODELS_LOCKED = '1';
+
+    // A named account must not read signed out while its provider reads connected
+    // (hearsay-tools/squawk#4116): the cockpit would drop it and the start would switch accounts.
+    await expect(service.profileStatus('claude', { id: 'work', configDir: '/work' }))
+      .resolves.toEqual({ provider: 'claude', status: 'connected', profileId: 'work' });
+    expect(service.peekProfileStatus('claude', 'work')).toEqual({ provider: 'claude', status: 'connected', profileId: 'work' });
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
   it.each(['0', 'true', 'yes', ''])(
     'does not disable provider checks for CEZ_AGENT_MODELS_LOCKED=%j',
     (value) => {
