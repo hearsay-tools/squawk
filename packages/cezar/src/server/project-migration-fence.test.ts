@@ -1,5 +1,4 @@
-import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import '../core/register-all-runners.testkit.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
 import { spawn, spawnSync } from 'node:child_process';
@@ -46,8 +45,6 @@ import { createWorkspaceProjects } from './workspace-projects.ts';
 import { createRunManager } from './engine-run-manager.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-
-sealTestRunners(claudeRunner);
 
 /**
  * The exclusive project migration fence (hearsay-tools/cezarion#3087): one claim file beside both
