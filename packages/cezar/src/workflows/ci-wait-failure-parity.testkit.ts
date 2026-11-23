@@ -5,6 +5,8 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { shellQuote } from '../core/shell-env.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiWaitResult, Wait } from '@open-mercato/cezar-contract';
 
@@ -13,7 +15,7 @@ import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
 import { acceptedWorkerIdentitySchema, workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { planOwnedWorkspace } from '../delegation/workspace.ts';
-import { eventCheckpoint, manager, restart, root, semaphore, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-core.testkit.ts';
+import { eventCheckpoint, manager, restart, root, semaphore, store, timeline, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef } from './types.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
@@ -208,7 +210,7 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
       const run = await ownedChain(runner, { name: 'owned-ci-chain', source: 'built-in', steps: [
         { id: 'first', prompt: adapter.scenarios['provider-error-controlled']!, runner, agentProfile: 'default' },
         { id: 'later', prompt: adapter.scenarios['cezar-done']!, runner, agentProfile: 'default' },
-        { id: 'check', command: 'node -e "const fs=require(\'node:fs\');if(!fs.existsSync(\'check-retried\')){fs.writeFileSync(\'check-retried\',\'\');process.exit(1)}"', onFail: { retry: 'later', max: 1 } },
+        { id: 'check', command: `node -e ${shellQuote("const fs=require('node:fs');const path=process.argv[1];if(!fs.existsSync(path)){fs.writeFileSync(path,'');process.exit(1)}")} ${shellQuote(join(root, 'check-retried'))}`, onFail: { retry: 'later', max: 1 } },
       ] });
       await until(wire.held);
       await register(run.id);
@@ -228,9 +230,14 @@ export function registerCiFailureGroup(group: CiFailureGroup): void {
         expect(capacity).toHaveBeenCalled(); capacity.mockRestore();
       }
       await restart(false, undefined, eventCheckpoint());
-      await until(() => ['done', 'failed'].includes(store.getRun(run.id)?.status ?? '') || store.getRun(run.id)?.status === 'waiting' && manager.isActive(run.id) && [...work.liveSessions].some(session => session.open));
+      await until(() => ['done', 'failed'].includes(store.getRun(run.id)?.status ?? '') || store.getRun(run.id)?.status === 'waiting' && manager.isActive(run.id) && [...work.liveSessions].some(session => session.open), () => timeline(run.id));
       if (manager.isActive(run.id) && store.getRun(run.id)?.status === 'waiting') signalDone(run.id, runner);
-      await until(() => store.getRun(run.id)?.status === 'done' && !manager.isActive(run.id));
+      // Observe durable progress: fast steps may already have ended before the next poll.
+      await until(() => (store.getRun(run.id)?.steps.find(step => step.id === 'later')?.iterations ?? 0) >= 1, () => timeline(run.id));
+      await until(() => (store.getRun(run.id)?.steps.find(step => step.id === 'check')?.retriesUsed ?? 0) >= 1, () => timeline(run.id));
+      await until(() => (store.getRun(run.id)?.steps.find(step => step.id === 'later')?.iterations ?? 0) >= 2, () => timeline(run.id));
+      await until(() => store.getRun(run.id)?.steps.find(step => step.id === 'check')?.status === STEP_STATUS.done, () => timeline(run.id));
+      await until(() => store.getRun(run.id)?.status === 'done' && !manager.isActive(run.id), () => timeline(run.id));
       expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')).toMatchObject({
         status: STEP_STATUS.failed, iterations: 1, error: failed.error, finishedAt: failed.finishedAt,
       });

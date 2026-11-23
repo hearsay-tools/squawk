@@ -205,10 +205,14 @@ const message = JSON.parse(line); const content = message.message?.content ?? []
 const text = typeof content === 'string' ? content : content.filter(part => part.type === 'text').map(part => part.text).join('\n');
 // Logged on arrival, before the queue: a line that waits behind a gated one is still listed as read.
 const humanAnswer = text.includes('human answer mock:hold'); log(humanAnswer ? 'human-answer' : 'line', text);
+const recordAnswer = () => { fs.appendFileSync(received, JSON.stringify({ text }) + '\n'); log('recorded'); };
+// Without a first-result gate, receipt needs no queued work or asynchronous wait.
+const recordOnArrival = humanAnswer && options.humanAnswerGate && !options.firstResultGate;
+if (recordOnArrival) recordAnswer();
 queue = queue.then(async () => {
 if (options.replay && message.uuid) emit({ type: 'user', isReplay: true, uuid: message.uuid, message: message.message });
-if (first) { first = false; fs.writeFileSync(${JSON.stringify(initial)}, 'received'); await wait(options.firstResultGate); }
-if (humanAnswer && options.humanAnswerGate) { fs.appendFileSync(received, JSON.stringify({ text }) + '\n'); log('recorded'); await wait(options.humanAnswerGate); log('released'); }
+if (first) { first = false; fs.writeFileSync(${JSON.stringify(initial)}, 'received'); if (options.firstResultGate) await wait(options.firstResultGate); }
+if (humanAnswer && options.humanAnswerGate) { if (!recordOnArrival) recordAnswer(); await wait(options.humanAnswerGate); log('released'); }
 // hearsay-tools/cezarion#2397: the lifecycle scenarios call the Squawk tool through the session's
 // MCP config with the native mocks' own client, then end the turn.
 const lifecycle = async (name, toolArgs) => (await import(${JSON.stringify(MOCK_CI_TOOL)})).lifecycleCall('claude', args, name, toolArgs);
