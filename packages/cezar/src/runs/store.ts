@@ -68,7 +68,7 @@ export type StepStatus =
 
 export { LEGACY_INDEX_BACKUP_FILE, LEGACY_INDEX_FILE } from './legacy-index.ts';
 export { decodeRunRecord, decodeRunRow, parseRunRecords, runRecordSchema, type DecodedRun, type RunRecord, type StepState } from './run-decode.ts';
-export { ARCHIVED_WINDOW } from './archived-window.ts';
+export { ARCHIVED_WINDOW } from './run-index.ts';
 
 export type QueuedMessage = z.infer<typeof queuedMessageSchema>;
 
