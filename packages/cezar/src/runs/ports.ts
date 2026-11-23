@@ -37,6 +37,8 @@ export interface RunReads extends RunLookup {
 
 /** Lists and finds over many runs (`runs/run-queries.ts`, `store.queries`). */
 export interface RunQueries {
+  /** Revision-verified completed destroys; only used for receipts with complete cleanup. */
+  verifiedWorkerReleases(): { skip(id: string): boolean; flush(): void };
   listRuns(): RunRecord[];
   listAllRunsForLegacyRoute(): RunRecord[];
   listPeerTaskSummaries(options: PeerTaskPageOptions): { runs: RunSummary[]; nextOffset?: number };

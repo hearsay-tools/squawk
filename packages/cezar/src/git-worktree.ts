@@ -1,3 +1,4 @@
+import { ReceiptCache } from './delegation/receipt-cache.ts';
 import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
 import { git } from './git-command.ts';
@@ -330,14 +331,19 @@ export function worktreeSizeBytes(path: string): Promise<number | null> {
 
 type OwnedCleanupSets = { paths: Set<string>; branches: Set<string> };
 
+const ownedReceiptCache = new ReceiptCache<{ path: string; branch: string }>();
+
 async function collectOwnedReceipts(receipts: string, sets: OwnedCleanupSets): Promise<boolean> {
   const entries = await readdir(receipts).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return []; throw error;
   });
+  ownedReceiptCache.prune(receipts, new Set(entries.map(entry => join(receipts, entry))));
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
     const path = join(receipts, entry); const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 16_384) return true;
+    const cached = ownedReceiptCache.get(path, info);
+    if (cached) { sets.paths.add(cached.path); sets.branches.add(cached.branch); continue; }
     const receipt: unknown = JSON.parse(await readFile(path, 'utf8'));
     if (!receipt || typeof receipt !== 'object' || !('workspace' in receipt)) return true;
     const parsed = ownedWorkspaceSchema.safeParse(receipt.workspace);
@@ -346,6 +352,9 @@ async function collectOwnedReceipts(receipts: string, sets: OwnedCleanupSets): P
     if (workspace.branch !== branchFor(workspace.ownerRunId) ||
         !['cezar', 'squawk'].some(name => workspace.path.endsWith(join('.ai', name, 'worktrees', workspace.ownerRunId))) ||
         entry.replace(/(?:\.cleanup)?\.json$/, '') !== workspace.resourceId) return true;
+    if (ownedReceiptCache.key(info) === ownedReceiptCache.key(await lstat(path))) {
+      ownedReceiptCache.set(path, info, { path: workspace.path, branch: workspace.branch });
+    }
     sets.paths.add(workspace.path); sets.branches.add(workspace.branch);
   }
   return false;
