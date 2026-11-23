@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { stepLabel } from './run.ts';
 import { workflowStepSchema } from './types.ts';
 

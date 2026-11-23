@@ -14,7 +14,7 @@ import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
 import { RUN_STATUS, STEP_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';

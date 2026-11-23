@@ -1,4 +1,4 @@
-import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
+import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkToolDefinitions, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
 export { waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';

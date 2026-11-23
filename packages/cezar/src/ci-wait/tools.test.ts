@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import { callScheduleTask, callSquawkDone, callSquawkWait } from './client.ts';
 import { squawkToolDefinitions } from './tool-catalog.ts';
 import { squawkToolNames } from './tool-names.ts';

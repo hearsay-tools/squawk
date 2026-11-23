@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneAnswerSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { AskQuestion, HumanWaitEntry } from '@open-mercato/cezar-contract';

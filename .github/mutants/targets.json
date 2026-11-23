@@ -52,7 +52,12 @@
   "packages/contract/src/waits.ts": {
     "tier": "logic",
     "guards": [
-      "workerWaitView",
+      "workerWaitView"
+    ]
+  },
+  "packages/contract/src/wait-tools.ts": {
+    "tier": "logic",
+    "guards": [
       "oneModeTakesOneId"
     ]
   },

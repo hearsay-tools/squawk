@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { ciWaitRequestSchema, ciWaitSchema, ciWaitResultSchema, ciWaitReceiptSchema } from '@open-mercato/cezar-contract/ci-wait';
 import { previewServeResultSchema, type PreviewServeRequest, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
-import { type SquawkWaitAnswer, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/waits';
+import { type SquawkWaitAnswer, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { squawkServerInstructions, squawkToolEnvNames, squawkTools, doneToolDefinition, waitToolDefinition, waitAnswerHint } from './tools.ts';
 import { waitInvalidInput } from './errors.ts';
 

@@ -7,7 +7,8 @@ import type { ActiveRun } from '../active-run.ts';
 import type { AutomationToolService, RunModuleContext } from './types.ts';
 import type { SquawkToolHandlers } from '../../ci-wait/controller.ts';
 import { askErrorMessage, waitErrorMessage, scheduleRefusal } from '../../ci-wait/errors.ts';
-import { askErrorCodeSchema,  type SquawkAskAnswer, type SquawkCancelWaitAnswer, type SquawkWaitRequestInput, type SquawkAskRequest, type SquawkDoneRequest, type SquawkDoneAnswer, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { askErrorCodeSchema, type WaitVia, type HumanWaitEntry, type PrWaitEntry, type TimerWaitEntry, type WorkerWaitEntry, type ProcessWaitEntry, type PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { type SquawkAskAnswer, type SquawkCancelWaitAnswer, type SquawkWaitRequestInput, type SquawkAskRequest, type SquawkDoneRequest, type SquawkDoneAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import type { PreviewServeRequest, PreviewServeResult, PreviewStopRequest, PreviewStopResult } from '@open-mercato/cezar-contract/preview';
 import { CANCEL_MESSAGES, openWaitList } from '../waits.ts';
 

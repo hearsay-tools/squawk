@@ -1,6 +1,6 @@
 import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
 import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
-import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/waits';
+import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { previewStopRequestSchema, previewServeRequestSchema } from '@open-mercato/cezar-contract/preview';
 import { scheduleTaskRequestSchema, scheduledTasksRequestSchema } from '@open-mercato/cezar-contract/scheduled-tasks';
