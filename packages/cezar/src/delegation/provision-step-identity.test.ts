@@ -3,7 +3,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { openTestRunStore } from '../runs/run-store-open.testkit.ts';
+import { openTestRunStore, runPersistence } from '../runs/run-store-open.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -374,6 +374,40 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     expect(sessions[1]!.spec).toMatchObject({ model: 'sonnet', effort: 'low' });
     expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({ model: 'sonnet', effort: 'low' });
     expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+  });
+
+  it('does not finalize untouched worker identity when runs.db fails to persist, and recovers after restart', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: [] });
+    expect(f.manager.cancel(a.child.workerId)).toBe(true);
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    await f.releaseAdmission();
+
+    const failPersist = vi.spyOn(runPersistence(f.store), 'persist').mockImplementationOnce(() => {
+      throw new Error('disk failure');
+    });
+    const refused = f.manager.continueRun(a.child.workerId, { text: 'retry', model: 'sonnet', effort: 'low' });
+    failPersist.mockRestore();
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('disk failure') });
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+
+    // Simulate a controller restart after the failed DB write.
+    f.manager.dispose();
+    sessions[0]!.finish();
+    setRunStatus(f.store, a.parent.id, RUN_STATUS.waiting);
+    f.store.close();
+    const restartedStore = openTestRunStore(join(f.root, '.ai/cezar'), { keepLive: true });
+    const restartedManager = createFixtureManager(restartedStore, f.root);
+    recoveredStores.push(restartedStore);
+    recoveredManagers.push(restartedManager);
+    await restartedManager.recover();
+
+    expect(restartedStore.getRun(a.child.workerId)).toMatchObject({ status: RUN_STATUS.cancelled, model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(restartedStore.workerExecutions, a.child.workerId)).toMatchObject({ model: 'haiku', effort: 'high' });
+    expect(readWorkerIdentity(restartedStore.workerExecutions, a.child.workerId)).not.toHaveProperty('pending');
+    expect(restartedManager.continueRun(a.child.workerId, { text: 'retry after restart', model: 'sonnet', effort: 'low' })).toEqual({ ok: true });
+    await until(() => sessions.some(entry => entry.spec.env?.CEZ_TASK_ID === a.child.workerId));
+    const launched = sessions.find(entry => entry.spec.env?.CEZ_TASK_ID === a.child.workerId)!;
+    expect(launched.spec).toMatchObject({ model: 'sonnet', effort: 'low' });
   });
 
   it('targets the first agent step when overriding an untouched cancelled multi-step worker', async () => {

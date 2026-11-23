@@ -1,5 +1,5 @@
 import { withCutOff } from './cut-off-work.ts';
-import { atContinue, atTaskHead } from './launch-read-resolver.ts';
+import { atContinue, atLiveInput, atTaskHead } from './launch-read-resolver.ts';
 
 import { patchWorkerIdentity, readWorkerIdentity, resolveWorkerIdentity, type AcceptedWorkerIdentity, type WorkerPendingOverride, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
@@ -110,7 +110,7 @@ export class ContinuationAcceptance {
       if (refusal) return refusal;
       this.context.store.updateRun(runId, continuation.overridePatch(admitted.run, opts, admitted.targetRunner, admitted.originalRunner));
     }
-    if (admitted.untouched) return this.acceptUntouchedContinuation(runId, opts, admitted.supersedes, workerOverride);
+    if (admitted.untouched) return this.acceptUntouchedContinuation(runId, opts, admitted.supersedes, conversation, workerOverride);
     return this.acceptResumedContinuation(runId, opts, deferForCapacity, conversation, admitted, workerOverride);
   }
 
@@ -132,7 +132,13 @@ export class ContinuationAcceptance {
     return patched ? { previous, next: patched.identity, pending: patched.pending, runPatch: patched.runPatch } : undefined;
   }
 
-  private acceptUntouchedContinuation(runId: string, opts: ContinueRunOptions, supersedes: boolean, workerOverride?: WorkerIdentityOverride): continuation.ContinuationResult {
+  private acceptUntouchedContinuation(
+    runId: string,
+    opts: ContinueRunOptions,
+    supersedes: boolean,
+    conversation: continuation.ContinuationConversation,
+    workerOverride?: WorkerIdentityOverride,
+  ): continuation.ContinuationResult {
     const current = this.context.store.getRun(runId)!;
     let job: { workflow: WorkflowDef; input: StartRunInput };
     let identityStaged = false;
@@ -151,21 +157,50 @@ export class ContinuationAcceptance {
       if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
       return admissionRefusal(error, 'original execution checkpoint unavailable');
     }
-    if (supersedes) this.workerQuestions.supersedeWorkerFallback(runId);
     const content = continuation.content(opts);
     const message = content.length ? this.queuedInput.toQueuedMessage(runId, content) : undefined;
+    const refusal = this.commitUntouchedContinuation(runId, current, message, conversation, workerOverride, identityStaged);
+    if (refusal) return refusal;
+    if (supersedes) this.workerQuestions.supersedeWorkerFallback(runId);
     this.autoResumeScheduler.clearAutoResume(runId);
-    this.context.store.archive.setArchived(runId, false);
-    this.host.move(runId, 'continue-line', {
-      ...(workerOverride ? workerOverride.runPatch : {}),
-      stopping: undefined,
-      ...(message ? { queuedMessages: [...(current.queuedMessages ?? []), message] } : {}),
-    });
-    this.context.store.persistence.flush();
-    if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
     this.line.enqueueJob(runId, job);
     void this.host.pump();
     return { ok: true };
+  }
+
+  private commitUntouchedContinuation(
+    runId: string,
+    current: RunRecord,
+    message: ReturnType<QueuedInput['toQueuedMessage']> | undefined,
+    conversation: continuation.ContinuationConversation,
+    workerOverride: WorkerIdentityOverride | undefined,
+    identityStaged: boolean,
+  ): continuation.ContinuationRefusal | undefined {
+    const queuedPatch = message ? { queuedMessages: [...(atLiveInput.queuedMessages(current) ?? []), message] } : {};
+    if (current.delegation?.role === 'worker') {
+      try {
+        // Use the throwing transactional commit so identity finalization never outruns runs.db.
+        this.context.store.commitWorkerContinuation(runId, 'continue-line', {
+          ...(workerOverride ? workerOverride.runPatch : {}),
+          stopping: undefined,
+          archived: false,
+          archivedAt: undefined,
+          ...queuedPatch,
+        }, undefined, conversation);
+      } catch (error) {
+        if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
+        void this.host.finishWorkerExecution(runId);
+        const cause = error instanceof Error && error.message ? error.message : String(error);
+        console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
+        return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
+      }
+      if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
+      return undefined;
+    }
+    this.context.store.archive.setArchived(runId, false);
+    this.host.move(runId, 'continue-line', { stopping: undefined, ...queuedPatch });
+    this.context.store.persistence.flush();
+    return undefined;
   }
 
   private finalizeWorkerIdentity(runId: string, identity: AcceptedWorkerIdentity): void {
