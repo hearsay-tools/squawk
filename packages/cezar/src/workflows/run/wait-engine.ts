@@ -72,7 +72,7 @@ export class WaitEngine {
   private readonly settleRetries = new Map<string, { runId: string; timer: NodeJS.Timeout }>();
   /** Each armed wait's watch, by wait id: the context its row's lifecycle reads, and the signal
    *  the engine aborts when it disarms the wait. */
-  private readonly armedWatches = new Map<string, { context: WaitWatchContext; abort: AbortController }>();
+  private readonly armedWatches = new Map<string, { context: WaitWatchContext; abort: AbortController; armed: boolean }>();
   private readonly workerResolveRetries = new Set<string>();
   /** One timer per wait with an armed deadline, keyed by wait id. */
   private readonly waitTimers = new Map<string, { runId: string; timer: NodeJS.Timeout }>();
@@ -180,8 +180,10 @@ export class WaitEngine {
     }
     // Only the user's answer, or a cancel, ends a wait without an arm hook: nothing to arm.
     const arm = row?.lifecycle?.arm;
-    if (!arm || (row.isPlugin && this.armedWatches.has(wait.id))) return;
-    arm(this.watchContext(runId, wait));
+    if (!arm || (row.isPlugin && this.armedWatches.get(wait.id)?.armed)) return;
+    const context = this.watchContext(runId, wait);
+    this.armedWatches.get(wait.id)!.armed = true;
+    arm(context);
   }
 
   /** The wait's watch context: the armed one, now reading this entry, or a new one. */
@@ -202,12 +204,14 @@ export class WaitEngine {
       processes: this.processSupervisor,
       exitFileRoots: () => this.exitFileRoots(runId),
     };
-    this.armedWatches.set(wait.id, { context, abort });
+    this.armedWatches.set(wait.id, { context, abort, armed: false });
     return context;
   }
 
-  /** The wait's one timer. A newer timer, or a disarm, makes an older one's callback a no-op. */
+  /** The wait's one timer. A newer timer clears the previous one, and disarm clears the current one. */
   private armTimer(runId: string, wait: Wait, delay: number, due: () => void): void {
+    const previous = this.waitTimers.get(wait.id);
+    if (previous) clearTimeout(previous.timer);
     const timer = watchDeadline({ deadline: 'deadline' in wait ? wait.deadline : undefined, delay }, deadlineSignal, () => {
       if (this.waitTimers.get(wait.id)?.timer !== timer) return;
       this.waitTimers.delete(wait.id);
