@@ -1,3 +1,4 @@
+import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from '../../packages/cezar/src/built-in-wait-kinds.ts';
 import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src/built-in-tools.ts';
 import { spawnCapacityRefusal } from '../../packages/cezar/src/delegation/capacity.ts';
 import { resolveHome } from '../../packages/cezar/src/home/resolve.ts';
@@ -33,6 +34,8 @@ registerBuiltInRunners();
 sealBuiltInRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
+registerBuiltInWaitKinds();
+sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
 

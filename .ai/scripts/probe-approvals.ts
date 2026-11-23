@@ -1,3 +1,4 @@
+import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from '../../packages/cezar/src/built-in-wait-kinds.ts';
 import { scrubProbeSessionEnv } from '../../packages/cezar/scripts/probe-session-env.ts';
 // Manual real-harness probe for hearsay-tools/cezarion#1343: does Squawk answer Codex's MCP tool
 // approvals as AGENT_PROTOCOL.md § MCP tool approvals says? Squawk's own server must run with no
@@ -47,6 +48,8 @@ import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src
 // The Codex session's child env reads the runner registry; register the built-ins first.
 registerBuiltInRunners();
 sealBuiltInRunners();
+registerBuiltInWaitKinds();
+sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
 
