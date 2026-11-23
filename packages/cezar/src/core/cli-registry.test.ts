@@ -48,3 +48,26 @@ it('renders and dispatches a custom command without core edits', async () => {
   const { knownRunnerIds } = await import('./runner-registry.ts');
   expect(knownRunnerIds()).toEqual([]);
 });
+
+it('passes root arguments to runtime predicates before loading the command', async () => {
+  vi.resetModules();
+  const { registerCliCommand, sealCliCommands } = await import('./cli-registry.ts');
+  const { registeredRunners } = await import('./runner-registry.ts');
+  const { runSlotsSealed } = await import('../runs/removal-slots.ts');
+  const predicate = vi.fn((argv: readonly string[]) => argv.includes('warm'));
+  const handler = vi.fn(async () => {
+    expect(registeredRunners().length).toBeGreaterThan(0);
+    expect(runSlotsSealed()).toBe(true);
+  });
+  registerCliCommand({ name: 'fixture-root', usage: ['  cez fixture-root'],
+    parseMode: 'root', homeMode: 'none', runtimeMode: predicate, load: async () => handler });
+  sealCliCommands();
+  const { main, defaultCliDeps } = await import('../cli-dispatch.ts');
+  await main({ ...defaultCliDeps,
+    process: { argv: ['/bin/node', '/bin/hsq', 'fixture-root', 'warm'], env: {}, cwd: () => '/work' },
+    getRepoInfo: async () => null,
+    resolveCliHome: () => { throw new Error('Unexpected Home access'); }, readOwnVersion: () => '0',
+  } as unknown as import('../cli-dispatch.ts').CliDeps);
+  expect(predicate).toHaveBeenCalledWith(['warm']);
+  expect(handler).toHaveBeenCalledOnce();
+});

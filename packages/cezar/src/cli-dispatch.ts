@@ -146,7 +146,7 @@ async function dispatch(deps: CliDeps): Promise<void> {
 
   const command = positionals[0] ?? 'serve';
   const definition = cliCommand(command);
-  if (definition?.parseMode === 'root') await prepareCommandRuntime(command);
+  if (definition?.parseMode === 'root') await prepareCommandRuntime(command, positionals.slice(1));
   const task = positionals.slice(1).join(' ').trim();
   homeEntry = cliCommand(command)?.homeEntry?.(positionals) ?? command;
   const cwd = resolve(values.repo ?? deps.process.cwd());
