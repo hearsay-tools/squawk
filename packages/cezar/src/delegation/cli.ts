@@ -83,7 +83,7 @@ function attachIssue(error: z.ZodError, operation: string, typed: string[]): str
   return value === undefined ? `${operation} has invalid --attach` : `${operation} has invalid --attach: ${value}`;
 }
 const WORKER_USAGE = { operations: [
-  { name: 'resume', positionals: 2, required: ['--id'], optional: ['--timeout-seconds'] },
+  { name: 'resume', positionals: 2, required: ['--id'], optional: ['--timeout-seconds', '--model', '--effort'] },
   { name: 'spawn', positionals: 1, required: ['--request-id'], optional: ['--baseline', '--workspace', '--workflow', '--skill', '--runner', '--backend', '--model', '--effort', '--context', '--context-file', '--attach'] },
   { name: 'list', positionals: 0 },
   { name: 'inspect', positionals: 1 },
@@ -98,7 +98,7 @@ const WORKER_USAGE = { operations: [
 
 ] };
 const WORKER_HELP: Record<string, { args: string; description: string }> = {
-  resume: { args: '<worker-id> "<instruction>" --id <UUID>', description: 'Resume a settled owned worker with a request; --timeout-seconds accepts 1-86400.' },
+  resume: { args: '<worker-id> "<instruction>" --id <UUID> [--model <model>] [--effort <level>]', description: 'Resume a settled or held owned worker with a request; --timeout-seconds accepts 1-86400. Optional --model and --effort override model/effort on the worker\'s existing runner.' },
   spawn: { args: '"<task>" --request-id <UUID> [--baseline <ref> | --workspace shared]', description: 'Create an owned worker: in its own worktree from a committed baseline, or in your worktree with --workspace shared. A worker may start one shared worker at a time, and no flag is needed: wait for it (worker wait), read its result (worker collect) and destroy it (worker destroy) before you start the next.' },
   list: { args: '', description: 'List your owned workers, execution revisions and remaining cleanup resources.' },
   inspect: { args: '<worker-id>', description: 'Show worker state and input locations.' },
@@ -324,7 +324,7 @@ export async function runWorkerCommand(argv: string[], env: NodeJS.ProcessEnv): 
   if (argv[0] === 'wait' && flags.some(arg => arg === '--peer' || arg.startsWith('--peer='))) return usageFailure(commandText('Use cez message wait --peer <task-id>.'));
   if (argv[0] === 'resume') {
     if (argv.length === 2 && (argv[1] === '--help' || argv[1] === '-h')) { console.log(workerHelp('resume')); return 0; }
-    if (flags.some(arg => /^--(?:kind|resume|request-id)(?:=|$)/.test(arg))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> [--timeout-seconds <1-86400>].'));
+    if (flags.some(arg => /^--(?:kind|resume|request-id)(?:=|$)/.test(arg))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> [--timeout-seconds <1-86400>] [--model <model>] [--effort <level>].'));
     return runDelegationCommand(['send', '--kind', 'request', '--resume', ...argv.slice(1)], env, () => workerHelp('resume'));
   }
   if (!WORKER_USAGE.operations.some(entry => entry.name === argv[0])) {
@@ -357,6 +357,7 @@ export async function runMessageCommand(argv: string[], env: NodeJS.ProcessEnv):
   if (!operation || !Object.hasOwn(MESSAGE_HELP, operation)) return usageFailure(commandText('Use cez message --help for task messaging commands.'));
   const flags = optionArguments(argv);
   if (flags.some(arg => arg === '--resume' || arg.startsWith('--resume='))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> to resume an owned worker.'));
+  if (flags.some(arg => /^--(?:model|effort)(?:=|$)/.test(arg))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> [--model <model>] [--effort <level>] to override model or effort.'));
   if (flags.some(arg => arg === '--kind' || arg.startsWith('--kind='))) return usageFailure(commandText('The cez message verb selects the kind; use request, progress, follow-up or reply.'));
   if (flags.includes('--help') || flags.includes('-h')) {
     // Let parseArgs decide whether a flag is help or a string option's value.
@@ -433,7 +434,7 @@ const COMMAND_OPTIONS: Record<string, NonNullable<Parameters<typeof parseArgs>[0
   spawn: { baseline: stringFlag, workspace: stringFlag, 'request-id': stringFlag, workflow: stringFlag, skill: stringFlag, runner: stringFlag, backend: stringFlag,
     model: stringFlag, effort: stringFlag, context: stringFlag, 'context-file': stringFlag, attach: repeatedFlag },
   conversation: { before: stringFlag }, tasks: { all: { type: 'boolean' }, offset: stringFlag },
-  send: { ...messageOptions, resume: { type: 'boolean' } }, progress: messageOptions, reply: messageOptions, 'follow-up': messageOptions,
+  send: { ...messageOptions, resume: { type: 'boolean' }, model: stringFlag, effort: stringFlag }, progress: messageOptions, reply: messageOptions, 'follow-up': messageOptions,
   wait: waitOptions, 'wait-requests': waitOptions, destroy: { 'discard-work': { type: 'boolean' } },
 };
 function cliInteger(operation: string, flag: string, value: CliValues[string]): number | undefined {
@@ -447,6 +448,8 @@ function messagePayload(operation: string, values: CliValues, positionals: strin
   expectCount(operation, positionals, 2);
   return conversationSendRequestSchema.parse({ id: values.id, recipientRunId: positionals[0], text: positionals[1],
     kind: operation === 'send' ? values.kind : operation, resume: values.resume, requestId: values['request-id'],
+    ...(values.model === undefined ? {} : { model: values.model }),
+    ...(values.effort === undefined ? {} : { effort: values.effort }),
     timeoutSeconds: cliInteger(operation, 'timeout-seconds', values['timeout-seconds']) });
 }
 async function spawnPayload(values: CliValues, positionals: string[], argv: string[]) {

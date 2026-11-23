@@ -14,6 +14,7 @@ import type { RunLookup, WorkerExecutionRecords } from '../runs/ports.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
+import { writePrivateRecord } from './private-record-file.ts';
 
 const absolutePathSchema = z.string().min(1).max(4096).refine(isAbsolute).refine(path => !/[\u0000-\u001f\u007f]/.test(path));
 
@@ -102,6 +103,87 @@ export function writeWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'id
   // Immutable acceptance evidence. An orphan from failed index publication cannot be adopted.
   const fd = openSync(executions.identityPath(id, true), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try { writeFileSync(fd, JSON.stringify(identity)); fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+/** Atomically replace an existing worker identity after a same-runner model/effort override. */
+export function updateWorkerIdentity(executions: Pick<WorkerExecutionRecords, 'identityPath'>, id: string, identity: WorkerExecutionIdentity): void {
+  writePrivateRecord(executions.identityPath(id, true), workerExecutionIdentitySchema.parse(identity));
+}
+
+export interface WorkerModelEffortPatch {
+  /** `undefined` keeps the pin; `''` clears it; non-empty sets it. */
+  model?: string | undefined;
+  /** `undefined` keeps the pin; `''` clears it; canonical effort sets it. */
+  effort?: string | undefined;
+}
+
+function applyStepModelEffort<T extends { model?: string | undefined; effort?: string | undefined }>(entry: T, patch: WorkerModelEffortPatch): T {
+  const { model: prevModel, effort: prevEffort, ...rest } = entry;
+  const nextModel = patch.model === undefined ? prevModel : patch.model === '' ? undefined : patch.model;
+  const nextEffort = patch.effort === undefined ? prevEffort : patch.effort === '' ? undefined : patch.effort;
+  return {
+    ...rest,
+    ...(nextModel === undefined ? {} : { model: nextModel }),
+    ...(nextEffort === undefined ? {} : { effort: nextEffort }),
+  } as unknown as T;
+}
+
+function patchBoundWorkflow(workflow: WorkflowDef | undefined, targetStepId: string | undefined, patch: WorkerModelEffortPatch): WorkflowDef | undefined {
+  if (!workflow || targetStepId === undefined) return undefined;
+  let changed = false;
+  const steps = workflow.steps.map(step => {
+    if (step.id !== targetStepId) return step;
+    const next = applyStepModelEffort(step, patch);
+    if (next.model !== step.model || next.effort !== step.effort) changed = true;
+    return next;
+  });
+  return changed ? { ...workflow, steps } : undefined;
+}
+
+/**
+ * Update a worker's same-runner model and/or effort on the targeted step while keeping its pinned
+ * account, tool grants, and context hash fixed. Returns the replacement private identity and the
+ * matching public run patch, or `undefined` when nothing changes.
+ */
+export function patchWorkerIdentity(
+  run: RunRecord,
+  identity: AcceptedWorkerIdentity,
+  stepId: string | undefined,
+  patch: WorkerModelEffortPatch,
+): { identity: AcceptedWorkerIdentity; runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } } | undefined {
+  if (patch.model === undefined && patch.effort === undefined) return undefined;
+  const runPatch: { model?: string | undefined; effort?: string | undefined; modelIdentity?: undefined; workflowDef?: WorkflowDef } = {};
+  let nextIdentity: AcceptedWorkerIdentity;
+  let targetStepId = stepId;
+  if (identity.steps === undefined) {
+    nextIdentity = applyStepModelEffort(identity, patch);
+    runPatch.model = nextIdentity.model;
+    runPatch.effort = nextIdentity.effort;
+    runPatch.modelIdentity = undefined;
+  } else {
+    const index = stepId === undefined ? 0 : identity.steps.findIndex(step => step.stepId === stepId);
+    if (index < 0) throw new WorkerIdentityError(`Accepted worker step identity is unavailable for "${stepId}"`);
+    const updatedStep = applyStepModelEffort(identity.steps[index]!, patch);
+    targetStepId = updatedStep.stepId;
+    const steps = identity.steps.map((step, i) => i === index ? updatedStep : step);
+    const updatedRunLevel = index === 0 ? applyStepModelEffort(identity, patch) : identity;
+    nextIdentity = { ...updatedRunLevel, steps };
+    if (index === 0) {
+      runPatch.model = nextIdentity.model;
+      runPatch.effort = nextIdentity.effort;
+    }
+    runPatch.modelIdentity = undefined;
+  }
+  const nextWorkflow = patchBoundWorkflow(run.workflowDef, targetStepId, patch);
+  if (nextWorkflow) {
+    runPatch.workflowDef = nextWorkflow;
+    if (nextIdentity.workflowHash !== undefined) {
+      nextIdentity = { ...nextIdentity, workflowHash: workerWorkflowHash(nextWorkflow) };
+    }
+  }
+  const validated = acceptedWorkerIdentitySchema.parse(nextIdentity);
+  if (JSON.stringify(validated) === JSON.stringify(identity) && runPatch.workflowDef === undefined) return undefined;
+  return { identity: validated, runPatch };
 }
 
 export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.ProcessEnv = process.env): WorkerAccountBinding | undefined {

@@ -319,4 +319,36 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     expect(sessions.at(-1)!.spec).toMatchObject({ model: 'haiku', effort: 'high' });
     expect(sessions.at(-1)!.spec.env?.CLAUDE_CONFIG_DIR).toBe(a.home);
   });
+  it('allows same-runner model and effort overrides on worker Continue while keeping runner, account and grants fixed', async () => {
+    const a = await acceptIdentityWorker(undefined, { allowedTools: ['Read'], bashAllowlist: ['git status'] });
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'worker-sess', resumed: false });
+    sessions[1]!.finish('done');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    // Cross-runner override and foreign model preset stay refused without changing persisted identity.
+    expect(f.manager.continueRun(a.child.workerId, { text: 'switch runner', runner: 'codex' })).toMatchObject({ ok: false, error: expect.stringContaining('identity') });
+    expect(f.manager.continueRun(a.child.workerId, { text: 'foreign model', model: 'gpt-5.1-codex' })).toMatchObject({ ok: false, error: expect.stringContaining('not a claude model') });
+    expect(f.manager.continueRun(a.child.workerId, { text: 'bad effort', effort: 'turbo' })).toMatchObject({ ok: false, error: 'Invalid effort' });
+    // Same-runner model and effort override succeeds, persists to identity + record, and resumes the session.
+    expect(f.manager.continueRun(a.child.workerId, { text: 'use sonnet', model: 'sonnet', effort: 'medium' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({
+      resume: true, sessionId: 'worker-sess', model: 'sonnet', effort: 'medium',
+      toolGrant: { kind: 'inherited', tools: ['Read'], bashAllowlist: ['git status'] },
+    });
+    expect(sessions[2]!.spec.env?.CLAUDE_CONFIG_DIR).toBe(a.home);
+    expect(f.store.getRun(a.child.workerId)).toMatchObject({ runner: 'claude', model: 'sonnet', effort: 'medium' });
+    expect(readWorkerIdentity(f.store.workerExecutions, a.child.workerId)).toMatchObject({
+      model: 'sonnet', effort: 'medium', account: { provider: 'claude', homePath: a.home },
+      grants: { allowedTools: ['Read'], bashAllowlist: ['git status'] },
+    });
+    // Clearing effort (`''`) removes the pin on the next Continue.
+    sessions[2]!.finish('done again');
+    expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(a.child.workerId, { text: 'auto effort', effort: '' })).toEqual({ ok: true });
+    await until(() => sessions.length === 4);
+    expect(sessions[3]!.spec.model).toBe('sonnet');
+    expect(sessions[3]!.spec.effort).toBeUndefined();
+    expect(f.store.getRun(a.child.workerId)?.effort).toBeUndefined();
+  });
 });

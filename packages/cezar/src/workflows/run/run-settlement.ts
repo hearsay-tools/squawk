@@ -578,6 +578,7 @@ export class RunSettlement {
     // an account that looked healthy, and started work that was already doomed.
     this.autoResumeScheduler.armHeldResume(runId);
     this.reconcileSettledFamilies(runId);
+    this.workerQuestions.noticeParkedWorker(runId);
     this.host.releaseSlot();
     // A run leaving the active registry may have reached a terminal transition
     // (done/review/failed/cancelled), increasing the finished-worktree count.

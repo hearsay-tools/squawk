@@ -7,7 +7,7 @@ import type { ConversationMessage } from '@open-mercato/cezar-contract';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
-import { parkNoticeId } from '../delegation/park-notice.ts';
+import { holdNoticeId, parkNoticeId } from '../delegation/park-notice.ts';
 import { messagesPrompt } from './monitoring-turn.testkit.ts';
 import { thenSay, toolCall } from './waits-parity.testkit.ts';
 import { delegatingParent, eventCheckpoint, fixtureUpdateRun, manager, register, restart, semaphore, spendWorkerBudget, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
@@ -79,19 +79,24 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     expect(notices(p.id, w.id)).toHaveLength(1);
   });
 
-  // The product decision of hearsay-tools/squawk#3502: the hold resumes the worker by itself.
-  it('sends no notice for a worker on an auto-resume hold, also after recovery', async () => {
+  it('sends one hold notice for a worker on an auto-resume hold, and recovery does not duplicate it', async () => {
     vi.stubEnv('CEZ_MOCK_LIMIT_RESET_SECONDS', '3600');
     const { p } = await family();
     const w = await worker(p.id, 'mock:limit Waiting on the account.');
+    const wait = register(p.id, [w.id]);
     manager.enqueueOwnedRun(w.id);
     await until(() => parked(w.id) && store.getRun(w.id)?.autoResumeAt !== undefined && store.workerExecutions.readWorkerExecution(w.id)?.phase === 'complete', () => timeline(w.id));
-    register(p.id, [w.id]);
-    expect(notices(p.id, w.id)).toEqual([]);
-    // Recovery's sweep passes over the held worker too.
+    await until(() => notices(p.id, w.id).length > 0, () => timeline(w.id));
+    const [notice, ...more] = notices(p.id, w.id);
+    expect(more).toEqual([]);
+    expect(notice).toMatchObject({ id: holdNoticeId(w.id, wait.id), recipientRunId: p.id, state: 'accepted' });
+    expect(notice!.text).toContain('hit a usage limit and is on hold until');
+    expect(notice!.text).toContain(`worker resume ${w.id}`);
+    expect(notice!.text).toContain('[--model <model>] [--effort <level>]');
+    // Recovery's sweep keeps the single notice and posts no duplicate.
     await restart(false, undefined, eventCheckpoint());
     expect(store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
-    expect(notices(p.id, w.id)).toEqual([]);
+    expect(notices(p.id, w.id)).toHaveLength(1);
   });
 
   it('sends no notice when the turn that parked already messaged the parent', async () => {

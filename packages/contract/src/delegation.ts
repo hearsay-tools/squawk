@@ -437,6 +437,14 @@ export const workerWaitRequestSchema = z.object({
 export type WorkerWaitRequest = z.infer<typeof workerWaitRequestSchema>;
 
 
+export const workerHoldSchema = z.object({
+  reason: z.enum(['usage-limit', 'provider-error']),
+  resumeAt: z.iso.datetime(),
+  attempts: z.number().int().min(0).optional(),
+  error: z.string().max(2_000).optional(),
+}).strict();
+export type WorkerHold = z.infer<typeof workerHoldSchema>;
+
 export const workerInspectionSchema = z.object({
   workerId: z.uuid(),
   settled: z.boolean(),
@@ -449,6 +457,8 @@ export const workerInspectionSchema = z.object({
   workspace: workerWorkspaceSchema,
   backend: workerBackendSchema.optional(),
   model: z.string().max(512).optional(),
+  effort: effortFieldSchema,
+  hold: workerHoldSchema.optional(),
   inputs: z.array(workerInputSchema).max(32).optional(),
   wait: workerWaitSchema.optional(),
   /** The parent's deadline-less completion wait on this worker (hearsay-tools/cezarion#1301). */
@@ -463,7 +473,7 @@ export type WorkerInspection = z.infer<typeof workerInspectionSchema>;
 
 /** Small summaries omit inspection inputs, wait payloads and assistant output. */
 export const workerListEntrySchema = workerInspectionSchema.pick({
-  workerId: true, parentRunId: true, supervisorRunId: true, status: true, workspace: true, destroy: true,
+  workerId: true, parentRunId: true, supervisorRunId: true, status: true, workspace: true, hold: true, destroy: true,
 }).extend({
   revision: z.number().int().nonnegative(),
   settled: z.boolean(),

@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  acceptedWorkerIdentitySchema, boundWorkerAccountEnv, captureWorkerAccount, workerAccountBindingSchema,
-  workerExecutionIdentitySchema, workerStepIdentity, WorkerIdentityError,
+  acceptedWorkerIdentitySchema, boundWorkerAccountEnv, captureWorkerAccount, patchWorkerIdentity, workerAccountBindingSchema,
+  workerExecutionIdentitySchema, workerStepIdentity, workerWorkflowHash, WorkerIdentityError,
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
+import type { RunRecord } from '../runs/store.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 
 sealTestRunners(claudeRunner, codexRunner, piRunner, ompRunner);
@@ -44,6 +45,49 @@ describe('per-step worker identity (#452)', () => {
     expect(acceptedWorkerIdentitySchema.safeParse({ ...runLevel, steps: [{ stepId: 'a', account: claude, grants: {}, extra: 1 }] }).success).toBe(false);
     expect(acceptedWorkerIdentitySchema.safeParse({ ...runLevel, steps: [{ stepId: 'a', account: claude }] }).success).toBe(false);
     expect(acceptedWorkerIdentitySchema.safeParse({ ...runLevel, steps: [] }).success).toBe(false);
+  });
+  it('patches same-runner model and effort on legacy, first-step and later-step identities without altering account or grants', () => {
+    const legacy = acceptedWorkerIdentitySchema.parse(runLevel);
+    const baseRun = { id: 'r1', runner: 'claude', model: 'opus', effort: 'high' } as unknown as RunRecord;
+    const legacyPatched = patchWorkerIdentity(baseRun, legacy, undefined, { model: 'sonnet', effort: '' });
+    expect(legacyPatched?.identity).toEqual({ ...legacy, model: 'sonnet', effort: undefined });
+    expect(legacyPatched?.runPatch).toEqual({ model: 'sonnet', effort: undefined, modelIdentity: undefined });
+    expect(patchWorkerIdentity(baseRun, legacy, undefined, { model: 'opus', effort: 'high' })).toBeUndefined();
+
+    const workflowDef = {
+      name: 'mixed',
+      source: 'file' as const,
+      steps: [
+        { id: 'implement', prompt: 'impl', runner: 'codex', agentProfile: 'work', model: 'gpt-5.1-codex', allowedTools: [] },
+        { id: 'review', prompt: 'rev', runner: 'claude', agentProfile: 'default', model: 'opus', effort: 'high', allowedTools: ['Read'] },
+      ],
+    };
+    const multi = acceptedWorkerIdentitySchema.parse({
+      kind: 'accepted',
+      account: codex,
+      grants: { allowedTools: [] },
+      model: 'gpt-5.1-codex',
+      workflowHash: workerWorkflowHash(workflowDef),
+      steps: [
+        { stepId: 'implement', account: codex, grants: { allowedTools: [] }, model: 'gpt-5.1-codex' },
+        { stepId: 'review', account: claude, grants: { allowedTools: ['Read'] }, model: 'opus', effort: 'high' },
+      ],
+    });
+    const multiRun = { id: 'r2', runner: 'codex', model: 'gpt-5.1-codex', workflowDef } as unknown as RunRecord;
+    const step2 = patchWorkerIdentity(multiRun, multi, 'review', { model: 'sonnet', effort: 'low' })!;
+    expect(step2.identity.model).toBe('gpt-5.1-codex');
+    expect(step2.identity.account).toEqual(codex);
+    expect(step2.identity.steps![0]).toEqual(multi.steps![0]);
+    expect(step2.identity.steps![1]).toEqual({ stepId: 'review', account: claude, grants: { allowedTools: ['Read'] }, model: 'sonnet', effort: 'low' });
+    expect(step2.runPatch.model).toBeUndefined();
+    expect(step2.runPatch.workflowDef?.steps[1]).toMatchObject({ id: 'review', model: 'sonnet', effort: 'low' });
+    expect(step2.identity.workflowHash).toBe(workerWorkflowHash(step2.runPatch.workflowDef!));
+
+    const step1 = patchWorkerIdentity(multiRun, multi, 'implement', { model: 'gpt-5.1-codex-mini', effort: 'medium' })!;
+    expect(step1.identity.model).toBe('gpt-5.1-codex-mini');
+    expect(step1.identity.effort).toBe('medium');
+    expect(step1.runPatch).toMatchObject({ model: 'gpt-5.1-codex-mini', effort: 'medium' });
+    expect(step1.identity.workflowHash).toBe(workerWorkflowHash(step1.runPatch.workflowDef!));
   });
 });
 

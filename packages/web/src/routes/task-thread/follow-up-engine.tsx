@@ -19,7 +19,7 @@ import {
   resolveEffort,
   resolveModel,
 } from '@/routes/new-task-form'
-import { useContinuationProvider } from './continuation-provider'
+import { useContinuationProvider, workerContinuationStep } from './continuation-provider'
 import { runActionFlags } from './run-actions'
 
 /** What the thread needs to offer Continue from its composer. */
@@ -57,17 +57,20 @@ function resolveContinueModel(
   config: ContinueConfig, catalog: ContinueCatalog, registered: ContinueRunners,
   pickedModel: string | null, pickedEffort: string | null,
 ) {
+  const workerStep = workerContinuationStep(run)
+  const currentModel = workerStep ? workerStep.model : run.model
+  const currentEffort = workerStep ? workerStep.effort : run.effort
   // While the runner is unchanged, the model pill starts on the run's own pin; switching the
   // runner invalidates that pin and falls back to the new backend's configured default / auto.
   const modelDefaults =
-    !modelsLocked && !runnerChanged && run.model
-      ? { ...config?.defaultModels, [runner]: run.model }
+    !modelsLocked && !runnerChanged && currentModel
+      ? { ...config?.defaultModels, [runner]: currentModel }
       : config?.defaultModels
   const effectivePickedModel = modelsLocked ? null : pickedModel
   const models = modelsForRunner(runner, registered, catalog, [effectivePickedModel, modelDefaults?.[runner]])
   const model = resolveModel(effectivePickedModel, runner, registered, modelDefaults, catalog)
   const effortOptions = effortOptionsForModel(model, catalog)
-  const rawEffort = modelsLocked ? '' : (pickedEffort ?? run.effort ?? '')
+  const rawEffort = modelsLocked ? '' : (pickedEffort ?? currentEffort ?? '')
   const effort = resolveEffort(rawEffort, effortOptions)
   const mustClearStoredEffort =
     !modelsLocked && pickedEffort === null && rawEffort !== '' && effort === ''
@@ -207,6 +210,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     },
   })
 
+  const isWorker = run.delegation?.role === 'worker'
   return {
     skillRunner: runner,
     skillAccount: account,
@@ -219,8 +223,8 @@ export function useContinueAction(run: ApiRun): ContinueAction {
       <div data-slot="follow-up-engine" className="session-engine-controls">
 <PickerPillGroup>
         {/* Shown when there is a choice to make, or a signed-out runner to point at its Settings card
-            (hearsay-tools/squawk#4116). A host with one ready runner and nothing to sign in to sees no pill. */}
-        {runners.length > 1 || continuation.signedOut.length > 0 ? (
+            (hearsay-tools/squawk#4116). Owned workers keep their accepted runner and account. */}
+        {!isWorker && (runners.length > 1 || continuation.signedOut.length > 0) ? (
           <RunnerPill
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
@@ -240,6 +244,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
             readOnly
+            disabledHint={isWorker ? 'Owned workers keep their runner; change model or effort instead.' : undefined}
             slot="session-runner-value"
             ariaLabel="Runner"
             label={runner}

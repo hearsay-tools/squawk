@@ -23,6 +23,11 @@ export function parkNoticeId(workerRunId: string, waitId: string): string {
   return uuidFrom(`worker-park:${workerRunId}:${waitId}`);
 }
 
+/** At most one hold notice per worker and parent wait: distinct from turn-park notices. */
+export function holdNoticeId(workerRunId: string, waitId: string): string {
+  return uuidFrom(`worker-hold:${workerRunId}:${waitId}`);
+}
+
 /** Whether the worker's own turn parked it (`parkReason`, ADR 0064), the one park that earns a
  *  notice (hearsay-tools/squawk#3502). A row saved before the fact reads as a turn's park unless it
  *  is a usage-limit hold. */
@@ -30,12 +35,17 @@ export function parkedByTurn(run: Pick<RunRecord, 'status' | 'autoResumeAt' | 'p
   return (run.parkReason ?? (isUsageLimitHold(run) ? 'hold' : 'turn')) === 'turn';
 }
 
-/** The parent's first open worker wait that selects the worker, by its ID or by a request sent to
- *  it, and holds no park notice from it yet. */
-export function parkNoticeWait(workerRunId: string, waits: readonly Wait[], messages: readonly ConversationMessage[]): WorkerWaitEntry | undefined {
+/** The parent's first open worker wait that selects the worker, by its ID or by a request to
+ *  it, and holds no notice with `noticeIdFor` yet. */
+export function parkNoticeWait(
+  workerRunId: string,
+  waits: readonly Wait[],
+  messages: readonly ConversationMessage[],
+  noticeIdFor: (workerId: string, waitId: string) => string = parkNoticeId,
+): WorkerWaitEntry | undefined {
   const selects = (wait: WorkerWaitEntry) => wait.workerIds ? wait.workerIds.includes(workerRunId)
     : (wait.requestIds ?? []).some(id => messages.some(message => message.id === id && message.recipientRunId === workerRunId));
-  const noticed = (wait: WorkerWaitEntry) => { const id = parkNoticeId(workerRunId, wait.id); return messages.some(message => message.id === id); };
+  const noticed = (wait: WorkerWaitEntry) => { const id = noticeIdFor(workerRunId, wait.id); return messages.some(message => message.id === id); };
   return WAIT_KINDS.worker.selectOpen(waits).find(wait => selects(wait) && !noticed(wait));
 }
 
@@ -87,6 +97,38 @@ export function parkNoticeMessage(input: {
     .digest('hex');
   return { id, senderRunId: input.workerRunId, recipientRunId: input.parentRunId, kind: 'progress',
     text: input.redact(formatParkNoticeText(input)), createdAt: input.now, requestHash, state: 'accepted' };
+}
+
+/** What the supervisor reads when a worker enters a usage-limit or provider-error hold. */
+export function formatHoldNoticeText(input: {
+  workerRunId: string; waitId: string; reason: 'usage-limit' | 'provider-error'; resumeAt: string;
+  error?: string; runner?: string; model?: string; effort?: string;
+}): string {
+  const kind = input.reason === 'provider-error' ? 'provider error' : 'usage limit';
+  const detail = input.error ? parkNoticeExcerpt(input.error) : undefined;
+  const settings = [
+    ...(input.runner ? [`runner: ${input.runner}`] : []),
+    ...(input.model ? [`model: ${input.model}`] : []),
+    ...(input.effort ? [`effort: ${input.effort}`] : []),
+  ];
+  return [
+    `Squawk notice: your worker ${input.workerRunId} hit a ${kind} and is on hold until ${input.resumeAt}. Your wait ${input.waitId} stays open; this message closes no wait.`,
+    ...(detail === undefined ? [] : [`Error: ${detail}`]),
+    ...(settings.length ? [`Current settings: ${settings.join(', ')}.`] : []),
+    commandText(`Wait for automatic resume, inspect with cez worker inspect ${input.workerRunId}, or resume now with cez worker resume ${input.workerRunId} '<instruction>' --id <new-message-UUID> [--model <model>] [--effort <level>].`),
+  ].join('\n');
+}
+
+export function holdNoticeMessage(input: {
+  workerRunId: string; parentRunId: string; waitId: string; reason: 'usage-limit' | 'provider-error'; resumeAt: string;
+  error?: string; runner?: string; model?: string; effort?: string; now: string; redact(text: string): string;
+}): ConversationMessage {
+  const id = holdNoticeId(input.workerRunId, input.waitId);
+  const requestHash = createHash('sha256')
+    .update(JSON.stringify({ senderRunId: input.workerRunId, recipientRunId: input.parentRunId, holdNotice: input.waitId }))
+    .digest('hex');
+  return { id, senderRunId: input.workerRunId, recipientRunId: input.parentRunId, kind: 'progress',
+    text: input.redact(formatHoldNoticeText(input)), createdAt: input.now, requestHash, state: 'accepted' };
 }
 
 /** A peer already took the notice's deterministic ID in the parent conversation (hearsay-tools/cezarion#1990

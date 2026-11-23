@@ -218,7 +218,7 @@ function stepEffort(
 export const atTaskHead = { executionPayload, queuedPayload, resumedPayload, acceptedWorkflowFields, recordedRunner, defaultRunner, runnerless, heldFor, accountFor, workerStep, executionInput, executionWorkflow, requeueJob, baseBranch, worktreeSetup: continuationWorktreeSetup, jobInput, jobWorkflow, resumedJob, storedWorkflow, interruptedIndex, interruptedDefinition, heldAccount, worktree: inputWorktree, workflowName, images: acceptedImages, task: acceptedTask, skillHint: acceptedSkillHint, ownedJob, verifyIdentity: verifyWorkerIdentity, autonomous: inputAutonomous, reviveWorkflow, queuedResumeSession, recoveryInput: queuedRecoveryInput, acceptedRunFields, acceptInput, modelIdentity: taskModelIdentity, config: readLaunchConfig, runner: taskRunner, systemPrompt: taskSystemPrompt, hydrateQueuedInput, attachments: readPersistedAttachments };
 export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, skillQuery: runSkillQuery, skillAccount, sessionSkills, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
 export const atLiveInput = { projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, queuedMessages: queuedMessageSource, attachments: readPersistedAttachments, taskAttachmentUrls, };
-export const atContinue = { skillQuery: runSkillQuery, task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
+export const atContinue = { skillQuery: runSkillQuery, task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, workerRollbackPatch, workerHoldSettings, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
 
 function hydrateQueuedInput(context: RunModuleContext, readAttachments: AttachmentReader, runId: string, input: StartRunInput): StartRunInput {
     const run = context.store.getRun(runId);
@@ -466,6 +466,18 @@ async function agentEnvForStep(
     env,
     profileId: resolved.profile.id,
     accountBinding: captureWorkerAccount(resolved.profile, buildChildEnv({ backend, extraEnv: env })),
+  };
+}
+
+function workerRollbackPatch(run: RunRecord) {
+  return { model: run.model, effort: run.effort, modelIdentity: run.modelIdentity, workflowDef: run.workflowDef };
+}
+
+function workerHoldSettings(run: RunRecord) {
+  return {
+    ...(run.runner === undefined ? {} : { runner: run.runner }),
+    ...(run.model === undefined ? {} : { model: run.model }),
+    ...(run.effort === undefined ? {} : { effort: run.effort }),
   };
 }
 

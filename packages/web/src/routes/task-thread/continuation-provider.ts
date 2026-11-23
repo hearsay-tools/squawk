@@ -1,11 +1,36 @@
 import { useConfig, useProviderStatus } from '@/api/queries'
 import { runnerIds, useRunners } from '@/api/runners'
+import { latestSessionStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { useRunnerAvailability } from '@/api/agent-accounts'
 import { runAccountId } from './active-provider'
 import { resolveRunner } from '@/routes/new-task-form'
 import { isStoppedBeforeStarting } from './run-actions'
+
+/** The workflow step an owned worker's Continue extends: the held/resumed step, else the latest
+ *  session's step, else the chain's last agent step. */
+export function workerContinuationStep(run: ApiRun) {
+  if (run.delegation?.role !== 'worker') return undefined
+  const steps = run.workflowDef?.steps
+  if (!steps?.length) return undefined
+  const cursorId = run.workflowCursor?.mode === 'resume' ? run.workflowCursor.stepId : undefined
+  const session = latestSessionStep(run.steps)
+  const targetId = cursorId ?? session?.continuesStepId ?? session?.id
+  const isAgent = (step: (typeof steps)[number]) => step.command === undefined && step.kind !== 'plugin'
+  return (targetId ? steps.find(step => step.id === targetId && isAgent(step)) : undefined)
+    ?? [...steps].reverse().find(isAgent)
+}
+
+function continuationCurrentRunner(run: ApiRun, untouched: boolean, removed: boolean, defaultRunner: Runner | undefined): Runner {
+  const workerStep = workerContinuationStep(run)
+  return workerStep?.runner ?? run.runner ?? (untouched || removed ? defaultRunner : undefined) ?? 'claude'
+}
+
+function continuationOverride(isWorker: boolean, pickedRunner: Runner | null, currentRunnerConnected: boolean, removed: boolean, runner: Runner): Runner | undefined {
+  if (isWorker) return undefined
+  return pickedRunner !== null || !currentRunnerConnected || removed ? runner : undefined
+}
 
 /** Every question the reason chain asks, in the priority order it asks them. */
 interface ContinuationReasonInput {
@@ -62,13 +87,15 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   // A continuation sends no account: each runner counts when the account the server will continue
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
   const availability = useRunnerAvailability()
-  const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
+  const isWorker = run.delegation?.role === 'worker'
+  const currentRunner = continuationCurrentRunner(run, untouched, removed, config.data?.defaultRunner)
   // Each candidate counts on the account the server would continue it on, after the runner switch
   // clears the run's account (hearsay-tools/squawk#4116).
   const accountOn = (provider: Runner, target: Runner) =>
     runAccountId(run, provider, availability.repoAccount, { original: currentRunner, target })
   const { runners, signedOut } = availability.runnersOn((candidate) => accountOn(candidate, candidate))
-  const runner = resolveRunner(pickedRunner, runners, currentRunner)
+  // Owned workers keep their accepted runner and account; only model and effort can change.
+  const runner = isWorker ? currentRunner : resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
   const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner, runnerIds(registered.data)) : [runner]
   const missing = required.filter(provider => !availability.readyOn(provider, accountOn(provider, runner)))
@@ -94,9 +121,6 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
     providerPending: providersPending || (needsConfig && config.isPending),
     providerError: providersError,
     reason,
-    runnerOverride:
-      pickedRunner !== null || !currentRunnerConnected || removed
-        ? runner
-        : undefined,
+    runnerOverride: continuationOverride(isWorker, pickedRunner, currentRunnerConnected, removed, runner),
   }
 }

@@ -13,7 +13,7 @@ import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal,
 import type { WorkerExecutionsFactory, WorkerExecutionsState } from '../runs/worker-executions-registry.ts';
 import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-scope/scope.ts';
 import { WorkerScopes } from '../worker-scope/worker-scopes.ts';
-import { workerExecutionIdentitySchema, writeWorkerIdentity } from './execution-identity.ts';
+import { updateWorkerIdentity, workerExecutionIdentitySchema, writeWorkerIdentity } from './execution-identity.ts';
 import { readPrivateRecord, writePrivateRecord } from './private-record-file.ts';
 import { workerDeletionProof } from './worker-deletion-proof.ts';
 import { recordedHolders, workerResourceAuthorized } from './worker-resource-holders.ts';
@@ -50,6 +50,11 @@ export class WorkerExecutionsTopic implements WorkerExecutions, WorkerExecutionR
   /** Checked against the worker identity schema, then written once (`writeWorkerIdentity`). */
   writeWorkerIdentity(id: string, identity: unknown): void {
     writeWorkerIdentity(this, id, workerExecutionIdentitySchema.parse(identity));
+  }
+
+  /** Atomically update an existing worker identity (same-runner model/effort override). */
+  updateWorkerIdentity(id: string, identity: unknown): void {
+    updateWorkerIdentity(this, id, workerExecutionIdentitySchema.parse(identity));
   }
 
   executionPath(id: string, write = false): string {

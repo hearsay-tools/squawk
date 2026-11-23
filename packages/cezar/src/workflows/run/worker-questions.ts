@@ -14,10 +14,12 @@ import { askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { commitNewMessage, inboxSlotsUsed, projectConversationEvents } from '../../delegation/conversations.ts';
 import { answersQuestion, questionMessage, reservedReplies, uuidFrom } from '../../delegation/questions.ts';
-import { messagedParentSince, parkedByTurn, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
+import { usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
+import { holdNoticeId, holdNoticeMessage, messagedParentSince, parkedByTurn, parkNoticeId, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
 import { workerQuestionRouting } from '../question-routing.ts';
 import { WORKER_FALLBACK_NOTE, WORKER_FALLBACK_REPLY_NOTE } from '../turn-end.ts';
 import { historyDeletionPending, rootFinishRequested } from './run-guards.ts';
+import { atContinue } from './launch-read-resolver.ts';
 import { pendingHumanAskSeq, hasPendingHumanAsk } from './pending-ask-facts.ts';
 
 interface WorkerQuestionsHost {
@@ -197,8 +199,11 @@ export class WorkerQuestions {
    */
   noticeParkedWorker(workerId: string): void {
     const worker = this.context.store.getRun(workerId);
-    if (worker?.delegation?.role !== 'worker' || worker.delegation.destroy || !this.parkedBeforeFinishing(worker)) return;
-    const target = this.parkNoticeTarget(worker);
+    if (worker?.delegation?.role !== 'worker' || worker.delegation.destroy) return;
+    const hold = usageLimitHoldOf(worker);
+    if (hold) { this.noticeHeldWorker(worker, hold); return; }
+    if (!this.parkedBeforeFinishing(worker)) return;
+    const target = this.parkNoticeTarget(worker, parkNoticeId);
     if (!target) return;
     const { root, parent, parentId, state, wait } = target;
     const turn = parkingTurn(this.context.store.eventLog.readEvents(workerId));
@@ -206,23 +211,47 @@ export class WorkerQuestions {
     const now = new Date().toISOString();
     const message = parkNoticeMessage({ workerRunId: workerId, parentRunId: parentId, waitId: wait.id, waits: worker.waits ?? [],
       ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redaction.redactText(text) });
-    const input = { id: message.id, source: 'agent' as const, parentRunId: root.id, text: message.text, createdAt: now,
+    this.commitNoticeMessage(root.id, workerId, parentId, wait.id, state, message, now);
+  }
+
+  /** A worker that entered a usage-limit or provider-error hold tells its waiting supervisor so
+   *  the supervisor can wait for auto-resume or resume it immediately with another model/effort. */
+  private noticeHeldWorker(worker: RunRecord, hold: NonNullable<ReturnType<typeof usageLimitHoldOf>>): void {
+    if (worker.stopping || this.context.store.transcriptFacts.transcriptFacts(worker.id).pendingAsk ||
+      this.host.active(worker.id)?.boundary.pendingHumanAsk) return;
+    const target = this.parkNoticeTarget(worker, holdNoticeId);
+    if (!target) return;
+    const { root, parent, parentId, state, wait } = target;
+    if (this.parkNoticeAtCapacity(worker.id, wait.id, parent, state)) return;
+    const now = new Date().toISOString();
+    const message = holdNoticeMessage({
+      workerRunId: worker.id, parentRunId: parentId, waitId: wait.id,
+      reason: hold.reason, resumeAt: hold.resumeAt,
+      ...(hold.error === undefined ? {} : { error: hold.error }),
+      ...atContinue.workerHoldSettings(worker),
+      now, redact: text => this.context.store.redaction.redactText(text),
+    });
+    this.commitNoticeMessage(root.id, worker.id, parentId, wait.id, state, message, now);
+  }
+
+  private commitNoticeMessage(rootId: string, workerId: string, parentId: string, waitId: string, state: ConversationState, message: ConversationMessage, now: string): void {
+    const input = { id: message.id, source: 'agent' as const, parentRunId: rootId, text: message.text, createdAt: now,
       conversation: { senderRunId: workerId, recipientRunId: parentId, kind: 'progress' as const } };
-    if (!commitNewMessage(this.context.store, root.id, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input }, () => parkNoticeIdInUse(this.context.store, workerId, wait.id))) return;
-    projectConversationEvents(this.context.store, this.context.store.getRun(root.id)!);
+    if (!commitNewMessage(this.context.store, rootId, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input }, () => parkNoticeIdInUse(this.context.store, workerId, waitId))) return;
+    projectConversationEvents(this.context.store, this.context.store.getRun(rootId)!);
     this.host.deliverConversationInput(parentId);
   }
 
   /** Where a parked worker's notice goes: the task that started it, when that task waits on it and
    *  can read it. The family record holds the ledger. */
-  private parkNoticeTarget(worker: RunRecord) {
+  private parkNoticeTarget(worker: RunRecord, noticeIdFor: (workerId: string, waitId: string) => string) {
     const root = this.context.store.getRun(familyRecordIdOf(worker)!);
     const parentId = supervisorIdOf(worker)!;
     const parent = this.context.store.getRun(parentId);
     if (root?.delegation?.role !== 'root' || !parent || !this.supervisorTakesMessages(parent) ||
       !supervisedReceipts(root, parentId).some(receipt => receipt.workerId === worker.id && !receipt.deletion)) return undefined;
     const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
-    const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages);
+    const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages, noticeIdFor);
     return wait ? { root, parent, parentId, state, wait } : undefined;
   }
 

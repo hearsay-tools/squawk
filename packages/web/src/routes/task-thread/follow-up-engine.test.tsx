@@ -797,3 +797,65 @@ describe('untouched workflow provider requirements', () => {
     expect(requests.find(request => request.url.endsWith('/continue'))?.body).not.toHaveProperty('runner')
   })
 })
+
+describe('owned worker Continue engine controls', () => {
+  const workerRun = (extra: Partial<ApiRun> = {}): ApiRun => makeRun({
+    status: RUN_STATUS.waiting,
+    autoResumeAt: '2030-01-15T12:00:00.000Z',
+    autoResumeReason: 'usage-limit',
+    runner: 'claude',
+    model: 'opus',
+    effort: 'high',
+    delegation: {
+      role: 'worker',
+      parentRunId: '11111111-2222-4333-8444-555555555555',
+      permissions: ['inspect'],
+      workspace: {
+        kind: 'owned-isolated',
+        ownerRunId: 'r1',
+        resourceId: 'res-1',
+        path: '/repo/.worktrees/r1',
+        branch: 'cez/r1',
+        baselineSha: '0123456789abcdef0123456789abcdef01234567',
+      },
+    },
+    ...extra,
+  })
+
+  it('keeps the runner read-only on an owned worker while allowing same-runner model and effort changes', async () => {
+    serve()
+    renderAction(workerRun())
+    // Runner pill is read-only even though both claude and codex are connected.
+    expect(await screen.findByLabelText(/^Runner · claude/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Runner · / })).toBeNull()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Model · / }))
+    const modelOptions = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(modelOptions.find((o) => o.textContent?.includes('sonnet')) as HTMLElement)
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Effort · / }))
+    const effortOptions = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(effortOptions.find((o) => o.textContent?.includes('medium')) as HTMLElement)
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toBeDefined())
+    expect(continueBody()).toEqual({ model: 'sonnet', effort: 'medium' })
+  })
+
+  it('does not fall back to another runner when the worker\'s own runner is disconnected', async () => {
+    serve(
+      HEALTH_MULTI,
+      {},
+      {
+        providers: [
+          { provider: 'claude', status: 'disconnected', enabled: true },
+          { provider: 'codex', status: 'connected', enabled: true },
+          { provider: 'opencode', status: 'not-installed', enabled: true },
+        ],
+      },
+    )
+    renderAction(workerRun())
+    expect(await screen.findByText('Connect an agent provider to continue.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /continue/i })).toBeNull()
+  })
+})
