@@ -55,8 +55,8 @@ describe('rule short-bound: Vitest waits', () => {
     expect(rules('let SHORT = 500', 'await vi.waitFor(() => ok(), { timeout: SHORT })')).toEqual(['short-bound'])
   })
 
-  it('accepts a bound at or above the floor, however it is spelled', () => {
-    expect(rules('await vi.waitFor(() => ok(), { timeout: 3_000 })')).toEqual([])
+  it('accepts a bound above the floor, however it is spelled', () => {
+    expect(rules('await vi.waitFor(() => ok(), { timeout: 3_001 })')).toEqual([])
     expect(rules('await vi.waitFor(() => ok(), 5_000)')).toEqual([])
     expect(rules('await expect.poll(() => value(), { timeout: 60 * 1_000 }).toBe(1)')).toEqual([])
     expect(rules('const GUARD = 15_000', 'await vi.waitUntil(() => ok(), { timeout: GUARD })')).toEqual([])
@@ -86,7 +86,7 @@ describe('rule short-bound: Testing Library waits', () => {
     expect(rules(`import * as other from './helpers'`, 'await other.waitFor(() => ok(), { timeout: 500 })')).toEqual([])
     expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 2 * 1000 })')).toEqual(['short-bound'])
     expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 30_000 / 20 })')).toEqual(['short-bound'])
-    expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 3 * 1000 })')).toEqual([])
+    expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 3 * 1000 })')).toEqual(['short-bound'])
   })
 
   it('flags a literal timeout under the floor on findBy and findAllBy, which take it as the last options', () => {
@@ -106,8 +106,8 @@ describe('rule short-bound: Testing Library waits', () => {
     expect(rules(tlImport, 'await waitForElementToBeRemoved(() => screen.queryByText("x"))')).toEqual([])
   })
 
-  it('accepts a timeout at the floor or above, or one it cannot read', () => {
-    expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 3_000 })')).toEqual([])
+  it('accepts a timeout above the floor, or one it cannot read', () => {
+    expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: 3_001 })')).toEqual([])
     expect(rules(tlImport, 'await screen.findByText("x", {}, { timeout: 10_000 })')).toEqual([])
     expect(rules(tlImport, 'await waitFor(() => ok(), { timeout: budget })')).toEqual([])
   })
@@ -185,9 +185,9 @@ describe('rule poll-deadline', () => {
     expect(rules('const start = performance.now()', 'while (!ready() && performance.now() < start + 1_500) await sleep(10)')).toEqual(['poll-deadline'])
   })
 
-  it('accepts a clock bound at the floor or above', () => {
+  it('accepts a clock bound above the floor', () => {
     expect(rules('const start = Date.now()', 'while (!ready()) { if (Date.now() - start > 5_000) throw new Error("late"); await sleep(10) }')).toEqual([])
-    expect(rules('const end = Date.now() + 3_000', 'while (Date.now() < end) await sleep(10)')).toEqual([])
+    expect(rules('const end = Date.now() + 3_001', 'while (Date.now() < end) await sleep(10)')).toEqual([])
     expect(rules('for (const end = Date.now() + 15_000; !ready() && Date.now() < end;) await sleep(10)')).toEqual([])
   })
 
@@ -224,13 +224,13 @@ describe('rule poll-deadline', () => {
   it('counts attempts when the count and every delay are literals: count times interval is the deadline', () => {
     expect(rules('for (let i = 0; i < 20; i++) { if (ready()) break; await sleep(50) }')).toEqual(['poll-deadline'])
     expect(rules('for (let i = 0; i < 59; i += 1) { if (ready()) break; await sleep(50) }')).toEqual(['poll-deadline'])
-    expect(rules('for (let i = 0; i < 60; i++) { if (ready()) break; await sleep(50) }')).toEqual([])
-    expect(rules('for (let i = 0; i <= 59; i++) { if (ready()) break; await sleep(50) }')).toEqual([])
+    expect(rules('for (let i = 0; i < 60; i++) { if (ready()) break; await sleep(50) }')).toEqual(['poll-deadline'])
+    expect(rules('for (let i = 0; i <= 59; i++) { if (ready()) break; await sleep(50) }')).toEqual(['poll-deadline'])
     expect(rules('for (let i = 1; i < 21; i++) { if (ready()) break; await sleep(50) }')).toEqual(['poll-deadline'])
   })
 
   it('sums the delays of the loop when it holds more than one sleep', () => {
-    expect(rules('for (let i = 0; i < 20; i++) { await sleep(50); if (ready()) break; await sleep(100) }')).toEqual([])
+    expect(rules('for (let i = 0; i < 21; i++) { await sleep(50); if (ready()) break; await sleep(100) }')).toEqual([])
     expect(rules('for (let i = 0; i < 10; i++) { await sleep(50); if (ready()) break; await sleep(100) }')).toEqual(['poll-deadline'])
   })
 
@@ -582,7 +582,7 @@ describe('a bound the scan computes, and one it leaves to the caller', () => {
       'NaN', 'Infinity', '-Infinity', 'Number.POSITIVE_INFINITY', '2 ** 31', 'Math.min(500, 20_000)', 'Math.floor(2_999.9)', 'Math.max(100, 200) * 2',
     ]
     expect(lines(...short.map(wait))).toEqual(short.map((_, index) => index + 1))
-    const long = ['20_000 as number', '(20_000)', '+20_000', '-(-20_000)', '2 ** 14', 'Math.max(500, 20_000)', 'Math.ceil(2_999.1)', '5e4', '0x4E20', '3_000 + 1']
+    const long = ['20_000 as number', '(20_000)', '+20_000', '-(-20_000)', '2 ** 14', 'Math.max(500, 20_000)', 'Math.ceil(3_000.1)', '5e4', '0x4E20', '3_000 + 1']
     expect(scan(...long.map(wait))).toEqual([])
     expect(lines('await vi.waitFor(() => ok(), -1)', 'await vi.waitFor(() => ok(), NaN)', 'await vi.waitFor(() => ok(), 0)', 'await vi.waitFor(() => ok(), +20_000)')).toEqual([1, 2, 3])
   })

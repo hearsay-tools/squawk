@@ -1,7 +1,7 @@
 /**
  * A syntax-tree scan of the server unit tests for the three ways a test waits on the wall clock instead
  * of on the product: a bare awaited sleep standing in for a condition nobody named, a wait
- * bounded under SHORT_BOUND_MS, and a poll loop with no deadline or a deadline under
+ * bounded at or under SHORT_BOUND_MS, and a poll loop with no deadline or a deadline at or under
  * SHORT_BOUND_MS. The last three load flakes under hearsay-tools/cezarion#902 had that one cause
  * (hearsay-tools/cezarion#1144, hearsay-tools/cezarion#1145, hearsay-tools/cezarion#1146): a
  * fixed bound on a fixture's own startup, or one bound for a whole sequence of steps, which a
@@ -39,13 +39,17 @@
  * at the use: the nearest declaration hides the ones further out, and a `const` of an outer scope counts wherever it sits, since a
  * function runs after the module has loaded. A `let` or `var` of an outer scope is read only when nothing writes it after its declaration. A wait bound
  * that is negative, zero, `NaN`, infinite or past a timer's limit is below the floor.
- * A part on the list is left alone only for a value that comes from outside the file or from the function's parameters (a
+ * A part on the list is left alone only for a value that comes from outside the file or from the function's required parameters (a
  * parameter, an import, a global, a property of an argument): the caller sizes it. A value the file declares and the scan cannot
  * evaluate (a call, a ternary, a destructured binding, a `let` written after its declaration, a name set to one of those) is never
  * left alone: as a limit, start, deadline or delay it bounds nothing, and as a wait bound it is below the floor. Any other shape
  * has no bound: a ternary, `??`, a call, arithmetic on the clock, an equality, a counter the body steps, a start the loop
  * resets, a flag set in a branch. A loop with no bound on the list is reported, unless `// bound: <reason>` accepts it. A loop
  * over a collection or a stream ends with it, and a count of passes that sleep nothing says nothing in milliseconds.
+ *
+ * A one-shot read after a condition wait is also reported when a preceding timer, watcher or
+ * background service call, or a retry predicate, names a live writer. Poll the read itself or
+ * await the writer completion signal; the first condition does not freeze other state.
  *
  * `cez/test-wait-discipline` runs it against every `*.test.ts` and `*.testkit.ts` under
  * `packages/cezar/src` and compares the tally with two checked-in baselines that can only shrink,
@@ -62,11 +66,12 @@ import { WaitNames } from './server-wait-names.ts';
 import { type WaitFile, VITEST_DEFAULT_MS, isShort, isShortDeadline, numberOf, rawOf } from './server-wait-values.ts';
 import { keyText, leadingObject, optionsBound, waitMs } from './server-wait-options.ts';
 import { loopAround, pollDeadline, runsEveryPass, type LoopSleep, type PollLoop } from './server-wait-loops.ts';
+import { oneShotReadSites } from './server-one-shot-reads.ts';
 import { inOxlint } from './wait-oxlint.ts';
 
 export { SHORT_BOUND_MS } from './server-wait-values.ts';
 
-export type Rule = 'sleep' | 'short-bound' | 'poll-deadline';
+export type Rule = 'sleep' | 'short-bound' | 'poll-deadline' | 'one-shot-read';
 
 export interface Site {
   file: string;
@@ -308,7 +313,7 @@ function helperArrow(tree: WaitTree, node: N): { params: N[]; offset: number } |
   return { params: init.params, offset: node.start };
 }
 
-/** Rule `short-bound`: a Vitest wait with no bound (1 s) or one under 10 s, and the local helpers alike. */
+/** Rule `short-bound`: a Vitest wait with no bound (1 s) or one at or under 10 s, and the local helpers alike. */
 export function boundSites(wf: WaitFile, calls: readonly N[]): Found[] {
   const found: Found[] = [];
   for (const node of calls) {
@@ -348,7 +353,7 @@ export function sitesOf(file: string, root: N, source: WaitSource, starts: Start
   const wf: WaitFile = { tree, names: new WaitNames(tree) };
   const accepted = boundAccepted(source);
   const sites: Site[] = [];
-  for (const { rule, offset } of [...sleepSites(wf, starts.awaits), ...boundSites(wf, starts.calls)]) {
+  for (const { rule, offset } of [...sleepSites(wf, starts.awaits), ...boundSites(wf, starts.calls), ...oneShotReadSites(tree)]) {
     const line = source.lineOf(offset);
     if (!accepted(line)) sites.push({ file, rule, line, site: source.lines[line - 1]?.trim() ?? '' });
   }
@@ -403,7 +408,7 @@ export const scannedServerFile = (file: string): boolean => file.startsWith('pac
   && !['test-wait-discipline.test.ts', 'test-wait-discipline.testkit.ts'].includes(file.slice('packages/cezar/src/'.length));
 
 export const waitRemedy = (rule: Rule): string => rule === 'poll-deadline'
-  ? 'A poll loop needs a deadline of 10 s or more, read from the clock in the loop or its function (or attempts x interval with literals). Add one, or state why the loop ends as a `// bound: <reason>` comment on its first line (AGENTS.md § Validation)'
+  ? 'A poll loop needs a deadline above 10 s, read from the clock in the loop or its function (or attempts x interval with literals). Add one, or state why the loop ends as a `// bound: <reason>` comment on its first line (AGENTS.md § Validation)'
   : "Wait on the product's own signal, or state the bound's reason at the site as a `// bound: <reason>` comment (AGENTS.md § Validation)";
 
 export const testWaitDiscipline: AstRule = {

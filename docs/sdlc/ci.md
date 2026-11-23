@@ -519,12 +519,13 @@ checks. See [release App setup](../publishing.md#release-app-setup).
 
 ### Per-file duration limits
 
-`.github/scripts/vitest-file-duration.mjs` owns both limits. Each Vitest shard step sets
+`.github/scripts/vitest-file-duration.mjs` owns the limits and warning threshold. Each Vitest shard step sets
 `VITEST_FILE_DURATION_CAP=1`, so `vitest.config.ts` adds the reporter.
 
 | Limit | Constant | Runs in | A file at or over it |
 |---|---|---|---|
 | Hard, 60,000 ms | `FILE_DURATION_LIMIT_MS` | Every Vitest shard run | Fails the shard |
+| Warning, 48,000 ms (80% of the hard cap) | `FILE_DURATION_WARNING_MS` | Every Vitest shard run | Warns without failing; the PR soft limit takes precedence |
 | Soft, 45,000 ms | `FILE_DURATION_SOFT_LIMIT_MS` | The selected PR run only | Fails the shard when the PR changes the test file itself; any other file gets a warning |
 
 - The reporter compares each file's time after it divides that time by the shard's
@@ -534,7 +535,8 @@ checks. See [release App setup](../publishing.md#release-app-setup).
   never makes a limit stricter and a broken VM cannot pass every file.
 - The PR run learns the changed paths from `scripts/test-changed.mjs --ci`, which
   writes them to the file named by `VITEST_CHANGED_FILES`. Without that variable the
-  soft limit is off.
+  soft limit is off, but the 80% warning still applies. A file receives only one
+  duration annotation: the hard failure, PR soft-limit result, or 80% warning.
 - Each failed file gets an `::error` annotation and each warning a `::warning`
   annotation, with the file path. The check summary therefore names the file. The
   failed step's log, and the job summary, carry the cap block:

@@ -9,7 +9,7 @@ export { childrenOf, walkAll };
  * `{ … }` is still open there. A function nested beside the use keeps its names to itself.
  */
 
-/** Where a name is read: the functions around the use, outermost first, and whether the use is a wait (a parameter's default is not its bound). */
+/** Where a name is read: the functions around the use, outermost first, and whether the use is a wait. */
 export interface Place {
   chain: readonly N[];
   /** Where each scope's text starts: the module, then each function's parameter list. */
@@ -127,7 +127,7 @@ export class WaitNames {
     const declares = found.filter(each => each.before !== 'plain').map(each => each.depth);
     const innermost = Math.max(-1, ...declares, ...this.#paramDepths(place, name));
     const own = place.bounds.length - 1;
-    const values: Held[] = found.filter(each => each.depth >= innermost && !(place.wait && each.before === 'param')).map(each => {
+    const values: Held[] = found.filter(each => each.depth >= innermost).map(each => {
       const constant = each.before === 'const' || each.before === 'param';
       const readable = constant || (each.depth === own && !place.wait) || (each.before === 'let' && !this.writes(name, true));
       return { value: readable ? each.value : UNREAD, at: each.value.start, param: each.before === 'param' };

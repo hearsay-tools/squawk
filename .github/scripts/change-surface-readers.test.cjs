@@ -27,6 +27,7 @@ const repoRoot = path.join(__dirname, '..', '..');
 // Package files that name a docs-only file near a read call without reading
 // it, as the `naming file -> docs path` pairs the scan below finds.
 const mentionedOnly = [
+  { file: 'packages/cezar/src/test-wait-discipline.baseline.json', markdown: 'AGENTS.md', reason: 'the metadata cites the rule; nearby readFile text is a recorded test source line, never a read by the baseline' },
   { file: 'packages/cezar/src/runners/antigravity/account-home.test.ts', markdown: 'AGENTS.md', reason: 'reads a native instruction fixture in a temporary account, never this checkout' },
   { file: 'packages/cezar/src/runs/store-database.test.ts', markdown: 'docs/run-history-recovery.md', reason: 'asserts that a warning names the doc' },
   { file: 'packages/cezar/src/server/checkout.test.ts', markdown: 'README.md', reason: 'reads README.md in a temporary checkout, never this one' },

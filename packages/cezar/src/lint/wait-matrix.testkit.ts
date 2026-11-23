@@ -52,6 +52,14 @@ export const lintCells = (rule: AstRule, cells: readonly Cell[]): string[][] =>
  */
 interface OracleFile { base: string; profiles: Record<string, { cells: number; digest: string; rows: string }> }
 
+interface BoundAmendments {
+  issue: string;
+  profiles: Record<string, { cells: number; digest: string; indices: string; rows: string }>;
+}
+
+// Keep the original scanner oracle intact. These reviewed deltas implement the new bound contract.
+const amendments = JSON.parse(readFileSync(join(import.meta.dirname, 'wait-bound-amendments.oracle.json'), 'utf8')) as BoundAmendments;
+
 const file = JSON.parse(readFileSync(join(import.meta.dirname, 'wait-matrix.oracle.json'), 'utf8')) as OracleFile;
 const oracle = (profile: string) => file.profiles[profile] ?? { cells: 0, digest: '', rows: '' };
 
@@ -74,6 +82,15 @@ export function matrixSuite(profile: string): void {
       expect(file.base).toBe(ORACLE_BASE);
       expect({ cells: recorded.cells, digest: recorded.digest }).toEqual({ cells: cells.length, digest: digest(cells) });
       expect(decodeRows(recorded.rows)).toHaveLength(cells.length);
+      expect(amendments.issue).toBe('hearsay-tools/squawk#3765');
+      const amended = amendments.profiles[profile]!;
+      expect({ cells: amended.cells, digest: amended.digest }).toEqual({ cells: cells.length, digest: digest(cells) });
+      const indices = amended.indices === '' ? [] : amended.indices.split(',').map(Number);
+      expect(decodeRows(amended.rows)).toHaveLength(indices.length);
+      expect(new Set(indices).size).toBe(indices.length);
+      for (const index of indices) {
+        expect(Number.isInteger(index) && index >= 0 && index < cells.length).toBe(true);
+      }
     });
 
     let rows: string[][] | undefined;
@@ -83,7 +100,13 @@ export function matrixSuite(profile: string): void {
       return [`${start}-${end}`, start, end] as const;
     });
     it.each(slices)(`${profile}: the rules report what the oracle recorded for cells %s`, (_name, start, end) => {
-      rows ??= decodeRows(oracle(profile).rows);
+      if (!rows) {
+        rows = decodeRows(oracle(profile).rows);
+        const amended = amendments.profiles[profile]!;
+        const indices = amended.indices === '' ? [] : amended.indices.split(',').map(Number);
+        const replacements = decodeRows(amended.rows);
+        indices.forEach((index, at) => { rows![index] = replacements[at]!; });
+      }
       const recorded = rows;
       const slice = cells.slice(start, end);
       const linted = findings(slice);

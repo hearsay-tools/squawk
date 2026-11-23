@@ -1,0 +1,1109 @@
+{
+  "$comment": "Snapshots after a condition wait inherited at hearsay-tools/squawk#3765. Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation.",
+  "sites": [
+    {
+      "file": "core/model-refusal-workflow-parity.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(runId)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "core/session-process.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(existsSync(join(cwd, 'member.term'))).toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "delegation/provision-accounts-lifecycle.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(f.store.getRun(run.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "delegation/provision-intent-catalog.test.ts",
+      "rule": "one-shot-read",
+      "site": "const worker = f.store.getRun(child.workerId)!;",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-holder.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(existsSync(workspace.path)).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-holder.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(readFileSync(calls, 'utf8').trim().split('\\n').length).toBeGreaterThanOrEqual(2);",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-recovery.test.ts",
+      "rule": "one-shot-read",
+      "site": "const parent = f.store.getRun(f.parent.id)!;",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-topology-repair.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(existsSync(workspace.path)).toBe(false);",
+      "count": 3
+    },
+    {
+      "file": "delegation/service-destroy-work.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(existsSync(workspace.path)).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "delegation/service.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(existsSync(workspace.path)).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "git-worktree-race.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect({ preserved, victim: JSON.parse(readFileSync(victim.result, 'utf8')), peer: JSON.parse(readFileSync(peer.result, 'utf8')) }).toMatchObject({",
+      "count": 1
+    },
+    {
+      "file": "git-worktree-race.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(JSON.parse(readFileSync(adopted.result, 'utf8'))).toMatchObject({ ok: true });",
+      "count": 1
+    },
+    {
+      "file": "git-worktree-race.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(JSON.parse(readFileSync(peer.result, 'utf8'))).toMatchObject({ ok: true });",
+      "count": 1
+    },
+    {
+      "file": "runners/acp/session.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(acknowledged).toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "runners/fixture/fixture-runner.test.ts",
+      "rule": "one-shot-read",
+      "site": "const run = f.store.getRun(record.id)!;",
+      "count": 1
+    },
+    {
+      "file": "server/provider-action-gating-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "const current = store.getRun(run.id);",
+      "count": 1
+    },
+    {
+      "file": "server/provider-sign-ins.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(JSON.stringify(manager.get(first.id))).not.toContain('accounts.google.com');",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(['done', 'review']).toContain(store.getRun(record.id)?.status);",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(record.id).some((event) => String(event.message ?? '').includes('resuming automatically (1/12)'))).toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(record.id).some(event => String(event.message ?? '').includes('could not start'))).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();",
+      "count": 2
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.status).toBe('failed');",
+      "count": 2
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.status).toBe('waiting');",
+      "count": 2
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeReason: 'provider-error' });",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(resigned.id)?.steps.some((step) => step.id === 'continue-1')).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "workflows/check-stop-kill.test.ts",
+      "rule": "one-shot-read",
+      "site": "const ev = f.store.eventLog.readEvents(id).find((e) => e.type === 'check-output') as { text: string; exitCode: number } | undefined;",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-failure-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const failed = structuredClone(store.getRun(run.id)!.steps.find(step => step.id === 'first')!);",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-failure-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const failedStep = structuredClone(store.getRun(run.id)!.steps.find(step => step.id === failedStepId)!);",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-failure-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-failure-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe(outcome === 'failed' ? 'failed' : 'done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-failure-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting });",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait-native-activity.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "workflows/ci-wait.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.find(step => step.id === 'check')?.status).toBe('pending');",
+      "count": 2
+    },
+    {
+      "file": "workflows/ci-wait.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.map(step => step.status)).toEqual(['done', 'done']);",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "one-shot-read",
+      "site": "const stepId = a.store.getRun(runId)!.currentStepId!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(a.store.getRun(runId)?.finishedAt).toEqual(expect.any(String));",
+      "count": 1
+    },
+    {
+      "file": "workflows/completion-gate-entry-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(f.store.getRun(id)?.steps.find(step => step.id === 'task')?.status).toBe('waiting');",
+      "count": 2
+    },
+    {
+      "file": "workflows/delegation-integration.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(p.id)?.status).toBe(RUN_STATUS.review);",
+      "count": 1
+    },
+    {
+      "file": "workflows/execution-account-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "const otherWait = await manager.registerWait(other.id, { kind: WAIT_KIND.timer, seconds: 60 }, 'cezar_wait', generations.get(other.id)!);",
+      "count": 1
+    },
+    {
+      "file": "workflows/execution-account-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(fresh.id)?.status).toBe('queued');",
+      "count": 2
+    },
+    {
+      "file": "workflows/execution-account-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(live.id)?.agentInputs?.find(input => input.id === wait.id)?.deliveredAt).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/failed-attempt-cursor.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.filter(step => !step.synthetic).map(step => [step.id, step.status]))",
+      "count": 1
+    },
+    {
+      "file": "workflows/failed-attempt-cursor.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)).toMatchObject({ parkReason: 'turn', steps: [expect.objectContaining({ id: 'first', status: STEP_STATUS.waiting }), expect.anything()] });",
+      "count": 1
+    },
+    {
+      "file": "workflows/failed-attempt-cursor.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting, parkReason: 'turn', workflowCursor: { stepId: 'first', mode: 'resume' } });",
+      "count": 1
+    },
+    {
+      "file": "workflows/held-human-input-liveness.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(['done', 'review']).toContain(store.getRun(record.id)?.status);",
+      "count": 2
+    },
+    {
+      "file": "workflows/held-human-input-liveness.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "workflows/human-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "const answer = JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\\n')[0]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/human-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "const timer = store.getRun(run.id)!.waits!.find(wait => wait.kind === 'timer')!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/launch-read-boundaries.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(head.id)?.error).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/launch-read-boundaries.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(target.id)?.error).toBeUndefined();",
+      "count": 7
+    },
+    {
+      "file": "workflows/launch-read-boundaries.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(target.id)?.runner).toBe('codex');",
+      "count": 1
+    },
+    {
+      "file": "workflows/launch-read-boundaries.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(target.id)?.worktreeSetup?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/monitoring-turn-rows.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(p.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/monitoring-turn-rows.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(p.id)?.status).toBe('waiting');",
+      "count": 1
+    },
+    {
+      "file": "workflows/native-skill-input.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(f.store.getRun(record.id)?.error).toContain('claude account \"default\" skill \"known\"');",
+      "count": 1
+    },
+    {
+      "file": "workflows/native-skill-recovery.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(id)?.queuedMessages ?? []).toEqual([]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/native-skill-recovery.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(id)?.queuedMessages).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments-continue.test.ts",
+      "rule": "one-shot-read",
+      "site": "const reopened = readStdinLines().find((line) => line.userText.includes('fix what this shows'));",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "one-shot-read",
+      "site": "const after = fx.store.getRun(record.id);",
+      "count": 2
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "one-shot-read",
+      "site": "const lines = readStdinLines();",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "one-shot-read",
+      "site": "const message = readStdinLines().find((line) => line.userText.includes('read my missing brief'))!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "one-shot-read",
+      "site": "const opening = readStdinLines().find((line) => line.userText.includes('wait for my brief'));",
+      "count": 1
+    },
+    {
+      "file": "workflows/peer-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(b.id)?.status).not.toBe(RUN_STATUS.failed);",
+      "count": 1
+    },
+    {
+      "file": "workflows/pi-teardown.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect.soft(store.getRun(id)?.steps[0]?.error).toBe(providerError);",
+      "count": 1
+    },
+    {
+      "file": "workflows/pi-teardown.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(id)?.steps.find((step) => step.id === 'continue-1')?.error).toBe(providerError);",
+      "count": 1
+    },
+    {
+      "file": "workflows/resume-diagnostics.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-continue-recovery-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "const first = JSON.parse(readFileSync(join(repoRoot, 'stdin.ndjson'), 'utf8').trim().split('\\n')[0]!);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-continue-recovery-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.steps).toEqual(expect.arrayContaining([",
+      "count": 2
+    },
+    {
+      "file": "workflows/run-continue-recovery-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)).toMatchObject({",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-continue-recovery-engine.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.cancelled });",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-idle-close.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.steps.find(step => step.id === 'task')?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-isolation.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(first.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-isolation.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(first.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-isolation.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.status).toBe('failed');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-lease.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(after.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-lease.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(holder.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-lease.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(holder.id)?.status).toBe('running');",
+      "count": 2
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "const asks = readEvents(record.id).filter((e) => e.type === 'ask.requested');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "const events = readEvents(record.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "const parked = store.getRun(record.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "const wakeTimer = monitoringTimerWait(fixture.store.getRun(record.id));",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.running });",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.costUsd).toBe(0);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-asks-cost.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.steps[0]?.costUsd).toBeCloseTo(priorState === 'legacy-inflated' ? 7.35 : 3.94);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-reply.test.ts",
+      "rule": "one-shot-read",
+      "site": "const timer = openTimer(fixture.store.getRun(record.id))!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-reply.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.agentInputs?.filter(input => input.id === timer.id)).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-reply.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(openTimer(fixture.store.getRun(record.id))?.id).toBe(timer.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "const events = fixture.store.eventLog.readEvents(record.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "const parked = fixture.store.getRun(record.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "const wait = openTimer(fixture.store.getRun(record.id))!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "const wakeTimer = monitoringTimerWait(fixture.store.getRun(record.id));",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.waits ?? []).toMatchObject([{ kind: WAIT_KIND.human, via: WAIT_VIA['monitoring-line'], source: WAIT_SOURCE.agent, phase: WAIT_PHASE.open }]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-monitoring-timers.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.running });",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "const events = readFileSync(join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(deriveAttention(fixture.store.getRun(record.id)!).label).toBe('needs you');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.agentInputs?.filter(input => input.id === wake.id)).toHaveLength(1);",
+      "count": 2
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.waits ?? []).toEqual([]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.waits?.find(wait => wait.phase === 'open')?.id).toBe(timer!.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-schedule-wakeup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.waits?.find(wait => wait.phase === 'open')).toMatchObject({ kind: WAIT_KIND.timer, via: WAIT_VIA['schedule-wakeup'] });",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-workflow-remainder-resume.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.steps).toEqual(expect.arrayContaining([",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-workflow-restart.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(fixture.store.getRun(record.id)?.steps).toEqual(expect.arrayContaining([",
+      "count": 2
+    },
+    {
+      "file": "workflows/run.test.ts",
+      "rule": "one-shot-read",
+      "site": "const finished = store.getRun(record.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/run.test.ts",
+      "rule": "one-shot-read",
+      "site": "const notes = readFileSync(join(repoRoot, 'notes.md'), 'utf8').trim().split('\\n');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.status).toBe('waiting');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.steps.map((s) => ({ id: s.id, status: s.status }))).toEqual([",
+      "count": 1
+    },
+    {
+      "file": "workflows/run.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(second.id)?.status).toBe('queued');",
+      "count": 1
+    },
+    {
+      "file": "workflows/run/turn-nudges-decisions.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.waiting);",
+      "count": 1
+    },
+    {
+      "file": "workflows/session-context-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(readFileSync(handoff, 'utf8')).toContain('- 10:00 \u2014 R120 progress');",
+      "count": 1
+    },
+    {
+      "file": "workflows/stopped-composer.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.stopping).not.toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "workflows/subagent-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "const parked = store.getRun(run.id)!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/subagent-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect([...store.getRun(run.id)?.waits ?? [], ...store.getRun(run.id)?.lastWaits ?? []].some(entry => entry.kind === WAIT_KIND.subagent)).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "workflows/subagent-waits.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(deriveAttention(store.getRun(run.id)!).rung).toBe('needs-you');",
+      "count": 1
+    },
+    {
+      "file": "workflows/team-skill-materialize.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(record.id)?.error).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/tool-activity-wiring.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(toolActivity.read(record.id, Date.now())).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-answers-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.error).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-answers-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.queuedMessages ?? []).toEqual([]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-asks-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(deriveAttention(store.getRun(run.id)!).label).toBe('monitoring');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-asks-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-asks-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting });",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const input = store.getRun(run.id)!.agentInputs!.find(input => input.id === timer.id)!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-closed-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const wakes = store.getRun(w.id)?.automaticWakes ?? 0;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-closed-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(w.id).filter(event => event.type === 'note' && String(event.message).startsWith(WORKER_FALLBACK_REPLY_NOTE)))",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-deadlines-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.automaticWakes).toBe(8);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-deadlines-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.automaticWakes).toBe(budget);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-delivery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('waiting');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-delivery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waitDeliveryFailures).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-delivery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-done-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const answer = JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\\n')[0]);",
+      "count": 2
+    },
+    {
+      "file": "workflows/waits-parity-done-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const finished = store.getRun(run.id)!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-done-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const status = store.getRun(run.id)!.status;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-done-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\\n')[0])).toMatchObject({ ok: true, finishes: 'at_turn_end' });",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-done-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved \u2014 session closed')).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-entries-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-entries-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.some(step => step.id === 'continue-1')).toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-input-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(task.id).some(event => event.type === 'turn.started')).toBe(false);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-input-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(blocker.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-input-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits).toEqual([expect.objectContaining({ id: ci.id, phase: WAIT_PHASE.open })]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-process-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const wait = store.getRun(run.id)!.lastWaits!.find(entry => entry.kind === 'process')!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-process-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('waiting');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-process-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-process-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits).toEqual([expect.objectContaining({ id: wait.id, phase: WAIT_PHASE.open })]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-recovery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(f.p.id)?.agentInputs?.filter(input => input.id === id)).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-recovery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(f.p.id)?.status).toBe('waiting');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-recovery-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits?.find(entry => entry.id === wait.id)?.phase).toBe('open');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-refusal-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.delegation).not.toHaveProperty('finishRequestedAt');",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-refusal-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(waitOf(store.getRun(p.id))).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const ci = store.getRun(run.id)!.lastWaits!.find(wait => wait.kind === 'pr')!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "const timer = store.getRun(run.id)!.lastWaits!.find(wait => wait.kind === 'timer')!;",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.automaticWakes ?? 0).toBe(0);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.automaticWakes).toBe(40);",
+      "count": 3
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.error).toMatch(cause);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.filter(step => step.status === 'failed').map(step => step.error)).toEqual([expect.stringMatching(cause), expect.stringMatching(cause)]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-parity-registration-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waitRegistrations?.at(-1)).toMatchObject({ wait: { id: ci.id }, deduplicated: true });",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-subagents-parity-cells.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe(RUN_STATUS.waiting);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-wake-delivery.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waitDeliveryFailures).toBe(2);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-wake-delivery.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.waits ?? []).toEqual([]);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-wake-questions.test.ts",
+      "rule": "one-shot-read",
+      "site": "const events = store.eventLog.readEvents(run.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/waits-wake-questions.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(third.id).filter(event => event.type === 'step-start')).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-inbox-liveness.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.map(step => step.status)).toEqual(['done', 'done']);",
+      "count": 2
+    },
+    {
+      "file": "workflows/worker-parent-attention.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(p.id)?.status).toBe('waiting');",
+      "count": 2
+    },
+    {
+      "file": "workflows/worker-parent-attention.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-parent-attention.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(waitOf(store.getRun(p.id))?.phase).toBe('parked');",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-reboot-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(typeof store.workerExecutions.readWorkerProcesses(w.id, next.generation)).toBe('object');",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-restart-parity.testkit.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.workerExecutions.readWorkerExecution(w.id)?.generation).not.toBe(proof.generation);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-held-ack.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-held-ack.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.map(step => step.status)).toEqual(['done', 'done']);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-held-ack.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(waitOf(store.getRun(run.id))).toBeUndefined();",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-held-response.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-wake-checkpoint.test.ts",
+      "rule": "one-shot-read",
+      "site": "const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-wake-checkpoint.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(run.id).filter(event => event.type === 'human-input-delivered')).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-wake-checkpoint.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.eventLog.readEvents(run.id).some(event => event.type === 'ask.requested')).toBe(true);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-wake-checkpoint.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.steps.map(step => step.status)).toEqual(['done', 'done']);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-capacity-wake-checkpoint.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting });",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-fixture-cleanup.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.getRun(run.id)?.status).toBe('queued');",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-outcomes.test.ts",
+      "rule": "one-shot-read",
+      "site": "const own = store.getRun(p.id)?.agentInputs?.filter(input => input.conversation?.senderRunId !== w.id);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worker-wait-outcomes.test.ts",
+      "rule": "one-shot-read",
+      "site": "const wake = waitOf(store.getRun(p.id)); expect(wake?.phase).toBe('wake-pending');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(a.store.getRun(a1.id)?.status).toBe('running');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(a.store.getRun(a2.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(a.store.getRun(queued.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(a.store.getRun(third.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(b.store.getRun(older.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(b.store.getRun(queued.id)?.status).toBe('done');",
+      "count": 1
+    },
+    {
+      "file": "workflows/workspace-semaphore.test.ts",
+      "rule": "one-shot-read",
+      "site": "expect(store.queries.listRuns().filter((run) => run.status === 'running')).toHaveLength(1);",
+      "count": 1
+    },
+    {
+      "file": "workflows/worktree-setup-run.test.ts",
+      "rule": "one-shot-read",
+      "site": "const finished = store.getRun(record.id)!;",
+      "count": 2
+    }
+  ]
+}

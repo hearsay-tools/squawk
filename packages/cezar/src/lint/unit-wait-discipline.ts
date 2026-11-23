@@ -143,8 +143,8 @@ export function report(ctx: Ctx, rule: Rule, node: N): void {
 /** The longest delay a timer keeps: a larger one fires after 1 ms. */
 export const MAX_TIMER_MS = 2 ** 31 - 1
 
-/** A wait bound is short unless it is a finite number of at least the floor that a timer keeps: a negative, zero, `NaN`, infinite or overflowing one fires at once. */
-export const isShortBound = (ms: number): boolean => !(ms >= FLOOR_MS && ms <= MAX_TIMER_MS)
+/** A wait bound is short unless it is a finite number above the floor that a timer keeps: a negative, zero, `NaN`, infinite or overflowing one fires at once. */
+export const isShortBound = (ms: number): boolean => !(ms > FLOOR_MS && ms <= MAX_TIMER_MS)
 
 export function shortBound(call: N, ctx: Ctx, ancestors: readonly N[]): boolean {
   const place = placeAt(ancestors, call.start ?? 0)
@@ -266,7 +266,7 @@ export function scanProgram(file: string, program: N, source: WaitSource): Site[
   walk(program, [], (node, ancestors) => visit(node, ancestors, ctx))
   for (const [loop, { sleeps, where }] of ctx.loops) {
     const deadline = pollDeadline(where, sleeps)
-    if (deadline === 'none' || (typeof deadline === 'number' && !(deadline >= FLOOR_MS && Number.isFinite(deadline)))) report(ctx, 'poll-deadline', loop)
+    if (deadline === 'none' || (typeof deadline === 'number' && !(deadline > FLOOR_MS && Number.isFinite(deadline)))) report(ctx, 'poll-deadline', loop)
   }
   return ctx.sites.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule))
 }

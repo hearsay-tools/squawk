@@ -1,4 +1,311 @@
 {
-  "$comment": "Bare sleeps and short wait bounds the server unit tests carried when the ratchet landed (hearsay-tools/cezarion#1155). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation.",
-  "sites": []
+  "$comment": "Bare sleeps and short wait bounds the server unit tests carried when the ratchet landed (hearsay-tools/cezarion#1155). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation. Floor-equal bounds and wait bounds from parameter defaults recorded by hearsay-tools/squawk#3765; all entries continue to shrink.",
+  "sites": [
+    {
+      "file": "ci-wait/supervisor.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(async()=>{ expect(await readFile(log,'utf8')).toContain('--watch'); }, { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "core/harness-parity-core.testkit.ts",
+      "rule": "short-bound",
+      "site": "export async function waitFor(cond: () => boolean, ms = 10_000): Promise<void> {",
+      "count": 1
+    },
+    {
+      "file": "core/harness-parity-ownership.cells.testkit.ts",
+      "rule": "short-bound",
+      "site": "await waitFor(() => { store.persistence.flush(); return !store.queries.heldIds().includes(runId); }, 10_000);",
+      "count": 1
+    },
+    {
+      "file": "core/harness-parity-session.cells.testkit.ts",
+      "rule": "short-bound",
+      "site": "else await waitFor(() => consumed.includes(id) || reported(), 10_000).catch(() => undefined);",
+      "count": 1
+    },
+    {
+      "file": "core/runner-shutdown.testkit.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });",
+      "count": 2
+    },
+    {
+      "file": "core/seam-contract.testkit.ts",
+      "rule": "short-bound",
+      "site": "export async function until(recorder: Recorder, cond: () => boolean, ms = 10_000): Promise<void> {",
+      "count": 1
+    },
+    {
+      "file": "core/unread-input.test.ts",
+      "rule": "short-bound",
+      "site": "await waitFor(() => !!fixture.store.getRun(runId)?.agentInputs?.[0]?.deliveredAt, 10_000);",
+      "count": 1
+    },
+    {
+      "file": "core/unread-input.test.ts",
+      "rule": "short-bound",
+      "site": "await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.deliveredAt, 10_000);",
+      "count": 3
+    },
+    {
+      "file": "core/unread-input.test.ts",
+      "rule": "short-bound",
+      "site": "await waitFor(() => existsSync(wire) && readFileSync(wire, 'utf8').includes('late parent guidance'), 10_000);",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => { for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(1); }, { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBe(1), { timeout: 10_000, interval: 20 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.needsAttention).toBe(true), { timeout: 10_000 });",
+      "count": 2
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(full.length).toBeGreaterThan(0), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-cadence.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(full.length).toBeGreaterThanOrEqual(3), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-holder.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });",
+      "count": 2
+    },
+    {
+      "file": "delegation/service-destroy-holder.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });",
+      "count": 2
+    },
+    {
+      "file": "delegation/service-destroy-holder.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(existsSync(started)).toBe(true), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-destroy-topology-repair.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });",
+      "count": 5
+    },
+    {
+      "file": "delegation/service-destroy-topology-repair.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });",
+      "count": 5
+    },
+    {
+      "file": "delegation/service-destroy-work.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service-engine.test.ts",
+      "rule": "short-bound",
+      "site": "await expect.poll(() => f.service.collect(f.caller, { workerId }), { timeout: 10_000, interval: 250 }).toMatchObject({ settled: true });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(existsSync(blocked)).toBe(true), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "delegation/service.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(f.store.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 10_000 });",
+      "count": 2
+    },
+    {
+      "file": "delegation/workspace-manager-recovery.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => {",
+      "count": 1
+    },
+    {
+      "file": "preview/chromium.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(",
+      "count": 1
+    },
+    {
+      "file": "runners/omp/omp-runner.test.ts",
+      "rule": "short-bound",
+      "site": "const waitForChild = (assert: () => void) => vi.waitFor(assert, { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "runners/opencode/opencode-serve-retry.test.ts",
+      "rule": "short-bound",
+      "site": "const waitFor = async (cond: () => boolean, ms = 10_000): Promise<void> => {",
+      "count": 1
+    },
+    {
+      "file": "runners/opencode/opencode-server-runner.test.ts",
+      "rule": "short-bound",
+      "site": "async function waitFor(cond: () => boolean, ms = 10_000): Promise<void> {",
+      "count": 1
+    },
+    {
+      "file": "server/cockpit-address.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(contexts.peek(otherId)).toBeDefined(), { timeout: 10_000, interval: 20 });",
+      "count": 1
+    },
+    {
+      "file": "server/project-warmup.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(contexts.peek(otherId)).toBeDefined(), { timeout: 10_000, interval: 20 });",
+      "count": 1
+    },
+    {
+      "file": "server/project-warmup.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(sweepRegisteredPreviewLeftovers).toHaveBeenCalled(), { timeout: 10_000, interval: 20 });",
+      "count": 2
+    },
+    {
+      "file": "server/reports-api.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => {",
+      "count": 1
+    },
+    {
+      "file": "worker-scope/groups-macos.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => { expect(pidExists(watched)).toBe(false); expect(pidExists(leader)).toBe(false); }, { timeout: HANG_GUARD_MS });",
+      "count": 1
+    },
+    {
+      "file": "worker-scope/groups-macos.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });",
+      "count": 1
+    },
+    {
+      "file": "worker-scope/worker-scopes.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(pidExists(first.printed)).toBe(false), { timeout: HANG_GUARD_MS });",
+      "count": 1
+    },
+    {
+      "file": "worker-scope/worker-scopes.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });",
+      "count": 2
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "short-bound",
+      "site": "await expect",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "short-bound",
+      "site": "await expect.poll(() => store.getRun(record.id)?.waits?.find((wait) => wait.id === timerId)?.phase, { timeout: 10_000 }).toBe('resolved');",
+      "count": 1
+    },
+    {
+      "file": "workflows/auto-resume.test.ts",
+      "rule": "short-bound",
+      "site": "await expect.poll(() => store.getRun(waiting.id)?.status, { timeout: 10_000 }).toBe('queued');",
+      "count": 2
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(a.store.getRun(runId)?.status).toBe('cancelled'), waitOptions);",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(b.store.getRun(queued.id)?.status).toBe('done'), waitOptions);",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(processExited(pid)).toBe(true), waitOptions);",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "short-bound",
+      "site": "const pid = await vi.waitFor(() => requirePid(ready), waitOptions);",
+      "count": 1
+    },
+    {
+      "file": "workflows/codex-startup-cancel.test.ts",
+      "rule": "short-bound",
+      "site": "if (pid !== undefined) await vi.waitFor(() => expect(processExited(pid)).toBe(true), waitOptions);",
+      "count": 1
+    },
+    {
+      "file": "workflows/fixture-cleanup.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(manager.isActive(run.id)).toBe(false), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "workflows/fixture-cleanup.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(store.getRun(id)?.status).toBe('waiting'), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "workflows/fixture-cleanup.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(store.getRun(run.id)?.status).toBe('waiting'), { timeout: 10_000 });",
+      "count": 1
+    },
+    {
+      "file": "workflows/stopped-composer.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(captured.specs).toHaveLength(1), SETTLE);",
+      "count": 2
+    },
+    {
+      "file": "workflows/stopped-composer.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => expect(store.getRun(run.id)?.status).toBe('cancelled'), SETTLE);",
+      "count": 2
+    },
+    {
+      "file": "workflows/worker-workspace-port.test.ts",
+      "rule": "short-bound",
+      "site": "await vi.waitFor(() => {",
+      "count": 1
+    }
+  ]
 }

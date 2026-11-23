@@ -16,6 +16,8 @@ import { type BaselineEntry as Entry, waitBaseline } from './wait-baseline'
 
 export type Rule =
   | 'one-shot-read'
+  | 'one-shot-input'
+  | 'stale-element-handle'
   | 'hover-in-wait'
   | 'mutating-predicate'
   | 'sleep'
@@ -72,6 +74,8 @@ export function scanSource(file: string, source: string): Site[] {
 
   // Rule 1 — a one-shot read within two lines after an action, with no wait between them.
   for (const j of oneShotReadIndices(lines)) sites.push(at('one-shot-read', j))
+  for (const index of oneShotInputIndices(source)) sites.push(at('one-shot-input', index))
+  for (const index of staleElementIndices(source)) sites.push(at('stale-element-handle', index))
   // Rules 2 and 3 — what a wait's argument contains.
   for (const site of waitPredicateSites(source)) sites.push(at(site.rule, site.line))
   // Rule 4 — a sleep.
@@ -101,6 +105,56 @@ function oneShotReadIndices(lines: string[]): number[] {
     }
   })
   return [...flaggedReads].sort((a, b) => a - b)
+}
+
+/** An input followed by a wait on transient input state must be retried with that condition:
+ * a render can replace the input or restore its value. Submission and navigation effects are
+ * excluded: retrying those actions can submit twice. A surrounding
+ * retry call already repeats the action, so its inputs are accepted. */
+function oneShotInputIndices(source: string): number[] {
+  const waits = callSpans(source, /\b(waitFor\w*|poll\w*|retry\w*)\(/g)
+  const found = new Set<number>()
+  for (const input of callSpans(source, /\b\w+\.(click|press|fill)\(/g)) {
+    const end = input.textStart + input.text.length
+    if (waits.some(call => call.start < input.start && call.textStart + call.text.length > end)) continue
+    const next = waits.find(call => call.start > end && lineOf(source, call.start) - lineOf(source, end) <= 3)
+    if (!next || !/activeElement|\.(?:value|checked|selected|selectionStart)\b/.test(next.text)) continue
+    // Another input or navigation starts a separate interaction.
+    const between = source.slice(end + 1, next.start)
+    if (/\b\w+\.(?:click|press|fill|goto)\(/.test(between)) continue
+    found.add(lineOf(source, input.start))
+  }
+  return [...found]
+}
+
+/** A DOM node kept on window or another holder survives a query, not a render. Read it again
+ * from the page after scrolling, refresh or navigation. Reassignment to a fresh query resets
+ * the handle's lifetime. This is a source heuristic like the other in-page rules. */
+function staleElementIndices(source: string): number[] {
+  const held = new Map<string, { changed: boolean }>()
+  const found = new Set<number>()
+  for (const call of callSpans(source, /\b(evaluate|waitForFunction|waitForValue|waitForStable|waitForSettledSample|reload|refresh|goto|wheel)\(/g)) {
+    if (['reload', 'refresh', 'goto', 'wheel'].includes(call.name)) {
+      for (const state of held.values()) state.changed = true
+      continue
+    }
+    const rooted = rootedNames(call.text, new Set())
+    const events = /([A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\s*=(?![=>])\s*([^;\n]+)|\b(?:scrollTop|scrollLeft)\s*(?:[-+]?=)|\.(?:scrollIntoView|scrollTo|scrollBy|reload|refresh)\s*\(|\b[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*/g
+    for (const match of call.text.matchAll(events)) {
+      if (match[1]) {
+        const rhs = match[2] ?? ''
+        if (/querySelector|getElementById/.test(rhs) || [...rooted].some(name => new RegExp(`\\b${name}\\b`).test(rhs))) held.set(match[1], { changed: false })
+        else held.delete(match[1])
+        continue
+      }
+      if (/scroll|reload|refresh/.test(match[0])) {
+        for (const state of held.values()) state.changed = true
+      } else if (held.get(match[0])?.changed) {
+        found.add(lineOf(source, call.textStart + match.index))
+      }
+    }
+  }
+  return [...found]
 }
 
 /** Rules 2 and 3 — what a wait's argument contains. */

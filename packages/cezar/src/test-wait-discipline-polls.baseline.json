@@ -1,4 +1,143 @@
 {
-  "$comment": "Poll loops the server unit tests carried when the deadline rule landed (hearsay-tools/cezarion#1203). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation.",
-  "sites": []
+  "$comment": "Poll loops the server unit tests carried when the deadline rule landed (hearsay-tools/cezarion#1203). Keyed by file, rule and the line text so a moved line does not churn it. This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. Rules: AGENTS.md \u00a7 Validation. Floor-equal bounds and wait bounds from parameter defaults recorded by hearsay-tools/squawk#3765; all entries continue to shrink.",
+  "sites": [
+    {
+      "file": "autosave-attribution.test.ts",
+      "rule": "poll-deadline",
+      "site": "for (const deadline = Date.now() + HANG_CEILING_MS; !condition();) {",
+      "count": 1
+    },
+    {
+      "file": "core/harness-parity-core.testkit.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) {",
+      "count": 1
+    },
+    {
+      "file": "core/seam-contract.testkit.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) {",
+      "count": 1
+    },
+    {
+      "file": "delegation/non-dumpable.testkit.ts",
+      "rule": "poll-deadline",
+      "site": "while (pidExists(pid) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));",
+      "count": 1
+    },
+    {
+      "file": "linux-zombie.testkit.ts",
+      "rule": "poll-deadline",
+      "site": "while (true) {",
+      "count": 2
+    },
+    {
+      "file": "preview/dev-server.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (await probePort(port)) {",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-cli-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-cli-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!events.some(e => e.type === 'error') && events.filter(e => e.type === 'turn-end').length < 2) { if (Date.now() - start > 10_000) throw new Error('no second turn'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-cli-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!events.some(e => e.type === 'turn-end')) { if (Date.now() - start > 10_000) throw new Error('no turn-end'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-cli-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (ends < 2) { if (Date.now() - start > 10_000) throw new Error('no second turn-end'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-cli-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (events.filter(e => e.type === 'turn-end').length < 2) { if (Date.now() - start > 10_000) throw new Error('no second turn-end'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/claude/claude-model-refusal.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!predicate() && performance.now() < deadline) await sleep(10);",
+      "count": 1
+    },
+    {
+      "file": "runners/codex/codex-steering.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/opencode/opencode-serve-retry.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) {",
+      "count": 1
+    },
+    {
+      "file": "runners/opencode/opencode-server-runner.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) {",
+      "count": 1
+    },
+    {
+      "file": "runners/opencode/opencode-steering.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "runners/pi/pi-steering.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }",
+      "count": 1
+    },
+    {
+      "file": "workflows/grouped-command.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (Date.now() < end) {",
+      "count": 1
+    },
+    {
+      "file": "workflows/held-human-input-liveness.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!condition()) {",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!deferred && Date.now() < deadline) {",
+      "count": 1
+    },
+    {
+      "file": "workflows/pasted-attachments.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!readStdinLines().some((line) => line.userText.includes('mixed delivery followup')) && Date.now() < deadline) {",
+      "count": 1
+    },
+    {
+      "file": "workflows/retention-wiring.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (!store.getRun(older.recId)?.worktreeReclaimedAt) {",
+      "count": 1
+    },
+    {
+      "file": "workflows/run-lease.test.ts",
+      "rule": "poll-deadline",
+      "site": "while (Date.now() < deadline) {",
+      "count": 1
+    }
+  ]
 }
