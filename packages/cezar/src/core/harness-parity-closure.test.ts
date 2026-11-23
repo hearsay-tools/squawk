@@ -9,9 +9,8 @@ import { importClosure } from '../lint/import-closure.testkit.ts';
  * erases type-only ones.
  */
 const src = join(import.meta.dirname, '..');
-const WORKFLOW_ENGINE = ['workflows/run.ts', 'workflows/fixture-manager.testkit.ts'];
-const DELEGATION_ENGINE = ['delegation/provision.ts', 'delegation/workspace.ts'];
-const ENGINE = [...WORKFLOW_ENGINE, ...DELEGATION_ENGINE];
+const WORKFLOW_ENGINE = ['workflows/run.ts', 'delegation/workspace.ts', 'workflows/fixture-manager.testkit.ts'];
+const ENGINE = ['workflows/run.ts', 'delegation/provision.ts', 'delegation/workspace.ts', 'workflows/fixture-manager.testkit.ts'];
 const FEATURE_CATALOGS = ['preview/tool-catalog.ts', 'automations/tool-catalog.ts', 'delegation/service.ts'];
 
 function filesIn(entry: string, targets: readonly string[]): string[] {
