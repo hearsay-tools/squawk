@@ -1,3 +1,4 @@
+import '../cli-boot.testkit.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
