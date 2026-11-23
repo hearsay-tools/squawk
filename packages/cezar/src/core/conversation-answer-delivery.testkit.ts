@@ -16,7 +16,7 @@ import { inputDeliveryOf } from './agent-runner-values.ts';
 import { createRunner } from './runner-registry.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { ANSWER_DELIVERY_GROUPS, answerDeliveryFamilies } from './conversation-answer-delivery-rows.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 
 
 // hearsay-tools/cezarion#935: a Continue executing an answer keeps that answer's checkpoint until

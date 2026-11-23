@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import '../runners/claude/claude-runner.testkit.ts';
-import { answerAsParent } from '../core/workflow-parity-core.testkit.ts';
+import { answerAsParent } from '../core/worker-parity-core.testkit.ts';
 import { grantSteer, eventCheckpoint, timeline, controlledWire, fixtureUpdateRun, manager, parent, register, restart, root, store, until, waitOf, worker, work } from './worker-wait-claude.testkit.ts';
 import { setRunStatus, readPersistedRuns, hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';

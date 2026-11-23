@@ -6,7 +6,7 @@ import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contra
 import { projectConversationEvents } from '../delegation/conversations.ts';
 import { WORKER_FALLBACK_HEADER } from '../workflows/run.ts';
 import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 
 // R6/R7 already pin native/portable answer routing and queue recovery. This
 // integration adds the conversation-specific seam: durable structured identity

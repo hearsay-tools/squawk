@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';

@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import '../built-in-run-slots.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { MONITORING_PARTITIONS, type MonitoringPartitionName } from './monitoring-turn-partitions.testkit.ts';

@@ -10,7 +10,7 @@ import { withHeldAck } from './owned-input-delivery.testkit.ts';
 
 import './created-runners.testkit.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 
 sealTestRunners(claudeRunner, opencodeRunner);
 

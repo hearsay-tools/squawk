@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { agentEnvForStep } from './run/launch-context.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';

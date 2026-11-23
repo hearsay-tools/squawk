@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 
 // #505 on every real runner wire: the worker's ask (native or cezar_ask) travels to its
 // parent as a routed request, and the parent's reply answers it through the same seam a

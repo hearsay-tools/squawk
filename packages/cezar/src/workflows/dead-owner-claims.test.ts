@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

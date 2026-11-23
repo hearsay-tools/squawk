@@ -9,11 +9,18 @@ import { importClosure } from '../lint/import-closure.testkit.ts';
  * erases type-only ones.
  */
 const src = join(import.meta.dirname, '..');
-const ENGINE = ['workflows/run.ts', 'delegation/provision.ts', 'delegation/workspace.ts', 'workflows/fixture-manager.testkit.ts'];
+const WORKFLOW_ENGINE = ['workflows/run.ts', 'workflows/fixture-manager.testkit.ts'];
+const DELEGATION_ENGINE = ['delegation/provision.ts', 'delegation/workspace.ts'];
+const ENGINE = [...WORKFLOW_ENGINE, ...DELEGATION_ENGINE];
+const FEATURE_CATALOGS = ['preview/tool-catalog.ts', 'automations/tool-catalog.ts', 'delegation/service.ts'];
+
+function filesIn(entry: string, targets: readonly string[]): string[] {
+  const closure = importClosure(join(src, entry)).map(path => relative(src, path));
+  return targets.filter(file => closure.includes(file));
+}
 
 function engineFilesIn(entry: string): string[] {
-  const closure = importClosure(join(src, entry)).map(path => relative(src, path));
-  return ENGINE.filter(file => closure.includes(file));
+  return filesIn(entry, ENGINE);
 }
 
 describe('the harness parity kits', () => {
@@ -30,7 +37,17 @@ describe('the harness parity kits', () => {
     expect(engineFilesIn(kit)).toEqual([]);
   });
 
-  it.each(['core/workflow-parity.testkit.ts', 'core/workflow-parity-core.testkit.ts'])('loads the workflow engine through the workflow-level kit %s', (kit) => {
+  it.each(['core/workflow-parity.testkit.ts', 'core/workflow-parity-core.testkit.ts'])('loads only the workflow engine without delegation or feature catalogs through %s', (kit) => {
+    expect(engineFilesIn(kit)).toEqual(WORKFLOW_ENGINE);
+    expect(filesIn(kit, FEATURE_CATALOGS)).toEqual([]);
+  });
+
+  it.each(['core/worker-parity.testkit.ts', 'core/worker-parity-core.testkit.ts'])('loads the workflow and delegation engines without feature tool catalogs through %s', (kit) => {
     expect(engineFilesIn(kit)).toEqual(ENGINE);
+    expect(filesIn(kit, ['preview/tool-catalog.ts', 'automations/tool-catalog.ts'])).toEqual([]);
+  });
+
+  it.each(['core-registries.testkit.ts', 'core/register-all-runners.testkit.ts'])('keeps feature catalogs and delegation service out of %s', (kit) => {
+    expect(filesIn(kit, [...FEATURE_CATALOGS, 'built-in-tools.ts', 'built-in-wait-kinds.ts'])).toEqual([]);
   });
 });

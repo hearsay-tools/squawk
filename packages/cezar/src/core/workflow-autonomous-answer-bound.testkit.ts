@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import '../core-registries.testkit.ts';
 /**
  * A16: an autonomous nudge the harness acknowledges and then never answers is bounded from its
  * acknowledgement at the no-wait nudge's reply bound. Heartbeats do not extend it. At expiry the

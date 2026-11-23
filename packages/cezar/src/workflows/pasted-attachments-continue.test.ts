@@ -1,3 +1,4 @@
+import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';

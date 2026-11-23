@@ -1,4 +1,4 @@
-import '../ci-wait/tools.testkit.ts';
+import '../core-tools.testkit.ts';
 import { registerBuiltInRunners, sealBuiltInRunners } from '../runners/built-in.ts';
 
 // Importing this module registers and seals every built-in runner: it sets no runner

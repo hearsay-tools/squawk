@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import type { AgentInput } from '@open-mercato/cezar-contract';
@@ -14,7 +15,7 @@ import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { inputDeliveryOf } from './agent-runner-values.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 
 export const agentInput = (parentRunId: string, text = '/owned-skill mock:agent-echo parent steering'): AgentInput => ({
   id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId, text, createdAt: new Date().toISOString(),

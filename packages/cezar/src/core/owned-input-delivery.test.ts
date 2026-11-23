@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
@@ -8,7 +9,7 @@ import { runnersWhere } from './runner-facts.ts';
 import { inFlightWithHeldAck, withDelayedAck } from './owned-input-delivery.testkit.ts';
 
 import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 import { thenSay, toolCall } from '../workflows/waits-parity.testkit.ts';
 const delivered = (input: object, stored: { consumedAt?: string | undefined; awaitingRead?: true | undefined } | undefined) =>
   ({ ...input, deliveredAt: expect.any(String), ...(stored?.consumedAt ? { consumedAt: expect.any(String) } : {}),
