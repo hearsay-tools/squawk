@@ -132,3 +132,16 @@ export async function remoteSquawkTools(env: NodeJS.ProcessEnv = process.env) {
   return { instructions: catalog.instructions, tools: catalog.tools.map(tool => ({ definition: tool, label: tool.label, trigger: tool.trigger,
     invoke: (input: unknown) => invokeRemoteTool(tool.name, input, env, tool) })) };
 }
+
+/** Pi and OMP use the same async extension registration contract. */
+export async function registerRemoteSquawkTools(host: { registerTool(tool: {
+  name: string; label: string; description: string;
+  parameters: import('./tool-registry.ts').JsonObject;
+  execute(callId: string, params: unknown): Promise<AgentToolResult>;
+}): void }) {
+  const { tools } = await remoteSquawkTools();
+  for (const tool of tools) host.registerTool({
+    name: tool.definition.name, label: tool.label, description: tool.definition.description, parameters: tool.definition.inputSchema,
+    execute: async (_callId, params) => tool.invoke(params),
+  });
+}

@@ -2,17 +2,6 @@
 // Resolve beside this installed script; no private workspace dependency or download.
 import { existsSync } from 'node:fs';
 const source = new URL('../src/ci-wait/client.ts', import.meta.url);
-const { remoteSquawkTools } = await import(existsSync(source) ? source.href : new URL('../dist/ci-wait/client.js', import.meta.url).href);
+const { registerRemoteSquawkTools } = await import(existsSync(source) ? source.href : new URL('../dist/ci-wait/client.js', import.meta.url).href);
 // #781: the shared Squawk tool list, read in Pi's own process, whose env carries the opt-in.
-export default async function ciWaitExtension(pi) {
-  const { tools } = await remoteSquawkTools(process.env);
-  for (const tool of tools) {
-    pi.registerTool({
-      name: tool.definition.name,
-      label: tool.label,
-      description: tool.definition.description,
-      parameters: tool.definition.inputSchema,
-      async execute(_toolCallId, params) { return tool.invoke(params); },
-    });
-  }
-}
+export default registerRemoteSquawkTools;

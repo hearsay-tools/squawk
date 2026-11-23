@@ -13,18 +13,7 @@ const loadBuilt = (error) => {
   process.stderr.write('Squawk: loading built Squawk tools from dist/; rebuild after changing src/ci-wait\n');
   return import(built.href);
 };
-const { remoteSquawkTools } = await (existsSync(source) ? import(source.href).catch(loadBuilt) : import(built.href));
+const { registerRemoteSquawkTools } = await (existsSync(source) ? import(source.href).catch(loadBuilt) : import(built.href));
 // #781: the shared Squawk tool list, read in OMP's own process, whose env carries the opt-in.
 // `ompTools` admits exactly these names to `--tools`: OMP exits 2 on a name nothing registered.
-export default async function ciWaitExtension(pi) {
-  const { tools } = await remoteSquawkTools(process.env);
-  for (const tool of tools) {
-    pi.registerTool({
-      name: tool.definition.name,
-      label: tool.label,
-      description: tool.definition.description,
-      parameters: tool.definition.inputSchema,
-      async execute(_toolCallId, params) { return tool.invoke(params); },
-    });
-  }
-}
+export default registerRemoteSquawkTools;
