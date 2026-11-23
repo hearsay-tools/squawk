@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +7,12 @@ import { ProjectRail, ProjectRailPlaceholder, type ProjectRailProps } from '@/co
 import { ThemeProvider } from '@/components/theme-provider'
 import { PROJECT_RAIL_EXPANDED_STORAGE_KEY } from '@/lib/project-rail-expanded'
 import type { ProjectSignal } from '@/lib/project-signal'
+
+const sortableChunk = vi.hoisted(() => ({ pending: Promise.resolve() }))
+vi.mock('./project-rail-sortable', async (importOriginal) => {
+  await sortableChunk.pending
+  return importOriginal()
+})
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
@@ -415,9 +421,47 @@ describe('ProjectRail reorder', () => {
     })
   }
 
-  it('renders the projects in the order it is given', () => {
-    renderRail({ projects: [project('gamma'), project('alpha'), project('beta')], canReorder: true, onReorder: () => {} })
+  it('keeps order, links and focus when ui-state arrives before the sortable chunk', async () => {
+    let loadChunk!: () => void
+    sortableChunk.pending = new Promise<void>((resolve) => { loadChunk = resolve })
+    const projects = [project('gamma'), project('alpha'), project('beta')]
+    const onReorder = vi.fn()
+    const { rerender } = renderRail({ projects, canReorder: false, onReorder })
+    link('gamma').focus()
+    rerender(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/p/toolkit-dev/']}>
+          <ProjectRail projects={projects} signals={new Map()} version="0.15.0" canReorder onReorder={onReorder} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+    // The chunk is still pending: the new fallback must already hold keyboard focus.
+    try {
+      expect(order()).toEqual(['gamma', 'alpha', 'beta'])
+      expect(link('gamma').getAttribute('href')).toBe('/p/gamma/')
+      expect(link('gamma').getAttribute('aria-describedby')).toBeNull()
+      expect(document.activeElement).toBe(link('gamma'))
+    } finally { loadChunk() }
+    await waitFor(() => expect(link('gamma').getAttribute('aria-describedby')).toBeTruthy())
+    expect(document.activeElement).toBe(link('gamma'))
     expect(order()).toEqual(['gamma', 'alpha', 'beta'])
+  })
+
+  it.each([false, true])('keeps project-link focus when ui-state enables sorting (expanded=%s)', async (expanded) => {
+    setViewport(1600)
+    if (expanded) localStorage.setItem(PROJECT_RAIL_EXPANDED_STORAGE_KEY, '1')
+    const onReorder = vi.fn()
+    const { rerender } = renderRail({ projects: three, canReorder: false, onReorder })
+    link('beta').focus()
+    rerender(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/p/toolkit-dev/']}>
+          <ProjectRail projects={three} signals={new Map()} version="0.15.0" canReorder onReorder={onReorder} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
+    expect(document.activeElement).toBe(link('beta'))
   })
 
   it('offers no reorder until the ui-state has loaded, without a writer, or with one project', () => {
@@ -434,10 +478,11 @@ describe('ProjectRail reorder', () => {
     expect(grip('alpha')).toBeNull()
   })
 
-  it('gives every expanded row a labelled grip button that says where it is', () => {
+  it('gives every expanded row a labelled grip button that says where it is', async () => {
     setViewport(1600)
     localStorage.setItem(PROJECT_RAIL_EXPANDED_STORAGE_KEY, '1')
     renderRail({ projects: three, canReorder: true, onReorder: () => {} })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     expect(screen.getByRole('navigation', { name: 'Projects' }).getAttribute('data-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: 'Reorder alpha, position 1 of 3' })).toBe(grip('alpha'))
     expect(grip('gamma')?.getAttribute('aria-label')).toBe('Reorder gamma, position 3 of 3')
@@ -445,8 +490,9 @@ describe('ProjectRail reorder', () => {
     expect(link('alpha').contains(grip('alpha'))).toBe(false)
   })
 
-  it('keeps a collapsed mark a link, with the reorder instructions attached', () => {
+  it('keeps a collapsed mark a link, with the reorder instructions attached', async () => {
     renderRail({ projects: three, canReorder: true, onReorder: () => {} })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     expect(screen.getByRole('navigation', { name: 'Projects' }).getAttribute('data-expanded')).toBe('false')
     expect(grip('alpha')).toBeNull()
     expect(link('alpha').getAttribute('role')).toBeNull()
@@ -464,6 +510,7 @@ describe('ProjectRail reorder', () => {
     }
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const activator = expanded ? grip('alpha')! : link('alpha')
     activator.focus()
@@ -482,6 +529,7 @@ describe('ProjectRail reorder', () => {
     // a local order the rail paints the OLD order for that frame and the row visibly snaps back.
     const onReorder = vi.fn()
     const { rerender } = renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     link('alpha').focus()
 
@@ -508,6 +556,7 @@ describe('ProjectRail reorder', () => {
   it('does not lift a collapsed mark on Enter, so the link still navigates', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     link('alpha').focus()
     await press(link('alpha'), 'Enter')
@@ -520,6 +569,7 @@ describe('ProjectRail reorder', () => {
   it('lifts a collapsed mark by touch on a long press, and leaves a finger swipe to the browser', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const target = link('alpha')
     const touch = (y: number) => ({ touches: [{ clientX: 30, clientY: y }], changedTouches: [{ clientX: 30, clientY: y }] })
@@ -556,6 +606,7 @@ describe('ProjectRail reorder', () => {
   it('cancels the click that ends a pointer drag, so the link does not load a page', async () => {
     const onReorder = vi.fn()
     renderRail({ projects: three, canReorder: true, onReorder })
+    await waitFor(() => expect(link('alpha').getAttribute('aria-describedby') ?? grip('alpha')?.getAttribute('aria-describedby')).toBeTruthy())
     layOutRows()
     const target = link('alpha')
 

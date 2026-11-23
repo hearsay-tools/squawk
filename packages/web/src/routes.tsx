@@ -29,17 +29,15 @@ import { ThreadLoading } from './routes/task-thread/thread-loading'
 // Static on purpose: the tabs' own Suspense fallbacks must render at once. The layout is thin; the
 // pane it can open is a lazy chunk (preview-split.tsx).
 import { TaskPreviewLayout } from './routes/task-thread/preview/task-preview-layout'
-import { visibleSettingsSections, type SettingsSectionId } from './routes/settings/registry'
-import {
-  SettingsIndexRoute,
-  SettingsSectionRoute,
-  settingsSectionPath,
-  GLOBAL_SETTINGS_HOME,
-} from './routes/settings/settings-shell'
+import { GLOBAL_SETTINGS_HOME, settingsSectionPath, visibleSettingsSections, type SettingsSectionId } from './routes/settings/registry'
 import { TasksOverviewRoute } from './routes/tasks-overview'
 import { GlobalTasksRoute } from './routes/global-tasks'
-import { AutomationsRoute } from './routes/automations/automations-route'
-import { WorkspaceToolsRoute } from './routes/workspace-tools'
+
+// Keep section metadata eager for navigation; load secondary route bodies on entry.
+const AutomationsRoute = lazy(() => import('./routes/automations/automations-route').then((m) => ({ default: m.AutomationsRoute })))
+const WorkspaceToolsRoute = lazy(() => import('./routes/workspace-tools').then((m) => ({ default: m.WorkspaceToolsRoute })))
+const SettingsIndexRoute = lazy(() => import('./routes/settings/settings-shell').then((m) => ({ default: m.SettingsIndexRoute })))
+const SettingsSectionRoute = lazy(() => import('./routes/settings/settings-shell').then((m) => ({ default: m.SettingsSectionRoute })))
 
 /** Lazy ON PURPOSE: the thread view carries the markdown stack (Streamdown + remark/rehype,
  *  ~140 KB gz) — as a static import it would sit in the main bundle every visitor pays for
@@ -549,10 +547,10 @@ function projectScopeRoute() {
           </Suspense>
         }
       />
-      <Route path="automations" element={<AutomationsRoute />} />
-      <Route path="automations/new" element={<AutomationsRoute mode="new" />} />
-      <Route path="automations/:automationId" element={<AutomationsRoute mode="edit" />} />
-      <Route path="automations/:automationId/log" element={<AutomationsRoute mode="log" />} />
+      <Route path="automations" element={<Suspense fallback={<p role="status">Loading automations…</p>}><AutomationsRoute /></Suspense>} />
+      <Route path="automations/new" element={<Suspense fallback={<p role="status">Loading automations…</p>}><AutomationsRoute mode="new" /></Suspense>} />
+      <Route path="automations/:automationId" element={<Suspense fallback={<p role="status">Loading automations…</p>}><AutomationsRoute mode="edit" /></Suspense>} />
+      <Route path="automations/:automationId/log" element={<Suspense fallback={<p role="status">Loading automations…</p>}><AutomationsRoute mode="log" /></Suspense>} />
       {/* The skills catalog (R6 Step 1.4) — its own top-level surface, no settings sub-nav.
           `/settings/skills` redirects here (below) so pasted links keep working. */}
       <Route
@@ -590,13 +588,13 @@ function projectScopeRoute() {
           honest 404s until the section ships (notifications unhides in Step 1.7).
           Only the PROJECT-scoped sections live here (multi-project spec, step 3.5); the
           global ones are the top-level `/settings/global/*` block below. */}
-      <Route path="settings" element={<SettingsIndexRoute />} />
+      <Route path="settings" element={<Suspense fallback={<p role="status">Loading settings…</p>}><SettingsIndexRoute /></Suspense>} />
       <Route path="settings/skills" element={<SettingsSkillsRedirect />} />
       {visibleSettingsSections('project').map((section) => (
         <Route
           key={section.id}
           path={`settings/${section.id}`}
-          element={<SettingsSectionRoute section={section} scope="project" />}
+          element={<Suspense fallback={<p role="status">Loading settings…</p>}><SettingsSectionRoute section={section} scope="project" /></Suspense>}
         />
       ))}
       {/* A section that MOVED out of the project area keeps its old URL working: every
@@ -655,7 +653,7 @@ export function AppRoutes() {
           keep redirecting to the boot project's thread (`LegacyPathRedirect` below owns it).
           React Router ranks this static segment above that `*`, so the two never compete. */}
       <Route path="/tasks" element={<GlobalTasksRoute />} />
-      <Route path="/tools" element={<WorkspaceToolsRoute />} />
+      <Route path="/tools" element={<Suspense fallback={<p role="status">Loading workspace tools…</p>}><WorkspaceToolsRoute /></Suspense>} />
       {/* The global activity view, beside `/tasks` for the same reason: every project's activity
           scoped to one project is a contradiction, and without this route `LegacyPathRedirect`
           would send `/activity` to the boot project. */}
@@ -685,7 +683,7 @@ export function AppRoutes() {
         <Route
           key={section.id}
           path={settingsSectionPath('global', section.id)}
-          element={<SettingsSectionRoute section={section} scope="global" />}
+          element={<Suspense fallback={<p role="status">Loading settings…</p>}><SettingsSectionRoute section={section} scope="global" /></Suspense>}
         />
       ))}
 

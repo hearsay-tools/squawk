@@ -65,6 +65,8 @@ describe('settings → appearance against the live dry-run server', () => {
     // A fresh navigation: the pre-paint script must re-apply the choice before the bundle.
     browser.goto(`${baseUrl}/settings/global/appearance`)
     browser.waitForFunction(`document.documentElement.classList.contains('light')`)
+    // Settings routes and sections are lazy chunks, so wait for the appearance control to mount.
+    browser.waitForFunction(`document.querySelector('[data-slot="appearance-theme"]') !== null`)
     expect(browser.count('[data-slot="appearance-theme"] [data-value="light"][aria-checked="true"]')).toBe(1)
 
     // Back to dark so every other suite screenshots the default palette.
