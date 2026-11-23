@@ -189,7 +189,14 @@ export function createGithubBranchForge(deps: GithubBranchForgeDeps = {}): Branc
       });
       for (let i = 0; i < fresh.length; i += HEADS_PER_QUERY) {
         const chunk = fresh.slice(i, i + HEADS_PER_QUERY);
-        const flight = headQueue(() => fetchHeadBatch(run, handle.owner, handle.name, chunk));
+        const flight = headQueue(() => fetchHeadBatch(run, handle.owner, handle.name, chunk)).then((batch) => {
+          for (const [head, found] of batch.complete) {
+            headCache.delete(`${repoRoot}\0${head}`);
+            headCache.set(`${repoRoot}\0${head}`, { at: Date.now(), prs: found });
+          }
+          while (headCache.size > HEAD_CACHE_MAX) headCache.delete(headCache.keys().next().value as string);
+          return batch;
+        });
         for (const head of chunk) headFlights.set(`${repoRoot}\0${head}`, flight);
         batches.add(flight);
         void flight.finally(() => {
@@ -201,11 +208,8 @@ export function createGithubBranchForge(deps: GithubBranchForgeDeps = {}): Branc
         for (const head of batch.incomplete) if (wanted.includes(head)) incomplete.add(head);
         for (const [head, found] of batch.complete) {
           if (wanted.includes(head)) prs.push(...found);
-          headCache.delete(`${repoRoot}\0${head}`);
-          headCache.set(`${repoRoot}\0${head}`, { at: Date.now(), prs: found });
         }
       }
-      while (headCache.size > HEAD_CACHE_MAX) headCache.delete(headCache.keys().next().value as string);
       return { available: !failed, prs, incomplete };
     },
   };

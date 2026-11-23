@@ -1,6 +1,6 @@
 import { memoizeRead } from './bounded-read-cache.ts';
 import { cachedWorktreeSizeBytes } from './worktree-size-cache.ts';
-import { readRepo, forgetRepoRead } from './repo-read-cache.ts';
+import { readRepoRefs, forgetRepoRead } from './repo-read-cache.ts';
 import { allocateAgentProfileId } from './agent-profile-id.ts';
 import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
@@ -187,7 +187,7 @@ import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
-import { getCommit, getDiff, getRepoInfo } from './git.ts';
+import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
@@ -4033,8 +4033,33 @@ export function createApp(deps: ServerDeps) {
   // ---- chained family: repo / git (project-scoped) ----
   const repoRoutes = new Hono<ProjectApiEnv>()
     .get('/repo', async (c) => {
-      const { root, store } = c.get('project');
-      return c.json(await readRepo(root, deps.home, store.queries));
+      const { root: repoRoot, store } = c.get('project');
+      const info = await getRepoInfo(repoRoot);
+      if (!info)
+        return c.json({
+          info: null,
+          status: [],
+          log: [],
+          branches: [],
+          baseBranch: null,
+          tracking: null,
+        });
+
+      // Status stays fresh for edits made outside Squawk; only ref-derived reads are cached.
+      const [status, config] = await Promise.all([
+        getStatus(info.root),
+        loadConfig(repoRoot, deps.home),
+      ]);
+      // The helper validates refs and branch-owner evidence before reusing log attribution.
+      const refs = await readRepoRefs(info, config.baseBranch, store.queries);
+      return c.json({
+        info,
+        status,
+        log: refs.log,
+        branches: refs.branches,
+        baseBranch: config.baseBranch ?? null,
+        tracking: refs.tracking,
+      });
     })
 
     // Every local branch, classified (issue 08 §A/§B2) — cached on the refs state, so the

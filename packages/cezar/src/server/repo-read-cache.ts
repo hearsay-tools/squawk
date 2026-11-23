@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { RepoResponse } from '@open-mercato/cezar-contract';
-import type { Home } from '../home/home.ts';
+import type { RepoResponse, RepoInfo } from '@open-mercato/cezar-contract';
 import type { RunQueries } from '../runs/ports.ts';
-import { loadConfig } from '../config.ts';
-import { getBranches, getLogWithParents, getRepoInfo, getStatus, getTracking } from './git.ts';
+import { getBranches, getLogWithParents, getTracking } from './git.ts';
 import { attributeLog } from './repo-branches.ts';
 import { configFilesKey, readGitDirStamp } from './git-dir-stamp.ts';
 import { boundedReadCache } from './bounded-read-cache.ts';
@@ -30,22 +28,21 @@ async function refStamp(root: string): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-export async function readRepo(root: string, home: Home, queries: Pick<RunQueries, 'listBranchOwners'>): Promise<RepoResponse> {
-  const info = await getRepoInfo(root);
-  if (!info) return { info: null, status: [], log: [], branches: [], baseBranch: null, tracking: null };
-  const [status, config, stamp] = await Promise.all([getStatus(info.root), loadConfig(root, home), refStamp(info.root)]);
+export async function readRepoRefs(info: RepoInfo, baseBranch: string | undefined, queries: Pick<RunQueries, 'listBranchOwners'>) {
+  const root = info.root;
+  const stamp = await refStamp(root);
   const owners = queries.listBranchOwners();
-  const key = createHash('sha256').update(JSON.stringify([root, info, stamp, config.baseBranch, owners])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([root, info, stamp, baseBranch, owners])).digest('hex');
   const load = async () => {
     const [rawLog, branches, tracking] = await Promise.all([
-      getLogWithParents(info.root), getBranches(info.root), getTracking(info.root, config.baseBranch ?? info.branch),
+      getLogWithParents(info.root), getBranches(info.root), getTracking(info.root, baseBranch ?? info.branch),
     ]);
     const sources = await attributeLog(info.root, rawLog, owners);
     const log = rawLog.map(({ parents: _parents, ...entry }, i) => sources[i] ? { ...entry, source: sources[i]! } : entry);
-    return { log, branches, baseBranch: config.baseBranch ?? null, tracking };
+    return { log, branches, baseBranch: baseBranch ?? null, tracking };
   };
   if (keys.get(root) !== key) forgetRepoRead(root);
   keys.set(root, key);
   while (keys.size > 64) forgetRepoRead(keys.keys().next().value!);
-  return { info, status, ...await (stamp ? refs.read(key, load) : load()) };
+  return await (stamp ? refs.read(key, load) : load());
 }

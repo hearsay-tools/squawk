@@ -2,10 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Home } from '../home/home.ts';
 import * as gitReads from './git.ts';
 import { commit, git } from './repo-branches.testkit.ts';
-import { readRepo, forgetRepoRead } from './repo-read-cache.ts';
+import { readRepoRefs, forgetRepoRead } from './repo-read-cache.ts';
 import { cachedWorktreeSizeBytes, clearWorktreeSizeCacheForTests, forgetWorktreeSize } from './worktree-size-cache.ts';
 import { worktreeSizeBytes } from '../git-worktree.ts';
 
@@ -45,24 +44,24 @@ it('coalesces size reads, bounds du concurrency, expires and invalidates entries
 
 it('keeps status fresh, coalesces ref reads and detects external commits and branches', async () => {
   const root = mkdtempSync(join(tmpdir(), 'repo-read-'));
-  const home = Home.sandbox(join(root, 'home'));
   const queries = { listBranchOwners: () => [] };
+  const readRepo = async () => ({ status: await gitReads.getStatus(root), ...await readRepoRefs((await gitReads.getRepoInfo(root))!, undefined, queries) });
   const logRead = vi.spyOn(gitReads, 'getLogWithParents');
   try {
     await git(root, 'init', '-q', '-b', 'main');
     await commit(root, 'base.txt', 'base');
-    await Promise.all([readRepo(root, home, queries), readRepo(root, home, queries)]);
+    await Promise.all([readRepo(), readRepo()]);
     expect(logRead).toHaveBeenCalledTimes(1);
     writeFileSync(join(root, 'new.txt'), 'new');
-    expect((await readRepo(root, home, queries)).status).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'new.txt' })]));
+    expect((await readRepo()).status).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'new.txt' })]));
     expect(logRead).toHaveBeenCalledTimes(1);
     await commit(root, 'base.txt', 'changed');
     await git(root, 'branch', 'external');
-    const changed = await readRepo(root, home, queries);
+    const changed = await readRepo();
     expect(logRead).toHaveBeenCalledTimes(2);
     expect(changed.branches).toContain('external');
     forgetRepoRead(root);
-    await readRepo(root, home, queries);
+    await readRepo();
     expect(logRead).toHaveBeenCalledTimes(3);
   } finally { forgetRepoRead(root); rmSync(root, { recursive: true, force: true }); }
 });
