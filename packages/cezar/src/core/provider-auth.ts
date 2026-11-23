@@ -361,7 +361,19 @@ export class ProviderAuthService {
       this.verifyingRuntimeFailures.delete(provider);
     }
 
-    if (probed.status !== 'connected') return null;
+    if (probed.status !== 'connected') {
+      // A named account the check found signed out must not keep serving an older connected answer:
+      // the start gate reads this cache, and the rejected account would start again
+      // (hearsay-tools/squawk#4116).
+      if (profile) {
+        this.completedProfiles.set(profileCacheKey(provider, profile.id), {
+          status: { ...probed, profileId: profile.id },
+          timestamp: this.now(),
+          generation: ++this.nextProbeGeneration,
+        });
+      }
+      return null;
+    }
     // Fence the clear against the captured GENERATION, not just the id: while the latch stands a
     // new failure report keeps the same `authFailureId`, so an id comparison alone would let this
     // answer — gathered for the incident as it was — clear a newer failure reported mid-probe,

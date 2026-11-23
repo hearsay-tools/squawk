@@ -1197,7 +1197,9 @@ describe('ProviderAuthService', () => {
 
       await expect(service.verifyRuntimeAuthFailure('claude', { id: 'work', configDir: '/work' }))
         .resolves.toBeNull();
-      expect(service.peekProfileStatus('claude', 'work')).toBeUndefined();
+      // The account's own cache learns the logout, so the start gate cannot start it on an older
+      // connected answer (hearsay-tools/squawk#4116).
+      expect(service.peekProfileStatus('claude', 'work')).toMatchObject({ provider: 'claude', status: 'disconnected', profileId: 'work' });
       await expect(service.status()).resolves.toMatchObject({
         providers: expect.arrayContaining([
           expect.objectContaining({ provider: 'claude', status: 'disconnected', authFailureId: 'incident-1' }),

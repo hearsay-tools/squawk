@@ -521,7 +521,7 @@ export function RunnerPill({
 /** Not-installed and signed-out runners as menu links to their Settings card. Greyed by colour,
  *  not opacity, so the text keeps its contrast. A link, not a radio row: it can never become the
  *  task's runner. */
-function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
+export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
   const registered = useRunners().data
   const entries = runnerEntries(registered).flatMap((entry) => {
     if (uninstalled.includes(entry.id)) return [{ id: entry.id, state: 'Not installed', action: 'Install in Settings' }]

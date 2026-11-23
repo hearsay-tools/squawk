@@ -218,8 +218,9 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     pills: (
       <div data-slot="follow-up-engine" className="session-engine-controls">
 <PickerPillGroup>
-        {/* Shown when there is a choice to make. A host with one runner sees no pill. */}
-        {runners.length > 1 ? (
+        {/* Shown when there is a choice to make, or a signed-out runner to point at its Settings card
+            (hearsay-tools/squawk#4116). A host with one ready runner and nothing to sign in to sees no pill. */}
+        {runners.length > 1 || continuation.signedOut.length > 0 ? (
           <RunnerPill
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel

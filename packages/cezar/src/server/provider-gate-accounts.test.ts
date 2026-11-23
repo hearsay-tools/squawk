@@ -65,12 +65,15 @@ describe('the start gate checks the account the task runs on', () => {
   });
 
   /** Claude's default account is signed out; the `work` account's state is the test's to set. */
+  const state = { workSignedIn: false };
+  let providerAuth: ProviderAuthService;
   const setup = (workSignedIn: boolean) => {
-    const providerAuth = new ProviderAuthService({
+    state.workSignedIn = workSignedIn;
+    providerAuth = new ProviderAuthService({
       platform: 'linux',
       runCommand: async (executable, _args, _timeout, env) => {
         if (executable === 'claude') {
-          const loggedIn = env?.CLAUDE_CONFIG_DIR === workDir && workSignedIn;
+          const loggedIn = env?.CLAUDE_CONFIG_DIR === workDir && state.workSignedIn;
           return loggedIn
             ? { stdout: '{"loggedIn":true}', stderr: '', exitCode: 0 }
             : { stdout: '{"loggedIn":false}', stderr: '', exitCode: 1 };
@@ -82,7 +85,13 @@ describe('the start gate checks the account the task runs on', () => {
     const app = createApp({ home: testHome(),
       repoRoot,
       store,
-      manager: { startRun, sendMessage: vi.fn(() => true), continueRun: vi.fn(() => ({ ok: true })) } as unknown as RunManager,
+      manager: {
+        startRun,
+        sendMessage: vi.fn(() => true),
+        continueRun: vi.fn(() => ({ ok: true })),
+        // The planner's runner fails, so a plan that passes the gate answers its one-step fallback.
+        createRunner: vi.fn(async () => ({ run: async () => { throw new Error('no model in tests'); } })),
+      } as unknown as RunManager,
       version: 'test',
       providerAuth,
       workspaceConfig: memoryWorkspaceConfig([]),
@@ -132,5 +141,39 @@ describe('the start gate checks the account the task runs on', () => {
       error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
     });
     expect(startRun).not.toHaveBeenCalled();
+  });
+
+  it('re-probes a named account while a runtime incident stands, instead of trusting its cache', async () => {
+    const app = setup(true);
+    expect((await start(app, 'work')).status).toBe(201); // caches `work` as connected
+    state.workSignedIn = false;
+    providerAuth.reportRuntimeAuthFailure('claude');
+
+    const response = await start(app, 'work');
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
+    });
+  });
+
+  const plan = (app: Hono, agentProfile?: string) => apiRequest(app, '/api/v1/plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ task: 'Task', ...(agentProfile === undefined ? {} : { agentProfile }) }),
+  });
+
+  it('plans on a connected named account while the default account is signed out', async () => {
+    const response = await plan(setup(true), 'work');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ fallback: true });
+  });
+
+  it('refuses a plan on the signed-out default account, and on a signed-out named account', async () => {
+    expect((await plan(setup(true))).status).toBe(409);
+    const response = await plan(setup(false), 'work');
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
+    });
   });
 });

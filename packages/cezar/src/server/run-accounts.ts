@@ -74,14 +74,15 @@ export function runAccountFor(run: RunRecord, provider: ProviderId): string | un
 }
 
 /** The probed sign-in state of each named account in `accounts`. `refresh` drops the cached answer
- *  first, so a refusal is confirmed by a fresh probe, as the default rows are. */
+ *  first for the providers it names, so a refusal is confirmed by a fresh probe, as the default rows
+ *  are, and a provider with a standing runtime incident is never answered from an older cache. */
 export async function probeNamedAccounts(
   providerAuth: Pick<ProviderAuthService, 'profileStatus' | 'forgetProfileStatus'>,
   accounts: ReadonlyMap<ProviderId, ResolvedAgentProfile>,
-  refresh = false,
+  refresh: (provider: ProviderId) => boolean = () => false,
 ): Promise<Map<ProviderId, GateAccount>> {
   const rows = await Promise.all([...accounts].map(async ([provider, account]) => {
-    if (refresh) providerAuth.forgetProfileStatus(provider, account.id);
+    if (refresh(provider)) providerAuth.forgetProfileStatus(provider, account.id);
     const probed = await providerAuth.profileStatus(provider, { id: account.id, configDir: account.path });
     return [provider, { label: account.label, status: probed.status }] as const;
   }));

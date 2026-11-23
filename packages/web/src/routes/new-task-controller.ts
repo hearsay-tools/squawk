@@ -210,6 +210,11 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   }
   const pickedAccount = availability.accountFor(displayRunner, draft.agentProfile)
     ?? availability.repoAccount?.[displayRunner]
+  // Plan first runs on the project's default runner: it carries the composer's account when that
+  // runner is the picked one, else the default runner's own connected account (hearsay-tools/squawk#4116).
+  const planAccount = defaultRunner === undefined
+    ? null
+    : availability.accountFor(defaultRunner, runner === defaultRunner ? draft.agentProfile : null)
   const catalog = useRunnerModels(displayRunner, true, pickedAccount)
   const modelsLocked = config.data?.modelsLocked === true
   const defaultModels = config.data?.defaultModels
@@ -228,6 +233,7 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
     uninstalled,
     signedOut,
     defaultRunner,
+    planAccount,
     runner,
     displayRunner,
     providersReady,
@@ -484,7 +490,7 @@ export function useNewTaskSubmit(input: {
       // Keep the original draft while planning so Discard returns to it unchanged.
       setPlanning(true)
       try {
-        const planned = await postPlan(text)
+        const planned = await postPlan(text, engine.planAccount)
         if (mounted.current) setPlan(pendingPlanOf(text, images, planned))
       } finally {
         setPlanning(false)

@@ -551,7 +551,8 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
     renderAction(makeRun({ runner: 'claude', model: 'opus' }))
 
     const button = await screen.findByRole('button', { name: /continue/i })
-    expect(screen.queryByRole('button', { name: /^Runner · / })).toBeNull()
+    // Signed-out claude stays visible as a sign-in link, so the pill shows (hearsay-tools/squawk#4116).
+    expect(await screen.findByRole('button', { name: /^Runner · codex/ })).not.toBeNull()
     fireEvent.click(button)
 
     await waitFor(() => expect(continueBody()).toBeDefined())

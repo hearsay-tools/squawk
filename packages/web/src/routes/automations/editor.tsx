@@ -8,7 +8,7 @@ import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
 import { SegmentedControl } from '@/components/facet-filter'
-import { PickerPill, PickerPillGroup } from '@/components/picker-pill'
+import { PickerPill, PickerPillGroup, UnavailableRunnerLinks } from '@/components/picker-pill'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -297,7 +297,7 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
   const workflows = useWorkflows()
   // A scheduled run sends no account: it runs on the project's selection (hearsay-tools/squawk#4116).
   const availability = useRunnerAvailability()
-  const usable = availability.runnersOn((runner) => availability.repoAccount?.[runner]).runners
+  const { runners: usable, signedOut } = availability.runnersOn((runner) => availability.repoAccount?.[runner])
   const config = useConfig()
   const registered = useRunners()
   const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
@@ -331,6 +331,8 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
           value={draft.runner ?? ''}
           disabled={!registered.data}
           options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: runnerPickerLabel(registered.data, id) }))]}
+          // A runner that is not installed or not signed in stays visible as a link to its Settings card.
+          footer={<UnavailableRunnerLinks uninstalled={availability.uninstalled} signedOut={signedOut.filter((id) => id !== draft.runner)} />}
           onPick={(runner) => {
             // A model id belongs to its runner, so picking another runner clears it.
             patch({ runner: runner ? (runner as Runner) : undefined, model: undefined })
