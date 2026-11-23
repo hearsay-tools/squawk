@@ -80,3 +80,10 @@ export const waitKindRow = registry.get;
 export function waitKindForWait(wait: Wait): WaitKindRow | undefined {
   return waitKindRow(wait.kind === 'plugin' ? wait.pluginKind : wait.kind);
 }
+
+/** Validation failures are definite refusals, never unknown registration outcomes. */
+export function parsePluginWaitRequest(row: WaitKindRow, request: unknown) {
+  const parsed = row.inputSchema?.safeParse(request);
+  if (!parsed?.success) throw Object.assign(new Error('Invalid plugin wait request'), { code: 'invalid_request' });
+  return parsed.data;
+}

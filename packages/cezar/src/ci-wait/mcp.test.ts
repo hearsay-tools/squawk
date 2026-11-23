@@ -1,4 +1,5 @@
 import './tools.testkit.ts';
+import '../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';

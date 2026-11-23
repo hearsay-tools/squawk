@@ -117,8 +117,9 @@ export class WaitEngine {
     const settled = 'result' in options;
     if (!settled) this.armOpened(runId, wait);
     const hooks = waitKindForWait(wait)?.lifecycle;
-    hooks?.postOpen?.({ runId, store: this.context.store, host: this.host, wait, signal: this.customWatches.get(wait.id)?.abort.signal ?? deadlineSignal,
-      resolve: result => this.settleWait(runId, wait.id, result) });
+    if (hooks?.postOpen && this.context.store.getRun(runId)?.waits?.some(entry => entry.id === wait.id && entry.phase === 'open')) {
+      hooks.postOpen(this.customWatchContext(runId, wait));
+    }
     if (options.park) this.park(runId, state, wait);
     // The answer is the wait as opened, even when the result resolves it at once.
     const opened = this.openedEntry(runId, wait);
@@ -206,13 +207,22 @@ export class WaitEngine {
     }
     if (row?.lifecycle?.arm) {
       if (this.customWatches.has(wait.id)) return;
-      const abort = new AbortController();
-      const context: WaitWatchContext = { runId, store: this.context.store, host: this.host, wait, signal: abort.signal, resolve: result => this.settleWait(runId, wait.id, result) };
-      this.customWatches.set(wait.id, { context, abort });
-      row.lifecycle.arm(context);
+      row.lifecycle.arm(this.customWatchContext(runId, wait));
       return;
     }
     this.watches[waitPolicyForWait(wait).watch](runId, wait);
+  }
+
+  private customWatchContext(runId: string, wait: Wait): WaitWatchContext {
+    const current = this.customWatches.get(wait.id);
+    if (current) return current.context;
+    const abort = new AbortController();
+    const context: WaitWatchContext = { runId, store: this.context.store, host: this.host, wait, signal: abort.signal, resolve: result => {
+      if (abort.signal.aborted || this.context.disposed() || this.customWatches.get(wait.id)?.context !== context) return;
+      this.settleWait(runId, wait.id, result);
+    } };
+    this.customWatches.set(wait.id, { context, abort });
+    return context;
   }
 
   /** A timer, peer or subagent deadline. Native subagents live only in their session: with none,

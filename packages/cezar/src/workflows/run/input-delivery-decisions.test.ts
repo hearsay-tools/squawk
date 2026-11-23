@@ -1,3 +1,4 @@
+import '../../built-in-wait-kinds.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import {
   makeRunRecord,

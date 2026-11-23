@@ -1,3 +1,4 @@
+import { parsePluginWaitRequest } from './wait-kind-registry.ts';
 import { WaitDeadlineConflict } from '../../ci-wait/errors.ts';
 import { createHash } from 'node:crypto';
 import type { Wait, WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
@@ -10,11 +11,11 @@ export type RegistrationIdentity = Pick<WaitRegistrationReceipt, 'operationId' |
 export function registrationIdentity(request: SquawkWaitRequest): RegistrationIdentity | undefined {
   if (!request.operation_id) return undefined;
   const row = waitRequestRow(request.kind);
-  const { operation_id, ...fields } = row.isPlugin ? row.inputSchema!.parse(request) : builtInSquawkWaitRequestSchema.parse(request);
+  const { operation_id, ...fields } = row.isPlugin ? parsePluginWaitRequest(row, request) : builtInSquawkWaitRequestSchema.parse(request);
   const canonical = { ...fields };
   if (row.isPlugin) row.canonicalizePlugin?.(canonical);
   else row.canonicalize(canonical as import('@open-mercato/cezar-contract/wait-tools').BuiltInSquawkWaitRequest);
-  for (const field of ['worker_ids', 'request_ids', 'peer_ids'] as const) {
+  if (!row.isPlugin) for (const field of ['worker_ids', 'request_ids', 'peer_ids'] as const) {
     if (field in canonical) (canonical as Record<string, unknown>)[field] = [...(canonical as unknown as Record<string, string[]>)[field]!].sort();
   }
   const sorted = Object.fromEntries(Object.entries(canonical).sort(([a], [b]) => a.localeCompare(b)));

@@ -1,4 +1,4 @@
-import { waitKindRow } from './wait-kind-registry.ts';
+import { waitKindRow, parsePluginWaitRequest } from './wait-kind-registry.ts';
 import { pluginWaitEntrySchema } from '@open-mercato/cezar-contract/waits';
 import { warnRegistrationRefused, type WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS, routeRegistration, waitPolicyForWait } from './wait-kinds.ts';
@@ -253,7 +253,7 @@ export class WaitRegistry {
   private async registerPluginWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal) {
     const row = waitKindRow(request.kind)!;
     if (!row.inputSchema || !row.register) throw Object.assign(new Error('Plugin wait has no registration handler'), { code: 'invalid_request' });
-    const parsed = row.inputSchema.parse(request);
+    const parsed = parsePluginWaitRequest(row, request);
     row.canonicalizePlugin?.(parsed);
     const { refuse, assertCanRegister } = this.registrationGate(runId, generation, capabilitySignal);
     const { state, run } = assertCanRegister();
@@ -261,13 +261,17 @@ export class WaitRegistry {
     const registration = registrationIdentity(parsed);
     const replay = replayRegistration(run, registration);
     if (replay) return replay as Extract<RegisteredWait, { kind: 'plugin' }>;
-    const repeated = run.waits?.find(wait => wait.kind === 'plugin' && wait.pluginKind === row.kind && wait.phase === 'open' && row.duplicatePlugin?.(wait, parsed, turnId));
+    const duplicate = (current: RunRecord) => current.waits?.find(wait => wait.kind === 'plugin' && wait.pluginKind === row.kind && wait.phase === 'open' && row.duplicatePlugin?.(wait, parsed, turnId));
+    const repeated = duplicate(run);
     if (repeated) return repeatRegistration(this.context.store, runId, repeated, undefined, registration) as Extract<RegisteredWait, { kind: 'plugin' }>;
     if (!this.host.waitEngine.hasRoom(run)) refuse('capacity');
     if (row.refusesSpentBudget && this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) refuse('wake_budget_spent');
     const wait = pluginWaitEntrySchema.parse(await row.register(parsed, { runId, turnId, via, now: Date.now(), signal: capabilitySignal }));
-    assertCanRegister();
+    const { run: latest } = assertCanRegister();
     if (state.waitIdentity.ciTurnId !== turnId) refuse('turn_changed');
+    // Another operation may have committed the same wait while this handler yielded.
+    const concurrent = duplicate(latest);
+    if (concurrent) return repeatRegistration(this.context.store, runId, concurrent, undefined, registration) as Extract<RegisteredWait, { kind: 'plugin' }>;
     if (wait.pluginKind !== row.kind || wait.phase !== 'open') refuse('invalid_request');
     return this.host.waitEngine.open(runId, state, wait, OPEN_REGISTERED(registration)).wait!;
   }

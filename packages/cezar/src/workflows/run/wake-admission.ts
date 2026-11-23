@@ -432,6 +432,9 @@ function parkHold(run: RunRecord, state: ActiveRun, top: WaitingOn['kind'] | und
 function parkTopKeepsSlot(run: RunRecord, top: WaitingOn['kind'] | undefined): boolean {
   if (top === undefined) return resolvedWaits(run).length > 0;
   if (top === 'human' || top === 'usage-limit') return false;
+  const selected = computeWaitingOn(run);
+  const selectedWait = selected && 'waitId' in selected ? openWaits(run).find(wait => wait.id === selected.waitId) : undefined;
+  if (selectedWait) return waitPolicyForWait(selectedWait).keepsSlot;
   const kind = top === 'workers' ? 'worker' : top === 'peers' ? 'peer' : top === 'subagents' ? 'subagent' : top;
   return WAIT_KINDS[kind].keepsSlot;
 }
