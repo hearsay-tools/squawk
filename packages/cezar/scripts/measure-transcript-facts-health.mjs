@@ -41,6 +41,9 @@ try {
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import(new URL('workflows/step-kind-registry.js', runtime.url));
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();
+  const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import(new URL('built-in-wait-kinds.js', runtime.url));
+  registerBuiltInWaitKinds();
+  sealBuiltInWaitKinds();
   const { registerBuiltInTools, sealBuiltInTools } = await import(new URL('built-in-tools.js', runtime.url));
   registerBuiltInTools();
   sealBuiltInTools();

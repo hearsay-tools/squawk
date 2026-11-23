@@ -82,8 +82,11 @@ import { registerBuiltInRunners, sealBuiltInRunners } from ${JSON.stringify(path
 import piExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/pi-ci-wait.mjs')).href)};
 import ompExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/omp-ci-wait.mjs')).href)};
 import { registerBuiltInTools, sealBuiltInTools } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-tools.js')).href)};
+import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-wait-kinds.js')).href)};
 registerBuiltInRunners();
 sealBuiltInRunners();
+registerBuiltInWaitKinds();
+sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
 await probe({ Client, StdioClientTransport, CiToolController, createRunner, piExtension, ompExtension }, JSON.parse(process.argv[2]));

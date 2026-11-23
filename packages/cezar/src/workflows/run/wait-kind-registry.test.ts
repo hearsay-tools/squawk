@@ -39,6 +39,11 @@ it('registers the same reference idempotently and rejects conflicts and new post
 it('imports the tool catalog before registration, then builds its schema lazily after seal', async () => {
   const registry = await fixture();
   const { flatWaitInputSchema, waitToolDefinition } = await import('../../ci-wait/tool-catalog.ts');
+  const { registerBuiltInTools, sealBuiltInTools } = await import('../../built-in-tools.ts');
+  const { agentTool, agentToolMetadata } = await import('../../ci-wait/tool-registry.ts');
+  registerBuiltInTools();
+  sealBuiltInTools();
+  expect(() => agentToolMetadata(agentTool('cezar_wait')!)).toThrow(/unsealed/);
   expect(() => flatWaitInputSchema()).toThrow(/unsealed/);
   const { registerBuiltInWaitKinds } = await import('../../built-in-wait-kinds.ts');
   registerBuiltInWaitKinds();
@@ -47,6 +52,7 @@ it('imports the tool catalog before registration, then builds its schema lazily 
   registry.sealWaitKinds();
   const schema = waitToolDefinition.inputSchema;
   expect(schema).toEqual(flatWaitInputSchema());
+  expect(agentToolMetadata(agentTool('cezar_wait')!).inputSchema).toEqual(schema);
   expect(schema.properties.kind).toMatchObject({ enum: ['pr', 'worker', 'request', 'peer', 'timer', 'process', 'fixture'] });
   expect(schema.properties.target).toEqual({ type: 'string', description: 'The fixture target.' });
   expect(schema.properties.timeout_seconds).toMatchObject({ minimum: 1, maximum: 7200, default: 1800 });
