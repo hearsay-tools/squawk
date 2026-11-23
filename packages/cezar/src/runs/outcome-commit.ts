@@ -1,7 +1,7 @@
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { LAST_WAITS_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
-import { isSquawkHumanWait, isUserAnsweredWait, supersededResult, waitInputId } from './wait-helpers.ts';
+import { isHumanWait, isSquawkHumanWait, isUserAnsweredWait, supersededResult, waitInputId } from './wait-helpers.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
 import type { RunRecord } from './store.ts';
 import { checkWaitWrite } from './wait-phases.ts';
@@ -88,7 +88,7 @@ export interface StagedOutcome {
 /** An answer to the question at `askSeq` settles the agent's waits shown up to it, the waits not
  *  shown yet, and Squawk's own wait, which no question binds. */
 function answeredBy(wait: Wait, askSeq: number | undefined): boolean {
-  return askSeq === undefined || wait.kind !== 'human' || isSquawkHumanWait(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
+  return askSeq === undefined || !isHumanWait(wait) || isSquawkHumanWait(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
 }
 
 /** What the outcomes settled so far: `StagedOutcome.answered` and `settled`. */

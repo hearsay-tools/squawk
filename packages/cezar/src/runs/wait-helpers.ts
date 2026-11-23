@@ -10,6 +10,11 @@ export function isUserAnsweredKind(kind: Wait['kind']): boolean {
   return kind === 'human';
 }
 
+/** A human question: the one wait kind the user answers. */
+export function isHumanWait(wait: Wait): wait is Extract<Wait, { kind: 'human' }> {
+  return wait.kind === 'human';
+}
+
 /** A wait the user answers: only a human question. */
 export function isUserAnsweredWait(wait: Wait): boolean {
   return isUserAnsweredKind(wait.kind);
@@ -27,7 +32,7 @@ export function supersededResult(wait: Wait): { reason: 'superseded' } | undefin
  *  and is replaced by the agent's own (hearsay-tools/cezarion#1234), so the agent is never told of
  *  it as one of its waits. */
 export function isSquawkHumanWait(wait: Wait): boolean {
-  return wait.kind === 'human' && wait.source === 'cezar';
+  return isHumanWait(wait) && wait.source === 'cezar';
 }
 
 /** The agent input that delivers a resolved wait's result: the wait's own id, or for an upgraded
