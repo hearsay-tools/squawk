@@ -1,6 +1,6 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
@@ -37,9 +37,8 @@ import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, piRunner);
 
 let root: string;
 let store: RunStore;

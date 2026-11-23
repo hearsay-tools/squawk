@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -16,8 +16,8 @@ import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 // hearsay-tools/cezarion#2321: one project context failure answers the same on every transport.
 const runId = '00000000-0000-4000-8000-000000002321';

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
@@ -6,6 +7,8 @@ import type { ProcessWaitEntry, ProcessWaitResult, Wait } from '@open-mercato/ce
 import { ProcessWaitSupervisor, type ProcessWatchRequest } from '../process-wait/supervisor.ts';
 import { manager, parent, restart, semaphore, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-claude.testkit.ts';
 import { waitResultText } from './waits.ts';
+
+sealTestRunners();
 
 // hearsay-tools/cezarion#1446: a process wait through RunManager. Only the process watch is
 // controlled; the store, scheduler and runner wire stay real.

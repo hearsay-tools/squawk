@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { CiToolController } from '../ci-wait/controller.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -13,6 +14,8 @@ import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+
+sealTestRunners();
 
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 

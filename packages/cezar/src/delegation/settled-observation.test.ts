@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { workspaceKindOf } from './workspace-kinds.ts';
+
+sealTestRunners();
 
 describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
   let f: ReturnType<typeof fixture>;

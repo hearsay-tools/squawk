@@ -13,9 +13,11 @@ import { join } from 'node:path';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { type AgentEvent } from '../../packages/cezar/src/core/agent-runner.ts';
 import { inputDeliveryOf } from '../../packages/cezar/src/core/agent-runner-values.ts';
-import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
 registerBuiltInRunners();
+
+sealBuiltInRunners();
 
 const [backend, model] = process.argv.slice(2) as [string, string | undefined];
 if (!backend) { console.error('usage: probe-steering.ts <backend> [model]'); process.exit(2); }

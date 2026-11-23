@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // These tests pin the five built-in runners' agent homes, so they register only those five.
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
@@ -14,6 +15,7 @@ import { binDir, versionsDir } from '../managed-install/layout.ts';
 import { cezCacheDir, resolveChromium } from '../preview/chromium.ts';
 import { resolveHome } from './resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
+sealTestRunners();
 
 // Shared setup now loads the write guard before this file installs its OS-home mock.
 vi.hoisted(() => vi.resetModules());

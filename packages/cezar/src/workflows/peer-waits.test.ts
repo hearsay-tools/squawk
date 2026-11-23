@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,8 @@ import { IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES } from './run.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { stateOf } from './run-states.ts';
 import { controlledWire, fixtureUpdateRun, manager, parent, restart, root, semaphore, store, toolGenerationOf, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 /**
  * The `peer` wait (hearsay-tools/cezarion#1995), spec 2026-10-27-task-communication-protocol § 7:

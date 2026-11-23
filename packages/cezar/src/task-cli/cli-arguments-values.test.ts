@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -6,9 +7,9 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { describe, expect, it, vi } from 'vitest';
 
 import { taskCliArgumentRun, taskCliFixture } from './cli.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('cez task', () => {
   const ctx = taskCliFixture();

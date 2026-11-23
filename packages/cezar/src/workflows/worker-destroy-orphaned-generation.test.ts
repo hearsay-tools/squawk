@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
@@ -28,13 +29,12 @@ import { createRunner } from '../core/runner-registry.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 import { workerExecutionsOf } from '../delegation/worker-executions.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
   useWorkerDestroyFixture();

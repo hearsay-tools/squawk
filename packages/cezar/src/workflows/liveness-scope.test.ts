@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -6,6 +7,7 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { LivenessTimers } from './run/liveness-timers.ts';
 import { InputDelivery } from './run/input-delivery.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
+sealTestRunners();
 
 /** hearsay-tools/squawk#3662: an execution's liveness bounds end at `dropActive`, the unread-input bound too. */
 const f = setupMonitoringFixture();

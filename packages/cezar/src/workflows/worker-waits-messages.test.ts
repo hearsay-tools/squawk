@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
@@ -14,7 +14,8 @@ import '../core/created-runners.testkit.ts';
 import { delegatingParent, manager, restart, root, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait-core.testkit.ts';
 
 import { entryOf, inputOf } from './worker-waits-shared.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('messages wake without being waits', { timeout: 45_000 }, () => {
   useWorkerWaitFixture();

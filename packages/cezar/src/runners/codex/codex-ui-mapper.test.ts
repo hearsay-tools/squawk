@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 /**
  * Golden tests for the codex app-server → v2 mapper: each fixture in
  * `__fixtures__/` is a JSONL frame transcript (shapes from
@@ -18,11 +19,11 @@ import { z } from 'zod';
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import type { UiEvent, UiItem } from '../../core/ui-events.ts';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP, codexSessionStarted, createCodexUiState, mapCodexNotification } from './codex-ui-mapper.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 import { PLAN_STATUSES } from '../../core/ui-events.ts';
@@ -1204,7 +1205,6 @@ describe('codex reasoning text survives replay (#528)', () => {
     expect(reasoningAt(events, 'item.completed', 'item_rsn_2')).toMatchObject({ text: 'Next' });
   });
 });
-
 
 it('recovers from recorded retry errors through the real app-server transport (#550)', async () => {
   const runner = new CodexAppServerRunner({ bin: join(HERE, '../../../scripts/mock-codex-app-server.mjs'), timeoutMs: 0 });

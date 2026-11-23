@@ -1,3 +1,4 @@
+import { prepareBenchmarkRuntime } from './benchmark-runtime.ts';
 import { Home } from '../src/home/home.ts';
 /**
  * Workspace stream benchmark (hearsay-tools/cezarion#2730): what one large delegation family costs
@@ -41,15 +42,8 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
-import { registerBuiltInRunners } from '../src/runners/built-in.ts';
-import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 
-// Workspace receipts and markers use the host's identity store (ADR 0032).
-installWindowsIdentityStore();
-registerBuiltInRunners();
-registerBuiltInRunSlots();
-sealBuiltInRunSlots();
+prepareBenchmarkRuntime();
 
 type RunManager = import('../src/workflows/run.ts').RunManager;
 type RunRecord = import('../src/runs/store.ts').RunRecord;

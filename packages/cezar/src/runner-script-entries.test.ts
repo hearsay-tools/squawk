@@ -7,11 +7,10 @@ import { repoRoot } from './lint/source-rule.ts';
 // top level, before it reads config or runs a task (spec 2026-11-18-runner-definitions). The
 // scripts start real CLIs or many processes, so this reads their source.
 const ENTRIES = [
-  'packages/cezar/scripts/benchmark-family-reconcile.ts',
-  'packages/cezar/scripts/benchmark-run-store.ts',
-  'packages/cezar/scripts/benchmark-stuck-destroys.ts',
-  'packages/cezar/scripts/benchmark-worker-lifecycle.ts',
-  'packages/cezar/scripts/benchmark-workspace-events.ts',
+  'packages/cezar/scripts/benchmark-runtime.ts',
+  'packages/cezar/scripts/measure-transcript-facts-health.mjs',
+  'packages/web/e2e/home-recovery-server.mjs',
+  'packages/web/scripts/tab-fixture-server.mjs',
   '.ai/scripts/mock-wire-evidence.ts',
   '.ai/scripts/probe-approvals.ts',
   '.ai/scripts/probe-questions.ts',
@@ -19,8 +18,17 @@ const ENTRIES = [
   '.ai/scripts/probe-steering.ts',
 ];
 
-it.each(ENTRIES)('%s registers the built-in runners at its top level', (entry) => {
+it.each(ENTRIES)('%s registers and seals the built-in runners at startup', (entry) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/^import \{ registerBuiltInRunners \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/runners\/built-in\.ts';$/m);
-  expect(source).toMatch(/^registerBuiltInRunners\(\);$/m);
+  expect(source).toMatch(/\{ registerBuiltInRunners, sealBuiltInRunners \} (?:from |=[^\n]*(?:import|load)\()/);
+  expect(source).toMatch(/^(\s*)registerBuiltInRunners\(\);?\n\1sealBuiltInRunners\(\);?$/m);
 });
+
+// Each benchmark reaches the same reviewed process boot before opening its store.
+it.each(['family-reconcile', 'run-store', 'stuck-destroys', 'worker-lifecycle', 'workspace-events'])(
+  'benchmark-%s boots its process registries', name => {
+    const source = readFileSync(join(repoRoot, `packages/cezar/scripts/benchmark-${name}.ts`), 'utf8');
+    expect(source).toContain("import { prepareBenchmarkRuntime } from './benchmark-runtime.ts';");
+    expect(source).toMatch(/^prepareBenchmarkRuntime\(\);$/m);
+  },
+);

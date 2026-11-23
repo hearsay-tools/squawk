@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Home } from './home.ts';
@@ -5,12 +6,12 @@ import { HomeStore } from './store.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { acquireLock, deleteServerState } from '../server-install/state.ts';
 import { loadAgentAccounts } from '../workspace/agent-accounts.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { disableRemoteSettings, enableRemoteSettings, isPortGranted } from '../remote-settings.ts';
 
 // The account paths read Claude's account data through the registry; every account case here is a Claude account.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 afterEach(() => { vi.restoreAllMocks(); cleanStoreRoots(); });
 

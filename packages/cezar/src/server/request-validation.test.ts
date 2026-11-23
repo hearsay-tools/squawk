@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -17,6 +18,7 @@ import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 registerBuiltInRunners();
+sealTestRunners();
 
 /**
  * Tightened request validation (#429): the mutating routes now bound their

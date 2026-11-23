@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
 import { TrackedWork } from './run/tracked-work.ts';
@@ -25,11 +26,10 @@ import {
 } from './run.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { RunMemory } from './run/run-memory.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 // Publication guidance is additive for both fresh sessions and Continue; the
 // full prompt assertions below must still pin the unchanged handoff contract.

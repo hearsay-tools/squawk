@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -25,8 +25,8 @@ import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import type { WorkspaceProjects } from './workspace-projects.ts';
 import { createRunner } from '../core/runner-registry.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const TOOL_STATUS = activityToolSchema.shape.status.enum;
 

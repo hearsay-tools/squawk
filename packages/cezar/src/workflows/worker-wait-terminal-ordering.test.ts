@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import type { AgentEvent } from '../core/agent-runner.ts';
 import type { UiEvent } from '../core/ui-events.ts';
@@ -12,7 +12,8 @@ import '../core/created-runners.testkit.ts';
 import { captureState, controlledWire, fixtureUpdateRun, manager, parent, register, restart, root, semaphore, store, timeline, until, useWorkerWaitFixture, waitOf, workerEntryOf, worker } from './worker-wait-core.testkit.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const runnerEvents = vi.hoisted(() => new Map<string, (event: UiEvent) => void>());
 const runnerTurnEvents = vi.hoisted(() => new Map<string, (event: AgentEvent) => void>());

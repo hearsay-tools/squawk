@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -10,11 +11,11 @@ import {
   resolveCodexExecutable,
   waitForCodexAppServerExit,
 } from './codex-app-server-transport.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The transport's child-env sanitizer reads Codex's allow-list from the registry; every case drives Codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 
 const originalBin = process.env.CEZ_CODEX_BIN;
 

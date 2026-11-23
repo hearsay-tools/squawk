@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -21,7 +21,8 @@ import { eventCheckpoint, manager, parent, restart, root, store, until, delegati
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { toolCall } from './waits-parity.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // hearsay-tools/cezarion#1234: the human kind of the wait list on the Claude wire. The rules are
 // runner-neutral (BUILT_IN_RUNNER_IDS coverage is U7h and U9h in `waits-parity-asks-cells.testkit.ts`); the runner,

@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationSendRequest } from '@open-mercato/cezar-contract/conversations';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { fixture } from './service.testkit.ts';
+
+sealTestRunners();
 
 describe('reply scope before direction guidance', () => {
   let f: ReturnType<typeof fixture>;

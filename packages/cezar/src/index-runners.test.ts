@@ -43,8 +43,9 @@ it('renders runner help after registration even when imported before it', async 
   const { taskHelp } = await import('./task-cli/cli.ts');
   const { knownRunnerIds } = await import('./core/runner-registry.ts');
   expect(knownRunnerIds()).toEqual([]);
-  const { registerBuiltInRunners } = await import('./runners/built-in.ts');
+  const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
+  sealBuiltInRunners();
   expect(taskHelp('start')).toContain('claude | codex | opencode | pi | omp | antigravity');
 });
 

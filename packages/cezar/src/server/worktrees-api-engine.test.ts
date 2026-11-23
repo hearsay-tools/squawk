@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -18,6 +19,8 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { removeWorktreesRepo, run, seedWorktreeRun, worktreesRepo } from './worktrees-api.testkit.ts';
 // Deletion, removal and reclaim ask the shipped autosave gate.
 import '../built-in-run-slots.testkit.ts';
+
+sealTestRunners();
 
 /**
  * The worktrees API cases that need a real manager: Continue admission against the reclaim and

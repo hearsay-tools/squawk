@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +13,8 @@ import { WorktreeAutosave } from './run/worktree-autosave.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS } from './run.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
 import { manager, restart, root, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait-core.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // hearsay-tools/squawk#1621: a workflow step that fails while its run holds waits is the resume
 // cursor. Review D1: on disk before the final autosave, so a crash there keeps it. Review B1:

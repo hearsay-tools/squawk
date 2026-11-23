@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-claude.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -7,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
 import { ignoreTermShell, ownerGuardShell } from '../stubborn-child.testkit.ts';
+
+sealTestRunners();
 
 
 // These fixtures exercise checks and Git, never the auxiliary LLM namer.

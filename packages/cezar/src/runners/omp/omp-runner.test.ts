@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
@@ -34,16 +35,14 @@ import { ignoreTermSource } from '../../stubborn-child.testkit.ts';
 import { z } from 'zod';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
 import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { ompRunner } from './definition.ts';
 
-registerRunner(ompRunner);
+sealTestRunners(ompRunner);
 
 const TOOL_STATUS = z.enum([
   ...Object.values(CODEX_TOOL_STATUS_MAP),
   ...Object.values(OPENCODE_TOOL_STATUS_MAP),
 ]).enum;
-
 
 /** The OMP (Oh My Pi) runner (#595): argv, tool mapping, and the persistent RPC session. */
 

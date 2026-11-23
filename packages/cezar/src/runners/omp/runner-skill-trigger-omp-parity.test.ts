@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import { describeNativeSkillTriggers } from '../../core/runner-skill-trigger.tes
 import { ompRunner } from './definition.ts';
 
 useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
+sealTestRunners();
 describeNativeSkillTriggers('omp');
 
 it('passes an omp mid-message skill token unchanged for native expansion', async () => {

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import '../core/created-runners.testkit.ts';
 import { controlledWire, fixtureUpdateRun, manager, parent, root, store, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('conversation backlog delivery (#475)', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();

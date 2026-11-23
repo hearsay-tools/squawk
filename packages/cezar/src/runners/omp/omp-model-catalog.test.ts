@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -9,11 +10,11 @@ import {
   resolveOmpExecutable,
   spawnOmp,
 } from './omp-model-catalog.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { ompRunner } from './definition.ts';
 
 // The spawn path reads omp's env and account data through the registry; every case drives omp.
-registerRunner(ompRunner);
+
+sealTestRunners(ompRunner);
 
 // Trimmed from a recorded `omp models --json` (omp/18.4.11): the output is an OBJECT with a
 // `models` array, and `thinking` is null or the model's own list of levels.

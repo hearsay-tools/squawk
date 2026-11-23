@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -6,6 +7,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait-claude.testkit.ts';
 import type { TimerWaitEntry, Wait } from '@open-mercato/cezar-contract/waits';
 import { conversationPair, turnEnds } from './worker-wait-conversations.testkit.ts';
+
+sealTestRunners();
 
 /** The deadline of the run's open timer: `mock:cezar-wait` opens a cezar_wait timer (hearsay-tools/cezarion#2397). */
 const timerDeadlineOf = (run?: { waits?: Wait[] | undefined }) => run?.waits?.find((wait): wait is TimerWaitEntry => wait.kind === 'timer' && wait.phase === 'open')?.deadline;

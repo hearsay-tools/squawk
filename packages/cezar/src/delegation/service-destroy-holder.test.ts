@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +12,8 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { runWorktreeTeardown } from './worktree-teardown.ts';
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, fakeManager, useHolderFixture } from './service-destroy-holder.testkit.ts';
+
+sealTestRunners();
 
 /** A process in its own group with its cwd in `root`, as a test server or file watcher a worktree
  * started for itself. */

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
@@ -10,14 +11,12 @@ import { RunManager } from './run.js';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.js';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
 // A settled run reaps its scratch, which asks the removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
-registerRunner(piRunner);
+sealTestRunners(claudeRunner, piRunner);
 
 const workflow: WorkflowDef = {
   name: 'quick-task', source: 'built-in',

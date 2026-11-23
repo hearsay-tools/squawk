@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,11 +9,11 @@ import type { UiEvent } from '../../core/ui-events.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { OPENCODE_LOST_WAKE_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { opencodeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives OpenCode.
-registerRunner(opencodeRunner);
+
+sealTestRunners(opencodeRunner);
 
 const mockBin = fileURLToPath(new URL('../../../scripts/mock-opencode-serve.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {

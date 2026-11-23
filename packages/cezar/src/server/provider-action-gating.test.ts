@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -19,9 +19,7 @@ import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { createApp } from './server.ts';
 import { DISABLED_MESSAGE, memoryWorkspaceConfig, providerAuth } from './provider-action-gating.testkit.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 describe('provider action gating', () => {
   let repoRoot: string;

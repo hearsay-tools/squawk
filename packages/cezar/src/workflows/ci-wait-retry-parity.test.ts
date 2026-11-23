@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,7 +13,8 @@ import { manager, store, root, restart, toolGenerationOf, until, useWorkerWaitFi
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // Control only the initial retry delay, retaining abort behavior and native
 // runner processes. Releasing the delay represents its one-second backoff.

@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { beforeEach, expect, it } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentRunSpec, ContentBlock } from '../core/agent-runner.ts';
@@ -11,7 +11,8 @@ import { createFixtureManager, fixtureWork, fixtureWorkSettled } from './fixture
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import type { RunManager } from './run.ts';
 import { join } from 'node:path';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const f = setupMonitoringFixture();
 const catalog = () => fixedSkillCatalog([{ id: 'known', name: 'Known', path: '/listed/known', scope: 'repo' }]);

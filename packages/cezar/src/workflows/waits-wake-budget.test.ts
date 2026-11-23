@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { writeFileSync } from 'node:fs';
@@ -28,7 +28,8 @@ import {
   notes,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // hearsay-tools/cezarion#1233: the automatic-wake budget: one charge per batch, the cap, refusals and
 // restarts. Shared setup: waits-wake.testkit.ts.

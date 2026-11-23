@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -28,6 +29,8 @@ import { createFixtureManager, removeFixtureRepo, fixtureWorkSettled, fixtureWor
 import { unused } from './unused.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { RunMemory } from './run/run-memory.ts';
+
+sealTestRunners();
 
 const roots: string[] = [];
 async function cleanupFixtureRoots() {

@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { runnerHook } from './runner-hook.testkit.ts';
 import { runnersUnderTest } from '../core/runners-under-test.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { UNSET_TOOL_GRANT } from '../core/tool-grant.testkit.ts';
 import type { AgentRunner, AgentSession } from '../core/agent-runner.ts';
+
+sealTestRunners();
 
 afterEach(() => { runnerHook.runner = undefined; });
 

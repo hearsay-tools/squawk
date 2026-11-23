@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -7,11 +8,11 @@ import type { AgentEvent } from '../../core/agent-runner.js';
 import { KILL_GRACE_MS } from '../../core/runner-runtime.js';
 import { CodexAppServerRunner, codexTurnStartExtras } from './codex-app-server-runner.js';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning the real mock app-server through the untouched `spawn`. */

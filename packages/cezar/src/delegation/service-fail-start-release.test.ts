@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { chmodSync, existsSync, mkdirSync, rmdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -15,10 +16,9 @@ import { workerCleanups } from './worker-cleanup.ts';
 import { workerCapacity } from './capacity.ts';
 import { cadence, destroyOf, f, input, linux, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { fixture } from './service-engine.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 /** A worker whose launch failed before its first step: settled, failed, with no step started. */
 async function failStart(options: { reservedDirectory?: boolean } = {}) {

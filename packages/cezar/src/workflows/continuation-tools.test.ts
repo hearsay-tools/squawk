@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
@@ -16,8 +16,6 @@ import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import { DEFAULT_ALLOWED_TOOLS, type WorkflowDef } from './types.ts';
-registerRunner(codexRunner);
-registerRunner(piRunner);
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -45,6 +43,7 @@ useRunners(fakeRunnerFactory(() => ({
     },
     interrupt: async () => {},
   })));
+sealTestRunners(codexRunner, piRunner);
 
 /**
  * A rebuilt session keeps its workflow step's tools.

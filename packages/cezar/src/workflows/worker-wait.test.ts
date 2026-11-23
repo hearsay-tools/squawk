@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { setImmediate } from 'node:timers/promises';
@@ -13,8 +13,8 @@ import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { checkpoint, collect, manager, parent, semaphore, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { completionNudges, sentTexts, recordAgentInput, blockedDone, sessionOf } from './worker-wait-readiness.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, opencodeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

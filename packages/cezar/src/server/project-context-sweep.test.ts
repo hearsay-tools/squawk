@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
@@ -11,8 +11,8 @@ import { ProjectContexts, ProjectContextsClosedError } from './project-context.t
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const sweeps = vi.hoisted(() => ({ started: 0 }));
 vi.mock('./repo-branch-sweep.ts', async (original) => {

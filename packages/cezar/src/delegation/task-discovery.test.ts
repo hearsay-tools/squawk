@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -5,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixture } from './service.testkit.ts';
 import { discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
+
+sealTestRunners();
 
 describe('peer discovery lifecycle', () => {
   let f: ReturnType<typeof fixture>;

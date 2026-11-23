@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 
 import { existsSync } from 'node:fs';
@@ -11,6 +12,8 @@ import { DelegationService } from './service.ts';
 
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 describe('destroy backoff cadence', { timeout: 30_000 }, () => {
   let fake: ReturnType<typeof fixture>;

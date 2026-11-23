@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +17,7 @@ import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 
 registerBuiltInRunners();
+sealTestRunners();
 
 /** The closed enum's refusal of a runner id, recorded on main at 9b5394c4a. */
 const ENUM = `Invalid option: expected one of ${BUILT_IN_RUNNER_IDS.map(id => `"${id}"`).join('|')}`;

@@ -1,3 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -8,6 +10,8 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp, type ServerDeps } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+
+sealTestRunners(claudeRunner);
 
 /**
  * Deployment modes + forge seam (cockpit-ui redesign spec): `/api/v1/health`

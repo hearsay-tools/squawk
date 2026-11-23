@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
@@ -35,8 +35,8 @@ import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 describe('appendTurnText', () => {
   it(

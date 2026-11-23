@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose } from './worker-wait-readiness.testkit.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
@@ -18,7 +18,8 @@ import { RUN_TRIGGERS, stateOf, type RunState } from './run-states.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { manager, restart, store, timeline, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /**
  * The run state table drives a real run (hearsay-tools/cezarion#1804). Each command takes its

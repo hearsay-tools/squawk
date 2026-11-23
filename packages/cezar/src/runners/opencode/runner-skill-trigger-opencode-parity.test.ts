@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { expect, it } from 'vitest';
 import { driveSeam } from '../../core/harness-parity-core.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
@@ -6,6 +7,7 @@ import { describeNativeSkillTriggers } from '../../core/runner-skill-trigger.tes
 import { opencodeRunner } from './definition.ts';
 
 useRunners(onlyRunner(opencodeRunner, () => new OpencodeServerRunner()));
+sealTestRunners();
 describeNativeSkillTriggers('opencode');
 
 

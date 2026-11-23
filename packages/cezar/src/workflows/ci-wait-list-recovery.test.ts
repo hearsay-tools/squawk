@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // Register the external CI mock before loading RunManager.
 import { success, registerPr, registerTimer, waitById, settledById, inputsFor, fireTimer, flushMicrotasks, githubByPr, waitingParent, expectNoWaitHumanWait, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -14,6 +15,8 @@ import { controlledWire, manager, parent, root, restart, store, until, useWorker
 
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { ciWatchRequest, waitResultText } from './waits.ts';
+
+sealTestRunners();
 
 
 describe('Wait list recovery and cancellation', { timeout: 30_000 }, () => {

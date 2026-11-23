@@ -1,14 +1,14 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { access, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { spawnSessionLeader } from '../../core/session-process.ts';
 import { discoverAntigravitySkills, parseAntigravitySkills } from './antigravity-skill-catalog.ts';
 import { antigravityRunner } from './definition.ts';
 
-registerRunner(antigravityRunner);
+sealTestRunners(antigravityRunner);
 
 const capture = JSON.parse(readFileSync(new URL('./__fixtures__/skill-list.json', import.meta.url), 'utf8'));
 const cwd = '/tmp/skill-list-probe/repo';

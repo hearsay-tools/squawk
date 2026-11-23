@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { ABSENT_PROCESS_PID, OTHER_ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
 import { fixture as ownedFixture } from '../delegation/service-engine.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -19,6 +20,7 @@ import { useRunners } from '../core/runners-under-test.testkit.ts';
 
 const hook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
 useRunners(async () => hook.runner!);
+sealTestRunners();
 
 function signal<T = void>() {
   let resolve!: (value: T) => void;

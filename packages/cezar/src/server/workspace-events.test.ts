@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -24,10 +24,8 @@ import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
 
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 /**
  * Workspace SSE stream (spec 2026-07-20-multi-project-workspace, step 2.8):

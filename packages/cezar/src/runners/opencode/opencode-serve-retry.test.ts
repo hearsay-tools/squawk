@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -10,11 +11,11 @@ import type { AgentEvent } from '../../core/agent-runner.ts';
 import { OpencodeServerRunner, SERVE_START_RETRY_DELAY_MS } from './opencode-server-runner.ts';
 import { sessionGroupOf } from '../../core/session-process.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { opencodeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives OpenCode.
-registerRunner(opencodeRunner);
+
+sealTestRunners(opencodeRunner);
 
 /** `override` sees the 1-based spawn count; returning undefined spawns for real. */
 const spawnHook = vi.hoisted(() => ({ calls: 0, override: null as null | ((call: number) => unknown) }));

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { autoEndObservationClock } from '../core/observation-clock.testkit.ts';
@@ -8,7 +8,8 @@ import { withHeldResponse } from '../core/owned-input-delivery.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { captureState, collect, manager, register, semaphore, setFailureState, store, until, worker } from './worker-wait-core.testkit.ts';
 import { parkedOnWorkers, useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

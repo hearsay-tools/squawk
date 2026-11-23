@@ -1,6 +1,9 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DelegationPolicyError } from './policy.ts';
 import { fixture } from './service.testkit.ts';
+
+sealTestRunners();
 
 describe('delegation execution settings boundary', () => {
   let f: ReturnType<typeof fixture>;

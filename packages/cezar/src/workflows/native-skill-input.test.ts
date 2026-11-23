@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { makeHumanWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
@@ -8,15 +9,12 @@ import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { factsAtDone } from './run/done-accepted.ts';
 import { fixtureWork } from './fixture-manager.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner);
 
 const f = setupMonitoringFixture();
 let emit: (event: AgentEvent) => void;
@@ -151,7 +149,6 @@ it('uses a plugin-qualified id exactly and preserves a near miss', async () => {
   expect(sent[1]?.[0]).toEqual({ type: 'text', text: '/plugin:know near miss' });
 });
 
-
 it('fails a selected skill before a model call when its runner list is unavailable', async () => {
   const catalog = fixedSkillCatalog();
   vi.spyOn(catalog, 'get').mockResolvedValue({ runner: 'claude', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel' });
@@ -174,7 +171,6 @@ it('passes an unknown opening command without probing the list a second time', a
   expect(get).toHaveBeenCalledOnce();
   expect(f.store.eventLog.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
 });
-
 
 it('starts a unique other-scope plugin skill without a reported path', async () => {
   f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'plugin:known', name: 'Plugin skill', scope: 'other' }]));
@@ -226,7 +222,6 @@ it('resolves a second step slash prompt before adding its chain context', async 
   expect(launches[1]?.skill?.args).toContain('you are running step 2 of 2');
   expect(launches[1]?.skill?.args).not.toContain('/known');
 });
-
 
 it('surfaces a turn-ending question before a held trigger and delivers the answer first', async () => {
   const id = await start();

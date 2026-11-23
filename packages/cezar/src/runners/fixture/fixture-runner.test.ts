@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,13 +7,13 @@ import { harnessAdapter } from '../../core/harness-parity-core.testkit.ts';
 import { describeHarnessGroups, vitestRegistration, type HarnessGroup } from '../../core/harness-parity-registrar.testkit.ts';
 import { SEAM_CRITERIA, seamRows } from '../../core/harness-parity-seam-tier.testkit.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
-import { knownRunnerIds, registerRunner, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';
+import { knownRunnerIds, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';
 import { setupMonitoringFixture, waitForProduct } from '../../workflows/run-fixture.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../ids.ts';
 import { fixtureRunner } from './definition.testkit.ts';
 import { FIXTURE_BIN_ENV } from './data.testkit.ts';
 
-registerRunner(fixtureRunner);
+sealTestRunners(fixtureRunner);
 
 /**
  * The fixture runner (hearsay-tools/squawk#3899): a registered runner that no built-in list names, over

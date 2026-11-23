@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
@@ -13,10 +13,8 @@ import {
   type AcceptedWorkerIdentity,
 } from './execution-identity.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, piRunner, ompRunner);
 
 // The cases bind accounts of several providers; the schema reads each one's account layout from the registry.
 

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -25,11 +25,8 @@ import {
   recoverWithProviderRuntimeAuthObservation,
   watchProviderRuntimeAuthFailures,
 } from './provider-auth-runtime.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

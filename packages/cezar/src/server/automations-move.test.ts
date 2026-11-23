@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -15,14 +16,14 @@ import { projectPaths } from '../project-paths.ts';
 import { registerProject, listProjects } from '../workspace/projects.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunner, registerRunner } from '../core/runner-registry.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { startServer } from './start-server.ts';
 import { WorkspaceEventBus } from './server.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const temporary: string[] = [];
 function directory(): string {
@@ -150,7 +151,6 @@ it('replaces a handle opened before a move at lookup and refresh', async () => {
     expect(AutomationStore.open(projectPaths(root).write).state('poll')?.lastSuccessAt).toBe('2026-02-01T00:00:00.000Z');
   } finally { ownership.releaseAll(); }
 });
-
 
 it('writes boot API state after the move and refuses scheduled-task tools under a fence', async () => {
   const home = Home.sandbox(directory());

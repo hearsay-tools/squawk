@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // These tests register Codex alone: the agent-config listing reads only the registered runners.
-import { registerRunner } from '../core/runner-registry.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -10,7 +10,8 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 
 // hearsay-tools/squawk#3900: Claude's MCP state belongs to the Claude runner. Without it the
 // listing still answers, with Codex's files and no Claude MCP state.

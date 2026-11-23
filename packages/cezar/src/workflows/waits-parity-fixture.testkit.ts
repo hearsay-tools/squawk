@@ -25,6 +25,8 @@ import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
+registerRunner(claudeRunner);
+
 // hearsay-tools/cezarion#1233: every runner opens, cancels and survives CI and timer waits on its
 // own native wire. The production tool controller, bundled tool, runner, store and scheduler stay
 // real; only GitHub (metadata and the watch) is controlled.
@@ -83,7 +85,6 @@ const runnerBoundary = vi.hoisted(() => ({
 /** The test file's runner for its parents, and the Claude runner for the workers this kit runs on
  *  the Claude wire whatever the parent's runner is (hearsay-tools/cezarion#2939). */
 function withClaudeWorkers(inner: RunnerFactory): RunnerFactory {
-  registerRunner(claudeRunner);
   return async backend => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend);
 }
 

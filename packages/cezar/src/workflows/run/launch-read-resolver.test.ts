@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { Home } from '../../home/home.ts';
 import { useTestHome } from '../../home/test-home.testkit.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
@@ -18,13 +19,11 @@ import { retryPrompt } from './auto-resume.ts';
 import { TrackedWork } from './tracked-work.ts';
 import type { RunModuleContext } from './types.ts';
 import { noRunners } from '../../core/runners-under-test.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { defineRunner } from '../../core/runner-definition.ts';
 import { codexRunner } from '../../runners/codex/definition.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+sealTestRunners(claudeRunner, codexRunner, defineRunner({ ...codexRunner, id: 'custom-runner' }));
 
 let root: string;
 let store: RunStore;
@@ -273,7 +272,6 @@ it('keeps a queued provider retry on the held step\'s runner across a restart', 
 // id and its own facts on Continue. Its facts say the native wire reports the session id, so a
 // shown launch with no `session` event does not resume; Claude's facts would resume it.
 it('resolves a registered custom runner to itself on Continue', () => {
-  registerRunner(defineRunner({ ...codexRunner, id: 'custom-runner' }));
   store.updateRun(id, { runner: 'custom-runner' });
   store.updateStep(id, 'first', { backend: 'custom-runner', sessionId: 'custom-session' });
   store.eventLog.appendEvent(id, { type: 'step-start', stepId: 'first', name: 'First', kind: STEP_KIND.agent, iteration: 1 });

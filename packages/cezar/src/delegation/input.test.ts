@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { createActiveRun } from '../workflows/active-run.ts';
@@ -24,13 +25,12 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import { enqueueAgentInput, nextAgentInput, agentInputBatch } from './input.ts';
 import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 // A settled run reaps its scratch, which asks the removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 /** Read at call time, so a test's `vi.spyOn(runners, 'createRunner')` reaches managers built before it. */
 const spiedRunners: RunnerFactory = backend => runners.createRunner(backend);
@@ -94,7 +94,6 @@ describe('attributed input queue', () => {
     } finally { store.persistence.flush(); rmSync(dir, { recursive: true, force: true }); }
   });
 });
-
 
 type LiveInputRun = {
   store: RunStore; manager: RunManager; dir: string; runId: string; work: TrackedWork;
@@ -351,7 +350,6 @@ it.each(['accepted', 'rejected'] as const)('%s ACK settles before a later provid
   });
 });
 
-
 it('a live inbox claim is a FIFO barrier; expiry restores the original conversation batch', () => {
   const now = Date.now();
   const make = (text: string): AgentInput => ({ ...input, id: randomUUID(), text,
@@ -500,7 +498,6 @@ it.each(['live', 'expired'] as const)('restart recovers a %s receipt and expiry 
   }, true);
 });
 
-
 // hearsay-tools/cezarion#1235 review: the 1 Hz admission retry keeps trying a refused
 // continuation, but the retained note is written once per refusal, not once per retry.
 it('a continuation refused across several admission retries writes the retained note once', async () => {
@@ -524,7 +521,6 @@ it('a continuation refused across several admission retries writes the retained 
     } finally { recovered.dispose(); reopened.persistence.flush(); }
   }, true);
 });
-
 
 it.each([1, 32])('a full reply queue with %i claimed inputs defers lifecycle admission without losing messages', async count => {
   await withInboxRun(({ store, manager, runId, enqueue }) => {
@@ -555,7 +551,6 @@ it('disposed managers cannot expire or deliver their durable claims', async () =
     expect(store.getRun(runId)?.agentInputs?.[0]?.deliveredAt).toBeUndefined();
   });
 });
-
 
 it('expiry retries a failed checkpoint without delivering or losing the durable receipt', async () => {
   await withInboxRun(async ({ store, manager, dir, runId, enqueue, sent }) => {

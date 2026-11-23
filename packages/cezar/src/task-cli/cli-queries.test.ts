@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -6,9 +7,9 @@ import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/ceza
 import { apiRunSchema, runStatusSchema } from '@open-mercato/cezar-contract/runs';
 import { describe, expect, it, vi } from 'vitest';
 import { taskCliFixture } from './cli.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** The agent's open timer: the monitoring park since hearsay-tools/cezarion#1301. */
 const openTimer = () => ({

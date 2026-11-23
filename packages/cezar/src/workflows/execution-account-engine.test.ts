@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -17,15 +18,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-manager.testkit.ts';
 import type { RunManager } from './run.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-
 const runnerHook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
 useRunners(async () => runnerHook.runner!);
+sealTestRunners(claudeRunner, codexRunner);
 
 function initRepo(root: string) {
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { staleContinuationDisposition } from './run/continuation-session.ts';
 import { createActiveRun } from './active-run.ts';
@@ -18,6 +19,8 @@ import { createFixtureManager, removeFixtureRepo, fixtureWork, fixtureWorkSettle
 import { unused } from './unused.testkit.ts';
 import type { WorkflowDef } from './types.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+
+sealTestRunners();
 
 const workflow: WorkflowDef = {
   name: 'prelaunch-cancel', source: 'built-in',

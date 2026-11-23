@@ -1,4 +1,4 @@
-import { registerRunner } from '../../core/runner-registry.ts';
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { antigravityRunner } from './definition.ts';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +7,8 @@ import { afterEach, expect, it } from 'vitest';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { ProviderAuthService } from '../../core/provider-auth.ts';
-registerRunner(antigravityRunner);
+
+sealTestRunners(antigravityRunner);
 
 it('refuses terminal sign-in and explains how to supply credentials', () => {
   const auth = new ProviderAuthService();

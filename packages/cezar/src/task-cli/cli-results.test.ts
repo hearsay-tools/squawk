@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { readdirSync, readlinkSync, writeFileSync } from 'node:fs';
@@ -8,11 +9,10 @@ import { makeHumanWait } from '@open-mercato/cezar-contract/wait-factories.testk
 import { describe, expect, it, vi } from 'vitest';
 import { runTaskCommand, taskHelp } from './cli.ts';
 import { taskCliFixture } from './cli.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 describe('cez task', () => {
   const ctx = taskCliFixture();
   const { io, run, last, start } = ctx;

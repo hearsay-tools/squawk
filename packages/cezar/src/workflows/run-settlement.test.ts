@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -17,7 +17,8 @@ import { RunStore, type StepState } from '../runs/store.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 vi.mock('../git-worktree.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../git-worktree.ts')>(),

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -31,9 +31,8 @@ import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 describe('delegation service durable authority', () => {
   let f: ReturnType<typeof fixture>;

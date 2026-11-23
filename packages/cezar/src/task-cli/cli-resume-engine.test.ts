@@ -1,9 +1,10 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 import { taskCliFixture } from './cli.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // `send --resume` reports `resumed` only once the engine accepts the Continue, which the fake does not
 // do (hearsay-tools/squawk#3937). Moved from cli-actions.test.ts and cli-results.test.ts.

@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // hearsay-tools/squawk#3553: an explicit destroy of a worker that holds work refuses before it
 // changes anything; `discardWork` deletes the work, and the pending destroy keeps that approval.
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { betweenAttempts, cadence, destroyOf, f, settled, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+
+sealTestRunners();
 
 describe('explicit destroy of a worker that holds work', { timeout: 30_000 }, () => {
   useDestroyBackoffFixture();

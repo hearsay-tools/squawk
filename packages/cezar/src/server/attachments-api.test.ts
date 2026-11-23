@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -16,6 +17,7 @@ import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Starting a run and checking a request's runner id read the registered runners.
 registerBuiltInRunners();
+sealTestRunners();
 
 /**
  * #950 — the attachment half of the runs routes, now that an attachment is not necessarily an

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -19,10 +19,8 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
 
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 const LOCKED_MESSAGE = 'agent models are locked — configure the model in the native coding-agent settings';
 const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agent defaults → Providers.';

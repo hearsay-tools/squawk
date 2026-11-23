@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 /**
  * A restart finds a worker that another worker started still live while that supervisor has

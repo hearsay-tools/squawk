@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { describeHarnessParity } from '../../core/harness-parity-owned-workflows.cells.testkit.ts';
 import { OmpRunner } from './omp-runner.ts';
 import { ClaudeCliRunner } from '../claude/claude-cli-runner.ts';
@@ -7,5 +8,6 @@ import { claudeRunner } from '../claude/definition.ts';
 
 // R14 runs a mixed-runner chain: its second step is the next runner in BUILT_IN_RUNNER_IDS.
 useRunners(onlyRunners([[ompRunner, () => new OmpRunner()], [claudeRunner, () => new ClaudeCliRunner()]]));
+sealTestRunners();
 
 describeHarnessParity({ runner: ompRunner, part: 'owned-workflows' });

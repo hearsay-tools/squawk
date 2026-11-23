@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -16,6 +17,8 @@ import { RunStore } from '../runs/store.ts';
 import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import { fixture } from './service.testkit.ts';
 import { projectConversationEvents } from './conversations.ts';
+
+sealTestRunners();
 
 // Messages between root tasks (hearsay-tools/cezarion#1990): spec
 // 2026-10-27-task-communication-protocol § 2, § 4, § 5 and § 13.

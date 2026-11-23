@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/every-runner.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -16,11 +16,8 @@ import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner);
 
 /** One accumulating conversation per root, committed the way the delegation service does. */
 function conversation(rootId: string) {

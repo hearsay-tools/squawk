@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -10,6 +11,8 @@ import { fixture } from './service-engine.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { processStartToken } from '../core/process-stat.ts';
 import { workerExecutionsOf } from './worker-executions.ts';
+
+sealTestRunners();
 
 describe('resume with worker services (hearsay-tools/squawk#3901)', () => {
   let f: ReturnType<typeof fixture>;

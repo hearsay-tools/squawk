@@ -22,10 +22,11 @@ const { UiEventSink } = await load('runs/ui-event-sink.js')
 const { RunManager } = await load('workflows/run.js')
 const { acquireCiResources } = await load('ci-wait/resources.js')
 const { startServer } = await load('server/start-server.js')
-const { registerBuiltInRunners } = await load('runners/built-in.js')
+const { registerBuiltInRunners, sealBuiltInRunners } = await load('runners/built-in.js')
 // This fixture is a process entry like index.ts: the server reads every registered runner, and
 // a deletion or a reclaim asks the removal slots.
-registerBuiltInRunners()
+registerBuiltInRunners();
+sealBuiltInRunners();
 const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js')
 registerBuiltInRunSlots()
 sealBuiltInRunSlots()

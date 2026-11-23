@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -13,9 +13,8 @@ import '../core/created-runners.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { readWorkerIdentity } from './execution-identity.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 const model = (id: string) => ({ id, label: id, description: '', effortLevels: ['low', 'high'] as const });
 describe('parent discovery and model admission', () => {

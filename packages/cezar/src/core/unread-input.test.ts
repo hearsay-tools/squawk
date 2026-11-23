@@ -1,4 +1,4 @@
-import { registerRunner } from './runner-registry.ts';
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -15,9 +15,8 @@ import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import './created-runners.testkit.ts';
 import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 // #505: accepted input a finished turn never read goes back to the queue and is
 // submitted again; DONE and park never finish over it.

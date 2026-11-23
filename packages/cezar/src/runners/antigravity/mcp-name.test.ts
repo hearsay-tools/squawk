@@ -1,16 +1,16 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { squawkToolDefinitions } from '../../ci-wait/tool-catalog.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import { antigravityRunner } from './definition.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 import { antigravityTool } from './tool-normalization.ts';
 
-registerRunner(antigravityRunner);
+sealTestRunners(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 const tools = squawkToolDefinitions({ HSQ_PREVIEW: '1', HSQ_AUTOMATIONS: '1' });

@@ -1,4 +1,4 @@
-import { registerRunner } from './runner-registry.ts';
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -11,9 +11,8 @@ import { withHeldAck } from './owned-input-delivery.testkit.ts';
 import './created-runners.testkit.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
 
+sealTestRunners(claudeRunner, opencodeRunner);
 
 it.each(['unresponsive', 'cancel', 'finish'] as const)('opencode provider failure with %s ACK terminates without inventing delivery', async stop => {
   await withHeldAck('opencode', async () => {

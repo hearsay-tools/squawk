@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 // The fixture's runner mock must load before anything that imports the run manager.
@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
 import { ToolActivityTracker } from '../activity/tool-activity.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const TOOL_STATUS = activityToolSchema.shape.status.enum;
 

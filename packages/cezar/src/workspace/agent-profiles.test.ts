@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -22,11 +22,8 @@ import {
   selectProfile,
 } from './agent-profiles.ts';
 import { loadAgentAccounts } from './agent-accounts.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner);
 
 // Profile resolution reads each provider's account data from the registry; the cases use all five.
 

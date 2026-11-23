@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { join } from 'node:path';
@@ -10,6 +11,8 @@ import { seedWorkerWait } from './service.testkit.ts';
 import { workerSpawnResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 // Cancelling an open wait and reading a cancellation after a restart need the run engine.
 describe('authenticated delegation HTTP family', () => {

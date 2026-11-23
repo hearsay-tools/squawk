@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { homeFileLocation } from '../home/file-location.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -13,12 +14,11 @@ import { mergeWriteWorkspaceConfig, loadWorkspaceConfig } from './config.ts';
 import { mergeWriteAgentAccounts, loadAgentAccounts } from './agent-accounts.ts';
 import { listBackups as allBackups, isValidRestore } from './backups.ts';
 import { runBackupCommand } from './backup-cli.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
 // The account store parses selections through the registry; every case here drives a Claude account.
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 // Rotation retains P0's guarantees. The separate .bak is now also listed for restore.
 const listBackups: typeof allBackups = (file, home) => allBackups(file, home).filter(entry => entry.path !== join(typeof home === 'string' ? home : home.root, 'config.json.bak'));
@@ -129,7 +129,6 @@ it.each([['restore', '../config.json'], ['restore', 'config.json', '--at', 'inva
   expect(await runBackupCommand(args, process.env, testHome())).toBe(1);
 });
 
-
 it('orders same-clock writes and keeps a snapshot for repeated content', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-01T00:00:00Z'));
@@ -181,7 +180,6 @@ it('ignores incomplete or changed snapshots when listing and selecting a restore
   expect(await runBackupCommand(['restore', 'agent-accounts.json'], process.env, testHome())).toBe(0);
   expect((await loadAgentAccounts(testHome())).marker).toBe('original');
 });
-
 
 it('cleans a failed partial staging write without publishing it or blocking the live write', async () => {
   await mergeWriteWorkspaceConfig(() => undefined, testHome());

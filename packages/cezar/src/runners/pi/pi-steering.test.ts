@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,11 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentEvent, SessionOptions } from '../../core/agent-runner.ts';
 import { PiRunner } from './pi-runner.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { piRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives pi.
-registerRunner(piRunner);
+
+sealTestRunners(piRunner);
 
 const mockBin = fileURLToPath(new URL('../../../scripts/mock-pi-rpc.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {

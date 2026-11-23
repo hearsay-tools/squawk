@@ -66,15 +66,17 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 
 - `registerRunner(definition)` adds one. A different definition with a registered id is an error,
   and so is a legacy id (`claude-cli`, in `core/runner-ids.ts`). The same object registered twice
-  is a no-op.
-- `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` throw on an empty
-  registry, so a process entry that registered nothing fails at once. `knownRunnerIds()` and
+  is a no-op, before or after sealing. New registrations after sealing throw.
+- `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` throw while the registry is
+  unsealed, so an entry that forgot its boot boundary fails at once. `sealRunners()` is idempotent;
+  `runnersSealed()` reports the lifecycle state. A sealed empty registry permits normal reads. `knownRunnerIds()` and
   `savedRunnerRegistration(id)` never throw: config decoders and the read of saved runs use them.
 - `createRunner(id)` is async. It maps a legacy id, gives the default runner (`claude`) to an id
   that no runner registered, and awaits the definition's `loadAdapter()`. After the await, a
   caller checks stop and cancel again before it changes state.
-- `src/index.ts` calls `registerBuiltInRunners()` (`runners/built-in.ts`) before any command
-  reads config or runs a task. `index-runners.test.ts` pins it. A script under
+- `prepareCommandRuntime()` lazily calls `registerBuiltInRunners()` then `sealBuiltInRunners()`
+  (`runners/built-in.ts`) before a command reads config or runs a task. Registration itself never
+  seals, so boot can add other definitions first. `index-runners.test.ts` pins it. A script under
   `packages/cezar/scripts/` that reads runner data calls it too.
 - `BUILT_IN_RUNNERS` (`runners/built-in.ts`) is the only list of built-in definitions.
   `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests, testkits,
@@ -128,8 +130,9 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
   process that registers the runner reads the run as before. A queued run on such a runner stays
   queued. `runs/unregistered-runner-saved-data.test.ts` pins it. AGENT_PROTOCOL.md §10a lists the
   readers.
-- A process that registered no runner still maps a legacy id and folds a retired id. It reads
-  any other saved id as written, with no fold.
+- A process whose runner registry is unsealed still maps a legacy id and folds a retired id. It
+  reads any other saved id as written, even if some definitions have registered already. A sealed
+  empty registry treats every non-legacy id as unregistered.
 - The stored-config decoders (`config.ts`, `workspace/config.ts`,
   `workspace/agent-accounts.ts`) check ids against the registry. A per-runner record keeps its own
   handling of a key that no runner registered: `defaultModels` in `config.ts` drops it;
@@ -141,8 +144,11 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
 ### How tests register runners
 
 No setup file registers every runner. A test registers the runners it drives with
-`registerRunner(definition)`. A test that needs every built-in runner (it enumerates
-`runnersWhere` or `registeredRunners`) imports `core/register-all-runners.testkit.ts`. A test that
+`sealTestRunners(...definitions)` (`core/runner-registry.testkit.ts`). A test that imports a
+default runner testkit seals after adding all its own definitions; default testkits register
+without sealing. Dynamic registrations use `vi.resetModules()` and seal the fresh module graph
+before reads. A test that needs every built-in runner (it enumerates
+`runnersWhere` or `registeredRunners`) imports `core/register-all-runners.testkit.ts`, which registers and seals that complete roster. A test that
 needs only the ids reads `runners/ids.ts`, which loads no definition. A static test table that
 crosses runners reads the runner folders' data files, never a hand list:
 `core/runner-fact-rows.testkit.ts` for facts and extra tools, `runnerDataRows` for the others.

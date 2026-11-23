@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -31,11 +31,8 @@ import {
   mergeWriteAgentAccounts,
   selectionFor,
 } from './agent-accounts.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner);
 
 /**
  * `~/.cezar/agent-accounts.json` (spec 2026-07-29-agent-profiles).

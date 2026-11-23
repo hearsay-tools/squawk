@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +10,8 @@ import { createApp } from './server.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { ownedWorkspace, workerDestroyResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+
+sealTestRunners();
 
 describe('human owned-worker cleanup', () => {
   let f: ReturnType<typeof fixture>;

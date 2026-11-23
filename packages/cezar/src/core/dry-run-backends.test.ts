@@ -1,4 +1,4 @@
-import { registerRunner } from './runner-registry.ts';
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -13,10 +13,8 @@ import './created-runners.testkit.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
 import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
 import { OmpRunner } from '../runners/omp/omp-runner.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(ompRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, ompRunner);
 
 afterEach(() => vi.unstubAllEnvs());
 it('selects bundled Codex, OpenCode and OMP mocks in dry runs without host binaries', () => {

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
@@ -15,7 +15,6 @@ import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunManager } from './run.ts';
-registerRunner(codexRunner);
 
 // hearsay-tools/squawk#3715: a run saved on a runner Squawk no longer ships continues only on a
 // runner the Continue names, in a new session.
@@ -30,6 +29,7 @@ useRunners(fakeRunnerFactory(() => ({
       sendMessage: () => true, discardQueuedMessages: () => {}, holdsHumanInput: () => false, end: () => {}, interrupt: () => {}, open: true };
   },
 })));
+sealTestRunners(codexRunner);
 
 const roots: string[] = [];
 const managers: RunManager[] = [];

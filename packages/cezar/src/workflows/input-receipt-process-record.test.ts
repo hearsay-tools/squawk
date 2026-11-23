@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { createActiveRun } from './active-run.ts';
@@ -19,6 +20,7 @@ import { noRunners, useRunners } from '../core/runners-under-test.testkit.ts';
 // The receipt setup contract with no run manager: `input-receipt-boundaries.test.ts` drives the rest on the engine.
 const hook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
 useRunners(async () => hook.runner!);
+sealTestRunners();
 
 function signal<T = void>() {
   let resolve!: (value: T) => void;

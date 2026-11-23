@@ -1,17 +1,15 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readAgentModelDefaults, readAgentModelProvider } from './models.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner);
 
 // readAgentModelDefaults reads every runner's native default model.
 

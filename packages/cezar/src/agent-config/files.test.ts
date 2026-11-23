@@ -1,14 +1,13 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readConfigFile, writeConfigFile } from './files.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
+sealTestRunners(claudeRunner, opencodeRunner);
 
 let repo: string;
 let home: string;

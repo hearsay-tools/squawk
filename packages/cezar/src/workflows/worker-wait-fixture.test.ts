@@ -1,7 +1,10 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { WorkerOperation } from '@open-mercato/cezar-contract';
 import { isAuthenticatedCaller } from '../delegation/credentials.ts';
 import { captureState, delegatingParent, parent, semaphore, store, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 describe('service-ready worker-wait fixture (hearsay-tools/cezarion#1752)', () => {
   useWorkerWaitFixture();

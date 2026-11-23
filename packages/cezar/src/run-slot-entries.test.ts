@@ -8,11 +8,7 @@ import { repoRoot } from './lint/source-rule.ts';
 // "Removal slots"). The scripts start real CLIs or many processes, so this reads their source.
 const TOP_LEVEL = /^registerBuiltInRunSlots\(\);$/m;
 const ENTRIES: ReadonlyArray<{ entry: string; call: RegExp }> = [
-  { entry: 'packages/cezar/scripts/benchmark-family-reconcile.ts', call: TOP_LEVEL },
-  { entry: 'packages/cezar/scripts/benchmark-run-store.ts', call: TOP_LEVEL },
-  { entry: 'packages/cezar/scripts/benchmark-stuck-destroys.ts', call: TOP_LEVEL },
-  { entry: 'packages/cezar/scripts/benchmark-worker-lifecycle.ts', call: TOP_LEVEL },
-  { entry: 'packages/cezar/scripts/benchmark-workspace-events.ts', call: TOP_LEVEL },
+  { entry: 'packages/cezar/scripts/benchmark-runtime.ts', call: /^ {2}registerBuiltInRunSlots\(\);$/m },
   // Its test imports the measurement, so the entry seals in main().
   { entry: 'packages/cezar/scripts/benchmark-worktree-retention.ts', call: /^async function main\(\): Promise<void> \{\n {2}registerBuiltInRunSlots\(\);$/m },
   { entry: 'packages/cezar/scripts/measure-transcript-facts-health.mjs', call: /^ {2}registerBuiltInRunSlots\(\);$/m },

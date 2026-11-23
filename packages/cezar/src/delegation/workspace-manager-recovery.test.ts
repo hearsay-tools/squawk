@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -10,6 +11,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { createOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
 import { roots, stores, managers, fixture, durableRun, git, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+
+sealTestRunners();
 
 // The timeout of a test that runs a dry-run task to completion through finished().
 // The two such tests take 2.4-2.7 s alone and 2.7-2.9 s in an idle full `npm test`

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,6 +14,7 @@ import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Starting a run and checking a request's runner id read the registered runners.
 registerBuiltInRunners();
+sealTestRunners();
 
 /**
  * Request-origin guard (#426). The server executes agents with shell access,

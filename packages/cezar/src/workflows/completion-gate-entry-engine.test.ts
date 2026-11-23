@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
@@ -10,6 +11,8 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { DONE_RECONSIDERED_NOTE } from './turn-end.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+sealTestRunners();
 
 // The completion gate's refusal of a done reached through a live runner: queued input, an open wait
 // and a question after the done, on the real engine. The gate and settle decisions themselves are

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -13,7 +13,8 @@ import { loadServerState } from './state.ts';
 import { createAutoUi } from './ui.ts';
 import { nginxVhost } from './platforms/ubuntu-vps.ts';
 import { MIGRATABLE_PLATFORM_IDS, type Runner } from './types.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // The dry-run install walks the dependency step, which probes every runner.
 

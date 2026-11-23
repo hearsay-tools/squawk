@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -11,7 +11,8 @@ import {
   controlledWire, manager, root, semaphore, store, terminal, until,
   useWorkerWaitFixture,
 } from './worker-wait-core.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('worker inbox holds nonfinal agent completion', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();

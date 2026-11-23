@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -28,12 +29,11 @@ import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 
 import { HANG_GUARD_MS, until, gate, root, store, manager, parent, releases, worker, workspace, useWorkerDestroyFixture, replaceWorkerDestroyManager } from "./worker-destroy.testkit.ts";
 import { createRunner } from '../core/runner-registry.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

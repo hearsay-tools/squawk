@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { agentEnvForStep } from './run/launch-context.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { join } from 'node:path';
@@ -8,6 +9,8 @@ import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
 
 import { handlers, entryOf, settledOf } from './worker-waits-shared.testkit.ts';
+
+sealTestRunners();
 
 vi.mock('./run/launch-context.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('./run/launch-context.ts')>();

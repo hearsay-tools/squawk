@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -14,8 +14,8 @@ import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 import { createRunner } from '../core/runner-registry.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /** The versioned surface (spec 2026-07-23-independent-server-web-packages): everything lives under `/api/v1`. */
 describe('the versioned API surface', () => {

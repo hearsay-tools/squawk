@@ -1,3 +1,4 @@
+import { sealTestRunners } from './core/runner-registry.testkit.ts';
 import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome } from './home/test-home.testkit.ts';
@@ -8,10 +9,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunner } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
-import { registerRunner } from './core/runner-registry.ts';
 import { ompRunner } from './runners/omp/definition.ts';
 
-registerRunner(ompRunner);
+sealTestRunners(ompRunner);
 
 const run = vi.fn(async () => ({ text: '' }));
 async function runners(): Promise<AgentRunner> {

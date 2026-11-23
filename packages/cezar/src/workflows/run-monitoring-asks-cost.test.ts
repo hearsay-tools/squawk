@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -20,8 +20,8 @@ import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factori
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { fileURLToPath } from 'node:url';
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, opencodeRunner);
 
 describe('RunManager reported cost accounting', () => {
   let repoRoot: string;
@@ -295,7 +295,6 @@ describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
     expect(questions[0]!.header).toBe('Library');
     expect(questions[0]!.options).toHaveLength(2);
   }, 30_000);
-
 
   it('a mid-turn follow-up does not resume past a cezar_ask park', async () => {
     savedEnv.CEZ_OPENCODE_BIN = process.env.CEZ_OPENCODE_BIN;

@@ -1,13 +1,14 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtemp, mkdir, writeFile, readFile, readlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { profileEnv } from '../../core/agent-profiles.ts';
 import { prepareAntigravityAccount } from './account-home.ts';
 import { antigravityRunner } from './definition.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
-registerRunner(antigravityRunner);
+
+sealTestRunners(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 async function workspace() { const dir = await mkdtemp(join(tmpdir(), 'agy-accounts-')); dirs.push(dir); return dir; }

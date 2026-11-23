@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -17,11 +18,10 @@ import { AutomationStore } from '../automations/store.ts';
 import type { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { Hono } from 'hono';
 import { openRunCli } from '../server/open-in-targets.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 // The agent-profiles route reads every provider's account data from the registry.
 

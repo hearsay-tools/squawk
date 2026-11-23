@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,8 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { MESSAGING_OFF, WORKERS_OFF } from './policy.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 // Per-task access (hearsay-tools/cezarion#2784): the human's two switches, read at every call.
 describe('task access', () => {

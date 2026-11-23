@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as catalog from './load.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { fixtureUpdateRun, lastWaitOf, manager, parent, root, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 /**
  * Recovery for one adopted family (#779, plan step 3) runs while the rest of the project is live.

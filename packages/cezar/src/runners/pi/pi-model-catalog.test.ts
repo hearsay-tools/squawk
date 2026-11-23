@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -9,11 +10,11 @@ import {
   parsePiModels,
   spawnPi,
 } from './pi-model-catalog.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { piRunner } from './definition.ts';
 
 // The spawn path reads pi's env and account data through the registry; every case drives pi.
-registerRunner(piRunner);
+
+sealTestRunners(piRunner);
 
 /**
  * A stand-in for the `pi --list-models` child: write its stdout, then close with a code.
@@ -367,7 +368,6 @@ describe('discoverPiModels', () => {
       }),
     ).rejects.toThrow('exited (1)');
   });
-
 
   it('escalates to SIGKILL when the probe survives the teardown SIGTERM', async () => {
     vi.useFakeTimers();

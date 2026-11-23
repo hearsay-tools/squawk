@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import {
   RUN_STATUS,
@@ -29,6 +30,8 @@ import type { WorkflowDef } from './types.ts';
 import { AutoResumeScheduler } from './run/auto-resume.ts';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+
+sealTestRunners();
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

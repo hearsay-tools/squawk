@@ -1,13 +1,13 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 describe('RunManager waiting publication', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor, publishedWaiting, persistedRun } = fixture;

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { uuidFrom } from '../delegation/questions.ts';
 import { describe, expect, it, vi } from 'vitest';
@@ -5,6 +6,8 @@ import { WORKER_FALLBACK_HEADER, WORKER_FALLBACK_QUESTION } from './run.ts';
 import { manager, spendWorkerBudget, store, until, worker } from './worker-wait-claude.testkit.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { conversationOf, eventsOf, squawkAnswered, closedAs, noHumanCard, steeringParent, fillInbox, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
+
+sealTestRunners();
 
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();

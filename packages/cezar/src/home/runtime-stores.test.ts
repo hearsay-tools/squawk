@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { testHome } from './test-home.testkit.ts';
@@ -18,8 +18,8 @@ import { createWorkspaceProjects } from '../server/workspace-projects.ts';
 import { resolveServerDeps } from '../server/server-deps.ts';
 import { modelLockRefusal as startRefusal } from '../server/start-run-options.ts';
 import { modelLockRefusal as continueRefusal } from '../workflows/continuation-admission.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 it('loads machine defaults and retention from the selected Home', async () => {
   const { root, selected } = runtimeHomes();

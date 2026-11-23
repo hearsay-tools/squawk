@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,8 @@ import { gatedProviderFailure } from './waits-parity.testkit.ts';
 import { fixtureUpdateRun, manager, parent, restart, root, semaphore, store, until, useWorkerWaitFixture, worker, work, toolGenerationOf, controlledWire } from './worker-wait-core.testkit.ts';
 
 import { pr, identity, entryOf, settledOf, inputOf, heldParent } from './worker-waits-shared.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /**
  * Parks, slots, idle close, failure and recovery (hearsay-tools/cezarion#1235 phase 3a): a park

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,11 +9,11 @@ import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-value
 import { waitFor } from '../../core/harness-parity-core.testkit.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
-registerRunner(opencodeRunner);
+
+sealTestRunners(opencodeRunner);
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 

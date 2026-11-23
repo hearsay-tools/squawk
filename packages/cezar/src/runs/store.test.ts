@@ -1,14 +1,13 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
 
 // The saved rows this file reads name claude, codex and pi. An id no runner registered (gemini)
 // stays a parse failure, and the retired cursor keeps its fold.
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, piRunner);
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

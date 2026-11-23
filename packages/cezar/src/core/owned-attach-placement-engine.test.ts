@@ -1,3 +1,4 @@
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
@@ -12,10 +13,9 @@ import * as runners from './runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import './created-runners.testkit.ts';
 import { fixture } from '../delegation/service-engine.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 const until = (predicate: () => boolean) => vi.waitFor(() => expect(predicate()).toBe(true), { timeout: 15_000, interval: 10 });
 const ATTACHED = { 'qa/1149/brief.md': 'the brief\n', 'qa/evidence.log': 'evidence bytes\n' } as const;

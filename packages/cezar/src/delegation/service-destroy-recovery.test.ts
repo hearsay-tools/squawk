@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { fakeRunManager } from '../server/fake-run-manager.testkit.ts';
 
@@ -13,6 +14,8 @@ import { DelegationService } from './service.ts';
 
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 /** Resolves once every operation already queued on the service's serialization `key` settled. */
 function serializedAfter(service: DelegationService, key: string): Promise<void> {

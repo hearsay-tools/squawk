@@ -1,14 +1,15 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { UiEvent } from '../../core/ui-events.ts';
 import { codexApproval, isCodexApprovalRequest } from './codex-approvals.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 
 const bin = fileURLToPath(new URL('../../../scripts/mock-codex-app-server.mjs', import.meta.url));
 

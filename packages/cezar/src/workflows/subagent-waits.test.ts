@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import * as runners from '../core/runner-registry.ts';
@@ -16,10 +17,9 @@ import { IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES } from './run.ts';
 import { stateOf } from './run-states.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
 import { controlledWire, manager, parent, restart, root, store, semaphore, work, toolGenerationOf, worker, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 /**
  * Squawk's wait on native subagents (hearsay-tools/cezarion#2431): one test per `waiting:subagents`
