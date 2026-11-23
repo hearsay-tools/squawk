@@ -422,7 +422,7 @@ export function identicalPeerWait(waits: readonly Wait[], peerIds: readonly stri
 /** The stored row that serves a tool request kind, including request waits in the worker row. */
 export function waitRequestRow(kind: string): WaitKindRow<Wait['kind']> {
   const row = Object.values(WAIT_KINDS).find(row => row.requestKinds.some(requestKind => requestKind === kind));
-  if (!row) throw new Error(`no wait row registers ${kind}`);
+  if (!row) throw Object.assign(new Error(`no wait row registers ${kind}`), { code: 'invalid_request' });
   return row;
 }
 

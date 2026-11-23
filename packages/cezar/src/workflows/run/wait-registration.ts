@@ -9,9 +9,9 @@ import { WAIT_KINDS, waitRequestRow } from './wait-kinds.ts';
 export type RegistrationIdentity = Pick<WaitRegistrationReceipt, 'operationId' | 'requestHash'>;
 export function registrationIdentity(request: SquawkWaitRequest): RegistrationIdentity | undefined {
   if (!request.operation_id) return undefined;
+  const row = waitRequestRow(request.kind);
   const { operation_id, ...fields } = builtInSquawkWaitRequestSchema.parse(request);
   const canonical = { ...fields };
-  const row = waitRequestRow(canonical.kind);
   row.canonicalize(canonical);
   for (const field of ['worker_ids', 'request_ids', 'peer_ids'] as const) {
     if (field in canonical) (canonical as Record<string, unknown>)[field] = [...(canonical as unknown as Record<string, string[]>)[field]!].sort();
