@@ -13,7 +13,8 @@ const POLICY = 'src/delegation/workspace-record.ts';
 // The Windows store and the native helper it wraps.
 const WINDOWS = ['src/delegation/windows-identity-store.ts', 'src/delegation/windows-workspace-identity.ts'];
 const SCRIPT_DIRS = ['scripts', '../../scripts', '../../.ai/scripts'];
-const INSTALL = /^installWindowsIdentityStore\(\);$/m;
+// Shared script boot helpers install inside their function body.
+const INSTALL = /^[ \t]*installWindowsIdentityStore\(\);$/m;
 const isTest = (file: string) => /\.test\.|\.testkit\.|\.d\.ts$/.test(file);
 const slashes = (path: string) => path.split(sep).join('/');
 const fromPkg = (path: string) => slashes(relative(pkg, join(pkg, path)));
