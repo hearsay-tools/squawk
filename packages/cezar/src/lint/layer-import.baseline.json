@@ -464,30 +464,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/workflows/run/wait-engine.ts",
-      "target": "packages/cezar/src/ci-wait/supervisor.ts",
-      "count": 1,
-      "reason": "feature:forge: the wait engine holds a feature's wait kind. The engine is core; this kind moves to its feature (spec 2026-11-16-core-layer-map, wait kinds)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/wait-kinds.ts",
-      "target": "packages/cezar/src/ci-wait/supervisor.ts",
-      "count": 1,
-      "reason": "feature:forge: the core reads the PR watcher or GitHub state directly. The pr wait kind and its watcher move to the forge feature"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/wait-registry.ts",
-      "target": "packages/cezar/src/ci-wait/supervisor.ts",
-      "count": 1,
-      "reason": "feature:forge: the core reads the PR watcher or GitHub state directly. The pr wait kind and its watcher move to the forge feature"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/wait-registry.ts",
-      "target": "packages/cezar/src/delegation/policy.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/wake-admission.ts",
       "target": "packages/cezar/src/delegation/conversations.ts",
       "count": 1,

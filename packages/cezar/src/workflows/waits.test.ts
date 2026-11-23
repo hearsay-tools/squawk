@@ -3,7 +3,8 @@ import { makePluginWait, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@o
 import { describe, expect, it } from 'vitest';
 import { ciWaitSchema } from '@open-mercato/cezar-contract/ci-wait';
 import type { PrWaitEntry, HumanWaitEntry, ProcessWaitEntry, TimerWaitEntry, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
-import { chargesBudget, ciWatchRequest, identicalWait, isSquawkHumanWait, isMonitoringTimer, MONITORING_WAKE_NUDGE, normalizePrUrl, openWaitList, openWaits, openWaitsFooter, resolvedWaits, waitResultText } from './waits.ts';
+import { chargesBudget, ciWatchRequest, identicalWait, isSquawkHumanWait, isMonitoringTimer, MONITORING_WAKE_NUDGE, openWaitList, openWaits, openWaitsFooter, resolvedWaits, waitResultText } from './waits.ts';
+import { normalizePrUrl } from '../ci-wait/pr-wait-kind.ts';
 
 // hearsay-tools/cezarion#1233: the wait list's pure helpers. RunManager behaviour lives in
 // the ci-wait*.test.ts files and the U-cells in the waits-parity-<part>-cells.testkit.ts modules.

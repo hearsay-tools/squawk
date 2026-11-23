@@ -4,7 +4,8 @@ import type { SquawkWaitRequest } from '@open-mercato/cezar-contract';
 import { WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { squawkWaitRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ciWatchRequest } from '../waits.ts';
-import { identicalWait, prWaitEntry } from './wait-kinds.ts';
+import { identicalWait } from './wait-kinds.ts';
+import { prWaitEntry } from '../../ci-wait/pr-wait-kind.ts';
 
 /** hearsay-tools/squawk#3972: a PR wait registered right after the caller's own push. */
 const github = 'a'.repeat(40);

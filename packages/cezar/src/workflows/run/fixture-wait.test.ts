@@ -1,0 +1,74 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { deriveAttention, deriveWebhookState } from '@open-mercato/cezar-contract/attention';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
+import { makePluginWait, WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
+import type { WaitKindRegistration, WaitWatchContext } from './wait-kind-registry.ts';
+
+// hearsay-tools/squawk#4160: a plugin wait kind registered from outside the core, through the
+// wait-kind registry only. It must reach `cezar_wait`, the wait list, the engine's watch and the
+// contract's attention without an edit to any core file.
+
+beforeEach(() => vi.resetModules());
+
+const deployRequest = z.object({ kind: z.literal('deploy'), operation_id: z.uuid().optional(), environment: z.string().min(1) });
+
+async function deployRuntime() {
+  const registry = await import('./wait-kind-registry.ts');
+  const { BUILT_IN_WAIT_ROWS } = await import('./wait-kinds.ts');
+  const { registerBuiltInWaitKinds } = await import('../../built-in-wait-kinds.ts');
+  const watches: WaitWatchContext[] = [];
+  const disarm = vi.fn();
+  const deploy: WaitKindRegistration = {
+    ...BUILT_IN_WAIT_ROWS.plugin, kind: 'deploy', isPlugin: true, requestKinds: ['deploy'],
+    inputSchema: deployRequest,
+    inputs: [{ kind: 'deploy', order: 100, inputSchema: deployRequest, properties: { environment: { type: 'string' } },
+      descriptions: { environment: 'kind "deploy": the environment whose rollout ends the wait.' }, description: '"deploy" waits for a rollout to finish.' }],
+    answerKind: () => 'deploy',
+    register: (request, context) => makePluginWait({ pluginKind: 'deploy', turnId: context.turnId, via: context.via,
+      summary: `deploy to ${String(request.environment)}`, payload: { environment: request.environment }, deadline: undefined }),
+    duplicatePlugin: (wait, request) => wait.payload.environment === request.environment,
+    lifecycle: { arm: context => { watches.push(context); }, disarm },
+  };
+  registerBuiltInWaitKinds();
+  registry.registerWaitKind(deploy);
+  registry.sealWaitKinds();
+  const { waitRegistryFixture } = await import('../ci-wait-registration.testkit.ts');
+  return { f: waitRegistryFixture(), watches, disarm };
+}
+
+it('advertises a registered plugin kind and its fields in the sealed cezar_wait schema', async () => {
+  await deployRuntime();
+  const { flatWaitInputSchema } = await import('../../ci-wait/tool-catalog.ts');
+  const schema = flatWaitInputSchema();
+  expect(schema.properties.kind).toMatchObject({ enum: ['pr', 'worker', 'request', 'peer', 'timer', 'process', 'deploy'] });
+  expect(schema.properties.environment).toEqual({ type: 'string', description: 'kind "deploy": the environment whose rollout ends the wait.' });
+});
+
+it('opens, watches and resolves a plugin wait through cezar_wait and the engine, with attention from the contract', async () => {
+  const { f, watches, disarm } = await deployRuntime();
+  const opened = await f.tools().registerWait({ kind: 'deploy', environment: 'staging' }, WAIT_VIA.cezar_wait, new AbortController().signal);
+  if (!('wait' in opened) || opened.wait.kind !== WAIT_KIND.plugin) throw new Error(JSON.stringify(opened.answer));
+  expect(opened.answer).toMatchObject({ ok: true, kind: 'deploy' });
+  expect(opened.wait).toMatchObject({ pluginKind: 'deploy', phase: WAIT_PHASE.open, summary: 'deploy to staging', payload: { environment: 'staging' } });
+  expect(watches).toHaveLength(1);
+  expect(watches[0]!.wait.id).toBe(opened.wait.id);
+
+  // The run parks on the open wait; the contract reads it as the plugin's own monitoring rung.
+  const parked = { ...f.store.getRun(f.run.id)!, status: RUN_STATUS.waiting };
+  const waitingOn = computeWaitingOn(parked);
+  expect(waitingOn).toEqual({ kind: WAIT_KIND.plugin, pluginKind: 'deploy', waitId: opened.wait.id, summary: 'deploy to staging' });
+  expect(deriveAttention({ ...parked, waitingOn })).toMatchObject({ rung: 'monitoring', label: 'deploy to staging' });
+  expect(deriveWebhookState({ ...parked, waitingOn })).toBe('waiting-other');
+
+  watches[0]!.resolve({ rollout: 'finished' });
+  const resolved = f.waitById(opened.wait.id);
+  expect(resolved).toMatchObject({ kind: WAIT_KIND.plugin, pluginKind: 'deploy', phase: WAIT_PHASE.resolved, result: { rollout: 'finished' } });
+  expect(resolved && 'resolvedAt' in resolved && resolved.resolvedAt).toEqual(expect.any(String));
+  expect(f.store.getRun(f.run.id)?.agentInputs).toContainEqual(expect.objectContaining({ id: opened.wait.id, source: 'lifecycle',
+    text: `Plugin wait ${opened.wait.id} ended. External data follows: {"rollout":"finished"}.` }));
+  expect(watches[0]!.signal.aborted).toBe(true);
+  expect(disarm).toHaveBeenCalledOnce();
+  expect(computeWaitingOn(f.store.getRun(f.run.id)!)).toBeUndefined();
+});
