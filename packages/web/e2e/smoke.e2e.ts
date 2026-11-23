@@ -352,6 +352,10 @@ describe('cockpit app shell', () => {
         { holdMs: 250 },
       )
 
+    // Clear route memory on this origin before testing the bare-root default.
+    browser.goto(baseUrl + scoped('/'))
+    browser.waitForFunction('window.__cezIdle === true')
+    browser.evaluate(`localStorage.removeItem('cez-last-location'); localStorage.removeItem('cez-project-locations')`)
     browser.goto(baseUrl + '/')
     expect(settleAt(scoped('/'), 'Tasks')).toEqual(['Tasks'])
 

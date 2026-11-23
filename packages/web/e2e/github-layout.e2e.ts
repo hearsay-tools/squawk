@@ -344,7 +344,11 @@ describe('the GitHub tab against the live dry-run server', () => {
     browser.screenshot(`${artifactsDir}/github-independent-scroll.png`)
   })
 
-  it('lays out long issue and pull-request titles at the review viewports in both themes and densities', async () => {
+  it.each([REVIEW_PHONE, DESKTOP].flatMap(viewport =>
+    (['light', 'dark'] as const).flatMap(theme =>
+      (['comfortable', 'ultra'] as const).map(density => ({ viewport, theme, density })),
+    ),
+  ))('lays out long titles at $viewport.width px in $theme / $density', async ({ viewport, theme, density }) => {
     expect(forgeAvailable).toBe(true)
 
     const longTitle =
@@ -365,122 +369,128 @@ describe('the GitHub tab against the live dry-run server', () => {
       prs: relabelled.prs.map((pr, index) => (index === 0 ? { ...pr, title: longTitle, author: longAuthor } : pr)),
     })
 
-    for (const viewport of [REVIEW_PHONE, DESKTOP]) {
-      for (const theme of ['light', 'dark'] as const) {
-        for (const density of ['comfortable', 'ultra'] as const) {
-          browser.setViewport(viewport.width, viewport.height)
-          // Land somewhere else first, install the stub, then reach GitHub by a CLIENT
-          // navigation — the same order the loading/empty/error cases below use, because a
-          // `goto` would reload the page and take the stub with it.
-          await rememberGithubView('issues')
-          browser.goto(`${baseUrl}${scoped('/')}`)
-          browser.waitForFunction(`document.querySelector('a[href="${scoped('/github')}"]') !== null`)
-          browser.evaluate(`(() => {
-            document.documentElement.classList.toggle('light', ${theme === 'light'})
-            document.documentElement.dataset.density = ${JSON.stringify(density)}
-            const nativeFetch = window.fetch;
-            window.fetch = (input, init) => {
-              const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-              if (new URL(url, location.href).pathname.endsWith('/github')) {
-                return Promise.resolve(new Response(${JSON.stringify(stub)}, { status: 200, headers: { 'content-type': 'application/json' } }));
-              }
-              return nativeFetch(input, init);
-            };
-            document.querySelector('a[href="${scoped('/github')}"]').click();
-          })()`)
-          if (viewport === REVIEW_PHONE) {
-            // A phone lands on the filter index (#622); All issues pushes the list under test.
-            browser.waitForFunction(`document.querySelector('[data-slot="github-filter-screen"] [data-gh-filter="all"]') !== null`)
-            browser.click('[data-slot="github-filter-screen"] [data-gh-filter="all"]')
+    const previous = await api<{ appearance?: unknown }>('/api/v1/workspace/ui-state')
+    const writeAppearance = async (appearance: unknown) => {
+      const response = await fetch(`${baseUrl}/api/v1/workspace/ui-state`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ appearance }),
+      })
+      expect(response.ok).toBe(true)
+    }
+    try {
+      await writeAppearance({ accent: 'cezarion', density, width: 'narrow' })
+      browser.setViewport(viewport.width, viewport.height)
+      // Land somewhere else first, install the stub, then reach GitHub by a CLIENT
+      // navigation — the same order the loading/empty/error cases below use, because a
+      // `goto` would reload the page and take the stub with it.
+      await rememberGithubView('issues')
+      browser.goto(`${baseUrl}${scoped('/')}`)
+      browser.waitForFunction(`document.querySelector('a[href="${scoped('/github')}"]') !== null`)
+      browser.evaluate(`(() => {
+        document.documentElement.classList.toggle('light', ${theme === 'light'})
+        const nativeFetch = window.fetch;
+        window.fetch = (input, init) => {
+          const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+          if (new URL(url, location.href).pathname.endsWith('/github')) {
+            return Promise.resolve(new Response(${JSON.stringify(stub)}, { status: 200, headers: { 'content-type': 'application/json' } }));
           }
-          waitForGitHubSurface(scoped('/github'))
+          return nativeFetch(input, init);
+        };
+        document.querySelector('a[href="${scoped('/github')}"]').click();
+      })()`)
+      if (viewport === REVIEW_PHONE) {
+        // A phone lands on the filter index (#622); All issues pushes the list under test.
+        browser.waitForFunction(`document.querySelector('[data-slot="github-filter-screen"] [data-gh-filter="all"]') !== null`)
+        browser.click('[data-slot="github-filter-screen"] [data-gh-filter="all"]')
+      }
+      waitForGitHubSurface(scoped('/github'))
 
-          for (const view of ['issues', 'prs'] as const) {
-            const path: '/github' | '/github/prs' = view === 'issues' ? '/github' : '/github/prs'
-            clickGitHubTab(path)
-            browser.waitForFunction(
-              `document.querySelector('[data-slot="gh-row"]')?.getAttribute('href')?.includes(${JSON.stringify(view === 'issues' ? '/issues/' : '/prs/')}) === true
-                 && document.querySelector('[data-slot="gh-row"]').textContent.includes(${JSON.stringify(longAuthor)})`,
-            )
-            const facts = waitForSettledSample(browser, `(() => {
-              const row = document.querySelector('[data-slot="gh-row"]')
-              const icon = row.querySelector('[data-slot="gh-row-icon"]')
-              const title = row.querySelector('[data-slot="gh-row-title"]')
-              const meta = row.querySelector('[data-slot="gh-row-meta"]')
-              const labels = row.querySelector('[data-slot="gh-row-labels"]')
-              const titleStyle = getComputedStyle(title)
-              const titleRect = title.getBoundingClientRect()
-              const iconRect = icon.getBoundingClientRect()
-              const metaRect = meta.getBoundingClientRect()
-              const labelsRect = labels?.getBoundingClientRect()
-              const lineHeight = Number.parseFloat(titleStyle.lineHeight)
-              const metaLines = new Set([...meta.children].map((child) => Math.round(child.getBoundingClientRect().top))).size
-              return {
-                titleLines: Math.round(titleRect.height / lineHeight),
-                titleClamped: title.scrollHeight > title.clientHeight,
-                titleOverflowing: title.scrollWidth > title.clientWidth,
-                textOverflow: titleStyle.textOverflow,
-                iconOffset: icon.checkVisibility() ? Math.abs(iconRect.top - titleRect.top) : 0,
-                metaLines,
-                metaBelowTitle: metaRect.top >= titleRect.bottom,
-                labelsBeforeMeta: !labelsRect || (labelsRect.top >= titleRect.bottom && labelsRect.bottom <= metaRect.top),
-                pageOverflow: document.documentElement.scrollWidth > innerWidth,
-                listWidth: document.querySelector('[data-slot="gh-list"]').getBoundingClientRect().width,
-                light: document.documentElement.classList.contains('light'),
-                appliedDensity: document.documentElement.dataset.density,
-                titleText: title.textContent,
-                authorText: row.querySelector('[data-slot="gh-row-author"]').textContent,
-              }
-            })()`) as {
-              titleLines: number
-              titleClamped: boolean
-              titleOverflowing: boolean
-              textOverflow: string
-              iconOffset: number
-              metaLines: number
-              metaBelowTitle: boolean
-              labelsBeforeMeta: boolean
-              pageOverflow: boolean
-              listWidth: number
-              light: boolean
-              appliedDensity: string
-              titleText: string
-              authorText: string
-            }
-
-            observations.push({ viewport, theme, density, view, ...facts })
-            // The row really is laying out the long strings, and they came from the payload.
-            expect(facts.titleText).toBe(longTitle)
-            expect(facts.authorText).toBe(longAuthor)
-            expect(facts.light).toBe(theme === 'light')
-            expect(facts.appliedDensity).toBe(density)
-            expect(facts.metaBelowTitle).toBe(true)
-            expect(facts.labelsBeforeMeta).toBe(true)
-            expect(facts.pageOverflow).toBe(false)
-            if (viewport.width === REVIEW_PHONE.width) {
-              expect(facts.titleLines).toBe(2)
-              expect(facts.titleClamped).toBe(true)
-              expect(facts.iconOffset).toBeLessThanOrEqual(3)
-              expect(facts.metaLines).toBeGreaterThan(1)
-            } else {
-              // Desktop cards now wrap full titles; metadata must remain below them.
-              expect(facts.titleLines).toBeGreaterThanOrEqual(1)
-              expect(facts.titleOverflowing).toBe(false)
-              expect(facts.metaLines).toBeGreaterThanOrEqual(1)
-              expect(facts.listWidth).toBeGreaterThan(0)
-            }
+      for (const view of ['issues', 'prs'] as const) {
+        const path: '/github' | '/github/prs' = view === 'issues' ? '/github' : '/github/prs'
+        clickGitHubTab(path)
+        browser.waitForFunction(
+          `document.querySelector('[data-slot="gh-row"]')?.getAttribute('href')?.includes(${JSON.stringify(view === 'issues' ? '/issues/' : '/prs/')}) === true
+             && document.querySelector('[data-slot="gh-row"]').textContent.includes(${JSON.stringify(longAuthor)})`,
+        )
+        const facts = waitForSettledSample(browser, `(() => {
+          const row = document.querySelector('[data-slot="gh-row"]')
+          const icon = row.querySelector('[data-slot="gh-row-icon"]')
+          const title = row.querySelector('[data-slot="gh-row-title"]')
+          const meta = row.querySelector('[data-slot="gh-row-meta"]')
+          const labels = row.querySelector('[data-slot="gh-row-labels"]')
+          const titleStyle = getComputedStyle(title)
+          const titleRect = title.getBoundingClientRect()
+          const iconRect = icon.getBoundingClientRect()
+          const metaRect = meta.getBoundingClientRect()
+          const labelsRect = labels?.getBoundingClientRect()
+          const lineHeight = Number.parseFloat(titleStyle.lineHeight)
+          const metaLines = new Set([...meta.children].map((child) => Math.round(child.getBoundingClientRect().top))).size
+          return {
+            titleLines: Math.round(titleRect.height / lineHeight),
+            titleClamped: title.scrollHeight > title.clientHeight,
+            titleOverflowing: title.scrollWidth > title.clientWidth,
+            textOverflow: titleStyle.textOverflow,
+            iconOffset: icon.checkVisibility() ? Math.abs(iconRect.top - titleRect.top) : 0,
+            metaLines,
+            metaBelowTitle: metaRect.top >= titleRect.bottom,
+            labelsBeforeMeta: !labelsRect || (labelsRect.top >= titleRect.bottom && labelsRect.bottom <= metaRect.top),
+            pageOverflow: document.documentElement.scrollWidth > innerWidth,
+            listWidth: document.querySelector('[data-slot="gh-list"]').getBoundingClientRect().width,
+            light: document.documentElement.classList.contains('light'),
+            appliedDensity: document.documentElement.dataset.density ?? 'comfortable',
+            titleText: title.textContent,
+            authorText: row.querySelector('[data-slot="gh-row-author"]').textContent,
           }
+        })()`) as {
+          titleLines: number
+          titleClamped: boolean
+          titleOverflowing: boolean
+          textOverflow: string
+          iconOffset: number
+          metaLines: number
+          metaBelowTitle: boolean
+          labelsBeforeMeta: boolean
+          pageOverflow: boolean
+          listWidth: number
+          light: boolean
+          appliedDensity: string
+          titleText: string
+          authorText: string
+        }
 
-          browser.screenshot(
-            `${artifactsDir}/github-titles-${viewport.width}-${theme}-${density}.png`,
-            { viewport: true },
-          )
+        observations.push({ viewport, theme, density, view, ...facts })
+        // The row really is laying out the long strings, and they came from the payload.
+        expect(facts.titleText).toBe(longTitle)
+        expect(facts.authorText).toBe(longAuthor)
+        expect(facts.light).toBe(theme === 'light')
+        expect(facts.appliedDensity).toBe(density)
+        expect(facts.metaBelowTitle).toBe(true)
+        expect(facts.labelsBeforeMeta).toBe(true)
+        expect(facts.pageOverflow).toBe(false)
+        if (viewport.width === REVIEW_PHONE.width) {
+          expect(facts.titleLines).toBe(2)
+          expect(facts.titleClamped).toBe(true)
+          expect(facts.iconOffset).toBeLessThanOrEqual(3)
+          expect(facts.metaLines).toBeGreaterThan(1)
+        } else {
+          // Desktop cards now wrap full titles; metadata must remain below them.
+          expect(facts.titleLines).toBeGreaterThanOrEqual(1)
+          expect(facts.titleOverflowing).toBe(false)
+          expect(facts.metaLines).toBeGreaterThanOrEqual(1)
+          expect(facts.listWidth).toBeGreaterThan(0)
         }
       }
-    }
 
-    expect(observations).toHaveLength(16)
-    browser.setViewport(DESKTOP.width, DESKTOP.height)
+      browser.screenshot(
+        `${artifactsDir}/github-titles-${viewport.width}-${theme}-${density}.png`,
+        { viewport: true },
+      )
+      expect(observations).toHaveLength(2)
+    } finally {
+      await writeAppearance(previous.appearance ?? {})
+      browser.setViewport(DESKTOP.width, DESKTOP.height)
+    }
   }, 60_000)
 })
 
