@@ -4,7 +4,7 @@
 
 ## Read first
 
-`packages/cezar/src/workflows/types.ts`, then `packages/cezar/src/workflows/load.ts`, `packages/cezar/src/workflows/run.ts`, `workflows/run/`
+`packages/cezar/src/workflows/types.ts`, then `packages/cezar/src/workflows/step-kind-registry.ts`, `packages/cezar/src/workflows/load.ts`, `packages/cezar/src/workflows/run.ts`, `workflows/run/` (including `workflows/run/wait-kind-registry.ts`)
 
 ## Two project directories before P5
 
@@ -16,7 +16,9 @@ that path with the instruction to use the binary that migrated the project.
 
 ## Rules
 
-A step is agent (`prompt`/`skill`) XOR check (`command`); a file has `steps` XOR the portable `skills` shorthand — both enforced by zod refinements. `onFail.retry` may only reference an _earlier_ step (`stepsIssue`). `{{task}}` is the substitution token. `quick-task` is the built-in zero-config workflow; built-ins always come back after delete.
+A step is agent (`prompt`/`skill`) XOR check (`command`) XOR plugin (`kind: 'plugin'`, `pluginKind`, optional `config`); a file has `steps` XOR the portable `skills` shorthand — both enforced by zod refinements. `onFail.retry` may only reference an _earlier_ step (`stepsIssue`). `{{task}}` is the substitution token. `quick-task` is the built-in zero-config workflow; built-ins always come back after delete.
+
+Step kinds register in `workflows/step-kind-registry.ts` (`agent` and `check` built in; [ADR 0069](../adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)): `workflows/load.ts` validates registered `pluginKind` values when sealed, `providersRequiredByWorkflow` skips plugin steps, and `workflows/run/step-loop.ts` dispatches execution through the sealed registry. Wait kinds register in `workflows/run/wait-kind-registry.ts` (`human`, `timer`, `process`, and `subagent` in core; `pr` in `ci-wait/pr-wait-kind.ts`; `worker` and `peer` in `delegation/wait-kinds.ts`), and `cezar_wait` builds `flatWaitInputSchema()` lazily after seal.
 
 ## Workflow format
 
