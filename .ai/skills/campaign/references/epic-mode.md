@@ -69,7 +69,7 @@ Work types: <per-issue cleanup or feature>.
 Prerequisites accepted on main <SHA>: <conditions and evidence>.
 Phase exit: <integrated checks, evidence owner and acceptance criteria>.
 
-Controls: <runner/model/effort>, at most <k> live workers, hot-file control
+Controls: <worker model policy or runner/model/effort>, at most <k> live workers, hot-file control
 <value>. Merge authority: <owner's explicit grant and source, or "The owner
 merges each PR">. Product decisions stay with the owner.
 Phase exceptions: <owner-approved exceptions and dates, or none>.
