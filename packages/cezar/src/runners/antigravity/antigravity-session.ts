@@ -318,8 +318,8 @@ export class AntigravitySession implements AgentSession {
     this.beginClose(); this.closeInput();
     this.term = setTimeout(() => this.terminate(), this.spec.timings?.eofTermGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofTermGraceMs);
   }
-  private beginClose(captureDescendants = true): void {
-    if (captureDescendants) this.descendants.capture();
+  private beginClose(): void {
+    this.descendants.capture();
     this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); clearTimeout(this.quietTimer); this.discardQueuedMessages(); this.pendingAsk = undefined;
   }
   private closeInput(): void { this.acp.close(); this.child.stdin.end(); }
@@ -340,11 +340,7 @@ export class AntigravitySession implements AgentSession {
   private fail(error: unknown): void {
     if (this.requestedClose) return;
     this.failure ??= error instanceof Error ? error : new Error(String(error));
-    // EOF can reject the prompt before the child emits exit or reparents its
-    // detached children. Keep cleanup bounded without taking a new tree snapshot.
-    if (this.child.stdout.readableEnded || this.child.stdout.destroyed || this.child.exitCode !== null || this.child.signalCode !== null) {
-      this.beginClose(false); this.closeInput(); this.terminate();
-    } else this.end();
+    this.end();
   }
   private clearAutoEnd(): void { clearTimeout(this.autoEnd); this.autoEnd = undefined; }
   private scheduleAutoEnd(): void {
