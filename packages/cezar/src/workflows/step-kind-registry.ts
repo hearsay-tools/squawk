@@ -48,12 +48,16 @@ export function knownStepKinds(): readonly string[] | undefined {
   return registry.isSealed() ? registry.keys() : undefined;
 }
 
+function validateBuiltInStep(step: WorkflowStepDef): void {
+  if (step.kind === 'plugin') throw new Error('pluginKind cannot name a built-in step kind');
+}
+
 const agent: StepKindDefinition = {
-  kind: 'agent', requiresRunner: true,
+  kind: 'agent', requiresRunner: true, validate: validateBuiltInStep,
   execute: context => context.runAgent(),
 };
 const check: StepKindDefinition = {
-  kind: 'check', requiresRunner: false,
+  kind: 'check', requiresRunner: false, validate: validateBuiltInStep,
   execute: async context => ({ kind: 'result', ...await context.runCheck() }),
 };
 /** Register only. Plugins register before the boot boundary seals the registry. */

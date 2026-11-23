@@ -23,7 +23,7 @@ export const WB_MAX_STEPS = 8
 export function skillStack(steps: readonly WorkflowStepDef[]): string[] | null {
   const skills: string[] = []
   for (const s of steps) {
-    if (s.command || !s.skill) return null
+    if (s.kind === 'plugin' || s.command || !s.skill) return null
     if (s.prompt !== undefined && s.prompt !== '{{task}}') return null
     if (s.name !== undefined && s.name !== s.skill) return null
     if (s.timeoutMs !== undefined || s.model || s.effort !== undefined || s.runner || s.agentProfile || s.allowedTools || s.bashAllowlist || s.onFail) return null
@@ -128,6 +128,11 @@ function yamlStepLines(step: WorkflowStepDef): string[] {
     `  - id: ${yamlScalar(step.id)}`,
     ...yamlStepNameAndSkill(step),
     ...(step.prompt ? yamlBlock('prompt', step.prompt, 4) : []),
+    ...(step.kind === 'plugin' ? [
+      '    kind: plugin',
+      `    pluginKind: ${yamlScalar(step.pluginKind!)}`,
+      ...(step.config === undefined ? [] : [`    config: ${JSON.stringify(step.config)}`]),
+    ] : []),
     ...yamlStepRunFields(step),
     ...yamlStepAllowlists(step),
     ...(step.command ? yamlBlock('command', step.command, 4) : []),

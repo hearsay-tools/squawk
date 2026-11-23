@@ -14,6 +14,7 @@ it('keeps plugin configuration and state, with no runner provider', () => {
 });
 
 it.each([
+  { ...plugin, pluginKind: STEP_KIND.agent }, { ...plugin, pluginKind: STEP_KIND.check },
   { ...plugin, command: '' }, { ...plugin, prompt: '' },
   { ...plugin, prompt: 'work' }, { ...plugin, skill: 'work' }, { ...plugin, command: 'true' },
   { ...plugin, pluginKind: undefined }, { ...plugin, pluginKind: '' }, { ...plugin, pluginKind: 'x'.repeat(65) },
@@ -22,4 +23,10 @@ it.each([
   { id: 'check', command: 'true', config: {} },
 ])('rejects mixed or incomplete plugin steps: %j', step => {
   expect(workflowStepDefSchema.safeParse(step).success).toBe(false);
+});
+
+it('keeps previously accepted check metadata for saved workflow recovery', () => {
+  const check = { id: 'verify', command: 'true', model: 'sonnet', effort: 'high', runner: 'codex', agentProfile: 'work', allowedTools: ['Read'], bashAllowlist: ['git'] };
+  expect(workflowStepDefSchema.parse(check)).toEqual(check);
+  expect(workflowStepDefSchema.safeParse({ ...check, timeoutMs: 0 }).success).toBe(false);
 });

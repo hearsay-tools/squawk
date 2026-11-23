@@ -58,16 +58,21 @@ export const workflowStepDefSchema = z
     if (plugin && [s.prompt, s.skill, s.command].some(value => value !== undefined)) {
       ctx.addIssue({ code: 'custom', message: 'plugin steps cannot carry prompt, skill, or command' });
     }
+    if (plugin && (s.pluginKind === 'agent' || s.pluginKind === 'check')) {
+      ctx.addIssue({ code: 'custom', path: ['pluginKind'], message: 'pluginKind cannot name a built-in step kind' });
+    }
     if (plugin && !s.pluginKind) {
       ctx.addIssue({ code: 'custom', path: ['pluginKind'], message: 'plugin steps require pluginKind' });
     }
     if (!plugin && (s.pluginKind !== undefined || s.config !== undefined)) {
       ctx.addIssue({ code: 'custom', message: 'pluginKind and config apply only to plugin steps' });
     }
-    if (!agent || plugin || check) {
+    if (plugin) {
       for (const key of ['timeoutMs', 'model', 'effort', 'runner', 'agentProfile', 'allowedTools', 'bashAllowlist'] as const) {
         if (s[key] !== undefined) ctx.addIssue({ code: 'custom', path: [key], message: `${key} applies only to agent steps` });
       }
+    } else if (check && s.timeoutMs !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['timeoutMs'], message: 'timeoutMs applies only to agent steps' });
     }
   });
 export type WorkflowStepDef = z.infer<typeof workflowStepDefSchema>;

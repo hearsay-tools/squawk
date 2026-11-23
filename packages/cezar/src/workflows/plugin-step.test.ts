@@ -71,7 +71,7 @@ it('loads and executes a registered plugin through StepLoop, including a backwar
   ]));
 });
 
-it.each([['missing', 'dev', /Unknown workflow step kind/], ['fixture-deploy', 'prod', /target must be dev/]])('reports invalid plugin workflow %s %s', async (kind, target, message) => {
+it.each([['agent', 'dev', /built-in step kind/], ['check', 'dev', /built-in step kind/], ['missing', 'dev', /Unknown workflow step kind/], ['fixture-deploy', 'prod', /target must be dev/]])('reports invalid plugin workflow %s %s', async (kind, target, message) => {
   const loaded = await loadWorkflows(fixture(kind, target));
   expect(loaded.workflows.some(w => w.name === 'deploy')).toBe(false);
   expect(loaded.issues[0]?.message).toMatch(message);
