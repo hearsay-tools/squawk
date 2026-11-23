@@ -361,7 +361,19 @@ export class ProviderAuthService {
       this.verifyingRuntimeFailures.delete(provider);
     }
 
-    if (probed.status !== 'connected') return null;
+    if (probed.status !== 'connected') {
+      // A named account the check found signed out must not keep serving an older connected answer:
+      // the start gate reads this cache, and the rejected account would start again
+      // (hearsay-tools/squawk#4116).
+      if (profile) {
+        this.completedProfiles.set(profileCacheKey(provider, profile.id), {
+          status: { ...probed, profileId: profile.id },
+          timestamp: this.now(),
+          generation: ++this.nextProbeGeneration,
+        });
+      }
+      return null;
+    }
     // Fence the clear against the captured GENERATION, not just the id: while the latch stands a
     // new failure report keeps the same `authFailureId`, so an id comparison alone would let this
     // answer — gathered for the incident as it was — clear a newer failure reported mid-probe,
@@ -511,13 +523,15 @@ export class ProviderAuthService {
 
   /**
    * Probe one named account, cached by provider and profile id. Keep default status unchanged. Do
-   * not apply the coarse provider runtime latch to every named account.
+   * not apply the coarse provider runtime latch to every named account. With auth checks off
+   * (`AGENT_MODELS_LOCKED`) every account reads connected, as `status()` does, so the cockpit and the
+   * start gate never drop a named account the native agent authenticates (hearsay-tools/squawk#4116).
    */
   async profileStatus(
     provider: ProviderId,
     profile: { id: string; configDir: string | null },
   ): Promise<ProviderStatus> {
-    if (productEnv('DRY_RUN') === '1') {
+    if (productEnv('DRY_RUN') === '1' || providerAuthChecksDisabled()) {
       return { provider, status: 'connected', profileId: profile.id };
     }
     const key = profileCacheKey(provider, profile.id);
@@ -566,7 +580,7 @@ export class ProviderAuthService {
    * last-known status; callers needing a fresh answer must probe.
    */
   peekProfileStatus(provider: ProviderId, profileId: string): ProviderStatus | undefined {
-    if (productEnv('DRY_RUN') === '1') {
+    if (productEnv('DRY_RUN') === '1' || providerAuthChecksDisabled()) {
       return { provider, status: 'connected', profileId };
     }
     return this.completedProfiles.get(profileCacheKey(provider, profileId))?.status;
@@ -575,7 +589,7 @@ export class ProviderAuthService {
   /** The cached default-profile rows, or `undefined` when the probe has never completed. Same
    *  no-spawn contract as {@link peekProfileStatus}. */
   peekStatus(): ProviderStatusResponse | undefined {
-    if (productEnv('DRY_RUN') === '1') {
+    if (productEnv('DRY_RUN') === '1' || providerAuthChecksDisabled()) {
       return { providers: registeredRunners().map(({ id }) => ({ provider: id, status: 'connected' })) };
     }
     if (!this.completed) return undefined;

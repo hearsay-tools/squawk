@@ -12,6 +12,7 @@ import { controlLocation } from '@open-mercato/cezar-contract/control-locations'
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 
 import type { ProviderId } from '../core/provider-auth.ts';
+import type { AccountScope } from './run-accounts.ts';
 import { clientRequestHash, type ClientRequestPayload } from '../runs/client-request.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { RunQueries } from '../runs/ports.ts';
@@ -43,7 +44,7 @@ export const NO_WEBHOOK_ERROR =
 const REQUEST_ID_CONFLICT_ERROR = 'request id payload conflict';
 
 /** The provider gate: the message that refuses a start, or `null` when every provider is usable. */
-type ProviderActionError = (required: readonly ProviderId[]) => Promise<string | null>;
+type ProviderActionError = (required: readonly ProviderId[], scope?: AccountScope) => Promise<string | null>;
 
 /** Resolves an account id for a provider; a dangling id comes back as an `{ error }`. */
 type ProfileResolver = (provider: ProviderId, profileId?: string) => Promise<{ profile: unknown } | { error: string }>;
@@ -109,8 +110,9 @@ export async function providerGateRefusal(
   providerActionError: ProviderActionError,
   workflow: WorkflowDef,
   runner: string,
+  scope?: AccountScope,
 ): Promise<StartRunRefusal | undefined> {
-  const blocked = await providerActionError(providersRequiredByWorkflow(workflow, runner));
+  const blocked = await providerActionError(providersRequiredByWorkflow(workflow, runner), scope);
   return blocked ? { error: blocked, status: 409 } : undefined;
 }
 

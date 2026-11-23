@@ -45,6 +45,7 @@ function seed(
 ): void {
   client.setQueryData(workspaceQueryKeys.providerStatus, providers)
   client.setQueryData(workspaceQueryKeys.uiState, uiState)
+  client.setQueryData(workspaceQueryKeys.agentProfiles, { editable: true, profiles: [], profileCapableProviders: [], selections: {} })
   seedRunners(client)
 }
 

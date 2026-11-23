@@ -51,10 +51,16 @@ card per registered runner: install state and version from health checks, manage
 sign-in and the defaults for new projects. Each card has the id `agent-<runner>`; link to it with
 `agentCardPath` (`packages/web/src/lib/agents-settings-path.ts`) and the plain react-router `Link`.
 The project page Settings → Agent defaults (`/p/<id>/settings/agent-defaults`) holds the repo's
-runner, models, system prompt and providers. A runner picker lists a runner whose provider status is
-`not-installed` after its choices, greyed out, as a link to that card (`uninstalledRunners`); it is
-never a radio choice, so picking it starts nothing. A disabled runner pill (no runner connected)
-still opens when it lists such a link; its choices stay locked (`choicesDisabled`).
+runner, models, system prompt and providers. The provider-status row describes the DEFAULT account
+only, so a start picker reads `useRunnerAvailability` (`packages/web/src/api/agent-accounts.ts`): a
+runner is a choice when it is enabled, installed and at least one of its accounts (default or named)
+is connected. A signed-out account is never a row, and when the account a start would use is signed
+out, the start names a connected account instead. A runner picker lists a runner whose provider
+status is `not-installed` (`uninstalledRunners`), or that is installed with no connected account
+(`signedOutRunners`), after its choices, greyed out, as a link to that card; it is never a radio
+choice, so picking it starts nothing. A disabled runner pill (no runner connected) still opens when
+it lists such a link; its choices stay locked (`choicesDisabled`). The server start gate checks the
+same account (`namedRunAccounts` in `packages/cezar/src/server/run-accounts.ts`).
 
 **Reload on server upgrade.** `VersionReloadNotice` (in the shell's banner row) reloads the page
 when health reports a `version` other than the first one this page's query client saw, because the

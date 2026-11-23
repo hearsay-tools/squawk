@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
@@ -24,6 +25,7 @@ const resolved = (over: Partial<ResolvedEngine> = {}): ResolvedEngine => ({
   effortOptions: EFFORT_OPTIONS,
   runners: ['claude'],
   uninstalled: [],
+  signedOut: [],
   defaultRunner: 'claude',
   canRun: true,
   providerPending: false,
@@ -35,7 +37,8 @@ const resolved = (over: Partial<ResolvedEngine> = {}): ResolvedEngine => ({
 
 /** One row of `GET /api/v1/workspace/agent-profiles`. Only the four fields the pills read matter
  *  here; the rest of the closed schema is pinned by the contract tests. */
-const profile = (provider: Runner, id: string, label: string) => ({
+const profile = (provider: Runner, id: string, label: string, status?: 'connected' | 'disconnected') => ({
+  ...(status === undefined ? {} : { status: { provider, status } }),
   id,
   provider,
   label,
@@ -401,6 +404,52 @@ describe('useResolvedEngine agent accounts', () => {
 
     expect(result.current.accounts).toEqual([])
     expect(engineRunBody(result.current)).toEqual(engineBody(result.current))
+  })
+})
+
+describe('a runner whose default account is signed out (hearsay-tools/squawk#4116)', () => {
+  const DEFAULT_SIGNED_OUT = {
+    providers: [
+      { provider: 'claude', status: 'disconnected', enabled: true },
+      { provider: 'codex', status: 'connected', enabled: true },
+    ],
+  }
+
+  it('stays usable through another connected account, and the start names that account', async () => {
+    stubResolverFetch({
+      providers: DEFAULT_SIGNED_OUT,
+      profiles: [profile('claude', 'default', 'Default'), profile('claude', 'klaudiusz', 'Klaudiusz', 'connected')],
+    })
+
+    const { result } = renderResolved({ runner: 'claude', model: null, effort: null, account: null })
+    await waitFor(() => expect(result.current.runners).toContain('claude'))
+
+    expect(result.current.runner).toBe('claude')
+    expect(result.current.signedOut).toEqual([])
+    // The signed-out default account is no row of the pill, and the start never runs on it.
+    expect(result.current.accounts.map((a) => `${a.provider}:${a.id}`)).toEqual(['claude:klaudiusz'])
+    expect(result.current.account).toBe('klaudiusz')
+    expect(engineRunBody(result.current).agentProfile).toBe('klaudiusz')
+  })
+
+  it('shows a runner with no connected account greyed, as a link to sign in in Settings', async () => {
+    stubResolverFetch({ providers: DEFAULT_SIGNED_OUT, projectDefault: 'codex', profiles: [] })
+    render(createElement(QueryClientProvider, { client: createQueryClient() },
+      createElement(MemoryRouter, null,
+        createElement(EnginePills, { pick: { runner: null, model: null, effort: null, account: null }, onChange: vi.fn() }))))
+
+    const runner = await screen.findByRole('button', { name: /^Runner · / })
+    fireEvent.pointerDown(runner)
+    const link = await waitFor(() => {
+      const found = document.querySelector('[data-slot="runner-install-link"][data-runner="claude"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(link.textContent).toContain('Not signed in')
+    expect(link.textContent).toContain('Sign in in Settings')
+    expect(link.getAttribute('href')).toContain('#')
+    // A link, never a choice: claude is not a runner row.
+    expect(screen.queryByRole('menuitemradio', { name: /claude/i })).toBeNull()
   })
 })
 

@@ -17,6 +17,7 @@ import { createRunner } from './core/runner-registry.ts';
 import { loadWorkflows } from './workflows/load.ts';
 import { ProviderRuntimeAuthObserver } from './server/provider-auth-runtime.ts';
 import { providersRequiredByWorkflow, unavailableProviderMessage } from './server/provider-action-gate.ts';
+import { namedRunAccounts, probeNamedAccounts } from './server/run-accounts.ts';
 import { loadWorkspaceConfig } from './workspace/config.ts';
 import { WorkspaceSemaphore } from './workspace/semaphore.ts';
 
@@ -69,9 +70,13 @@ export async function runHeadless(
       providerAuth.status(),
       deps.loadWorkspaceConfig(home.workspaceConfig),
     ]);
+    // The project's selected account answers for its provider, not only the default account
+    // (hearsay-tools/squawk#4116).
+    const accounts = await probeNamedAccounts(providerAuth, await namedRunAccounts(home, repoRoot, requiredProviders));
     const blocked = deps.unavailableProviderMessage(
       requiredProviders,
       deps.applyProviderEnablement(discovered, workspace.disabledProviders),
+      accounts,
     );
     if (blocked) {
       deps.console.error(blocked);

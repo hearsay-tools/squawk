@@ -32,11 +32,12 @@ afterEach(() => {
 })
 
 
-/** One connected runner and no missing CLI: nothing to choose and nothing to install. */
+/** One connected runner, the others disabled: nothing to choose, install or sign in to. A signed-out
+ *  enabled runner would be a sign-in link (hearsay-tools/squawk#4116), which opens the pill. */
 const PROVIDERS_NONE_MISSING: ProviderStatusResponse = { providers: [
   { provider: 'claude', status: 'connected', enabled: true },
-  { provider: 'codex', status: 'disconnected', enabled: true },
-  { provider: 'opencode', status: 'disconnected', enabled: true },
+  { provider: 'codex', status: 'disconnected', enabled: false },
+  { provider: 'opencode', status: 'disconnected', enabled: false },
 ] }
 
 describe('the hero surface', () => {
@@ -876,7 +877,7 @@ describe('provider authentication gate', () => {
     )
   })
 
-  it('one connected provider suppresses the runner pill but leaves submission enabled', async () => {
+  it('one connected provider lists the signed-out ones as sign-in links and leaves submission enabled', async () => {
     serve({
       health: { ...HEALTH_MULTI, defaultRunner: 'codex' },
       providerStatus: {
@@ -890,7 +891,7 @@ describe('provider authentication gate', () => {
     renderNewTask()
     await pillReady()
 
-    expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
+    expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull()
     fireEvent.change(textarea(), { target: { value: 'Use the only connected provider' } })
     expect((screen.getByRole('button', { name: 'Start task' }) as HTMLButtonElement).disabled).toBe(false)
   })

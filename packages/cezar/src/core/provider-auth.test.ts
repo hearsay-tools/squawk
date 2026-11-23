@@ -1197,7 +1197,9 @@ describe('ProviderAuthService', () => {
 
       await expect(service.verifyRuntimeAuthFailure('claude', { id: 'work', configDir: '/work' }))
         .resolves.toBeNull();
-      expect(service.peekProfileStatus('claude', 'work')).toBeUndefined();
+      // The account's own cache learns the logout, so the start gate cannot start it on an older
+      // connected answer (hearsay-tools/squawk#4116).
+      expect(service.peekProfileStatus('claude', 'work')).toMatchObject({ provider: 'claude', status: 'disconnected', profileId: 'work' });
       await expect(service.status()).resolves.toMatchObject({
         providers: expect.arrayContaining([
           expect.objectContaining({ provider: 'claude', status: 'disconnected', authFailureId: 'incident-1' }),
@@ -1382,6 +1384,19 @@ describe('ProviderAuthService', () => {
     });
     expect(runCommand).not.toHaveBeenCalled();
     expect(createAuthFailureId).not.toHaveBeenCalled();
+  });
+
+  it('reads every named account connected under CEZ_AGENT_MODELS_LOCKED=1, as status() does', async () => {
+    const runCommand = runner();
+    const service = new ProviderAuthService({ runCommand });
+    process.env.CEZ_AGENT_MODELS_LOCKED = '1';
+
+    // A named account must not read signed out while its provider reads connected
+    // (hearsay-tools/squawk#4116): the cockpit would drop it and the start would switch accounts.
+    await expect(service.profileStatus('claude', { id: 'work', configDir: '/work' }))
+      .resolves.toEqual({ provider: 'claude', status: 'connected', profileId: 'work' });
+    expect(service.peekProfileStatus('claude', 'work')).toEqual({ provider: 'claude', status: 'connected', profileId: 'work' });
+    expect(runCommand).not.toHaveBeenCalled();
   });
 
   it.each(['0', 'true', 'yes', ''])(

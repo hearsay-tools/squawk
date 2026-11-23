@@ -1,11 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
-import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
+import { hasAccountChoice, useRunnerAvailability } from '@/api/agent-accounts'
 import { useConfig, useProviderStatus, useRunnerModels } from '@/api/queries'
 import { useRunners } from '@/api/runners'
 import type { CreateRunInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill, type RunnerAccountChoice } from '@/components/picker-pill'
-import { uninstalledRunners, usableRunners } from '@/lib/provider-status'
 import {
   effortOptionsForModel,
   modelsForRunner,
@@ -62,6 +61,8 @@ export interface ResolvedEngine {
   runners: readonly Runner[]
   /** Registered runners whose CLI is missing; the pill lists them as links to their Settings card. */
   uninstalled: readonly Runner[]
+  /** Installed runners with no signed-in account; the pill lists them as sign-in links. */
+  signedOut: readonly Runner[]
   /** What the active project's server context would pick from its authoritative config. */
   defaultRunner?: Runner | undefined
   /** True only after provider status confirms at least one connected backend. */
@@ -83,22 +84,20 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const providers = useProviderStatus()
   const config = useConfig()
   const registered = useRunners()
-  const runners = usableRunners(providers.data, registered.data)
-  const uninstalled = uninstalledRunners(providers.data, registered.data)
+  // Agent accounts (spec 2026-07-29-agent-profiles), read through the shared hook the /new composer
+  // and the thread's Continue read, so no start surface can disagree about which login runs — or
+  // drop a runner whose default account is signed out while another account is connected.
+  const { runners, uninstalled, signedOut, accounts, repoAccount, accountFor } = useRunnerAvailability()
   // `/api/health` is deliberately boot-project-only. Runner policy is per project, so every
   // scoped start surface must read the active project's `/api/config` instead (#699).
   const defaultRunner = config.data?.defaultRunner
   const runner = resolveRunner(pick.runner, runners, defaultRunner ?? runners[0] ?? 'claude')
   // Resolved first: each runner has its own host catalog (#794), so the fetch follows the pick.
   const modelsLocked = config.data?.modelsLocked === true
-  // Agent accounts (spec 2026-07-29-agent-profiles), read through the shared hook the /new composer
-  // and the thread's Continue read, so no start surface can disagree about which login runs.
-  const { accounts, repoAccount } = useAgentAccounts()
   // An account belonging to ANOTHER runner is dropped rather than sent: switching runner must not
-  // silently carry the previous runner's login along. Same guard as the composer's.
-  const account = accounts.some((choice) => choice.provider === runner && choice.id === pick.account)
-    ? pick.account
-    : null
+  // silently carry the previous runner's login along. A signed-out account is replaced by a
+  // connected one, so the task never starts on it. Same rule as the composer's.
+  const account = accountFor(runner, pick.account)
   const catalog = useRunnerModels(runner, true, account ?? repoAccount?.[runner])
   const model = resolveModel(
     modelsLocked ? null : pick.model,
@@ -116,6 +115,7 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
     effortOptions,
     runners,
     uninstalled,
+    signedOut,
     defaultRunner,
     canRun: providers.isSuccess && runners.length > 0,
     modelsLocked,
@@ -172,8 +172,8 @@ export function engineRunBody(
 /** Shown when there is a choice to make: more than one runner, or — where accounts are offered —
  *  more than one login for one of them — or a missing CLI to point at its Settings card. */
 function runnerPillShown(resolved: ResolvedEngine, accountChoices: readonly RunnerAccountChoice[]): boolean {
-  const { runners, uninstalled } = resolved
-  return runners.length > 1 || uninstalled.length > 0 || runners.some((id) => hasAccountChoice(accountChoices, id))
+  const { runners, uninstalled, signedOut } = resolved
+  return runners.length > 1 || uninstalled.length > 0 || signedOut.length > 0 || runners.some((id) => hasAccountChoice(accountChoices, id))
 }
 
 export function EnginePills({
@@ -246,6 +246,7 @@ export function EnginePills({
       fieldLabel
       runners={runners}
       uninstalled={resolved.uninstalled}
+      signedOut={resolved.signedOut}
       value={runner}
       accounts={accountChoices}
       account={accounts ? resolved.account : null}

@@ -59,6 +59,7 @@ import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebh
 import { subscribeRunFeed } from './run-event-feed.ts';
 import type { ApiRun, ArchivedRunsResponse, RunSummary, RunsSearchResponse } from '@open-mercato/cezar-contract';
 import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
+import { probeWritableDir } from './probe-writable-dir.ts';
 import { ARCHIVED_RUNS_PAGE_DEFAULT } from '@open-mercato/cezar-contract/run-limits';
 import { RUNS_SEARCH_PER_PROJECT_MAX, archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema, runsSearchQuerySchema } from '@open-mercato/cezar-contract/runs';
 import { workspaceEventsQuerySchema, type RunsIndexResponse } from '@open-mercato/cezar-contract/workspace-events';
@@ -84,7 +85,7 @@ import {
   isGithubAutomation,
 } from '../automations/types.ts';
 import type { IncomingMessage } from 'node:http';
-import { access, constants as fsConstants, mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context, type Next } from 'hono';
@@ -624,25 +625,6 @@ const COMMIT_FORMATS = ['text/plain', 'application/json'] as const;
  *  everything that is not an image anyway. */
 const FILE_FORMATS = ['application/json', 'image/*'] as const;
 
-/** Workspace-root writability probe (multi-project spec, "API Contracts"):
- *  optional `mkdir -p`, `access W_OK`, then a real create/delete round-trip — W_OK alone
- *  can lie (e.g. a read-only mount still reports writable permission bits).
- *  Returns the failure message, or null when the directory is usable. */
-async function probeWritableDir(dir: string, create: boolean): Promise<string | null> {
-  const probe = join(dir, `.cez-write-probe-${process.pid}-${Date.now().toString(36)}`);
-  try {
-    if (create) await mkdir(dir, { recursive: true });
-    const info = await stat(dir);
-    if (!info.isDirectory()) return `${dir} is not a directory`;
-    await access(dir, fsConstants.W_OK);
-    await writeFile(probe, '', 'utf8');
-    await unlink(probe);
-    return null;
-  } catch (err) {
-    await unlink(probe).catch(() => {}); // best-effort if the round-trip half-succeeded
-    return err instanceof Error ? err.message : String(err);
-  }
-}
 function writeErrorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 // The return type is INFERRED on purpose: it is the chained app type built at the bottom of
 // this function, and `AppType` (src/server/app-type.ts) is `ReturnType<typeof createApp>`.
@@ -661,7 +643,7 @@ export function createApp(deps: ServerDeps) {
   // The host-wide services and the provider closures built on them live in `./server-deps.ts`.
   const { skillCatalog, modelCatalog, providerAuth, workspaceConfig, openTerminal, openFile, openApp, detectEnvironment } = resolveServerDeps(deps, bootRoot);
   const { providerStatus, providerActionError, invalidateHostModels } =
-    createProviderStatus({ modelCatalog, providerAuth, workspaceConfig });
+    createProviderStatus({ modelCatalog, providerAuth, workspaceConfig }, deps.home);
 
   const workspaceProjects = deps.workspaceProjects ?? createWorkspaceProjects({ bootRoot, bootProjectId, home: deps.home });
   const { resolveBootProject } = workspaceProjects;
@@ -2506,9 +2488,12 @@ export function createApp(deps: ServerDeps) {
     .post('/plan', jsonZodValidator(planSchema), async (c) => {
       const { root: repoRoot, manager } = c.get('project');
       const parsed = { data: c.req.valid('json') };
-      const blocked = await providerActionError([(await loadConfig(repoRoot, deps.home)).defaultRunner]);
+      const planner = (await loadConfig(repoRoot, deps.home)).defaultRunner;
+      const blocked = await providerActionError([planner], { repoRoot, picks: { [planner]: parsed.data.agentProfile } });
       if (blocked) return c.json({ error: blocked }, 409);
-      return c.json(await planChain(repoRoot, parsed.data.task, skillCatalog, deps.home, manager.createRunner));
+      const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, planner, parsed.data.agentProfile);
+      if (badProfile) return c.json({ error: badProfile.error }, badProfile.status);
+      return c.json(await planChain(repoRoot, parsed.data.task, skillCatalog, deps.home, manager.createRunner, parsed.data.agentProfile));
     });
 
   // ---- GitHub automations --------------------------------------------------
@@ -2929,7 +2914,7 @@ export function createApp(deps: ServerDeps) {
       if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
       const { workflow } = resolved;
       const runner = body.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : registeredRunnerId(body.runner);
-      const blocked = await providerGateRefusal(providerActionError, workflow, runner);
+      const blocked = await providerGateRefusal(providerActionError, workflow, runner, { repoRoot, picks: { [runner]: body.agentProfile } });
       if (blocked) return c.json({ error: blocked.error }, blocked.status);
       const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, runner, body.agentProfile);
       if (badProfile) return c.json({ error: badProfile.error }, badProfile.status);
@@ -3056,7 +3041,7 @@ export function createApp(deps: ServerDeps) {
       // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
       // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
       if (run.status !== 'queued') {
-        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))]);
+        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))], { repoRoot: c.get('project').root, run, live: true });
         if (blocked) return c.json({ error: blocked }, 409);
       }
       const content: PastedContent[] = [
@@ -3198,7 +3183,7 @@ export function createApp(deps: ServerDeps) {
       const required = untouched
         ? providersRequiredByWorkflow(run.workflowDef!, provider)
         : [provider];
-      const blocked = await providerActionError(required);
+      const blocked = await providerActionError(required, { repoRoot, run, runners: { original: originalProvider, target: provider } });
       if (blocked) return c.json({ error: blocked }, 409);
       const result = manager.continueRun(id, {
         text: parsed.data.text,
@@ -3222,14 +3207,14 @@ export function createApp(deps: ServerDeps) {
       const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
-      const blocked = await providerActionError([backend]);
+      const resume = checkout.resumeAllowed ? resumeCommand(backend, sessionId) : undefined;
+      // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
+      if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
+      const blocked = await providerActionError([backend], { repoRoot: project.root, picks: { [backend]: resume ? profileId ?? DEFAULT_AGENT_ACCOUNT_ID : undefined } });
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();
       const refusal = fallbackProjectWriteError(cwd);
       if (refusal) return c.json({ error: refusal }, 409);
-      const resume = checkout.resumeAllowed ? resumeCommand(backend, sessionId) : undefined;
-      // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
-      if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
       const account = resume
         ? { command: resume, ...await handoffEnv(backend, profileId) }
         : await freshCliHandoff(backend, project.root, deps.home);

@@ -113,12 +113,12 @@ export const PROVIDERS_CONNECTED: ProviderStatusResponse = {
   ],
 }
 
-/** One connected runner and no missing CLI: the runner pill has nothing to choose or link to. */
+/** One connected runner, the others disabled: the runner pill has nothing to choose or link to. */
 export const PROVIDERS_NONE_MISSING: ProviderStatusResponse = {
   providers: [
     { provider: 'claude', status: 'connected', enabled: true },
-    { provider: 'codex', status: 'disconnected', enabled: true },
-    { provider: 'opencode', status: 'disconnected', enabled: true },
+    { provider: 'codex', status: 'disconnected', enabled: false },
+    { provider: 'opencode', status: 'disconnected', enabled: false },
   ],
 }
 

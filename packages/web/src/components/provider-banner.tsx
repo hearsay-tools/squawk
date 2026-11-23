@@ -8,7 +8,7 @@ import {
   type ProviderAuthIncident,
   visibleProviderAuthIncidents,
 } from '@/lib/provider-auth-alert'
-import { parseProviderStatusResponse } from '@/lib/provider-status'
+import { parseProviderStatusResponse, runnerSignedIn, type AccountSignIn } from '@/lib/provider-status'
 
 import { StatusDot } from './status-dot'
 
@@ -20,6 +20,8 @@ interface ProviderBannerProps {
   error: boolean
   dismissals: ProviderAuthDismissals
   onDismissAuthFailures: (incidents: readonly ProviderAuthIncident[]) => void
+  /** Agent accounts with their sign-in state: a named account's sign-in counts as credentials. */
+  accounts?: readonly AccountSignIn[]
 }
 
 export function ProviderBanner({
@@ -29,6 +31,7 @@ export function ProviderBanner({
   error,
   dismissals,
   onDismissAuthFailures,
+  accounts = [],
 }: ProviderBannerProps) {
   if (pending || !status) return null
   let normalized: ProviderStatusResponse
@@ -71,11 +74,11 @@ export function ProviderBanner({
 
   if (error) return null
   const usable = normalized.providers.some(
-    (row) => row.enabled && row.status === 'connected',
+    (row) => row.enabled && runnerSignedIn(row, accounts),
   )
   if (usable) return null
   const credentialsExist = normalized.providers.some(
-    (row) => row.status === 'connected',
+    (row) => runnerSignedIn(row, accounts),
   )
   const uncertain = normalized.providers.some((row) => row.status === 'unknown')
   const message = credentialsExist

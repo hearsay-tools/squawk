@@ -1668,11 +1668,11 @@ export async function createRepoBranch(
 
 /** Chain-from-prompt: the planner proposes 1–5 steps for the task. Degraded answers come back
  *  as a one-step plan with `fallback: true`, never as an error — only transport/validation fail. */
-export async function postPlan(task: string): Promise<PlanResponse> {
+export async function postPlan(task: string, agentProfile?: string | null): Promise<PlanResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].plan.$post({
       param: { projectId: queryScope() },
-      json: { task },
+      json: { task, ...(agentProfile ? { agentProfile } : {}) },
     }),
     '/plan',
   )

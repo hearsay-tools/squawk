@@ -3,7 +3,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 
 import { createRun, postPlan, putUiState } from '@/api/client'
-import { useAgentAccounts } from '@/api/agent-accounts'
+import { useRunnerAvailability } from '@/api/agent-accounts'
 import { useRunners } from '@/api/runners'
 import {
   queryKeys,
@@ -25,7 +25,6 @@ import {
   resolveAutoApply,
 } from '@/lib/prompt-templates'
 import { bumpSkillUsage, orderSkillsByUsage } from '@/lib/skills'
-import { uninstalledRunners, usableRunners } from '@/lib/provider-status'
 import { taskWebhooks } from '@/lib/webhook'
 import { useNavigate } from '@/lib/project-router'
 
@@ -196,8 +195,8 @@ export function usePromptTemplates(input: {
 export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   const providers = useProviderStatus()
   const registered = useRunners()
-  const runners = usableRunners(providers.data, registered.data)
-  const uninstalled = uninstalledRunners(providers.data, registered.data)
+  const availability = useRunnerAvailability()
+  const { runners, uninstalled, signedOut } = availability
   const defaultRunner = config.data?.defaultRunner
   const preferredRunner = defaultRunner ?? 'claude'
   const runner = runners.length > 0 ? resolveRunner(draft.runner, runners, preferredRunner) : null
@@ -209,9 +208,13 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
     isPending: providers.isPending || registered.isPending,
     isError: providers.isError || registered.isError,
   }
-  const accountChoices = useAgentAccounts()
-  const pickedAccount = accountChoices.accounts.some(choice => choice.provider === displayRunner && choice.id === draft.agentProfile)
-    ? draft.agentProfile : accountChoices.repoAccount?.[displayRunner]
+  const pickedAccount = availability.accountFor(displayRunner, draft.agentProfile)
+    ?? availability.repoAccount?.[displayRunner]
+  // Plan first runs on the project's default runner: it carries the composer's account when that
+  // runner is the picked one, else the default runner's own connected account (hearsay-tools/squawk#4116).
+  const planAccount = defaultRunner === undefined
+    ? null
+    : availability.accountFor(defaultRunner, runner === defaultRunner ? draft.agentProfile : null)
   const catalog = useRunnerModels(displayRunner, true, pickedAccount)
   const modelsLocked = config.data?.modelsLocked === true
   const defaultModels = config.data?.defaultModels
@@ -228,7 +231,9 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
     registered,
     runners,
     uninstalled,
+    signedOut,
     defaultRunner,
+    planAccount,
     runner,
     displayRunner,
     providersReady,
@@ -249,13 +254,11 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
  */
 export function useAccountSelection(displayRunner: Runner, draftAgentProfile: string | null) {
   const profiles = useAgentProfiles()
-  const { accounts: accountChoices, repoAccount } = useAgentAccounts()
+  const { accounts: accountChoices, repoAccount, accountFor } = useRunnerAvailability()
   // A draft account belonging to ANOTHER runner is ignored rather than sent: switching runner must
-  // not silently carry a foreign account along.
-  const owned = accountChoices.some(
-    (choice) => choice.provider === displayRunner && choice.id === draftAgentProfile,
-  )
-  return { accountChoices, repoAccount, accountsSettled: !profiles.isPending, agentProfile: owned ? draftAgentProfile : null }
+  // not silently carry a foreign account along. A signed-out account (the pick, or the one the
+  // project's selection resolves to) is replaced by a connected one (hearsay-tools/squawk#4116).
+  return { accountChoices, repoAccount, accountsSettled: !profiles.isPending, agentProfile: accountFor(displayRunner, draftAgentProfile) }
 }
 
 /**
@@ -487,7 +490,7 @@ export function useNewTaskSubmit(input: {
       // Keep the original draft while planning so Discard returns to it unchanged.
       setPlanning(true)
       try {
-        const planned = await postPlan(text)
+        const planned = await postPlan(text, engine.planAccount)
         if (mounted.current) setPlan(pendingPlanOf(text, images, planned))
       } finally {
         setPlanning(false)

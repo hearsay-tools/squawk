@@ -58,7 +58,7 @@ export interface PlanResult {
   fallback: boolean;
 }
 
-export async function planChain(repoRoot: string, task: string, catalog: RunnerSkillCatalog, home: Home, createRunner: RunnerFactory): Promise<PlanResult> {
+export async function planChain(repoRoot: string, task: string, catalog: RunnerSkillCatalog, home: Home, createRunner: RunnerFactory, agentProfile?: string): Promise<PlanResult> {
   const [config, verifyCommands] = await Promise.all([
     loadConfig(repoRoot, home),
     detectVerifyCommands(repoRoot),
@@ -72,7 +72,8 @@ export async function planChain(repoRoot: string, task: string, catalog: RunnerS
   // Plan under the SAME agent account this project's tasks run on (spec
   // 2026-07-29-agent-profiles). Without this the planner would quietly bill the personal
   // subscription for a project the user pointed at their work account.
-  const account = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, undefined, process.env, home).catch(() => null);
+  // An explicit `agentProfile` (the composer's pick) wins over the project's selection.
+  const account = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, agentProfile, process.env, home).catch(() => null);
   const profileEnv = account?.env ?? {};
   const listed = account === null ? [] : (await catalog.get({ runner: config.defaultRunner, cwd: repoRoot,
     accountHome: account.profile.isDefault ? undefined : account.profile.path })).skills;

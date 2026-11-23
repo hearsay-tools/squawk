@@ -2,7 +2,8 @@ import { useConfig, useProviderStatus } from '@/api/queries'
 import { runnerIds, useRunners } from '@/api/runners'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
-import { usableRunners } from '@/lib/provider-status'
+import { useRunnerAvailability } from '@/api/agent-accounts'
+import { runAccountId } from './active-provider'
 import { resolveRunner } from '@/routes/new-task-form'
 import { isStoppedBeforeStarting } from './run-actions'
 
@@ -51,19 +52,26 @@ function useProviderSources() {
 
 /** One provider decision for every UI path that reopens an existing agent session. */
 export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null) {
-  const { providers, registered, providersPending, providersError, providersReady } = useProviderSources()
+  const { registered, providersPending, providersError, providersReady } = useProviderSources()
   const config = useConfig()
   const untouched = isStoppedBeforeStarting(run)
   // A task saved on a removed runner has no runner of its own: it starts on the project's default
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
   const removed = run.removedRunner !== undefined
   const needsConfig = (untouched && !run.runner) || removed
-  const runners = usableRunners(providers.data, registered.data)
+  // A continuation sends no account: each runner counts when the account the server will continue
+  // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
+  const availability = useRunnerAvailability()
   const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
+  // Each candidate counts on the account the server would continue it on, after the runner switch
+  // clears the run's account (hearsay-tools/squawk#4116).
+  const accountOn = (provider: Runner, target: Runner) =>
+    runAccountId(run, provider, availability.repoAccount, { original: currentRunner, target })
+  const { runners, signedOut } = availability.runnersOn((candidate) => accountOn(candidate, candidate))
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
   const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner, runnerIds(registered.data)) : [runner]
-  const missing = required.filter(provider => !runners.includes(provider))
+  const missing = required.filter(provider => !availability.readyOn(provider, accountOn(provider, runner)))
   const canContinue = providersReady && (!needsConfig || config.isSuccess) && missing.length === 0
   const reason = continuationReason({
     needsConfig,
@@ -78,6 +86,7 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
 
   return {
     runners,
+    signedOut,
     currentRunner,
     runner,
     currentRunnerConnected,

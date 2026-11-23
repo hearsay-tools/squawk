@@ -64,6 +64,7 @@ export function AgentOptions({
   // installed runner still sees where to install another.
   const showRunnerPill = engine.runners.length > 1
     || engine.uninstalled.length > 0
+    || engine.signedOut.length > 0
     || engine.runners.some((id) => hasAccountChoice(accounts.accountChoices, id))
   const runnerPill = showRunnerPill
     ? <RoutedRunnerPill key="runner" engine={engine} accounts={accounts} update={update} />
@@ -86,6 +87,7 @@ function RoutedRunnerPill({ engine, accounts, update }: { engine: Engine; accoun
       fieldLabel
       runners={engine.runners}
       uninstalled={engine.uninstalled}
+      signedOut={engine.signedOut}
       value={engine.displayRunner}
       accounts={accounts.accountChoices}
       account={accounts.agentProfile}
