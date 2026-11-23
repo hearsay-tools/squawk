@@ -1,6 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { NO_PROGRESS_CRITERIA, exemptionFor } from './harness-parity-core.testkit.ts';
+import { isRegisteredRunner } from './runner-registry.ts';
 
 // The workflow-no-progress cells and their partition, apart from the engine the cell bodies
 // drive, so the registration guard collects the same names without loading it.
@@ -74,6 +75,7 @@ export function workflowNoProgressParity(cells: WorkflowNoProgressCells) {
     const { describe, it } = partitionParity(part, PARTS, collect);
     describe('managed open-turn inactivity — #470', () => {
       for (const backend of BUILT_IN_RUNNER_IDS) {
+        if (part !== 'all' && !isRegisteredRunner(backend)) continue;
         for (const row of NO_PROGRESS_CRITERIA) {
           const exemption = exemptionFor(row.id, backend);
           if (exemption) {
