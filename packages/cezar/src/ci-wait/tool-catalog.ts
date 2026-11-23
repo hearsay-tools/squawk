@@ -1,21 +1,10 @@
 import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
-import { productEnv } from '../core/product-env.ts';
-import { automationsEnabled } from '../automations/enabled.ts';
+import { automationsToolEnabled, previewToolEnabled } from './tool-env.ts';
 import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema, squawkWaitRequestSchema } from '@open-mercato/cezar-contract/waits';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { previewStopRequestSchema, previewServeRequestSchema } from '@open-mercato/cezar-contract/preview';
 import { scheduleTaskRequestSchema, scheduledTasksRequestSchema } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { z } from 'zod';
-
-/** Live preview is on under the exact value `1` only (spec 2026-10-02-live-preview-v1). */
-export function previewToolEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return productEnv('PREVIEW', env) === '1';
-}
-
-/** Automations are on unless the value is exactly `0` (spec 2026-10-02-scheduled-automations). */
-export function automationsToolEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return automationsEnabled(env);
-}
 
 /**
  * The Anthropic tool API refuses a top-level `oneOf`/`anyOf`/`allOf`, so `cezar_wait` advertises
@@ -165,16 +154,4 @@ export function squawkToolDefinitions(env: NodeJS.ProcessEnv = process.env) {
     ...(previewToolEnabled(env) ? [previewToolDefinition, previewStopToolDefinition] : []),
     ...(automationsToolEnabled(env) ? [scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition] : []),
   ];
-}
-export function squawkToolNames(env: NodeJS.ProcessEnv = process.env): string[] {
-  return squawkToolDefinitions(env).map(tool => tool.name);
-}
-
-/**
- * Env names a harness must forward to the adapter process. Several harnesses spawn MCP servers
- * from an allowlist, so preview opt-in and automations opt-out must both reach the adapter.
- */
-export function squawkToolEnvNames(env: NodeJS.ProcessEnv = process.env): string[] {
-  return ['CEZ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_AUTOMATIONS', ...(previewToolEnabled(env) ? ['CEZ_PREVIEW'] : [])]
-    .flatMap(name => { const preferred = name.replace(/^CEZ_/, 'HSQ_'); return env[preferred] === undefined ? [name] : [name, preferred]; });
 }

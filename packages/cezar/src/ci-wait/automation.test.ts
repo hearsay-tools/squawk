@@ -3,7 +3,8 @@ import { callAutomation } from './client.ts';
 import { CiToolController } from './controller.ts';
 import type { AutomationToolAnswer, AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
 import { GITHUB_COMMAND_TIMEOUT_MS } from '../core/github-request-limits.ts';
-import { automationToolDefinition, squawkToolNames } from './tool-catalog.ts';
+import { automationToolDefinition } from './tool-catalog.ts';
+import { squawkToolNames } from './tool-names.ts';
 
 const controllers: CiToolController[] = [];
 afterEach(async () => { vi.useRealTimers(); vi.unstubAllEnvs(); for (const controller of controllers.splice(0)) await controller.close(); });

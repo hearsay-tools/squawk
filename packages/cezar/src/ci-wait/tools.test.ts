@@ -3,6 +3,8 @@ import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
 import { callScheduleTask, callSquawkDone, callSquawkWait } from './client.ts';
+import { squawkToolDefinitions } from './tool-catalog.ts';
+import { squawkToolNames } from './tool-names.ts';
 import { invokeDoneTool, invokeScheduleTaskTool, invokeWaitTool } from './tools.ts';
 
 vi.mock('./client.ts', () => ({
@@ -51,5 +53,16 @@ describe('Squawk tool answers', () => {
   ])('cezar_schedule_task answers %s with the hint for it', async (_name, answer, hint) => {
     vi.mocked(callScheduleTask).mockResolvedValue(answer);
     expect(shown(await invokeScheduleTaskTool(schedule))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
+  });
+});
+
+describe('squawkToolNames', () => {
+  it.each([
+    {},
+    { HSQ_PREVIEW: '1' },
+    { HSQ_AUTOMATIONS: '0' },
+    { HSQ_PREVIEW: '1', HSQ_AUTOMATIONS: '0' },
+  ])('lists the names of the advertised definitions in order for %j', env => {
+    expect(squawkToolNames(env)).toEqual(squawkToolDefinitions(env).map(tool => tool.name));
   });
 });

@@ -12,7 +12,7 @@ import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 import { permissionPolicy } from './permissions.ts';
-import { squawkToolNames } from '../../ci-wait/tool-catalog.ts';
+import { squawkToolNames } from '../../ci-wait/tool-names.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
