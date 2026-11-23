@@ -42,10 +42,13 @@ import type { UiEvent } from '../../packages/cezar/src/core/ui-events.ts';
 import { CiToolController, type SquawkToolHandlers, type WaitRegistration } from '../../packages/cezar/src/ci-wait/controller.ts';
 import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
 import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src/built-in-tools.ts';
 
 // The Codex session's child env reads the runner registry; register the built-ins first.
 registerBuiltInRunners();
 sealBuiltInRunners();
+registerBuiltInTools();
+sealBuiltInTools();
 
 type Frame = Record<string, unknown>;
 type Toml = { parse(text: string): Frame; stringify(value: Frame): string };
