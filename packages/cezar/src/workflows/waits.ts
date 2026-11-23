@@ -1,4 +1,4 @@
-import { isSquawkHumanWait } from './run/wait-kinds.ts';
+import { isSquawkHumanWait, waitInputId } from '../runs/wait-helpers.ts';
 import { WAIT_KINDS } from './run/wait-kinds.ts';
 import type { ProcessWaitResult, SubagentWaitResult } from '@open-mercato/cezar-contract/waits';
 import type { PeerWaitResult } from '@open-mercato/cezar-contract/delegation';
@@ -75,11 +75,7 @@ export { identicalWait } from './run/wait-kinds.ts';
 export const identicalWorkerWait = WAIT_KINDS.worker.duplicateWorker;
 export const identicalPeerWait = WAIT_KINDS.peer.duplicatePeer;
 
-/** The agent input that delivers a resolved wait's result: the wait's own id, or for an upgraded
- *  worker wait whose wake was already queued, that input (`wakeInputId`). */
-export function waitInputId(wait: Wait): string {
-  return WAIT_KINDS[wait.kind].inputId(wait);
-}
+export { waitInputId };
 
 /** The CI watcher still speaks the schema-3 `CiWait`; an open entry is a parked one to it. */
 export function ciWatchRequest(wait: PrWaitEntry): CiWait {
@@ -102,4 +98,5 @@ export function settledWaitEntry(latest: Wait, result: WaitResult | undefined, o
   return WAIT_KINDS[latest.kind].resolve(latest, result, observed, resolvedAt);
 }
 
-export { normalizePrUrl, isSquawkHumanWait, isMonitoringTimer, MONITORING_WAKE_NUDGE, waitResultText, subagentWaitResultText, describeWait, openWaitsFooter } from './run/wait-kinds.ts';
+export { isSquawkHumanWait };
+export { normalizePrUrl, isMonitoringTimer, MONITORING_WAKE_NUDGE, waitResultText, subagentWaitResultText, describeWait, openWaitsFooter } from './run/wait-kinds.ts';
