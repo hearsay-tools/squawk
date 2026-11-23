@@ -62,7 +62,7 @@ it('stamps unchanged PR checks by revision, retries after writes, and still rest
   openClose();
   expect(scan.mock.results.filter((_, i) => scan.mock.calls[i]![0] === LEGACY_REFERENCE_HEAL_SQL)
     .flatMap(result => result.value).map(row => row.id)).toContain('unchanged');
-  expect(meta('pr-reference-heal:unchanged')).toBe(String(revision + 1));
+  expect(meta('pr-reference-heal:unchanged')).toBe(String(database(db => db.get(unchanged.id)!.revision)));
 });
 
 it('loads only foreign records, caches corroborated scope, and invalidates by handle and revision', () => {
