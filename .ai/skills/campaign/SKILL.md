@@ -27,7 +27,7 @@ Use the prompt's controls, with these defaults:
 | Control | Default |
 |---|---|
 | Source | Required: a label, issue list or epic |
-| Worker | Codex `gpt-6.1-sol-fast`; confirm with runner and model discovery before spawning |
+| Worker | Pick runner, model and (when advertised) effort per item from task complexity and available discovered models (`hsq discover runners`, `hsq discover models --runner=<name>`); do not guess when discovery is unavailable |
 | Live workers | 4; start one minute apart to avoid startup rate limits |
 | Hot file | Every ready branch needs coordinator PR-opening release from actual patch and semantic evidence; see [release check](references/hot-file-release.md) |
 | Integration | Independent PRs into `main`, as the repo's branching binding requires |
@@ -106,8 +106,10 @@ For each free slot:
    authority verbatim, the coordinator id, the expected evidence and any
    mandatory PR-opening release check.
 4. Use `hsq worker spawn --baseline parent-head --request-id <UUID>
-   --context-file <brief> '<task>'` with the discovered runner/model. Reuse the
-   request id only for an exact retry.
+   --context-file <brief> '<task>'` with the runner, model and (when
+   advertised) effort chosen for the item's complexity from discovered
+   available models, or the prompt's worker control. Reuse the request id
+   only for an exact retry.
 5. Record the accepted worker id and register a wait covering every live worker.
 
 Done when the accepted worker and its baseline are recorded and a wait covers
