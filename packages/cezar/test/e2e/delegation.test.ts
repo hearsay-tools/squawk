@@ -121,8 +121,9 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     const { registerBuiltInRunners } = await load('runners/built-in.js') as typeof import('../../src/runners/built-in.ts');
     registerBuiltInRunners();
     // This process admits and settles workers from the installed tarball, so it seals the removal slots as an entry does.
-    const { registerBuiltInRunSlots } = await load('built-in-run-slots.js') as typeof import('../../src/built-in-run-slots.ts');
+    const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js') as typeof import('../../src/built-in-run-slots.ts');
     registerBuiltInRunSlots();
+    sealBuiltInRunSlots();
     const { DelegationController, bundledWorkerInvocation } = await load('delegation/provision.js') as typeof import('../../src/delegation/provision.ts');
     const { workerCleanups } = await load('delegation/worker-cleanup.js') as typeof import('../../src/delegation/worker-cleanup.ts');
     const { WorkspaceSemaphore } = await load('workspace/semaphore.js') as typeof import('../../src/workspace/semaphore.ts');

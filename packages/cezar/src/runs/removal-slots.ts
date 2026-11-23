@@ -1,3 +1,4 @@
+import { createListRegistry } from '../core/registry.ts';
 import type { WorkerResults } from './ports.ts';
 import type { RunRecord } from './store.ts';
 
@@ -49,40 +50,41 @@ export interface RunSlots {
   readonly cleanups?: readonly RemovalCleanup[] | undefined;
 }
 
-const gates: DeletionGate[] = [];
-const preparations: ReclaimPreparation[] = [];
-const cleanups: RemovalCleanup[] = [];
-let sealed = false;
+const options = { name: 'The removal slots', bootHint: 'call registerBuiltInRunSlots(), then sealBuiltInRunSlots().' };
+const gates = createListRegistry<DeletionGate>(options);
+const preparations = createListRegistry<ReclaimPreparation>(options);
+const cleanups = createListRegistry<RemovalCleanup>(options);
 
-function add<T>(list: T[], slots: readonly T[] | undefined): void {
-  for (const slot of slots ?? []) {
-    if (list.includes(slot)) continue;
-    if (sealed) throw new Error('The removal slots are sealed: register every slot before sealRunSlots().');
-    list.push(slot);
+function registerSlot<T>(registry: { register(slot: T): void }, slot: T): void {
+  try { registry.register(slot); } catch (error) {
+    if (runSlotsSealed()) throw new Error('The removal slots are sealed: register every slot before sealRunSlots().');
+    throw error;
   }
 }
 
 /** Add slots, in call order. Registering the same slot object again does nothing. */
 export function registerRunSlots(slots: RunSlots): void {
-  add(gates, slots.gates);
-  add(preparations, slots.preparations);
-  add(cleanups, slots.cleanups);
+  for (const slot of slots.gates ?? []) registerSlot(gates, slot);
+  for (const slot of slots.preparations ?? []) registerSlot(preparations, slot);
+  for (const slot of slots.cleanups ?? []) registerSlot(cleanups, slot);
 }
 
 /** Close the registry: removals may run, and no new slot may register. */
 export function sealRunSlots(): void {
-  sealed = true;
+  gates.seal();
+  preparations.seal();
+  cleanups.seal();
 }
 
 /** Whether this process sealed its removal slots. Never throws. */
 export function runSlotsSealed(): boolean {
-  return sealed;
+  return gates.isSealed();
 }
 
 /** Throws unless the registry is sealed. A removal path calls it before its first side effect. */
 export function assertRunSlotsSealed(): void {
-  if (!sealed) {
-    throw new Error('No removal slot is registered: call registerBuiltInRunSlots() from built-in-run-slots.ts at the process entry, '
+  if (!runSlotsSealed()) {
+    throw new Error('No removal slot is registered: call registerBuiltInRunSlots() then sealBuiltInRunSlots() from built-in-run-slots.ts at the process entry, '
       + 'or seal the slots this test uses with sealTestRunSlots() from runs/removal-slots.testkit.ts.');
   }
 }
@@ -90,7 +92,7 @@ export function assertRunSlotsSealed(): void {
 /** The first gate's reason to refuse this deletion, in registration order. */
 export function deletionRefusal(runId: string, kind: DeletionKind, dataDir: string): string | undefined {
   assertRunSlotsSealed();
-  for (const gate of gates) {
+  for (const gate of gates.values()) {
     const reason = gate.refuse(runId, kind, dataDir);
     if (reason) return reason;
   }
@@ -100,14 +102,14 @@ export function deletionRefusal(runId: string, kind: DeletionKind, dataDir: stri
 /** Run every preparation in registration order; the first rejection stops the rest. */
 export async function prepareReclaim(run: RunRecord, context: ReclaimContext): Promise<void> {
   assertRunSlotsSealed();
-  for (const preparation of preparations) await preparation.prepare(run, context);
+  for (const preparation of preparations.values()) await preparation.prepare(run, context);
 }
 
 /** Run every cleanup in registration order, then throw the first failure. */
 export function runRemovalCleanups(runId: string, dataDir: string): void {
   assertRunSlotsSealed();
   const failures: unknown[] = [];
-  for (const cleanup of cleanups) {
+  for (const cleanup of cleanups.values()) {
     try { cleanup.removed(runId, dataDir); } catch (error) { failures.push(error); }
   }
   if (failures.length) throw failures[0];

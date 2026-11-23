@@ -1,3 +1,4 @@
+import { createSingleRegistry } from '../core/registry.ts';
 import type { RunLifecycle } from './lifecycle.ts';
 import type { WorkerExecutionRecords, WorkerExecutions, WorkerResults } from './ports.ts';
 import type { RunRecord } from './store.ts';
@@ -27,24 +28,23 @@ export interface WorkerExecutionsState {
 
 export type WorkerExecutionsFactory = (dataDir: string, state: WorkerExecutionsState) => WorkerExecutions & WorkerExecutionRecords;
 
-let registered: WorkerExecutionsFactory | undefined;
+const registry = createSingleRegistry<WorkerExecutionsFactory>({
+  name: 'No worker-executions factory is registered (worker-executions registry)',
+  bootHint: 'call registerBuiltInRunSlots(), then sealBuiltInRunSlots(), or import delegation/worker-executions.testkit.ts in this test.',
+});
 
-/** Register this process's factory. Registering the same factory again does nothing; another one throws. */
+/** Register the factory without sealing the registry. */
 export function registerWorkerExecutions(factory: WorkerExecutionsFactory): void {
-  if (registered && registered !== factory) throw new Error('A different worker-executions factory is already registered in this process.');
-  registered = factory;
+  registry.register(factory);
 }
 
-/** The registered factory. Throws when none is registered. */
-export function workerExecutionsFactory(): WorkerExecutionsFactory {
-  if (!registered) {
-    throw new Error('No worker-executions factory is registered: call registerBuiltInRunSlots() from built-in-run-slots.ts at the process entry, '
-      + 'or import delegation/worker-executions.testkit.ts in this test.');
-  }
-  return registered;
-}
+export function sealWorkerExecutions(): void { registry.seal(); }
+export function workerExecutionsSealed(): boolean { return registry.isSealed(); }
 
-/** Whether this process registered a factory. Never throws. */
+/** Fail closed before boot seals the registry, and when boot supplied no factory. */
+export function workerExecutionsFactory(): WorkerExecutionsFactory { return registry.get(); }
+
+/** Passive cold inspection: an unsealed factory cannot be used yet. */
 export function workerExecutionsRegistered(): boolean {
-  return registered !== undefined;
+  return registry.isSealed() && registry.has();
 }
