@@ -1,4 +1,3 @@
-import { probeReleasePortProblems } from './probe-release-port.ts';
 import { staleProductEnvReads } from './product-env-read.ts';
 import { staleHomeReaders } from './home-boundary.ts';
 import { externalTestHomeProblems } from './test-home-repository.ts';
@@ -188,7 +187,7 @@ export function waitProblems(): string[] {
 }
 
 export function repositoryProblems(): string[] {
-  return [...probeReleasePortProblems(), ...staleEntries(), ...layerMapProblems(), ...staleProductEnvReads(), ...fileLengthProblems(), ...guardianCssProblems(), ...externalTestHomeProblems()];
+  return [...staleEntries(), ...layerMapProblems(), ...staleProductEnvReads(), ...fileLengthProblems(), ...guardianCssProblems(), ...externalTestHomeProblems()];
 }
 
 async function lintProblems(withOxlint: boolean): Promise<string[]> {

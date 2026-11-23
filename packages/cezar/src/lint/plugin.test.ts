@@ -62,6 +62,7 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  'probe-release-port': ['packages/cezar/src/port-violation.test.ts', 'function port() { const s = createServer(); s.listen(0); const { port } = s.address(); s.close(); return port; }'],
   'attention-bucket-compare-outside-owner': ['packages/web/src/attention-violation.tsx', "const x = attention.bucket === 'waiting';\n"],
   'automations-capability-read-outside-owner': ['packages/web/src/capabilities-violation.tsx', 'const x = health.capabilities.automations;\n'],
   'subagent-children-outside-dock': ['packages/web/src/children-violation.tsx', 'const x = subagentChildren(turns, id);\n'],
@@ -127,6 +128,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
 const APPROVED: Record<string, string> = {
+  'packages/cezar/src/port-approved.test.ts': '// oxlint-disable-next-line cez/probe-release-port -- deliberate syntax fixture\nfunction port() { const s = createServer(); s.listen(0); const { port } = s.address(); s.close(); return port; }',
   'packages/cezar/src/workflows/run/launch-read-resolver.ts': 'const skills = state.skills.catalog;\n',
   'packages/cezar/src/env-approved.ts': "productEnv('DRY_RUN'); delete process.env.CEZ_DRY_RUN;",
   'packages/web/src/sandbox-home.test.ts': "writeFileSync(join(Home.sandbox(dir).root, 'config.json'), '{}');\n",

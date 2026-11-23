@@ -1,8 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { probeReleasePorts } from './probe-release-port.ts';
+import { gitSync } from '../git-command.ts';
+import { checkRule, ruleCases } from './ast-rule.testkit.ts';
+import { repoRoot } from './source-rule.ts';
+import { probeReleasePort } from './probe-release-port.ts';
 
-describe('probe-then-release port guard', () => {
-  it.each([
+ruleCases(probeReleasePort, {
+  file: 'packages/cezar/src/probe.test.ts',
+  invalid: [
     `async function freePort() {
       const server = createServer();
       await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -26,11 +32,9 @@ describe('probe-then-release port guard', () => {
       await new Promise(resolve => probe.close(resolve));
       return port;
     }`,
-  ])('rejects an ephemeral port returned after closing its listener', source => {
-    expect(probeReleasePorts(source)).toHaveLength(1);
-  });
 
-  it.each([
+  ],
+  valid: [
     `const server = createServer(handler);
      server.listen(0, '127.0.0.1', () => announce(server.address().port));`,
     `async function check() {
@@ -46,7 +50,15 @@ describe('probe-then-release port guard', () => {
       const { port } = server.address(); request(port); server.close();
     }
     function unrelated() { const port = 123; return port; }`,
-  ])('allows an owned port-0 listener and ignores comments', source => {
-    expect(probeReleasePorts(source)).toEqual([]);
+
+  ],
+});
+
+// Oxlint's normal package scan does not include these script roots. Use the same
+// visitors here so new script helpers get the same regression guard.
+describe('script port ownership', () => {
+  const files = gitSync(['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'scripts', '.github/scripts', '.ai/scripts'], { cwd: repoRoot }).split('\0').filter(file => /\.[cm]?[jt]sx?$/.test(file));
+  it.each([...new Set(files)])('%s keeps its listener', file => {
+    expect(checkRule(probeReleasePort, file, readFileSync(join(repoRoot, file), 'utf8'))).toEqual([]);
   });
 });

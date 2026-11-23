@@ -24,7 +24,7 @@ export function spawnViteFixture(): ChildProcess {
 
 export async function waitForViteFixture(child: ChildProcess): Promise<string> {
   try {
-    return await pollFor(() => announcements.get(child)!(), () => 'Vite did not announce its listener', { timeoutMs: 45_000 })
+    return await pollFor(() => announcements.get(child)!(), () => 'Vite did not announce its listener', { timeoutMs: 45_000, tries: Infinity })
   } catch (error) {
     await stopFixtureServer(child)
     throw error

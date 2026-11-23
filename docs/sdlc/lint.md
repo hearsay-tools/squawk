@@ -690,11 +690,17 @@ curated YAML case, and `ast-rules-launch-read.test.ts` runs them through RuleTes
 
 ## Probe-then-release ports
 
-`cez/probe-release-port` scans tracked and new JavaScript and TypeScript under
-`packages`, `scripts`, `.github/scripts` and `.ai/scripts`. It rejects helpers
-that listen on port 0, read the address, close the listener and return its port.
-The listening process must own its port and report it after binding. The guard
-recognizes local variable captures and common Promise resolvers; it does not
-track aliases across functions. A listener kept for requests and closed at
-teardown passes. Tests which need a declared port before starting a process
-use the non-ephemeral exact-port pattern from hearsay-tools/squawk#3648.
+Static scope: `cez/probe-release-port` checks local listener names in JavaScript
+and TypeScript under `packages`, `scripts`, `.github/scripts` and `.ai/scripts`.
+It rejects helpers which call `listen(0)`, capture `address()` or its `port`,
+close that listener and return or resolve the captured port. Promise and socket
+callbacks belong to the enclosing helper. Other functions stay separate.
+Oxlint supplies the syntax tree; the rule follows no imports, dynamic property
+names or values across helpers. The script-root regression test runs the same
+visitors outside the normal package scan.
+
+The listening process must bind port 0 and report its bound port. A listener
+kept for requests and closed at teardown passes. Tests which need a declared
+port before starting a process use the non-ephemeral exact-port pattern from
+hearsay-tools/squawk#3648. A deliberate exception uses
+`// oxlint-disable-next-line cez/probe-release-port -- <reason>`. No baseline.

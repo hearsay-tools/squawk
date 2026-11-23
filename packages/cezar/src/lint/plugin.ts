@@ -1,3 +1,4 @@
+import { probeReleasePort } from './probe-release-port.ts';
 import { attentionBucketCompareOutsideOwner } from './attention-bucket-compare-outside-owner.ts';
 import { automationsCapabilityReadOutsideOwner } from './automations-capability-read-outside-owner.ts';
 import { subagentChildrenOutsideDock } from './subagent-children-outside-dock.ts';
@@ -36,7 +37,7 @@ import { stubbornTestChild } from './stubborn-test-child.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
 export const AST_RULES: AstRule[] = [
-  productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport,
+  probeReleasePort, productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport,
   designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
   parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
