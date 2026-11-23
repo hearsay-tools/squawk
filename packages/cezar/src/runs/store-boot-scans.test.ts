@@ -8,11 +8,18 @@ import { encodeRunRow } from './run-row.ts';
 import { seedRuns, overwriteRunColumns } from './run-store.testkit.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { decodeRunRecord, RunStore, type RunRecord } from './store.ts';
+import * as ownership from '../server/cockpit-ownership.ts';
 import { AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY, AUTOMATION_ORIGIN_HEAL_SQL, LEGACY_REFERENCE_HEAL_SQL } from './store-open.ts';
+
+const fence = vi.hoisted(() => ({ refused: false }));
+vi.mock('../server/cockpit-ownership.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof ownership>();
+  return { ...actual, projectWriteRefused: (dataDir: string) => fence.refused || actual.projectWriteRefused(dataDir) };
+});
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'boot-scans-')); });
-afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { fence.refused = false; vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: true }); });
 const record = (id: string, extra: Partial<RunRecord> = {}): RunRecord => decodeRunRecord(JSON.stringify({
   id, title: id, workflow: 'build', task: 'research', status: RUN_STATUS.done,
   createdAt: '2026-09-01T00:00:00Z', tokensUsed: 0, archived: false, steps: [], ...extra,
@@ -106,14 +113,27 @@ it('loads only foreign records, caches corroborated scope, and invalidates by ha
 });
 
 it('commits nothing while opening a clean database and writes the heal stamps at close', () => {
-  seedRuns(dir, [record('clean')]);
+  seedRuns(dir, [record('clean', { markerRefs: { pr: 9 } })]);
+  const revision = database(db => db.get('clean')!.revision);
   const commits = vi.spyOn(RunDatabase.prototype, 'transaction');
   const store = RunStore.open(dir);
   expect(commits).not.toHaveBeenCalled();
   expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBeUndefined();
+  expect(meta('pr-reference-heal:clean')).toBeUndefined();
   store.close();
   expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBe('1');
+  expect(meta('pr-reference-heal:clean')).toBe(String(revision));
   const scan = vi.spyOn(RunDatabase.prototype, 'listWhere');
   openClose();
   expect(scan.mock.calls.some(([sql]) => sql === AUTOMATION_ORIGIN_HEAL_SQL)).toBe(false);
+});
+
+it('writes no heal stamps at close once a migration fence refuses project writes', () => {
+  seedRuns(dir, [record('fenced', { markerRefs: { pr: 9 } })]);
+  const store = RunStore.open(dir);
+  fence.refused = true;
+  store.close();
+  fence.refused = false;
+  expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBeUndefined();
+  expect(meta('pr-reference-heal:fenced')).toBeUndefined();
 });

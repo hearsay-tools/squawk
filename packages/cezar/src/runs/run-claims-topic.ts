@@ -153,7 +153,8 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
   flushHealMeta(): void {
     const meta = this.pendingHealMeta;
     this.pendingHealMeta = {};
-    if (this.db) saveHealMeta(this.db, meta);
+    // A migration fence raised after open() refuses this write as it refuses every other one.
+    if (this.db && !projectWriteRefused(this.dataDir)) saveHealMeta(this.db, meta);
   }
 
   /** Complete only after a scan finds no stale row, including rows already held for saving. */
