@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -10,6 +11,8 @@ import { acquireCiResources } from '../ci-wait/resources.ts';
 import { collect, fixtureUpdateRun, manager, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
 
 import { pr, identity, handlers, entryOf, settledOf, inputOf, heldParent } from './worker-waits-shared.testkit.ts';
+
+sealTestRunners();
 
 /** A stopped and collected worker: settled, so it blocks no finish, and a wait on it resolves at once. */
 async function settledWorker(parentId: string) {

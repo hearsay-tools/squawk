@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { reportsIndex } from '../artifacts/reports-index.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -8,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
-import { createRunner, registerRunner } from '../core/runner-registry.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { Home } from '../home/home.ts';
 import { holdCockpitLease } from '../home/leases.ts';
@@ -37,8 +38,8 @@ import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /**
  * The cockpit's automatic project move (hearsay-tools/cezarion#3089): at cockpit start and at a project's first open, a legacy project moves before anything

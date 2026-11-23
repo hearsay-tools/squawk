@@ -1,3 +1,4 @@
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.ts';
@@ -5,6 +6,7 @@ import { runnerGolden } from './runner-golden.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 registerBuiltInRunners();
+sealTestRunners();
 
 const models: ModelOption[] = [
   {

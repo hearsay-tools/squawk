@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -20,9 +21,9 @@ import { taskWebhooks } from '../workspace/webhooks.ts';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

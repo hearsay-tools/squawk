@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -13,9 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
 
+sealTestRunners(claudeRunner, codexRunner);
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,10 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WriteBoundary } from '../worktree-manifest.ts';
 import { readManifest, uncoveredPaths } from '../worktree-manifest.testkit.ts';
 import { isPreserved, seedAgentConfigLocalLayer } from './seed.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 let repo: string;
 const env = process.env;

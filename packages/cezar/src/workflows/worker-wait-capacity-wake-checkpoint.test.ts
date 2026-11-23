@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { captureSessions } from './runner-session-capture.testkit.ts';
@@ -16,8 +16,8 @@ import { bookkeeping, collect, manager, register, root, semaphore, store, termin
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { parkedOnWorkers, useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, opencodeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

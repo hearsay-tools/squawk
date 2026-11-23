@@ -1,6 +1,8 @@
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import type { RunnerFactory } from './agent-runner.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
+sealTestRunners();
 
 // Which factory a test file drives when its closure loads several runner kits
 // (hearsay-tools/cezarion#3242). Each case loads a fresh `runners-under-test.testkit.ts`, so

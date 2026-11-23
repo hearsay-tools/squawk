@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 /**
  * Golden tests for the opencode SSE-bus → v2 mapper: each fixture in
  * `__fixtures__/` is a wire-faithful `{type, properties}` bus-event
@@ -30,11 +31,11 @@ import {
   type OpencodeUiMapping,
 } from './opencode-ui-mapper.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
-registerRunner(opencodeRunner);
+
+sealTestRunners(opencodeRunner);
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,6 +41,7 @@ import { extraToolRows } from '../../core/runner-fact-rows.testkit.ts';
 // The runner's child env reads each backend's allow-list from the registry; the env tests below
 // drive pi, OpenCode (the `provider/model` control) and Claude.
 for (const definition of [piRunner, opencodeRunner, claudeRunner]) registerRunner(definition);
+sealTestRunners();
 
 /**
  * The `pi` runner (#387): a new string slotted into the runner seam as

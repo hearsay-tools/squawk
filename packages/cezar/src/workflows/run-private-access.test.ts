@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { parse } from '@babel/parser';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,10 +11,9 @@ import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 function privateMembers() {
   const source = readFileSync(new URL('./run.ts', import.meta.url), 'utf8');
@@ -55,7 +55,6 @@ it('hides every AST-derived private member at runtime', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
-
 
 it('rejects every private access through the pinned compiler API', () => {
   const { names } = privateMembers();

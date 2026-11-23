@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os'; // test-home-read: checks refusal of the pinned test home; never writes it.
@@ -14,7 +14,8 @@ import { previewRefusal } from '../ci-wait/errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // The agent-config listing reads every runner's config files.
 

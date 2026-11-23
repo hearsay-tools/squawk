@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { ChildProcess, execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,11 +13,11 @@ import { HEALTH_TTL_MS } from './health-cache.ts';
 import { BACKEND_MAX_AGE_MS } from './backend-checks.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
 // The environment stamp reads each registered runner's binary, as the live server does.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** Hang guard for the cold detection below: the wait ends the moment its checks arrive. */
 const HANG_GUARD_MS = 15_000;

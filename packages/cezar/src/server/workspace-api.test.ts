@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -16,6 +17,7 @@ import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Starting a run and checking a request's runner id read the registered runners.
 registerBuiltInRunners();
+sealTestRunners();
 
 /**
  * The workspace settings API (multi-project spec, step 2.7):

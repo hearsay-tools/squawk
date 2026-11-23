@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -24,12 +25,11 @@ import { workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { RunStore } from '../runs/store.ts';
 import { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps } from './types.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 const LAUNCH_WAIT_MS = 15_000;
 const execFileAsync = promisify(execFile);

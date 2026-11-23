@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from './capacity.ts';
 import '../core/every-runner.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -23,13 +24,11 @@ import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from
 import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from '../server/engine-run-manager.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { readWorkerIdentity } from './execution-identity.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+sealTestRunners(claudeRunner, codexRunner);
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels

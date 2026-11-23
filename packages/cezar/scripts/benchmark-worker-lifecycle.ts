@@ -29,12 +29,13 @@ import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { ClaudeCliRunner } from '../src/runners/claude/claude-cli-runner.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
-import { registerBuiltInRunners } from '../src/runners/built-in.ts';
+import { registerBuiltInRunners, sealBuiltInRunners } from '../src/runners/built-in.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 import { workerExecutionsOf } from '../src/delegation/worker-executions.ts';
 
 installWindowsIdentityStore();
 registerBuiltInRunners();
+sealBuiltInRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
 const ownHome = prepareBenchmarkEnv();

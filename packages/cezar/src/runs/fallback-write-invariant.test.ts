@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,14 +21,13 @@ import { RUNS_DB_FILE, RunConflictError, RunDatabase, RunDatabaseBusyError } fro
 import { DatabaseSync } from 'node:sqlite';
 import { readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import { RunStore } from './store.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { sealTestRunSlots } from './removal-slots.testkit.ts';
 
 // Deletion and reclaim run here; no feature's slot is part of what these cases check.
 sealTestRunSlots();
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 /**
  * The invariant, without naming the paths that could break it: boot, recovery, every reconciler

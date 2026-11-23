@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { completionRefusal, type CompletionGateHost } from './run/completion-gate.ts';
 import type { RunModuleContext } from './run/types.ts';
@@ -8,6 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixture } from '../delegation/service.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+
+sealTestRunners();
 
 function unused<T extends object>(name: string, values: Partial<T> = {}): T {
   return new Proxy(values, { get(target, key) {

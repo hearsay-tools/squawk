@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import * as git from '../autosave-commit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRunResult, AgentSession } from '../core/agent-runner.ts';
@@ -7,10 +8,9 @@ import { fixture } from '../delegation/service-engine.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { fixtureWorkSettled } from './fixture-manager.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 // bound: Git and the manager must have time to launch on a loaded host.
 const until = (predicate: () => boolean) => vi.waitFor(() => expect(predicate()).toBe(true), { timeout: 15_000, interval: 10 });

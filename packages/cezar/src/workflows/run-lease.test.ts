@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-claude.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+
+sealTestRunners();
 
 const SETTLED = ['done', 'failed', 'cancelled', 'review'];
 

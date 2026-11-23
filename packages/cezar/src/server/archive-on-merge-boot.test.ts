@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -25,10 +26,10 @@ const forgeFactory = (root: string) => ({
   mergedPullRequests: (identities: ArchivePullRequestIdentity[], signal: AbortSignal) => lookupMergedPullRequests(root, identities, signal),
 });
 import { startServer } from './start-server.ts';
-import { createRunner, registerRunner } from '../core/runner-registry.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

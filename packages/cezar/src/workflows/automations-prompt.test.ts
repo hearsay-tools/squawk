@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import '../core/register-all-runners.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
@@ -43,6 +44,7 @@ useRunners(fakeRunnerFactory((backend: string) => ({
     },
     interrupt: async () => {},
   })));
+sealTestRunners();
 
 const ADDRESS = { origin: 'http://127.0.0.1:5555', projectId: 'proj-1' };
 const PROMPT_HEADING = '## Automations';

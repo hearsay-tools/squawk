@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +7,8 @@ import { discoveredTasksSchema } from '@open-mercato/cezar-contract/discovery';
 import { RunDatabase } from '../runs/run-database.ts';
 import { encodeRunRow } from '../runs/run-row.ts';
 import { fixture } from './service.testkit.ts';
+
+sealTestRunners();
 
 describe('bounded peer discovery pages', () => {
   let f: ReturnType<typeof fixture>;

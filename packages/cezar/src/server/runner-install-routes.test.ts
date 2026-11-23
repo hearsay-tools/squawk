@@ -1,13 +1,13 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { expect, it, vi } from 'vitest';
 import { runnerInstallStatusSchema } from '@open-mercato/cezar-contract/runner-install';
-import { registerRunner } from '../core/runner-registry.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { ManagedCliInstallation } from '../managed-install/cli-installation.ts';
 import { resolveCapabilities } from './capabilities.ts';
 import { createRunnerInstallRoutes } from './runner-install-routes.ts';
 
-registerRunner(antigravityRunner);
+sealTestRunners(antigravityRunner);
 
 it.each(['check', 'install', 'update', 'remove'])('refuses hosted %s without settingsAdmin before creating an installer', async action => {
   const home = testHome(); const create = vi.fn();

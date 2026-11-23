@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -5,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { manager, parent, restart, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 // hearsay-tools/squawk#868: a worker that runs mid-turn when the server stops is resumed by recovery
 // (`RunRecovery.recoverInterruptedRun`), and its uncommitted worktree changes stay.

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -16,8 +16,8 @@ import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, type ProjectContextSource } from './project-context.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const record = (id: string, extra: Record<string, unknown> = {}) => ({
   id, title: id, task: id, workflow: 'quick-task', steps: [], status: RUN_STATUS.done, tokensUsed: 0, archived: false,

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { workerCollectedResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -17,6 +18,8 @@ import { artifactDirectory, publishArtifact } from '../artifacts/store.ts';
 import { readPersistedRuns, readPersistedText, seedRuns } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+
+sealTestRunners();
 
 vi.mock('node:fs', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs') & { default: typeof import('node:fs') }>();

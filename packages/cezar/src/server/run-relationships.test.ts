@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -7,6 +8,8 @@ import { runRelationshipsSchema, type WorkerSpawnResult } from '@open-mercato/ce
 import { createApp } from './server.ts';
 import { fixture } from '../delegation/service.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+
+sealTestRunners();
 let f: ReturnType<typeof fixture>;
 beforeEach(() => { f = fixture(workerCleanups()); });
 afterEach(async () => { await f.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 /**
  * hearsay-tools/cezarion#1512: Claude resumes the parent agent without a stdin line — after a
  * background task's notification or a native peer message. The runner emits exactly one
@@ -16,11 +17,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from './definition.ts';
 
 // The runner's session env reads claude's registry data; this test drives only claude.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 import type { UiEvent } from '../../core/ui-events.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 

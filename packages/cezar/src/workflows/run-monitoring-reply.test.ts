@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { readFileSync } from 'node:fs';
@@ -5,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WAIT_KIND, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
+sealTestRunners();
 describe('RunManager monitoring reply', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor, openTimer } = fixture;

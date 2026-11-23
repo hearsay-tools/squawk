@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -12,12 +13,10 @@ import * as agentProfiles from '../workspace/agent-profiles.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { ompRunner } from '../runners/omp/definition.ts';
 
-registerRunner(claudeRunner);
-registerRunner(ompRunner);
+sealTestRunners(claudeRunner, ompRunner);
 
 // Route-level guard cases for the extracted handlers. Inject launchers so this suite never
 // opens a GUI or a real coding-agent session, and own all account and provider state.

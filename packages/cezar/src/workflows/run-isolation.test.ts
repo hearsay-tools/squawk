@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
 import { shellQuote } from '../core/shell-env.ts';
@@ -9,6 +10,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
+sealTestRunners();
 
 vi.mock('../git-worktree.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../git-worktree.ts')>();

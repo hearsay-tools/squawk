@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // Register the external CI mock before loading RunManager.
 import { pr, identity, externalResource, success, ciWaitOf, lastCiWaitOf, parked, github, register, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
@@ -10,6 +11,8 @@ import { type Wait } from '@open-mercato/cezar-contract/waits';
 
 import { controlledWire, manager, parent, root, restart, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
+
+sealTestRunners();
 
 
 

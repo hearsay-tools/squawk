@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,7 @@ import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { runnerGolden } from '../core/runner-golden.testkit.ts';
 
 registerBuiltInRunners();
+sealTestRunners();
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });

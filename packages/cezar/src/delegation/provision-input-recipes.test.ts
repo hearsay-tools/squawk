@@ -1,4 +1,4 @@
-
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 
 import '../core/created-runners.testkit.ts';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -9,9 +9,9 @@ import { join } from 'node:path';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
 import { provisionWorkflowFixture, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels

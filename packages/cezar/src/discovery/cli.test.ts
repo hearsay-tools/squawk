@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
@@ -22,9 +22,8 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { connectedProviderAuth } from '../server/provider-auth.testkit.ts';
 import { createApp } from '../server/server.ts';
 import { runDiscoverCommand } from './cli.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, piRunner);
 
 describe('cez discover', () => {
   let f: ReturnType<typeof fixture>;

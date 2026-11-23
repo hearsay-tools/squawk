@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { agentEnvForStep } from './run/launch-context.ts';
 import { InputDelivery } from './run/input-delivery.ts';
 import { randomUUID } from 'node:crypto';
@@ -8,6 +9,8 @@ import { RunStore } from '../runs/store.ts';
 import { controlledWire, fixtureUpdateRun, manager, parent, queuedWake, register, restart, root, semaphore, store, until, useWorkerWaitFixture, waitOf, lastWaitOf, worker } from './worker-wait-claude.testkit.ts';
 import { blockRunWrites, readPersistedRuns, readPersistedText } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+
+sealTestRunners();
 
 vi.mock('./run/launch-context.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('./run/launch-context.ts')>();

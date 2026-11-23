@@ -18,3 +18,6 @@ export const BUILT_IN_RUNNERS: readonly RunnerDefinition[] = [claudeRunner, code
 export function registerBuiltInRunners(): void {
   for (const definition of BUILT_IN_RUNNERS) registerRunner(definition);
 }
+
+/** Seal after all built-in and additional runner registrations. */
+export { sealRunners as sealBuiltInRunners } from '../core/runner-registry.ts';

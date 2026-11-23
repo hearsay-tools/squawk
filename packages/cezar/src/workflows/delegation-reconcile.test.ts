@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import '../core/created-runners.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -28,12 +29,11 @@ import { COMPLETION_NUDGE_NOTE, COMPLETION_WILL_WAIT, QUEUE_WATCHDOG_MS, RunMana
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { cleanupCheckpoint, seedSettledFamily } from './delegation-reconcile.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 describe('terminal delegation checkpoint reconciliation (#661)', () => {
   let root: string;

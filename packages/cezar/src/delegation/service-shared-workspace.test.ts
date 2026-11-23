@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -11,7 +11,8 @@ import { fixture } from './service.testkit.ts';
 import { git, parentWorktree, shared } from './service-shared-workspace.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const mutationLock = vi.hoisted(() => ({ taken: 0 }));
 vi.mock('../git-worktree-lock.ts', async importOriginal => {

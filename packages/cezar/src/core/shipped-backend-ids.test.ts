@@ -1,3 +1,4 @@
+import { sealTestRunners } from './runner-registry.testkit.ts';
 /**
  * A shipped backend id never stops parsing.
  *
@@ -6,7 +7,6 @@
  * after an upgrade (AGENTS.md, Changing what already works). `claude-cli` is the legacy id of
  * `claude`.
  */
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -19,12 +19,8 @@ import { runRecordSchema } from '../runs/run-decode.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
 
 import { createRunner } from './runner-registry.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
 
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner);
 
 /**
  * Every backend id that shipped, with the runner it resolves to. Add a new id; never remove an

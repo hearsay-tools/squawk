@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import * as gitWorktree from '../git-worktree.ts';
 import { join } from 'node:path';
@@ -6,6 +7,8 @@ import { type RunRecord } from '../runs/store.ts';
 import { manager, parent, restart, root, store, until, work } from './worker-wait-claude.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+
+sealTestRunners();
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

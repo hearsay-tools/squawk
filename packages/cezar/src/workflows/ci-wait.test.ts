@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';
 // Register the external CI mock before loading RunManager.
@@ -15,6 +16,8 @@ import { controlledWire, manager, parent, root, restart, store, until, worker, w
 
 import { readPersistedRuns, hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+
+sealTestRunners();
 
 
 

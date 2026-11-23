@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { retainAutosaveCleanup, clearAutosaveCleanup } from '../autosave-cleanup.ts';
@@ -6,6 +7,8 @@ import { completedWorker, DISCARD } from './destruction-results.testkit.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 // The worker collect row of the removal cases table (spec 2026-11-21-run-lifecycle-and-store-ports):
 // collecting a worker whose history deletion is pending asks the history gate through

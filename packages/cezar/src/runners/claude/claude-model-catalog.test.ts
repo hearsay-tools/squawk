@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,11 +7,11 @@ import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { discoverClaudeModels, KILL_GRACE_MS, TERM_GRACE_MS } from './claude-model-catalog.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from './definition.ts';
 
 // The catalog builds the Claude child env through the registry; every case drives Claude.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /**
  * A stand-in for the CLI's stream-json channel: it records the control requests written to stdin

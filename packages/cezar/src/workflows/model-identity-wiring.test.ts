@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import '../core/created-runners.testkit.ts';
@@ -12,8 +12,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { RunStore } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import type { RunManager } from './run.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

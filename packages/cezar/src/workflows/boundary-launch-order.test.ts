@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useBoundaryRunner } from './boundary-runner.testkit.ts';
@@ -6,6 +7,7 @@ import { traceBoundary } from './run/boundary-order.testkit.ts';
 import type { ActiveRun } from './active-run.ts';
 import * as sessionEvents from './run/session-events.ts';
 import * as receipts from './run/input-receipts.ts';
+sealTestRunners();
 
 const f = setupMonitoringFixture();
 const log: string[] = [];

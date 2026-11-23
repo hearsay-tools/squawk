@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
@@ -18,6 +19,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 // follows it (the spec's "Transitions out: hearsay-tools/squawk#2587 (S13)" table). U6r and U6p
 // pin the kept done and the refused one on every runner; these rows run on Claude's wire.
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
+sealTestRunners();
 const runner = 'claude';
 
 const prWait = (id: string) => store.getRun(id)?.waits?.find(wait => wait.kind === WAIT_KIND.pr);

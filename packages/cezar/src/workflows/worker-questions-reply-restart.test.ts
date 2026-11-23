@@ -1,5 +1,8 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, it } from 'vitest';
 import { replyAfterRestart, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
+
+sealTestRunners();
 
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();

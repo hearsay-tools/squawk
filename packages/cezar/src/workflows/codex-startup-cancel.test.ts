@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -15,14 +16,12 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import { TrackedWork } from './run/tracked-work.ts';
 import type { WorkflowDef } from './types.ts';
 import { createRunner } from '../core/runner-registry.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 // A settled run reaps its scratch, which asks the removal slots.
 import '../built-in-run-slots.testkit.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+sealTestRunners(claudeRunner, codexRunner);
 
 const workflow: WorkflowDef = {
   name: 'startup-cancel', source: 'built-in',

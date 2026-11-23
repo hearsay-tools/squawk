@@ -1,10 +1,10 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerRunner } from '../core/runner-registry.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
@@ -18,9 +18,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { memoryWorkspaceConfig } from './provider-action-gating.testkit.ts';
 import { createApp } from './server.ts';
 
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 /**
  * hearsay-tools/squawk#4116: the provider-status row speaks for the DEFAULT account only. A start

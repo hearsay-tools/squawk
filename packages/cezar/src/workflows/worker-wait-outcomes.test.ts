@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { deliveredBesideWorkerMessages, checkpoint, controlledWire, fixtureUpdateRun, manager, parent, register, root, semaphore, store, terminal, timeline, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-claude.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+
+sealTestRunners();
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -5,6 +6,8 @@ import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { fixture as fakeFixture } from '../delegation/service.testkit.ts';
 import { fixture as engineFixture } from '../delegation/service-engine.testkit.ts';
+
+sealTestRunners();
 
 // The fake must write what the engine writes for a run no session holds (hearsay-tools/squawk#3937).
 // Each case runs on both, over the same delegation fixture, and compares the store's records.

@@ -12,6 +12,9 @@ const ENTRIES = [
   'packages/cezar/scripts/benchmark-stuck-destroys.ts',
   'packages/cezar/scripts/benchmark-worker-lifecycle.ts',
   'packages/cezar/scripts/benchmark-workspace-events.ts',
+  'packages/cezar/scripts/measure-transcript-facts-health.mjs',
+  'packages/web/e2e/home-recovery-server.mjs',
+  'packages/web/scripts/tab-fixture-server.mjs',
   '.ai/scripts/mock-wire-evidence.ts',
   '.ai/scripts/probe-approvals.ts',
   '.ai/scripts/probe-questions.ts',
@@ -19,8 +22,8 @@ const ENTRIES = [
   '.ai/scripts/probe-steering.ts',
 ];
 
-it.each(ENTRIES)('%s registers the built-in runners at its top level', (entry) => {
+it.each(ENTRIES)('%s registers and seals the built-in runners at startup', (entry) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/^import \{ registerBuiltInRunners \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/runners\/built-in\.ts';$/m);
-  expect(source).toMatch(/^registerBuiltInRunners\(\);$/m);
+  expect(source).toMatch(/\{ registerBuiltInRunners, sealBuiltInRunners \} (?:from |=[^\n]*(?:import|load)\()/);
+  expect(source).toMatch(/^(\s*)registerBuiltInRunners\(\);?\n\1sealBuiltInRunners\(\);?$/m);
 });

@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -29,8 +29,8 @@ import { writeSettledJournal } from './project-migration.testkit.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import { prepareBeforeTicks, prepareProjects } from './auto.ts';
 import { createRunManager } from '../server/engine-run-manager.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /**
  * Early recovery of an unfinished project migration (hearsay-tools/cezarion#3089): every entry

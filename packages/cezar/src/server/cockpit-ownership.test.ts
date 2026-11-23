@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { projectPaths } from '../project-paths.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -14,8 +14,8 @@ import { processStartToken } from '../core/process-stat.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const roots: string[] = [];
 const owners: CockpitOwnership[] = [];
@@ -154,7 +154,6 @@ it.runIf(process.platform === 'linux' || process.platform === 'darwin')('reclaim
   owner.publishUrl('http://127.0.0.1:4321');
   await expect(fixture().owner.acquire(dataDir)).rejects.toThrow('http://127.0.0.1:4321');
 });
-
 
 it('refuses a live fallback cockpit before creating legacy state and keeps its claim unchanged', async () => {
   const { root, owner, dataDir } = fixture();

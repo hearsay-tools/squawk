@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -13,11 +14,11 @@ import type { RunManager } from '../workflows/run.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
 import { ProjectContexts } from './project-context.ts';
 import { startServer } from './start-server.ts';
-import { createRunner, registerRunner } from '../core/runner-registry.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /**
  * #774: the cockpit hands every project's RunManager the address it BOUND (`--port 0` asks for an

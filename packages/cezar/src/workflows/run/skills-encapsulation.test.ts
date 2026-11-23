@@ -1,8 +1,9 @@
-import { registerRunner } from '../../core/runner-registry.ts';
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { codexRunner } from '../../runners/codex/definition.ts';
 
 // The skill catalog the fixture builds covers the registered runners; this test reads codex's.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 import { testHome } from '../../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,6 @@ it('an unavailable list fails a selected skill with runner and account diagnosti
   expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('codex account "work"');
   expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('runner skill list is unavailable: probe refused sentinel');
 });
-
 
 it.each(['claude', 'codex'] as const)('opening an unknown command on %s reads only the opening snapshot', async runner => {
   const active = state();

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -12,6 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunStore } from '../runs/store.ts';
 import { worktreeDiff } from '../git-worktree.ts';
+
+sealTestRunners();
 
 vi.mock('../git-worktree.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../git-worktree.ts')>(),

@@ -1,9 +1,12 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { DelegationPolicyError } from '../delegation/policy.ts';
 import { manager, store, until, waitOf, worker } from './worker-wait-claude.testkit.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { eventsOf, steeringParent, askedPair, answered, said, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
+
+sealTestRunners();
 
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,6 +14,8 @@ import { gitCommonDir } from './workspace-git.ts';
 import { withWorktreeMutation } from '../git-worktree-lock.ts';
 
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+
+sealTestRunners();
 
 describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
   useDestroyBackoffFixture();

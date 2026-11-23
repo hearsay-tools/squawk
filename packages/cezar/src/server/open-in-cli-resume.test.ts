@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
@@ -23,12 +23,8 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
-registerRunner(piRunner);
-registerRunner(ompRunner);
-registerRunner(antigravityRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner, antigravityRunner);
 
 // The cases span the Claude, Codex, OpenCode and OMP take-over commands.
 

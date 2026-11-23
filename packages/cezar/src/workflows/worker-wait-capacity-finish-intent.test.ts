@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import * as gitWorktree from '../git-worktree.ts';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -5,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { bookkeeping, collect, manager, parent, restart, root, store, until, worker, work } from './worker-wait-claude.testkit.ts';
 import { blockRunWrites, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
+
+sealTestRunners();
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

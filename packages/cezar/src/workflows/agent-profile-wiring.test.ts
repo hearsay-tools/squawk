@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
@@ -17,9 +17,8 @@ import { registerProject } from '../workspace/projects.ts';
 import type { RunManager } from './run.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
 import { agentEnv, agentEnvForStep } from './run/launch-context.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, codexRunner, piRunner);
 
 /**
  * Which agent account a STEP spawns under (spec 2026-07-29-agent-profiles).

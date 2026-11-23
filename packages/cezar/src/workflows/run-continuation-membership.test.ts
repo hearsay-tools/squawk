@@ -1,12 +1,13 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose } from './worker-wait-readiness.testkit.ts';
 import { setupMonitoringFixture } from './run-fixture.testkit.ts';
 import { createFixtureManager } from './fixture-manager.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 describe('RunManager continuation membership', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor } = fixture;

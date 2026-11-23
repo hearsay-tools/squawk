@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -21,8 +21,8 @@ import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /**
  * Alias parity for the mirrored project-route table (spec

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
@@ -25,6 +26,7 @@ useRunners(fakeRunnerFactory(() => ({
       sendMessage: () => true, discardQueuedMessages: () => {}, holdsHumanInput: () => false, end: () => {}, interrupt: () => {}, open: true };
   },
 })));
+sealTestRunners();
 const workflow = { name: 'original', source: 'built-in' as const, steps: [{ id: 'work', prompt: '{{task}}', allowedTools: ['Read'] }] };
 const roots: string[] = [];
 const managers: RunManager[] = [];

@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -21,7 +21,8 @@ import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 function unused<T extends object>(name: string, values: Partial<T> = {}): T {
   return new Proxy(values, { get(target, key) {

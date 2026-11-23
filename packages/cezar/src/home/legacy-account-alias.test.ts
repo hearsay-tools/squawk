@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -5,12 +6,12 @@ import { Home } from './home.ts';
 import { migrateLegacyHome } from './migrate.ts';
 import { getHomeRecovery, importHomeRecovery } from './recovery.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
 // The migration parses account stores through the registry; every case here drives a Claude
 // account, so claude is the only runner this file registers.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 afterEach(cleanStoreRoots);
 

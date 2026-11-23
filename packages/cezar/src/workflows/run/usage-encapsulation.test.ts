@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,10 +7,9 @@ import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { RunStore } from '../../runs/store.ts';
 import { createActiveRun } from '../active-run.ts';
 import { beginUsageInvocation, recordReportedCost, recordUsageUiEvent } from './usage-accounting.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 // Generic receivers deliberately exercise the runtime boundary after syntax/type information
 // has been erased. No mutation below receives the owner's private write capability.

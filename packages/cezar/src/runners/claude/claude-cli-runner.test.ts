@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,11 +15,11 @@ import { autoEndObservationClock } from '../../core/observation-clock.testkit.ts
 import type { UiEvent } from '../../core/ui-events.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 import { TOOL_GRANT_CASES } from '../../core/tool-grant-parity-cells.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from './definition.ts';
 
 import './claude-runner.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning its real stub binary through the untouched `spawn`. */

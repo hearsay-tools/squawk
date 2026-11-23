@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,8 @@ import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createFixtureManager, fixtureWork, removeFixtureRepo } from './fixture-claude.testkit.ts';
 import type { WorkflowDef } from './types.ts';
+
+sealTestRunners();
 
 // `createRunner` is async: the step awaits the adapter's load. A Stop that lands during that load
 // ends the step before it selects itself and provisions its tools, as a Stop just before the load

@@ -11,16 +11,17 @@ import { readPersistedRuns, seedRuns } from './run-store.testkit.ts';
  * hearsay-tools/squawk#3897). Each "process" is a fresh module graph, so its runner registry starts
  * empty and holds only what that phase registers.
  */
-type Registration = 'none' | 'built-in' | 'built-in and gemini';
+type Registration = 'none' | 'unsealed' | 'sealed empty' | 'built-in' | 'built-in and gemini';
 
 async function processWith(registration: Registration) {
   vi.resetModules();
   const registry = await import('../core/runner-registry.ts');
   const builtIn = await import('../runners/built-in.ts');
   const { RunStore } = await import('./store.ts');
-  if (registration !== 'none') builtIn.registerBuiltInRunners();
+  if (registration !== 'none' && registration !== 'sealed empty') builtIn.registerBuiltInRunners();
   // A runner this build does not ship: the Claude definition under another id.
   if (registration === 'built-in and gemini') registry.registerRunner({ ...builtIn.BUILT_IN_RUNNERS[0]!, id: 'gemini' as never });
+  if (registration !== 'none' && registration !== 'unsealed') registry.sealRunners();
   return RunStore;
 }
 
@@ -57,13 +58,14 @@ describe('a run saved on an unregistered runner', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('opens as a removed-runner run, with no session on that runner', async () => {
-    const RunStore = await processWith('built-in');
+  it.each(['built-in', 'sealed empty'] as const)('opens as a removed-runner run with a %s registry', async registration => {
+    const RunStore = await processWith(registration);
     const store = RunStore.open(dataDir);
     const run = store.getRun('gem');
     expect(run?.removedRunner).toBe('gemini');
     expect(run?.runner).toBeUndefined();
-    expect(run?.steps[0]).toMatchObject({ sessionId: 'claude-sess', backend: 'claude' });
+    if (registration === 'built-in') expect(run?.steps[0]).toMatchObject({ sessionId: 'claude-sess', backend: 'claude' });
+    else expect(run?.steps[0]).toMatchObject({ removedBackend: 'claude' });
     expect(run?.steps[1]?.removedBackend).toBe('gemini');
     for (const key of ['sessionId', 'sessionTransport', 'backend']) expect(run?.steps[1]).not.toHaveProperty(key);
     expect(run?.workflowDef?.steps[1]).toEqual({ id: 'build', name: 'Build', prompt: 'build {{task}}' });
@@ -133,11 +135,11 @@ describe('a run saved on an unregistered runner', () => {
     }
   });
 
-  it('reads as written, and a write of an unrelated field keeps the runner id, in a process that registered no runner', async () => {
+  it.each(['none', 'unsealed'] as const)('keeps saved data through an unrelated write in a %s process', async registration => {
     // The empty registry has no opinion (planner decision 2026-11-20, option a): no fold, no
     // rejection, the row reads exactly as stored. Production entries register the built-ins
     // before they open a store (index-runners.test.ts), so this is the saved-run rule only.
-    const store = (await processWith('none')).open(dataDir);
+    const store = (await processWith(registration)).open(dataDir);
     const run = store.getRun('gem');
     expect(run?.runner).toBe('gemini');
     expect(run?.removedRunner).toBeUndefined();

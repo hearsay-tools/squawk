@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { AUTONOMOUS_NUDGE, NO_WAIT_NUDGE_NOTE } from './run.ts';
@@ -5,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { emitUsageForTest } from '../core/process-usage.ts';
+sealTestRunners();
 
 describe('RunManager memory guard', () => {
   const f = setupMonitoringFixture();

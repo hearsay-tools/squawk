@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 /**
  * A Codex child that outlives the parent turn (hearsay-tools/cezarion#2431). Codex 0.164.0 reports
  * the spawn as `subAgentActivity(kind: started)` and the child's end as a parent-thread
@@ -13,11 +14,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 import { createCodexUiState, mapCodexNotification, type CodexUiMapperState } from './codex-ui-mapper.ts';
 import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -30,13 +31,13 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { startServer } from './start-server.ts';
 import { createApp, WorkspaceEventBus } from './server.ts';
 import { projectPaths } from '../project-paths.ts';
-import { createRunner, registerRunner } from '../core/runner-registry.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createFakeRunManager } from './fake-run-manager.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 // Server prewarming outlives the HTTP response. Keep unrelated host discovery
 // from starting CLIs that write HOME caches during fixture teardown. GitHub
@@ -230,7 +231,6 @@ describe('GitHub automation API', () => {
     const { automation } = await response.json() as any;
     expect(Date.parse(automationStore.state(automation.id)!.baselineAt!)).toBeGreaterThanOrEqual(started);
   });
-
 
   it('answers GitHub availability from a settled probe on a cold cache', async () => {
     withGithubRemote(root);

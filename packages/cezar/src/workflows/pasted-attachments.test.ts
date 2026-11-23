@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,6 +16,7 @@ import {
 } from './run.ts';
 import { attachmentExtension, isAttachmentMediaType, isImageAttachmentName } from '@open-mercato/cezar-contract/attachments';
 import { BRIEF_MD, BRIEF_MD_B64, slotHolder, TINY_PDF, TINY_PDF_B64, TINY_PNG_B64, usePastedAttachmentsFixture } from './pasted-attachments.testkit.ts';
+sealTestRunners();
 
 // Task start, queued, follow-up and live/deferred/continuation delivery. The Continue cases live in
 // pasted-attachments-continue.test.ts; shared setup in pasted-attachments.testkit.ts.

@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { piRunner } from '../runners/pi/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -12,8 +12,8 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(piRunner);
+
+sealTestRunners(claudeRunner, piRunner);
 describe('RunManager monitoring timers', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor, openTimer } = fixture;

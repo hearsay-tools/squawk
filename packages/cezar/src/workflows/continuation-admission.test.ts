@@ -1,7 +1,7 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
-registerRunner(codexRunner);
+sealTestRunners(codexRunner);
 import { describe, expect, it } from 'vitest';
 import { STEP_KIND, STEP_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { sessionAffinity } from './continuation-admission.ts';

@@ -125,8 +125,8 @@ function parityTestFile(fixtureTest) {
     .replace(/describe\('a task on the fixture runner'.*/s, '');
   for (const line of UNUSED_TEST_LINES) text = replaceOnce(text, line, '');
   text = text.replace(/import \{ FIXTURE_BIN_ENV \} from '\.\/[a-z]+\.testkit\.ts';\n/, '');
-  text = replaceOnce(text, "import { knownRunnerIds, registerRunner, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';\n",
-    "import { registerRunner } from '../../core/runner-registry.ts';\n");
+  text = replaceOnce(text, "import { knownRunnerIds, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';\n",
+    '');
   return replaceOnce(rename(text), "'./definition.testkit.ts'", "'./definition.ts'");
 }
 

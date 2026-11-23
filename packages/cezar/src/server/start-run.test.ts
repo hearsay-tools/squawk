@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,6 +15,7 @@ import { registerBuiltInRunners } from '../runners/built-in.ts';
 
 // Starting a run and checking a request's runner id read the registered runners.
 registerBuiltInRunners();
+sealTestRunners();
 
 /**
  * `POST /api/v1/runs` `systemPrompt` (R2 2.3) — the programmatic per-run

@@ -1,6 +1,6 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../../delegation/capacity.ts';
 import '../../core/created-runners.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -29,7 +29,8 @@ import { createFixtureManager as createRunnerFixtureManager } from '../fixture-m
 import { CLAUDE_SPEC_SUPPORT } from '../../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('completionRefusalQueueDecision', () => {
   it.each([

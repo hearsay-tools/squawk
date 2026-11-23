@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 /**
  * Golden tests for the claude stream-json → v2 mapper: each fixture in
  * `__fixtures__/` is a wire-faithful NDJSON stdout transcript
@@ -29,11 +30,11 @@ import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { claudeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Claude.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const TOOL_STATUS = z.enum([
   ...Object.values(OPENCODE_TOOL_STATUS_MAP),

@@ -42,12 +42,13 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
-import { registerBuiltInRunners } from '../src/runners/built-in.ts';
+import { registerBuiltInRunners, sealBuiltInRunners } from '../src/runners/built-in.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
 registerBuiltInRunners();
+sealBuiltInRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
 

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,7 +6,6 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 
 import { defineRunner } from '../../core/runner-definition.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from '../../runners/codex/definition.ts';
 import { RunStore } from '../../runs/store.ts';
 import { createActiveRun } from '../active-run.ts';
@@ -13,8 +13,8 @@ import { beginUsageInvocation, recordReportedCost } from './usage-accounting.ts'
 
 // C1 review B2 (hearsay-tools/squawk#3936): a registered runner that is no built-in reads its own
 // declared cost report, also when a new process restores a cumulative session's baseline.
-registerRunner(defineRunner({ ...codexRunner, id: 'custom-cumulative', facts: { ...codexRunner.facts, costReport: 'cumulative' } }));
-registerRunner(defineRunner({ ...codexRunner, id: 'custom-per-turn', facts: { ...codexRunner.facts, costReport: 'per-turn' } }));
+
+sealTestRunners(defineRunner({ ...codexRunner, id: 'custom-cumulative', facts: { ...codexRunner.facts, costReport: 'cumulative' } }), defineRunner({ ...codexRunner, id: 'custom-per-turn', facts: { ...codexRunner.facts, costReport: 'per-turn' } }));
 
 let root: string;
 let store: RunStore;

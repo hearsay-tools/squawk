@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createServer, type ServerResponse } from 'node:http';
@@ -7,11 +8,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import { AUTO_END_DELAY_MS } from '../../core/runner-runtime.ts';
 import { KILL_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
-registerRunner(opencodeRunner);
+
+sealTestRunners(opencodeRunner);
 import type { UiEvent } from '../../core/ui-events.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 import { rejectedAcknowledgement } from '../../workflows/run/input-delivery.ts';

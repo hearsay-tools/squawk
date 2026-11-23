@@ -2,7 +2,7 @@ import type { parseRunRecords } from './store.ts';
 import type { RunRowInput } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { upgradeLegacyWaits } from './legacy-waits.ts';
-import { knownRunnerIds, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { savedRunnerRegistration } from '../core/runner-registry.ts';
 import { LEGACY_RUNNER_IDS } from '../core/runner-ids.ts';
 
 /** The read-time upgrades of a stored record, in place, before the schema reads it. */
@@ -21,7 +21,7 @@ export const REMOVED_RUNNER_IDS: readonly string[] = ['cursor'];
  * How a saved runner id reads in this process. `retired`: a runner Squawk no longer ships; its fold
  * is stored. `unregistered`: an id that no runner of this process registered (a runner of a newer
  * build or one that did not load); its fold is undone by the next write and by a later process that
- * registers it. Undefined: a readable id. With no runner registered, no id is `unregistered`.
+ * registers it. Undefined: a readable id. Before the registry seals, no id is `unregistered`.
  */
 type Removal = 'retired' | 'unregistered';
 
@@ -37,14 +37,13 @@ export function waitsForUnregisteredRunner(run: { removedRunner?: string | undef
   return run.removedRunner !== undefined && !REMOVED_RUNNER_IDS.includes(run.removedRunner);
 }
 
-/** Whether a saved runner id parses: a legacy id, or an id a runner registered. A process that
- *  registered no runner has no opinion: every non-empty id parses, the row reads as written, and
+/** Whether a saved runner id parses: a legacy id, or an id a runner registered. An unsealed process
+ *  has no opinion: every non-empty id parses, the row reads as written, and
  *  the unregistered-runner fold is skipped (planner decision 2026-11-20, option a). Production
  *  entries register the built-ins before they open a store, so this is the saved-run rule only. */
 export function readableSavedRunner(id: string): boolean {
   if (LEGACY_RUNNER_IDS.has(id)) return true;
-  const known = knownRunnerIds();
-  return known.length === 0 || known.includes(id);
+  return savedRunnerRegistration(id) !== false;
 }
 
 /** A removed field of an unregistered runner and where it was. */

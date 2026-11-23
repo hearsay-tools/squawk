@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { waitFor } from '../../core/harness-parity-core.testkit.ts';
 import { withRejectedInput } from '../../core/owned-input-delivery.testkit.ts';
 import { mkdtemp, rm, readFile, writeFile, access } from 'node:fs/promises';
@@ -6,7 +7,6 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import type { AgentEvent } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
 import { antigravityRunner } from './definition.ts';
 import { pidExists } from '../../core/process-stat.ts';
@@ -14,7 +14,8 @@ import { permissionPolicy } from './permissions.ts';
 import { antigravityTool } from './tool-normalization.ts';
 import type { AcpPermissionRequest } from '../acp/protocol.ts';
 import { parseUsageLimit } from '../../core/usage-limit.ts';
-registerRunner(antigravityRunner);
+
+sealTestRunners(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 const bin = join(import.meta.dirname, '../../../scripts/mock-acp.mjs');
@@ -282,7 +283,6 @@ it('fails closed on a narrowed grant and shell composition outside a command pre
   expect(permissionPolicy({ kind: 'unset', bashAllowlist: ['git status'] }, request)).toEqual({ outcome: 'selected', optionId: 'deny' });
   expect(permissionPolicy({ kind: 'explicit', tools: ['Bash'], bashAllowlist: ['git status'] }, { ...request, toolCall: { ...request.toolCall, rawInput: { CommandLine: 'git status --short' } } })).toEqual({ outcome: 'selected', optionId: 'allow' });
 });
-
 
 it('reports native execution errors as a failed turn and a failed result', async () => {
   const cwd = await workspace(); const ui: UiEvent[] = []; const events: AgentEvent[] = [];

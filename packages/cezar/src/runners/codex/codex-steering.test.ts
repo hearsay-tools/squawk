@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,11 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentEvent, SessionOptions } from '../../core/agent-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { codexRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Codex.
-registerRunner(codexRunner);
+
+sealTestRunners(codexRunner);
 
 const mockBin = fileURLToPath(new URL('../../../scripts/mock-codex-app-server.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {
@@ -173,7 +174,6 @@ describe('codex agent input steering (#505)', () => {
     session.end(); await session.result;
   });
 });
-
 
 describe('codex native skill admission', () => {
   const trigger = [{ type: 'skill' as const, id: 'probe-project', path: '/probe/SKILL.md', args: 'skill argument' }];

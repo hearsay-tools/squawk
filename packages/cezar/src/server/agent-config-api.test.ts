@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // These tests pin the five built-in runners' config files, so they register only those five.
 import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
@@ -19,6 +20,7 @@ import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
+sealTestRunners();
 
 
 /**

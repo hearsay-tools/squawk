@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { projectPaths } from '../project-paths.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -13,8 +13,8 @@ import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
 import { lifecycleListeners } from '../runs/lifecycle-listeners.testkit.ts';
 import type { RunLifecycleEventType } from '../runs/lifecycle.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 const LIFECYCLE_TYPES: RunLifecycleEventType[] = ['run.created', 'run.updated', 'run.status-changed', 'run.deleted', 'run.event', 'store.closed'];
 const observed = vi.hoisted(() => ({

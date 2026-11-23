@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,8 +28,8 @@ import { delegationFailure } from '../delegation/routes.ts';
 import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /** `requireRunControl` is the one explicit write that adopts a family read from `.ai/squawk/`. */
 let root: string, primary: string, fallback: string, store: RunStore, manager: RunManager, app: Hono;
@@ -215,7 +215,6 @@ it('refuses a worktree reclaim for a mixed family with the named refusal, before
   expect(readFileSync(join(worktree, 'file.txt'), 'utf8')).toBe('checkout');
   expect(primaryIds()).not.toContain(family.workerId);
 });
-
 
 it.each(['autosave', 'removed'] as const)('git writes refuse a fallback checkout before %s checks', async (state) => {
   const family = seedFamily(false, false);

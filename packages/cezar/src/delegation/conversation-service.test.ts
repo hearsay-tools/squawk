@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runPersistence } from '../runs/run-store-open.testkit.ts';
@@ -15,6 +16,8 @@ import { conversationSendResultSchema, conversationSendEffectSchema, requestOutc
 import { inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
 import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { readPersistedText } from '../runs/run-store.testkit.ts';
+
+sealTestRunners();
 
 const INVALID_PENDING_RECEIPT_STATUS = 'pending';
 

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -35,6 +36,7 @@ useRunners(fakeRunnerFactory(() => ({
     },
     interrupt: async () => {},
   })));
+sealTestRunners();
 
 type PreviewCallback = (request: PreviewServeRequest, signal?: AbortSignal) => Promise<PreviewServeResult>;
 

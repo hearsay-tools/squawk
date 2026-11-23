@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -11,7 +11,8 @@ import '../core/created-runners.testkit.ts';
 import { collect, manager, parent, root, store, until, useWorkerWaitFixture, worker } from '../workflows/worker-wait-core.testkit.ts';
 import { setRunStatus, hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('authoritative finishability (#449)', () => {
   // The race below includes the final autosave, so its worktree keeps the mock's notes.md change.

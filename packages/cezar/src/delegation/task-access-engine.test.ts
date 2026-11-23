@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationSendRequest } from '@open-mercato/cezar-contract/conversations';
@@ -8,6 +9,8 @@ import { WORKERS_OFF } from './policy.ts';
 import { fixture } from './service-engine.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 // Per-task access (hearsay-tools/cezarion#2784): the engine's acceptance defaults for a new run, and a
 // resume the engine accepts once workers are on again.

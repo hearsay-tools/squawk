@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -13,11 +14,11 @@ import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { digest, VersionLog } from './version-log.ts';
 import { listBackups } from '../workspace/backups.ts';
 import * as fs from 'node:fs';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
 // The recovery parses account stores through the registry; every case here drives a Claude account.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 vi.mock('node:fs', async original => {
   const actual = await original<typeof import('node:fs')>();

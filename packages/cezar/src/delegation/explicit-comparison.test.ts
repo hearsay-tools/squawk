@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +10,8 @@ import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { fixture } from './service.testkit.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 let f: ReturnType<typeof fixture>;
 beforeEach(() => { onTestFinished(scopeFixtureProcesses()); f = fixture(workerCleanups()); });

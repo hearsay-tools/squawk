@@ -65,8 +65,9 @@ export async function prepareCommandRuntime(command: string, argv: readonly stri
   const operatorRuntime = operator && !operatorHelp(command, argv);
   if (!worker && !operatorRuntime && !['serve', 'run', 'init', 'projects', 'server-install', 'server-deploy', 'server-uninstall',
     'migrate', 'server-migrate', 'migrate-project', 'discover', 'task'].includes(command)) return;
-  const { registerBuiltInRunners } = await import('./runners/built-in.ts');
+  const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
   registerBuiltInRunners();
+  sealBuiltInRunners();
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();

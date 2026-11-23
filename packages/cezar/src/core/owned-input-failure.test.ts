@@ -1,4 +1,4 @@
-import { registerRunner } from './runner-registry.ts';
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';
 import { captureSessions } from '../workflows/runner-session-capture.testkit.ts';
@@ -12,8 +12,8 @@ import './created-runners.testkit.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { blockRunWrites, muteLockedDatabaseLogs } from '../runs/run-store.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, opencodeRunner);
 
 type Fixture = Parameters<Parameters<typeof withOwnedInputRun>[2]>[0];
 

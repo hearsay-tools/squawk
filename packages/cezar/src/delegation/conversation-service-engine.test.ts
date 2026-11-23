@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -12,6 +13,8 @@ import { RunStore } from '../runs/store.ts';
 import { fixture } from './service-engine.testkit.ts';
 import { FRESH_SESSION_NOTICE } from './service.ts';
 import { ensureOwnedWorkspace } from './workspace.ts';
+
+sealTestRunners();
 
 // Continue admission (every resume) and cancelling an open wait need the run engine.
 describe('durable conversations', () => {

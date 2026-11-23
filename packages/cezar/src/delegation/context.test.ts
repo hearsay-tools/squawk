@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -7,6 +8,8 @@ import { fixture } from './service.testkit.ts';
 import { parentFileSnapshotPath, prepareWorkerContext, verifyWorkerContext } from './context.ts';
 import { ensureOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
 import type { WorkerSpawnRequest } from '@open-mercato/cezar-contract';
+
+sealTestRunners();
 
 // A one-shot hook around `open`: it may change the filesystem just before a matching path is
 // opened and return a step that runs right after, so a race lands between the canonical checks.

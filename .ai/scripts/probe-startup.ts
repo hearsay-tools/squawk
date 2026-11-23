@@ -52,9 +52,11 @@ import { buildOmpArgs } from '../../packages/cezar/src/runners/omp/omp-runner.ts
 import { buildPiArgs } from '../../packages/cezar/src/runners/pi/pi-runner.ts';
 import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
 import { allowedToolsForStep } from '../../packages/cezar/src/workflows/types.ts';
-import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 
 registerBuiltInRunners();
+
+sealBuiltInRunners();
 
 type Frame = Record<string, unknown>;
 type SpyRequest = { path: string; body: Frame };

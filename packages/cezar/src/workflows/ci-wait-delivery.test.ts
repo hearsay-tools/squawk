@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 // Register the external CI mock before loading RunManager.
 import { success, ciWaitOf, lastCiWaitOf, github, register, githubByPr, registerPr, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
@@ -12,11 +13,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import '../core/created-runners.testkit.ts';
 import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture, work, toolGenerationOf } from './worker-wait-core.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
-
+sealTestRunners(claudeRunner);
 
 describe('CI wait delivery', { timeout: 30_000 }, () => {
   useWorkerWaitFixture({ acquireCiResources: acquireExternalCiResources });

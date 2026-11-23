@@ -6,9 +6,9 @@ import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 // registerBuiltInRunners() fails at once instead of falling back to Claude.
 it('throws on every definition read, naming the missing registration', async () => {
   for (const read of [() => registeredRunners(), () => isRegisteredRunner('claude'), () => runnerDefinition('claude')]) {
-    expect(read).toThrow(/No runner is registered: call registerBuiltInRunners\(\)/);
+    expect(read).toThrow(/Runner registry is unsealed: call registerBuiltInRunners\(\)/);
   }
-  await expect(createRunner('claude')).rejects.toThrow(/No runner is registered/);
+  await expect(createRunner('claude')).rejects.toThrow(/Runner registry is unsealed/);
 });
 
 it('still reads the default runner and the legacy ids', () => {

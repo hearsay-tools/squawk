@@ -1,10 +1,10 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { expect, it, vi } from 'vitest';
-import { registerRunner } from '../core/runner-registry.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { missingModelChoices } from './choices.ts';
 
-registerRunner(antigravityRunner); registerRunner(claudeRunner);
+sealTestRunners(antigravityRunner, claudeRunner);
 
 it('never starts a picker-only native session during task/worker model admission', async () => {
   const get = vi.fn(() => new Promise<never>(() => {}));

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from './capacity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { workerExecutionStopped } from '../workflows/run/run-guards.ts';
@@ -19,6 +20,8 @@ import { RunDatabase, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run-database.ts';
 import { encodeRunRow } from '../runs/run-row.ts';
 import { readPersistedRuns, seedRuns, runIds } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 vi.mock('node:fs', async original => {
   const fs = await original<typeof import('node:fs') & { default: typeof import('node:fs') }>();

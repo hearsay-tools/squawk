@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +28,8 @@ import {
   timerOwedWithoutSession,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // hearsay-tools/cezarion#1233: what every delivered turn ends with, failed wake deliveries across
 // restarts, usage limits and Stop. Shared setup: waits-wake.testkit.ts.

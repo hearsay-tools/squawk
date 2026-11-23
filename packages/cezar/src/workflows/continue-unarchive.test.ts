@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -8,11 +9,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { acceptanceOver } from './continuation-acceptance-fakes.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
 // Session affinity and model presets read the runner definitions, as the engine fixture registered them.
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 const roots: string[] = [];
 const stores: RunStore[] = [];

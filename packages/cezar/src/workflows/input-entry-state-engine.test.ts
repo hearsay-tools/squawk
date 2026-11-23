@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
@@ -10,6 +11,7 @@ import { createActiveRun } from './active-run.ts';
 import type { InputGroup } from './run/input-delivery.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
+sealTestRunners();
 
 vi.mock('./active-run.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('./active-run.ts')>();

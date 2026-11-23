@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,8 +14,8 @@ import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createRunner } from '../core/runner-registry.ts';
-registerRunner(claudeRunner);
 
+sealTestRunners(claudeRunner);
 
 /**
  * Idempotent `POST /runs` (#504, spec 2026-09-24-cez-task-cli). A real manager with no slots, so

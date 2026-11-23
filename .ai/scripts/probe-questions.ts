@@ -23,12 +23,13 @@ import { RunManager } from '../../packages/cezar/src/workflows/run.ts';
 import { acquireCiResources } from '../../packages/cezar/src/ci-wait/resources.ts';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { installWindowsIdentityStore } from '../../packages/cezar/src/delegation/windows-identity-store.ts';
-import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../../packages/cezar/src/built-in-run-slots.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
 registerBuiltInRunners();
+sealBuiltInRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
 

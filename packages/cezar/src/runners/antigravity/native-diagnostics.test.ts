@@ -1,15 +1,15 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { antigravityRunner } from './definition.ts';
 import { AntigravityRunner } from './antigravity-runner.ts';
 import { discoverAntigravityModels } from './antigravity-model-catalog.ts';
 import { logAntigravityFailure } from './native-diagnostics.ts';
 import { AntigravityProbe } from './probe-process.ts';
 
-registerRunner(antigravityRunner);
+sealTestRunners(antigravityRunner);
 const dirs: string[] = [];
 afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllEnvs();

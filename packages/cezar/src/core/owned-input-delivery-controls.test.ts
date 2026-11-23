@@ -1,4 +1,4 @@
-import { registerRunner } from './runner-registry.ts';
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { existsSync } from 'node:fs';
@@ -6,9 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { withHeldAck, withHeldResponse, withRejectedInput } from './owned-input-delivery.testkit.ts';
 import './created-runners.testkit.ts';
 import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
 
+sealTestRunners(claudeRunner, codexRunner);
 
 describe('delivery control wrappers', () => {
   afterEach(() => vi.unstubAllEnvs());

@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
@@ -20,7 +20,8 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** hearsay-tools/squawk#2064: per-run memory ends with the run. */
 describe('run memory release (hearsay-tools/squawk#2064)', () => {

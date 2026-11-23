@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import '../runners/claude/claude-runner.testkit.ts';
@@ -14,6 +15,7 @@ import { createOwnedWorkspace, planOwnedWorkspace } from '../delegation/workspac
 import { durableRun, fixture, git, managers, WORKSPACE_TEST_TIMEOUT_MS } from '../delegation/workspace-fixture.testkit.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
+sealTestRunners();
 
 const NO_PORT = 'Worker workspaces are unavailable: no worker workspace port is registered';
 

@@ -1,3 +1,4 @@
+import { sealTestRunners } from './runner-registry.testkit.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -11,10 +12,9 @@ import { fixture } from '../delegation/service.testkit.ts';
 import { parentFileSnapshotPath, placeWorkerAttachments } from '../delegation/context.ts';
 import { ensureOwnedWorkspace, readOwnedDiff } from '../delegation/workspace.ts';
 import { autosaveCommit } from '../autosave-commit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 
-registerRunner(claudeRunner);
+sealTestRunners(claudeRunner);
 
 // A one-shot hook around `open`: it may change the filesystem just before a matching path is opened,
 // and its returned step receives the opened handle, so a test can land a race or a failing write.

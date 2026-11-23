@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { productIdentity } from '../home/identity.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { resolve } from 'node:path';
@@ -7,9 +8,9 @@ import { runTaskCommand, taskHelp } from './cli.ts';
 import { discoverCockpit } from './discovery.ts';
 import { registerProject } from '../workspace/projects.ts';
 import { taskCliFixture } from './cli.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe('cez task', () => {
   const ctx = taskCliFixture();

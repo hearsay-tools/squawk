@@ -1,5 +1,5 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import '../core/created-runners.testkit.ts';
@@ -12,7 +12,8 @@ import { RunStore } from '../runs/store.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import type { WorkflowDef } from './types.ts';
 import { crashAfterContinue, TINY_PDF, TINY_PDF_B64, TINY_PNG_B64, usePastedAttachmentsFixture } from './pasted-attachments.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // Continue's pasted attachments: a closed run's composer, a failed disk write and a restart before
 // the continuation spawns. Shared setup in pasted-attachments.testkit.ts.

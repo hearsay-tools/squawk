@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
@@ -5,6 +6,7 @@ import type { RunRecord } from '../runs/store.ts';
 import { runAccountFor } from './run-accounts.ts';
 
 registerBuiltInRunners();
+sealTestRunners();
 
 const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: 'run-1',

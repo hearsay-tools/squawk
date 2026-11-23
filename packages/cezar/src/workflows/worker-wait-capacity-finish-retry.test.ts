@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { observationClock } from '../core/observation-clock.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -14,7 +14,8 @@ import { blockRunWrites, readPersistedRuns } from '../runs/run-store.testkit.ts'
 import { monitoringWakeOf } from './waits.testkit.ts';
 import { useWorkerCapacityFixture } from './worker-wait-capacity.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 describe("worker waits through RunManager", { timeout: 30_000 }, () => {
   useWorkerCapacityFixture();

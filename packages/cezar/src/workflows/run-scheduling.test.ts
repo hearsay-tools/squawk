@@ -1,7 +1,11 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { accountHeldFor, deriveAccountHolds, queuedStartAt, resumeInFlight } from './run-scheduling.ts';
 import type { WorkflowDef } from './types.ts';
+
+sealTestRunners(claudeRunner);
 
 const NOW = Date.parse('2026-11-12T12:00:00.000Z');
 const later = new Date(NOW + 60_000).toISOString();

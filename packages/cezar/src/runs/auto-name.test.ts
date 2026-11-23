@@ -124,8 +124,9 @@ describe('generateRunName (dry run)', () => {
       const root = mkdtempSync(join(tmpdir(), 'cez-namer-'));
       try {
         const { generateRunName } = await import('./auto-name.ts');
-        const { createRunner, registerRunner } = await import('../core/runner-registry.ts');
+        const { createRunner, registerRunner, sealRunners } = await import('../core/runner-registry.ts');
         registerRunner((await import('../runners/claude/definition.ts')).claudeRunner);
+        sealRunners();
         const result = await generateRunName(root, { task: '437', skillName: 'om-auto-review-pr' }, testHome(), createRunner, resolveProfileEnvForRoot);
         expect(result).toEqual({ titleSummary: '437: implementing cr fixes', prNumber: 437 });
       } finally {

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../core/created-runners.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
@@ -29,11 +30,10 @@ import {
   questionBesideCi,
   useWaitsWakeFixture,
 } from './waits-wake.testkit.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 // hearsay-tools/cezarion#1233: a resolved wait beside a pending question, and which parks hold a slot.
 // Shared setup: waits-wake.testkit.ts.

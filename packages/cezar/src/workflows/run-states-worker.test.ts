@@ -1,11 +1,12 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { idleClose, observeIdleClose } from './worker-wait-readiness.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_TRIGGERS, stateOf } from './run-states.ts';
 import '../core/created-runners.testkit.ts';
 import { manager, parent, spendWorkerBudget, store, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** Rows of the run state table that only an owned worker reaches (hearsay-tools/cezarion#1804). */
 describe('run states of an owned worker', { timeout: 45_000 }, () => {

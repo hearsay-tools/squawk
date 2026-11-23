@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
@@ -21,6 +22,8 @@ import {
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 vi.mock('node:fs', async original => {
   const fs = await original<typeof import('node:fs') & { default: typeof import('node:fs') }>();

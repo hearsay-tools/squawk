@@ -1,16 +1,16 @@
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { access, mkdtemp, readFile, rm, writeFile, mkdir, readdir, copyFile, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inspect } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
-import { registerRunner } from '../../core/runner-registry.ts';
 import { antigravityRunner } from './definition.ts';
 import { ANTIGRAVITY_CODE_REDIRECT, antigravityLoginResponse, startAntigravitySignIn } from './browser-sign-in.ts';
 import { discoverAntigravityModels, antigravityModelCatalogKey } from './antigravity-model-catalog.ts';
 import { antigravityLogin } from './login-probe.ts';
 import { resolveAntigravityCommand, antigravityCliOutput, antigravityInstalled, antigravityOnPath, antigravityStatusExecutable, antigravityStatusFromPath, cachedAntigravityOnPath, checkAntigravityCli, knownAntigravityCli } from './executable.ts';
 
-registerRunner(antigravityRunner);
+sealTestRunners(antigravityRunner);
 const bin = join(import.meta.dirname, '../../../scripts/mock-antigravity-auth.mjs');
 const roots: string[] = [];
 const version = { stdout: '1.5.14\n', stderr: '', exitCode: 0 };

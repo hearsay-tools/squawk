@@ -1,8 +1,8 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { expect, it, vi } from 'vitest';
 import { providerSignInSchema } from '@open-mercato/cezar-contract/workspace';
 import { ProviderSignIns } from './provider-sign-ins.ts';
 import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { resolveCapabilities } from './capabilities.ts';
@@ -10,11 +10,12 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { enableRemoteSettings, disableRemoteSettings } from '../remote-settings.ts';
 import { BrowserSignInStartError } from '../core/browser-sign-in-error.ts';
 
+sealTestRunners(antigravityRunner);
+
 // Keep the old gate available to the red proof over the pre-fix source.
 const permissions = (local = true, admin = local) => ({ localHandoff: () => local, settingsAdmin: () => admin });
 
 it.each([true, false])('shows only sanitized startup causes through the API (safe error=%s)', async safe => {
-  registerRunner(antigravityRunner);
   const message = 'Antigravity personal sign-in could not start. Agent exited (code 1): Unknown flag uid https://accounts.google.com/o/oauth2/auth?state=private-state token=private-token';
   const create = vi.fn().mockRejectedValue(safe ? new BrowserSignInStartError(message) : new Error(message));
   const loader = vi.spyOn(antigravityRunner, 'loadBrowserSignIn').mockResolvedValue(create);
@@ -69,7 +70,6 @@ it('expires a waiting flow and releases it even if native cleanup rejects', asyn
 });
 
 it('refuses every browser endpoint without settings administration before resolving an account', async () => {
-  registerRunner(antigravityRunner);
   const resolve = vi.fn(async () => ({ error: 'should not run' }));
   const app = createProviderSignInRoutes({ ...permissions(false), resolve, auth: new ProviderAuthService(), invalidateModels: () => {} });
   for (const [method, path] of [['POST', 'start'], ['GET', 'unknown'], ['POST', 'unknown/redirect'], ['DELETE', 'unknown']] as const) {
@@ -86,7 +86,6 @@ it('starts, replays and observes the selected native account through the typed A
   const native = { url: 'https://accounts.google.com/o/oauth2/auth?state=fixture', completion: new Promise<void>(resolve => { finish = resolve; }),
     redirect: vi.fn(async (_url: string) => { finish(); }), close: vi.fn(async () => {}) };
   const create = vi.fn(async (_home?: string) => native);
-  registerRunner(antigravityRunner);
   const loader = vi.spyOn(antigravityRunner, 'loadBrowserSignIn').mockResolvedValue(create);
   const auth = new ProviderAuthService();
   vi.spyOn(auth, 'profileStatus').mockResolvedValue({ provider: 'antigravity', status: 'connected', profileId: 'work' });
@@ -108,7 +107,6 @@ it('starts, replays and observes the selected native account through the typed A
 });
 
 it.each([undefined, 'work'])('allows hosted sign-in for account %s only while its listen port has the host grant', async profileId => {
-  registerRunner(antigravityRunner);
   const home = testHome();
   const port = 4357;
   await enableRemoteSettings(port, {}, new Date(), home);

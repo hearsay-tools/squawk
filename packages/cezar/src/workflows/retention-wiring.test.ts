@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-claude.testkit.ts';
 import { execFile } from 'node:child_process';
@@ -10,6 +11,8 @@ import { createWorktree } from '../git-worktree.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
+
+sealTestRunners();
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

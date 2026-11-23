@@ -1,3 +1,4 @@
+import { sealTestRunners } from './core/runner-registry.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome } from './home/test-home.testkit.ts';
 import { testHome } from './home/test-home.testkit.ts';
@@ -7,13 +8,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
-import { registerRunner } from './core/runner-registry.ts';
 import { claudeRunner } from './runners/claude/definition.ts';
 import { codexRunner } from './runners/codex/definition.ts';
 import { opencodeRunner } from './runners/opencode/definition.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
-registerRunner(opencodeRunner);
+
+sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 
 // `defaultModels` is a record keyed by registered id, and the cases use several runners' keys.
 

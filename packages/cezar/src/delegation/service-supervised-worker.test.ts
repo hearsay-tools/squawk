@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -21,7 +21,8 @@ import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { fixture } from './service-engine.testkit.ts';
 import { workerCleanupInternals } from './service.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // A worker that supervises (hearsay-tools/squawk#3819): R is the root task, W the worker R
 // started in its own worktree, C the shared worker W started.

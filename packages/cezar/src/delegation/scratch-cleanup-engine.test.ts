@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -7,6 +8,8 @@ import { agentTmpDir, agentTmpEnv } from '../runs/agent-tmpdir.ts';
 import { manager, store, root, worker, reopenRuntime, useWorkerWaitFixture } from '../workflows/worker-wait-claude.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
+
+sealTestRunners();
 
 /** Scratch cleanup cases that need the run engine's own recovery and terminal-run reap. */
 describe('durable scratch cleanup evidence', () => {

@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { uuidFrom } from '../delegation/questions.ts';
 import { join } from 'node:path';
@@ -6,6 +7,8 @@ import { eventCheckpoint, manager, restart, root, store, until } from './worker-
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { conversationOf, eventsOf, squawkAnswered, noHumanCard, askedPair, said, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
+
+sealTestRunners();
 
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();

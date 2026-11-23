@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { seedWaits, setRunStatus } from '../runs/run-store.testkit.ts';
 import {
   RUN_STATUS,
@@ -16,11 +17,11 @@ import { runRecordSchema, toRunSummary } from '@open-mercato/cezar-contract/runs
 import { startTestCockpit, type TestCockpit } from './cockpit.testkit.ts';
 import type { Wait } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 // Its runs are deleted, reclaimed or archived, or start worker executions: the shipped removal slots.
 import '../built-in-run-slots.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;
@@ -71,7 +72,6 @@ describe('cez task watching', () => {
       expect(await run(['wait', id, '--timeout-seconds', '10'])).toBe(0);
       expect(last()).toMatchObject({ timedOut: false, runs: [{ id, status: RUN_STATUS.review }] });
     });
-
 
     // What a timed-out wait prints for each run depends on whether a poll answered before the
     // deadline, which a real cockpit cannot be timed into (hearsay-tools/cezarion#1066). Both cases
@@ -158,7 +158,6 @@ describe('cez task watching', () => {
       expect(Date.now() - started).toBeLessThan(10_000);
       expect(last()).toMatchObject({ runs: [{ id, status: 'missing' }] });
     });
-
 
   });
 

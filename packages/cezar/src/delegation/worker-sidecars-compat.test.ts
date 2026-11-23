@@ -1,8 +1,8 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { registerRunner } from '../core/runner-registry.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { RunStore } from '../runs/store.ts';
@@ -11,8 +11,8 @@ import { workerExecutionsOf } from './worker-executions.ts';
 import './worker-executions.testkit.ts';
 
 // The accepted identity binds a codex and a claude account; its schema reads each one's account layout from the registry.
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 /**
  * Worker sidecar files that Squawk wrote before the worker-executions code left `runs/store.ts`

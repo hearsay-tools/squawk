@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 // Register the external CI mock before loading RunManager.
 import { generationOf, prUrl, registerPr, registerTimer, waitById, settledById, inputsFor, fireTimer, timerFired, githubByPr, waitingParent, expectNoWaitHumanWait, acquireExternalCiResources } from './ci-wait-fixture.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
@@ -7,6 +8,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
+
+sealTestRunners();
 
 // The wait list's delivery on the real engine: resolved waits wake the run, a timer fires on the
 // run's clock, and the workspace semaphore's interval leaves an open timer alone. The registration

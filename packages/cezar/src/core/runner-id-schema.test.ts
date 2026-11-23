@@ -1,10 +1,9 @@
 import './register-all-runners.testkit.ts';
 import { z } from 'zod';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { registeredRunnerIdSchema } from './runner-id-schema.ts';
 import { defineRunner } from './runner-definition.ts';
-import { registerRunner } from './runner-registry.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
 // The closed decoder these schemas replaced (hearsay-tools/squawk#3936, item 5).
@@ -23,10 +22,14 @@ describe('registeredRunnerIdSchema', () => {
     expect(issues(later(registeredRunnerIdSchema()), 'gemini')).toEqual(issues(later(closedEnum()), 'gemini'));
   });
 
-  it('reads the registry at each parse', () => {
-    const schema = registeredRunnerIdSchema();
+  it('reads the completed registry at parse time, even when the schema predates boot', async () => {
+    vi.resetModules();
+    const { registeredRunnerIdSchema: schemaFactory } = await import('./runner-id-schema.ts');
+    const { registerRunner, sealRunners } = await import('./runner-registry.ts');
+    const schema = schemaFactory();
     expect(schema.safeParse('late-runner').success).toBe(false);
     registerRunner(defineRunner({ ...codexRunner, id: 'late-runner' }));
+    sealRunners();
     expect(schema.safeParse('late-runner').data).toBe('late-runner');
   });
 });

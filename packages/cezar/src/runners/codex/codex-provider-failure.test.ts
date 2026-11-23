@@ -1,4 +1,4 @@
-import { registerRunner } from '../../core/runner-registry.ts';
+import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../claude/definition.ts';
 import { codexRunner } from './definition.ts';
 import { STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import '../../core/created-runners.testkit.ts';
 import { driveSeam } from '../../core/harness-parity-core.testkit.ts';
 import { driveRun } from '../../core/workflow-parity-core.testkit.ts';
-registerRunner(claudeRunner);
-registerRunner(codexRunner);
+
+sealTestRunners(claudeRunner, codexRunner);
 
 describe('Codex 0.147 provider completion (#83)', () => {
   it('surfaces the provider 400 before the v1 turn boundary and marks v2 as error', async () => {

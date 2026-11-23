@@ -1,4 +1,4 @@
-import { registerRunner } from '../core/runner-registry.ts';
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +10,8 @@ import { randomUUID } from 'node:crypto';
 import '../core/created-runners.testkit.ts';
 import { collect, manager, parent, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-core.testkit.ts';
 import { completionNudges, sentTexts, recordAgentInput, blockedDone, sessionOf } from './worker-wait-readiness.testkit.ts';
-registerRunner(claudeRunner);
+
+sealTestRunners(claudeRunner);
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.

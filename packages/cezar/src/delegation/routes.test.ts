@@ -1,3 +1,4 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { RUN_STATUS, STEP_KIND, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,6 +23,8 @@ import {
 } from '@open-mercato/cezar-contract/delegation';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+
+sealTestRunners();
 
 describe('authenticated delegation HTTP family', () => {
   let f: ReturnType<typeof fixture>, app: ReturnType<typeof createDelegationRoutes>;

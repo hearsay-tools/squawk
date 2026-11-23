@@ -1,3 +1,4 @@
+import { sealTestRunners } from './core/runner-registry.testkit.ts';
 // These tests pin the five built-in runners' agent homes, so they register only those five.
 import { registerRunner } from './core/runner-registry.ts';
 import { claudeRunner } from './runners/claude/definition.ts';
@@ -21,6 +22,7 @@ import {
   serverStatePath,
 } from './paths.ts';
 for (const runner of [claudeRunner, codexRunner, opencodeRunner, piRunner, ompRunner]) registerRunner(runner);
+sealTestRunners();
 
 describe('paths', () => {
   const original = env.CEZ_HOME;
@@ -85,8 +87,9 @@ describe('agentHomePaths', () => {
   // A fresh module graph holds its own registry, so these definitions reach no other test.
   const freshPaths = async (definitions: readonly RunnerDefinition[]) => {
     vi.resetModules();
-    const { registerRunner } = await import('./core/runner-registry.ts');
+    const { registerRunner, sealRunners } = await import('./core/runner-registry.ts');
     for (const definition of definitions) registerRunner(definition);
+    sealRunners();
     return import('./paths.ts');
   };
 

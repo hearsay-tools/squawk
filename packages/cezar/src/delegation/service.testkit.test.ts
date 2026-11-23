@@ -1,8 +1,11 @@
+import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fixture, removeAfterOwnedWork } from './service.testkit.ts';
+
+sealTestRunners();
 
 describe('delegation fixture cleanup', () => {
   const leftovers: string[] = [];
