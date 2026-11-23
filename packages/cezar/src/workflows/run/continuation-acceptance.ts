@@ -178,28 +178,46 @@ export class ContinuationAcceptance {
   ): continuation.ContinuationRefusal | undefined {
     const queuedPatch = message ? { queuedMessages: [...(atLiveInput.queuedMessages(current) ?? []), message] } : {};
     if (current.delegation?.role === 'worker') {
-      try {
-        // Use the throwing transactional commit so identity finalization never outruns runs.db.
-        this.context.store.commitWorkerContinuation(runId, 'continue-line', {
-          ...(workerOverride ? workerOverride.runPatch : {}),
-          stopping: undefined,
-          archived: false,
-          archivedAt: undefined,
-          ...queuedPatch,
-        }, undefined, conversation);
-      } catch (error) {
-        if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
-        void this.host.finishWorkerExecution(runId);
-        const cause = error instanceof Error && error.message ? error.message : String(error);
-        console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
-        return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
-      }
-      if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
-      return undefined;
+      return this.commitWorkerContinuationRecord(runId, 'continue-line', {
+        ...(workerOverride ? workerOverride.runPatch : {}),
+        stopping: undefined,
+        archived: false,
+        archivedAt: undefined,
+        ...queuedPatch,
+      }, undefined, conversation, workerOverride, identityStaged);
     }
     this.context.store.archive.setArchived(runId, false);
     this.host.move(runId, 'continue-line', { stopping: undefined, ...queuedPatch });
     this.context.store.persistence.flush();
+    return undefined;
+  }
+
+  private commitWorkerContinuationRecord(
+    runId: string,
+    exit: 'continue-line' | 'continue-now',
+    acceptedPatch: Parameters<RunWrites['commitWorkerContinuation']>[2],
+    continuationStep: Parameters<RunWrites['commitWorkerContinuation']>[3],
+    conversation: continuation.ContinuationConversation,
+    workerOverride: WorkerIdentityOverride | undefined,
+    alreadyStaged: boolean,
+  ): continuation.ContinuationRefusal | undefined {
+    let identityStaged = alreadyStaged;
+    try {
+      if (workerOverride && !identityStaged) {
+        this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.pending });
+        identityStaged = true;
+      }
+      // Use the throwing transactional commit so identity finalization never outruns runs.db.
+      this.context.store.commitWorkerContinuation(runId, exit, acceptedPatch, continuationStep, conversation);
+    } catch (error) {
+      if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
+      // No session exists yet. Release the private reservation through execution finalization.
+      void this.host.finishWorkerExecution(runId);
+      const cause = error instanceof Error && error.message ? error.message : String(error);
+      console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
+      return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
+    }
+    if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
     return undefined;
   }
 
@@ -255,24 +273,9 @@ export class ContinuationAcceptance {
     conversation: continuation.ContinuationConversation,
     workerOverride?: WorkerIdentityOverride): continuation.ContinuationRefusal | undefined {
     if (run.delegation?.role === 'worker') {
-      let identityStaged = false;
-      try {
-        if (workerOverride) {
-          this.context.store.workerExecutions.updateWorkerIdentity(runId, { ...workerOverride.previous, pending: workerOverride.pending });
-          identityStaged = true;
-        }
-        this.context.store.commitWorkerContinuation(runId, exit, acceptedPatch, continuationStep, conversation);
-      }
-      catch (error) {
-        if (identityStaged && workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.previous);
-        // No session exists yet. Release the private reservation through execution finalization.
-        void this.host.finishWorkerExecution(runId);
-        const cause = error instanceof Error && error.message ? error.message : String(error);
-        console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
-        return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
-      }
-      if (workerOverride) this.finalizeWorkerIdentity(runId, workerOverride.next);
-    } else this.context.store.move(runId, exit, acceptedPatch);
+      return this.commitWorkerContinuationRecord(runId, exit, acceptedPatch, continuationStep, conversation, workerOverride, false);
+    }
+    this.context.store.move(runId, exit, acceptedPatch);
   }
 
   private dispatchAcceptedContinuation(runId: string, toLine: boolean, stepId: string,
