@@ -1032,7 +1032,7 @@ describe('the comment thread', () => {
     expect(sent.length).toBeGreaterThan(0)
   })
 
-  it('a refresh drops every other cached thread of this project and keeps the open one (#3854)', async () => {
+  it('a refresh drops every other cached thread of this project and keeps the open one (hearsay-tools/squawk#3854)', async () => {
     stubFetch({ 'GET /api/v1/github?refresh=1': () => jsonResponse(GITHUB) })
     const client = renderAt('/github/issues/142')
     const openKey = queryKeys.githubComments('issue', 142)
@@ -1088,7 +1088,7 @@ describe('the unavailable forge state', () => {
     )
   })
 
-  it('a refresh with no thread open drops every cached thread of this project (#3854)', async () => {
+  it('a refresh with no thread open drops every cached thread of this project (hearsay-tools/squawk#3854)', async () => {
     const unavailable: GithubData = { available: false, reason: 'gh not installed', issues: [], prs: [] }
     stubFetch({
       'GET /api/v1/github?limit=50': () => jsonResponse(unavailable),
