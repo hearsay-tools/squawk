@@ -115,6 +115,39 @@ describe('verified destruction retains results through explicit history deletion
     expect(existsSync(join(files, `${f.parent.id}-worker-results`))).toBe(false);
     reopened.persistence.flush();
   });
+  it('keeps updated delegation.results when deleting a worker whose settled parent is cold', async () => {
+    const { workerId } = await completed();
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
+    setRunStatus(f.store, f.parent.id, RUN_STATUS.done);
+    f.store.close();
+    const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
+    onTestFinished(() => reopened.close());
+    const before = reopened.getRun(f.parent.id);
+    if (before?.delegation?.role !== 'root') throw Error('fixture');
+    const beforeSnapshotId = before.delegation.results?.find(entry => entry.workerId === workerId)?.snapshotId;
+    expect(beforeSnapshotId).toBeDefined();
+    expect(reopened.retention.deleteRun(workerId)).toBe(true);
+    const after = reopened.getRun(f.parent.id);
+    if (after?.delegation?.role !== 'root') throw Error('missing parent');
+    const afterSnapshotId = after.delegation.results?.find(entry => entry.workerId === workerId)?.snapshotId;
+    expect(afterSnapshotId).toBeDefined();
+    expect(afterSnapshotId).not.toBe(beforeSnapshotId);
+    const persistedParent = readPersistedRuns(join(f.root, '.ai/cezar')).find((run: { id: string }) => run.id === f.parent.id);
+    expect(persistedParent?.delegation?.results?.find((entry: { workerId: string }) => entry.workerId === workerId)?.snapshotId).toBe(afterSnapshotId);
+    expect(reopened.workerResults.readWorkerResult(f.parent.id, workerId)).toMatchObject({
+      settled: true,
+      summary: { text: 'Completed implementation' },
+      artifacts: { state: 'available', items: [{ state: 'deleted', id: 'worker-context-0.input' }] },
+    });
+    expect(reopened.workerResults.readDeletedWorkerResult(f.parent.id, workerId)).toMatchObject({
+      settled: true,
+      artifacts: { state: 'available', items: [{ state: 'deleted', id: 'worker-context-0.input' }] },
+    });
+    expect(reopened.workerResults.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
+    expect(reopened.retention.canDeleteRun(f.parent.id)).toBe(true);
+    expect(reopened.retention.deleteRun(f.parent.id)).toBe(true);
+    reopened.persistence.flush();
+  });
   it('refuses child deletion without valid parent result bytes and current termination evidence', async () => {
     const { workerId, files } = await completed();
     await f.service.destroy(f.caller, { workerId }, DISCARD);
