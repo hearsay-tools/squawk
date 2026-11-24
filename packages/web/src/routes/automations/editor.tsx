@@ -3,7 +3,7 @@ import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
 import { useConfig, useRunnerModels, useWorkflows } from '@/api/queries'
-import { runnerPickerLabel, useRunners } from '@/api/runners'
+import { planRunner, runnerIds, runnerPickerLabel, useRunners } from '@/api/runners'
 import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
@@ -300,7 +300,8 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
   const { runners: usable, signedOut } = availability.runnersOn((runner) => availability.repoAccount?.[runner])
   const config = useConfig()
   const registered = useRunners()
-  const effectiveRunner: Runner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
+  const storedRunner = draft.runner ?? config.data?.defaultRunner ?? 'claude'
+  const effectiveRunner: Runner = planRunner(storedRunner, runnerIds(registered.data)) ?? storedRunner
   // The model list comes from the account the scheduled run uses: the project's selection.
   const catalog = useRunnerModels(effectiveRunner, true, availability.repoAccount?.[effectiveRunner])
   const names = [...new Set([...(workflows.data?.workflows ?? []).map((workflow) => workflow.name), ...(draft.workflow ? [draft.workflow] : [])])]

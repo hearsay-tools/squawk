@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
-import { isRegisteredRunner, registeredRunners } from '../core/runner-registry.ts';
+import { registeredRunners, savedRunnerRegistration } from '../core/runner-registry.ts';
 import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
@@ -71,10 +71,12 @@ const agentAccountSchema = z
     // returns `{}` for it, so the step records the account, the UI names it, and the CLI runs on
     // the default login anyway. Dropped by the per-entry salvage instead, which is the one
     // degradation that cannot mislead.
-    // A provider the registry does not hold is kept verbatim: its plugin may be absent, and
-    // `supportsProfiles` would throw looking it up. The refusal stands for a registered runner
-    // whose credentials do not follow its config dir (spec 2026-11-24, A3).
-    provider: storedRunnerIdSchema.refine((provider) => !isRegisteredRunner(provider) || supportsProfiles(provider), {
+    // A provider the registry does not hold is kept verbatim: its plugin may be absent.
+    // `savedRunnerRegistration` is false for that id once the registry is sealed, and undefined
+    // while it is unsealed — both keep the row. `isRegisteredRunner` and `supportsProfiles` throw
+    // before the seal, and this decode runs at startup. A registered runner whose credentials
+    // do not follow its config dir is still dropped (spec 2026-11-24, A3).
+    provider: storedRunnerIdSchema.refine((provider) => savedRunnerRegistration(provider) !== true || supportsProfiles(provider), {
       message: 'this agent cannot carry more than one account (its credentials do not follow its config dir)',
     }),
     configDir: z

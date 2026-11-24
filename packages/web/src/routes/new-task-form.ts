@@ -12,6 +12,8 @@ import type {
 } from '@open-mercato/cezar-api-client'
 import { runnerEntry, runnerIds, runnerModelListName } from '@/api/runners'
 
+export { planRunner } from '@/api/runners'
+
 /**
  * The new-task form's picker rules and its POST body, as pure functions — the exact semantics
  * of the legacy form (web/app.js: `renderChrome`,
@@ -180,18 +182,6 @@ export function availableRunners(checks: readonly BackendCheck[], runners: Runne
     checks.some((c) => c.name === id && c.available),
   )
   return available.length > 0 ? available : ['claude']
-}
-
-/** The runner a stored default names for execution. A registered id stays. An unknown stored id
- *  maps to the first registered runner, as the server's `resolveRunnerId` maps it to the default
- *  (`claude`, registered first). The stored id itself is not changed. */
-export function planRunner(
-  stored: Runner | undefined,
-  registered: readonly Runner[],
-): Runner | undefined {
-  if (stored === undefined) return undefined
-  if (registered.includes(stored)) return stored
-  return registered[0]
 }
 
 /** The effective runner: the user's pick when still installed, else the configured default

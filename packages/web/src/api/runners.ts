@@ -43,6 +43,18 @@ export function runnerIds(runners: RunnersResponse | undefined): string[] {
   return runnerEntries(runners).map((entry) => entry.id)
 }
 
+/** The runner a stored id names for a registered-only request. A registered id stays. An unknown
+ *  id maps to the first registered runner, as the server's `resolveRunnerId` maps it to the
+ *  default. The stored id itself is not changed. Undefined stays undefined. */
+export function planRunner<T extends string>(
+  stored: T | undefined,
+  registered: readonly T[],
+): T | undefined {
+  if (stored === undefined) return undefined
+  if (registered.includes(stored)) return stored
+  return registered[0]
+}
+
 /** The registered runner `id`, or undefined when no registered runner has that id. */
 export function runnerEntry(runners: RunnersResponse | undefined, id: string): RunnerEntry | undefined {
   return runners?.runners.find((entry) => entry.id === id)

@@ -1,5 +1,5 @@
 import { useConfig, useProviderStatus } from '@/api/queries'
-import { runnerIds, useRunners } from '@/api/runners'
+import { planRunner, runnerIds, useRunners } from '@/api/runners'
 import { workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { providersRequiredByWorkflow } from '@open-mercato/cezar-api-client/contract/workflows'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
@@ -91,7 +91,9 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
   const availability = useRunnerAvailability()
   const isWorker = run.delegation?.role === 'worker'
-  const currentRunner = continuationCurrentRunner(run, untouched, removed, config.data?.defaultRunner)
+  const storedDefault = config.data?.defaultRunner
+  const fallback = planRunner(storedDefault, runnerIds(registered.data)) ?? storedDefault
+  const currentRunner = continuationCurrentRunner(run, untouched, removed, fallback)
   // Each candidate counts on the account the server would continue it on, after the runner switch
   // clears the run's account (hearsay-tools/squawk#4116).
   const accountOn = (provider: Runner, target: Runner) =>

@@ -201,7 +201,8 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   const defaultRunner = config.data?.defaultRunner
   const preferredRunner = defaultRunner ?? 'claude'
   const runner = runners.length > 0 ? resolveRunner(draft.runner, runners, preferredRunner) : null
-  const displayRunner = runner ?? preferredRunner
+  const storedDisplay = runner ?? preferredRunner
+  const displayRunner = planRunner(storedDisplay, runnerIds(registered.data)) ?? storedDisplay
   const providersReady = providers.isSuccess && runners.length > 0
   // The pickers read the provider status and the runners list: either one pending or failed
   // holds them the same way.
@@ -211,8 +212,8 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   }
   const pickedAccount = availability.accountFor(displayRunner, draft.agentProfile)
     ?? availability.repoAccount?.[displayRunner]
-  // Plan first runs on the runner the stored default resolves to. A stored unknown id is not a
-  // registered account key, so the lookup uses the resolved runner and the stored id stays as it is.
+  // Plan first and the model catalog run on the runner the stored default resolves to. A stored
+  // unknown id is not a registered account key, so both lookups use the resolved runner.
   const planner = planRunner(defaultRunner, runnerIds(registered.data))
   const planAccount = planner === undefined
     ? null
