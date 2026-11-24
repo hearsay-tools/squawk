@@ -14,8 +14,8 @@ import { repoRoot } from './source-rule.ts';
  * own tests. The rule reports
  * - a string literal or a template part that starts with an ISO calendar date (`YYYY-MM-DD`);
  * - a `Date.now()` call that is an operand of `+` or `-` inside the first argument of `new Date(…)`.
- * A file that calls `setSystemTime` or `useFakeTimers` on any object pins the clock and passes. A
- * file with a `// real-clock: <reason>` comment passes; the comment without a reason is reported.
+ * A file that calls `setSystemTime(…)` or `useFakeTimers({ now: … })` on any object pins the clock
+ * and passes; a bare `useFakeTimers()` starts at the real time and pins nothing. A file with a `// real-clock: <reason>` comment passes; the comment without a reason is reported.
  * The rule follows no value: it does not see a date built in a helper, held in a variable before
  * `new Date`, or kept as a number.
  *
@@ -29,7 +29,6 @@ export const clockDatesFile = 'packages/cezar/src/lint/test-unpinned-clock-date.
 const LINT_DIR = 'packages/cezar/src/lint/';
 const TEST_FILE = /\.(?:test|e2e)\.[cm]?[jt]sx?$/;
 const ISO_DATE = /^(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?!\d)/;
-const PINS = new Set(['setSystemTime', 'useFakeTimers']);
 const REAL_CLOCK = /^\s*real-clock:/;
 const REASONED = /^\s*real-clock:\s*\S/;
 const ARITHMETIC = new Set(['+', '-']);
@@ -37,7 +36,7 @@ const WRAPPERS = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullE
 
 export const CLOCK_DATE_MESSAGE =
   'This test builds a calendar date from a literal or from Date.now() and never pins the clock, so it can fail ' +
-  'when the real day changes. Pin the clock with vi.useFakeTimers({ toFake: [\'Date\'] }) and vi.setSystemTime(…), ' +
+  'when the real day changes. Pin the clock with vi.setSystemTime(<fixed time>) or vi.useFakeTimers({ now: <fixed time> }), ' +
   'or add // real-clock: <reason> to the file (hearsay-tools/squawk#4194).';
 export const BARE_REAL_CLOCK_MESSAGE = '// real-clock: needs a reason after the colon (hearsay-tools/squawk#4194).';
 
@@ -65,10 +64,19 @@ function feedsNewDate(call: EsNode): boolean {
   return false;
 }
 
-const isPin = (node: EsNode) => {
+/**
+ * `setSystemTime(…)`, or `useFakeTimers({ now: … })`. A bare `useFakeTimers()` starts the fake
+ * clock at the real time, so it pins nothing.
+ */
+function isPin(node: EsNode): boolean {
   const callee = unwrap(child(node, 'callee'));
-  return callee?.type === 'MemberExpression' && PINS.has(propertyName(callee) ?? '');
-};
+  if (callee?.type !== 'MemberExpression') return false;
+  const name = propertyName(callee);
+  if (name === 'setSystemTime') return true;
+  const options = unwrap(children(node, 'arguments')[0]);
+  return name === 'useFakeTimers' && options?.type === 'ObjectExpression'
+    && children(options, 'properties').some(property => property.type === 'Property' && propertyName(child(property, 'key')) === 'now');
+}
 
 /** What one file holds: its date sites, whether it pins the clock, and its `real-clock` comments. */
 export interface ClockDates { sites: EsNode[]; pinned: boolean; reasoned: boolean; bare: EsNode[] }

@@ -28,6 +28,13 @@ describe('test-unpinned-clock-date (hearsay-tools/squawk#4194)', () => {
     expect(findings(`\n${source}`)).toEqual([{ line: 2, message: CLOCK_DATE_MESSAGE }]);
   });
 
+  it.each([
+    ['vi.useFakeTimers()', 'vi.useFakeTimers();'],
+    ['fake Date only', "vi.useFakeTimers({ toFake: ['Date'] });"],
+  ])('refuses %s alone: it starts the fake clock at the real time, so a lookback still expires', (_case, fake) => {
+    expect(findings(`${fake}\nconst epoch = Date.parse('2026-10-27T00:00:00Z');`)).toEqual([{ line: 2, message: CLOCK_DATE_MESSAGE }]);
+  });
+
   it('reports every site in a file', () => {
     expect(findings("const a = '2026-01-01';\nconst b = new Date(Date.now() - 1);")).toEqual([
       { line: 1, message: CLOCK_DATE_MESSAGE }, { line: 2, message: CLOCK_DATE_MESSAGE },
@@ -36,7 +43,7 @@ describe('test-unpinned-clock-date (hearsay-tools/squawk#4194)', () => {
 
   it.each([
     ['a pinned clock', "vi.setSystemTime(Date.parse('2026-10-27T00:00:00Z'));"],
-    ['fake timers', "beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));\nconst at = new Date(Date.now() - 1000);"],
+    ['fake timers from a fixed time', "beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-10-27') }));\nconst at = new Date(Date.now() - 1000);"],
     ['a reasoned real clock', '// real-clock: the browser runs at local noon\nconst at = new Date(Date.now() - 1000);'],
     ['a deadline', 'const deadline = Date.now() + 5000;'],
     ['a duration', 'const spent = Date.now() - started;'],
