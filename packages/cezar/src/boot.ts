@@ -18,7 +18,7 @@ export interface BootRuntimeOptions {
 let runtimeBoot: Promise<void> | undefined;
 
 /**
- * Register every built-in extension table, run the optional hook, then seal all seven registries
+ * Register every built-in extension table, run the optional hook, then seal all eight registries
  * in this one place. A second call returns the same boot and does not run the hook again.
  */
 export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
@@ -38,6 +38,7 @@ async function sealRuntime(beforeSeal: BootRuntimeOptions['beforeSeal']): Promis
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
   const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
+  const { sealRunLifecycleListeners } = await import('./runs/lifecycle-registry.ts');
   registerBuiltInRunners();
   registerBuiltInRunSlots();
   registerBuiltInStepKinds();
@@ -50,4 +51,5 @@ async function sealRuntime(beforeSeal: BootRuntimeOptions['beforeSeal']): Promis
   sealBuiltInStepKinds();
   sealBuiltInTools();
   sealBuiltInWaitKinds();
+  sealRunLifecycleListeners();
 }

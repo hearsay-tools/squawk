@@ -11,6 +11,7 @@ const SEAL_ALLOWLIST = new Set([
   'built-in-run-slots.ts',
   'core/cli-registry.ts',
   'core/runner-registry.ts',
+  'runs/lifecycle-registry.ts',
   'runs/removal-slots.ts',
   'runs/worker-executions-registry.ts',
   'workflows/step-kind-registry.ts',
@@ -27,7 +28,7 @@ function productionSources(dir = ''): string[] {
   });
 }
 
-it('seals all seven registries and runs beforeSeal only on the first full boot', async () => {
+it('seals all eight registries and runs beforeSeal only on the first full boot', async () => {
   vi.resetModules();
   const boot = await import('./boot.ts');
   const order: string[] = [];
@@ -38,10 +39,12 @@ it('seals all seven registries and runs beforeSeal only on the first full boot',
   const steps = await import('./workflows/step-kind-registry.ts');
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
+  const lifecycle = await import('./runs/lifecycle-registry.ts');
   const sealed = () => ({
     cli: cli.cliCommandsSealed(), runners: runners.runnersSealed(), slots: slots.runSlotsSealed(),
     workers: workers.workerExecutionsSealed(), steps: steps.stepKindsSealed(),
     tools: tools.agentToolsSealed(), waits: waits.waitKindsSealed(),
+    lifecycle: lifecycle.runLifecycleListenersSealed(),
   });
   expect(Object.values(sealed()).some(Boolean)).toBe(false);
   await boot.bootRuntime({ beforeSeal: () => {
@@ -50,7 +53,9 @@ it('seals all seven registries and runs beforeSeal only on the first full boot',
     expect(Object.values(state).every(value => value === false), JSON.stringify(state)).toBe(true);
   } });
   expect(order).toEqual(['hook']);
-  expect(sealed()).toEqual({ cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true });
+  expect(sealed()).toEqual({
+    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true,
+  });
   await boot.bootRuntime({ beforeSeal: () => { order.push('again'); } });
   expect(order).toEqual(['hook']);
 });
@@ -68,10 +73,12 @@ it('seals only the CLI command table on a cold boot', async () => {
   const steps = await import('./workflows/step-kind-registry.ts');
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
+  const lifecycle = await import('./runs/lifecycle-registry.ts');
   expect([
     runners.runnersSealed(), slots.runSlotsSealed(), workers.workerExecutionsSealed(),
     steps.stepKindsSealed(), tools.agentToolsSealed(), waits.waitKindsSealed(),
-  ]).toEqual([false, false, false, false, false, false]);
+    lifecycle.runLifecycleListenersSealed(),
+  ]).toEqual([false, false, false, false, false, false, false]);
   boot.bootColdCli();
   expect(runners.runnersSealed()).toBe(false);
 });
