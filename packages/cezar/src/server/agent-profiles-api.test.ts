@@ -383,6 +383,22 @@ describe('agent profiles API', () => {
       expect((await loadAgentAccounts(testHome())).selections[first.root]).toEqual({ codex: 'kept' });
     });
 
+    it('404s an account whose provider is not registered, and keeps its row and selection', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{ id: 'ghost-work', provider: 'ghost', configDir: '~/.ghost-work', label: 'Ghost' }],
+        selections: { '/repo': { ghost: 'ghost-work' } },
+      })));
+      const { status, body } = await send('DELETE', '/api/v1/workspace/agent-profiles/ghost-work');
+      expect(status).toBe(404);
+      expect(body.error).toContain('unknown account');
+      const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as {
+        accounts: { id: string }[];
+        selections: Record<string, Record<string, string>>;
+      };
+      expect(raw.accounts.map((row) => row.id)).toEqual(['ghost-work']);
+      expect(raw.selections).toEqual({ '/repo': { ghost: 'ghost-work' } });
+    });
+
     it('drops the whole selection object when the deleted account was its only key', async () => {
       const first = await registerProject(repoRoot, undefined, testHome());
       const { body: created } = await send('POST', '/api/v1/workspace/agent-profiles', {

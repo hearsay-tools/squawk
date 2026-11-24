@@ -56,6 +56,16 @@ it('reads the runner the server runs instead when the stored default is not regi
   expect(requests.some((url) => url.includes('runner=ghost'))).toBe(false)
 })
 
+it('does not send an account picked for another runner with the resolved runner', async () => {
+  const requests = mount()
+  await screen.findByRole('option', { name: 'Work' })
+  fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'work' } })
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&account=work'))
+  fireEvent.click(screen.getByRole('button', { name: 'pi' }))
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=pi'))
+  expect(requests.some((url) => url.includes('runner=pi&account='))).toBe(false)
+})
+
 it('still reads the stored default runner when the runners list fails', async () => {
   const requests = mount('live', createQueryClient(), { runnersFail: true })
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex'))

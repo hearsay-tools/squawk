@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
-import { registeredRunners, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { isRegisteredRunner, registeredRunners, savedRunnerRegistration } from '../core/runner-registry.ts';
 import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
@@ -252,6 +252,29 @@ export async function mergeWriteAgentAccounts(
     store.writeJson(home.agentAccounts, next);
     return next;
   }, [home.agentAccounts]);
+}
+
+/**
+ * `DELETE /workspace/agent-profiles/:id`'s mutation: remove account `id` and scrub every selection
+ * that names it. Returns the removed row's provider, or undefined when nothing was removed.
+ */
+export function removeAgentAccount(store: AgentAccountStore, id: string): ProviderId | undefined {
+  const removedProvider = store.accounts.find((a) => a.id === id)?.provider;
+  // A row whose runner is not registered is kept on disk until its plugin returns, and
+  // answers 404 here as it does on status and PATCH (hearsay-tools/squawk#4200).
+  if (removedProvider === undefined || !isRegisteredRunner(removedProvider)) return undefined;
+  store.accounts = store.accounts.filter((a) => a.id !== id);
+  // Scrub every reference IN THE SAME MUTATOR — the reason selections share this file.
+  // A two-call delete-then-scrub can be observed mid-way by another Squawk process on
+  // this machine, which would then resolve a dangling id; harmless today (it degrades
+  // to the default) but only by luck.
+  for (const [root, selection] of Object.entries(store.selections)) {
+    for (const key of Object.keys(selection) as Array<keyof typeof selection>) {
+      if (selection[key] === id) delete selection[key];
+    }
+    if (Object.keys(selection).length === 0) delete store.selections[root];
+  }
+  return removedProvider;
 }
 
 /**

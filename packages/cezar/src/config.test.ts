@@ -128,6 +128,9 @@ describe('loadConfig systemPrompt', () => {
 
       write({ defaultModels: { claude: 'opus', ghost: null } });
       expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus' });
+
+      write({ defaultModels: { '': 'model', ['p'.repeat(65)]: 'model', [`gh${String.fromCharCode(10)}ost`]: 'model', ghost: 'gpt-x' } });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ ghost: 'gpt-x' });
     });
   });
 

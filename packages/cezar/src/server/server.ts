@@ -223,7 +223,7 @@ import {
   defaultAgentAccountStore,
   isAbsoluteConfigDir,
   loadAgentAccounts,
-  mergeWriteAgentAccounts,
+  mergeWriteAgentAccounts, removeAgentAccount,
   type AgentAccount,
   type AgentAccountStore,
 } from '../workspace/agent-accounts.ts';
@@ -1662,21 +1662,8 @@ export function createApp(deps: ServerDeps) {
         let removedProvider: ProviderId | undefined;
         try {
           await mergeWriteAgentAccounts((store) => {
-            const before = store.accounts.length;
-            removedProvider = store.accounts.find((a) => a.id === id)?.provider;
-            store.accounts = store.accounts.filter((a) => a.id !== id);
-            removed = store.accounts.length < before;
-            if (!removed) return;
-            // Scrub every reference IN THE SAME MUTATOR — the reason selections share this file.
-            // A two-call delete-then-scrub can be observed mid-way by another Squawk process on
-            // this machine, which would then resolve a dangling id; harmless today (it degrades
-            // to the default) but only by luck.
-            for (const [root, selection] of Object.entries(store.selections)) {
-              for (const key of Object.keys(selection) as Array<keyof typeof selection>) {
-                if (selection[key] === id) delete selection[key];
-              }
-              if (Object.keys(selection).length === 0) delete store.selections[root];
-            }
+            removedProvider = removeAgentAccount(store, id);
+            removed = removedProvider !== undefined;
           }, deps.home);
         } catch (err) {
           return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);

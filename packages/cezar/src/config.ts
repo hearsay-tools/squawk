@@ -96,9 +96,10 @@ const configSchema = z.object({
       const valueSchema = z.string().trim().min(1).max(200);
       const out: Record<string, string> = {};
       // Unknown keys first, in stored order, then registered keys in registry order. Every value is
-      // trimmed and bounded the same way; a value that fails drops only its own key.
+      // trimmed and bounded the same way; a key or value that fails drops only its own entry.
       for (const [id, value] of Object.entries(entries)) {
-        if (known.has(id)) continue;
+        // An empty, over-long or control-character id is dropped; its siblings stay.
+        if (known.has(id) || !storedRunnerIdSchema.safeParse(id).success) continue;
         const parsed = valueSchema.safeParse(value);
         if (parsed.success) out[id] = parsed.data;
       }
