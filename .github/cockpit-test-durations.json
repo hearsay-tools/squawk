@@ -5,53 +5,55 @@
     "root": "packages/web/e2e",
     "runs": [
       {
-        "id": 45196904726,
-        "headSha": "ceb1dc63ed77a2be0551395a24e2d484b47f84bf",
+        "id": 45406325233,
+        "headSha": "41c1f4f05fe0c9b5cf1e4606c70782945cffa014",
         "jobs": [
-          137769866601,
-          137769866698,
-          137769866708,
-          137769866763,
-          137769866780,
-          137769866841,
-          137769866863,
-          137769866927
+          138488110980,
+          138488111070,
+          138488111076,
+          138488111077,
+          138488111105,
+          138488111125,
+          138488111129,
+          138488111146
         ]
       },
       {
-        "id": 45195372257,
-        "headSha": "7c4959072a3f5d1ca3964863aaacd746e9ef8e9e",
+        "id": 45395338069,
+        "headSha": "a7b4165bf0241bd70d6336a0c43bef42d482e739",
         "jobs": [
-          137764542382,
-          137764542406,
-          137764542423,
-          137764542454,
-          137764542479,
-          137764542481,
-          137764542586,
-          137764542627
+          138449616827,
+          138449616843,
+          138449616854,
+          138449616856,
+          138449616914,
+          138449616928,
+          138449616945,
+          138449617007
         ]
       },
       {
-        "id": 45195368268,
-        "headSha": "99b8febea7235cc893d3ba2bd3598a58355da767",
+        "id": 45375244033,
+        "headSha": "3368dfd5ff71f6cf50b1b1dc92fffb2e6c6ea0fe",
         "jobs": [
-          137764490408,
-          137764490470,
-          137764490511,
-          137764490538,
-          137764490544,
-          137764490585,
-          137764490715,
-          137764490921
+          138379784364,
+          138379784449,
+          138379784521,
+          138379784564,
+          138379784572,
+          138379784612,
+          138379784703,
+          138379784827
         ]
       }
     ],
     "estimatedFiles": [],
-    "baselineCommit": "ceb1dc63ed77a2be0551395a24e2d484b47f84bf",
+    "baselineCommit": "3454d14d6e549a95c77a53ef08bf2b41394d91b7",
     "updatedFiles": [
-      "agents-settings-mobile.e2e.ts",
-      "task-list-virtualization.e2e.ts"
+      "live-preview.e2e.ts",
+      "project-rail.e2e.ts",
+      "task-list-virtualization.e2e.ts",
+      "worker-relationships.e2e.ts"
     ],
     "remainingChanges": 0
   },
@@ -89,7 +91,7 @@
     "index-workload.e2e.ts": 24319,
     "ios-sweep.e2e.ts": 14275,
     "issue-linked-tasks.e2e.ts": 6296,
-    "live-preview.e2e.ts": 22613,
+    "live-preview.e2e.ts": 15096,
     "markdown-preview.e2e.ts": 8727,
     "mobile-projects.e2e.ts": 14052,
     "mobile-tab-bar.e2e.ts": 26652,
@@ -103,7 +105,7 @@
     "plan-mode.e2e.ts": 18521,
     "progressive-history.e2e.ts": 26503,
     "project-order.e2e.ts": 6942,
-    "project-rail.e2e.ts": 21669,
+    "project-rail.e2e.ts": 28722,
     "project-sidebar.e2e.ts": 6354,
     "queued-stack.e2e.ts": 41137,
     "quick-list.e2e.ts": 121253,
@@ -138,7 +140,7 @@
     "task-files.e2e.ts": 13596,
     "task-github-items.e2e.ts": 13607,
     "task-handoff.e2e.ts": 12886,
-    "task-list-virtualization.e2e.ts": 115919,
+    "task-list-virtualization.e2e.ts": 163878,
     "task-list-workload.e2e.ts": 28812,
     "task-pr-collection.e2e.ts": 24058,
     "task-status-groups.e2e.ts": 11763,
@@ -150,7 +152,7 @@
     "tools-menu.e2e.ts": 3568,
     "touch-targets.e2e.ts": 197819,
     "worker-conversation.e2e.ts": 26993,
-    "worker-relationships.e2e.ts": 42347,
+    "worker-relationships.e2e.ts": 53296,
     "workflows.e2e.ts": 18056,
     "worktree-setup.e2e.ts": 5612,
     "agents-settings-mobile.e2e.ts": 5596
