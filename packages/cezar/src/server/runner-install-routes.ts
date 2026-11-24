@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { runnerInstallParamsSchema, runnerInstallActionSchema } from '@open-mercato/cezar-contract/runner-install';
 import type { Home } from '../home/home.ts';
+import type { ManagedCliSource } from '../core/managed-cli-source.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { ManagedCliInstallation } from '../managed-install/cli-installation.ts';
 import { jsonZodValidator, paramZodValidator } from './validators.ts';
@@ -8,7 +9,7 @@ import { jsonZodValidator, paramZodValidator } from './validators.ts';
 export function createRunnerInstallRoutes(options: {
   home: Home;
   settingsAdmin(): boolean;
-  create?: (runner: string) => ManagedCliInstallation;
+  create?: (runner: string, source: ManagedCliSource) => ManagedCliInstallation;
 }) {
   const installations = new Map<string, ManagedCliInstallation>();
   const installation = (runner: string) => {
@@ -16,7 +17,7 @@ export function createRunnerInstallRoutes(options: {
     if (existing) return existing;
     const source = runnerDefinition(runner).cli.installSource;
     if (!source || !('managed' in source)) return null;
-    const created = options.create?.(runner) ?? new ManagedCliInstallation(options.home, runner, source.managed);
+    const created = options.create?.(runner, source.managed) ?? new ManagedCliInstallation(options.home, runner, source.managed);
     installations.set(runner, created);
     return created;
   };
