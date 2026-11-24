@@ -1,6 +1,6 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -173,5 +173,16 @@ describe('the start gate checks the account the task runs on', () => {
     expect(await response.json()).toEqual({
       error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
     });
+  });
+
+  it('plans through the registered default when the stored default runner is not registered', async () => {
+    // Dry-run reports every registered account connected, so the gate tests the resolved id, not sign-in.
+    process.env.CEZ_DRY_RUN = '1';
+    const app = setup(true);
+    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'ghost' }));
+    const response = await plan(app);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ fallback: true });
   });
 });

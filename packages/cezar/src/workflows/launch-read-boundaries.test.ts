@@ -156,6 +156,15 @@ it('P6-17 P6-21 task head reads current default runner and system prompt', async
   expect(launched.systemPrompt).not.toContain('old default');
 });
 
+it('a runnerless start records the registered default when the stored default runner is not registered', async () => {
+  config({ defaultRunner: 'ghost' });
+  const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
+  await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  expect(store.getRun(target.id)?.error).toBeUndefined();
+  expect(store.getRun(target.id)?.runner).toBe('claude');
+});
+
 it('P6-04 P6-12 P6-20 P6-24 P6-28 P6-32 P6-36 live input keeps the open session without new launch selection', async () => {
   const reads = { workflow: 0, policy: 0, provider: 0, profile: 0, runner: 0, config: 0 };
   const inFlight: Promise<unknown>[] = [];

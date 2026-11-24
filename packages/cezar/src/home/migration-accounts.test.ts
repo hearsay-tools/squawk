@@ -42,17 +42,25 @@ it('C1: duplicate account IDs use the loader first-wins rule and never mix crede
   const { legacy, target, account } = accountFixture();
   const duplicate = { ...account, provider: 'codex', configDir: join(legacy.root, 'other-account') };
   rawJson(join(duplicate.configDir, 'duplicate-only.json'), { secret: 'other login' });
+  // `invalid` is a well-formed provider no runner registered, so salvage keeps it and it wins the id.
   Home.seed(legacy, legacy.agentAccounts, { accounts: [{ id: account.id, provider: 'invalid', configDir: duplicate.configDir }, account, duplicate] });
-  const skipped = { id: duplicate.id, configDir: duplicate.configDir, reason: 'duplicate-account-id' };
+  const skipped = [
+    { id: account.id, configDir: account.configDir, reason: 'duplicate-account-id' },
+    { id: duplicate.id, configDir: duplicate.configDir, reason: 'duplicate-account-id' },
+  ];
   const plan = planLegacyMigration(legacy, target);
   expect(plan.accounts).toHaveLength(1);
-  expect(plan.notMoved).toEqual([skipped]);
-  expect(plan.files.find(file => file.path === 'other-account/duplicate-only.json')?.target).toBeNull();
+  expect(plan.notMoved).toEqual(skipped);
+  expect(plan.files.find(file => file.path === 'credentials/work/auth.json')?.target).toBeNull();
   migrateLegacyHome(legacy, target);
-  expect(readMigrationRecord(target)!.notMoved).toEqual([skipped]);
-  expect(json(target.agentAccounts).accounts[1].configDir).toBe(join(target.data, 'accounts', account.id));
-  expect(json(target.agentAccounts).accounts[2].configDir).toBe(duplicate.configDir);
-  expect(existsSync(join(target.data, 'accounts', account.id, 'duplicate-only.json'))).toBe(false);
+  expect(readMigrationRecord(target)!.notMoved).toEqual(skipped);
+  const written = json(target.agentAccounts).accounts.map((row: { provider: string; configDir: string }) => [row.provider, row.configDir]);
+  expect(written).toEqual([
+    ['invalid', join(target.data, 'accounts', account.id)],
+    ['claude', account.configDir],
+    ['codex', duplicate.configDir],
+  ]);
+  expect(existsSync(join(target.data, 'accounts', account.id, 'auth.json'))).toBe(false);
 });
 
 it('B1: an account recopy replaces its pending tree and drops files deleted since the first copy', () => {

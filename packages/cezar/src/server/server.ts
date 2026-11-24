@@ -2488,7 +2488,7 @@ export function createApp(deps: ServerDeps) {
     .post('/plan', jsonZodValidator(planSchema), async (c) => {
       const { root: repoRoot, manager } = c.get('project');
       const parsed = { data: c.req.valid('json') };
-      const planner = (await loadConfig(repoRoot, deps.home)).defaultRunner;
+      const planner = resolveRunnerId((await loadConfig(repoRoot, deps.home)).defaultRunner);
       const blocked = await providerActionError([planner], { repoRoot, picks: { [planner]: parsed.data.agentProfile } });
       if (blocked) return c.json({ error: blocked }, 409);
       const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, planner, parsed.data.agentProfile);
