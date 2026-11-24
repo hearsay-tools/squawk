@@ -5,7 +5,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
-import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
+import type { RunAccess, RunEventLog, WorkerExecutions, WorkerResults } from '../runs/ports.ts';
+import type { RunEvent, RunRecord } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { workspaceDirectoryRemoved, workspaceKindOf } from './workspace-kinds.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
@@ -22,8 +23,16 @@ export function topLevelAssistantText(event: RunEvent): string | undefined {
   return typeof text === 'string' ? text : undefined;
 }
 
+/** The store topics worker evidence collection reads. */
+export interface WorkerEvidenceStore {
+  readonly workerResults: Pick<WorkerResults, 'readWorkerResult' | 'readWorkerResultDiff' | 'workerResultSnapshotPath'>;
+  readonly eventLog: Pick<RunEventLog, 'readEventsAsync'>;
+  readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'>;
+  readonly claims: Pick<RunAccess, 'sourceDataDir'>;
+}
+
 /** Snapshot collection is deliberately read-only until the service rechecks lifecycle identity. */
-export async function collectWorkerEvidence(repoRoot: string, store: RunStore, run: RunRecord): Promise<{ result: WorkerCollectedResult; diffSnapshot?: string }> {
+export async function collectWorkerEvidence(repoRoot: string, store: WorkerEvidenceStore, run: RunRecord): Promise<{ result: WorkerCollectedResult; diffSnapshot?: string }> {
   if (run.delegation?.role !== 'worker') throw Error('missing worker ownership');
   const delegation = run.delegation;
   const previous = store.workerResults.readWorkerResult(delegation.parentRunId, run.id);
@@ -53,7 +62,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
 /** The kind's report of what changed in the workspace's directory, for the worker's current execution.
  *  Only a worker that is queued, running or waiting counts as still running: one that stopped in any
  *  other way, with or without a complete execution record, is never compared with the directory as it is. */
-async function readWorkspaceChanges(store: RunStore, run: RunRecord): Promise<Pick<WorkerCollectedResult, 'changes'>> {
+async function readWorkspaceChanges(store: WorkerEvidenceStore, run: RunRecord): Promise<Pick<WorkerCollectedResult, 'changes'>> {
   const changes = await workspaceKindOf(run).changeReport(store.claims.sourceDataDir(run.id), run,
     { generation: store.workerExecutions.readWorkerExecution(run.id)?.generation, settled: !isLiveStatus(run.status) });
   return changes ? { changes } : {};
@@ -98,7 +107,7 @@ async function readWorkerHead(repoRoot: string, run: RunRecord, previous: Worker
 type WorkerDelegation = Extract<NonNullable<RunRecord['delegation']>, { role: 'worker' }>;
 
 /** The owned workspace's diff, or this revision's retained snapshot when the live read fails. */
-async function readWorkerDiff(repoRoot: string, store: RunStore, run: RunRecord, delegation: WorkerDelegation, cleanup: { destroyed: boolean; workspaceRemoved: boolean }): Promise<{ diff: WorkerCollectedResult['diff']; diffSnapshot: string | undefined }> {
+async function readWorkerDiff(repoRoot: string, store: WorkerEvidenceStore, run: RunRecord, delegation: WorkerDelegation, cleanup: { destroyed: boolean; workspaceRemoved: boolean }): Promise<{ diff: WorkerCollectedResult['diff']; diffSnapshot: string | undefined }> {
   const noDiff = workspaceKindOf(run).noDiff;
   if (noDiff) return { diff: { state: 'unavailable', reason: 'unsupported', detail: noDiff }, diffSnapshot: undefined };
   let diff: WorkerCollectedResult['diff'] = { state: cleanup.workspaceRemoved ? 'deleted' : 'unavailable', reason: 'missing' };

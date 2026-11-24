@@ -1,13 +1,12 @@
-import type { ReclaimPreparation } from '../runs/removal-slots.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
-import type { WorkerResults } from '../runs/ports.ts';
+import type { ReclaimContext, ReclaimPreparation } from '../runs/removal-slots.ts';
+import type { RunRecord } from '../runs/store.ts';
 import { collectWorkerEvidence } from './results.ts';
 
 /** Snapshot parent-owned worker evidence before the checkout goes. A collect/commit failure
  *  returns false so the directory is left for the next pass. */
-async function preserveWorkerResult(repoRoot: string, store: { readonly workerResults: WorkerResults }, run: RunRecord): Promise<boolean> {
+async function preserveWorkerResult(repoRoot: string, store: ReclaimContext['store'], run: RunRecord): Promise<boolean> {
   if (run.delegation?.role !== 'worker') return true;
-  const evidence = await collectWorkerEvidence(repoRoot, store as RunStore, run);
+  const evidence = await collectWorkerEvidence(repoRoot, store, run);
   store.workerResults.commitWorkerResult(run.delegation.parentRunId, evidence.result, evidence.diffSnapshot);
   return evidence.diffSnapshot !== undefined || evidence.result.diff.state === 'available';
 }

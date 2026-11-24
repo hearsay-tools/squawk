@@ -46,13 +46,15 @@ async function branchExists(repo: string, runId: string): Promise<boolean> {
 }
 
 /** A tiny in-memory store exposing only what the enforcer touches. No worker preparation is
- *  registered here, so the worker results are never read. */
-function fakeStore(runs: RunRecord[]): RetentionStore & { runs: RunRecord[] } {
-  const unused = () => { throw new Error('worker results are not read here'); };
+ *  registered here, so worker results and event logs are never read. */
+function fakeStore(repo: string, runs: RunRecord[]): RetentionStore & { runs: RunRecord[] } {
+  const unused = () => { throw new Error('worker evidence is not read here'); };
   return {
     runs,
-    workerResults: { readWorkerResult: unused, readWorkerResultDiff: unused, readDeletedWorkerResult: unused,
-      workerResultSnapshotPath: unused, commitWorkerResult: unused },
+    workerResults: { readWorkerResult: unused, readWorkerResultDiff: unused, workerResultSnapshotPath: unused, commitWorkerResult: unused },
+    eventLog: { readEventsAsync: unused },
+    workerExecutions: { readWorkerExecution: () => undefined },
+    claims: { sourceDataDir: () => projectPaths(repo).write },
     queries: { listRunsWithWorktree: () => runs.filter((r) => r.worktreePath !== undefined && r.worktreeReclaimedAt === undefined) },
     getRun: (id) => runs.find((r) => r.id === id),
     updateRun: (id, patch) => {
@@ -90,7 +92,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const newId = '22222222-2222-4222-8222-222222222222';
     const oldWt = await createWorktree(repo, oldId, 'main');
     const newWt = await createWorktree(repo, newId, 'main');
-    const store = fakeStore([
+    const store = fakeStore(repo, [
       finishedRun(oldId, oldWt.path, '2026-07-01T00:00:00.000Z'),
       finishedRun(newId, newWt.path, '2026-07-09T00:00:00.000Z'),
     ]);
@@ -122,7 +124,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const oldWt = await createWorktree(repo, oldId, 'main');
     const newWt = await createWorktree(repo, newId, 'main');
 
-    const store = fakeStore([
+    const store = fakeStore(repo, [
       finishedRun(oldId, oldWt.path, '2026-07-01T00:00:00.000Z'),
       finishedRun(newId, newWt.path, '2026-07-09T00:00:00.000Z'),
     ]);
@@ -149,7 +151,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const newId = '55555555-5555-4555-8555-555555555555';
     const oldWt = await createWorktree(repo, oldId, 'main');
     const newWt = await createWorktree(repo, newId, 'main');
-    const store = fakeStore([
+    const store = fakeStore(repo, [
       finishedRun(oldId, oldWt.path, '2026-07-01T00:00:00.000Z'),
       finishedRun(newId, newWt.path, '2026-07-09T00:00:00.000Z'),
     ]);
@@ -169,7 +171,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const repo = await fixtureRepo();
     const ids = ['66666666-6666-4666-8666-666666666666', '77777777-7777-4777-8777-777777777777', '88888888-8888-4888-8888-888888888888'];
     const trees = await Promise.all(ids.map((id) => createWorktree(repo, id, 'main')));
-    const store = fakeStore(ids.map((id, i) => finishedRun(id, trees[i]!.path, `2026-07-0${i + 1}T00:00:00.000Z`)));
+    const store = fakeStore(repo, ids.map((id, i) => finishedRun(id, trees[i]!.path, `2026-07-0${i + 1}T00:00:00.000Z`)));
     const held = new Set<string>();
     const heldDuringRemove: boolean[] = [];
 
@@ -202,7 +204,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const cleanWt = await createWorktree(repo, cleanId, 'main');
     const keptWt = await createWorktree(repo, keptId, 'main');
     writeFileSync(join(dirtyWt.path, 'notes.txt'), 'uncommitted\n');
-    const store = fakeStore([
+    const store = fakeStore(repo, [
       finishedRun(dirtyId, dirtyWt.path, '2026-07-01T00:00:00.000Z'),
       finishedRun(cleanId, cleanWt.path, '2026-07-02T00:00:00.000Z'),
       finishedRun(keptId, keptWt.path, '2026-07-09T00:00:00.000Z'),
@@ -226,7 +228,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const repo = await fixtureRepo();
     const id = '66666666-6666-4666-8666-666666666666';
     const wt = await createWorktree(repo, id, 'main');
-    const store = fakeStore([finishedRun(id, wt.path, '2026-07-01T00:00:00.000Z')]);
+    const store = fakeStore(repo, [finishedRun(id, wt.path, '2026-07-01T00:00:00.000Z')]);
     expect(await reclaimWorktrees(repo, store, 0)).toEqual([]);
     expect(existsSync(wt.path)).toBe(true);
   });
@@ -237,7 +239,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     const newId = '88888888-8888-4888-8888-888888888888';
     const oldWt = await createWorktree(repo, oldId, 'main');
     const newWt = await createWorktree(repo, newId, 'main');
-    const store = fakeStore([
+    const store = fakeStore(repo, [
       finishedRun(oldId, oldWt.path, '2026-07-01T00:00:00.000Z', 'worker'),
       finishedRun(newId, newWt.path, '2026-07-09T00:00:00.000Z', 'worker'),
     ]);
