@@ -98,8 +98,9 @@ const configSchema = z.object({
       // Unknown keys first, in stored order, then registered keys in registry order. Every value is
       // trimmed and bounded the same way; a key or value that fails drops only its own entry.
       for (const [id, value] of Object.entries(entries)) {
-        // An empty, over-long or control-character id is dropped; its siblings stay.
-        if (known.has(id) || !storedRunnerIdSchema.safeParse(id).success) continue;
+        // An empty, padded, over-long or control-character id is dropped, as `registerRunner`
+        // refuses it; its siblings stay.
+        if (known.has(id) || storedRunnerIdSchema.safeParse(id).data !== id) continue;
         const parsed = valueSchema.safeParse(value);
         if (parsed.success) out[id] = parsed.data;
       }
