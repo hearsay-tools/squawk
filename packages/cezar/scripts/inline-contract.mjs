@@ -40,10 +40,11 @@ const scan = (dir) => {
 scan(dist);
 
 // Emitted declarations under dist/ may reference `@hearsay-tools/squawk/plugin*`, which TypeScript
-// cannot resolve while the workspace package name is `@wjarka/cezarion`. Repoint `.d.ts` files
-// to the sibling `dist/plugin/<stem>.js` declaration; `.js` runtime imports stay on the package
-// specifier and resolve through `installPluginResolveHook()`.
-const PLUGIN_SPEC = /(['"])@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?\1/g;
+// cannot resolve while the workspace package name is `@wjarka/cezarion`. Repoint `.d.ts` module
+// specifiers (`from`, `import(...)`, side-effect `import`) to the sibling `dist/plugin/<stem>.js`
+// declaration without touching string-literal type constants; `.js` runtime imports stay on the
+// package specifier and resolve through `installPluginResolveHook()`.
+const PLUGIN_SPEC = /(from\s+|import\s*\(\s*|import\s+)(['"])@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?\2/g;
 const pluginDir = join(dist, 'plugin');
 function repointPluginDecls() {
   if (!existsSync(join(pluginDir, 'index.d.ts'))) return 0;
@@ -57,10 +58,10 @@ function repointPluginDecls() {
         const text = readFileSync(p, 'utf8');
         PLUGIN_SPEC.lastIndex = 0;
         if (!PLUGIN_SPEC.test(text)) continue;
-        const next = text.replace(PLUGIN_SPEC, (_match, _quote, sub) => {
+        const next = text.replace(PLUGIN_SPEC, (_match, prefix, _quote, sub) => {
           let rel = relative(dirname(p), join(pluginDir, `${sub ?? 'index'}.js`)).replaceAll('\\', '/');
           if (!rel.startsWith('.')) rel = `./${rel}`;
-          return `'${rel}'`;
+          return `${prefix}'${rel}'`;
         });
         writeFileSync(p, next, 'utf8');
         count++;

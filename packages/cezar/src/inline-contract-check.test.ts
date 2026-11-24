@@ -100,13 +100,15 @@ describe('inline-contract fails the build on a contract import the bundle lacks 
     expect(readFileSync(join(dist, 'runners/demo/config.js'), 'utf8')).toContain("from '@hearsay-tools/squawk/plugin'");
   });
 
-  it('still repoints plugin declarations when dist has no contract referrers', () => {
+  it('still repoints plugin declarations when dist has no contract referrers and preserves string-literal types', () => {
     const { dist, status, stderr } = inline({
       'plugin/index.d.ts': 'export type RunnerFacts = {};\n',
+      'plugin/resolve-hook.d.ts': 'export declare const PLUGIN_ENTRY_SPECIFIER = "@hearsay-tools/squawk/plugin";\n',
       'runners/demo/config.d.ts': "import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';\nexport type Demo = RunnerFacts;\n",
     });
 
     expect(status, stderr).toBe(0);
     expect(readFileSync(join(dist, 'runners/demo/config.d.ts'), 'utf8')).toContain("from '../../plugin/index.js'");
+    expect(readFileSync(join(dist, 'plugin/resolve-hook.d.ts'), 'utf8')).toBe('export declare const PLUGIN_ENTRY_SPECIFIER = "@hearsay-tools/squawk/plugin";\n');
   });
 });

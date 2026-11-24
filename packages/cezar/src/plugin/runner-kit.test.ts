@@ -81,5 +81,26 @@ describe('the runner kit', () => {
     ]) {
       expect(inputs.has(heavy), `plugin/index.ts must not eagerly load ${heavy}`).toBe(false);
     }
+
+    const runtimeResult = await build({
+      entryPoints: [join(srcRoot, 'plugin/runtime.ts')],
+      absWorkingDir: srcRoot,
+      bundle: true,
+      write: false,
+      metafile: true,
+      platform: 'node',
+      format: 'esm',
+      packages: 'external',
+      logLevel: 'silent',
+    });
+    const runtimeInputs = new Set(Object.keys(runtimeResult.metafile.inputs).map(p => relative(srcRoot, join(srcRoot, p))));
+    for (const isolated of [
+      'agent-config/model-settings/shared.ts',
+      'managed-install/cli-storage.ts',
+      'core/pi-rpc-turn.ts',
+      'core/pi-rpc-wire.ts',
+    ]) {
+      expect(runtimeInputs.has(isolated), `plugin/runtime.ts must not pull ${isolated}`).toBe(false);
+    }
   });
 });

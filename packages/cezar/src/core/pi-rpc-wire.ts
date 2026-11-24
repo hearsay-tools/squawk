@@ -1,3 +1,4 @@
+import { isRecord, number } from './json-guards.ts';
 import { skillOf, slashSkillPrompt } from './skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, ContentBlock } from './agent-runner.ts';
@@ -86,16 +87,10 @@ function rpcErrorFor(value: Record<string, unknown>, cli: 'pi' | 'omp'): string 
   return string(error?.message) ?? string(value.message) ?? `${cli} RPC command ${string(value.command) ?? 'unknown'} failed`;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+export { isRecord, number };
 
 export function string(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
-}
-
-export function number(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /** OMP reports native expansion as a custom message rather than a user message. */

@@ -25,7 +25,7 @@ export { readNdjson } from '../core/ndjson.ts';
 export { InputSubmissions } from '../core/input-submissions.ts';
 export { V1TextCoalescer } from '../core/v1-text-coalescer.ts';
 export { ownLookup } from '../core/own-lookup.ts';
-export { isRecord, number } from '../core/pi-rpc-wire.ts';
+export { isRecord, number } from '../core/json-guards.ts';
 export { hookEventName, isVisibleHookItem } from '../core/hook-items.ts';
 export { parseAskRequest, uiAskQuestions } from '../core/ask.ts';
 export { editWriteKey } from '../core/edit-write-key.ts';
