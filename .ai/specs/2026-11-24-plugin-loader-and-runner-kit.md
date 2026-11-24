@@ -257,9 +257,11 @@ Cross-runner and shared `runners/` files:
   `join(config, 'plugins')`.
 - **Resolve hook (`packages/cezar/src/plugin/resolve-hook.ts`):**
   - Installs once via `registerHooks` from `node:module` before loading any plugin.
-  - Intercepts `'@hearsay-tools/squawk/plugin'` (and its package subpath if referenced) and
-    resolves it to the running Squawk copy's file URL (`new URL('./index.ts', import.meta.url)`
-    under source/tsx/vitest, `new URL('./index.js', import.meta.url)` under built `dist/`).
+  - Intercepts `'@hearsay-tools/squawk/plugin'` and resolves it to the running Squawk copy's file
+    URL (`new URL('./index.ts', import.meta.url)` under source/tsx/vitest,
+    `new URL('./index.js', import.meta.url)` under built `dist/`).
+  - Refuses every other specifier in `@hearsay-tools/squawk` (the root and any deeper subpath):
+    none has a running copy, and an installed copy would split process state.
 - **Discovery and order (`packages/cezar/src/plugin/loader.ts`):**
   - Reads `<config>/plugins/` (if present). Missing directory is a silent no-op (zero config).
   - Iterates direct child directories (and symlinks to directories) in deterministic,

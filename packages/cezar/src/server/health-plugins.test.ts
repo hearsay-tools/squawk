@@ -11,6 +11,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { PluginLoadReport } from '../plugin/loader.ts';
 import { createApp } from './server.ts';
+import type { TopicPublisher } from './ws.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 
 sealTestRunners(claudeRunner);
@@ -84,6 +85,28 @@ describe('GET /api/v1/health — plugins', () => {
     expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
     vi.stubEnv('HSQ_REMOTE', '1');
     const body = await health(app);
+    expect(body.capabilities.localHandoff).toBe(false);
+    expect(body.repoRoot).toBe(basename(repoRoot));
+    expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+  });
+
+  it('pushes no host path from a snapshot cached before the cockpit became hosted', async () => {
+    report.current = loaded;
+    let settleDetection: (checks: Array<{ name: string; available: boolean }>) => void = () => {};
+    const detectEnvironment = () => new Promise<Array<{ name: string; available: boolean }>>(resolve => { settleDetection = resolve; });
+    let publisher: TopicPublisher | undefined;
+    const hub = { ...socketHub, registerTopic: (name: string, topic: TopicPublisher) => { if (name === 'health') publisher = topic; } };
+    const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', socketHub: hub, detectEnvironment });
+    expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    const pushed: unknown[] = [];
+    publisher!.start(payload => pushed.push(payload));
+    vi.stubEnv('HSQ_REMOTE', '1');
+    // A settled detection patches the cached local snapshot and pushes it.
+    settleDetection([{ name: 'codex', available: true }]);
+    // bound: the push follows one microtask chain; the default wait budget is only a hang guard.
+    await vi.waitFor(() => expect(pushed).toHaveLength(1));
+    const body = healthResponseSchema.parse(pushed[0]);
+    expect(body.checks).toEqual([{ name: 'codex', available: true }]);
     expect(body.capabilities.localHandoff).toBe(false);
     expect(body.repoRoot).toBe(basename(repoRoot));
     expect(JSON.stringify(body.plugins)).not.toContain('/home/me');

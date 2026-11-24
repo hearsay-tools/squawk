@@ -190,6 +190,7 @@ import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWork
 import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { COMMIT_FORMATS, FILE_FORMATS, negotiate } from './accept-negotiation.ts';
+import { authorityOfHost, authorityOfOrigin, hostnameOfHost, hostnameOfOrigin } from './host-authority.ts';
 import { pluginHealth, pluginLoadReport } from '../plugin/loader.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
@@ -258,7 +259,7 @@ import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunM
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
 import { expandTilde } from '../paths.ts';
-import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
+import { isLoopbackHostHeader, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { browseDirectory, isInsideBrowseRoot, isLexicallyInsideBrowseRoot, resolveBrowseRoot } from './fs-browse.ts';
@@ -963,9 +964,17 @@ export function createApp(deps: ServerDeps) {
   // Stale-while-revalidate cache over the snapshot; see health-cache.ts.
   // Set while the topic has a subscriber (a noop when nobody is listening).
   let publishHealth: (data: unknown) => void = () => {};
+  // Capabilities follow each read and push, like the gates (ADR 0055). Host paths follow them: a
+  // snapshot cached in local mode must not send them once the cockpit is hosted.
+  const inCurrentMode = (payload: Awaited<ReturnType<typeof healthSnapshot>>) => {
+    const caps = capabilities();
+    const repoRoot = caps.localHandoff ? bootRoot : basename(bootRoot);
+    return { ...payload, capabilities: caps, repoRoot, plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
+  };
   const healthCache = createHealthCache({
     snapshot: healthSnapshot,
-    publish: (payload) => {
+    publish: (cached) => {
+      const payload = inCurrentMode(cached);
       publishHealth(payload);
       workspaceEvents.emit('health', payload);
     },
@@ -977,13 +986,7 @@ export function createApp(deps: ServerDeps) {
   // no refresher keeping a cache coherent, so it computes fresh, exactly as before.
   const readHealth = async () => {
     if (!deps.socketHub) return healthSnapshot();
-    // Capabilities per request, like the gates (ADR 0055). Host paths follow the same read: a
-    // snapshot taken in local mode must not send them once the cockpit is hosted.
-    return healthCache.read((payload) => {
-      const caps = capabilities();
-      const repoRoot = caps.localHandoff ? bootRoot : basename(bootRoot);
-      return { ...payload, capabilities: caps, repoRoot, plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
-    });
+    return healthCache.read(inCurrentMode);
   };
 
   // ---- chained family: health (workspace-level) ----------------------------
@@ -4536,50 +4539,6 @@ export function verifyWsUpgrade(req: IncomingMessage, bindHost?: string): WsUpgr
   // metadata (Safari/Firefox), where the dev proxy and a foreign local page are
   // indistinguishable: admit as UNTRUSTED so only `loopbackReadable` topics show.
   return { trusted: fetchSite === 'same-origin' };
-}
-
-/** The bare hostname of a `Host` header — see `normalizeHostname`. `''` when the
- *  header is absent, which no allowlist matches. */
-function hostnameOfHost(host: string | undefined): string {
-  return host ? normalizeHostname(host) : '';
-}
-
-/** The `hostname:port` authority of a `Host` header, e.g. `127.0.0.1:4321`.
- *
- *  The port is kept verbatim and is `''` when the header omits it — which is
- *  exactly when a browser also omits it from `Origin` (both drop the scheme's
- *  default port). That symmetry is what lets us compare the two without knowing
- *  our own scheme, which we cannot know behind a TLS-terminating proxy. */
-function authorityOfHost(host: string | undefined): string {
-  if (!host) return '';
-  const port = host.match(/^\[[^\]]*\]:(\d+)$/)?.[1] ?? host.match(/^[^:]*:(\d+)$/)?.[1] ?? '';
-  return `${normalizeHostname(host)}:${port}`;
-}
-
-/** The `hostname:port` authority of an `Origin` header, or `null` when it is not
- *  a parseable http(s) URL (the opaque `"null"` origin of a sandboxed iframe, a
- *  `file://` page). `URL.port` is `''` for a scheme's default port, matching
- *  `authorityOfHost`. */
-function authorityOfOrigin(origin: string): string | null {
-  try {
-    const u = new URL(origin);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    return `${normalizeHostname(u.hostname)}:${u.port}`;
-  } catch {
-    return null;
-  }
-}
-
-/** The hostname of an `Origin` header, or `null` when it is not a parseable URL
- *  (e.g. the opaque `"null"` origin of a sandboxed iframe). Normalized through
- *  the same path as `hostnameOfHost` so the two compare equal for IPv6 and for
- *  trailing-dot FQDNs. */
-function hostnameOfOrigin(origin: string): string | null {
-  try {
-    return normalizeHostname(new URL(origin).hostname);
-  } catch {
-    return null;
-  }
 }
 
 function resolveWebDir(): string {
