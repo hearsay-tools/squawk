@@ -1,16 +1,16 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runsOn } from '../core/parity-classes.testkit.ts';
+import { PARITY_ROSTER, runsOn } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { handoffPath } from '../handoff.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, type WorkflowDef } from './types.ts';
+export { SESSION_CONTEXT_GROUPS } from './session-context-rows.testkit.ts';
 
 // hearsay-tools/cezarion#1584: every cezar-managed launch opens with the run's own handoff and
 // the project's context rules, on every native wire; a live message never does.
@@ -71,20 +71,12 @@ async function finished(id: string) {
   await until(() => ['failed', 'done', 'review', 'waiting'].includes(store.getRun(id)?.status ?? '') && !manager.isActive(id));
 }
 
-export const SESSION_CONTEXT_GROUPS = {
-  opening: ['R120'],
-  live: ['R121'],
-  retry: ['R122'],
-  recovery: ['R123'],
-  worker: ['R124'],
-} as const;
-
 export function describeSessionContext(rows: readonly string[], suite = { describe, it, afterEach, useWorkerWaitFixture }) {
   suite.describe('session-start context through every native wire (hearsay-tools/cezarion#1584)', () => {
     suite.useWorkerWaitFixture();
     suite.afterEach(() => vi.unstubAllEnvs());
 
-    for (const runner of BUILT_IN_RUNNER_IDS) {
+    for (const runner of PARITY_ROSTER) {
       if (rows.includes('R120') && runsOn('session-context', 'R120', runner)) suite.it(`${runner} R120 opens a fresh step with the whole handoff and parent rules, then refreshes them on Continue`, async () => {
         const messages = native(runner);
         projectContext();

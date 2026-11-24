@@ -24,7 +24,7 @@ export const { describeWaitParity } = waitPartDescribers('completion', completio
 async function completionParkOnMessenger(runner: string) {
   const reply = repliesDoneAgain();
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  process.env[HARNESS_ADAPTERS.fixture!.binEnv] = HARNESS_ADAPTERS.fixture!.mockBin;
   const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
@@ -99,10 +99,10 @@ export function completionCells(runners: string[], it: typeof registerTest = reg
       const first = await blockedDone(r.id, () => blockingWorker(r.id));
       await until(() => prompted(runner, liveRefusal(first)).length > 0, () => timeline(r.id));
       const { w, c } = await replyBlockedAgain(r.id, reply, first, async () => {
-        const w = await worker(r.id);
+        const w = await worker(r.id, undefined, 'fixture');
         store.commitDelegation([{ id: w.id, delegation: { ...w.delegation!, permissions: [...workerOperationSchema.options], spawnGrant: { kinds: ['shared'], live: 1 } } as never }]);
         fixtureUpdateRun(w.id, { status: RUN_STATUS.running, worktreePath: root });
-        const c = await worker(w.id);
+        const c = await worker(w.id, undefined, 'fixture');
         slow = c.id;
         // W ends and its execution is proven complete; C has not terminated.
         fixtureUpdateRun(w.id, { status: RUN_STATUS.cancelled });

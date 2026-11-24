@@ -1,5 +1,5 @@
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import '../core/created-runners.testkit.ts';
+import '../runners/fixture/fixture-runner.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { WaitEngine } from './run/wait-engine.ts';
 import type { CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
@@ -18,9 +18,9 @@ import { manager, store, restart, root, semaphore, toolGenerationOf, until, useW
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 
-sealTestRunners(claudeRunner);
+sealTestRunners(fixtureRunner);
 
 // Control only the supervisor's 30-second probe, keeping abort behavior and the real native
 // runner processes. Releasing the held probes stands for the merge loop's next poll.

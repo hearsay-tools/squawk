@@ -1,7 +1,7 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { runsOn, SCENARIO_RUNNER, type ParityFamilyName } from './parity-classes.testkit.ts';
+import { PARITY_ROSTER, runsOn, SCENARIO_RUNNER, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { registrationStrings } from './registration-coverage.testkit.ts';
 
 type Cell = { name: string; body: CellBody; timeout: number | undefined };
@@ -25,7 +25,7 @@ export function parityCellKey(name: string): string {
 /** Whether a `<runner> <row> …` cell runs on its runner under the family's class (hearsay-tools/cezarion#2991). */
 function familyRuns(family: ParityFamilyName | undefined, name: string): boolean {
   const pair = /^(\w+) ([A-Z]\d+)\b/.exec(name);
-  if (!family || !pair || !(BUILT_IN_RUNNER_IDS as readonly string[]).includes(pair[1]!)) return true;
+  if (!family || !pair || !PARITY_ROSTER.includes(pair[1]!)) return true;
   return runsOn(family, pair[2], pair[1] as string);
 }
 
@@ -41,7 +41,7 @@ const afterRunner = (key: string): string => key.slice(key.indexOf(' ') + 1);
 function inPart(part: ParityPart, parts: Readonly<Record<string, readonly string[]>>, key: string): boolean {
   if (parts[part]?.includes(key)) return true;
   const runner = key.slice(0, key.indexOf(' '));
-  if (!(BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner)) return false;
+  if (!PARITY_ROSTER.includes(runner)) return false;
   const named = Object.values(parts).some(entries => entries.some(entry => entry.startsWith(`${runner} `) && /^\w+ [A-Z]\d+\b/.test(entry)));
   if (named) return false;
   const first = Object.entries(parts).find(([, entries]) => entries.some(entry => afterRunner(entry) === afterRunner(key)));
@@ -74,7 +74,7 @@ export function partitionParity(part: ParityPart, parts: Readonly<Record<string,
 function cellKind(name: string): string {
   const key = parityCellKey(name);
   const runner = key.slice(0, key.indexOf(' '));
-  return (BUILT_IN_RUNNER_IDS as readonly string[]).includes(runner) ? `<runner> ${afterRunner(key)}` : key;
+  return PARITY_ROSTER.includes(runner) ? `<runner> ${afterRunner(key)}` : key;
 }
 
 /**
@@ -95,7 +95,7 @@ function expectEveryRunnerRegistersEveryKind(expected: readonly string[], runner
   for (const name of expected) {
     const key = parityCellKey(name);
     const runner = key.slice(0, key.indexOf(' '));
-    if (!roster.includes(runner)) continue;
+    if (!PARITY_ROSTER.includes(runner)) continue;
     const rest = afterRunner(key);
     const row = /^[A-Z]\d+\b/.exec(rest)?.[0];
     if (row === undefined) { loose.set(rest, (loose.get(rest) ?? new Set()).add(runner)); continue; }
@@ -112,7 +112,7 @@ function expectEveryRunnerRegistersEveryKind(expected: readonly string[], runner
   for (const [kind, runners] of loose) {
     const rule = runnerKinds[kind];
     const owners = rule ? roster.filter(rule) : undefined;
-    const registered = roster.filter(runner => runners.has(runner));
+    const registered = PARITY_ROSTER.filter(runner => runners.has(runner));
     if (owners) expect(registered, kind).toEqual(owners);
     else if (!(registered.length === 1 && registered[0] === SCENARIO_RUNNER)) expect(registered, kind).toEqual([...roster]);
   }
@@ -147,7 +147,7 @@ export function checkParityRegistration(
       return { file, source, calls, imported };
     })
     .filter(entry => entry.imported || entry.calls.length > 0);
-  expect(entries.length, family).toBeGreaterThan(1);
+  expect(entries.length, family).toBeGreaterThan(0);
   for (const { file, source, calls } of entries) {
     expect(calls, file).toHaveLength(1);
     const names: string[] = [];

@@ -10,27 +10,27 @@ import type { RunnerAccountsData, RunnerCli, RunnerDetection, RunnerDisplay, Run
  * file can import them and the runner-class guard (`runner-class-rule.test.ts`) does not list them.
  */
 
-/** What the fixture mock's wire can do: one prompt per stdin line, one turn at a time. */
+/** What the fixture mock's wire can do: JSON prompt lines on stdin, observable consumption, direct Squawk tool IPC. */
 export const FIXTURE_FACTS = {
   shutdownDescendants: 'process-group',
   skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   childWork: 'none', hookEvents: 'none', nativePermission: 'none', transport: 'stdio', humanPromptHold: 'none',
   inputDelivery: {
-    mode: 'boundary', consumption: 'unobservable', acknowledgement: 'write', humanInputAtTurnEnd: 'always-held',
-    via: 'one JSON prompt line on stdin; a prompt sent during a turn waits for its turn end',
+    mode: 'steer', consumption: 'observable', acknowledgement: 'write', humanInputAtTurnEnd: 'held-when-late',
+    via: 'JSON prompt line on stdin with id; echoed as a consumed frame',
   },
   systemPromptOnResume: 'resent',
-  nativeAsk: 'none', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
+  nativeAsk: 'none', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'launch',
   claudeModelAliases: false,
   turnStart: 'on-write',
 } as const satisfies RunnerFacts;
 
-const UNMAPPED = 'The fixture mock reads one prompt line and nothing else';
+const UNMAPPED = 'The fixture mock reads JSON prompt lines and nothing else';
 
 export const FIXTURE_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
-  systemPrompt: { honored: false, reason: UNMAPPED },
-  squawkTools: { honored: false, reason: 'The fixture mock calls no Squawk tool' },
+  systemPrompt: { honored: true, via: '--append-system-prompt' },
+  squawkTools: { honored: true, via: 'direct Squawk tool IPC over CEZ_TOOL_SOCKET' },
   userPrompt: { honored: true, via: 'stdin line {"type":"prompt","text":...}' },
   skill: { honored: false, reason: UNMAPPED },
   resumeFallbackSkill: { honored: false, reason: UNMAPPED },
@@ -44,8 +44,8 @@ export const FIXTURE_SPEC_SUPPORT: AgentRunSpecSupport = {
   model: { honored: false, reason: UNMAPPED },
   effort: { honored: false, reason: UNMAPPED },
   timeoutMs: { honored: true, via: 'wall-clock kill switch' },
-  sessionId: { honored: false, reason: 'The mock mints its own session id' },
-  resume: { honored: false, reason: 'The mock keeps no saved session' },
+  sessionId: { honored: true, via: '--session-id / --resume' },
+  resume: { honored: true, via: '--resume <sessionId>' },
   resumeFallbackSystemPrompt: { honored: false, reason: UNMAPPED },
 };
 

@@ -35,7 +35,7 @@ export function deadlineCells(runners: string[], it: typeof registerTest = regis
           const pid = kind === 'process' ? sleeper() : undefined;
           const waits: Wait[] = [];
           for (let index = 0; index < 4; index++) {
-            const peer = kind === 'peer' ? store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner: 'claude', steps: [] }) : undefined;
+            const peer = kind === 'peer' ? store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner, steps: [] }) : undefined;
             if (peer) setRunStatus(store, peer.id, RUN_STATUS.running, { delegation: { role: 'root', permissions: ['wait', 'steer'], receipts: [] } });
             const request: SquawkWaitRequestInput = kind === 'process'
               ? { kind, pid: pid!, exit_file: `u29-${index}.exit`, timeout_seconds: 600 + index }

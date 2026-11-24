@@ -1,9 +1,11 @@
+import '../runners/fixture/register-fixture-runner.testkit.ts';
 import '../ci-wait/tools.testkit.ts';
 import './every-runner.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { describeHarnessParity, HARNESS_PARITY_GROUPS, harnessParityFile, harnessParityRegistrations, type HarnessParityPart } from './harness-parity-cells.testkit.ts';
+import { PARITY_ROSTER } from './parity-classes.testkit.ts';
 
 import { describeAutosaveChurn, describeAutosaveSettlement } from './harness-autosave-settlement.testkit.ts';
 
@@ -13,12 +15,13 @@ describeHarnessParity('once');
 describe('harness parity part registration', () => {
   it('registers every criterion and runner exactly once across its part files', () => {
     const parts = Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[];
-    const expectedFiles = BUILT_IN_RUNNER_IDS.flatMap(runner => parts.map(part => harnessParityFile(runner, part)));
-    const actualFiles = BUILT_IN_RUNNER_IDS.flatMap(runner =>
+    const expectedFiles = PARITY_ROSTER.flatMap(runner =>
+      parts.filter(part => harnessParityRegistrations(runner, part).length > 0).map(part => harnessParityFile(runner, part)));
+    const actualFiles = PARITY_ROSTER.flatMap(runner =>
       readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
         file.startsWith(`harness-${runner}-`) && file.endsWith('-parity.test.ts')));
     expect(actualFiles.sort()).toEqual(expectedFiles.sort());
-    for (const runner of BUILT_IN_RUNNER_IDS) {
+    for (const runner of PARITY_ROSTER) {
       const all = harnessParityRegistrations(runner);
       const routed = parts.map(part => harnessParityRegistrations(runner, part));
       // Full names also pin each variant of a criterion (permission decisions, fresh/Continue).

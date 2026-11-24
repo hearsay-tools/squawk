@@ -58,12 +58,8 @@ type WaitFoldGroup = {
   readonly families?: { readonly [P in FamilyPart]?: readonly (keyof typeof ROW_FAMILIES[P])[] };
 };
 export const WAIT_FOLDS = {
-  'base-registration': { parts: ['registration', 'process', 'deadlines'] },
-  base: { parts: ['input', 'asks', 'done', 'answers'] },
-  'base-delivery': { parts: ['delivery'] },
-  workers: { parts: ['mixed', 'recovery', 'conversations'] },
-  'workers-refusals': { parts: ['refusal', 'completion', 'completion-replies'], families: { closed: ['continue'] } },
-  'workers-closed': { families: { closed: ['resume', 'bound'] } },
+  base: { parts: ['registration', 'input', 'asks', 'done', 'answers', 'process', 'deadlines'] },
+  workers: { parts: ['delivery', 'mixed', 'recovery', 'conversations', 'refusal', 'completion', 'completion-replies', 'closed'] },
   'entries-refusals': { families: { entries: ['refusals', 'no-wait'] } },
   'entries-nudges': { families: { entries: ['completion', 'timer'] } },
 } as const satisfies Record<string, WaitFoldGroup>;
@@ -75,9 +71,20 @@ export const waitFoldModule = (fold: WaitFold): string => `waits-parity-${fold}-
 export type WaitPartScope = { runner: RunnerDefinition; part: WaitParityPart; family?: RowFamily };
 export type WaitFoldScope = { runner: RunnerDefinition; part: 'every-runner'; fold: WaitFold };
 
-/** Register a folded runner's cells of one group, each row only where its class runs it. */
-export function foldCells(runner: string, fold: WaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
-  const group: WaitFoldGroup = WAIT_FOLDS[fold];
+/** The scenario runner's consolidated wait folds (`runners/fixture/waits-fixture-<fold>-parity.test.ts`). */
+export const SHARED_WAIT_FOLDS = {
+  base: { parts: ['registration', 'input', 'delivery', 'asks'] },
+  outcomes: { parts: ['done', 'answers', 'process', 'deadlines'] },
+  workers: { parts: ['mixed', 'recovery', 'conversations', 'refusal'] },
+  completion: { parts: ['completion', 'completion-replies'] },
+  closed: { parts: ['closed', 'entries'] },
+} as const satisfies Record<string, WaitFoldGroup>;
+export type SharedWaitFold = keyof typeof SHARED_WAIT_FOLDS;
+export const sharedWaitFile = (runner: string, fold: SharedWaitFold): string => `waits-${runner}-${fold}-parity.test.ts`;
+export const sharedWaitFoldModule = (fold: SharedWaitFold): string => `waits-parity-shared-${fold}-fold.testkit.ts`;
+export type SharedWaitFoldScope = { runner: RunnerDefinition; part: 'shared'; fold: SharedWaitFold };
+
+function registerFoldGroup(runner: string, fold: string, group: WaitFoldGroup, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
   const partCells = (part: WaitParityPart): WaitCells => {
     const found = cells[part];
     if (found === undefined) throw Error(`The ${fold} fold needs the ${part} cells`);
@@ -90,6 +97,16 @@ export function foldCells(runner: string, fold: WaitFold, cells: Partial<Record<
       if (families.includes(rowFamily(part, title))) classed(title, body);
     }) as typeof registerTest);
   }
+}
+
+/** Register a folded runner's cells of one group, each row only where its class runs it. */
+export function foldCells(runner: string, fold: WaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
+  registerFoldGroup(runner, fold, WAIT_FOLDS[fold], cells, register);
+}
+
+/** Register the scenario runner's shared cells of one group. */
+export function sharedFoldCells(runner: string, fold: SharedWaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {
+  registerFoldGroup(runner, fold, SHARED_WAIT_FOLDS[fold], cells, register);
 }
 
 export function rowFamily(part: FamilyPart, title: string): RowFamily {

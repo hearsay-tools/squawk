@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { expect, vi } from 'vitest';
 import { nativeRecording, sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import { hasPendingAsk, readPersistedRuns } from '../runs/run-store.testkit.ts';
-import type { RunRecord } from '../runs/store.ts';
+import { RunStore, type RunRecord } from '../runs/store.ts';
+import { createFixtureManager, drainFixtureManagers } from '../workflows/fixture-manager.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run.ts';
 import { exemptionFor, HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { PROVIDER_HOLD_ROW_IDS } from './harness-parity-rows.testkit.ts';
@@ -409,6 +410,51 @@ export const RUN_GROUPS = {
             expect(observed.record?.pullRequests?.some(pr => pr.number === 999)).toBe(false);
           }, 150_000);
         }
+      }
+    });
+  },
+
+  // hearsay-tools/cezarion#779 plan step 3: `serve` and a headless `cez run` open one runs.db.
+  // A headless open (no keepLive) must leave a parked run owned by another live process alone.
+  owner(r: HarnessRegistrar) {
+    const { describeRunners, runners, parityRow } = r;
+    describeRunners('owner', 'harness parity — a second process leaves a parked run to its owner (hearsay-tools/cezarion#779)', () => {
+      for (const backend of runners) {
+        parityRow<{ afterHeadless: string | undefined; afterRestart: string | undefined; answered: { ok: boolean; error?: string }; final: RunRecord | undefined }>(backend, {
+          id: 'R50', name: 'R50 a headless open beside the owner leaves its parked run waiting, and a restart still answers it', scenario: 'ask',
+          assert: ({ afterHeadless, afterRestart, answered, final }) => {
+            expect(afterHeadless).toBe('waiting');
+            expect(afterRestart).toBe('waiting');
+            expect(answered).toEqual({ ok: true });
+            expect(TERMINAL).toContain(final?.status);
+          },
+        }, async () => {
+          let afterHeadless: string | undefined, afterRestart: string | undefined;
+          let answered: { ok: boolean; error?: string } = { ok: false };
+          let final: RunRecord | undefined;
+          await driveObservedRun(backend, 'ask', record => record?.status === 'waiting', 30_000,
+            async ({ store, runId, repoRoot }) => {
+              const dataDir = join(repoRoot, '.ai/cezar');
+              store.persistence.flush();
+              RunStore.open(dataDir).close();
+              afterHeadless = readPersistedRuns(dataDir).find((record) => record.id === runId)?.status;
+              store.close();
+              await drainFixtureManagers(repoRoot);
+              const rebooted = RunStore.open(dataDir, { keepLive: true });
+              const recovered = createFixtureManager(rebooted, repoRoot);
+              try {
+                await recovered.recover();
+                afterRestart = rebooted.getRun(runId)?.status;
+                answered = recovered.continueRun(runId, { text: promptFor(backend, 'cezar-done') });
+                if (answered.ok) await waitFor(() => TERMINAL.includes(rebooted.getRun(runId)?.status ?? '') && !recovered.isActive(runId), 30_000);
+                final = structuredClone(rebooted.getRun(runId));
+              } finally {
+                await drainFixtureManagers(repoRoot);
+                rebooted.close();
+              }
+            });
+          return { afterHeadless, afterRestart, answered, final };
+        });
       }
     });
   },

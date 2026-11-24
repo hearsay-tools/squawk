@@ -370,7 +370,7 @@ export async function collect(id: string) {
   return store.workerResults.commitWorkerResult(run.delegation?.role === 'worker' ? run.delegation.parentRunId : '', evidence.result, evidence.diffSnapshot);
 }
 export async function queuedWake(runner: string = 'claude') {
-  const p = await parent('mock:hold', runner); const w = await worker(p.id, 'mock:slow');
+  const p = await parent('mock:hold', runner); const w = await worker(p.id, 'mock:slow', runner);
   const wait = register(p.id, [w.id]); checkpoint('queued-wake-registered');
   await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
   const entry = workerEntryOf(store.getRun(p.id));

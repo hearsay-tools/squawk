@@ -38,6 +38,8 @@ export type HarnessRegistration = Pick<typeof import('vitest'), 'describe' | 'it
   /** The tool-grant cells; the session part registers `describeToolGrantParity` when absent. */
   toolGrants?: typeof describeToolGrantParity;
   allGroups?: boolean;
+  /** Register every row regardless of `runsOn`, e.g. baseline seam rows on the fixture runner. */
+  allRows?: boolean;
   /** A dry collection, for `groupCellCounts` and `harnessGroupRows`. A function also hears each
    *  cell the file's runner registers, with its group. */
   probe?: true | ((group: string, title: string) => void);
@@ -82,7 +84,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
   });
   const it = new Proxy(registration.it, {
     apply: (target, self, args: unknown[]) => {
-      if (scope !== 'once' && currentGroup !== undefined && typeof args[0] === 'string'
+      if (scope !== 'once' && !registration.allRows && currentGroup !== undefined && typeof args[0] === 'string'
         && !runsOn(`harness:${currentGroup}` as ParityFamilyName, parityRowId(args[0]), scope.runner.id)) return undefined;
       if (typeof registration.probe === 'function' && currentGroup !== undefined && typeof args[0] === 'string') registration.probe(currentGroup, args[0]);
       return Reflect.apply(target, self, args);
@@ -164,7 +166,7 @@ function createRegistrar(scope: HarnessParityScope, registration: HarnessRegistr
 
 /** How many cells each group's suite registers for one runner, by suite name. A shared group can
  *  hold none for a runner other than the scenario runner, and Vitest 4 fails an empty suite. */
-function groupCellCounts(scope: Exclude<HarnessParityScope, 'once'>, groups: readonly HarnessGroup[], toolGrantCells: number): Map<string, number> {
+function groupCellCounts(scope: Exclude<HarnessParityScope, 'once'>, groups: readonly HarnessGroup[], toolGrantCells: number, allRows?: boolean): Map<string, number> {
   const counts = new Map<string, number>();
   let cells = 0;
   describeHarnessGroups(scope, {
@@ -178,6 +180,7 @@ function groupCellCounts(scope: Exclude<HarnessParityScope, 'once'>, groups: rea
     afterAll: (() => undefined) as typeof afterAll,
     toolGrants: () => { cells += toolGrantCells; },
     allGroups: true,
+    ...(allRows ? { allRows } : {}),
     probe: true,
   }, groups, toolGrantCells);
   return counts;
@@ -187,7 +190,7 @@ function groupCellCounts(scope: Exclude<HarnessParityScope, 'once'>, groups: rea
  *  runner, for the dry count; only the session part holds that group. */
 export function describeHarnessGroups(scope: HarnessParityScope, registration: HarnessRegistration,
   groups: readonly HarnessGroup[], toolGrantCells = 0): HarnessRegistrar {
-  const cellCounts = scope === 'once' || registration.probe ? undefined : groupCellCounts(scope, groups, toolGrantCells);
+  const cellCounts = scope === 'once' || registration.probe ? undefined : groupCellCounts(scope, groups, toolGrantCells, registration.allRows);
   const registrar = createRegistrar(scope, registration, cellCounts);
   for (const group of groups) group(registrar);
   return registrar;

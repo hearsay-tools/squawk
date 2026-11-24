@@ -1,11 +1,11 @@
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import '../runners/fixture/fixture-runner.testkit.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import '../core/created-runners.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { parityRunners } from '../core/parity-classes.testkit.ts';
 import { CiGithubError, GithubCiClient } from '../ci-wait/github.ts';
@@ -14,7 +14,7 @@ import { acquireCiResources } from '../ci-wait/resources.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 
-sealTestRunners(claudeRunner);
+sealTestRunners(fixtureRunner);
 
 // Control only the initial retry delay, retaining abort behavior and native
 // runner processes. Releasing the delay represents its one-second backoff.

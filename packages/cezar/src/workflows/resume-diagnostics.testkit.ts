@@ -1,4 +1,3 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -11,6 +10,8 @@ import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
+import { RESUME_DIAGNOSTICS_GROUPS, type ResumeDiagnosticsFamily } from './resume-diagnostics-rows.testkit.ts';
+export { RESUME_DIAGNOSTICS_GROUPS } from './resume-diagnostics-rows.testkit.ts';
 
 // hearsay-tools/cezarion#1380: losing the saved cause before Continue, or preferring a
 // saved message over the restart explanation, must fail on every native input wire.
@@ -200,9 +201,8 @@ function savedContinuation(runner: string, it: typeof registerTest = registerTes
 }
 
 export const resumeDiagnosticsCells = { 'failure-context': failureContext, 'human-text': humanText, 'restart-context': restartContext, 'saved-continuation': savedContinuation };
-export const RESUME_DIAGNOSTICS_GROUPS = Object.fromEntries(Object.keys(resumeDiagnosticsCells).map(family => [family, BUILT_IN_RUNNER_IDS.map(runner => ({ runner, family: family as keyof typeof resumeDiagnosticsCells }))]));
 
-export function registerResumeDiagnosticsGroup(group: keyof typeof resumeDiagnosticsCells): void {
+export function registerResumeDiagnosticsGroup(group: ResumeDiagnosticsFamily): void {
   describe('resume diagnostics through every native wire (hearsay-tools/cezarion#1380)', () => {
     useWorkerWaitFixture();
     afterEach(() => vi.unstubAllEnvs());

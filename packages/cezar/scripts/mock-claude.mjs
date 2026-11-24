@@ -3,7 +3,7 @@ import { claudeTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skil
 import { productEnv } from './product-env.mjs';
 import { CLAUDE_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
-import { scenarioFor, play, afterParityPark } from './mock-scenario.mjs';
+import { scenarioFor, play, afterParityPark, holdSteerLines } from './mock-scenario.mjs';
 import { closeSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
@@ -40,17 +40,7 @@ function writeNotesTrace(userText) {
     // read-only cwd — the mock still works, just without a diff
   }
 }
-// `mock:steer-tool` holds its tool call for CEZ_MOCK_STEER_MS, or, with CEZ_MOCK_STEER_LINES=<n>,
-// until it has read n steered lines, so a loaded host cannot close the turn first (hearsay-tools/cezarion#1280).
-async function holdSteerTool() {
-  const lines = Number(process.env.CEZ_MOCK_STEER_LINES ?? 0);
-  if (!lines) { await sleep(Number(process.env.CEZ_MOCK_STEER_MS ?? 600)); return; }
-  const deadline = Date.now() + 15_000;
-  while (steering.length < lines) {
-    if (Date.now() > deadline) throw new Error(`CEZ_MOCK_STEER_LINES: ${steering.length} of ${lines} steered lines arrived`);
-    await sleep(10);
-  }
-}
+const holdSteerTool = () => holdSteerLines(() => steering.length);
 // Lines a `mock:ack-only` reply read and never answered (hearsay-tools/cezarion#1301): the turn they
 // opened is still running, so the next turn's result settles them with its own, as Claude settles
 // every line one turn consumed (#505).

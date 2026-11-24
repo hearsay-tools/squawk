@@ -9,6 +9,7 @@ import type { RunModuleContext } from '../workflows/run/types.ts';
 import { unused } from '../workflows/unused.testkit.ts';
 import { registerRunner } from './runner-registry.ts';
 import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 
 // R93 and R94 resolve the selected skill above the session: step-session.ts calls
 // RunSkills.selectedSkill before it launches one, so a throw there means no session event.
@@ -38,7 +39,7 @@ const engineRunnerCell = (key: EngineRunnerCell) => (runner: string): CellBody =
 /** Selects a skill the way a step opens on `runner` with the default account and `skills` listed. */
 async function selection(runner: string, skills: readonly RunnerSkill[]): Promise<(id: string, path?: string) => unknown> {
   // The skill catalog lists only registered runners, so the cell registers the runner it drives.
-  registerRunner(BUILT_IN_RUNNERS.find(definition => definition.id === runner)!);
+  registerRunner(runner === fixtureRunner.id ? fixtureRunner : BUILT_IN_RUNNERS.find(definition => definition.id === runner)!);
   const runSkills = new RunSkills(unused<RunModuleContext>('run context', { skillCatalog: fixedSkillCatalog(skills) }));
   const state = createActiveRun({ cwd: '/repo', pendingHumanAsk: false, autonomous: false });
   await runSkills.loadRunSkills(state, runner, { env: {}, profileId: 'default' });

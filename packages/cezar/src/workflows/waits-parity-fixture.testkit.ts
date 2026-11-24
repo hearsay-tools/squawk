@@ -11,9 +11,9 @@ import { WAIT_PHASE, WAIT_KIND } from '@open-mercato/cezar-contract/wait-factori
 import type { CiWaitResult, ProcessWaitResult, Wait, HumanWaitEntry, WorkerWaitEntry, ConversationMessage, RunRecord } from '@open-mercato/cezar-contract';
 import type { RunnerFactory } from '../core/agent-runner.ts';
 import { useRunners, runnersUnderTest } from '../core/runners-under-test.testkit.ts';
-import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
+import { FixtureAdapter } from '../runners/fixture/fixture-adapter.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { familyCells } from '../core/parity-classes.testkit.ts';
+import { familyCells, SCENARIO_RUNNER } from '../core/parity-classes.testkit.ts';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { ProcessWaitSupervisor } from '../process-wait/supervisor.ts';
 import { root, store, parent, until, timeline, worker, checkpoint, manager, terminal, collect, delegatingParent, spendWorkerBudget, semaphore, toolGenerationOf, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
@@ -22,11 +22,11 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages, toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
-import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells, fileFamilies, rowFamily, type FamilyPart } from './waits-parity-catalog.testkit.ts';
+import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells, fileFamilies, rowFamily, type FamilyPart, type SharedWaitFold, type SharedWaitFoldScope, sharedWaitFoldModule, sharedFoldCells } from './waits-parity-catalog.testkit.ts';
 import { registerRunner } from '../core/runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 
-registerRunner(claudeRunner);
+registerRunner(fixtureRunner);
 
 // hearsay-tools/cezarion#1233: every runner opens, cancels and survives CI and timer waits on its
 // own native wire. The production tool controller, bundled tool, runner, store and scheduler stay
@@ -83,10 +83,10 @@ const runnerBoundary = vi.hoisted(() => ({
   beforeReturn: undefined as ((runId: string) => void) | undefined,
   sessionFiles: new Map<string, string>(),
 }));
-/** The test file's runner for its parents, and the Claude runner for the workers this kit runs on
- *  the Claude wire whatever the parent's runner is (hearsay-tools/cezarion#2939). */
-function withClaudeWorkers(inner: RunnerFactory): RunnerFactory {
-  return async backend => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend);
+/** The test file's runner for its parents, and the fixture runner for the workers this kit runs
+ *  whatever the parent's runner is (hearsay-tools/squawk#4177). */
+function withFixtureWorkers(inner: RunnerFactory): RunnerFactory {
+  return async backend => backend === SCENARIO_RUNNER ? new FixtureAdapter() : inner(backend);
 }
 
 /** The test file's runners, with each session recorded at its boundary. */
@@ -188,17 +188,22 @@ export async function parentOn(runner: string) {
   return p;
 }
 
+/** Point the wait kit's background workers at the fixture mock wire. */
+export function fixtureWorkerWire(): void {
+  process.env[HARNESS_ADAPTERS[SCENARIO_RUNNER]!.binEnv] = HARNESS_ADAPTERS[SCENARIO_RUNNER]!.mockBin;
+}
+
 /** A root parent on `runner`'s native wire, parked after its opening turn, and one worker it owns
- *  that never starts: `fixtureUpdateRun` settles it. Workers run on the Claude wire. A restart
+ *  that never starts: `fixtureUpdateRun` settles it. Workers run on the fixture wire. A restart
  *  starts the worker, so a cell that restarts gives it a `task` that settles on its own. */
 export async function parentWithWorker(runner: string, step?: string, task?: string) {
   const p = await workerParent(runner, step);
-  return { p, w: await worker(p.id, task) };
+  return { p, w: await worker(p.id, task, SCENARIO_RUNNER) };
 }
 /** `parentWithWorker`'s parent, with no worker yet: a done the tool accepts (`blockedDone`). */
 export async function workerParent(runner: string, step?: string) {
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  fixtureWorkerWire();
   const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => step ? `${step}: opening park\n${timeline(p.id)}` : timeline(p.id));
@@ -245,7 +250,8 @@ export async function blockedDone<T>(id: string, block: () => T | Promise<T>, se
 
 /** A worker of `parentId` that never starts, created now; `uncollected` settles it without collecting it. */
 export async function blockingWorker(parentId: string, { uncollected = false, task }: { uncollected?: boolean; task?: string } = {}) {
-  const w = await worker(parentId, task);
+  fixtureWorkerWire();
+  const w = await worker(parentId, task, SCENARIO_RUNNER);
   if (uncollected) {
     manager.requestWorkerStop(w.id);
     expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -327,15 +333,15 @@ export function silenceRefusals() {
   });
 }
 
-/** A steering parent on `runner`'s native wire and a worker running on the Claude wire, parked,
+/** A steering parent on `runner`'s native wire and a worker running on the fixture wire, parked,
  *  with each one's credential on a delegation service, as `cez worker send` reaches them. */
 export async function conversingParent(runner: string) {
   nativeWire(runner);
-  process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+  fixtureWorkerWire();
   const { p, service, callerFor } = await delegatingParent({ task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, permissions: ['spawn', 'wait', 'steer', 'inspect'] });
   checkpoint('parent-opening-repark');
   await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
-  const w = await worker(p.id);
+  const w = await worker(p.id, undefined, SCENARIO_RUNNER);
   // An idle worker that only talks: it plain-parks rather than ask its parent (hearsay-tools/cezarion#1301).
   spendWorkerBudget(w.id);
   manager.enqueueOwnedRun(w.id);
@@ -411,7 +417,7 @@ export async function timerWaits(id: string) {
 /** The suite each wait parity file registers its cells in: the runners recorded at their boundary,
  *  the worker-wait fixture, and this kit's clocks reset before each cell. */
 export function describeWaitCells(register: () => void): void {
-  useRunners(boundaryRunners(withClaudeWorkers(runnersUnderTest())));
+  useRunners(boundaryRunners(withFixtureWorkers(runnersUnderTest())));
   describe('wait list on every native runner wire (hearsay-tools/cezarion#1233)', { timeout: 45_000 }, () => {
     useWorkerWaitFixture({ acquireCiResources: acquireCapturedCiResources });
     beforeEach(() => {
@@ -447,6 +453,14 @@ export function waitFoldDescriber(fold: WaitFold, cells: Partial<Record<WaitPari
     if (scope.fold !== fold) throw Error(`The ${fold} fold cannot run the ${scope.fold} fold: import ${waitFoldModule(scope.fold)}`);
     // Each row runs on the runners its class names (core/parity-classes.testkit.ts).
     describeWaitCells(() => foldCells(scope.runner.id, fold, cells, registerTest));
+  };
+}
+
+/** The describer of a shared wait fold's module: the scenario runner's files register its shared cells. */
+export function sharedWaitFoldDescriber(fold: SharedWaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>) {
+  return (scope: SharedWaitFoldScope): void => {
+    if (scope.fold !== fold) throw Error(`The shared ${fold} fold cannot run the ${scope.fold} fold: import ${sharedWaitFoldModule(scope.fold)}`);
+    describeWaitCells(() => sharedFoldCells(scope.runner.id, fold, cells, registerTest));
   };
 }
 

@@ -23,7 +23,8 @@ import { describeHarnessGroups, vitestRegistration, type HarnessGroup, type Harn
 import { CONTROL_CRITERIA } from './harness-parity-rows.testkit.ts';
 import { RUN_CRITERIA } from './harness-parity-run-tier.testkit.ts';
 import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
-import { parityRowId } from './parity-classes.testkit.ts';
+import { parityRowId, PARITY_ROSTER, SCENARIO_RUNNER } from './parity-classes.testkit.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 import { SEAM_CONTRACT_ROWS } from './seam-contract.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
 import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
@@ -85,7 +86,7 @@ export { HARNESS_PARITY_GROUPS, harnessParityFile, type HarnessParityPart };
 
 /** Every module that defines harness parity cells, for the prose and skipped-cell guards. */
 const HARNESS_PARITY_KITS = ['harness-parity-cells.testkit.ts', 'harness-parity-registrar.testkit.ts', 'harness-parity-parts.testkit.ts',
-  'harness-parity-seam-tier.testkit.ts', 'harness-parity-run-tier.testkit.ts',
+  'harness-parity-seam-tier.testkit.ts', 'harness-parity-run-tier.testkit.ts', 'harness-parity-pending-request-seam.cells.testkit.ts',
   ...(Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]).map(harnessParityCellsFile)];
 
 /** Every matrix row with the scenario it drives, as the matrix guard reads them. */
@@ -312,18 +313,23 @@ function matrixGuards(r: HarnessRegistrar): void {
         const routes = Object.values(HARNESS_PARITY_GROUPS).flat();
         expect([...routes].sort()).toEqual([...registeredGroups].sort());
         expect(new Set(registeredGroups).size).toBe(registeredGroups.length);
-        for (const backend of BUILT_IN_RUNNER_IDS) for (const part of Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]) {
+        for (const backend of PARITY_ROSTER) for (const part of Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]) {
           const file = harnessParityFile(backend, part);
           const url = new URL(`../runners/${backend}/${file}`, import.meta.url);
-          expect(existsSync(url), file).toBe(true);
+          const hasCells = harnessParityRegistrations(backend, part).length > 0;
+          expect(existsSync(url), file).toBe(hasCells);
+          if (!hasCells) continue;
           const source = readFileSync(url, 'utf8');
           expect(source, file).toContain(`describeHarnessParity({ runner: ${backend}Runner, part: '${part}' });`);
           expect(source.match(/describeHarnessParity\(/g), file).toHaveLength(1);
-          // Each part file loads only its own part's cells (hearsay-tools/cezarion#3242).
-          const cells = `../../core/${harnessParityCellsFile(part)}`;
+          // Each part file loads only its own part's cells (hearsay-tools/cezarion#3242); runners
+          // with no native permissions use the seam-only pending-request kit (hearsay-tools/squawk#4177).
+          const seamOnlyPending = part === 'pending-request' && (backend === SCENARIO_RUNNER ? fixtureRunner : runnerDefinition(backend)).facts.nativePermission === 'none';
+          const cellsFile = seamOnlyPending ? 'harness-parity-pending-request-seam.cells.testkit.ts' : harnessParityCellsFile(part);
+          const cells = `../../core/${cellsFile}`;
           expect(source, file).toContain(`import { describeHarnessParity } from '${cells}';`);
           expect(moduleImports(url, new URL('./', import.meta.url), /harness-parity-(?:[a-z-]+\.)?cells\.testkit\.ts$/), file)
-            .toEqual([harnessParityCellsFile(part)]);
+            .toEqual([cellsFile]);
         }
       });
 
@@ -416,7 +422,7 @@ function opencodeRestrictedSessions(r: HarnessRegistrar): void {
 /** Every group and once-only block, in the order the once file and the dry collections register them. */
 const HARNESS_PARITY_ORDER: readonly HarnessGroup[] = [
   CONTRACT_GROUPS.contract, STARTUP_GROUPS.startup, SESSION_GROUPS.seam, SESSION_GROUPS['tool-grants'], SESSION_GROUPS.input,
-  RUN_GROUPS.diagnostics, OWNERSHIP_GROUPS.continue, OWNERSHIP_GROUPS.restart, OWNERSHIP_GROUPS.owner, OWNERSHIP_GROUPS.adopt,
+  RUN_GROUPS.diagnostics, OWNERSHIP_GROUPS.continue, OWNERSHIP_GROUPS.restart, RUN_GROUPS.owner, OWNERSHIP_GROUPS.adopt,
   OWNERSHIP_GROUPS.stop, SESSION_GROUPS.session, PROVIDER_GROUPS.provider, RUN_GROUPS.run, RUN_GROUPS.child, RUN_GROUPS.hooks,
   RUN_GROUPS.answer, OWNED_INPUT_GROUPS.owned, OWNED_WORKFLOWS_GROUPS['owned-workflows'], opencodeDurableInput, matrixGuards,
   SESSION_GROUPS.governed, opencodeRestrictedSessions, SESSION_GROUPS['native-message'], SESSION_GROUPS.spec, SESSION_GROUPS.tools,
@@ -441,8 +447,9 @@ export function describeHarnessParity(scope: HarnessParityScope, registration: H
 /** The row ids each group registers on any runner, from its cell titles (hearsay-tools/cezarion#2991). */
 export function harnessGroupRows(): Map<string, Set<string>> {
   const rows = new Map<string, Set<string>>();
-  for (const runner of BUILT_IN_RUNNER_IDS) {
-    describeHarnessParity({ runner: runnerDefinition(runner), part: 'session' }, {
+  for (const runner of PARITY_ROSTER) {
+    const definition = runner === fixtureRunner.id ? fixtureRunner : runnerDefinition(runner);
+    describeHarnessParity({ runner: definition, part: 'session' }, {
       describe: ((_name: string, ...args: unknown[]) => { (args.at(-1) as () => void)(); }) as typeof describe,
       it: (() => undefined) as unknown as typeof it,
       beforeAll: (() => undefined) as typeof beforeAll,
@@ -470,7 +477,7 @@ export function harnessParityRegistrations(runner: string, part?: HarnessParityP
     allGroups: part === undefined,
   };
   // A part goes through its own module, so a group that module lacks is missing from its routes.
-  const definition = runnerDefinition(runner);
+  const definition = runner === fixtureRunner.id ? fixtureRunner : runnerDefinition(runner);
   if (part) HARNESS_PARITY_PARTS[part]({ runner: definition, part }, registration);
   else describeHarnessParity({ runner: definition, part: 'session' }, registration);
   return names;

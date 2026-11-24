@@ -173,7 +173,7 @@ export function mixedCells(runners: string[], it: typeof registerTest = register
 
     it(`${runner} U7w cez worker wait and cezar_wait kind worker land in the same wait list`, async () => {
       const { p, w } = await parentWithWorker(runner);
-      const other = await worker(p.id);
+      const other = await worker(p.id, undefined, 'fixture');
       const alias = manager.registerWorkerWait(p.id, { workerIds: [w.id], timeoutSeconds: 600 });
       await parentTurn(p.id, toolCall('cezar_wait', { kind: WAIT_KIND.worker, worker_ids: [other.id], timeout_seconds: 600 }), () => workerWaits(p.id).length === 2);
       expect(workerWaits(p.id).map(wait => [wait.via, wait.workerIds]).sort()).toEqual([['cez-worker-wait', [w.id]], ['cezar_wait', [other.id]]]);

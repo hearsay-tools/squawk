@@ -15,6 +15,20 @@ const QUESTIONS = [{ header: 'Library', question: 'Which test library?', multiSe
 const tool = (id, name, input, output) => ({ id, name, input, output, isError: false });
 const calls = call => [{ kind: 'toolStart', call }, { kind: 'toolEnd', call }];
 
+/**
+ * Hold `mock:steer-tool` for `CEZ_MOCK_STEER_MS`, or with `CEZ_MOCK_STEER_LINES=<n>` until
+ * `readCount()` reaches `n`, so a loaded host cannot close the turn first (hearsay-tools/cezarion#1280).
+ */
+export async function holdSteerLines(readCount) {
+  const lines = Number(process.env.CEZ_MOCK_STEER_LINES ?? 0);
+  if (!lines) { await sleep(Number(process.env.CEZ_MOCK_STEER_MS ?? 600)); return; }
+  const deadline = Date.now() + 15_000;
+  while (readCount() < lines) {
+    if (Date.now() > deadline) throw new Error(`CEZ_MOCK_STEER_LINES: ${readCount()} of ${lines} steered lines arrived`);
+    await sleep(10);
+  }
+}
+
 /** Shared post-park gate. The encoder keeps child attribution and native barriers. */
 export async function afterParityPark(prompt) {
   const gate = /parity-release=([^\s"\\]+)/.exec(prompt)?.[1];
@@ -249,8 +263,8 @@ function* steerTool(context) {
   yield { kind: 'hold', ms: Number(process.env.CEZ_MOCK_STEER_MS ?? 600) };
   yield { kind: 'toolEnd', call };
   yield { kind: 'readSteers', receive: texts => { admitted = texts ?? []; } };
-  // Both versions are pinned: Claude/Codex echo steers; pi/OMP finish in plain text.
-  const echoes = context.runner === 'claude' || context.runner === 'codex';
+  // Both versions are pinned: Claude/Codex/fixture echo steers; pi/OMP finish in plain text.
+  const echoes = context.runner === 'claude' || context.runner === 'codex' || context.runner === 'fixture';
   yield text(['steer tool done', ...(echoes ? admitted.map(value => `saw: ${value}`) : [])].join('\n'));
   yield end();
 }

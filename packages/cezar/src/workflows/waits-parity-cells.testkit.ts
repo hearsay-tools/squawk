@@ -10,7 +10,7 @@ import { it as registerTest, expect } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { familyCells } from '../core/parity-classes.testkit.ts';
+import { familyCells, PARITY_ROSTER, SCENARIO_RUNNER, SHARED_RUNNERS } from '../core/parity-classes.testkit.ts';
 import { collect, store, until, manager, semaphore, waitOf, root, terminal } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
@@ -31,7 +31,7 @@ import { processCells } from './waits-parity-process-cells.testkit.ts';
 import { recoveryCells } from './waits-parity-recovery-cells.testkit.ts';
 import { refusalCells } from './waits-parity-refusal-cells.testkit.ts';
 import { registrationCells } from './waits-parity-registration-cells.testkit.ts';
-import { type WaitParityPart, type WaitCells, type WaitFold, type FamilyPart, type RowFamily, foldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, foldedWaitFile, foldedWaitRunners, waitPartModule, waitFoldModule, fileFamilies, rowFamily, waitFamilyFile } from './waits-parity-catalog.testkit.ts';
+import { type WaitParityPart, type WaitCells, type WaitFold, type SharedWaitFold, type FamilyPart, type RowFamily, foldCells, sharedFoldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, SHARED_WAIT_FOLDS, foldedWaitFile, sharedWaitFile, foldedWaitRunners, waitPartModule, waitFoldModule, sharedWaitFoldModule, fileFamilies, rowFamily, waitFamilyFile } from './waits-parity-catalog.testkit.ts';
 
 // The full registry of the wait parity cells. Only `waits-parity.test.ts` imports it: it guards the
 // catalog and runs the single-runner cells. Each per-runner file imports its part's or fold's module
@@ -64,8 +64,15 @@ function foldTitles(runner: string, fold: WaitFold): string[] {
   return titles;
 }
 
+/** The titles a scenario runner's shared wait group registers. */
+function sharedFoldTitles(runner: string, fold: SharedWaitFold): string[] {
+  const titles: string[] = [];
+  sharedFoldCells(runner, fold, WAIT_PARITY_CELLS, ((title: string) => { titles.push(title); }) as typeof registerTest);
+  return titles;
+}
+
 function waitParityFileUrl(file: string): URL {
-  const runner = BUILT_IN_RUNNER_IDS.find(id => file.startsWith(`waits-${id}-`));
+  const runner = PARITY_ROSTER.find(id => file.startsWith(`waits-${id}-`));
   if (!runner) throw new Error(`${file}: not a per-runner wait parity file`);
   return new URL(`../runners/${runner}/${file}`, import.meta.url);
 }
@@ -106,7 +113,7 @@ function partFiles(runner: string, part: WaitParityPart): Array<{ file: string; 
 }
 
 function expectPartLeaf(runner: string, part: WaitParityPart): void {
-  if (folded(runner)) return; // Its one file is checked below.
+  if (folded(runner) || SHARED_RUNNERS.includes(runner)) return; // Folded files are checked below.
   for (const { file, scope } of partFiles(runner, part)) {
     const source = readFileSync(waitParityFileUrl(file), 'utf8');
     expect(source.match(/describeWaitParity\([^;]+\)/g), file).toEqual([`describeWaitParity(${scope})`]);
@@ -115,14 +122,15 @@ function expectPartLeaf(runner: string, part: WaitParityPart): void {
   }
 }
 
-// hearsay-tools/cezarion#1531: the single-runner cells run once, on the claude wire, from
+// hearsay-tools/cezarion#1531: the single-runner cells run once, on the scenario runner wire, from
 // `waits-parity.test.ts`. They take no runner: a cell for every runner goes in its part's cell group
 // (the semantic row families in `WAIT_PARITY_CELLS`), which the per-runner files run.
 function singleRunnerCells(): void {
+  const runner = SCENARIO_RUNNER;
   // The first failure and its durable refusal remain a public native-wire case. Repeated
   // closed-session gate effects use real-manager recovery in turn-nudges-decisions.test.ts.
   it('a closed session leaves one charged refusal owed through its first delivery failure', async () => {
-    const { p, w } = await parentWithWorker('claude');
+    const { p, w } = await parentWithWorker(runner);
     const refusal = `Workers are still live: ${w.id}.`;
     const refusals = () => store.getRun(p.id)?.agentInputs?.filter(input => input.text.includes(refusal)) ?? [];
     let closing = true;
@@ -147,20 +155,20 @@ function singleRunnerCells(): void {
   // hearsay-tools/cezarion#1301: a wait's lifecycle input is that wait's. Once the wait is
   // delivered, the same input undelivered again (a replay) is not a fresh wake.
   it('a delivered wait\'s lifecycle input is never owed again', async () => {
-    nativeWire('claude');
-    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 60, note: 'reowed' }), runner: 'claude' });
+    nativeWire(runner);
+    const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 60, note: 'reowed' }), runner });
     await until(() => parkedOn(run.id, waitOfKind(run.id, 'timer')));
     const timer = waitOfKind(run.id, 'timer')!;
     fireTimer(timer.id);
     await until(() => settled(run.id, timer.id)?.phase === 'delivered' && store.getRun(run.id)?.status === 'waiting');
     const input = store.getRun(run.id)!.agentInputs!.find(input => input.id === timer.id)!;
-    const nativeBefore = prompted('claude', input.text).length;
+    const nativeBefore = prompted(runner, input.text).length;
     const wakesBefore = store.getRun(run.id)?.automaticWakes;
     store.commitOutcome(run.id, { kind: 'requeued', inputIds: [timer.id] });
     const replayed = structuredClone(store.getRun(run.id)!.agentInputs!);
     await manager.recover();
     await semaphore.release();
-    expect(prompted('claude', input.text)).toHaveLength(nativeBefore);
+    expect(prompted(runner, input.text)).toHaveLength(nativeBefore);
     expect(store.getRun(run.id)?.automaticWakes).toBe(wakesBefore);
     expect(inputsFor(run.id, timer.id).map(input => input.deliveredAt)).toEqual([undefined]);
     // A lifecycle input no wait names is still owed and wakes this same parked session.
@@ -168,8 +176,8 @@ function singleRunnerCells(): void {
     store.commitAgentInputs(run.id, [...replayed, orphan]);
     await manager.recover();
     await semaphore.release();
-    await until(() => inputsFor(run.id, orphan.id).some(input => !!input.deliveredAt) && prompted('claude', orphan.text).length > 0);
-    expect(prompted('claude', orphan.text)).toHaveLength(1);
+    await until(() => inputsFor(run.id, orphan.id).some(input => !!input.deliveredAt) && prompted(runner, orphan.text).length > 0);
+    expect(prompted(runner, orphan.text)).toHaveLength(1);
     // The orphan supplies the wake; a replay may ride along after another input wakes it.
 
   });
@@ -177,7 +185,7 @@ function singleRunnerCells(): void {
   // hearsay-tools/cezarion#1301: a refused done is not a done and cancels no wait. With a wait open
   // at that turn end there is no nudge: the run parks on the wait, and the refusal is a note.
   it('a blocked done with an open wait parks on that wait without a nudge', async () => {
-    const p = await workerParent('claude');
+    const p = await workerParent(runner);
     const turns = turnEnds(p.id);
     const timerThen = (prompt: string) => expect(manager.sendMessage(p.id, [{ type: 'text', text: `${toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 60, note: 'u20 timer' })} ${prompt}` }])).toBe(true);
     const w = await blockedDone(p.id, () => blockingWorker(p.id), timerThen);
@@ -185,7 +193,7 @@ function singleRunnerCells(): void {
     const refusal = liveRefusal(w);
     expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && String(event.message).includes(refusal))).toHaveLength(1);
     expect(store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith(COMPLETION_NUDGE_NOTE))).toBe(false);
-    expect(prompted('claude', refusal)).toEqual([]);
+    expect(prompted(runner, refusal)).toEqual([]);
     expect(waitOf(store.getRun(p.id))).toBeUndefined();
     expect(store.getRun(p.id)?.delegation).not.toHaveProperty('completion');
     expect(agentWaits(p.id)).toEqual([expect.objectContaining({ kind: WAIT_KIND.timer, phase: WAIT_PHASE.open })]);
@@ -195,11 +203,11 @@ function singleRunnerCells(): void {
   // second step. A cezar_done refused mid-turn is no done: the turn ended with no wait.
   it('a tool-refused done in the nudge\'s reply turn takes the no-wait rule', async () => {
     process.env.CEZ_MOCK_COMPLETION_REPLY = `${toolCall('cezar_done', {})} ${thenSay('I will collect it next.')}`;
-    const p = await workerParent('claude');
+    const p = await workerParent(runner);
     // Uncollected only: with live workers the ordinary rule would open the implicit re-check timer.
     const w = await blockedDone(p.id, () => blockingWorker(p.id, { uncollected: true }));
-    await until(() => prompted('claude', NO_WAIT_NUDGE).length > 0 && humanOpen(p.id)[0]?.via === 'no-wait' && gated(p.id));
-    expect(prompted('claude', `Collect each (\`worker collect ${w.id}\`)`)).toHaveLength(1);
+    await until(() => prompted(runner, NO_WAIT_NUDGE).length > 0 && humanOpen(p.id)[0]?.via === 'no-wait' && gated(p.id));
+    expect(prompted(runner, `Collect each (\`worker collect ${w.id}\`)`)).toHaveLength(1);
     expect(workerWaits(p.id)).toEqual([]);
     expect(humanOpen(p.id)).toEqual([expect.objectContaining({ source: WAIT_SOURCE.cezar, via: WAIT_VIA['no-wait'] })]);
   });
@@ -208,9 +216,9 @@ function singleRunnerCells(): void {
     const release = join(root, 'release-u21');
     process.env.CEZ_MOCK_RELEASE_FILE = release;
     process.env.CEZ_MOCK_COMPLETION_REPLY = 'mock:hold-cezar-done';
-    const p = await workerParent('claude');
+    const p = await workerParent(runner);
     const w = await blockedDone(p.id, () => blockingWorker(p.id));
-    await until(() => prompted('claude', liveRefusal(w)).length > 0);
+    await until(() => prompted(runner, liveRefusal(w)).length > 0);
     // While the reply turn is held, the worker settles and its result is collected.
     manager.requestWorkerStop(w.id);
     expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
@@ -224,9 +232,9 @@ function singleRunnerCells(): void {
 
   it('the completion wait names only live workers', async () => {
     const reply = repliesDoneAgain();
-    const p = await workerParent('claude');
+    const p = await workerParent(runner);
     const first = await blockedDone(p.id, () => blockingWorker(p.id));
-    await until(() => prompted('claude', liveRefusal(first)).length > 0);
+    await until(() => prompted(runner, liveRefusal(first)).length > 0);
     // The reply's done is blocked by a live worker and a settled, uncollected one.
     const live = await replyBlockedAgain(p.id, reply, first, async () => {
       await blockingWorker(p.id, { uncollected: true });
@@ -244,11 +252,12 @@ export function describeWaitParity(scope: 'once'): void {
   if (scope !== 'once') throw Error(`Import the module of the ${String(scope)} cells`);
   describeWaitCells(() => {
     it('runs every runner\'s cells from its own file', () => {
-      const files = BUILT_IN_RUNNER_IDS.flatMap(runner =>
+      const files = PARITY_ROSTER.flatMap(runner =>
         readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
           /^waits-.*-parity\.test\.ts$/.test(file) && readFileSync(new URL(`../runners/${runner}/${file}`, import.meta.url), 'utf8').includes('describeWaitParity(')));
       const parts = Object.keys(WAIT_PARITY_FILES) as WaitParityPart[];
-      expect(files.sort()).toEqual(BUILT_IN_RUNNER_IDS.flatMap(runner => {
+      expect(files.sort()).toEqual(PARITY_ROSTER.flatMap(runner => {
+        if (SHARED_RUNNERS.includes(runner)) return (Object.keys(SHARED_WAIT_FOLDS) as SharedWaitFold[]).filter(fold => sharedFoldTitles(runner, fold).length > 0).map(fold => sharedWaitFile(runner, fold));
         if (folded(runner)) return (Object.keys(WAIT_FOLDS) as WaitFold[]).filter(fold => foldTitles(runner, fold).length > 0).map(fold => foldedWaitFile(runner, fold));
         return parts.flatMap(part => partFiles(runner, part).map(({ file }) => file));
       }).sort());
@@ -259,6 +268,19 @@ export function describeWaitParity(scope: 'once'): void {
         for (const family of families) {
           const familyFile = waitFamilyFile(runner, part, family);
           expect(existsSync(new URL(`../runners/${runner}/${familyFile}`, import.meta.url)), familyFile).toBe(!folded(runner) && familyRuns(runner, part, family));
+        }
+      }
+      for (const runner of SHARED_RUNNERS) {
+        const all: string[] = [];
+        for (const part of parts) WAIT_PARITY_CELLS[part]([runner], familyCells('waits', runner, ((title: string) => { all.push(title); }) as typeof registerTest));
+        const grouped = (Object.keys(SHARED_WAIT_FOLDS) as SharedWaitFold[]).flatMap(fold => sharedFoldTitles(runner, fold));
+        expect(grouped.slice().sort(), `${runner}: each shared cell in exactly one group`).toEqual(all.slice().sort());
+        for (const fold of Object.keys(SHARED_WAIT_FOLDS) as SharedWaitFold[]) {
+          if (sharedFoldTitles(runner, fold).length === 0) continue;
+          const file = sharedWaitFile(runner, fold);
+          const source = readFileSync(new URL(`../runners/${runner}/${file}`, import.meta.url), 'utf8');
+          expect(source.match(/describeWaitParity\([^;]+\)/g), file).toEqual([`describeWaitParity({ runner: ${runner}Runner, part: 'shared', fold: '${fold}' })`]);
+          expect(cellModules(file), file).toEqual([sharedWaitFoldModule(fold)]);
         }
       }
       for (const runner of foldedWaitRunners()) {
@@ -279,7 +301,7 @@ export function describeWaitParity(scope: 'once'): void {
     });
 
     it('registers every criterion and runner in exactly one part', () => {
-      for (const runner of BUILT_IN_RUNNER_IDS) {
+      for (const runner of PARITY_ROSTER) {
         const owners = new Map<string, string[]>();
         for (const part of Object.keys(WAIT_PARITY_CELLS) as WaitParityPart[]) {
           const criteria = new Set<string>();
@@ -295,7 +317,7 @@ export function describeWaitParity(scope: 'once'): void {
 
     it('registers every criterion', () => {
       expect(WAIT_CRITERIA.map(row => row.id)).toEqual(['U29p', 'U29q', 'U29m', 'U28w', 'U28r', 'U28p', 'U1', 'U4', 'U9', 'U2', 'U3', 'U7', 'U8', 'U8l', 'U8h', 'U10', 'U11', 'U12', 'U13', 'U14', 'U16', 'U16b', 'U9c', 'U7h', 'U7k', 'U7a', 'U9h', 'U6', 'U6r', 'U6p', 'U7d', 'U7q', 'U7b', 'U6s', 'U5', 'U5a', 'U5c', 'U5d', 'U18', 'U17', 'U15', 'U2w', 'U2t', 'U2c', 'U3w', 'U3n', 'U3r', 'U3d', 'U7w', 'U9w', 'U14m', 'U14i', 'U9u', 'U9v', 'U19', 'U19p', 'U19q', 'U19w', 'U20', 'U20u', 'U20h', 'U21', 'U21s', 'U21g', 'U21r', 'U21m', 'U21t', 'U21h', 'U21a', 'U22', 'U22s', 'U22c', 'U22f', 'U22k', 'U22r', 'U22x', 'U24', 'U24r', 'U26', 'U25', 'U1p', 'U2p', 'U4p', 'U9p', 'U9pr', 'U27', 'R13', 'R18', 'R17']);
-      for (const runner of BUILT_IN_RUNNER_IDS) for (const row of WAIT_CRITERIA) expect(HARNESS_ADAPTERS[runner]!.scenarios[row.scenario]!).toBeDefined();
+      for (const runner of PARITY_ROSTER) for (const row of WAIT_CRITERIA) expect(HARNESS_ADAPTERS[runner]!.scenarios[row.scenario]!).toBeDefined();
     });
 
     singleRunnerCells();

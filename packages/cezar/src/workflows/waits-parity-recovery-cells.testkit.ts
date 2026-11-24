@@ -28,7 +28,7 @@ export function recoveryCells(runners: string[], it: typeof registerTest = regis
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['provider-error-controlled']! });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       await until(wire.held);
-      const w = await worker(run.id);
+      const w = await worker(run.id, undefined, 'fixture');
       const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
       const registered = await tools.registerWait({ kind: WAIT_KIND.worker, worker_ids: [w.id], timeout_seconds: 600 }, 'cezar_wait', new AbortController().signal);
       expect(registered.answer).toMatchObject({ ok: true, kind: WAIT_KIND.worker });

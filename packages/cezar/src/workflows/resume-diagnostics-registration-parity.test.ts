@@ -1,17 +1,14 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
-import { registrationCollector, registrationCalls } from '../core/split-registration.testkit.ts';
+import { registrationCalls } from '../core/split-registration.testkit.ts';
 import { expect, it } from 'vitest';
-import { familyCells, runsOn } from '../core/parity-classes.testkit.ts';
-import { RESUME_DIAGNOSTICS_GROUPS, resumeDiagnosticsCells } from './resume-diagnostics.testkit.ts';
+import { PARITY_ROSTER, runsOn } from '../core/parity-classes.testkit.ts';
+import { RESUME_DIAGNOSTICS_FAMILY_ROWS, RESUME_DIAGNOSTICS_GROUPS, resumeDiagnosticsExpectedKeys } from './resume-diagnostics-rows.testkit.ts';
 
 it('registers every resume-diagnostics row exactly once', () => {
-  const names: string[] = [];
-  const collect = registrationCollector(names);
-  for (const rows of Object.values(RESUME_DIAGNOSTICS_GROUPS)) for (const row of rows) resumeDiagnosticsCells[row.family](row.runner, familyCells('resume-diagnostics', row.runner, collect));
-  const actual = names.map(name => { const match = name.match(/^(\S+) (R\d+)(?: .*saved (running|queued) continuation)?/)!; return `${match[1]}:${match[2]}${match[3] ? ':' + match[3] : ''}`; });
-  const expected = BUILT_IN_RUNNER_IDS.flatMap(runner => ['R85', 'R87', 'R88', 'R89', 'R90', 'R91', 'R86:running', 'R86:queued']
+  const actual = resumeDiagnosticsExpectedKeys();
+  const expected = PARITY_ROSTER.flatMap(runner => ['R85', 'R87', 'R88', 'R89', 'R90', 'R91', 'R86:running', 'R86:queued']
     .filter(row => runsOn('resume-diagnostics', row.split(':')[0], runner)).map(row => `${runner}:${row}`));
   expect(actual.sort()).toEqual(expected.sort());
   const calls = registrationCalls(new URL('.', import.meta.url), 'resume-diagnostics-', 'registerResumeDiagnosticsGroup');
   expect(calls.sort()).toEqual(Object.keys(RESUME_DIAGNOSTICS_GROUPS).sort());
+  expect(Object.keys(RESUME_DIAGNOSTICS_FAMILY_ROWS).sort()).toEqual(Object.keys(RESUME_DIAGNOSTICS_GROUPS).sort());
 });
