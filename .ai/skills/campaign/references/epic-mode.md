@@ -17,13 +17,20 @@ owner; the planner relays decisions and coordinates their effect on the plan.
 3. For each phase, name the slices, dependencies, preserved guarantees, checks,
    evidence owner and exit on integrated main. Each intermediate main must
    remain usable at shipped defaults. Resolve dependency cycles before dispatch.
-4. File the epic/sub-issues when needed under the repo's issue-authoring rules.
+4. Find each structural criterion: an epic criterion that claims a property of
+   a whole set or of the whole repository ("only", "every", "all", "no"). No
+   slice diff or diff-scoped review can show that one holds. For each, name an
+   executable check (a script or test and its command) and put it in the first
+   slice of Phase 1. If main does not pass it yet, the check records a
+   known-gap list; name where the list lives. A structural criterion without
+   an executable check is not ready: rewrite it with the owner before approval.
+5. File the epic/sub-issues when needed under the repo's issue-authoring rules.
    Have a governed worker publish the approved spec as a docs PR and review it
    before land-pr. Keep the planner checkout aligned with main so later
    fast-forwards work after squash merges. Land the spec before implementation.
 
-Done when the current approved spec is merged and every phase has a checkable
-exit. Design approval does not grant merge authority.
+Done when the current approved spec is merged, every phase has a checkable
+exit and every structural criterion has an executable check in Phase 1. Design approval does not grant merge authority.
 
 ## Each phase
 
@@ -52,6 +59,11 @@ exit. Design approval does not grant merge authority.
    Record SHA, acceptance evidence, metrics when relevant and scope changes in
    the epic body. Shared notes keep only lessons absent from the repo, under
    their own rules. A merged issue list alone does not pass a feature phase.
+7. **Run structural checks.** At every phase exit, run each structural check
+   on main and record its output with the phase evidence. A gap missing from
+   the known-gap list fails the exit: it needs a repair. Before the next phase
+   starts, give each remaining gap a slice in a named later phase. The last
+   phase exit needs an empty gap list.
 
 Done when the phase exit holds on main and its evidence is recorded. Continue
 without asking for routine scheduling decisions. An unreachable exit needs a
@@ -68,6 +80,8 @@ Approved spec: <path and revision>; read <sections> first.
 Work types: <per-issue cleanup or feature>.
 Prerequisites accepted on main <SHA>: <conditions and evidence>.
 Phase exit: <integrated checks, evidence owner and acceptance criteria>.
+Structural checks: <per criterion: command and known-gap list; run each on
+main at the phase exit and report new and remaining gaps, or none>.
 
 Controls: <worker model policy or runner/model/effort>, at most <k> live workers, hot-file control
 <value>. Merge authority: <owner's explicit grant and source, or "The owner
