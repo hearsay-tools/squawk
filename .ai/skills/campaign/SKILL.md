@@ -168,7 +168,8 @@ the next eligible item is dispatched, or the queue has no eligible work.
 ## 7. Close
 
 Check each phase exit against integrated main, including checks that span
-several issues. Report merged PRs, acceptance evidence, cleanup metrics and
+several issues and the epic's structural checks from the coordinator prompt
+([epic mode](references/epic-mode.md)). Report merged PRs, acceptance evidence, cleanup metrics and
 explicit exclusions. Required blocked work keeps the campaign incomplete;
 route the blocker or scope decision instead of reporting success.
 
