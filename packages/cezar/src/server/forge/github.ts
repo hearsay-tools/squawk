@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { githubRequestGate } from './github-request-gate.ts';
 import { refStatusQuery } from './github-ref-status-query.ts';
 import { mergedPullRequestChunk } from './github-merged-pr-chunk.ts';
+import { reviewerKey, reviewerRefSchema } from './github-reviewer-ref.ts';
 import { gh, githubContext, parseOwnerName, type GithubContext } from './github-cli.ts';
 import { canonicalRepoRef, discoverRepoHandle, forgetRepoHandle, forgettingNameOnMiss, resolveRepoHandle, sharedRepoHandle } from './github-repo-handle.ts';
 export { parseOwnerName } from './github-cli.ts';
@@ -1539,23 +1540,6 @@ export type GithubRefStatusData =
  *  contract rather than restated, because the cockpit caps its batches by the same number and a
  *  client that guessed high would have every chip in a batch 400 instead of losing its tail. */
 export const GH_REF_STATUS_MAX = REFERENCE_STATUS_MAX;
-
-/** A requested reviewer, as either connection spells them. `login` covers `User` and `Bot`, `slug`
- *  covers `Team`; `reviewerKey` folds them into one comparable string. */
-const reviewerRefSchema = z
-  .object({
-    __typename: z.string().nullish(),
-    login: z.string().nullish(),
-    slug: z.string().nullish(),
-  })
-  .nullish();
-
-/** One reviewer as a comparable key, or `null` when GitHub named nobody we can match on — which
- *  must never compare equal to another unnamed reviewer, hence `null` rather than a shared "". */
-function reviewerKey(ref: z.infer<typeof reviewerRefSchema>): string | null {
-  const name = ref?.login ?? ref?.slug;
-  return name ? `${ref?.__typename ?? '?'}:${name}` : null;
-}
 
 const ghRefStatusPrSchema = z
   .object({
