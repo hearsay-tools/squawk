@@ -124,6 +124,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'child-killed-read': ['packages/cezar/src/core/watchdog-killed.ts', "if (!child.killed) child.kill('SIGKILL');\n"],
   'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
   'runner-ids-import': ['packages/cezar/src/runners/claude/ids-reader.ts', "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n"],
+  'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
 };
 
@@ -173,6 +174,9 @@ const APPROVED: Record<string, string> = {
   // runner-roster-literal: the definition, a subset and a derived list. No file keeps a listed roster.
   'packages/cezar/src/runners/ids.ts': `export const BUILT_IN_RUNNER_IDS = [${ROSTER}] as const;\n`,
   'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];\n",
+  // test-unpinned-clock-date: a pinned clock and a reasoned real clock.
+  'packages/web/src/clock-pinned.test.ts': "vi.setSystemTime(Date.parse('2026-10-27'));\n",
+  'packages/web/src/clock-real.test.ts': "// real-clock: compares two fixed dates only\nconst at = new Date(Date.now() - 1000);\n",
   // undocumented-env-name: a documented name, a mock control, and a test.
   'packages/cezar/src/j.ts': "process.env.CEZ_DRY_RUN = '1'; env.CEZ_MOCK_ANYTHING = '1';\n",
   'packages/cezar/src/k.test.ts': 'const c = process.env.CEZ_NOT_DOCUMENTED_ANYWHERE;\n',
@@ -380,6 +384,7 @@ describe('stale entries', () => {
     'packages/cezar/src/lint/home-readers.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/runner-id-branch.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/runner-roster-literal.baseline.json': JSON.stringify({ entries: [] }),
+    'packages/cezar/src/lint/test-unpinned-clock-date.baseline.json': JSON.stringify({ files: { 'packages/web/src/gone.test.ts': 2 } }),
     'packages/cezar/src/lint/layers.json': JSON.stringify({ layers: {} }),
     'packages/cezar/src/lint/layer-import.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/resume-time-readers.json': JSON.stringify({ files: { 'packages/web/src/lib/reads.ts': 'reads', 'packages/web/src/lib/stopped.ts': 'stopped' } }),
@@ -394,6 +399,7 @@ describe('stale entries', () => {
     expect(staleEntries(seeded(lists))).toEqual([
       'packages/cezar/src/lint/contract-root-import.baseline.json cez/contract-root-import: packages/web/src/gone.ts no longer imports a contract root at runtime; remove its exemption',
       'packages/cezar/src/lint/resume-time-readers.json cez/run-fact-reader: packages/web/src/lib/stopped.ts no longer reads autoResumeAt; remove it from the list',
+      'packages/cezar/src/lint/test-unpinned-clock-date.baseline.json cez/test-unpinned-clock-date: stale or invalid entry packages/web/src/gone.test.ts (2); remove it',
       'packages/web/src/test/search-params-discipline.baseline.json cez/raw-query-setter: routes/x.tsx no longer has [query, setQuery] = useSearchParams(); remove the entry',
       'packages/web/src/test/card-2-contrast.baseline.json cez/card-2-contrast: stale entry gone.tsx: <p className="bg-card-2 text-danger">. Fix new sites; remove fixed entries from the baseline. Never add allowances. (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423).',
     ]);

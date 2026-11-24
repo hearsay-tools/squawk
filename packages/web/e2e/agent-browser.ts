@@ -349,13 +349,13 @@ export class AgentBrowser {
     private readonly browser: EnvDescriptor['browser'],
   ) {}
 
-  /** `launchArgs` are extra Chrome flags for THIS session's browser only (each session launches
-   *  its own). `HOVER_POINTER_ARGS` is the one in use: headless Chrome reports `(hover: none)`,
-   *  so Tailwind's `hover:` variants (wrapped in `@media (hover: hover)`) never paint without it. */
-  static open(session: string, { launchArgs = [] }: { launchArgs?: string[] } = {}): AgentBrowser {
+  /** `launchArgs` (Chrome flags) and `env` (spawn env, such as `TZ`) apply to THIS session's browser
+   *  only; each session launches its own. `HOVER_POINTER_ARGS` makes headless Chrome report
+   *  `(hover: hover)`, so Tailwind's `hover:` variants paint. */
+  static open(session: string, { launchArgs = [], env = {} }: { launchArgs?: string[]; env?: Record<string, string> } = {}): AgentBrowser {
     const browser = readTestEnv().browser
     const merged = [...(browser.launchArgs ?? []), ...launchArgs]
-    return AgentBrowser.attach({ ...browser, launchArgs: merged }, session)
+    return AgentBrowser.attach({ ...browser, launchArgs: merged, runtimeEnv: { ...browser.runtimeEnv, ...env } }, session)
   }
 
   /** The same seam over an explicit provider descriptor rather than the shared test env's —

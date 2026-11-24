@@ -68,6 +68,7 @@
     "cez/runner-ids-import": "error",
     "cez/probe-release-port": "error",
     "cez/stubborn-test-child": "error",
+    "cez/test-unpinned-clock-date": "error",
     "constructor-super": "error",
     "for-direction": "error",
     "getter-return": "error",

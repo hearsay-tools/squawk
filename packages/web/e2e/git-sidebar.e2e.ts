@@ -52,6 +52,17 @@ let server: ChildProcess
 let browser: AgentBrowser
 
 const scoped = (path: string, id = project) => `/p/${id}${path}`
+/**
+ * A fixed-offset zone where the local time at `now` is between 12:00 and 13:00. The commits use the
+ * real clock and the browser counts "today" from its own local midnight, so a run that crossed
+ * midnight counted them as yesterday (hearsay-tools/squawk#4194). From local noon, midnight is
+ * 11 hours away. `Etc/GMT` names are sign-inverted: `Etc/GMT-5` is UTC+5.
+ */
+function noonTimeZone(now: number): string {
+  const offset = 12 - new Date(now).getUTCHours()
+  return offset === 0 ? 'Etc/GMT' : `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`
+}
+// real-clock: the browser runs in noonTimeZone(), so its local day cannot change during the spec.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 const locationJs = `location.pathname + location.search`
 const has = (selector: string) => `document.querySelector(${JSON.stringify(selector)}) !== null`
@@ -121,9 +132,16 @@ beforeAll(async () => {
   if (!entry) throw new Error('cezar e2e: the second fixture project is not in the registry')
   projectB = entry.id
   mkdirSync(artifactsDir, { recursive: true })
-  browser = AgentBrowser.open(`git-view-${process.pid}`)
+  browser = AgentBrowser.open(`git-view-${process.pid}`, { env: { TZ: noonTimeZone(Date.now()) } })
   browser.setViewport(DESKTOP.width, DESKTOP.height)
 }, 60_000)
+
+it('runs the browser at local noon, so the commits stay in its today', () => {
+  browser.goto(`${base}${scoped('/git')}`)
+  // A browser that ignored TZ would make the '3 today' rows depend on the wall clock again.
+  const hour = browser.waitForValue<number>('new Date().getHours()', (value) => typeof value === 'number')
+  expect(hour).toBeOneOf([12, 13])
+})
 
 afterAll(async () => {
   browser?.close()
