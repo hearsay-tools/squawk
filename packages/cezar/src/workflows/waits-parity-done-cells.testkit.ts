@@ -30,7 +30,7 @@ export function doneCells(runners: string[], it: typeof registerTest = registerT
       process.env.CEZ_MOCK_CI_RESULT = answers;
       const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       await until(() => store.getRun(p.id)?.status === 'waiting');
-      const w = await worker(p.id);
+      const w = await worker(p.id, undefined, 'fixture');
       /** One turn through the native wire; the answer of its last Squawk tool call. */
       const turn = async (text: string) => {
         const turns = turnEnds(p.id);

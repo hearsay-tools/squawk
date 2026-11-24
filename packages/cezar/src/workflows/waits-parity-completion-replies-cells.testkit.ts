@@ -35,7 +35,7 @@ export function completionRepliesCells(runners: string[], it: typeof registerTes
     it(`${runner} U21a an autonomous parent's ignored refusal is nudged again until the budget`, async () => {
       const reply = repliesDoneAgain();
       nativeWire(runner);
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      process.env[HARNESS_ADAPTERS.fixture!.binEnv] = HARNESS_ADAPTERS.fixture!.mockBin;
       const run = manager.startRun(QUICK_TASK_WORKFLOW, { runner, task: HARNESS_ADAPTERS[runner]!.scenarios['autonomous-cap']!, autonomous: true });
       store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
       // The opening turn spends what is left and parks on the budget; the workers come after it.

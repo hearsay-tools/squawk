@@ -46,7 +46,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
     const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-    const w = await worker(p.id, adapter.scenarios.baseline!);
+    const w = await worker(p.id, adapter.scenarios.baseline!, runner);
     store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
     await until(() => store.getRun(w.id)?.status === 'waiting');
     const proof = store.workerExecutions.readWorkerExecution(w.id)!;
@@ -93,7 +93,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-      const w = await worker(p.id, adapter.scenarios.baseline!);
+      const w = await worker(p.id, adapter.scenarios.baseline!, runner);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
       const proof = store.workerExecutions.readWorkerExecution(w.id)!;
@@ -138,7 +138,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-      const w = await worker(p.id, adapter.scenarios.baseline!);
+      const w = await worker(p.id, adapter.scenarios.baseline!, runner);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
       const proof = store.workerExecutions.readWorkerExecution(w.id)!;
@@ -177,7 +177,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
       const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
       setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-      const w = await worker(p.id, adapter.scenarios.baseline!);
+      const w = await worker(p.id, adapter.scenarios.baseline!, runner);
       store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
       await until(() => store.getRun(w.id)?.status === 'waiting');
       const proof = store.workerExecutions.readWorkerExecution(w.id)!;
@@ -229,7 +229,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
     const adapter = HARNESS_ADAPTERS[runner]!; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { currentStepId: 'task', delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-    const w = await worker(p.id, adapter.scenarios.baseline!);
+    const w = await worker(p.id, adapter.scenarios.baseline!, runner);
     store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
     await until(() => store.getRun(w.id)?.status === 'waiting');
     const proof = store.workerExecutions.readWorkerExecution(w.id)!;

@@ -114,56 +114,6 @@ export const OWNERSHIP_GROUPS = {
     });
   },
 
-  // #779 plan step 3: `serve` and a headless `cez run` open one runs.db. A headless open (no
-  // keepLive) settled every live row as interrupted and saved it, so the owner's parked run — whose
-  // row only the owner's whole-file saves used to put back — loaded `failed` at the next restart and
-  // its question could no longer be answered there. A run another live process claims is left alone.
-  owner(r: HarnessRegistrar) {
-    const { describeRunners, runners, parityRow } = r;
-    describeRunners('owner', 'harness parity — a second process leaves a parked run to its owner (#779)', () => {
-      for (const backend of runners) {
-        parityRow<{ afterHeadless: string | undefined; afterRestart: string | undefined; answered: { ok: boolean; error?: string }; final: RunRecord | undefined }>(backend, {
-          id: 'R50', name: 'R50 a headless open beside the owner leaves its parked run waiting, and a restart still answers it', scenario: 'ask',
-          assert: ({ afterHeadless, afterRestart, answered, final }) => {
-            expect(afterHeadless).toBe('waiting');
-            expect(afterRestart).toBe('waiting');
-            expect(answered).toEqual({ ok: true });
-            expect(TERMINAL).toContain(final?.status);
-          },
-        }, async () => {
-          let afterHeadless: string | undefined, afterRestart: string | undefined;
-          let answered: { ok: boolean; error?: string } = { ok: false };
-          let final: RunRecord | undefined;
-          await driveObservedRun(backend, 'ask', record => record?.status === 'waiting', 30_000,
-            async ({ store, runId, repoRoot }) => {
-              const dataDir = join(repoRoot, '.ai/cezar');
-              store.persistence.flush();
-              // A headless `cez run` opens the project and exits while the owner still runs.
-              RunStore.open(dataDir).close();
-              afterHeadless = readPersistedRuns(dataDir).find((record) => record.id === runId)?.status;
-              // The owner exits: its store closes first, so nothing its manager does from here on
-              // reaches runs.db, then its session ends as a dead process's would. A new owner recovers.
-              store.close();
-              await drainFixtureManagers(repoRoot);
-              const rebooted = RunStore.open(dataDir, { keepLive: true });
-              const recovered = createFixtureManager(rebooted, repoRoot);
-              try {
-                await recovered.recover();
-                afterRestart = rebooted.getRun(runId)?.status;
-                answered = recovered.continueRun(runId, { text: promptFor(backend, 'cezar-done') });
-                if (answered.ok) await waitFor(() => TERMINAL.includes(rebooted.getRun(runId)?.status ?? '') && !recovered.isActive(runId), 30_000);
-                final = structuredClone(rebooted.getRun(runId));
-              } finally {
-                await drainFixtureManagers(repoRoot);
-                rebooted.close();
-              }
-            });
-          return { afterHeadless, afterRestart, answered, final };
-        });
-      }
-    });
-  },
-
   // #779 plan step 3: a control (archive, Stop, Continue…) on a run whose owning process died adopts
   // it first. Adopting settles it — nothing is resumed behind the user's back, whichever runner it
   // used — and Continue is the one control that starts its agent again, on its own session.

@@ -169,8 +169,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   (`core/seam-contract.testkit.ts`) or that runner's own rows. These run on every
   runner. Give a genuine wire gap a named executable exemption.
 - **A fix above the seam**, in Squawk's shared code, extends a shared row. A
-  shared row runs on one runner, `SCENARIO_RUNNER` (claude), as
-  [ADR 0063](../adr/0063-one-scenario-runner.md) records. Shared code sees a
+  shared row runs on one runner, `SCENARIO_RUNNER` (`fixture`, `runners/fixture/`), as
+  [ADR 0063](../adr/0063-one-scenario-runner.md) records (hearsay-tools/squawk#4177). Shared code sees a
   runner through its turn-path facts (`inputDelivery.mode`, `.consumption`,
   `.acknowledgement`, `.humanInputAtTurnEnd` and `systemPromptOnResume`). The
   scenario runner shows one value of each. Every other declared value names the
@@ -252,10 +252,12 @@ needs only the ids reads `BUILT_IN_RUNNER_IDS` from `runners/ids.ts`, which load
 production code never imports it (`cez/runner-ids-import`, for literal paths). The
 testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
-`workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
-adapter for its workers, and an owned-workflows file exactly one other runner for R14's mixed
-chain. `core/runner-closure.test.ts` enforces this
-(hearsay-tools/cezarion#2939).
+`workflow-parity`), which chooses every adapter. A wait parity file runs its workers on the fixture
+runner, so built-in wait files load no other built-in runner adapter; an owned-workflows file loads
+one other built-in runner for R14's mixed chain, and an automation-tools file loads Claude. Every
+fixture parity file under `runners/fixture/` loads `FixtureAdapter` and no built-in runner adapter
+or definition. `core/runner-closure.test.ts` enforces this
+(hearsay-tools/cezarion#2939, hearsay-tools/squawk#4177).
 
 The binding limit on a parity test file is CI's per-file cap: `FILE_DURATION_LIMIT_MS`
 (60 s) in `.github/scripts/vitest-file-duration.mjs`. CI enforces it on every Vitest
@@ -271,8 +273,8 @@ alone is too slow. A runner that runs no row of a part has no file for it, so th
 file guards compute the expected files from the class table, never from
 `BUILT_IN_RUNNER_IDS` alone. Fold files that were split only for the cap once fewer rows
 run, and measure each folded file against the CI cap first:
-`WAIT_FOLDS` in `workflows/waits-parity-catalog.testkit.ts` groups the parts of each runner
-other than the scenario runner into files of about 3–12 s locally.
+`WAIT_FOLDS` in `workflows/waits-parity-catalog.testkit.ts` groups the every-runner wait parts of
+each built-in runner, and `SHARED_WAIT_FOLDS` groups the shared wait parts on `runners/fixture/`.
 `core/harness-parity-cells.testkit.ts` and
 `workflows/waits-parity-cells.testkit.ts` are the examples
 (hearsay-tools/cezarion#1288). Squeal re-runs a test file when any file it imports changes, so

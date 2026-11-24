@@ -40,7 +40,7 @@ export function conversationsCells(runners: string[], it: typeof registerTest = 
     /** Another root task of the project (hearsay-tools/cezarion#1990): a record with no session,
      *  whose authenticated caller sends to `to` through the conversing parent's service. */
     function peerOf(f: Awaited<ReturnType<typeof conversingParent>>, to: string) {
-      const peer = store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner: 'claude', steps: [] });
+      const peer = store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner, steps: [] });
       setRunStatus(store, peer.id, RUN_STATUS.running, { delegation: { role: 'root', permissions: ['spawn', 'wait', 'steer', 'inspect'], receipts: [] } });
       const progress = async (text: string) => {
         const id = randomUUID();

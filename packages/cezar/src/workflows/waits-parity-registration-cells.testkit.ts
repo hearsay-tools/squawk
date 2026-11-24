@@ -26,7 +26,7 @@ export function registrationCells(runners: string[], it: typeof registerTest = r
     for (const [kind, row] of [['worker', 'U28w'], ['request', 'U28r'], ['peer', 'U28p']] as const) {
       it(`${runner} ${row} ${kind} accepts a two-hour wait on the native wire and names the range above it`, async () => {
         const { p, w } = await parentWithWorker(runner);
-        const peer = store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner: 'claude', steps: [] });
+        const peer = store.createRun({ title: 'peer', task: 'peer', workflow: 'quick-task', runner, steps: [] });
         setRunStatus(store, peer.id, RUN_STATUS.running, { delegation: { role: 'root', permissions: ['spawn', 'wait', 'steer', 'inspect'], receipts: [] } });
         const requestId = randomUUID();
         store.commitConversation(p.id, { messages: [{ id: requestId, senderRunId: p.id, recipientRunId: w.id,

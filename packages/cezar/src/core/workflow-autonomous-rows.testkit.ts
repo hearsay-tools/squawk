@@ -1,78 +1,41 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { AUTONOMOUS_CRITERIA, exemptionFor, type ParityExemption } from './harness-parity-core.testkit.ts';
-import { runsOn } from './parity-classes.testkit.ts';
+import { PARITY_ROSTER, runsOn } from './parity-classes.testkit.ts';
 import { isRegisteredRunner } from './runner-registry.ts';
 
 // The workflow-autonomous cells and their partition, apart from the engine the cell bodies
 // drive, so the registration guard collects the same names without loading it.
 const PARTS: Readonly<Record<string, readonly string[]>> = {
-  "budget-fresh": [
-    "claude A5 fresh"
+  budget: [
+    'fixture A5 fresh',
+    'fixture A5 continuation',
+    'fixture A11 fresh',
+    'fixture A12 continuation',
   ],
-  "budget-continuation": [
-    "claude A5 continuation"
+  engine: [
+    'fixture A1 fresh',
+    'fixture A2 continuation',
+    'fixture A3 fresh',
+    'fixture A4 continuation',
+    'fixture A6 fresh',
+    'fixture A6 continuation',
+    'fixture A7 fresh',
+    'fixture A8 fresh',
+    'fixture A10 fresh',
+    'fixture A16',
   ],
-  "late-readiness-fresh": [
-    "claude A11 fresh"
+  'idle-close-fresh': BUILT_IN_RUNNER_IDS.map(runner => `${runner} A13`),
+  'idle-close-continuation': BUILT_IN_RUNNER_IDS.map(runner => `${runner} A14`),
+  'ack-bound': BUILT_IN_RUNNER_IDS.map(runner => `${runner} A15`),
+  'native-questions': [
+    'claude A9',
+    'codex A9 fresh',
+    'omp A9',
+    'opencode A9 fresh',
+    'pi A9',
+    'antigravity A9 fresh',
   ],
-  "late-readiness-continuation": [
-    "claude A12 continuation"
-  ],
-  "nudges": [
-    "claude A1 fresh",
-    "claude A2 continuation"
-  ],
-  "ask-refusal": [
-    "claude A3 fresh",
-    "claude A4 continuation"
-  ],
-  "unanswered-question": [
-    "claude A10 fresh"
-  ],
-  "non-autonomous": [
-    "claude A6 continuation",
-    "claude A6 fresh"
-  ],
-  "tool-parking": [
-    "claude A7 fresh",
-    "claude A8 fresh"
-  ],
-  "idle-close-fresh": [
-    "claude A13",
-    "codex A13",
-    "cursor A13",
-    "omp A13",
-    "opencode A13",
-    "pi A13"
-  ],
-  "idle-close-continuation": [
-    "claude A14",
-    "codex A14",
-    "cursor A14",
-    "omp A14",
-    "opencode A14",
-    "pi A14"
-  ],
-  "ack-bound": [
-    "claude A15",
-    "codex A15",
-    "cursor A15",
-    "omp A15",
-    "opencode A15",
-    "pi A15"
-  ],
-  "answer-bound": [
-    "claude A16"
-  ],
-  "native-questions": [
-    "claude A9",
-    "codex A9 fresh",
-    "cursor A9",
-    "omp A9",
-    "opencode A9 fresh",
-    "pi A9"
-  ]
 };
 
 type AutonomousRow = (typeof AUTONOMOUS_CRITERIA)[number];
@@ -121,7 +84,7 @@ export function workflowAutonomousParity(cells: WorkflowAutonomousCells) {
   return function describeWorkflowAutonomousParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-autonomous');
     describe('autonomous turn-end parity — #426', () => {
-      for (const backend of BUILT_IN_RUNNER_IDS) {
+      for (const backend of PARITY_ROSTER) {
         if (part !== 'all' && !isRegisteredRunner(backend)) continue;
         for (const row of AUTONOMOUS_CRITERIA) {
           if (!runsOn('workflow-autonomous', row.id, backend)) continue;

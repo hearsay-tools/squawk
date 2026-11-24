@@ -1,28 +1,29 @@
 import type { RunnerMock } from '../../core/runner-definition.ts';
-import { MOCK_BASELINE_PROMPT } from '../mock-prompts.ts';
+import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS } from '../mock-prompts.ts';
 import { FIXTURE_BIN_ENV } from './data.testkit.ts';
 
 /**
  * The fixture runner's native mock (the `mock` part), laid out as a built-in runner's
- * `runners/<id>/mock.ts`. Data only. The scenarios the mock answers: those of the baseline seam rows the test runs. Every other scenario
- * is absent, so a row for it needs an exemption or a prompt before this runner can run it.
+ * `runners/<id>/mock.ts`. Data only. Supports every shared scenario so runner-agnostic engine
+ * tests run once on `runners/fixture/` without touching built-in adapters.
  */
 export const FIXTURE_MOCK = {
-  askResumeCases: [],
+  askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
   binEnv: FIXTURE_BIN_ENV,
   script: 'mock-fixture-runner.mjs',
   scenarios: {
-    baseline: MOCK_BASELINE_PROMPT,
-    'missing-binary': MOCK_BASELINE_PROMPT,
-    hold: 'mock:hold',
+    ...COMMON_MOCK_SCENARIOS,
+    ...STDIO_ASK_MOCK_SCENARIOS,
     'provider-error': 'mock:provider-error',
+    'provider-error-controlled': 'mock:auth-error',
+    'steer-late': 'mock:hold',
   },
-  // The reasons the parity kit requires by this runner's facts: A9 for no answerable native ask, and
-  // U12, U13 and U27 for an acknowledgement that is the local write (`runner-facts.test.ts`).
+  // The reasons the parity kit requires by this runner's facts: A9 for no answerable native ask,
+  // R77/UI2 for no hook frames, and U12/U13/U27 for an acknowledgement that is the local write.
   parityExemptions: {
     A9: {
-      kind: 'scenario-unconstructible',
-      reason: 'The fixture mock answers no ask scenario and its wire has no native ask, so no native mid-turn ask.requested can arise.',
+      kind: 'capability-absent',
+      reason: 'The fixture mock asks through cezar_ask and emits no native mid-turn ask.requested.',
     },
     U12: {
       kind: 'capability-absent',
@@ -38,11 +39,11 @@ export const FIXTURE_MOCK = {
     },
     R77: {
       kind: 'scenario-unconstructible',
-      reason: 'The fixture mock reads one prompt line and emits no hook lifecycle frame, so no hook item can arrive after a park.',
+      reason: 'The fixture mock emits no hook lifecycle frame, so no hook item can arrive after a park.',
     },
     UI2: {
       kind: 'capability-absent',
-      reason: 'The fixture mock reads one prompt line and emits no hook event.',
+      reason: 'The fixture mock emits no hook event.',
     },
   },
 } as const satisfies RunnerMock;

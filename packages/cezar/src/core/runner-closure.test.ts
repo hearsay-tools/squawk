@@ -81,12 +81,25 @@ describe('per-runner test closures', () => {
       const closure = byEntry.get(file) ?? new Set();
       const loads = (id: string) => closure.has(ADAPTERS[id]!) || closure.has(`runners/${id}/definition.ts`);
       const fileName = file.split('/').at(-1) ?? '';
-      const base = new Set<string>([runner, ...(fileName.startsWith('waits-') || fileName.startsWith('automation-tools-') ? ['claude' as const] : [])]);
+      const base = new Set<string>([runner, ...(fileName.startsWith('automation-tools-') ? ['claude' as const] : [])]);
       const partner = file.endsWith('-owned-workflows-parity.test.ts') ? BUILT_IN_RUNNER_IDS.find(id => !base.has(id) && loads(id)) : undefined;
       const allowed = new Set<string>([...base, ...(partner ? [partner] : [])]);
       return { file, own: closure.has(ADAPTERS[runner]!), others: foreignRunnerModules(closure, allowed) };
     });
     expect(loaded.filter(entry => !entry.own || entry.others.length)).toEqual([]);
+  }, 60_000);
+
+  it('keeps fixture parity files off every built-in runner adapter and definition (hearsay-tools/squawk#4177)', async () => {
+    const files = readdirSync(join(src, 'runners/fixture'), { encoding: 'utf8' })
+      .filter(file => file.endsWith('-parity.test.ts'))
+      .map(file => `runners/fixture/${file}`);
+    expect(files.length).toBeGreaterThan(0);
+    const byEntry = await closures(files);
+    const violations = files.map(file => {
+      const closure = byEntry.get(file) ?? new Set();
+      return { file, own: closure.has('runners/fixture/fixture-adapter.testkit.ts'), others: foreignRunnerModules(closure, new Set()) };
+    }).filter(entry => !entry.own || entry.others.length);
+    expect(violations).toEqual([]);
   }, 60_000);
 
   it('keep the global test setup off every runner definition and adapter (hearsay-tools/squawk#3936 review E1)', async () => {

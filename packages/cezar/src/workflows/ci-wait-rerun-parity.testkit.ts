@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GROUPS } from './ci-wait-rerun-rows.testkit.ts';
+import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { GithubCiClient } from '../ci-wait/github.ts';
 import { manager, store, root, restart, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
@@ -36,6 +37,8 @@ describe('hidden CI reruns across native harnesses', {timeout:30_000},()=>{
  useWorkerWaitFixture({ acquireCiResources });
  for(const runner of GROUPS[group]) {
   it(`${runner} R85 ${recovered?'recovered without a session':'fresh'} keeps partial green pending until rerun checks return`,async()=>{
+   process.env.CEZ_DRY_RUN='0';
+   process.env[HARNESS_ADAPTERS[runner]!.binEnv]=HARNESS_ADAPTERS[runner]!.mockBin;
    const state=join(root,'rerun-state');writeFileSync(state,'hidden');
    const github=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_RERUN_STATE:state}});
    const observe=github.observe.bind(github),runs=github.workflowRuns.bind(github);

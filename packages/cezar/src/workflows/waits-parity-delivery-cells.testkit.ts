@@ -367,8 +367,8 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
 
     it(`${runner} U11 a timer open at a blocked done keeps its deadline, the run parks on it with the refusal as a note and no nudge, and its result is delivered`, async () => {
       nativeWire(runner);
-      // Workers run on the Claude wire whatever the parent's runner is.
-      process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+      // Workers run on the fixture wire whatever the parent's runner is.
+      process.env[HARNESS_ADAPTERS.fixture!.binEnv] = HARNESS_ADAPTERS.fixture!.mockBin;
       const p = await parent(HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner);
       await until(() => store.getRun(p.id)?.status === 'waiting');
       let turns = turnEnds(p.id);
@@ -378,7 +378,7 @@ export function deliveryCells(runners: string[], it: typeof registerTest = regis
       turns = turnEnds(p.id);
       // hearsay-tools/cezarion#1301: a refused done is not a done and cancels no wait. With the timer
       // open there is no nudge: the run parks on the timer, and the refusal is a note.
-      const w = await blockedDone(p.id, () => worker(p.id));
+      const w = await blockedDone(p.id, () => worker(p.id, undefined, 'fixture'));
       const refusal = liveRefusal(w);
       await until(() => turnEnds(p.id) > turns && parkedOn(p.id, waitOfKind(p.id, WAIT_KIND.timer)) &&
         store.eventLog.readEvents(p.id).some(event => event.type === 'note' && String(event.message).includes(refusal)));

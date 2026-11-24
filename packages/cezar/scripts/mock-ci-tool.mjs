@@ -1,24 +1,72 @@
 // Offline harness fixtures share the real bundled MCP protocol, never a fake receipt.
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { request } from 'node:http';
 import { publishFile } from './mock-publish.mjs';
 import { basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { productEnv } from './product-env.mjs';
 
 export async function probeCiTool(backend, wire, pr = process.env.CEZ_MOCK_CI_PR) {
   if (!pr) return;
   return probeSquawkTool(backend, wire, 'cezar_wait', { kind: 'pr', pr });
 }
 
-// Calls one Squawk tool the way the real harness would: through the wired MCP server (or Pi/OMP extension).
+// Calls one Squawk tool the way the real harness would: through the wired MCP server (or Pi/OMP extension),
+// or directly over the private tool IPC socket for the test-only fixture runner.
 export async function probeSquawkTool(backend, wire, name, args, record = true) {
-  const result = backend === 'pi' || backend === 'omp'
-    ? await probeExtensionTool(backend, wire, name, args)
-    : await probeMcpTool(mcpServerOf(backend, wire), name, args);
+  const result = backend === 'fixture'
+    ? await probeFixtureSocketTool(name, args)
+    : backend === 'pi' || backend === 'omp'
+      ? await probeExtensionTool(backend, wire, name, args)
+      : await probeMcpTool(mcpServerOf(backend, wire), name, args);
   if (record && process.env.CEZ_MOCK_CI_RESULT) publishFile(process.env.CEZ_MOCK_CI_RESULT, JSON.stringify(result));
   return result;
+}
+
+/** Direct Unix-socket IPC call for the test-only fixture runner: real tool controller, zero MCP spawn overhead. */
+async function probeFixtureSocketTool(name, args) {
+  const socketPath = productEnv('TOOL_SOCKET');
+  const token = productEnv('TOOL_TOKEN');
+  if (!socketPath || !token) throw new Error('CI server absent');
+  const body = name === 'cezar_wait' && args && typeof args === 'object' && !Array.isArray(args) && !('operation_id' in args)
+    ? { ...args, operation_id: randomUUID() }
+    : args;
+  const response = await new Promise((resolve, reject) => {
+    const req = request({
+      socketPath,
+      agent: false,
+      path: `/api/v1/tools/${encodeURIComponent(name)}`,
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        accept: 'application/x-squawk-tool-result+json',
+      },
+    }, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('error', reject);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if (res.statusCode !== 200 && !parsed?.content) {
+            resolve({ isError: true, content: [{ type: 'text', text: JSON.stringify(parsed) }] });
+          } else {
+            resolve(parsed);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end(JSON.stringify(body ?? {}));
+  });
+  return { names: [], response };
 }
 
 /** Pi and OMP load the tools as an extension the mock imports and calls in process. */

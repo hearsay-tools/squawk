@@ -45,17 +45,21 @@ export function turnPathValues<Id extends string>(ids: readonly Id[], facts: Rea
 }
 
 /**
- * The one runner a shared parity row runs on: the default runner. CI history from 2026-09-02 to
- * 2026-11-14 showed every shared regression failing on every runner that ran its row, and almost
- * every single-runner failure as a flake (`docs/adr/0063-one-scenario-runner.md`).
+ * The one runner a shared parity row runs on: the test-only fixture runner (`runners/fixture/`).
+ * Runner-agnostic engine tests run once on it instead of duplicating across built-in runners, and
+ * editing a built-in adapter no longer re-runs them (hearsay-tools/squawk#4177,
+ * `docs/adr/0063-one-scenario-runner.md`).
  */
-export const SCENARIO_RUNNER: string = 'claude';
+export const SCENARIO_RUNNER: string = 'fixture';
 
-/** The runners a shared parity row runs on. */
 /** The built-in runners, from `runners/ids.ts`: a static roster, read at collection time
  *  before any registration, without loading any runner's data files. */
 const ROSTER: readonly string[] = BUILT_IN_RUNNER_IDS;
 
+/** Every runner a parity suite can register rows for: the scenario runner plus the built-in roster. */
+export const PARITY_ROSTER: readonly string[] = [SCENARIO_RUNNER, ...ROSTER];
+
+/** The runners a shared parity row runs on. */
 export const SHARED_RUNNERS: readonly string[] = [SCENARIO_RUNNER];
 
 /** The runner a family with no session runs on. */
@@ -204,7 +208,7 @@ export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamily
   [/^workflows\/ci-wait-conflict-.*parity\.test\.ts$/, ['ci-wait-conflict']],
   [/^workflows\/ci-wait-rerun-.*parity\.test\.ts$/, ['ci-wait-rerun']],
   [/^workflows\/ci-wait-retry-parity\.test\.ts$/, ['ci-wait-retry']],
-  [/^workflows\/ci-wait-(?:failure|final-recovery|nonfinal-[a-z-]+|restart-[a-z-]+)-parity\.test\.ts$/, ['ci-wait-failure']],
+  [/^workflows\/ci-wait-(?:failure|final-and-restart|nonfinal)-parity\.test\.ts$/, ['ci-wait-failure']],
   [/^workflows\/pr-merge-wait-parity\.test\.ts$/, ['pr-merge-wait']],
   [/^workflows\/worker-reboot-.*parity\.test\.ts$/, ['worker-reboot']],
   [/^workflows\/worker-restart-.*parity\.test\.ts$/, ['worker-restart']],
@@ -344,14 +348,14 @@ export function parityRunners(family: ParityFamilyName, row: string | undefined)
 }
 
 /**
- * Whether `runner` runs the family's row. A runner outside the built-in roster (a fixture runner a
- * test registers, hearsay-tools/squawk#3899) runs every row that runs on every built-in runner: the
- * rows of an every-runner family, and the rows of a shared family that differ by runner. It never runs
- * the rows that run on the scenario runner only.
+ * Whether `runner` runs the family's row. The scenario runner runs only shared and no-session rows.
+ * Any other runner outside the built-in roster (a custom runner a test registers,
+ * hearsay-tools/squawk#3899) runs every row that runs on every built-in runner: the rows of an
+ * every-runner family, and the rows of a shared family that differ by runner.
  */
 export function runsOn(family: ParityFamilyName, row: string | undefined, runner: string): boolean {
   const runners = parityRunners(family, row);
-  return runners.includes(runner) || (!ROSTER.includes(runner) && runners === ROSTER);
+  return runners.includes(runner) || (!ROSTER.includes(runner) && runner !== SCENARIO_RUNNER && runners === ROSTER);
 }
 
 

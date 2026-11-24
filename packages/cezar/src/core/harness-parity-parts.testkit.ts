@@ -13,10 +13,10 @@ export const HARNESS_PARITY_GROUPS: Readonly<Record<HarnessParityPart, readonly 
   provider: ['provider'],
   contract: ['contract'],
   session: ['seam', 'session', 'input', 'governed', 'native-message', 'spec', 'tools', 'cdp', 'tool-grants'],
-  run: ['run', 'diagnostics', 'child', 'hooks', 'answer', 'monitoring', 'prs'],
+  run: ['run', 'diagnostics', 'child', 'hooks', 'answer', 'monitoring', 'prs', 'owner'],
   'owned-workflows': ['owned-workflows'],
   'owned-input': ['owned'],
-  ownership: ['continue', 'restart', 'owner', 'adopt', 'stop'],
+  ownership: ['continue', 'restart', 'adopt', 'stop'],
   settlement: ['cleanup', 'multi-continue', 'superseded', 'disposal', 'scratch', 'permission', 'default-permission', 'mcp'],
   'pending-request': ['retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission'],
 };

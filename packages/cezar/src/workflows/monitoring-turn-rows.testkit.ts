@@ -1,5 +1,5 @@
 import '../built-in-run-slots.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { PARITY_ROSTER } from '../core/parity-classes.testkit.ts';
 import { fireCapturedTimer } from './waits.testkit.ts';
 import { MONITORING_PARTITIONS, type MonitoringPartitionName } from './monitoring-turn-partitions.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -90,9 +90,9 @@ async function reviewRequestLeavesMonitoring({ runId, send, attention, run }: Ro
   expect(hasPendingAsk(store, runId)).toBe(false);
   expect(store.eventLog.readEvents(runId).some(event => event.type === 'note' && event.code === 'unstructured-human-gate')).toBe(false);
 }
-async function withLiveWorker({ runId }: RowContext): Promise<void> {
+async function withLiveWorker({ runId, run }: RowContext): Promise<void> {
   store.commitDelegation([{ id: runId, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
-  await worker(runId);
+  await worker(runId, undefined, run().runner as string);
 }
 
 async function laterAskBeatsMonitoring({ runId, send, attention }: RowContext): Promise<void> {
@@ -261,7 +261,7 @@ export function registerClose(backend: string): void {
     const p = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:hold', runner: backend });
     await until(() => store.getRun(p.id)?.status === 'waiting');
     store.commitDelegation([{ id: p.id, delegation: { role: 'root', permissions: ['spawn', 'wait'], receipts: [] } }]);
-    const w = await worker(p.id);
+    const w = await worker(p.id, undefined, backend);
     expect(manager.sendMessage(p.id, [{ type: 'text', text: script(WAIT, thenSay(ACK_TEXT)) }])).toBe(true);
     register(p.id, [w.id]);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
@@ -280,7 +280,7 @@ export function registerClose(backend: string): void {
 }
 export function registerMonitoringPartition(name: MonitoringPartitionName): void {
   const partition = MONITORING_PARTITIONS[name];
-  for (const backend of BUILT_IN_RUNNER_IDS.filter(runner => partition.rows.some(row => runsOn('monitoring-turn', row, runner)))) describe(`${backend} monitoring turn`, { timeout: 30_000 }, () => {
+  for (const backend of PARITY_ROSTER.filter(runner => partition.rows.some(row => runsOn('monitoring-turn', row, runner)))) describe(`${backend} monitoring turn`, { timeout: 30_000 }, () => {
     useWorkerWaitFixture();
     for (const mode of partition.modes) for (const id of partition.rows.filter(row => runsOn('monitoring-turn', row, backend))) {
       if (id === 'M13' || id === 'M14') registerAutonomousProse(backend, mode);

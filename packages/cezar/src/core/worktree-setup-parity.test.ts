@@ -1,5 +1,5 @@
 import { sealTestRunners } from './runner-registry.testkit.ts';
-import './created-runners.testkit.ts';
+import '../runners/fixture/fixture-runner.testkit.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parityRunners } from './parity-classes.testkit.ts';
 import { WORKTREE_SETUP_CRITERIA } from './harness-parity-core.testkit.ts';
 import { driveRun } from './workflow-parity-core.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 
-sealTestRunners(claudeRunner);
+sealTestRunners(fixtureRunner);
 
 /**
  * R58 (hearsay-tools/cezarion#917, spec `.ai/specs/2026-10-07-worktree-setup.md`): a task

@@ -16,7 +16,7 @@ let current: RunnerFactory | undefined;
 let currentRank = 0;
 
 /** The rank of each default offer. A higher rank replaces a lower one. */
-export const RUNNER_OFFER = { none: 1, claude: 2 } as const;
+export const RUNNER_OFFER = { none: 1, fixture: 2, claude: 3 } as const;
 
 /** Choose the runners this test file's fixtures build. */
 export function useRunners(factory: RunnerFactory): void {

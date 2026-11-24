@@ -1,6 +1,6 @@
 import '../built-in-run-slots.testkit.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { PARITY_ROSTER } from '../core/parity-classes.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
@@ -18,12 +18,12 @@ import { ATTENTION_GROUPS, type AttentionGroup, type AttentionRow } from './work
 const ASK_PROMPT = toolCall('cezar_ask', { context: 'A choice is needed.', questions: [{ header: 'Choice', question: 'Which module?', options: [{ label: 'Parser' }, { label: 'Runner' }] }] });
 
 export function registerAttentionGroup(group: AttentionGroup): void {
- for (const backend of BUILT_IN_RUNNER_IDS) describe(`${backend} worker parent attention`, { timeout: 30_000 }, () => {
+ const rows = ATTENTION_GROUPS[group] as readonly AttentionRow[];
+ for (const backend of PARITY_ROSTER.filter(id => rows.some(row => row.backend === id))) describe(`${backend} worker parent attention`, { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
 const native = () => {
     process.env.CEZ_DRY_RUN = '0';
     process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
-    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
   };
 const capacity = (id: string) => {
     const run = store.getRun(id)!;
@@ -54,8 +54,7 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
           }
           expect(store.getRun(p.id)).toMatchObject({ status: RUN_STATUS.waiting });
           expect(monitoringWakeOf(store.getRun(p.id))).toBeUndefined();
-          const w = await worker(p.id);
-          process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+          const w = await worker(p.id, undefined, backend);
           manager.enqueueOwnedRun(w.id);
           await until(() => store.getRun(w.id)?.status === 'waiting');
           try {
@@ -116,7 +115,7 @@ it(`${mode} spawn without wait parks as monitoring and a real ASK still wins`, a
         expect(manager.continueRun(p.id, { text: 'mock:hold' }).ok).toBe(true);
         await until(() => store.getRun(p.id)?.status === 'waiting');
       }
-      await worker(p.id);
+      await worker(p.id, undefined, backend);
       const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
       manager.sendMessage(p.id, [{ type: 'text', text: 'mock:hold' }]);
       await until(() => store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length > boundaries);
@@ -135,12 +134,12 @@ if(row.family === 'completion') {
 it('queued wake after worker completion waits for capacity, not Needs you (#971)', async () => {
     native();
     const p = await parent('mock:hold', backend);
-    const w = await worker(p.id);
+    const w = await worker(p.id, undefined, backend);
     register(p.id, [w.id]);
     manager.enqueueOwnedRun(w.id);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
     await until(() => store.getRun(w.id)?.status === 'running');
-    const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:slow', runner: 'claude' });
+    const blocker = manager.startRun(QUICK_TASK_WORKFLOW, { task: 'mock:slow', runner: backend });
     try {
       await until(() => store.getRun(w.id)?.status === 'waiting');
       await until(() => store.getRun(blocker.id)?.status === 'running');
@@ -172,7 +171,7 @@ if(row.family === 'timeout') {
 it('queued wake after wait timeout waits for capacity, not Needs you (#971)', async () => {
     native();
     const p = await parent('mock:hold', backend);
-    const w = await worker(p.id, 'mock:slow');
+    const w = await worker(p.id, 'mock:slow', backend);
     register(p.id, [w.id]);
     manager.enqueueOwnedRun(w.id);
     await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
@@ -202,7 +201,7 @@ it('keeps a wake-pending parent with a pending human ask as Needs you (#971)', a
     native();
     const p = await parent('mock:hold', backend);
     await until(() => store.getRun(p.id)?.status === 'waiting');
-    const w = await worker(p.id);
+    const w = await worker(p.id, undefined, backend);
     const send = async (prompt: string, afterDelivery?: () => void) => {
       const boundaries = store.eventLog.readEvents(p.id).filter(event => event.type === 'turn-end').length;
       expect(manager.sendMessage(p.id, [{ type: 'text', text: prompt }])).toBe(true);

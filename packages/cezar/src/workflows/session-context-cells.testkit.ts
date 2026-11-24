@@ -1,16 +1,16 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runsOn } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { handoffPath } from '../handoff.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW, type WorkflowDef } from './types.ts';
+import { registerSessionContext, type SessionContextCells, type SessionContextSuite } from './session-context-rows.testkit.ts';
+export { SESSION_CONTEXT_GROUPS } from './session-context-rows.testkit.ts';
 
 // hearsay-tools/cezarion#1584: every cezar-managed launch opens with the run's own handoff and
 // the project's context rules, on every native wire; a live message never does.
@@ -71,21 +71,8 @@ async function finished(id: string) {
   await until(() => ['failed', 'done', 'review', 'waiting'].includes(store.getRun(id)?.status ?? '') && !manager.isActive(id));
 }
 
-export const SESSION_CONTEXT_GROUPS = {
-  opening: ['R120'],
-  live: ['R121'],
-  retry: ['R122'],
-  recovery: ['R123'],
-  worker: ['R124'],
-} as const;
-
-export function describeSessionContext(rows: readonly string[], suite = { describe, it, afterEach, useWorkerWaitFixture }) {
-  suite.describe('session-start context through every native wire (hearsay-tools/cezarion#1584)', () => {
-    suite.useWorkerWaitFixture();
-    suite.afterEach(() => vi.unstubAllEnvs());
-
-    for (const runner of BUILT_IN_RUNNER_IDS) {
-      if (rows.includes('R120') && runsOn('session-context', 'R120', runner)) suite.it(`${runner} R120 opens a fresh step with the whole handoff and parent rules, then refreshes them on Continue`, async () => {
+const SESSION_CONTEXT_CELLS: SessionContextCells = {
+  R120: (runner) => async () => {
         const messages = native(runner);
         projectContext();
         const task = HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!;
@@ -126,9 +113,8 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         expect(refreshed).toContain('### Autosave\n\n- 2026-10-25T10:00:00.000Z — turn end: R120 record\n');
         expect(second.endsWith('Keep working.')).toBe(true);
         expect(contextLines(run.id)).toHaveLength(2);
-      }, 60_000);
-
-      if (rows.includes('R121') && runsOn('session-context', 'R121', runner)) suite.it(`${runner} R121 never injects into a live message`, async () => {
+  },
+  R121: (runner) => async () => {
         const messages = native(runner);
         projectContext();
         const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner, worktree: false });
@@ -140,9 +126,8 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         const live = messages().slice(before).find((message) => message.includes('live follow-up 1584'))!;
         expect(live).not.toContain('<cezar-context');
         expect(contextLines(run.id)).toHaveLength(1);
-      }, 60_000);
-
-      if (rows.includes('R122') && runsOn('session-context', 'R122', runner)) suite.it(`${runner} R122 injects into a check retry`, async () => {
+  },
+  R122: (runner) => async () => {
         const messages = native(runner);
         projectContext();
         const workflow: WorkflowDef = { name: 'retry-1584', source: 'built-in', steps: [
@@ -156,9 +141,8 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         expect(opening[1]).toContain('A verification command failed after the previous attempt.');
         expect(prefixOf(opening[1]!)).toContain('STEP=implement');
         expect(contextLines(run.id)).toHaveLength(2);
-      }, 60_000);
-
-      if (rows.includes('R123') && runsOn('session-context', 'R123', runner)) suite.it(`${runner} R123 injects into restart recovery with no live session`, async () => {
+  },
+  R123: (runner) => async () => {
         const messages = native(runner);
         projectContext();
         const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios['cezar-done']!, runner, worktree: false });
@@ -175,9 +159,8 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         expect(count(recovered, '<cezar-context id="handoff"')).toBe(1);
         expect(prefixOf(recovered)).toContain(handoffBlock(run.id));
         expect(recovered).toContain('process restarted while you were working');
-      }, 60_000);
-
-      if (rows.includes('R124') && runsOn('session-context', 'R124', runner)) suite.it(`${runner} R124 renders an owned worker's own handoff and worker rules, never the parent's`, async () => {
+  },
+  R124: (runner) => async () => {
         const messages = native(runner);
         projectContext();
         const parent = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner]!.scenarios.baseline!, runner });
@@ -196,7 +179,9 @@ export function describeSessionContext(rows: readonly string[], suite = { descri
         expect(prefix).not.toContain(`RUN=${parent.id}`);
         // The worker's inherited system prompt carries none of the parent's rendered context.
         expect(store.getRun(child.id)?.systemPrompt ?? '').not.toContain('<cezar-context');
-      }, 60_000);
-    }
-  });
+  },
+};
+
+export function describeSessionContext(rows: readonly string[], suite: SessionContextSuite = { describe, it, afterEach, useWorkerWaitFixture }) {
+  registerSessionContext(rows, SESSION_CONTEXT_CELLS, suite, () => vi.unstubAllEnvs());
 }

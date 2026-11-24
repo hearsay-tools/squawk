@@ -1,4 +1,5 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { SCENARIO_RUNNER } from '../core/parity-classes.testkit.ts';
 import { factRows } from '../core/runner-fact-rows.testkit.ts';
 
 // The worker parent attention rows and their file groups. Apart from the cells, so the registration
@@ -24,14 +25,14 @@ export type AttentionRow =
  | { family: 'spawn-ask'; backend: string; mode: 'fresh' | 'continuation' }
  | { family: 'completion' | 'timeout' | 'restart' | 'human-ask'; backend: string };
 export const ATTENTION_GROUPS = {
- 'fresh-ordinary-progress': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'progress', backend, mode: 'fresh', transport: 'ordinary' } as const)),
+ 'fresh-ordinary-progress': [{ family: 'progress', backend: SCENARIO_RUNNER, mode: 'fresh', transport: 'ordinary' } as const],
  'fresh-delayed-progress': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'progress', backend, mode: 'fresh', transport: ACK_WIRES[backend]! } as const)),
- 'continued-ordinary-progress': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'progress', backend, mode: 'continuation', transport: 'ordinary' } as const)),
+ 'continued-ordinary-progress': [{ family: 'progress', backend: SCENARIO_RUNNER, mode: 'continuation', transport: 'ordinary' } as const],
  'continued-delayed-progress': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'progress', backend, mode: 'continuation', transport: ACK_WIRES[backend]! } as const)),
- 'fresh-spawn-ask': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'spawn-ask', backend, mode: 'fresh' } as const)),
- 'continued-spawn-ask': BUILT_IN_RUNNER_IDS.map(backend => ({ family: 'spawn-ask', backend, mode: 'continuation' } as const)),
- 'capacity-wake': BUILT_IN_RUNNER_IDS.flatMap(backend => { return (['completion', 'timeout'] as const).map(family => ({ family, backend } as const)); }),
- 'restart-human-ask': BUILT_IN_RUNNER_IDS.flatMap(backend => { return (['restart', 'human-ask'] as const).map(family => ({ family, backend } as const)); }),
+ 'fresh-spawn-ask': [{ family: 'spawn-ask', backend: SCENARIO_RUNNER, mode: 'fresh' } as const],
+ 'continued-spawn-ask': [{ family: 'spawn-ask', backend: SCENARIO_RUNNER, mode: 'continuation' } as const],
+ 'capacity-wake': (['completion', 'timeout'] as const).map(family => ({ family, backend: SCENARIO_RUNNER } as const)),
+ 'restart-human-ask': (['restart', 'human-ask'] as const).map(family => ({ family, backend: SCENARIO_RUNNER } as const)),
 };
 export type AttentionGroup = keyof typeof ATTENTION_GROUPS;
 export function attentionRowKey(row: AttentionRow): string {

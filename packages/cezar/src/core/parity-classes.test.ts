@@ -1,3 +1,4 @@
+import '../runners/fixture/register-fixture-runner.testkit.ts';
 import '../ci-wait/tools.testkit.ts';
 import './every-runner.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
@@ -6,8 +7,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { HARNESS_PARITY_GROUPS, harnessGroupRows, parityRowScenarios } from './harness-parity-cells.testkit.ts';
 import { CI_FAILURE_GROUPS, ciFailureRowId } from '../workflows/ci-wait-failure-rows.testkit.ts';
-import { RESUME_DIAGNOSTICS_GROUPS, resumeDiagnosticsCells } from '../workflows/resume-diagnostics.testkit.ts';
-import { registrationCollector } from './split-registration.testkit.ts';
+import { collectResumeDiagnosticsTitles } from '../workflows/resume-diagnostics-rows.testkit.ts';
 import {
   AUTONOMOUS_CRITERIA, FINAL_MESSAGE_CRITERIA, FOLLOWUP_CRITERIA, MODEL_REFUSAL_CRITERIA, NO_PROGRESS_CRITERIA, SHUTDOWN_CRITERIA,
   SKILL_PROVISION_CRITERIA, SKILL_RESUME_CRITERIA, STEP_COMPLETION_CRITERIA, WORKFLOW_ASK_CRITERIA, WORKFLOW_TIMEOUT_CRITERIA,
@@ -25,35 +25,37 @@ import { RUNNER_FACTS, type RunnerFacts } from './runner-facts.ts';
 import { COMBINATION_ROWS, type CombinationException } from '../lint/runner-fact-combination.ts';
 
 const src = join(import.meta.dirname, '..');
+const FACTS_WITH_SCENARIO: Readonly<Record<string, RunnerFacts>> = RUNNER_FACTS;
 
 describe('the scenario runner and the fact-value unit tests (docs/adr/0063-one-scenario-runner.md)', () => {
   it('runs shared and no-session rows on the scenario runner alone', () => {
-    expect(BUILT_IN_RUNNER_IDS).toContain(SCENARIO_RUNNER);
+    expect(SCENARIO_RUNNER).toBe('fixture');
+    expect(BUILT_IN_RUNNER_IDS).not.toContain(SCENARIO_RUNNER);
     expect(SHARED_RUNNERS).toEqual([SCENARIO_RUNNER]);
     expect(NO_SESSION_RUNNER).toBe(SCENARIO_RUNNER);
   });
 
   // Guard 1: every declared value the scenario runner does not show names unit tests that spell it.
   it('names unit tests for every turn-path fact value the scenario runner does not declare', () => {
-    expect(factValueProblems(FACT_VALUE_TESTS, RUNNER_FACTS)).toEqual([]);
+    expect(factValueProblems(FACT_VALUE_TESTS, FACTS_WITH_SCENARIO)).toEqual([]);
   });
 
   it('fails a missing value, a stale value, the scenario runner\'s own value and a bad file', () => {
     const tests = { ...FACT_VALUE_TESTS, 'inputDelivery.acknowledgement': {} };
-    expect(factValueProblems(tests, RUNNER_FACTS)).toEqual(['inputDelivery.acknowledgement response: no unit test is named']);
+    expect(factValueProblems(tests, FACTS_WITH_SCENARIO)).toEqual(['inputDelivery.acknowledgement response: no unit test is named']);
     // Without the runners that declare them, neither always-held nor unknown-skill error is declared.
-    const withoutDeclarers = Object.fromEntries(Object.entries(RUNNER_FACTS).filter(([, facts]) =>
+    const withoutDeclarers = Object.fromEntries(Object.entries(FACTS_WITH_SCENARIO).filter(([, facts]) =>
       facts.inputDelivery.humanInputAtTurnEnd !== 'always-held' && facts.skillUnknownName !== 'error'));
     expect(factValueProblems(FACT_VALUE_TESTS, withoutDeclarers)).toEqual([
       'inputDelivery.humanInputAtTurnEnd always-held: no runner declares it',
       'skillUnknownName error: no runner declares it',
     ]);
     const stale = { ...FACT_VALUE_TESTS, 'inputDelivery.consumption': { ...FACT_VALUE_TESTS['inputDelivery.consumption'], gone: ['workflows/turn-path-fact-values.test.ts'] } };
-    expect(factValueProblems(stale, RUNNER_FACTS)).toEqual(['inputDelivery.consumption gone: no runner declares it']);
+    expect(factValueProblems(stale, FACTS_WITH_SCENARIO)).toEqual(['inputDelivery.consumption gone: no runner declares it']);
     const own = { ...FACT_VALUE_TESTS, systemPromptOnResume: { ...FACT_VALUE_TESTS.systemPromptOnResume, resent: ['workflows/launch-system-prompt.test.ts'] } };
-    expect(factValueProblems(own, RUNNER_FACTS)).toEqual([`systemPromptOnResume resent: the scenario runner ${SCENARIO_RUNNER} declares it, so its parity rows test it`]);
+    expect(factValueProblems(own, FACTS_WITH_SCENARIO)).toEqual([`systemPromptOnResume resent: the scenario runner ${SCENARIO_RUNNER} declares it, so its parity rows test it`]);
     const files = { ...FACT_VALUE_TESTS, 'inputDelivery.humanInputAtTurnEnd': { ...FACT_VALUE_TESTS['inputDelivery.humanInputAtTurnEnd'], 'never-held': ['workflows/nowhere.test.ts', 'workflows/waits-parity.test.ts', 'workflows/launch-system-prompt.test.ts'] } };
-    expect(factValueProblems(files, RUNNER_FACTS)).toEqual([
+    expect(factValueProblems(files, FACTS_WITH_SCENARIO)).toEqual([
       'inputDelivery.humanInputAtTurnEnd never-held: workflows/nowhere.test.ts does not exist',
       'inputDelivery.humanInputAtTurnEnd never-held: workflows/waits-parity.test.ts is a parity file',
       'inputDelivery.humanInputAtTurnEnd never-held: workflows/launch-system-prompt.test.ts does not spell \'never-held\'',
@@ -107,13 +109,17 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
     expect(parityRunners('server-contract', 'R1')).toEqual([NO_SESSION_RUNNER]);
   });
 
-  it('runs on a runner outside the built-in roster every row that runs on every built-in runner, and no shared row (hearsay-tools/squawk#3899)', () => {
-    expect(runsOn('harness:run', 'R1', 'fixture')).toBe(true);
-    expect(runsOn('waits', 'U27', 'fixture')).toBe(true);
-    expect(runsOn('waits', undefined, 'fixture')).toBe(true);
-    expect(runsOn('waits', 'U2', 'fixture')).toBe(false);
-    expect(runsOn('server-contract', 'R1', 'fixture')).toBe(false);
-    for (const runner of BUILT_IN_RUNNER_IDS) expect(runsOn('waits', 'U2', runner)).toBe(runner === SCENARIO_RUNNER);
+  it('runs shared rows on the scenario runner alone and every-runner rows on any other custom runner (hearsay-tools/squawk#3899, hearsay-tools/squawk#4177)', () => {
+    expect(runsOn('harness:run', 'R1', 'custom')).toBe(true);
+    expect(runsOn('waits', 'U27', 'custom')).toBe(true);
+    expect(runsOn('waits', undefined, 'custom')).toBe(true);
+    expect(runsOn('waits', 'U2', 'custom')).toBe(false);
+    expect(runsOn('server-contract', 'R1', 'custom')).toBe(false);
+    expect(runsOn('waits', 'U2', SCENARIO_RUNNER)).toBe(true);
+    expect(runsOn('server-contract', 'R1', SCENARIO_RUNNER)).toBe(true);
+    expect(runsOn('harness:run', 'R1', SCENARIO_RUNNER)).toBe(false);
+    expect(runsOn('waits', 'U27', SCENARIO_RUNNER)).toBe(false);
+    for (const runner of BUILT_IN_RUNNER_IDS) expect(runsOn('waits', 'U2', runner)).toBe(false);
   });
 
   // A row whose scenario runs the runner's own code cannot be shared: a provider error is mapped by
@@ -137,7 +143,7 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
 
   it('classes every scenario a native mock declares, and every scenario a row drives', () => {
     // The adapters are the registered runners' `mock` parts: a test file that registered fewer would declare fewer scenarios.
-    expect(Object.keys(HARNESS_ADAPTERS)).toEqual([...BUILT_IN_RUNNER_IDS]);
+    expect(Object.keys(HARNESS_ADAPTERS).filter(id => id !== SCENARIO_RUNNER)).toEqual([...BUILT_IN_RUNNER_IDS]);
     const declared = new Set(Object.values(HARNESS_ADAPTERS).flatMap(adapter => Object.keys(adapter.scenarios)));
     expect([...declared].filter(name => !Object.hasOwn(SCENARIO_CLASSES, name))).toEqual([]);
     expect(parityRowScenarios().filter(row => !Object.hasOwn(SCENARIO_CLASSES, row.scenario)).map(row => row.id)).toEqual([]);
@@ -231,9 +237,7 @@ function familyRowCatalog(): Map<string, Set<string>> {
   const ids = (rows: ReadonlyArray<{ id: string }>) => new Set(rows.map(row => row.id));
   const catalog = new Map<string, Set<string>>([...harnessGroupRows()].map(([group, rows]) => [`harness:${group}`, rows]));
   catalog.set('ci-wait-failure', new Set(Object.values(CI_FAILURE_GROUPS).flat().map(ciFailureRowId)));
-  const titles: string[] = [];
-  for (const rows of Object.values(RESUME_DIAGNOSTICS_GROUPS)) for (const row of rows) resumeDiagnosticsCells[row.family](row.runner, registrationCollector(titles));
-  catalog.set('resume-diagnostics', new Set(titles.map(parityRowId).filter((row): row is string => row !== undefined)));
+  catalog.set('resume-diagnostics', new Set(collectResumeDiagnosticsTitles().map(parityRowId).filter((row): row is string => row !== undefined)));
   for (const [family, rows] of Object.entries(familyTables())) catalog.set(family, ids(rows));
   return catalog;
 }

@@ -1,13 +1,19 @@
 # Shared parity rows run on one runner
 
 A parity row that tests Squawk's shared logic above the runner seam runs on one runner,
-`SCENARIO_RUNNER` (claude, the default runner), in `core/parity-classes.testkit.ts`. Rows that
-test a runner's own code still run on every runner: the seam tier and the seam contract
+`SCENARIO_RUNNER` (`fixture`, the test-only fixture runner in `runners/fixture/`,
+hearsay-tools/squawk#4177), in `core/parity-classes.testkit.ts`. Rows that
+test a runner's own code still run on every built-in runner: the seam tier and the seam contract
 (S36–S44), the families classed `every-runner`, each row a family lists in `everyRunner`, and
 each row with an exemption. Shared code sees a runner through five turn-path facts
 (`inputDelivery.mode`, `.consumption`, `.acknowledgement`, `.humanInputAtTurnEnd` and
 `systemPromptOnResume`). The scenario runner shows one value of each. Every other declared value
 names the unit tests that drive shared code with it, in `FACT_VALUE_TESTS`.
+
+Moving `SCENARIO_RUNNER` from `claude` onto `runners/fixture/` keeps every shared engine parity
+test off every built-in runner adapter's import closure, removes built-in runner duplication from
+shared engine suites, and runs Squawk tool calls directly over `CEZ_TOOL_SOCKET` without spawning
+an MCP server child process.
 
 Before this record, a shared row ran on a derived set of three runners (claude, cursor, omp): the
 smallest set that showed every declared value of each turn-path fact (hearsay-tools/cezarion#2991).
@@ -44,7 +50,8 @@ read site ignores its value.
   value, and a named file that is missing, is a parity file or does not spell its value.
 - `cez/runner-fact-combination` still fails a function that combines two facts, which one test
   per value cannot show; a real combination still names a row that runs on every runner.
-- The wait parity files of every runner but the scenario runner are fold files (`WAIT_FOLDS`).
+- The wait parity files of every built-in runner are fold files (`WAIT_FOLDS`), and the scenario
+  runner's shared wait rows run from consolidated shared fold files (`SHARED_WAIT_FOLDS`).
   The cap splits that cursor needed as a shared-set runner (`WAIT_PARITY_FAMILIES`) are gone.
 - Each runner's adapter keeps its own tests: the seam tier, the seam contract and its unit tests.
   The T3 case shows the gap this leaves. A scenario row no longer finds a latent bug in another

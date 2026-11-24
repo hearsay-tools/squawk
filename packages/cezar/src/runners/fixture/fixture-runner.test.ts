@@ -28,7 +28,7 @@ describe('the fixture runner in the registry', () => {
     expect(knownRunnerIds()).toContain('fixture');
     expect(registeredRunners().map(({ id }) => id)).toContain('fixture');
     expect(BUILT_IN_RUNNER_IDS).not.toContain('fixture');
-    expect(RUNNER_FACTS.fixture!.inputDelivery.mode).toBe('boundary');
+    expect(RUNNER_FACTS.fixture!.inputDelivery.mode).toBe('steer');
   });
 });
 
@@ -41,7 +41,7 @@ const fixtureSeamRows: HarnessGroup = (r) => {
   });
 };
 
-describeHarnessGroups({ runner: fixtureRunner, part: 'startup' }, vitestRegistration(), [fixtureSeamRows]);
+describeHarnessGroups({ runner: fixtureRunner, part: 'startup' }, { ...vitestRegistration(), allRows: true }, [fixtureSeamRows]);
 
 describe('a task on the fixture runner', () => {
   const f = setupMonitoringFixture();

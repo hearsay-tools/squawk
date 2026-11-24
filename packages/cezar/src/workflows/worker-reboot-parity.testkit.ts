@@ -36,7 +36,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { currentStepId: 'task', delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-    const orphan = await worker(p.id, adapter.scenarios.baseline!);
+    const orphan = await worker(p.id, adapter.scenarios.baseline!, runner);
     store.updateRun(orphan.id, { runner }); manager.enqueueOwnedRun(orphan.id);
     await until(() => store.getRun(orphan.id)?.status === 'waiting');
     const files = join(root, '.ai/cezar/runs');
@@ -48,7 +48,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     manager.requestWorkerStop(orphan.id);
     expect(await manager.awaitRunTermination(orphan.id, 15_000)).toBe(true);
 
-    const twin = await worker(p.id, adapter.scenarios['cezar-done']!);
+    const twin = await worker(p.id, adapter.scenarios['cezar-done']!, runner);
     store.updateRun(twin.id, { runner }); manager.enqueueOwnedRun(twin.id);
     await until(() => store.workerExecutions.readWorkerExecution(twin.id)?.phase === 'complete');
     expect(store.getRun(twin.id)?.status).toBe('done');
@@ -149,7 +149,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv]! = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
     setRunStatus(store, p.id, RUN_STATUS.waiting, { currentStepId: 'task', delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
-    const w = await worker(p.id, adapter.scenarios.baseline!);
+    const w = await worker(p.id, adapter.scenarios.baseline!, runner);
     store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
     await until(() => store.getRun(w.id)?.status === 'waiting');
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);

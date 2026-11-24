@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { createFailureControl, type FailureControlOptions } from '../../scripts/mock-failure-control.mjs';
 import { expect } from 'vitest';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { SCENARIO_RUNNER } from '../core/parity-classes.testkit.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 
@@ -144,9 +145,9 @@ export const MESSAGE_WAKE_OPENING = 'Resume to receive queued messages.';
 // a message steered behind the opening would be read; `unread` makes Claude's failure end the
 // process instead, as a crash would, before it reads one. Every other prompt is unchanged.
 export function persistentWakeFailure(root: string, runner: string, { usageLimit = false, opening = TIMER_WAKE_OPENING, unread = false } = {}) {
-  if (usageLimit) expect(runner).toBe('claude');
+  if (usageLimit) expect([SCENARIO_RUNNER, 'claude']).toContain(runner);
   const { lift } = nativeFailureControl(root, runner, { mode: 'persistent', opening,
-    failure: unread && (runner === 'claude' || RUNNER_FACTS[runner]!.inputDelivery.consumption === 'unobservable') ? 'unread' : usageLimit ? 'usage-limit' : 'provider' });
+    failure: unread && (runner === 'claude' || runner === SCENARIO_RUNNER || RUNNER_FACTS[runner]!.inputDelivery.consumption === 'unobservable') ? 'unread' : usageLimit ? 'usage-limit' : 'provider' });
   return { lift };
 }
 

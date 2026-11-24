@@ -1,20 +1,8 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, readdirSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
-import { runsOn, type ParityFamilyName } from '../core/parity-classes.testkit.ts';
+import { describe, expect, it } from 'vitest';
+import { PARITY_ROSTER, runsOn, type ParityFamilyName } from '../core/parity-classes.testkit.ts';
 import { registrationGroups } from '../core/registration-coverage.testkit.ts';
-import { describeSessionContext, SESSION_CONTEXT_GROUPS } from './session-context-cells.testkit.ts';
-import { useWorkerWaitFixture } from './worker-wait.testkit.ts';
-
-/** Collect the real cell definitions without running fixtures or native processes. */
-function collectionSuite(names: string[]) {
-  return {
-    describe: ((_name: string, ...args: unknown[]) => (args.at(-1) as () => void)()) as typeof describe,
-    it: ((name: string) => { names.push(name); }) as typeof it,
-    afterEach: (() => {}) as typeof afterEach,
-    useWorkerWaitFixture: (() => {}) as typeof useWorkerWaitFixture,
-  };
-}
+import { collectSessionContextTitles, SESSION_CONTEXT_GROUPS } from './session-context-rows.testkit.ts';
 
 function registeredGroups(callee: string, catalog: string, known: string[]): string[] {
   const guard = 'context-completion-registration-parity.test.ts';
@@ -23,10 +11,15 @@ function registeredGroups(callee: string, catalog: string, known: string[]): str
     .flatMap(file => registrationGroups(readFileSync(new URL(file, import.meta.url), 'utf8'), file, callee, catalog, known));
 }
 
-function expectCells(names: string[], rows: string[], family: ParityFamilyName) {
-  const actual = names.map(name => name.split(' ').slice(0, 2).join(' ')).sort();
-  const expected = BUILT_IN_RUNNER_IDS.flatMap(runner => rows.filter(row => runsOn(family, row, runner)).map(row => `${runner} ${row}`)).sort();
-  expect(actual).toEqual(expected);
+function titlePair(title: string): string {
+  const match = title.match(/^(\S+)\s+(R\d+)\b/);
+  if (!match) throw new Error(`unexpected session-context title: ${title}`);
+  return `${match[1]} ${match[2]}`;
+}
+
+function expectCells(actual: string[], rows: string[], family: ParityFamilyName) {
+  const expected = PARITY_ROSTER.flatMap(runner => rows.filter(row => runsOn(family, row, runner)).map(row => `${runner} ${row}`)).sort();
+  expect([...actual].sort()).toEqual(expected);
 }
 
 describe('session-context family registration', () => {
@@ -34,8 +27,8 @@ describe('session-context family registration', () => {
     const known = Object.keys(SESSION_CONTEXT_GROUPS) as Array<keyof typeof SESSION_CONTEXT_GROUPS>;
     const registered = registeredGroups('describeSessionContext', 'SESSION_CONTEXT_GROUPS', known);
     expect(registered.sort()).toEqual([...known].sort());
-    const names: string[] = [];
-    for (const group of registered) describeSessionContext(SESSION_CONTEXT_GROUPS[group as keyof typeof SESSION_CONTEXT_GROUPS], collectionSuite(names));
-    expectCells(names, ['R120', 'R121', 'R122', 'R123', 'R124'], 'session-context');
+    const pairs = registered.flatMap(group =>
+      collectSessionContextTitles(SESSION_CONTEXT_GROUPS[group as keyof typeof SESSION_CONTEXT_GROUPS]).map(titlePair));
+    expectCells(pairs, ['R120', 'R121', 'R122', 'R123', 'R124'], 'session-context');
   });
 });

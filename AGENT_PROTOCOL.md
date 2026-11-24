@@ -221,10 +221,10 @@ Owners. Paths are relative to `packages/cezar/src/`.
   `SCENARIO_RUNNER` and `FACT_VALUE_TESTS` in `core/parity-classes.testkit.ts`.
 - **Spec-support rows:** `SPEC_FIELD_PROBES` in `core/harness-parity-cells.testkit.ts`.
 - **Per-runner files:** `runners/<id>/harness-<id>-<part>-parity.test.ts`
-  (`harnessParityFile`) and `runners/<id>/waits-<id>-<part>-parity.test.ts`
-  (`WAIT_PARITY_FILES`, `FAMILY_FILE_PARTS`, `WAIT_FOLDS` in
-  `workflows/waits-parity-catalog.testkit.ts`). A part in `FAMILY_FILE_PARTS` runs one
-  `waits-<runner>-<part>-<family>-parity.test.ts` file per row family.
+  (`harnessParityFile`) and `runners/<id>/waits-<id>-every-runner-<fold>-parity.test.ts`
+  (`WAIT_FOLDS` in `workflows/waits-parity-catalog.testkit.ts`), with shared wait rows in
+  `runners/fixture/waits-fixture-<fold>-parity.test.ts` (`SHARED_WAIT_FOLDS`). A part whose rows
+  are all shared (`ownership`) has a file under `runners/fixture/` only.
 - **Matrix guards and single-runner cells:** `core/harness-parity.test.ts` and
   `workflows/waits-parity.test.ts`.
 

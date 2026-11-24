@@ -15,6 +15,7 @@ import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { runnerGolden, shippedScriptPath } from './runner-golden.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
+import { runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
 import { SEAM_CRITERIA, seamRows } from './harness-parity-seam-tier.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
@@ -210,6 +211,7 @@ export const SESSION_GROUPS = {
   'tool-grants'(r: HarnessRegistrar) {
     const { describeRunners, scope, registration } = r;
     describeRunners('tool-grants', 'harness parity — tool grants', () => {
+      if (scope !== 'once' && !registration.allRows && !runsOn('harness:tool-grants' as ParityFamilyName, undefined, scope.runner.id)) return;
       (registration.toolGrants ?? describeToolGrantParity)(scope === 'once' ? 'once' : scope.runner.id);
     }, true);
   },
