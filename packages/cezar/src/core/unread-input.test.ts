@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { sealTestRunners } from './runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
@@ -14,7 +15,7 @@ import type { RunManager } from '../workflows/run.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import './created-runners.testkit.ts';
 import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 
 sealTestRunners(claudeRunner, codexRunner, opencodeRunner);
 

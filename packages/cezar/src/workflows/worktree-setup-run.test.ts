@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import '../runners/claude/claude-runner.testkit.ts';
-import { withOwnedInputRun } from '../core/workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from '../core/worker-parity-core.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
 import { ignoreTermShell } from '../stubborn-child.testkit.ts';
 import { reclaimWorktree } from '../runs/retention.ts';

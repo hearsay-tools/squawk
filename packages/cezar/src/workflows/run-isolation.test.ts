@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import '../runners/claude/claude-runner.testkit.ts';
 import { GIT_ID, waitForProduct } from './run-fixture.testkit.ts';

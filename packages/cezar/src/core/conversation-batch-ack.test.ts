@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { runnersWhere } from './runner-facts.ts';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 import { inFlightWithHeldAck, withDelayedAck } from './owned-input-delivery.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 

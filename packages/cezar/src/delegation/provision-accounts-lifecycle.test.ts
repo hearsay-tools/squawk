@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { spawnCapacityRefusal } from './capacity.ts';
 import '../core/every-runner.testkit.ts';

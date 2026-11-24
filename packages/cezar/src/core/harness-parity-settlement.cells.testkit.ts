@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -20,7 +20,7 @@ import { exemptionFor, HARNESS_ADAPTERS, promptFor, waitFor } from './harness-pa
 import { driveObservedRun } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { runnersWhere } from './runner-facts.ts';
-import { driveRun, withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
 
 /** Keep the exact fire-and-forget settlement promise owned by the fixture. */
 function observeSettlements(manager: RunManager) {

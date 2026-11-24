@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 
 import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
@@ -18,7 +18,7 @@ import { driveObservedRun, openTimerWait, RUN_CRITERIA, runRows, TERMINAL, timer
 import { observationClock } from './observation-clock.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
-import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
+import { driveRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 
 // #723: use the real RunManager on both event-handler construction paths.

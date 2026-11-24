@@ -288,7 +288,9 @@ export class WaitEngine {
 
   /** The open peer waits of these runs whose named peer already wrote, settled or was deleted resolve now. */
   resolvePeerWaits(runIds: readonly string[]): void {
-    for (const id of runIds) for (const wait of WAIT_KINDS.peer.select(openWaits(this.context.store.getRun(id) ?? {}))) this.resolvePeerWait(id, wait);
+    const peer = WAIT_KINDS.peer;
+    if (!peer) return;
+    for (const id of runIds) for (const wait of peer.select(openWaits(this.context.store.getRun(id) ?? {}))) this.resolvePeerWait(id, wait);
   }
 
   /** The wait's row re-observes its target now. True when the wait is no longer open. */

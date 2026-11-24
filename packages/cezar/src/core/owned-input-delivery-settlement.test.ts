@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
@@ -10,7 +11,7 @@ import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 
 import { driveSeam, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 
 
 for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {

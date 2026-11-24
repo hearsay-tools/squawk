@@ -1,3 +1,4 @@
+import '../ci-wait/tools.testkit.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import '../built-in-run-slots.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import childProcess, { execFileSync, spawn, type ChildProcess, type ExecFileOptions, type SpawnOptions } from 'node:child_process';
@@ -13,7 +13,7 @@ import { RunStore } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS, RunManager } from '../workflows/run.ts';
 import { createFixtureManager } from '../workflows/fixture-manager.testkit.ts';
 import { HARNESS_ADAPTERS, waitFor } from './harness-parity-core.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
 // Its stores reach worker executions: the shipped ones (hearsay-tools/squawk#4039).
 import '../delegation/worker-executions.testkit.ts';

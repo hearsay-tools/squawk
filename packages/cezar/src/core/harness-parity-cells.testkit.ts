@@ -1,3 +1,5 @@
+import '../ci-wait/tools.testkit.ts';
+import '../built-in-run-slots.testkit.ts';
 import { UI_CRITERIA } from './ui-parity-rows.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -24,7 +26,7 @@ import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
 import { parityRowId } from './parity-classes.testkit.ts';
 import { SEAM_CONTRACT_ROWS } from './seam-contract.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 import { CONTRACT_GROUPS, describeHarnessParity as describeContractParity } from './harness-parity-contract.cells.testkit.ts';
 import { describeHarnessParity as describeOwnedInputParity, OWNED_INPUT_GROUPS, agentInput } from './harness-parity-owned-input.cells.testkit.ts';
 import { describeHarnessParity as describeOwnedWorkflowsParity, OWNED_WORKFLOWS_GROUPS } from './harness-parity-owned-workflows.cells.testkit.ts';
@@ -285,7 +287,8 @@ function matrixGuards(r: HarnessRegistrar): void {
         for (const path of ['AGENT_PROTOCOL.md', '.ai/specs/2026-09-04-harness-parity-matrix.md',
           'packages/cezar/src/core/harness-parity.test.ts', ...HARNESS_PARITY_KITS.map(kit => `packages/cezar/src/core/${kit}`),
           'packages/cezar/src/core/harness-parity.testkit.ts', 'packages/cezar/src/core/harness-parity-core.testkit.ts',
-          'packages/cezar/src/core/workflow-parity.testkit.ts', 'packages/cezar/src/core/workflow-parity-core.testkit.ts']) {
+          'packages/cezar/src/core/workflow-parity.testkit.ts', 'packages/cezar/src/core/workflow-parity-core.testkit.ts',
+          'packages/cezar/src/core/worker-parity.testkit.ts', 'packages/cezar/src/core/worker-parity-core.testkit.ts']) {
           const source = readFileSync(new URL(`../../../../${path}`, import.meta.url), 'utf8');
           expect(source.match(countedRunners) ?? [], path).toEqual([]);
         }

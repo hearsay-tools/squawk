@@ -1,4 +1,4 @@
-import '../built-in-wait-kinds.testkit.ts';
+import '../core-registries.testkit.ts';
 import { workflowStepCompletionParity } from './workflow-step-completion-rows.testkit.ts';
 import { autoEndObservationClock, observationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';

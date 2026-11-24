@@ -1,3 +1,4 @@
+import '../built-in-run-slots.testkit.ts';
 import { runnerDefinition } from '../core/runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';

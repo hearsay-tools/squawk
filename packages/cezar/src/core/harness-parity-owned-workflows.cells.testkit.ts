@@ -10,7 +10,7 @@ import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from '../workflows/
 import { supportsProfiles } from './agent-profiles.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { withOwnedInputRun, withSkillParentRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun, withSkillParentRun } from './worker-parity-core.testkit.ts';
 
 export const OWNED_WORKFLOWS_GROUPS = {
   'owned-workflows'(r: HarnessRegistrar) {

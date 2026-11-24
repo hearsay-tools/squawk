@@ -10,7 +10,7 @@ import type { AgentSession } from './agent-runner.ts';
 import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
 import './created-runners.testkit.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './worker-parity-core.testkit.ts';
 import { blockRunWrites, muteLockedDatabaseLogs } from '../runs/run-store.testkit.ts';
 
 sealTestRunners(claudeRunner, opencodeRunner);

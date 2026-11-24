@@ -96,7 +96,9 @@ export function peerWaitResult(run: RunRecord, wait: PeerWaitEntry, peers: { get
 export function runsAwaitingPeer(peer: RunRecord | string, runs: () => readonly RunRecord[]): string[] {
   if (typeof peer !== 'string' && LIVE.includes(peer.status)) return [];
   const peerId = typeof peer === 'string' ? peer : peer.id;
-  const names = (wait: Wait) => WAIT_KINDS.peer.is(wait) && wait.peerIds.includes(peerId);
+  const peerRow = WAIT_KINDS.peer;
+  if (!peerRow) return [];
+  const names = (wait: Wait) => peerRow.is(wait) && wait.peerIds.includes(peerId);
   return runs().filter(run => openWaits(run).some(names)).map(run => run.id);
 }
 

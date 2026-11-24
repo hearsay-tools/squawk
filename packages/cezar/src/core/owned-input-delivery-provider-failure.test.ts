@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 import { runnersWhere } from './runner-facts.ts';
 
 import { promptFor, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './worker-parity.testkit.ts';
 
 const delivered = (input: object, stored: { consumedAt?: string | undefined; awaitingRead?: true | undefined } | undefined) =>
   ({ ...input, deliveredAt: expect.any(String), ...(stored?.consumedAt ? { consumedAt: expect.any(String) } : {}),
