@@ -209,7 +209,7 @@ export class WorkerQuestions {
     if (!target) return;
     const { root, parent, parentId, state, wait } = target;
     const turn = parkingTurn(this.context.store.eventLog.readEvents(workerId));
-    if (messagedParentSince(state.messages, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
+    if (messagedParentSince(this.context.store.conversations, root.id, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
     const now = new Date().toISOString();
     const message = parkNoticeMessage({ workerRunId: workerId, parentRunId: parentId, waitId: wait.id, waits: worker.waits ?? [],
       ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redaction.redactText(text) });

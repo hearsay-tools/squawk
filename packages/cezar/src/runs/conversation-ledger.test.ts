@@ -94,6 +94,8 @@ describe('StoredConversationLedger', () => {
       page: (rootIds, pair, before, limit) => archived.filter(entry => rootIds.includes('p') && between(entry, pair) &&
         (!before || entry.message.createdAt < before.createdAt)).slice(-limit),
       peerExchanged: (a, b) => [a, b].sort().join() === 'p,q',
+      sentSince: (rootId, sender, recipient, since) => rootId === 'p' && archived.some(entry =>
+        entry.message.senderRunId === sender && entry.message.recipientRunId === recipient && entry.message.createdAt >= since),
     };
     // A late reply amended the archived x1 in the row.
     const late: RequestOutcome = { requestId: 'x1', status: 'replied-late', observedAt: '2026-11-24T10:30:00.000Z', replyId: 'm2' };
@@ -114,5 +116,10 @@ describe('StoredConversationLedger', () => {
     expect(seen).toEqual(['x1', 'x2', 'm1', 'm2']);
     expect(ledger.peerExchanged('q', 'p')).toBe(true);
     expect(ledger.peerExchanged('w', 'p')).toBe(false);
+    // A message since a time: the row's (m2 p->w at 10:01), else the archive's (x3 p->q at 09:02).
+    expect(ledger.sentSince('p', 'p', 'w', '2026-11-24T10:01:00.000Z')).toBe(true);
+    expect(ledger.sentSince('p', 'w', 'p', '2026-11-24T10:00:00.001Z')).toBe(false);
+    expect(ledger.sentSince('p', 'p', 'q', '2026-11-24T09:02:00.000Z')).toBe(true);
+    expect(ledger.sentSince('p', 'p', 'q', '2026-11-24T09:02:00.001Z')).toBe(false);
   });
 });

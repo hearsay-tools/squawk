@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import type { ConversationMessage, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunEvent, RunRecord } from '../runs/store.ts';
-import type { RunEventLog } from '../runs/ports.ts';
+import type { ConversationLedger, RunEventLog } from '../runs/ports.ts';
 import { describeWait, isSquawkHumanWait } from '../workflows/waits.ts';
 import { uuidFrom } from './questions.ts';
 import { topLevelAssistantText } from './results.ts';
@@ -49,10 +49,11 @@ export function parkNoticeWait(
   return WAIT_KINDS.worker.selectOpen(waits).find(wait => selects(wait) && !noticed(wait));
 }
 
-/** Whether the worker sent its parent a message since `since`, the start of its parking turn. A
- *  turn that already said something needs no notice. */
-export function messagedParentSince(messages: readonly ConversationMessage[], workerRunId: string, parentRunId: string, since: string | undefined): boolean {
-  return since !== undefined && messages.some(message => message.senderRunId === workerRunId && message.recipientRunId === parentRunId && message.createdAt >= since);
+/** Whether the worker sent its parent a message since `since`, the start of its parking turn, in
+ *  root `rootId`'s ledger, archived history included (hearsay-tools/squawk#4192). A turn that
+ *  already said something needs no notice. */
+export function messagedParentSince(ledger: Pick<ConversationLedger, 'sentSince'>, rootId: string, workerRunId: string, parentRunId: string, since: string | undefined): boolean {
+  return since !== undefined && ledger.sentSince(rootId, workerRunId, parentRunId, since);
 }
 
 /** The turn the worker parked in: when it started, and its last top-level assistant text. An

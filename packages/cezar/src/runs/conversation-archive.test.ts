@@ -47,6 +47,9 @@ describe('conversation_archive (hearsay-tools/squawk#4192)', () => {
     expect(db.archive?.page(['elsewhere'], pair, undefined, 10)).toEqual([]);
     expect(db.archive?.peerExchanged('peer', 'root')).toBe(true);
     expect(db.archive?.peerExchanged('worker', 'root')).toBe(false);
+    expect(db.archive?.sentSince('root', 'worker', 'root', '2026-11-24T10:01:00.000Z')).toBe(true);
+    expect(db.archive?.sentSince('root', 'worker', 'root', '2026-11-24T10:01:00.001Z')).toBe(false);
+    expect(db.archive?.sentSince('root', 'root', 'worker', '2026-11-24T10:01:00.000Z')).toBe(true);
     // A late reply amends the archived outcome in place.
     const late: RequestOutcome = { requestId: 'm1', status: 'replied-late', observedAt: '2026-11-24T11:00:00.000Z', replyId: 'r1' };
     db.transaction({ upserts: [row('root', ['', 'root'])], deletes: [], conversationArchive: [{ rootId: 'root', entries: [], outcomes: [late] }] });

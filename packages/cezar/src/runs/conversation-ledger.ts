@@ -29,6 +29,9 @@ export interface ConversationLedger {
   page(rootIds: readonly string[], pair: readonly [string, string], before: ConversationCursor | undefined, limit: number): ConversationPage;
   /** Whether a peer message ever passed between runs `a` and `b`, in either one's ledger. */
   peerExchanged(a: string, b: string): boolean;
+  /** Whether root `rootId`'s ledger holds a message from `senderRunId` to `recipientRunId` created
+   *  at or after `since`. */
+  sentSince(rootId: string, senderRunId: string, recipientRunId: string, since: string): boolean;
 }
 
 /** The merged history order: `createdAt`, then `id`, a total order a cursor can name. */
@@ -42,7 +45,7 @@ export function acceptedRequest(message: ConversationMessage | undefined): Conve
 }
 
 /** The archive reads the ledger answers after the row. */
-export type ConversationArchiveReads = Pick<ConversationArchiveRows, 'find' | 'page' | 'peerExchanged'>;
+export type ConversationArchiveReads = Pick<ConversationArchiveRows, 'find' | 'page' | 'peerExchanged' | 'sentSince'>;
 
 /** The ledger as the store keeps it: each root's active entries in its row, the settled rest in
  *  `archive` (none for a store without a database). The row answers first. */
@@ -91,5 +94,10 @@ export class StoredConversationLedger implements ConversationLedger {
     const between = (message: ConversationMessage) => message.relationship === 'peer' &&
       [message.senderRunId, message.recipientRunId].includes(a) && [message.senderRunId, message.recipientRunId].includes(b);
     return [a, b].some(id => this.state(id)?.messages.some(between) ?? false) || (this.archive()?.peerExchanged(a, b) ?? false);
+  }
+
+  sentSince(rootId: string, senderRunId: string, recipientRunId: string, since: string): boolean {
+    return (this.state(rootId)?.messages.some(message => message.senderRunId === senderRunId && message.recipientRunId === recipientRunId && message.createdAt >= since) ?? false) ||
+      (this.archive()?.sentSince(rootId, senderRunId, recipientRunId, since) ?? false);
   }
 }

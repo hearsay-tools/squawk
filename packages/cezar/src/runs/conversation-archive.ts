@@ -74,6 +74,7 @@ export class ConversationArchiveRows {
         ORDER BY created_at DESC, id DESC LIMIT :limit`),
       peer: db.prepare(`SELECT 1 FROM conversation_archive WHERE root_id IN (:self, :other) AND peer = 1 AND ${PAIR} LIMIT 1`),
       count: db.prepare('SELECT count(*) AS count FROM conversation_archive WHERE root_id = ?'),
+      sentSince: db.prepare(`SELECT 1 FROM conversation_archive WHERE root_id = ? AND created_at >= ? AND sender_run_id = ? AND recipient_run_id = ? LIMIT 1`),
     };
   }
 
@@ -116,6 +117,11 @@ export class ConversationArchiveRows {
 
   /** Whether an archived peer message passed between `a` and `b` in either one's ledger. */
   peerExchanged(a: string, b: string): boolean { return this.execute(() => this.statements.peer.get({ self: a, other: b })) !== undefined; }
+
+  /** Whether root `rootId`'s archive holds a message from `senderRunId` to `recipientRunId` created at or after `since`. */
+  sentSince(rootId: string, senderRunId: string, recipientRunId: string, since: string): boolean {
+    return this.execute(() => this.statements.sentSince.get(rootId, since, senderRunId, recipientRunId)) !== undefined;
+  }
 
   /** How many entries root `rootId`'s archive holds. */
   count(rootId: string): number { return Number(this.execute(() => this.statements.count.get(rootId))?.count ?? 0); }

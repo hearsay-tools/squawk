@@ -214,7 +214,6 @@
     "packages/cezar/src/workflows/wait-scope.test.ts": 1,
     "packages/cezar/src/workflows/waits.test.ts": 17,
     "packages/cezar/src/workflows/waits.testkit.test.ts": 2,
-    "packages/cezar/src/workflows/worker-park-notice.test.ts": 1,
     "packages/cezar/src/workflows/worker-questions-parent-unreadable.test.ts": 1,
     "packages/cezar/src/workflows/worker-questions-reply-settlement.test.ts": 1,
     "packages/cezar/src/workflows/worker-wait-disposal.test.ts": 1,

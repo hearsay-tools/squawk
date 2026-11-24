@@ -8,6 +8,9 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 import { WAIT_KIND } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { holdNoticeId, parkNoticeId } from '../delegation/park-notice.ts';
+import { projectConversationEvents } from '../delegation/conversations.ts';
+import { CONVERSATION_ARCHIVE_THRESHOLD } from '../runs/conversation-compaction.ts';
+import { conversationOf as conversationState } from '../runs/task-rights.ts';
 import { messagesPrompt } from './monitoring-turn.testkit.ts';
 import { thenSay, toolCall } from './waits-parity.testkit.ts';
 import { delegatingParent, eventCheckpoint, fixtureUpdateRun, manager, register, restart, semaphore, spendWorkerBudget, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait-core.testkit.ts';
@@ -135,6 +138,32 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     await service.send(callerOf(w.id), { id: own, recipientRunId: p.id, kind: 'progress', text: 'I wait on the CI run of PR 12.', timeoutSeconds: 600 });
     register(p.id, [w.id]);
     expect(conversationOf(p.id).filter(message => message.senderRunId === w.id).map(message => message.id)).toEqual([own]);
+  });
+
+  // hearsay-tools/squawk#4192 review: compaction before the notice moves the turn's own message to
+  // the archive; the suppression still finds it there.
+  it('sends no notice when the turn that parked already messaged the parent and that message is archived', async () => {
+    const { p, service, callerOf } = await family();
+    const w = await parkedWorker(p.id, 'Parked after reporting.');
+    const own = randomUUID();
+    await service.send(callerOf(w.id), { id: own, recipientRunId: p.id, kind: 'progress', text: 'I wait on the CI run of PR 12.', timeoutSeconds: 600 });
+    const input = store.getRun(p.id)?.agentInputs?.find(entry => entry.id === own);
+    if (!input?.deliveredAt) store.commitOutcome(p.id, { kind: 'delivered', inputIds: [own], at: new Date().toISOString() });
+    // A threshold-size ledger of settled parent-to-worker history, older than the activity window.
+    const createdAt = new Date(Date.parse(store.getRun(w.id)!.createdAt) - 60_000).toISOString();
+    const state = conversationState(store.getRun(p.id)) ?? { messages: [], outcomes: [] };
+    store.commitConversation(p.id, { ...state, messages: [...state.messages, ...Array.from({ length: CONVERSATION_ARCHIVE_THRESHOLD }, (_, n): ConversationMessage =>
+      ({ id: randomUUID(), senderRunId: p.id, recipientRunId: w.id, kind: 'progress', text: `m${n}`, createdAt, requestHash: 'a'.repeat(64), state: 'accepted' }))] });
+    projectConversationEvents(store, store.getRun(p.id)!);
+    // The worker's own message ages past the activity window before the parent registers its wait.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 60_000 });
+    try {
+      register(p.id, [w.id]);
+    } finally { vi.useRealTimers(); }
+    expect(conversationOf(p.id).some(message => message.id === own)).toBe(false);
+    expect(store.conversations.findMessage(p.id, own)?.id).toBe(own);
+    expect(notices(p.id, w.id)).toEqual([]);
+    expect(store.conversations.findMessage(p.id, parkNoticeId(w.id, store.getRun(p.id)!.waits!.at(-1)!.id))).toBeUndefined();
   });
 
   it('a request wait on a reply from a parked worker gets the notice', async () => {
