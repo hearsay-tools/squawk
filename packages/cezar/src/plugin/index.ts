@@ -10,3 +10,4 @@ export type { StepKindDefinition, StepKindContext, StepKindOutcome } from '../wo
 export type { CliCommandDefinition, RootCommandContext, SubcommandRunner } from '../core/cli-registry.ts';
 export type { RunSlots, DeletionGate, DeletionKind, ReclaimPreparation, ReclaimContext, RemovalCleanup } from '../runs/removal-slots.ts';
 export type { RunLifecycleHandlers, RunLifecycleHandler, RunLifecycleEvents, RunLifecycleEventType } from '../runs/lifecycle.ts';
+export * from './runner-kit.ts';

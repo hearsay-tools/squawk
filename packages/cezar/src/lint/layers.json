@@ -42,6 +42,8 @@
     ],
     "shell": [
       "server/",
+      "plugin/index.ts",
+      "plugin/runner-kit.ts",
       "built-in-run-slots.ts",
       "built-in-cli-commands.ts",
       "built-in-tools.ts",

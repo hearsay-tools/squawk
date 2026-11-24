@@ -11,7 +11,7 @@ import type {
 import type { PlanEntry, UiEvent, UiToolItem } from '../../core/ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { ownLookup } from '../../core/own-lookup.ts';
-import { isRecord, number, string } from '../pi/pi-rpc-wire.ts';
+import { isRecord, number, string } from '../../core/pi-rpc-wire.ts';
 
 const TODO_STATUS: Readonly<Record<string, PlanEntry['status']>> = {
   pending: 'pending',

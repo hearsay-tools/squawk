@@ -42,7 +42,7 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
 | `loadModelCatalog()`, optional `loadModelCatalogKey()` | `<id>-model-catalog.ts` | The host model discovery adapter, with optional native auth/build cache identity; requests can carry the selected account home |
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
-| `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `runners/project-agents-file.ts`) names no runner |
+| `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `core/project-agents-file.ts`) names no runner |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
 | `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`, and R77/UI2 exactly where `facts.hookEvents` is `none`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
 | `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
@@ -88,6 +88,12 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
   the whole project when the lint plugin's import closure changes (`core/runner-closure.test.ts`).
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
+- A runner folder reads core code only through the runner kit, `@hearsay-tools/squawk/plugin`
+  (`plugin/runner-kit.ts`), and never imports another runner's folder. Code that several runners
+  share, such as the Pi-family RPC wire (`core/pi-rpc-wire.ts`, `core/pi-rpc-turn.ts`), lives in
+  `core/` and the kit re-exports it. `cez/runner-core-import` fails a new relative import out of a
+  runner folder; `runner-core-import.baseline.json` lists the ones that remain until each runner
+  moves onto the kit (hearsay-tools/squawk#4201).
 
 ### Managed CLI installation
 

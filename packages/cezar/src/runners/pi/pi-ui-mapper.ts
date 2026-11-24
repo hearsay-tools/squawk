@@ -14,7 +14,7 @@ import type {
   UiToolItem,
 } from '../../core/ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { contentText, isRecord, number, piRpcError as rpcError, string } from './pi-rpc-wire.ts';
+import { contentText, isRecord, number, piRpcError as rpcError, string } from '../../core/pi-rpc-wire.ts';
 
 export interface PiUiMapperState {
   readonly sessionStarted: boolean;

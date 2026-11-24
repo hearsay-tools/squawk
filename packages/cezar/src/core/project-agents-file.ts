@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { RunnerConfigFile } from '../core/runner-config-files.ts';
+import type { RunnerConfigFile } from './runner-config-files.ts';
 
 const OPENCODE_RULES_DOCS = 'https://opencode.ai/docs/rules/';
 

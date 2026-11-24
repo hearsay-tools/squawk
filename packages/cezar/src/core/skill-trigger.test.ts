@@ -8,7 +8,7 @@ import { createOpencodeUiState, mapOpencodeEvent } from '../runners/opencode/ope
 import { createPiUiState, mapPiRpcMessage } from '../runners/pi/pi-ui-mapper.ts';
 import { createAntigravityUiState, mapAntigravityFrame } from '../runners/antigravity/antigravity-ui-mapper.ts';
 import type { UiEvent } from './ui-events.ts';
-import { matchesSkillPrompt } from '../runners/pi/pi-rpc-wire.ts';
+import { matchesSkillPrompt } from './pi-rpc-wire.ts';
 import { slashSkillPrompt, validSkillMessage } from './skill-trigger.ts';
 
 it('ships a trigger capture for every runner whose mock serves skills, and none for another', () => {

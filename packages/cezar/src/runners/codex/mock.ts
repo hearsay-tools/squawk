@@ -1,5 +1,5 @@
 import type { RunnerMock } from '../../core/runner-definition.ts';
-import { COMMON_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, NATIVE_APPROVAL_MOCK_SCENARIOS } from '../mock-prompts.ts';
+import { COMMON_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, NATIVE_APPROVAL_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
 
 /** Why the A13 and A14 cells cannot run on this wire. */
 const PROMPT_ACK_REASON = 'Codex refuses agent input only while a human prompt is still on its way to the wire, and that prompt is held human input: the turn end takes it before any nudge.';
