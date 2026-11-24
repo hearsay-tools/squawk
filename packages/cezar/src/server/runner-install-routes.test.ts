@@ -10,6 +10,7 @@ import type { Home } from '../home/home.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { buildTestCliArchive, cleanupManagedCliHome } from '../managed-install/cli-archive.testkit.ts';
 import { ManagedCliInstallation, leaseManagedCli, managedCliExecutable } from '../managed-install/cli-installation.ts';
+import { managedCliTarget } from '../managed-install/cli-manifest.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 import { resolveCapabilities } from './capabilities.ts';
@@ -17,7 +18,7 @@ import { createRunnerInstallRoutes } from './runner-install-routes.ts';
 import { readRunners } from './runners-routes.ts';
 
 /**
- * Second runner with a distinct manifest shape (`{ release: { tag, assetUrl, sha256 } }`, SHA-256).
+ * Second runner with a distinct per-target manifest shape (`{ release: { tag, assets: { [target]: { assetUrl, sha256 } } } }`, SHA-256).
  * Proves a managed CLI runner installs through `/api/v1/runner-install/:runner` with zero edits
  * outside its own definition (hearsay-tools/squawk#4100).
  */
@@ -26,18 +27,26 @@ const fixtureManagedSource: ManagedCliSource = {
   downloadUrlPrefix: 'https://downloads.fixture-cli.example/builds/',
   executable: 'fixture-cli',
   windowsExecutable: 'fixture-cli.exe',
-  parseManifest(raw) {
+  parseManifest(raw, { target }) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid fixture manifest.');
     const release = (raw as { release?: unknown }).release;
     if (release === null || typeof release !== 'object' || Array.isArray(release)) throw new Error('Missing release block.');
-    const record = release as Record<string, unknown>;
-    if (typeof record.tag !== 'string' || typeof record.assetUrl !== 'string' || typeof record.sha256 !== 'string') {
-      throw new Error('Missing release.tag, release.assetUrl, or release.sha256.');
+    const { tag, assets } = release as { tag?: unknown; assets?: unknown };
+    if (typeof tag !== 'string' || assets === null || typeof assets !== 'object' || Array.isArray(assets)) {
+      throw new Error('Missing release.tag or release.assets.');
+    }
+    const picked = (assets as Record<string, unknown>)[target];
+    if (picked === null || typeof picked !== 'object' || Array.isArray(picked)) {
+      throw new Error(`Missing release asset for ${target}.`);
+    }
+    const { assetUrl, sha256 } = picked as Record<string, unknown>;
+    if (typeof assetUrl !== 'string' || typeof sha256 !== 'string') {
+      throw new Error('Missing assetUrl or sha256.');
     }
     return {
-      version: record.tag.replace(/^v/, ''),
-      url: record.assetUrl,
-      digest: { algorithm: 'sha256', value: record.sha256 },
+      version: tag.replace(/^v/, ''),
+      url: assetUrl,
+      digest: { algorithm: 'sha256', value: sha256 },
     };
   },
 };
@@ -91,23 +100,30 @@ it('returns exact status and accepts typed actions without waiting for installat
 
 it('installs, leases, and removes a second fixture runner with a different manifest shape and sha256 through the same routes', async () => {
   const home = testHome(); homes.push(home);
+  const target = managedCliTarget()!;
+  const otherTarget = target === 'linux_amd64' ? 'darwin_arm64' : 'linux_amd64';
   const asset = buildTestCliArchive('2.3.4', 'fixture-cli');
   const sha256 = createHash('sha256').update(asset).digest('hex');
+  const expectedManifestUrl = `https://fixture-cli.example/releases/${target}/manifest.json`;
+  const expectedAssetUrl = `${fixtureManagedSource.downloadUrlPrefix}2.3.4/fixture-cli-${target}.tar.gz`;
+  const otherAssetUrl = `${fixtureManagedSource.downloadUrlPrefix}2.3.4/fixture-cli-${otherTarget}.tar.gz`;
   const fetcher = vi.fn<typeof fetch>(async input => {
     const url = String(input);
-    if (url.startsWith('https://fixture-cli.example/releases/')) {
+    if (url === expectedManifestUrl) {
       return Response.json({
         release: {
           tag: 'v2.3.4',
-          assetUrl: `${fixtureManagedSource.downloadUrlPrefix}2.3.4/fixture-cli.tar.gz`,
-          sha256,
+          assets: {
+            [otherTarget]: { assetUrl: otherAssetUrl, sha256: '0'.repeat(64) },
+            [target]: { assetUrl: expectedAssetUrl, sha256 },
+          },
         },
       });
     }
-    if (url === `${fixtureManagedSource.downloadUrlPrefix}2.3.4/fixture-cli.tar.gz`) {
+    if (url === expectedAssetUrl) {
       return new Response(new Uint8Array(asset));
     }
-    return new Response('not found', { status: 404 });
+    return new Response(`unexpected url: ${url}`, { status: 404 });
   });
 
   expect(readRunners().runners.find(entry => entry.id === 'fixture-managed')?.managedInstall).toBe(true);
@@ -137,6 +153,10 @@ it('installs, leases, and removes a second fixture runner with a different manif
   });
   expect(startInstall.status).toBe(202);
   await created!.settled();
+
+  expect(fetcher).toHaveBeenCalledWith(expectedManifestUrl, expect.anything());
+  expect(fetcher).toHaveBeenCalledWith(expectedAssetUrl, expect.anything());
+  expect(fetcher).not.toHaveBeenCalledWith(otherAssetUrl, expect.anything());
 
   const afterInstall = await app.request('/runner-install/fixture-managed');
   expect(afterInstall.status).toBe(200);
