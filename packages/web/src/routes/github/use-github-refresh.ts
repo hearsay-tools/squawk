@@ -70,9 +70,11 @@ export function useGithubRefresh(view: GithubView, checkPrNumbers: number[], deb
       // when that param is present — so the client dutifully refetched and was handed the same
       // ≤60 s-old object. Pressing refresh has to reach `gh`, or it is theatre.
       const open = openThreadRef.current
+      // Every cached thread of this project: the scoped prefix of a thread key.
+      const allThreads = queryKeys.githubComments('issue', 0).slice(0, 3)
       if (!open) {
         // No thread on screen (the unavailable branch) — nothing mounted, so clearing is free.
-        void queryClient.removeQueries({ queryKey: queryKeys.githubCommentsAll() })
+        void queryClient.removeQueries({ queryKey: allThreads })
         return
       }
       const openKey = queryKeys.githubComments(open.kind, open.number)
@@ -87,7 +89,7 @@ export function useGithubRefresh(view: GithubView, checkPrNumbers: number[], deb
       // next opened. The open one MUST be excluded: removing a mounted query resets it to pending
       // and flashes the loading skeleton under the user.
       void queryClient.removeQueries({
-        queryKey: queryKeys.githubCommentsAll(),
+        queryKey: allThreads,
         predicate: (q) => q.queryHash !== hashKey(openKey),
       })
     },
