@@ -93,10 +93,11 @@ const configSchema = z.object({
     .transform((entries) => {
       const known = new Set(registeredRunners().map(({ id }) => id));
       const valueSchema = z.string().trim().min(1).max(200);
-      const out: Record<string, unknown> = {};
-      // An unknown key is kept as stored. A bad value for a registered runner drops only that key.
+      const out: Record<string, string> = {};
+      // An unknown string is kept as stored. A non-string, and a bad registered value, drops that key.
       for (const [id, value] of Object.entries(entries)) {
-        if (!known.has(id)) out[id] = value;
+        const parsed = valueSchema.safeParse(value);
+        if (!known.has(id) && parsed.success) out[id] = parsed.data;
       }
       for (const { id } of registeredRunners()) {
         if (!(id in entries)) continue;
@@ -105,7 +106,6 @@ const configSchema = z.object({
       }
       return Object.keys(out).length === 0 ? undefined : out;
     })
-    .pipe(z.record(z.string(), z.unknown()))
     .optional()
     .catch(undefined),
   /**
