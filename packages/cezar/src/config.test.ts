@@ -122,8 +122,11 @@ describe('loadConfig systemPrompt', () => {
 
       write({ defaultModels: { claude: '', ghost: 'kept' }, maxParallel: 4 });
       const config = await loadConfig(repoRoot, testHome());
-      expect(config.defaultModels).toBeUndefined();
+      expect(config.defaultModels).toEqual({ ghost: 'kept' });
       expect(config.maxParallel).toBe(4);
+
+      write({ defaultModels: { claude: 'opus', ghost: null } });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus', ghost: null });
     });
   });
 
