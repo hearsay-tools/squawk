@@ -130,9 +130,8 @@ or a committed file diff over the per-file patch limit or with a NUL byte.
   node:test files that `squeal.config.json` `inputs` select for the changed paths, and
   `npm run lint`. Run `squeal start` and run the gate again instead.
 - Local parity, browser and coverage runs are not duties before a PR. CI runs them. To
-  debug one, use `squeal run run-loop|browser <paths> --wait 60000`. With a daemon,
-  `npm run test:parity` asks `squeal run run-loop` for the parity files and waits for
-  their verdicts.
+  debug one, use `squeal run tests|browser <paths> --wait 60000`. With a daemon,
+  `npm run test:parity` waits for the parity files' verdicts.
 - The changed-function check ([`check-code-quality`](../../.ai/skills/check-code-quality/SKILL.md))
   is the complexity gate on the committed head, and the command runs it. It reads no
   coverage and takes seconds.
@@ -153,16 +152,9 @@ daemon, run `squeal start`; do not run other test runners by hand
 (AGENTS.md § Validation). `npm test` and `npm run test:watch` select only the four
 unit projects; Squeal also discovers the browser project from the root config.
 
-Squeal does not run every unit file after each edit. The `run-loop` check group in
-`squeal.config.json` owns the parity tests (`packages/cezar/src/**/*parity*.test.ts`) and
-the worker tests (`packages/cezar/src/**/worker-*.test.ts`). It runs at `"pause"`: Squeal
-runs these files when the agent ends its turn, and their verdicts arrive with the next
-prompt. Between edits, no message about these files is not a pass, and
-`squeal status --wait` does not hold for them. `squeal run run-loop <path>... --wait 60000`
-runs the group's files that the paths select now. When the agent has not paused since
-the change, `npm run prepr` fails on these files if they are edited or read a changed file
-directly, and reports the rest as pending ([§ Before the PR](#before-the-pr)).
-This is a three-day trial (hearsay-tools/squawk#3551); revert the group to return to edit-time runs.
+Squeal runs the parity and worker tests after each edit, with the other unit files. The
+trial that held them until the agent paused (hearsay-tools/squawk#3551) ended in
+hearsay-tools/squawk#4190: `npm run prepr` never pauses, so it failed on them.
 
 The final six-command gate and full-suite runs belong in CI. Do not run the
 complete local gate just to commit, open a PR, or complete a review. Record
@@ -210,7 +202,7 @@ waits at most 2 minutes, with the two outcomes [§ Before the PR](#before-the-pr
 
 When it fails on files with no result, get their verdicts, then run `npm run prepr` again before
 the push. To get one test file's verdict
-now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
+now, run `squeal run tests <file> --wait 60000`;
 for one test in it, `squeal status --wait 60000 <file> --check '<name>'`, and confirm it
 lists passed tests, not only skipped ones. With no daemon, run `squeal start` first.
 This also covers a file Squeal re-runs only because the change edited
