@@ -2,7 +2,6 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it as registerTest, vi } from 'vitest';
-import { familyCells } from '../core/parity-classes.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
@@ -10,7 +9,10 @@ import { ciNativeMessages } from './waits-parity.testkit.ts';
 import { nativeRecording, sessionWire } from './runner-session-wires.testkit.ts';
 import { manager, restart, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { RESUME_DIAGNOSTICS_GROUPS, type ResumeDiagnosticsFamily } from './resume-diagnostics-rows.testkit.ts';
+import {
+  RESUME_DIAGNOSTICS_GROUPS, registerResumeDiagnosticsFamily,
+  type ResumeDiagnosticsCells, type ResumeDiagnosticsFamily,
+} from './resume-diagnostics-rows.testkit.ts';
 export { RESUME_DIAGNOSTICS_GROUPS } from './resume-diagnostics-rows.testkit.ts';
 
 // hearsay-tools/cezarion#1380: losing the saved cause before Continue, or preferring a
@@ -41,9 +43,8 @@ async function start(runner: string, scenario: 'provider-error' | 'cezar-done') 
   await until(() => [RUN_STATUS.failed, RUN_STATUS.done, RUN_STATUS.review].some(status => status === store.getRun(run.id)?.status) && !manager.isActive(run.id));
   return run.id;
 }
-function failureContext(runner: string, it: typeof registerTest = registerTest): void {
-
-    it(`${runner} R85 checkpoints and delivers the failed step and continuation causes before Continue text`, async () => {
+const RESUME_DIAGNOSTICS_CELLS: ResumeDiagnosticsCells = {
+  R85: (runner) => async () => {
       const messages = native(runner);
       const id = await start(runner, 'provider-error');
       for (const text of [`${HARNESS_ADAPTERS[runner]!.scenarios['provider-error']!}\nKeep this second line.`, '']) {
@@ -75,9 +76,8 @@ function failureContext(runner: string, it: typeof registerTest = registerTest):
         expect(notices[0]!.message).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
         if (text) await until(() => store.getRun(id)?.status === RUN_STATUS.failed && !manager.isActive(id));
       }
-    }, 60_000);
-
-    it(`${runner} R89 keeps multiline errors on one line without hiding a slash skill or changing human history`, async () => {
+  },
+  R89: (runner) => async () => {
       native(runner);
       manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(root, 'SKILL.md') }]));
       const id = await start(runner, 'provider-error');
@@ -92,12 +92,8 @@ function failureContext(runner: string, it: typeof registerTest = registerTest):
       expect(prompt).not.toContain('Selected skill:');
       await until(() => store.eventLog.readEvents(id).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
       expect(store.eventLog.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');
-    }, 30_000);
-}
-
-function humanText(runner: string, it: typeof registerTest = registerTest): void {
-
-    it(`${runner} R87 leaves a non-error Continue unchanged`, async () => {
+  },
+  R87: (runner) => async () => {
       const messages = native(runner);
       const id = await start(runner, 'cezar-done');
       const before = messages().length;
@@ -105,9 +101,8 @@ function humanText(runner: string, it: typeof registerTest = registerTest): void
       expect(manager.continueRun(id, { text })).toEqual({ ok: true });
       await until(() => messages().length > before);
       expect(messages()[before]).toBe(text);
-    }, 30_000);
-
-    it(`${runner} R91 preserves human text that equals the legacy restart fallback`, async () => {
+  },
+  R91: (runner) => async () => {
       const messages = native(runner);
       const id = await start(runner, 'cezar-done');
       const text = `The Squawk process restarted while you were working on this task. Read the handoff file (CEZ_HANDOFF_FILE) to recover context, then continue the task from where you left off.`;
@@ -115,12 +110,8 @@ function humanText(runner: string, it: typeof registerTest = registerTest): void
       expect(manager.continueRun(id, { text })).toEqual({ ok: true });
       await until(() => messages().length > before);
       expect(messages()[before]).toBe(text);
-    }, 30_000);
-}
-
-function restartContext(runner: string, it: typeof registerTest = registerTest): void {
-
-    it(`${runner} R88 keeps the accepted failure cause and attachment through a restart`, async () => {
+  },
+  R88: (runner) => async () => {
       const messages = native(runner);
       const id = await start(runner, 'provider-error');
       const failed = structuredClone(store.getRun(id)!.steps.at(-1)!);
@@ -148,9 +139,8 @@ function restartContext(runner: string, it: typeof registerTest = registerTest):
       expect(prompt).toContain(`\n${text}`);
       expect(prompt).toContain(path);
       expect(readFileSync(path, 'utf8')).toBe('brief-1380');
-    }, 60_000);
-
-    it(`${runner} R90 explains repeated recovery once when the interrupted task had no saved message`, async () => {
+  },
+  R90: (runner) => async () => {
       const messages = native(runner);
       const id = await start(runner, 'cezar-done');
       store.updateStep(id, 'task', { status: STEP_STATUS.running, finishedAt: undefined });
@@ -167,45 +157,37 @@ function restartContext(runner: string, it: typeof registerTest = registerTest):
       const prompt = messages()[before]!;
       expect(prompt.match(/process restarted while you were working/g)).toHaveLength(1);
       expect(prompt.split('\n')[0]).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
-    }, 60_000);
-}
-
-function savedContinuation(runner: string, it: typeof registerTest = registerTest): void {
-
-    for (const status of [RUN_STATUS.running, RUN_STATUS.queued] as const) {
-      it(`${runner} R86 explains restart ahead of a saved ${status} continuation, without a live session`, async () => {
-        const messages = native(runner);
-        const id = await start(runner, 'cezar-done');
-        const original = structuredClone(store.getRun(id)!.steps[0]!);
-        const text = 'Saved human text.\nDo not change it.';
-        store.addStep(id, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation' });
-        store.updateStep(id, 'continue-1', { status: status === RUN_STATUS.queued ? STEP_STATUS.pending : STEP_STATUS.running });
-        setRunStatus(store, id, status, { currentStepId: status === RUN_STATUS.running ? 'continue-1' : undefined, finishedAt: undefined, error: undefined, continuationMessage: { id: 'continue-1', text, createdAt: new Date().toISOString(), origin: 'human' } });
-        expect(original.sessionId).toBeTruthy();
-        const before = messages().length;
-        // Two cold recoveries before admission must keep the original body and one context.
-        const held = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
-        await restart();
-        await restart();
-        const disk = readPersistedRuns(join(root, '.ai/cezar')).find(run => run.id === id)!;
-        expect(disk.continuationMessage).toMatchObject({ text, resumeContext: { restarted: true } });
-        held.mockRestore();
-        await semaphore.release();
-        await until(() => messages().length > before);
-        const prompt = messages()[before]!;
-        expect(prompt.split('\n')[0]).toContain('process restarted while you were working');
-        expect(prompt.match(/process restarted while you were working/g)).toHaveLength(1);
-        expect(prompt).toContain(`\n${text}`);
-      }, 60_000);
-    }
-}
-
-export const resumeDiagnosticsCells = { 'failure-context': failureContext, 'human-text': humanText, 'restart-context': restartContext, 'saved-continuation': savedContinuation };
+  },
+  R86: (runner, status) => async () => {
+      const messages = native(runner);
+      const id = await start(runner, 'cezar-done');
+      const original = structuredClone(store.getRun(id)!.steps[0]!);
+      const text = 'Saved human text.\nDo not change it.';
+      store.addStep(id, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation' });
+      store.updateStep(id, 'continue-1', { status: status === RUN_STATUS.queued ? STEP_STATUS.pending : STEP_STATUS.running });
+      setRunStatus(store, id, status, { currentStepId: status === RUN_STATUS.running ? 'continue-1' : undefined, finishedAt: undefined, error: undefined, continuationMessage: { id: 'continue-1', text, createdAt: new Date().toISOString(), origin: 'human' } });
+      expect(original.sessionId).toBeTruthy();
+      const before = messages().length;
+      // Two cold recoveries before admission must keep the original body and one context.
+      const held = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
+      await restart();
+      await restart();
+      const disk = readPersistedRuns(join(root, '.ai/cezar')).find(run => run.id === id)!;
+      expect(disk.continuationMessage).toMatchObject({ text, resumeContext: { restarted: true } });
+      held.mockRestore();
+      await semaphore.release();
+      await until(() => messages().length > before);
+      const prompt = messages()[before]!;
+      expect(prompt.split('\n')[0]).toContain('process restarted while you were working');
+      expect(prompt.match(/process restarted while you were working/g)).toHaveLength(1);
+      expect(prompt).toContain(`\n${text}`);
+  },
+};
 
 export function registerResumeDiagnosticsGroup(group: ResumeDiagnosticsFamily): void {
   describe('resume diagnostics through every native wire (hearsay-tools/cezarion#1380)', () => {
     useWorkerWaitFixture();
     afterEach(() => vi.unstubAllEnvs());
-    for (const row of RESUME_DIAGNOSTICS_GROUPS[group]!) resumeDiagnosticsCells[row.family](row.runner, familyCells('resume-diagnostics', row.runner, registerTest));
+    for (const row of RESUME_DIAGNOSTICS_GROUPS[group]!) registerResumeDiagnosticsFamily(row.family, row.runner, RESUME_DIAGNOSTICS_CELLS, registerTest);
   });
 }

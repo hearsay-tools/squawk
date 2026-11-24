@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { HARNESS_PARITY_GROUPS, harnessGroupRows, parityRowScenarios } from './harness-parity-cells.testkit.ts';
 import { CI_FAILURE_GROUPS, ciFailureRowId } from '../workflows/ci-wait-failure-rows.testkit.ts';
-import { RESUME_DIAGNOSTICS_FAMILY_ROWS } from '../workflows/resume-diagnostics-rows.testkit.ts';
+import { collectResumeDiagnosticsTitles } from '../workflows/resume-diagnostics-rows.testkit.ts';
 import {
   AUTONOMOUS_CRITERIA, FINAL_MESSAGE_CRITERIA, FOLLOWUP_CRITERIA, MODEL_REFUSAL_CRITERIA, NO_PROGRESS_CRITERIA, SHUTDOWN_CRITERIA,
   SKILL_PROVISION_CRITERIA, SKILL_RESUME_CRITERIA, STEP_COMPLETION_CRITERIA, WORKFLOW_ASK_CRITERIA, WORKFLOW_TIMEOUT_CRITERIA,
@@ -237,7 +237,7 @@ function familyRowCatalog(): Map<string, Set<string>> {
   const ids = (rows: ReadonlyArray<{ id: string }>) => new Set(rows.map(row => row.id));
   const catalog = new Map<string, Set<string>>([...harnessGroupRows()].map(([group, rows]) => [`harness:${group}`, rows]));
   catalog.set('ci-wait-failure', new Set(Object.values(CI_FAILURE_GROUPS).flat().map(ciFailureRowId)));
-  catalog.set('resume-diagnostics', new Set(Object.values(RESUME_DIAGNOSTICS_FAMILY_ROWS).flat().map(row => row.split(':')[0]!)));
+  catalog.set('resume-diagnostics', new Set(collectResumeDiagnosticsTitles().map(parityRowId).filter((row): row is string => row !== undefined)));
   for (const [family, rows] of Object.entries(familyTables())) catalog.set(family, ids(rows));
   return catalog;
 }
