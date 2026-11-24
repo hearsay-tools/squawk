@@ -172,6 +172,9 @@ describe('pluginHealth', () => {
     ['failed at file:///srv/x/index.mjs:3', 'failed at <path>'],
     ['open C:\\Users\\me\\plugins\\x', 'open <path>'],
     ['(/opt/plugins/x)', '(<path>)'],
+    ["Cannot find module './secret/auth.mjs' imported from /cfg/plugins/x/index.mjs", "Cannot find module '<path>' imported from <path>"],
+    ["Cannot find module '../shared/dep.mjs' imported from C:\\cfg\\plugins\\x\\index.mjs", "Cannot find module '<path>' imported from <path>"],
+    ['version 1.2 of x.y failed', 'version 1.2 of x.y failed'],
   ])('strips host paths: %s', async (input, output) => {
     const { withoutHostPaths } = await import('./loader.ts');
     expect(withoutHostPaths(input)).toBe(output);

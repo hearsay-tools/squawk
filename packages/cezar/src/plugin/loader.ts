@@ -130,12 +130,13 @@ export async function loadPluginFolder({ dir, source, warn = line => { process.s
   return report;
 }
 
-// An absolute POSIX path, a file URL or a Windows drive path that starts a word or a quoted value.
-const ABSOLUTE_PATH = /(^|[\s'"`(=])(?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^\s'"`)]*/g;
+// An absolute POSIX path, a file URL, a Windows drive path or a `./` or `../` relative path that
+// starts a word or a quoted value.
+const HOST_PATH = /(^|[\s'"`(=])(?:file:\/\/)?(?:\/|[A-Za-z]:[\\/]|\.\.?[\\/])[^\s'"`)]*/g;
 
-/** Replace every absolute host path in a message with `<path>`. */
+/** Replace every host path in a message, absolute or relative, with `<path>`. */
 export function withoutHostPaths(text: string): string {
-  return text.replace(ABSOLUTE_PATH, '$1<path>');
+  return text.replace(HOST_PATH, '$1<path>');
 }
 
 /**

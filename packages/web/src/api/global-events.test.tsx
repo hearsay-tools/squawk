@@ -1324,7 +1324,7 @@ describe('useGlobalEvents — provider status', () => {
   it('delivers completed remote health over SSE without letting a cold HTTP response overwrite it', async () => {
     const health = {
       version: 'test', repoRoot: 'repo', repo: null, defaultRunner: 'claude', forge: null,
-      projects: [], bootProject: BOOT,
+      projects: [], bootProject: BOOT, plugins: { loaded: [], failed: [] },
       capabilities: { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false, automations: false, preview: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true },
       checks: [{ name: 'codex', available: true }],
     }

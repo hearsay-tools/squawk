@@ -93,6 +93,14 @@ describe('plugin commands at dispatch', () => {
     expect(report.failed).toEqual([expect.objectContaining({ name: 'empty', error: 'missing index.mjs or index.js' })]);
   });
 
+  it('loads the same host plugin folder when a command wrapper boots before dispatch', async () => {
+    writePlugin('greeter', greeter);
+    const { prepareCommandRuntime } = await import('./subcommands.ts');
+    await prepareCommandRuntime('serve');
+    expect((await import('./core/cli-registry.ts')).cliCommand('greet')?.name).toBe('greet');
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([home.plugins]);
+  });
+
   it('keeps help cold: no Home, no plugin, no runner, and a footer that points to hsq plugins', async () => {
     writePlugin('greeter', greeter);
     const { deps, registries } = await dispatch(['--help']);

@@ -27,28 +27,39 @@ it('registers the hook once per process and maps only the plugin entry', async (
   const next = vi.fn(() => ({ url: 'file:///next' }));
   expect(resolve('@hearsay-tools/squawk/plugin', {}, next)).toEqual({ url: runningPluginEntryUrl(), shortCircuit: true });
   expect(next).not.toHaveBeenCalled();
-  expect(resolve('@hearsay-tools/squawk', {}, next)).toEqual({ url: 'file:///next' });
-  expect(next).toHaveBeenCalledWith('@hearsay-tools/squawk', {});
+  for (const other of ['@hearsay-tools/squawk', '@hearsay-tools/squawk/plugin/runner-kit', '@hearsay-tools/squawk/app-type']) {
+    expect(() => resolve(other, {}, next)).toThrow(`Cannot import ${other}: a plugin imports Squawk only from @hearsay-tools/squawk/plugin.`);
+  }
+  expect(next).not.toHaveBeenCalled();
+  expect(resolve('@hearsay-tools/squawk-extra', {}, next)).toEqual({ url: 'file:///next' });
+  expect(resolve('zod', {}, next)).toEqual({ url: 'file:///next' });
+  expect(next).toHaveBeenCalledWith('zod', {});
 });
 
-it('gives a plugin outside the repository the running copy of @hearsay-tools/squawk/plugin', async () => {
+it('gives a plugin outside the repository the running copy of @hearsay-tools/squawk/plugin and refuses a subpath', async () => {
   const outside = mkdtempSync(join(tmpdir(), 'hsq-hook-plugin-'));
   try {
     mkdirSync(join(outside, 'plugin'));
     writeFileSync(join(outside, 'plugin', 'index.mjs'), "export { productEnv } from '@hearsay-tools/squawk/plugin';\n");
+    writeFileSync(join(outside, 'plugin', 'subpath.mjs'), "export * from '@hearsay-tools/squawk/plugin/runner-kit';\n");
     const hook = pathToFileURL(fileURLToPath(new URL('./resolve-hook.ts', import.meta.url))).href;
     const entry = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
     const plugin = pathToFileURL(join(outside, 'plugin', 'index.mjs')).href;
+    const subpath = pathToFileURL(join(outside, 'plugin', 'subpath.mjs')).href;
     const script = `
       const { installPluginResolveHook } = await import(${JSON.stringify(hook)});
       installPluginResolveHook();
       const fromPlugin = await import(${JSON.stringify(plugin)});
       const running = await import(${JSON.stringify(entry)});
-      console.log(JSON.stringify({ same: fromPlugin.productEnv === running.productEnv }));
+      const subpath = await import(${JSON.stringify(subpath)}).then(() => 'loaded', error => error.message);
+      console.log(JSON.stringify({ same: fromPlugin.productEnv === running.productEnv, subpath }));
     `;
     // bound: a cold tsx start loads the runner kit; the default test timeout is the hang guard.
     const { stdout } = await promisify(execFile)(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], { cwd: fileURLToPath(new URL('../..', import.meta.url)) });
-    expect(JSON.parse(stdout.trim())).toEqual({ same: true });
+    expect(JSON.parse(stdout.trim())).toEqual({
+      same: true,
+      subpath: 'Cannot import @hearsay-tools/squawk/plugin/runner-kit: a plugin imports Squawk only from @hearsay-tools/squawk/plugin.',
+    });
   } finally {
     rmSync(outside, { recursive: true, force: true });
   }

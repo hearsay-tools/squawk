@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { operatorHomeEntry, prepareOperatorHome } from './home/entry.ts';
 import { bindManagedCliHome } from './managed-install/runtime-home.ts';
 import type { Home } from './home/home.ts';
-import { runSubcommand, prepareCommandRuntime } from './subcommands.ts';
+import { hostPluginsDir, runSubcommand, prepareCommandRuntime } from './subcommands.ts';
 import { getRepoInfo } from './server/git.ts';
 import { projectPaths } from './project-paths.ts';
 import { assertProjectAdmitted, projectAdmissionRefusal } from './server/cockpit-ownership.ts';
@@ -112,21 +112,11 @@ export function cliNeedsRuntime(argv: readonly string[]): boolean {
   return definition ? commandNeedsRuntime(definition, parsed.positionals.slice(1)) : true;
 }
 
-/** The operator's `<config>/plugins/`. An unresolvable home loads no host plugin. */
-function hostPluginsDir(deps: CliDeps): string | undefined {
-  try {
-    return deps.resolveCliHome().plugins;
-  } catch (error) {
-    deps.console.error(`[hsq] plugin folder unavailable (${error instanceof Error ? error.message : String(error)}) — continuing without plugins`);
-    return undefined;
-  }
-}
-
 /** Seal the command table the way this command line needs, before dispatch reads it. */
 async function bootCli(deps: CliDeps, argv: readonly string[]): Promise<void> {
   // An embedding caller (or a test) may seal its own table first.
   if (cliCommandsSealed()) return;
-  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps) });
+  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, line => deps.console.error(line)) });
   else bootColdCli();
 }
 
