@@ -87,7 +87,7 @@ describe('cez task', () => {
           : originalFetch(url, init));
       try {
         expect(await run(['start', 'do the thing', '--skill', 'cli-sample-skill'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.origin}/api/v1/runners`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
         expect(last()).not.toHaveProperty('warning');
       } finally { fetchSpy.mockRestore(); }
       const record = ctx.store.getRun(last().id as string);
@@ -110,7 +110,7 @@ describe('cez task', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
       try {
         expect(await run(args)).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.origin}/api/v1/runners`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         id: first.id, created: false,
@@ -123,7 +123,7 @@ describe('cez task', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
       try {
         expect(await run(['start', 'x', '--skill', 'not-a-real-cli-skill', '--request-id', '2b7e1c9a-5d4f-4a3b-8c2d-1e0f9a8b7c6d'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.origin}/api/v1/runners`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,
@@ -143,7 +143,7 @@ describe('cez task', () => {
           : originalFetch(url, init));
       try {
         expect(await run(['start', 'x', '--skill', 'maybe-there'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.origin}/api/v1/runners`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,
@@ -160,7 +160,7 @@ describe('cez task', () => {
           : originalFetch(url, init));
       try {
         expect(await run(['start', 'x', '--skill', 'maybe-there'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.origin}/api/v1/runners`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,

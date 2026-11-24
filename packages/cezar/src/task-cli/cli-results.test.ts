@@ -171,6 +171,16 @@ describe('cez task', () => {
       } finally { spy.mockRestore(); }
     });
 
+    it('checks the skill on the runner the server runs when the stored default is not registered', async () => {
+      const spy = respond('/config', { defaultRunner: 'ghost' });
+      try {
+        expect(await run(['start', 'task', '--skill', 'wanted'])).toBe(0);
+        const urls = spy.mock.calls.map(([url]) => String(url));
+        expect(urls).toContain(`${ctx.cockpit.api}/runner-skills?runner=claude`);
+        expect(urls.some((url) => url.includes('runner=ghost'))).toBe(false);
+      } finally { spy.mockRestore(); }
+    });
+
     it('does not mistake a different catalog entry for the requested skill', async () => {
       const spy = respond('/runner-skills?runner=codex', { runner: 'codex', source: 'live', skills: [{ id: 'other', name: 'Other' }], problems: [] });
       try {

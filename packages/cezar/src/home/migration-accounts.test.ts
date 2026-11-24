@@ -63,6 +63,24 @@ it('C1: duplicate account IDs use the loader first-wins rule and never mix crede
   expect(existsSync(join(target.data, 'accounts', account.id, 'auth.json'))).toBe(false);
 });
 
+it('C1: a row the salvage drops for an illegal provider does not claim the id ahead of a valid duplicate', () => {
+  const { legacy, target, account } = accountFixture();
+  const duplicate = { ...account, provider: 'codex', configDir: join(legacy.root, 'other-account') };
+  rawJson(join(duplicate.configDir, 'duplicate-only.json'), { secret: 'other login' });
+  // An empty provider fails the stored runner-id bound, so the salvage drops the row before ids are claimed.
+  Home.seed(legacy, legacy.agentAccounts, { accounts: [{ id: account.id, provider: '', configDir: duplicate.configDir }, account, duplicate] });
+  const skipped = { id: duplicate.id, configDir: duplicate.configDir, reason: 'duplicate-account-id' };
+  const plan = planLegacyMigration(legacy, target);
+  expect(plan.accounts).toHaveLength(1);
+  expect(plan.notMoved).toEqual([skipped]);
+  expect(plan.files.find(file => file.path === 'other-account/duplicate-only.json')?.target).toBeNull();
+  migrateLegacyHome(legacy, target);
+  expect(readMigrationRecord(target)!.notMoved).toEqual([skipped]);
+  expect(json(target.agentAccounts).accounts[1].configDir).toBe(join(target.data, 'accounts', account.id));
+  expect(json(target.agentAccounts).accounts[2].configDir).toBe(duplicate.configDir);
+  expect(existsSync(join(target.data, 'accounts', account.id, 'duplicate-only.json'))).toBe(false);
+});
+
 it('B1: an account recopy replaces its pending tree and drops files deleted since the first copy', () => {
   const { legacy, target, account } = accountFixture();
   migrateLegacyHome(legacy, target, { onStep(step, attempt) {

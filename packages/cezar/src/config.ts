@@ -95,10 +95,12 @@ const configSchema = z.object({
       const known = new Set(registeredRunners().map(({ id }) => id));
       const valueSchema = z.string().trim().min(1).max(200);
       const out: Record<string, string> = {};
-      // An unknown string is kept as stored. A non-string, and a bad registered value, drops that key.
+      // Unknown keys first, in stored order, then registered keys in registry order. Every value is
+      // trimmed and bounded the same way; a value that fails drops only its own key.
       for (const [id, value] of Object.entries(entries)) {
+        if (known.has(id)) continue;
         const parsed = valueSchema.safeParse(value);
-        if (!known.has(id) && parsed.success) out[id] = parsed.data;
+        if (parsed.success) out[id] = parsed.data;
       }
       for (const { id } of registeredRunners()) {
         if (!(id in entries)) continue;
