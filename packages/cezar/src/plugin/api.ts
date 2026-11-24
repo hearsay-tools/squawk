@@ -28,20 +28,6 @@ export interface SquawkPluginApi {
 /** A plugin module's default export. */
 export type SquawkPlugin = (api: SquawkPluginApi) => void | Promise<void>;
 
-/** The longest runner id a stored setting keeps (spec § 6, `storedRunnerIdSchema`). */
-const MAX_RUNNER_ID_LENGTH = 64;
-
-function isControlCharacter(character: string): boolean {
-  const code = character.codePointAt(0) ?? 0;
-  return code < 0x20 || (code >= 0x7f && code <= 0x9f);
-}
-
-function checkRunnerId(id: unknown): void {
-  if (typeof id !== 'string' || id.length === 0 || id !== id.trim() || id.length > MAX_RUNNER_ID_LENGTH || [...id].some(isControlCharacter)) {
-    throw new Error(`Invalid runner id ${JSON.stringify(id)}: use a trimmed, non-empty string of at most ${MAX_RUNNER_ID_LENGTH} characters with no control characters.`);
-  }
-}
-
 function checkKey(registry: string, key: unknown): void {
   if (typeof key !== 'string' || key.length === 0) throw new Error(`${registry}: invalid key ${JSON.stringify(key)}.`);
 }
@@ -56,8 +42,7 @@ interface KeyedTable<V> {
 }
 
 const runners: KeyedTable<RunnerDefinition> = {
-  name: 'Runner registry', key: value => value.id, shape: value => checkRunnerId(value.id),
-  check: checkRunnerRegistration, commit: registerRunner,
+  name: 'Runner registry', key: value => value.id, check: checkRunnerRegistration, commit: registerRunner,
 };
 const tools: KeyedTable<AgentToolDefinition> = {
   name: 'Agent tool registry', key: value => value.name, check: checkAgentToolRegistration, commit: registerAgentTool,
