@@ -1,6 +1,9 @@
 import { globSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parse } from '@babel/parser';
+import { PLUGIN_ENTRY_SUBPATHS } from '../plugin/resolve-hook.ts';
+
+const PLUGIN_DIR = join(import.meta.dirname, '..', 'plugin');
 
 type Node = { type: string; start?: number | null; end?: number | null; [key: string]: unknown };
 
@@ -108,14 +111,19 @@ export function relativeImports(source: string, file?: string): string[] {
   return runtimeImports(source, file).filter(specifier => specifier.startsWith('./') || specifier.startsWith('../'));
 }
 
-/** Every module `entry` (an absolute `.ts` path) loads at runtime through relative imports, as absolute paths. */
+/** Every module `entry` (an absolute `.ts` path) loads at runtime through relative imports and
+ *  allowlisted `@hearsay-tools/squawk/plugin*` entries, as absolute paths. */
 export function importClosure(entry: string): string[] {
   const seen = new Set<string>();
   const visit = (path: string): void => {
     if (seen.has(path)) return;
     seen.add(path);
-    for (const specifier of relativeImports(readFileSync(path, 'utf8'), path)) {
-      visit(join(dirname(path), specifier).replace(/\.js$/, '.ts'));
+    for (const specifier of runtimeImports(readFileSync(path, 'utf8'), path)) {
+      if (specifier.startsWith('./') || specifier.startsWith('../')) {
+        visit(join(dirname(path), specifier).replace(/\.js$/, '.ts'));
+      } else if (Object.hasOwn(PLUGIN_ENTRY_SUBPATHS, specifier)) {
+        visit(join(PLUGIN_DIR, `${PLUGIN_ENTRY_SUBPATHS[specifier]}.ts`));
+      }
     }
   };
   visit(entry);

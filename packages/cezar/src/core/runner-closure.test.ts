@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { runnerClassNames } from '../lint/owner-reader-rules.ts';
+import { PLUGIN_ENTRY_SUBPATHS } from '../plugin/resolve-hook.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
 // closure is every module the file reaches through static and dynamic imports; esbuild reads a
@@ -31,13 +32,9 @@ function perRunnerFiles(): Array<{ file: string; runner: string }> {
   }));
 }
 
-const PLUGIN_ENTRY_PATHS: Readonly<Record<string, string>> = {
-  '@hearsay-tools/squawk/plugin': join(src, 'plugin/index.ts'),
-  '@hearsay-tools/squawk/plugin/runtime': join(src, 'plugin/runtime.ts'),
-  '@hearsay-tools/squawk/plugin/model-settings': join(src, 'plugin/model-settings.ts'),
-  '@hearsay-tools/squawk/plugin/managed-cli': join(src, 'plugin/managed-cli.ts'),
-  '@hearsay-tools/squawk/plugin/pi-rpc': join(src, 'plugin/pi-rpc.ts'),
-};
+const PLUGIN_ENTRY_PATHS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(PLUGIN_ENTRY_SUBPATHS).map(([specifier, stem]) => [specifier, join(src, 'plugin', `${stem}.ts`)]),
+);
 
 const pluginKitAlias = {
   name: 'plugin-kit-alias',
