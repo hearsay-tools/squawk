@@ -5,6 +5,7 @@ import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { RunLifecycle, snapshotRun, type RunLifecycleHandlers } from '../runs/lifecycle.ts';
 import type { RunRecord } from '../runs/store.ts';
+import { StoredConversationLedger } from '../runs/conversation-ledger.ts';
 import type { ActivityStore } from './read-model.ts';
 
 /** The read clock of every activity test: one minute after the factories' `registeredAt`. */
@@ -91,6 +92,7 @@ export function fakeStore(runs: readonly RunRecord[], options: FakeStoreOptions 
     lifecycle: new CountedLifecycle(),
     claims: { listForeignClaimedRunIds: () => [...(options.foreign ?? [])] },
     getRun,
+    conversations: new StoredConversationLedger(getRun),
     isUnreadable: (id: string) => unreadable.has(id),
     workerExecutions: { readWorkerExecution: (id: string) => (options.complete?.includes(id) ? { phase: 'complete' } : undefined) },
     queries: {

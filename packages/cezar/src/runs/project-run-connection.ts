@@ -1,5 +1,6 @@
 import { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
 import { runIndexAdoption, runIndexView } from './run-index-rows.ts';
+import { CONVERSATION_ARCHIVE_COLUMNS } from './conversation-archive.ts';
 import { RUN_INDEXES } from './run-indexes.ts';
 import { claimOwnerLive } from './run-claims.ts';
 import { warnFallbackRunSource } from './project-run-sources.ts';
@@ -31,6 +32,8 @@ export class ProjectRunConnection {
   private deferred: boolean;
   private copied: string[] = [];
   private attached = false;
+  /** The attached fallback has `conversation_archive` (schema 16 and later). */
+  private fallbackArchive = false;
   private sourceTable = 'project_json';
 
   constructor(initial: DatabaseSync, readonly target: string, readonly source: string,
@@ -148,6 +151,13 @@ export class ProjectRunConnection {
       SELECT ${sourceColumns} FROM ${table} source WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.id)`);
     // A fallback row's index rows come from its record: an older fallback may not have the table.
     for (const { index } of RUN_INDEXES) db.exec(runIndexView(index, table));
+    this.fallbackArchive = attached && hasTable(db, 'project_fallback', 'conversation_archive');
+    // A fallback root's archived ledger entries read as main's do; a root main also holds wins.
+    if (hasTable(db, 'main', 'conversation_archive')) {
+      db.exec(`CREATE TEMP VIEW project_conversation_archive AS SELECT ${CONVERSATION_ARCHIVE_COLUMNS} FROM main.conversation_archive${this.fallbackArchive
+        ? ` UNION ALL SELECT ${CONVERSATION_ARCHIVE_COLUMNS} FROM project_fallback.conversation_archive source
+          WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.root_id)` : ''}`);
+    }
     this.attached = attached;
     this.sourceTable = table;
     const claims = attached ? 'SELECT * FROM project_fallback.run_claims' : 'SELECT * FROM main.run_claims WHERE 0';
@@ -219,6 +229,7 @@ export class ProjectRunConnection {
         this.current.prepare(`INSERT INTO main.runs (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
           .run(...columns.map(key => row[key] as string | number | null));
         for (const { index } of RUN_INDEXES) this.current.prepare(runIndexAdoption(index)).run({ id });
+        if (this.fallbackArchive) this.adoptArchive(id);
       }
     }
     // Inside the transaction, after the fence: another process may have added a fallback copy since the
@@ -229,6 +240,16 @@ export class ProjectRunConnection {
       const row = this.current.prepare('SELECT * FROM project_runs WHERE id = ?').get(id);
       return { id, reason: 'fallback' as const, current: row ? toRunRow(row) : undefined };
     }));
+  }
+
+  /** An adopted root's archived ledger entries and their members come with its row. */
+  private adoptArchive(id: string): void {
+    this.current.prepare(`INSERT OR IGNORE INTO main.conversation_archive (${CONVERSATION_ARCHIVE_COLUMNS})
+      SELECT ${CONVERSATION_ARCHIVE_COLUMNS} FROM project_fallback.conversation_archive WHERE root_id = ?`).run(id);
+    for (const table of ['conversation_archive_members', 'conversation_members']) {
+      this.current.prepare(`INSERT OR IGNORE INTO main.${table} (root_id, member_id)
+        SELECT root_id, member_id FROM project_fallback.conversation_archive_members WHERE root_id = ?`).run(id);
+    }
   }
 
   commitFiles(): void { this.copied = []; }
@@ -257,7 +278,11 @@ export class ProjectRunConnection {
   }
 }
 
-const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims',
+function hasTable(db: DatabaseSync, schema: string, table: string): boolean {
+  return db.prepare(`SELECT 1 FROM ${schema}.sqlite_schema WHERE type = 'table' AND name = ?`).get(table) !== undefined;
+}
+
+const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims', conversation_archive: 'project_conversation_archive',
   ...Object.fromEntries(RUN_INDEXES.map(({ index }) => [index.table, `project_${index.table}`])) };
 /** Match only table references. Quoted text and comments are opaque to the projection. A view has
  *  no index, so an index hint on a projected table is dropped. */

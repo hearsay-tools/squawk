@@ -201,7 +201,8 @@ describe('durable conversations', () => {
     expect(rejected.message.instruction).toMatch(/worker resume.*new.*ID/i);
     await expect(f.service.send(f.caller, { ...request, resume: true })).rejects.toMatchObject({ code: 'invalid_input' });
     await f.service.send(f.caller, { ...request, id: randomUUID(), resume: true });
-    expect(await f.service.send(f.caller, request)).toEqual({ ...rejected, effect: 'unchanged' });
+    // The stored receipt comes back unchanged; its capacity is the ledger's load now, with the resume's request and input.
+    expect(await f.service.send(f.caller, request)).toEqual({ ...rejected, effect: 'unchanged', capacity: { ...rejected.capacity!, activeMessages: 2, recipientInbox: 1 } });
   });
   it('inspects a usage-limit held worker, rejects plain messages, and resumes it with same-runner model and effort overrides', async () => {
     const w = await completedWorker();

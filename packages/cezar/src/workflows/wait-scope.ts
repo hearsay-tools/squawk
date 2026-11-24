@@ -4,7 +4,9 @@ import type { AgentInput, SquawkWaitRequest, PeerWaitEntry, PeerWaitResult, RunR
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { hasLiveInboxClaim } from '../delegation/input.ts';
 import { DelegationPolicyError, MessagingOffError } from '../delegation/policy.ts';
-import { conversationOf, familyRecordOf, grantsOf, holdsOperation, mayOperate, messageRelation } from '../runs/task-rights.ts';
+import { familyRecordOf, grantsOf, holdsOperation, mayOperate, messageRelation } from '../runs/task-rights.ts';
+import type { ConversationLedger } from '../runs/ports.ts';
+import { acceptedRequest } from '../runs/conversation-ledger.ts';
 import { identicalPeerWait, openWaits } from './waits.ts';
 
 /**
@@ -26,14 +28,13 @@ export function assertOwnedWorkerWaitScope(run: RunRecord, workerIds: readonly s
 
 /** Scope of a wait on replies: a task that may message may wait on replies to its own accepted
  *  requests, read from its family record's conversation. Who holds that record changes nothing. */
-export function assertRequestWaitScope(run: RunRecord, requestIds: readonly string[], getRun: GetRun): void {
+export function assertRequestWaitScope(run: RunRecord, requestIds: readonly string[], getRun: GetRun, ledger: ConversationLedger): void {
   const root = familyRecordOf(run, getRun);
   if (!root || !grantsOf(run).message.length) {
     throw new DelegationPolicyError('denied_scope', 'Request wait scope denied');
   }
   for (const id of requestIds) {
-    if (!conversationOf(root)?.messages.some(message => message.id === id && message.kind === 'request' &&
-      message.state === 'accepted' && message.senderRunId === run.id)) throw new DelegationPolicyError('denied_scope', 'Request wait scope denied');
+    if (acceptedRequest(ledger.findMessage(root.id, id))?.senderRunId !== run.id) throw new DelegationPolicyError('denied_scope', 'Request wait scope denied');
   }
 }
 

@@ -48,7 +48,7 @@ it('migrates the real v14 layout, preserving every named column, row, index and 
   const current = track(new DatabaseSync(path));
   const reordered = current.prepare('PRAGMA table_info(runs)').all().map(row => row.name as string);
   expect(reordered.indexOf('summary') + 1).toBe(reordered.indexOf('data'));
-  expect(current.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
+  expect(current.prepare('PRAGMA user_version').get()).toEqual({ user_version: 16 });
   expect(current.prepare('PRAGMA table_list').all().find(row => row.name === 'runs')?.strict).toBe(1);
   expect(current.prepare(`SELECT ${columns} FROM runs ORDER BY seq`).all()).toEqual(rows);
   expect(current.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'runs' ORDER BY name").all().map(row => ({ ...row, sql: String(row.sql).replace(/\s+/g, ' ') }))).toEqual(

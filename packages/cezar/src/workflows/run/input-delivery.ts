@@ -426,7 +426,7 @@ export class InputDelivery {
       this.host.queueWaitWake(runId);
       return;
     }
-    const bundle = state.boundary.atTurnBoundary === state.liveSession.session ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id)), reply.id) : undefined;
+    const bundle = state.boundary.atTurnBoundary === state.liveSession.session ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, this.context.store.conversations), reply.id) : undefined;
     const session = state.liveSession.session;
     const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
     const delivered = [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])];
@@ -818,7 +818,7 @@ export class InputDelivery {
       (!askPending || beside.has(input.id)) && (boundary || input.purpose !== 'completion-refusal'));
     const admitted = this.host.line.isAdmitted(runId) && state.boundary.atTurnBoundary === state.liveSession.session;
     if (resolved.length && admitted) {
-      const batch = resolvedWaitInputBatch(run, resolved, queue, input => formatAgentInput(input, id => this.context.store.getRun(id)), { workerStatus: this.host.waitEngine.workerStatus });
+      const batch = resolvedWaitInputBatch(run, resolved, queue, input => formatAgentInput(input, this.context.store.conversations), { workerStatus: this.host.waitEngine.workerStatus });
       if (!batch) return false;
       return this.host.submitAgentInput(runId, state, [{ type: 'text', text: batch.text }], batch.inputIds, beforeHumanReset);
     }
@@ -828,9 +828,9 @@ export class InputDelivery {
     // is a wake of its own, so an admitted one goes beside it (hearsay-tools/cezarion#1235).
     // An accepted done cancels the CI wait at its turn end, so it holds nothing (hearsay-tools/squawk#2587).
     if (!admitted && ((hasPrWait(run) && !run.doneAccepted) || (resolved.length && !queue.some(input => !input.deliveredAt)))) return false;
-    const batch = agentInputBatch(queue, input => formatAgentInput(input, id => this.context.store.getRun(id)));
+    const batch = agentInputBatch(queue, input => formatAgentInput(input, this.context.store.conversations));
     if (!batch) return false;
-    const text = batch.inputs.map(input => formatAgentInput(input, id => this.context.store.getRun(id))).join('\n\n');
+    const text = batch.inputs.map(input => formatAgentInput(input, this.context.store.conversations)).join('\n\n');
     return this.host.submitAgentInput(runId, state, [{ type: 'text', text }], batch.inputs.map(input => input.id), beforeHumanReset);
   }
 
@@ -904,7 +904,7 @@ export class InputDelivery {
     const answeringAskSeq = pendingHumanAskSeq(this.context.store.transcriptFacts, runId);
     // An answer opening a turn carries held conversation messages after the answer.
     const bundle = answeringAskSeq !== undefined && state.boundary.atTurnBoundary === state.liveSession.session
-      ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id))) : undefined;
+      ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, this.context.store.conversations)) : undefined;
     // Human input answers all human waits. Agent input gets its footer in submitAgentInput.
     const footer = openWaitsFooter((this.context.store.getRun(runId)?.waits ?? []).filter(wait => !waitPolicyForWait(wait).userAnswers));
     const deliverable = [...attached, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : []),

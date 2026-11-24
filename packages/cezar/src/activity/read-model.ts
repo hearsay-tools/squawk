@@ -1,10 +1,10 @@
-import type { ActivityProject, ActivityRun, ActivitySnapshot, ActivityTool, ActivityWorker, ConversationState } from '@open-mercato/cezar-contract';
+import type { ActivityProject, ActivityRun, ActivitySnapshot, ActivityTool, ActivityWorker, ConversationMessage } from '@open-mercato/cezar-contract';
 import { ACTIVITY_ERROR_MAX, ACTIVITY_RATE_SECONDS } from '@open-mercato/cezar-contract/activity';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import { workerRevision } from '../delegation/results.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { RunFamilyReads, RunQueries } from '../runs/ports.ts';
+import type { ConversationLedger, RunFamilyReads, RunQueries } from '../runs/ports.ts';
 import { readActivityRequests, type ActivityRequestStore } from './requests.ts';
 import { firstLine } from './text.ts';
 import { activityWait, type CiProgressSource } from './wait.ts';
@@ -17,7 +17,8 @@ export interface ToolActivitySource {
 }
 
 /** What the read model needs from a project's run store. It reads; it never writes a run. */
-export type ActivityStore = ActivityRequestStore & { readonly queries: Pick<RunQueries, 'listRunSummaries' | 'withReadCache'> & Pick<RunFamilyReads, 'listOwnedWorkers'> };
+export type ActivityStore = ActivityRequestStore & { readonly queries: Pick<RunQueries, 'listRunSummaries' | 'withReadCache'> & Pick<RunFamilyReads, 'listOwnedWorkers'> } &
+  { readonly conversations: Pick<ConversationLedger, 'findMessage'> };
 
 /** One project to read: its store and run manager when this process has loaded it. `ci` is the
  *  check progress of that project's own CI watchers; without it, `ActivityDeps.ci` is read. */
@@ -91,6 +92,7 @@ function loggingUnreadable(store: ActivityStore, log: (runId: string) => void): 
     isUnreadable: (id) => store.isUnreadable(id),
     get claims() { return store.claims; },
     get workerExecutions() { return store.workerExecutions; },
+    get conversations() { return store.conversations; },
     queries: {
       listRuns: () => store.queries.listRuns(),
       listRunSummaries: (options) => store.queries.listRunSummaries(options),
@@ -143,7 +145,7 @@ const byCreation = (a: RunRecord, b: RunRecord) => a.createdAt.localeCompare(b.c
 type RunContext = { now: number; tools: ToolActivitySource; ci: CiProgressSource };
 
 function activityRoot(store: ActivityStore, root: RunRecord, context: RunContext): ActivityRun {
-  const ledger = root.delegation?.role === 'root' ? root.delegation.conversation : undefined;
+  const ledger = (id: string) => (root.delegation?.role === 'root' ? store.conversations.findMessage(root.id, id) : undefined);
   const results = root.delegation?.role === 'root' ? root.delegation.results ?? [] : [];
   const workers = store.queries.listOwnedWorkers(root.id).sort(byCreation)
     .map((worker): ActivityWorker => {
@@ -153,7 +155,7 @@ function activityRoot(store: ActivityStore, root: RunRecord, context: RunContext
   return { ...activityRunBase(root, ledger, context), workers };
 }
 
-function activityRunBase(run: RunRecord, ledger: ConversationState | undefined, context: RunContext): Omit<ActivityRun, 'workers'> {
+function activityRunBase(run: RunRecord, ledger: (id: string) => ConversationMessage | undefined, context: RunContext): Omit<ActivityRun, 'workers'> {
   // Only a live run shows tool activity: a session can still report a tool after its run stopped,
   // and a stopped run never looks busy, whatever the tracker holds.
   const activity = isLiveStatus(run.status) ? context.tools.read(run.id, context.now) : undefined;

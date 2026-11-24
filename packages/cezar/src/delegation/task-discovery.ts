@@ -2,8 +2,9 @@ import type { DiscoveredTasks, DiscoveryRequest } from '@open-mercato/cezar-cont
 import { messagingAllowed } from '@open-mercato/cezar-contract/task-options';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import type { RunStore } from '../runs/store.ts';
-import { finishing, grantsOf, historyDeleting, isRootTask } from '../runs/task-rights.ts';
+import { conversationOf, finishing, grantsOf, historyDeleting, isRootTask } from '../runs/task-rights.ts';
 import { DelegationPolicyError, requireMessagingAllowed } from './policy.ts';
+import { conversationCapacity } from './questions.ts';
 
 /** Read stored summaries too: review and terminal peers must remain discoverable. */
 export function discoverTasks(store: RunStore, callerId: string, request: Extract<DiscoveryRequest, { kind: 'tasks' }>): DiscoveredTasks {
@@ -23,5 +24,8 @@ export function discoverTasks(store: RunStore, callerId: string, request: Extrac
       status: run.status, attention: attention.bucket, attentionLabel: attention.label, accepts,
       ...(accepts ? {} : { reason: open ? `${state}: only its human can continue it` : 'task messaging is off: it does not accept task messages' }) }];
   });
-  return { tasks, ...(page.nextOffset === undefined ? {} : { nextOffset: page.nextOffset }) };
+  // Only a root task discovers peers, so its own ledger is its family ledger, read as last committed:
+  // discovery writes nothing, and the next send's commit moves settled history out (hearsay-tools/squawk#4192).
+  return { tasks, ...(page.nextOffset === undefined ? {} : { nextOffset: page.nextOffset }),
+    capacity: conversationCapacity(conversationOf(caller) ?? { messages: [], outcomes: [] }) };
 }

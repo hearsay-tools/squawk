@@ -352,7 +352,7 @@ function continuationOpening(
   // as a human message, and its own reply outcome is not news to the worker.
   const answerSource = openingInput ? host.answerSource(runId, openingInput) : undefined;
   let prompt = input.prompt;
-  if (openingInput && !answerSource) prompt += agentInputOutcomeText(openingInput, store.getRun(openingInput.parentRunId));
+  if (openingInput && !answerSource) prompt += agentInputOutcomeText(openingInput, store.conversations);
   const { openingImages, attachments } = continuationImages(host, runId, stepId, checkpoint, input);
   if (checkpoint?.origin !== 'lifecycle' && !answerSource) store.eventLog.appendEvent(runId, {
     type: 'user-message',

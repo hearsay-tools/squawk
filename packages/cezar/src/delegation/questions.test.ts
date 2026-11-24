@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { conversationMessageSchema } from '@open-mercato/cezar-contract/conversations';
 import type { AgentInput, AskRequest } from '@open-mercato/cezar-contract';
-import { answersQuestion, formatQuestionText, questionMessage } from './questions.ts';
+import { ACTIVE_MESSAGE_LIMIT, answersQuestion, conversationCapacity, formatQuestionText, INBOX_LIMIT, OPEN_REQUEST_LIMIT, questionMessage } from './questions.ts';
 
 const W = randomUUID(); const P = randomUUID();
 const request: AskRequest = { questions: [{ header: 'DB', question: 'Which database?', options: [{ label: 'Postgres', description: 'Managed' }, { label: 'SQLite' }] }] };
@@ -52,5 +52,38 @@ describe('parent-routed worker questions (#505)', () => {
     expect(answersQuestion(message, input('follow-up', message.id))).toBe(false);
     expect(answersQuestion(message, input('reply', randomUUID()))).toBe(false);
     expect(answersQuestion({ ...message, question: undefined }, input('reply', message.id))).toBe(false);
+  });
+});
+
+describe('conversation capacity headroom (hearsay-tools/squawk#4192)', () => {
+  const message = (kind: 'progress' | 'request') => conversationMessageSchema.parse({ id: randomUUID(), senderRunId: P, recipientRunId: W, kind, text: 't',
+    createdAt: new Date(0).toISOString(), requestHash: 'a'.repeat(64), state: 'accepted' });
+  const ledger = (progress: number, requests = 0) => ({ messages: [...Array.from({ length: progress }, () => message('progress')),
+    ...Array.from({ length: requests }, () => message('request'))], outcomes: [] });
+
+  it('reports active messages with the room open requests reserve, open requests and the limits', () => {
+    expect(conversationCapacity(ledger(3, 2), 5)).toEqual({ activeMessages: 7, activeMessageLimit: ACTIVE_MESSAGE_LIMIT, openRequests: 2,
+      openRequestLimit: OPEN_REQUEST_LIMIT, recipientInbox: 5, inboxLimit: INBOX_LIMIT });
+    expect(conversationCapacity(ledger(0))).toEqual({ activeMessages: 0, activeMessageLimit: 1024, openRequests: 0, openRequestLimit: 32, inboxLimit: 32 });
+  });
+
+  it.each([
+    { name: '767 active messages', state: () => ledger(767), inbox: undefined, part: undefined },
+    { name: '768 active messages', state: () => ledger(768), inbox: undefined, part: '768 of 1024 active messages' },
+    { name: '23 open requests', state: () => ledger(0, 23), inbox: undefined, part: undefined },
+    { name: '24 open requests', state: () => ledger(0, 24), inbox: undefined, part: '24 of 32 open requests' },
+    { name: '23 recipient inbox slots', state: () => ledger(0), inbox: 23, part: undefined },
+    { name: '24 recipient inbox slots', state: () => ledger(0), inbox: 24, part: '24 of 32 recipient inbox slots' },
+  ])('warns at 75 % of a bound and not below: $name', ({ state, inbox, part }) => {
+    const { warning } = conversationCapacity(state(), inbox);
+    if (part === undefined) expect(warning).toBeUndefined();
+    else expect(warning).toContain(part);
+  });
+
+  it('names every bound at or past 75 % in one warning', () => {
+    const { warning } = conversationCapacity(ledger(744, 24), 24);
+    expect(warning).toContain('792 of 1024 active messages');
+    expect(warning).toContain('24 of 32 open requests');
+    expect(warning).toContain('24 of 32 recipient inbox slots');
   });
 });

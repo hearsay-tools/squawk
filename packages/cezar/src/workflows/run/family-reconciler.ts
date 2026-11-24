@@ -7,6 +7,7 @@ import type { ActiveRun } from '../active-run.ts';
 import type { CommitSource } from '../../runs/run-persistence.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { WorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import type { RequestOutcome } from '@open-mercato/cezar-contract';
 import { historyDeletionPending, executionBlockedByRootFinish } from './run-guards.ts';
 import { repairFailedRootFinish } from '../completion-policy.ts';
 import { reconcileConversationState, projectConversationEvents, settledRunFamilies } from '../../delegation/conversations.ts';
@@ -257,10 +258,10 @@ export class FamilyReconciler {
     return { outcomes, deletedResults };
   }
 
-  /** The family conversation's request outcomes, which settle request waits. */
-  private requestOutcomesOf(run: RunRecord) {
-    const root = run.delegation?.role === 'root' ? run : run.delegation?.role === 'worker' ? this.context.store.getRun(run.delegation.parentRunId) : undefined;
-    return root?.delegation?.role === 'root' ? root.delegation.conversation?.outcomes ?? [] : [];
+  /** The outcomes of the requests a wait names, from the family conversation: they settle request waits. */
+  private requestOutcomesOf(run: RunRecord, entry: WorkerWaitEntry): RequestOutcome[] {
+    const rootId = run.delegation?.role === 'root' ? run.id : run.delegation?.role === 'worker' ? run.delegation.parentRunId : undefined;
+    return rootId === undefined ? [] : (entry.requestIds ?? []).flatMap(id => this.context.store.conversations.findOutcome(rootId, id) ?? []);
   }
 
   /**
@@ -276,7 +277,6 @@ export class FamilyReconciler {
     if (!entries.length) return;
     const now = new Date().toISOString();
     const { outcomes, deletedResults } = observe(now);
-    const requests = this.requestOutcomesOf(parent);
     const destroyed = (entry: WorkerWaitEntry) => !!entry.workerIds?.length && this.isExecutingWorkerWaitTurn(parent.id) && entry.workerIds.every(id => {
       const child = this.context.store.getRun(id)?.delegation;
       return child?.role === 'worker' ? child.destroy?.phase === 'complete' : deletedResults.get(id)?.cleanup === 'complete';
@@ -296,7 +296,7 @@ export class FamilyReconciler {
           current.workerId === previous.workerId && (current.revision ?? 0) === (previous.revision ?? 0)));
         if (proven.length !== (selected.outcomes ?? []).length) selected = { ...selected, outcomes: proven };
       }
-      const { entry: next, reason } = reconcileWorkerEntry(selected, outcomes, now, requests);
+      const { entry: next, reason } = reconcileWorkerEntry(selected, outcomes, now, this.requestOutcomesOf(parent, selected));
       if (reason && destroyed(next)) {
         this.host.waitEngine.cancel(parent.id, [entry.id]);
       } else if (reason) {

@@ -7,9 +7,10 @@ import type { Home } from '../home/home.ts';
 import { assertReplyDirection, sendRequestContext, sendAdmission, sendMessage, sendInput, type ConversationPair } from './conversation-send.ts';
 import { discoverTasks } from './task-discovery.ts';
 import { discoveredRunners, missingModelChoices, type HostDiscovery } from '../discovery/choices.ts';
-import { assertConversationCapacity, byCreatedAtAndId, commitAccepted, inboxEntryIn,
-  orphanedPeerMessage, resolvePair, takesPart, projectConversationEvents, reconcileConversationState, replyOutcomes, type InboxEntry } from './conversations.ts';
+import { assertConversationCapacity, commitAccepted, inboxEntryIn, inboxSlotsUsed,
+  orphanedPeerMessage, resolvePair, takesPart, projectConversationEvents, reconcileConversationState, withReplyOutcome, type InboxEntry } from './conversations.ts';
 export { rootDelegation } from './conversations.ts';
+import { conversationCapacity } from './questions.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
 import { workerContextTask } from './context.ts';
 import { workerExecutionsOf } from './worker-executions.ts';
@@ -81,6 +82,7 @@ import { completionWaitEntry, peerWaitView, workerCompletionWaitProjection, work
 import type { RunStore, RunRecord } from '../runs/store.ts';
 import { assertConversationIdFree, ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import { workerDestroyView, workerOutcome, workerObservation } from '../runs/delegation-state.ts';
+import { acceptedRequest } from '../runs/conversation-ledger.ts';
 import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, defaultSpawnKind, familyRecordOf, grantsOf, historyDeleting, inspectableReceipts, isFamilyRecord, mayOperate, receiptsOf, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
 import { recordedDirectory } from '../runs/shared-hosts.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -384,15 +386,24 @@ export class DelegationService {
     if (historyDeleting(root)) return conversationOf(root) ?? { messages: [], outcomes: [] };
     const state = reconcileConversationState(root, (id) => project.store.getRun(id), new Date().toISOString(), run => run.delegation?.role === 'worker'
       ? project.store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete' : !project.manager.isActive(run.id), id => project.store.isUnreadable(id));
+    // The commit moves settled history to the archive; a ledger with nothing to reconcile compacts on
+    // its own, so only active load counts toward capacity (hearsay-tools/squawk#4192).
     if (state && state !== conversationOf(root)) project.store.commitConversation(root.id, state);
-    return state ?? { messages: [], outcomes: [] };
+    else if (state) project.store.compactConversation(root.id);
+    return conversationOf(project.store.getRun(root.id)) ?? state ?? { messages: [], outcomes: [] };
   }
   private conversationReceipt(project: DelegationProject, ledgerId: string, message: ConversationSendResult['message']): ConversationSendResult {
     const recipient = project.store.getRun(message.recipientRunId);
     const input = recipient?.agentInputs?.find(input => input.id === message.id);
-    const state = conversationOf(project.store.getRun(ledgerId));
-    const outcome = state?.outcomes.find(outcome => outcome.requestId === (message.requestId ?? message.id));
-    return { message, delivery: input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered', ...(outcome ? { outcome } : {}) };
+    const outcome = project.store.conversations.findOutcome(ledgerId, message.requestId ?? message.id);
+    const ledger = conversationOf(project.store.getRun(ledgerId)) ?? { messages: [], outcomes: [] };
+    return { message, delivery: input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered', ...(outcome ? { outcome } : {}),
+      capacity: conversationCapacity(ledger, recipient ? inboxSlotsUsed(recipient) : undefined) };
+  }
+  /** The message `id` the ledger already holds, after reconciling it: an exact retry finds it. */
+  private sentBefore(project: DelegationProject, root: RunRecord, id: string): ConversationMessage | undefined {
+    this.currentConversation(project, root);
+    return project.store.conversations.findMessage(root.id, id);
   }
   async send(caller: Caller, value: ConversationSendRequest): Promise<ConversationSendResult> {
     const request = conversationSendRequestSchema.parse(value);
@@ -409,7 +420,7 @@ export class DelegationService {
     const pair = this.conversationPair(caller, request.recipientRunId, true);
     const { project, recipient } = pair;
     // An exact retry returns its stored receipt, whatever became of the workspace since.
-    if (this.currentConversation(project, this.ledgerFor(pair, request)).messages.some(message => message.id === request.id)) return;
+    if (this.sentBefore(project, this.ledgerFor(pair, request), request.id)) return;
     if (recipient.delegation?.role !== 'worker' || recipient.delegation.destroy || !freshWorkerSession(recipient) && recipient.status !== 'cancelled') return;
     if (['queued', 'running', 'waiting'].includes(recipient.status) && !isUsageLimitHold(recipient)) return;
     try {
@@ -424,7 +435,7 @@ export class DelegationService {
     const pair = this.conversationPair(caller, request.recipientRunId, true);
     const { project, recipient } = pair;
     const root = this.ledgerFor(pair, request);
-    if (this.currentConversation(project, root).messages.some(message => message.id === request.id)) return undefined;
+    if (this.sentBefore(project, root, request.id)) return undefined;
     this.assertSendScope(pair, request);
     sendAdmission(pair, request);
     const effortPin = parseDelegationEffort(request.effort);
@@ -471,13 +482,14 @@ export class DelegationService {
     const { project, sender, recipient } = pair;
     const root = this.ledgerFor(pair, request);
     this.assertSendScope(pair, request);
-    if (pair.relationship === 'peer') assertReplyDirection(conversationOf(sender) ?? { messages: [], outcomes: [] }, request, sender, recipient);
+    const ledger = project.store.conversations;
+    if (pair.relationship === 'peer') assertReplyDirection(ledger, sender.id, request, sender, recipient);
     const requestHash = createHash('sha256').update(JSON.stringify({ senderRunId: sender.id, ...request })).digest('hex');
     const state = this.currentConversation(project, root);
-    const existing = state.messages.find(message => message.id === request.id);
+    const existing = ledger.findMessage(root.id, request.id);
     if (existing) return this.retrySend(pair, root, existing, requestHash);
     assertNewPeerSend(pair, request);
-    const { original, settled } = sendRequestContext(state, request, sender, recipient);
+    const { original, settled } = sendRequestContext(ledger, root.id, request, sender, recipient);
     const now = new Date().toISOString();
     const { destroyed, resumable, resume, instruction } = sendAdmission(pair, request);
     // A new continuation is new worker work: the parent's switch gates it (hearsay-tools/cezarion#2784).
@@ -493,9 +505,9 @@ export class DelegationService {
     // the question as replied while nothing delivers it; the human answers it instead.
     if (answering && !enqueue) throw new DelegationPolicyError('incompatible_state', 'The worker can no longer receive this answer; its question goes back to the human');
     assertConversationCapacity(state, pair, request.kind, enqueue, request.kind === 'reply' && !settled, answering);
-    const outcomes = replyOutcomes(state, request, settled, now);
+    const replied = withReplyOutcome(ledger, root.id, state, request, settled, now);
     const input = sendInput(pair, root, message, requestHash, now);
-    const next = { messages: [...state.messages, message], outcomes };
+    const next = { messages: [...replied.messages, message], outcomes: replied.outcomes };
     this.commitSend(pair, root, next, input, resume, enqueue, resumeOverrides);
     try {
       projectConversationEvents(project.store, project.store.getRun(root.id)!);
@@ -529,7 +541,7 @@ export class DelegationService {
     const { project, recipient, relationship } = pair;
     const peer = relationship === 'peer';
     if (resume) {
-      try { assertConversationIdFree(root, input, id => project.store.getRun(id), (runId, id) => project.store.eventLog.hasProjection(runId, id)); }
+      try { assertConversationIdFree(root, input, project.store.conversations, id => project.store.getRun(id), (runId, id) => project.store.eventLog.hasProjection(runId, id)); }
       catch (error) { if (error instanceof ConversationIdInUseError) throw new DelegationPolicyError('invalid_input', error.message); throw error; }
       const fresh = freshWorkerSession(recipient) ? `${FRESH_SESSION_NOTICE}\n` : '';
       const result = project.manager.continueRun(recipient.id, {
@@ -556,23 +568,17 @@ export class DelegationService {
   async conversation(caller: Caller, value: ConversationInspectRequest): Promise<ConversationInspectResult> {
     const request = conversationInspectRequestSchema.parse(value);
     const { project, ledgers, self, other } = this.historyLedgers(caller, request.recipientRunId);
-    const between = (message: ConversationMessage) => { return (message.senderRunId === self && message.recipientRunId === other) || (message.senderRunId === other && message.recipientRunId === self); };
-    const states = ledgers.map(ledger => {
-      const state = this.currentConversation(project, ledger);
+    for (const ledger of ledgers) {
+      this.currentConversation(project, ledger);
       projectConversationEvents(project.store, project.store.getRun(ledger.id) ?? ledger);
-      return state;
-    });
+    }
     const before = request.before === undefined ? undefined : decodeConversationCursor(request.before);
-    const merged = states.flatMap(state => state.messages.filter(between)).sort(byCreatedAtAndId)
-      .filter(message => !before || byCreatedAtAndId(message, before) < 0);
-    const messages = merged.slice(-CONVERSATION_PAGE_MESSAGES);
-    const ids = new Set(messages.map(message => message.id));
-    const outcomes = states.flatMap(state => state.outcomes.filter(outcome => ids.has(outcome.requestId)));
+    const { messages, outcomes, older } = project.store.conversations.page(ledgers.map(ledger => ledger.id), [self, other], before, CONVERSATION_PAGE_MESSAGES);
     const inputs = project.store.getRun(caller.runId)?.agentInputs ?? [];
     const unread = messages.some(message => message.recipientRunId === caller.runId &&
       inputs.some(input => input.id === message.id && !input.deliveredAt));
     return { messages, outcomes,
-      ...(merged.length > messages.length ? { nextBefore: encodeConversationCursor(messages[0]!) } : {}),
+      ...(older ? { nextBefore: encodeConversationCursor(messages[0]!) } : {}),
       ...(unread ? { hint: commandText(`This history includes unread messages. Run cez message inbox to receive and mark them delivered. Inbox will show them again intentionally; after acknowledgement, Squawk will not queue them again for normal end-of-turn delivery.`) } : {}) };
   }
   /** The ledgers a history read covers: the family's one, or each peer root's own while it exists.
@@ -585,7 +591,7 @@ export class DelegationService {
     if (pair?.relationship === 'family') return { project: pair.project, ledgers: [pair.root], self: caller.runId, other: otherId };
     const { project, self } = this.peerRecords(caller);
     const other = project.store.getRun(otherId);
-    if (!pair && !takesPart(self, other, otherId)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    if (!pair && !takesPart(project.store.conversations, self, otherId)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     return { project, ledgers: [self, ...(isFamilyRecord(other) ? [other] : [])], self: self.id, other: otherId };
   }
   async inbox(caller: Caller): Promise<InboxReserveResult> {
@@ -594,15 +600,14 @@ export class DelegationService {
     if (!run || !grantsOf(run).message.length) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     const selected: InboxEntry[] = [];
     let characters = 0;
-    const states = new Map<string, ConversationState>();
-    const ledgerState = (ledger: RunRecord) => {
-      let state = states.get(ledger.id);
-      if (!state) { state = this.currentConversation(project, ledger); states.set(ledger.id, state); }
-      return state;
+    const reconciled = new Set<string>();
+    const reconciledLedger = (ledger: RunRecord) => {
+      if (!reconciled.has(ledger.id)) { this.currentConversation(project, ledger); reconciled.add(ledger.id); }
+      return ledger.id;
     };
     for (const input of run.agentInputs ?? []) {
       if (!input.conversation || input.conversation.recipientRunId !== run.id || !project.manager.canClaimInboxInput(run.id, input.id)) continue;
-      const found = input.conversation.relationship === 'peer' ? this.peerInboxEntry(project, run, input, ledgerState) : this.familyInboxEntry(caller, run, input, ledgerState);
+      const found = input.conversation.relationship === 'peer' ? this.peerInboxEntry(project, run, input, reconciledLedger) : this.familyInboxEntry(caller, run, input, reconciledLedger);
       if (!found) continue;
       if (selected.length >= 32 || (selected.length > 0 && characters + found.message.text.length > 100_000)) break;
       characters += found.message.text.length;
@@ -620,20 +625,20 @@ export class DelegationService {
   }
   /** A peer input addressed to the caller: its participation is the whole check (spec § 2, two
    *  levels). When the sender's ledger went with its deletion, the input still carries the message. */
-  private peerInboxEntry(project: DelegationProject, run: RunRecord, input: AgentInput, ledgerState: (ledger: RunRecord) => ConversationState): InboxEntry | undefined {
+  private peerInboxEntry(project: DelegationProject, run: RunRecord, input: AgentInput, reconciledLedger: (ledger: RunRecord) => string): InboxEntry | undefined {
     if (!grantsOf(run).message.includes('peer')) return undefined;
     const ledger = project.store.getRun(input.parentRunId);
     if (!ledger) { const message = orphanedPeerMessage(input); return message && { message }; }
-    return isFamilyRecord(ledger) ? inboxEntryIn(ledgerState(ledger), input, run.id) : undefined;
+    return isFamilyRecord(ledger) ? inboxEntryIn(project.store.conversations, reconciledLedger(ledger), input, run.id) : undefined;
   }
   /** A family input: the pair must still be admitted, as before peers existed. */
-  private familyInboxEntry(caller: Caller, run: RunRecord, input: AgentInput, ledgerState: (ledger: RunRecord) => ConversationState): InboxEntry | undefined {
+  private familyInboxEntry(caller: Caller, run: RunRecord, input: AgentInput, reconciledLedger: (ledger: RunRecord) => string): InboxEntry | undefined {
     let pair: ConversationPair;
     try { pair = this.conversationPair(caller, input.conversation!.senderRunId); } catch (error) {
       if (error instanceof DelegationPolicyError && error.code === 'denied_scope') return undefined;
       throw error;
     }
-    return pair.relationship === 'family' ? inboxEntryIn(ledgerState(pair.root), input, run.id) : undefined;
+    return pair.relationship === 'family' ? inboxEntryIn(pair.project.store.conversations, reconciledLedger(pair.root), input, run.id) : undefined;
   }
   private inboxReceipt(caller: Caller, value: InboxReceiptRequest) {
     const { receiptId } = inboxReceiptRequestSchema.parse(value);
@@ -665,7 +670,8 @@ export class DelegationService {
   private ownRequest(caller: Caller, requestId: string): { project: DelegationProject; root: RunRecord; message: ConversationMessage } {
     const project = this.context(caller); const sender = project.store.getRun(caller.runId);
     const root = familyRecordOf(sender, id => project.store.getRun(id));
-    const message = conversationOf(root)?.messages.find(message => message.id === requestId && message.kind === 'request' && message.state === 'accepted' && message.senderRunId === caller.runId);
+    const found = isFamilyRecord(root) ? acceptedRequest(project.store.conversations.findMessage(root.id, requestId)) : undefined;
+    const message = found?.senderRunId === caller.runId ? found : undefined;
     if (!message) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     if (message.relationship === 'peer') return { ...this.peerRecords(caller), root: root!, message };
     const pair = this.conversationPair(caller, message.recipientRunId);
@@ -676,7 +682,7 @@ export class DelegationService {
     const { requestId } = conversationCancelRequestSchema.parse(value);
     const { project, root } = this.ownRequest(caller, requestId);
     const state = this.currentConversation(project, root);
-    const existing = state.outcomes.find(outcome => outcome.requestId === requestId);
+    const existing = project.store.conversations.findOutcome(root.id, requestId);
     if (existing) {
       projectConversationEvents(project.store, project.store.getRun(root.id)!); project.manager.reconcileWorkerWaits();
       return existing;

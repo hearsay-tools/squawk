@@ -5,9 +5,10 @@ export { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-d
 import { validateChanges, toRunClaim, toRunRow, toRunBindings, writeMetadata, readOnlyTarget } from './run-database-row.ts';
 import { reportRows, type IndexedArtifact } from './report-rows.ts';
 import { automationRuns } from './automation-runs.ts';
+import type { ConversationArchiveRows, ConversationArchiveWrite } from './conversation-archive.ts';
+import { RunDerivedRows } from './run-derived-rows.ts';
 import { conversationRoots } from './conversation-members.ts';
-import { runIndexRows, type RunIndexRow, type RunIndexTable } from './run-index-rows.ts';
-import { RUN_INDEXES } from './run-indexes.ts';
+import type { RunIndexRow, RunIndexTable } from './run-index-rows.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
 import { readPeerSummaryPage, toSummaryRow, type PeerSummaryPageQuery } from './run-database-peer-page.ts';
 import { accessSync, closeSync, constants, existsSync, openSync, readSync, statSync } from 'node:fs';
@@ -120,6 +121,8 @@ export interface RunDatabaseChanges {
   beforeCommit?: () => Readonly<Record<string, string>> | void;
   /** Explicit adoption only (`store.claims.adoptFallbackFamily`): fallback families to copy in first. */
   adoptFallback?: readonly string[];
+  /** Ledger entries a root's upsert in this change no longer holds (hearsay-tools/squawk#4192). */
+  conversationArchive?: readonly ConversationArchiveWrite[];
 }
 
 /** A family a fenced write touches: held at `generation`, or to `take` in that same transaction if
@@ -657,7 +660,11 @@ export class RunDatabase {
   }
 
   get reports() { return this.run(() => reportRows(this.db, work => this.run(work))); }
-  private indexTable(index: RunIndexTable) { return runIndexRows(this.db, index, work => this.run(work)); }
+  private derivedRows: RunDerivedRows | undefined;
+  private get derived(): RunDerivedRows { return this.derivedRows ??= new RunDerivedRows(this.db, work => this.run(work)); }
+  private indexTable(index: RunIndexTable) { return this.derived.indexTable(index); }
+  /** The archived entries of the family conversation ledgers (`RunDerivedRows.archive`). */
+  get archive(): ConversationArchiveRows | undefined { return this.derived.archive; }
   replaceArtifacts(id: string, artifacts: readonly IndexedArtifact[], revision?: number): void { this.run(() => this.reports.replace(id, artifacts, revision)); }
   listArtifacts(): IndexedArtifact[] { return this.run(() => this.reports.list()); }
 
@@ -694,13 +701,14 @@ export class RunDatabase {
           this.reports.deleteRun(id);
           this.statements.delete.run(id);
           this.statements.deleteMeta.run(`issue-attribution:${id}`);
-          for (const { index } of RUN_INDEXES) this.indexTable(index).deleteRun(id);
+          this.derived.deleteRun(id);
         }
+        this.derived.writeArchive(changes.conversationArchive);
         const revision = changes.upserts.length > 0 ? this.nextSequence(COMMIT_SEQ_KEY) : 0;
         for (const row of changes.upserts) {
           this.reports.markDirty(row.id, row.live, revision);
           const inserted = this.statements.upsert.get(toRunBindings(row, revision));
-          for (const { index, rowsOf } of RUN_INDEXES) this.indexTable(index).replace(row.id, rowsOf(row));
+          this.derived.replace(row);
           // Revision binding makes an older writer invalidate this optional repair cache.
           if (row.issueAttributionCurrent) this.statements.setMeta.run(`issue-attribution:${row.id}`, String(revision));
           else this.statements.deleteMeta.run(`issue-attribution:${row.id}`);

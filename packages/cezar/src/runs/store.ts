@@ -31,6 +31,8 @@ import { trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
+import { StoredConversationLedger, type ConversationLedger } from './conversation-ledger.ts';
+import { compactConversation } from './conversation-compaction.ts';
 
 import {
   RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, RunDatabaseBusyError,
@@ -164,6 +166,8 @@ export class RunStore {
   readonly queries: RunQueriesTopic;
   /** The repository this project is, and the repair of the runs it rescopes (hearsay-tools/squawk#4044). */
   readonly repoScope: RunRepoScopeTopic;
+  /** The family conversation ledgers, read by message and request ID (hearsay-tools/squawk#4192). */
+  readonly conversations: ConversationLedger = new StoredConversationLedger((id) => this.getRun(id), () => this.db?.archive);
   private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
   /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
    *  first use by the factory this process registered; throws when none is registered. */
@@ -457,10 +461,38 @@ export class RunStore {
     message?: ConversationIdentity): void {
     const root = this.rows.peek(rootId);
     if (root?.delegation?.role !== 'root') throw new Error('missing conversation root');
-    assertConversationIdFree(root, message ?? delivery?.input, id => this.rows.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
+    assertConversationIdFree(root, message ?? delivery?.input, this.conversations, id => this.rows.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
     const staged = new Map<string, RunRecord>();
-    stageConversation(staged, root, conversation, delivery, id => this.rows.peek(id), text => this.redaction.redactText(text));
-    this.persistence.commitIndex(staged);
+    const compacted = this.compactLedger(rootId, conversation);
+    stageConversation(staged, root, compacted.state, delivery, id => this.rows.peek(id), text => this.redaction.redactText(text));
+    this.persistence.commitIndex(staged, undefined, compacted.archive ? { archive: compacted.archive } : {});
+  }
+
+  /** Move root `rootId`'s settled ledger entries to the archive now, when any are eligible, so a row
+   *  full of settled history compacts before a capacity check reads it. A root this store may not
+   *  write stays as it is. */
+  compactConversation(rootId: string): void {
+    const root = this.rows.peek(rootId);
+    const state = root?.delegation?.role === 'root' ? root.delegation.conversation : undefined;
+    if (!root || !state) return;
+    const compacted = this.compactLedger(rootId, state);
+    if (!compacted.archive) return;
+    const staged = new Map<string, RunRecord>();
+    stageConversation(staged, root, compacted.state, undefined, id => this.rows.peek(id), text => this.redaction.redactText(text));
+    try { this.persistence.commitIndex(staged, undefined, { archive: compacted.archive }); }
+    catch (error) { if (!(error instanceof RunWriteRefusedError)) throw error; }
+  }
+
+  /** The settled entries a ledger commit moves to `conversation_archive` in its own transaction
+   *  (`compactConversation`, hearsay-tools/squawk#4192), their text scrubbed as the row's is. */
+  private compactLedger(rootId: string, state: ConversationState): ReturnType<typeof compactConversation> {
+    const archive = this.db?.archive;
+    if (!archive) return { state };
+    const compacted = compactConversation(rootId, state, { now: Date.now(), peek: id => this.rows.peek(id),
+      hasProjection: (runId, id) => this.eventLog.hasProjection(runId, id), archivedMessage: (root, id) => archive.find(root, id)?.message,
+      routedAskOpen: (workerId, messageId) => this.transcriptFacts.transcriptFacts(workerId).pendingAsk?.routedMessageId === messageId });
+    return compacted.archive ? { state: compacted.state, archive: { ...compacted.archive, entries: compacted.archive.entries.map(entry =>
+      ({ ...entry, message: { ...entry.message, text: this.redaction.redactText(entry.message.text) } })) } } : compacted;
   }
 
   /** Crash recovery (#505): input a harness accepted but was never seen reading goes
@@ -703,13 +735,15 @@ export class RunStore {
     };
     staged.set(id, next);
     if (Object.prototype.hasOwnProperty.call(patch, 'archived')) this.archive.syncTranscriptForm(id, next.archived);
+    let compacted: ReturnType<typeof compactConversation> | undefined;
     if (conversation) {
       const root = this.rows.peek(conversation.rootId);
       if (root?.delegation?.role !== 'root' || run.delegation.parentRunId !== root.id) throw new Error('missing conversation ownership');
-      stageConversation(staged, root, conversation.state, { recipientRunId: id, input: conversation.input },
+      compacted = this.compactLedger(root.id, conversation.state);
+      stageConversation(staged, root, compacted.state, { recipientRunId: id, input: conversation.input },
         runId => this.rows.peek(runId), text => this.redaction.redactText(text));
     }
-    this.persistence.commitIndex(staged, undefined, { exits: new Map([[id, exit]]) });
+    this.persistence.commitIndex(staged, undefined, { exits: new Map([[id, exit]]), ...(compacted?.archive ? { archive: compacted.archive } : {}) });
   }
 
   /** Create an owned worker run and its parent receipt; `createStoreOwnedRun` holds the checks. */

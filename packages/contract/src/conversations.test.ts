@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
+import { discoveredTasksSchema } from './discovery.ts';
 import { conversationCursorSchema, decodeConversationCursor, encodeConversationCursor,
   conversationSendRequestSchema, inboxReserveResultSchema, requestWaitRequestSchema,
-  conversationCancelRequestSchema, conversationInspectRequestSchema, conversationInspectResultSchema, conversationSendResultSchema,
+  conversationCancelRequestSchema, conversationCapacitySchema, conversationInspectRequestSchema, conversationInspectResultSchema, conversationSendResultSchema,
   conversationStateSchema, inboxReceiptRequestSchema, inboxReceiptResultSchema } from './conversations.ts';
 
 const id = 'abcdef01-2345-4678-9abc-def012345678';
@@ -124,6 +125,17 @@ describe('conversation records', () => {
   it('keeps every send result delivery', () => {
     acceptsEach(conversationSendResultSchema, { message, outcome }, 'delivery', ['queued', 'delivered', 'consumed', 'not-delivered']);
     refuses(conversationSendResultSchema, { message, delivery: 'queued', extra: true });
+  });
+
+  it('reports ledger capacity on a send result, with an optional recipient inbox and warning', () => {
+    const capacity = { activeMessages: 768, activeMessageLimit: 1024, openRequests: 1, openRequestLimit: 32, recipientInbox: 3, inboxLimit: 32, warning: 'near' };
+    accepts(conversationSendResultSchema, { message, delivery: 'queued', capacity });
+    accepts(conversationCapacitySchema, { activeMessages: 0, activeMessageLimit: 1024, openRequests: 0, openRequestLimit: 32, inboxLimit: 32 });
+    refuses(conversationCapacitySchema, { ...capacity, activeMessages: -1 });
+    refuses(conversationCapacitySchema, { ...capacity, warning: '' });
+    refuses(conversationCapacitySchema, { ...capacity, extra: 0 });
+    accepts(discoveredTasksSchema, { tasks: [], capacity: { ...capacity, recipientInbox: undefined } });
+    accepts(discoveredTasksSchema, { tasks: [] });
   });
 
   it('keeps the inspect, cancel and receipt requests strict', () => {

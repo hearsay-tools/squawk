@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationMessage, Wait } from '@open-mercato/cezar-contract';
 import { conversationMessageSchema } from '@open-mercato/cezar-contract/conversations';
 import type { RunEvent } from '../runs/store.ts';
+import type { RunRecord } from '../runs/store.ts';
+import { StoredConversationLedger } from '../runs/conversation-ledger.ts';
 import { PARK_NOTICE_EXCERPT_MAX, formatHoldNoticeText, formatParkNoticeText, holdNoticeId, holdNoticeMessage, messagedParentSince, parkNoticeExcerpt, parkNoticeId, parkNoticeMessage, parkNoticeWait, parkingTurn } from './park-notice.ts';
 
 const worker = randomUUID();
@@ -32,20 +34,23 @@ describe('park notices (hearsay-tools/cezarion#1327)', () => {
     const byId = workerWait({ workerIds: [worker] });
     const byRequest = workerWait({ requestIds: [request] });
     const waits = [timer, workerWait({ workerIds: [worker], phase: WAIT_PHASE.delivered }), workerWait({ workerIds: [randomUUID()] }), byId, byRequest];
+    const finder = (messages: ConversationMessage[]) => (id: string) => messages.find(entry => entry.id === id);
     const messages = [message({ id: request })];
-    expect(parkNoticeWait(worker, waits, messages)).toBe(byId);
-    expect(parkNoticeWait(worker, waits, [...messages, message({ id: parkNoticeId(worker, byId.id) })])).toBe(byRequest);
+    expect(parkNoticeWait(worker, waits, finder(messages))).toBe(byId);
+    expect(parkNoticeWait(worker, waits, finder([...messages, message({ id: parkNoticeId(worker, byId.id) })]))).toBe(byRequest);
     // A request to another worker does not select this one.
-    expect(parkNoticeWait(worker, [byRequest], [message({ id: request, recipientRunId: randomUUID() })])).toBeUndefined();
+    expect(parkNoticeWait(worker, [byRequest], finder([message({ id: request, recipientRunId: randomUUID() })]))).toBeUndefined();
   });
 
   it('knows whether the parking turn already messaged the parent', () => {
     const since = '2026-10-20T12:13:00.000Z';
-    const sent = (createdAt: string, recipientRunId = parent) => [message({ senderRunId: worker, recipientRunId, kind: 'progress', createdAt })];
-    expect(messagedParentSince(sent(since), worker, parent, since)).toBe(true);
-    expect(messagedParentSince(sent('2026-10-20T12:12:59.000Z'), worker, parent, since)).toBe(false);
-    expect(messagedParentSince(sent(since, randomUUID()), worker, parent, since)).toBe(false);
-    expect(messagedParentSince(sent(since), worker, parent, undefined)).toBe(false);
+    // The parent holds the family ledger in its row; the archive behind the row has its own test.
+    const sent = (createdAt: string, recipientRunId = parent) => new StoredConversationLedger(id => id === parent
+      ? { id, delegation: { role: 'root', receipts: [], conversation: { messages: [message({ senderRunId: worker, recipientRunId, kind: 'progress', createdAt })], outcomes: [] } } } as unknown as RunRecord : undefined);
+    expect(messagedParentSince(sent(since), parent, worker, parent, since)).toBe(true);
+    expect(messagedParentSince(sent('2026-10-20T12:12:59.000Z'), parent, worker, parent, since)).toBe(false);
+    expect(messagedParentSince(sent(since, randomUUID()), parent, worker, parent, since)).toBe(false);
+    expect(messagedParentSince(sent(since), parent, worker, parent, undefined)).toBe(false);
   });
 
   it('reads the parking turn: its start and its last top-level assistant text, not a subagent\'s or an earlier turn\'s', () => {

@@ -111,4 +111,28 @@ describe('project database projection', () => {
       expect(db.reports.dirty()).toEqual([workerId]);
     } finally { closeClaimSession(owner.session); }
   });
+
+  // hearsay-tools/squawk#4192: a fallback root's archived ledger entries read as main's, and come with its adoption.
+  it('reads a fallback root\'s conversation archive through the projection, shadowed by a main row, and copies it on adoption', () => {
+    const primary = open('cezar'), source = open('squawk');
+    const fallbackId = randomUUID(), sharedId = randomUUID(), member = randomUUID();
+    const entry = (id: string, senderRunId: string) => ({ message: { id, senderRunId, recipientRunId: member, kind: 'progress' as const, text: id,
+      createdAt: new Date(0).toISOString(), requestHash: 'a'.repeat(64), state: 'accepted' as const } });
+    const [hidden, kept, own] = [randomUUID(), randomUUID(), randomUUID()];
+    primary.transaction({ upserts: [encodeRunRow(record(sharedId))], deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'fixture' },
+      conversationArchive: [{ rootId: sharedId, entries: [entry(own, sharedId)], outcomes: [] }] });
+    source.transaction({ upserts: [encodeRunRow(record(fallbackId)), encodeRunRow(record(sharedId))], deletes: [], conversationArchive: [
+      { rootId: fallbackId, entries: [entry(kept, fallbackId)], outcomes: [] }, { rootId: sharedId, entries: [entry(hidden, sharedId)], outcomes: [] }] });
+    handles.splice(handles.indexOf(primary), 1);
+    const db = RunDatabase.withProjectSource(primary, join(repo, 'cezar', 'runs.db'), join(repo, 'squawk', 'runs.db'));
+    handles.push(db);
+    expect(db.archive?.find(fallbackId, kept)?.message.id).toBe(kept);
+    expect(db.archive?.find(sharedId, own)?.message.id).toBe(own);
+    expect(db.archive?.find(sharedId, hidden)).toBeUndefined();
+    db.transaction({ upserts: [], deletes: [], adoptFallback: [fallbackId] });
+    const raw = RunDatabase.open(join(repo, 'cezar', 'runs.db'));
+    handles.push(raw);
+    expect(raw.archive?.find(fallbackId, kept)?.message.id).toBe(kept);
+    expect(raw.listConversationRoots(member)).toContain(fallbackId);
+  });
 });

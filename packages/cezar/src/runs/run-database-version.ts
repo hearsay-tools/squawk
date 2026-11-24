@@ -3,7 +3,7 @@ import { guardedJsonSql } from './guarded-json-sql.ts';
 /** `PRAGMA user_version` of a database this build created. A higher number means a newer Squawk
  *  wrote it; that is refused rather than read, because a newer schema may store what this one
  *  would silently drop on its next write. */
-export const RUN_DATABASE_SCHEMA_VERSION = 15;
+export const RUN_DATABASE_SCHEMA_VERSION = 16;
 
 /**
  * The oldest `user_version` the READ-ONLY reader can read as it stands (`openReadOnly`). It never

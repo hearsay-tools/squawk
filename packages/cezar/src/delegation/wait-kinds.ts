@@ -106,7 +106,7 @@ function registerWorkerListWait(port: WaitRegistryPort, runId: string, request: 
   if (!run.delegation || run.delegation.role === 'invalid') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
   const getRun = (id: string) => port.store.getRun(id);
   if (request.workerIds) assertOwnedWorkerWaitScope(run, request.workerIds, getRun);
-  else assertRequestWaitScope(run, request.requestIds ?? [], getRun);
+  else assertRequestWaitScope(run, request.requestIds ?? [], getRun, port.store.conversations);
   const repeated = identicalWorkerWait(run.waits ?? [], request);
   if (repeated && hasWorkerDeadline(repeated)) return repeatRegistration(port.store, runId, repeated, request.timeoutSeconds, registration) as DeadlinedWorkerWaitEntry;
   if (!port.engine.hasRoom(run)) throw waitCapacityPolicyError();

@@ -63,9 +63,11 @@ for observation, not authority to enqueue turns. Reconcile missing projections
 using stable message/event identities after restart.
 
 Use bounded message text (the existing 100,000-character input ceiling), retain
-the existing 32-undelivered-input cap per recipient, and cap a family's retained
-conversation ledger at 1,024 messages and 32 open requests. Reject excess with an
-explicit capacity error; never evict obligations or deduplication receipts.
+the existing 32-undelivered-input cap per recipient, and cap a family's active
+conversation ledger at 1,024 messages and 32 open requests. Settled entries move to the
+`conversation_archive` table and no longer count (hearsay-tools/squawk#4192); archived history
+has no cap. Reject excess with an explicit capacity error; never evict obligations or
+deduplication receipts: every archived message and outcome stays findable by its ID.
 Apply existing secret redaction before storage and display.
 
 Extend AgentInput with optional structured attribution/correlation while retaining

@@ -13,7 +13,7 @@ import type { AskRequest } from '../../core/ask.ts';
 import { askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { commitNewMessage, inboxSlotsUsed, projectConversationEvents } from '../../delegation/conversations.ts';
-import { answersQuestion, questionMessage, reservedReplies, uuidFrom } from '../../delegation/questions.ts';
+import { activeLedgerHasRoom, answersQuestion, INBOX_LIMIT, questionMessage, uuidFrom } from '../../delegation/questions.ts';
 import { usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { holdNoticeId, holdNoticeMessage, messagedParentSince, parkedByTurn, parkNoticeId, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
 import { workerQuestionRouting } from '../question-routing.ts';
@@ -76,12 +76,14 @@ export class WorkerQuestions {
     const request = askRequestOf(ask);
     if (!request) { this.answerUndelivered(workerId, ask.seq, 'the question is not a valid request'); return; }
     const parentId = worker.delegation.parentRunId;
+    // Settled history leaves the row first: only active load refuses the question (hearsay-tools/squawk#4192).
+    this.context.store.compactConversation(parentId);
     const root = this.context.store.getRun(parentId);
     const now = new Date().toISOString();
     const message = questionMessage({ workerRunId: workerId, parentRunId: parentId, askSeq: ask.seq, request, now });
     // Already committed (a crash before the routing event): the question did reach the parent,
     // whatever its capacity or state is now. Record the routing; the close sweeps follow.
-    const committed = root?.delegation?.role === 'root' && !!root.delegation.conversation?.messages.some(m => m.id === message.id);
+    const committed = root?.delegation?.role === 'root' && !!this.context.store.conversations.findMessage(parentId, message.id);
     if (committed) {
       this.context.store.eventLog.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
       return;
@@ -207,7 +209,7 @@ export class WorkerQuestions {
     if (!target) return;
     const { root, parent, parentId, state, wait } = target;
     const turn = parkingTurn(this.context.store.eventLog.readEvents(workerId));
-    if (messagedParentSince(state.messages, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
+    if (messagedParentSince(this.context.store.conversations, root.id, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
     const now = new Date().toISOString();
     const message = parkNoticeMessage({ workerRunId: workerId, parentRunId: parentId, waitId: wait.id, waits: worker.waits ?? [],
       ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redaction.redactText(text) });
@@ -245,13 +247,14 @@ export class WorkerQuestions {
   /** Where a parked worker's notice goes: the task that started it, when that task waits on it and
    *  can read it. The family record holds the ledger. */
   private parkNoticeTarget(worker: RunRecord, noticeIdFor: (workerId: string, waitId: string) => string) {
+    this.context.store.compactConversation(familyRecordIdOf(worker)!);
     const root = this.context.store.getRun(familyRecordIdOf(worker)!);
     const parentId = supervisorIdOf(worker)!;
     const parent = this.context.store.getRun(parentId);
     if (root?.delegation?.role !== 'root' || !parent || !this.supervisorTakesMessages(parent) ||
       !supervisedReceipts(root, parentId).some(receipt => receipt.workerId === worker.id && !receipt.deletion)) return undefined;
     const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
-    const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages, noticeIdFor);
+    const wait = parkNoticeWait(worker.id, parent.waits ?? [], id => this.context.store.conversations.findMessage(root.id, id), noticeIdFor);
     return wait ? { root, parent, parentId, state, wait } : undefined;
   }
 
@@ -278,7 +281,7 @@ export class WorkerQuestions {
   /** The ledger and the parent's inbox keep room as `service.send` counts it, beside open
    *  questions' replies. When either is full, the worker's log says so once per wait. */
   parkNoticeAtCapacity(workerId: string, waitId: string, parent: RunRecord, state: ConversationState): boolean {
-    if (state.messages.length + reservedReplies(state) < 1024 && inboxSlotsUsed(parent) < 32) return false;
+    if (activeLedgerHasRoom(state, 1) && inboxSlotsUsed(parent) < INBOX_LIMIT) return false;
     const projectionId = `park-notice-skipped:${waitId}`;
     if (!this.context.store.eventLog.hasProjection(workerId, projectionId)) {
       this.context.store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the parent conversation is at capacity: no park notice was sent.' });
@@ -310,8 +313,7 @@ export class WorkerQuestions {
     const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     if (!ask || ask.fallback || ask.routedMessageId === undefined) return undefined;
     const root = this.context.store.getRun(run.delegation.parentRunId);
-    const message = root?.delegation?.role === 'root'
-      ? root.delegation.conversation?.messages.find(entry => entry.id === ask.routedMessageId) : undefined;
+    const message = root?.delegation?.role === 'root' ? this.context.store.conversations.findMessage(root.id, ask.routedMessageId) : undefined;
     return message ? { askSeq: ask.seq, message } : undefined;
   }
 
@@ -378,7 +380,7 @@ export class WorkerQuestions {
     return this.context.store.queries.listWorkersOf(parentId).flatMap(run => {
       const routed = this.routedAsk(run.id);
       const root = this.context.store.getRun(parentId);
-      const answered = root?.delegation?.role === 'root' && root.delegation.conversation?.outcomes.some(outcome => outcome.requestId === routed?.message.id);
+      const answered = root?.delegation?.role === 'root' && !!routed && !!this.context.store.conversations.findOutcome(root.id, routed.message.id);
       return routed && !answered ? [{ workerId: run.id, messageId: routed.message.id }] : [];
     });
   }

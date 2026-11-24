@@ -1,4 +1,5 @@
 import { AUTOMATION_RUNS_MIGRATION } from './automation-runs.ts';
+import { CONVERSATION_ARCHIVE_MIGRATION } from './conversation-archive.ts';
 import { CONVERSATION_MEMBERS_MIGRATION } from './conversation-members.ts';
 import { REPORTS_MIGRATION } from './report-rows.ts';
 import { DESTROYED_WORKTREE_MIGRATION, MERGE_WAIT_MIGRATION } from './run-database-version.ts';
@@ -231,4 +232,5 @@ export const MIGRATIONS: readonly string[] = [
     WHERE archived = 0 AND live = 0 AND parent_run_id IS NULL
       AND status IN ('review', 'done', 'failed', 'cancelled');
   `,
+  CONVERSATION_ARCHIVE_MIGRATION,
 ];
