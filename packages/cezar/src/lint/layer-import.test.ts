@@ -182,3 +182,11 @@ it('places CLI boot composition in shell and passive command metadata in core', 
   expect(layerOf('built-in-cli-commands.ts', map)).toBe('shell');
   expect(layerOf('core/cli-registry.ts', map)).toBe('core');
 });
+
+it('places managed-install and runner-install routes in feature:runner-install and host setup in feature:server-install', () => {
+  const map = readLayerMap(fileURLToPath(new URL('./layers.json', import.meta.url)));
+  expect(layerOf('managed-install/cli-installation.ts', map)).toBe('feature:runner-install');
+  expect(layerOf('managed-install/cli-manifest.ts', map)).toBe('feature:runner-install');
+  expect(layerOf('server/runner-install-routes.ts', map)).toBe('feature:runner-install');
+  expect(layerOf('server-install/steps.ts', map)).toBe('feature:server-install');
+});

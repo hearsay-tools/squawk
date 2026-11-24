@@ -4,15 +4,17 @@ import { open } from 'node:fs/promises';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
-import type { CliManifest } from './cli-manifest.ts';
+import { cliDigestSchema, type CliManifest } from './cli-manifest.ts';
 
 const MAX_BYTES = 512 * 1024 * 1024;
 
 /** Redirects are refused: the validated URL is the only network destination. */
 export async function downloadCli(manifest: CliManifest, path: string, fetcher = fetch): Promise<void> {
+  const digest = cliDigestSchema.parse(manifest.digest);
+  const expected = Buffer.from(digest.value, 'hex');
   const response = await fetcher(manifest.url, { signal: AbortSignal.timeout(180_000), redirect: 'error' });
   if (!response.ok || !response.body) throw new Error(`The CLI download failed (${response.status}).`);
-  const hash = createHash('sha512');
+  const hash = createHash(digest.algorithm);
   let bytes = 0;
   const verify = new Transform({ transform(chunk: Buffer, _encoding, done) {
     bytes += chunk.length;
@@ -22,7 +24,10 @@ export async function downloadCli(manifest: CliManifest, path: string, fetcher =
   } });
   await pipeline(Readable.fromWeb(response.body as import('node:stream/web').ReadableStream), verify,
     createWriteStream(path, { flags: 'wx', mode: 0o600 }));
-  if (!timingSafeEqual(hash.digest(), Buffer.from(manifest.sha512, 'hex'))) throw new Error('The CLI sha512 checksum does not match.');
+  const actual = hash.digest();
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    throw new Error(`The CLI ${digest.algorithm} checksum does not match.`);
+  }
 }
 
 function tarString(header: Buffer, start: number, end: number): string {

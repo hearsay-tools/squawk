@@ -8,7 +8,7 @@ import { recordedProcessLive, processStartToken } from '../core/process-stat.ts'
 import { assertHomePath } from '../home/boundary.ts';
 import { privateDirectory, replacePrivate } from '../home/private-files.ts';
 import { withHomeLock } from '../home/write-lock.ts';
-import { managedCliTarget } from './cli-manifest.ts';
+import { cliReleaseId, managedCliTarget, type CliManifest } from './cli-manifest.ts';
 
 const releaseIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const activeSchema = z.object({ releaseId: releaseIdSchema });
@@ -157,8 +157,8 @@ export async function withCliInstallLock<T>(home: Home, root: string, operation:
   finally { cliTransaction(home, () => rmSync(path, { force: true })); }
 }
 
-export function activateCliRelease(root: string, stage: string, manifest: { sha512: string; version: string }, executable: string): void {
-  const releaseId = manifest.sha512.slice(0, 64);
+export function activateCliRelease(root: string, stage: string, manifest: Pick<CliManifest, 'digest' | 'version'>, executable: string): void {
+  const releaseId = cliReleaseId(manifest.digest);
   const destination = assertHomePath(root, join(root, 'versions', releaseId));
   privateDirectory(join(root, 'versions'));
   if (!existsSync(destination)) {

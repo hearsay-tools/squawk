@@ -8,7 +8,7 @@ import type { Home } from '../home/home.ts';
 import type { ManagedCliSource } from '../core/managed-cli-source.ts';
 import { privateDirectory } from '../home/private-files.ts';
 import { downloadCli, extractCliArchive } from './cli-archive.ts';
-import { fetchCliManifest, managedCliTarget, type CliManifest } from './cli-manifest.ts';
+import { cliReleaseId, fetchCliManifest, managedCliTarget, type CliManifest } from './cli-manifest.ts';
 import { activateCliRelease, clearCliStaging, cliRoot, cliTransaction, pruneCliReleases, readActiveRelease, removeRelease, withCliInstallLock } from './cli-storage.ts';
 
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
@@ -32,7 +32,7 @@ export class ManagedCliInstallation {
       supported: target !== null,
       installedVersion: active?.version ?? null,
       latestVersion: this.latest?.version ?? null,
-      updateAvailable: !!active && !!this.latest && active.releaseId !== this.latest.sha512.slice(0, 64),
+      updateAvailable: !!active && !!this.latest && active.releaseId !== cliReleaseId(this.latest.digest),
       phase: this.phase, error: this.error,
     };
   }
@@ -77,7 +77,7 @@ export class ManagedCliInstallation {
       }
       const manifest = await this.manifest(target);
       const active = readActiveRelease(root, this.source);
-      if (active?.releaseId === manifest.sha512.slice(0, 64)) return;
+      if (active?.releaseId === cliReleaseId(manifest.digest)) return;
       await this.install(root, manifest);
     });
   }
