@@ -4,7 +4,7 @@ import { productEnv } from '../../core/product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import { isRecord, number, parseRpcLine, piRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from './pi-rpc-wire.ts';
+import { isRecord, number, parseRpcLine, piRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../../core/pi-rpc-wire.ts';
 import {
   adoptRpcSessionId,
   armEndWatchdog,
@@ -14,7 +14,7 @@ import {
   PiTextBlocks,
   type PiTurnMessages,
   settlePiFamilyExit,
-} from './pi-rpc-turn.ts';
+} from '../../core/pi-rpc-turn.ts';
 import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import type {
   AgentEvent,

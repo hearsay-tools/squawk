@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
-import { EDITOR_PLUS_COMMIT_NOTE } from '../agent-config-notes.ts';
-import { PROJECT_AGENTS_FILE } from '../project-agents-file.ts';
+import { EDITOR_PLUS_COMMIT_NOTE } from '../../core/agent-config-notes.ts';
+import { PROJECT_AGENTS_FILE } from '../../core/project-agents-file.ts';
 import { OMP_ACCOUNTS } from './accounts.ts';
 
 const ompHome = (home: AgentHomePaths): string => agentHome(home, OMP_ACCOUNTS.homeSlot);

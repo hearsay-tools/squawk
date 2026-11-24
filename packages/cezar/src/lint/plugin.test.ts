@@ -123,7 +123,8 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
   'child-killed-read': ['packages/cezar/src/core/watchdog-killed.ts', "if (!child.killed) child.kill('SIGKILL');\n"],
   'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
-  'runner-ids-import': ['packages/cezar/src/runners/claude/ids-reader.ts', "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n"],
+  'runner-ids-import': ['packages/cezar/src/server/ids-reader.ts', "import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';\n"],
+  'runner-core-import': ['packages/cezar/src/runners/claude/kit-escape.ts', "import { productEnv } from '../../core/product-env.ts';\n"],
   'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
 };
@@ -171,6 +172,9 @@ const APPROVED: Record<string, string> = {
   // layer-import: a runner definition that loads its adapter, and a shell file that imports a feature.
   'packages/cezar/src/runners/pi/definition.ts': "const load = () => import('./pi-runner.ts');\n",
   'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
+  // runner-core-import: the runner kit's package entry, and a test that reaches outside its runner folder.
+  'packages/cezar/src/runners/pi/kit-reader.ts': "import { productEnv } from '@hearsay-tools/squawk/plugin';\n",
+  'packages/cezar/src/runners/pi/kit-reader.test.ts': "import { productEnv } from '../../core/product-env.ts';\n",
   // runner-roster-literal: the definition, a subset and a derived list. No file keeps a listed roster.
   'packages/cezar/src/runners/ids.ts': `export const BUILT_IN_RUNNER_IDS = [${ROSTER}] as const;\n`,
   'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];\n",
@@ -387,6 +391,7 @@ describe('stale entries', () => {
     'packages/cezar/src/lint/test-unpinned-clock-date.baseline.json': JSON.stringify({ files: { 'packages/web/src/gone.test.ts': 2 } }),
     'packages/cezar/src/lint/layers.json': JSON.stringify({ layers: {} }),
     'packages/cezar/src/lint/layer-import.baseline.json': JSON.stringify({ entries: [] }),
+    'packages/cezar/src/lint/runner-core-import.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/resume-time-readers.json': JSON.stringify({ files: { 'packages/web/src/lib/reads.ts': 'reads', 'packages/web/src/lib/stopped.ts': 'stopped' } }),
     'packages/web/src/test/search-params-discipline.baseline.json': JSON.stringify({ sites: [{ file: 'routes/x.tsx', site: '[query, setQuery] = useSearchParams()', reason: 'r' }] }),
     'packages/api-client/src/index.ts': "export * from '@open-mercato/cezar-contract';\n",

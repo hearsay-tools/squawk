@@ -4,7 +4,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../pi/pi-rpc-wire.ts';
+import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../../core/pi-rpc-wire.ts';
 import {
   adoptRpcSessionId,
   armEndWatchdog,
@@ -15,7 +15,7 @@ import {
   type PiTurnMessages,
   type PiSkillSubmission,
   settlePiFamilyExit,
-} from '../pi/pi-rpc-turn.ts';
+} from '../../core/pi-rpc-turn.ts';
 import type {
   AgentEvent,
   AgentRunResult,

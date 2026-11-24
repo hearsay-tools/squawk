@@ -13,13 +13,14 @@ const formats = [
   'packages/web/src/test/search-params-discipline.baseline.json',
   'packages/web/src/test/card-2-contrast.baseline.json',
   '.github/agents-md.baseline.json',
+  'packages/cezar/src/lint/runner-core-import.baseline.json',
 ];
 for (const file of formats) {
   test(`pins growth and shrinkage for ${file}`, () => {
     const before = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
     assert.deepEqual(compareBaseline(before, structuredClone(before)), []);
     const after = structuredClone(before);
-    const entries = Array.isArray(after) ? after : after.sites;
+    const entries = Array.isArray(after) ? after : after.sites ?? after.entries;
     if (entries) {
       entries.push(typeof entries[0] === 'string' ? 'new-site' : { ...entries[0], file: 'new.test.ts' });
       assert.ok(compareBaseline(before, after).length);

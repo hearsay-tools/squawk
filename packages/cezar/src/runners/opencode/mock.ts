@@ -1,5 +1,5 @@
 import type { RunnerMock } from '../../core/runner-definition.ts';
-import { MOCK_BASELINE_PROMPT, COMMON_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, NATIVE_APPROVAL_MOCK_SCENARIOS } from '../mock-prompts.ts';
+import { MOCK_BASELINE_PROMPT, COMMON_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, NATIVE_APPROVAL_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
 
 /** The opencode runner's native mock and its scenario adapter (the `mock` part). Data only. */
 export const OPENCODE_MOCK = {

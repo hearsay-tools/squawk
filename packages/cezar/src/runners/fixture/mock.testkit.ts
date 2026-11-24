@@ -1,5 +1,5 @@
 import type { RunnerMock } from '../../core/runner-definition.ts';
-import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS } from '../mock-prompts.ts';
+import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
 import { FIXTURE_BIN_ENV } from './data.testkit.ts';
 
 /**

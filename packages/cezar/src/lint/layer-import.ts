@@ -91,20 +91,28 @@ function specifierOf(node: Node): string | undefined {
   }
 }
 
-/** The relative imports of `file` (a path relative to `packages/cezar/src/`) that stay inside it. */
-export function layerImports(file: string, source: string): LayerImport[] {
+/** One relative specifier in a source, with the offset of the import that names it. */
+export interface RelativeSpecifier { specifier: string; offset: number }
+
+/** The relative specifiers of the import forms this rule reads, in source order. */
+export function relativeSpecifiers(source: string): RelativeSpecifier[] {
   // An import the rule reads needs a quoted relative specifier; a file with none is not parsed.
   if (!/['"]\.\.?\//.test(source)) return [];
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript'] });
-  const found: LayerImport[] = [];
+  const found: RelativeSpecifier[] = [];
   visit(ast.program, (node) => {
     const specifier = specifierOf(node);
-    if (specifier === undefined || !specifier.startsWith('.')) return;
-    const target = posix.join(posix.dirname(file), specifier).replace(/\.js$/, '.ts');
-    if (target.startsWith('../')) return;
-    found.push({ target, offset: node.start ?? 0 });
+    if (specifier?.startsWith('.')) found.push({ specifier, offset: node.start ?? 0 });
   });
   return found.sort((a, b) => a.offset - b.offset);
+}
+
+/** The relative imports of `file` (a path relative to `packages/cezar/src/`) that stay inside it. */
+export function layerImports(file: string, source: string): LayerImport[] {
+  return relativeSpecifiers(source).flatMap(({ specifier, offset }) => {
+    const target = posix.join(posix.dirname(file), specifier).replace(/\.js$/, '.ts');
+    return target.startsWith('../') ? [] : [{ target, offset }];
+  });
 }
 
 /** Why `from` may not import `target`, or `undefined` when it may. */
@@ -215,8 +223,11 @@ export function staleLayerImports(root = repoRoot): string[] {
   });
 }
 
+/** The import node types whose literal specifier `importSpecifier` reads. */
+export const IMPORT_NODE_TYPES = ['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType', 'TSImportEqualsDeclaration'] as const;
+
 /** Read only literal import nodes; computed specifiers and re-export chains stay out of scope. */
-function astSpecifier(node: EsNode): string | undefined {
+export function importSpecifier(node: EsNode): string | undefined {
   if (node.type === 'TSImportEqualsDeclaration') {
     const reference = child(node, 'moduleReference');
     return reference?.type === 'TSExternalModuleReference' ? stringOf(child(reference, 'expression')) : undefined;
@@ -231,7 +242,7 @@ export function layerImportVisitors(report: Report, file: string, map = (loadedM
   if (layerOf(local, map) !== 'core') return {};
   const seen = new Map<string, number>();
   const inspect = (node: EsNode) => {
-    const specifier = astSpecifier(node);
+    const specifier = importSpecifier(node);
     if (!specifier?.startsWith('.')) return;
     const target = posix.join(posix.dirname(local), specifier).replace(/\.js$/, '.ts');
     if (target.startsWith('../')) return;
@@ -242,7 +253,7 @@ export function layerImportVisitors(report: Report, file: string, map = (loadedM
     if (count <= (exceptions.find(entry => entry.file === file && entry.target === `${SRC}${target}`)?.count ?? 0)) return;
     report(node, `${reason}. The core does not depend on a feature or a runner (ADR 0065, hearsay-tools/squawk#3706). Move the shared code into core, or invert the dependency; see ${layerMapFile}.`);
   };
-  return Object.fromEntries(['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType', 'TSImportEqualsDeclaration'].map(type => [type, inspect]));
+  return Object.fromEntries(IMPORT_NODE_TYPES.map(type => [type, inspect]));
 }
 
 export const layerImport: AstRule = {

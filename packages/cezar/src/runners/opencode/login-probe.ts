@@ -1,5 +1,5 @@
 import type { ProviderCommandResult, ProviderConnectionState } from '../../core/provider-auth.ts';
-import { normalizedLines } from '../login-output.ts';
+import { normalizedLines } from '../../core/login-output.ts';
 
 /** OpenCode's auth-status parser, moved verbatim from `core/provider-auth.ts`. Loads only through
  *  the definition's `loadLogin()`. */
